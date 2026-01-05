@@ -14,7 +14,8 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, DbMigrationFn, IDatabaseTransactionOpsCoreTyped, apply_migrations,
+    Database, DatabaseVersion, DbMigrationFn, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, apply_migrations,
 };
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -482,7 +483,9 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use fedimint_client::db::{ClientConfigKey, ClientConfigKeyV0};
     use fedimint_core::config::{ClientConfigV0, FederationId, GlobalClientConfigV0};
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::module::CoreConsensusVersion;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_logging::TracingSetup;

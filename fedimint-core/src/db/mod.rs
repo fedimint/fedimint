@@ -15,7 +15,10 @@
 //!
 //! ```rust
 //! use fedimint_core::db::mem_impl::MemDatabase;
-//! use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+//! use fedimint_core::db::{
+//!     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+//!     IReadDatabaseTransactionOpsCoreTyped,
+//! };
 //! use fedimint_core::encoding::{Decodable, Encodable};
 //! use fedimint_core::impl_db_record;
 //! use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -123,6 +126,7 @@ use rand::Rng;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::core::{ModuleInstanceId, ModuleKind};
@@ -265,8 +269,14 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// A raw database transaction type
     type Transaction<'a>: IRawDatabaseTransaction + Debug;
 
+    /// A raw read-only database transaction type
+    type ReadTransaction<'a>: IRawDatabaseReadTransaction + Debug;
+
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
+
+    /// Start a read-only database transaction
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a>;
 
     // Checkpoint the database to a backup directory
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
@@ -278,9 +288,14 @@ where
     T: IRawDatabase,
 {
     type Transaction<'a> = <T as IRawDatabase>::Transaction<'a>;
+    type ReadTransaction<'a> = <T as IRawDatabase>::ReadTransaction<'a>;
 
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
         (**self).begin_transaction().await
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        (**self).begin_read_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -315,6 +330,10 @@ where
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
+    /// Start a read-only database transaction
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)>;
     /// Register (and wait) for `key` updates
     async fn register(&self, key: &[u8]);
     /// Notify about `key` update (creation, modification, deletion)
@@ -335,6 +354,11 @@ where
 {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         (**self).begin_transaction().await
+    }
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
+        (**self).begin_read_transaction().await
     }
     async fn register(&self, key: &[u8]) {
         (**self).register(key).await;
@@ -374,6 +398,11 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
             self.notifications.clone(),
         ))
     }
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
+        Box::new(self.raw.begin_read_transaction().await)
+    }
     async fn register(&self, key: &[u8]) {
         self.notifications.register(key).await;
     }
@@ -399,6 +428,8 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
 pub struct Database {
     inner: Arc<dyn IDatabase + 'static>,
     module_decoders: ModuleDecoderRegistry,
+    /// Semaphore to ensure only one write transaction exists at a time
+    write_semaphore: Arc<Semaphore>,
 }
 
 impl Database {
@@ -435,6 +466,7 @@ impl Database {
         Self {
             inner,
             module_decoders,
+            write_semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 
@@ -447,6 +479,7 @@ impl Database {
                 prefix,
             }),
             module_decoders: self.module_decoders.clone(),
+            write_semaphore: self.write_semaphore.clone(),
         }
     }
 
@@ -467,6 +500,7 @@ impl Database {
                     prefix,
                 }),
                 module_decoders: self.module_decoders.clone(),
+                write_semaphore: self.write_semaphore.clone(),
             },
             global_dbtx_access_token,
         )
@@ -476,6 +510,7 @@ impl Database {
         Self {
             inner: self.inner.clone(),
             module_decoders,
+            write_semaphore: self.write_semaphore.clone(),
         }
     }
 
@@ -518,11 +553,50 @@ impl Database {
     }
 
     /// Begin a new non-committable database transaction
+    ///
+    /// Note: This still uses a write transaction internally. For a true read
+    /// transaction that doesn't block writers, use
+    /// [`Self::begin_read_transaction`].
     pub async fn begin_transaction_nc<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, NonCommittable>
     where
         's: 'tx,
     {
         self.begin_transaction().await.into_nc()
+    }
+
+    /// Begin a new read-only database transaction
+    ///
+    /// This returns a [`ReadDatabaseTransaction`] which only supports read
+    /// operations. It uses a true read transaction internally when available
+    /// (e.g., with redb), allowing concurrent readers without blocking writers.
+    pub async fn begin_read_transaction(&self) -> ReadDatabaseTransaction<'_> {
+        ReadDatabaseTransaction::new(
+            self.inner.begin_read_transaction().await,
+            self.module_decoders.clone(),
+        )
+    }
+
+    /// Begin a new committable write database transaction
+    ///
+    /// Only one write transaction can exist at a time. This method will wait
+    /// until any existing write transaction is dropped.
+    pub async fn begin_write_transaction<'s, 'tx>(
+        &'s self,
+    ) -> WriteDatabaseTransaction<'tx, Committable>
+    where
+        's: 'tx,
+    {
+        let permit = self
+            .write_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore is never closed");
+        WriteDatabaseTransaction::<Committable>::new(
+            self.inner.begin_transaction().await,
+            self.module_decoders.clone(),
+            permit,
+        )
     }
 
     pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -740,9 +814,94 @@ where
         }
     }
 
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
+        Box::new(PrefixReadTransaction {
+            inner: self.inner.begin_read_transaction().await,
+            prefix: self.prefix.clone(),
+        })
+    }
+
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
     }
+}
+
+/// A read-only database transaction that adds a prefix to all operations.
+///
+/// Produced by [`PrefixDatabase`].
+struct PrefixReadTransaction<Inner> {
+    inner: Inner,
+    prefix: Vec<u8>,
+}
+
+impl<Inner> fmt::Debug for PrefixReadTransaction<Inner> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PrefixReadTransaction")
+    }
+}
+
+impl<Inner> PrefixReadTransaction<Inner> {
+    fn get_full_key(&self, key: &[u8]) -> Vec<u8> {
+        let mut full_key = self.prefix.clone();
+        full_key.extend_from_slice(key);
+        full_key
+    }
+
+    fn get_full_range(&self, range: Range<&[u8]>) -> Range<Vec<u8>> {
+        Range {
+            start: self.get_full_key(range.start),
+            end: self.get_full_key(range.end),
+        }
+    }
+
+    fn adapt_prefix_stream(stream: PrefixStream<'_>, prefix_len: usize) -> PrefixStream<'_> {
+        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v)))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOpsCore for PrefixReadTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOpsCore + MaybeSend,
+{
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_get_bytes(&key).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        let key_prefix = self.get_full_key(key_prefix);
+        let stream = self.inner.raw_find_by_prefix(&key_prefix).await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        let key_prefix = self.get_full_key(key_prefix);
+        let stream = self
+            .inner
+            .raw_find_by_prefix_sorted_descending(&key_prefix)
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
+        let range = self.get_full_range(range);
+        let stream = self
+            .inner
+            .raw_find_by_range(range.start.as_slice()..range.end.as_slice())
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+}
+
+impl<Inner> IRawDatabaseReadTransaction for PrefixReadTransaction<Inner> where
+    Inner: IDatabaseTransactionOpsCore + MaybeSend + Debug
+{
 }
 
 /// A database transactions that wraps an `inner` one and adds a prefix to all
@@ -816,23 +975,9 @@ impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransactionOpsCore,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        let key = self.get_full_key(key);
-        self.inner.raw_insert_bytes(&key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_get_bytes(&key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        let key = self.get_full_key(key);
-        self.inner.raw_remove_entry(&key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -864,6 +1009,26 @@ where
             .await?;
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOpsCoreWrite for PrefixDatabaseTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOpsCoreWrite,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_insert_bytes(&key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_remove_entry(&key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let key = self.get_full_key(key_prefix);
@@ -871,37 +1036,20 @@ where
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
-where
-    Inner: IDatabaseTransactionOps,
+impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner> where
+    Inner: IDatabaseTransactionOps
 {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.inner.rollback_tx_to_savepoint().await
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.set_tx_savepoint().await
-    }
 }
 
-/// Core raw a operations database transactions supports
+/// Core raw read operations database transactions supports
 ///
-/// Used to enforce the same signature on all types supporting it
+/// Used to enforce the same signature on all types supporting it.
+/// This trait contains only read operations. Write operations are in
+/// [`IDatabaseTransactionOpsCoreWrite`].
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCore: MaybeSend {
-    /// Insert entry
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>>;
-
     /// Get key value
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
-
-    /// Remove entry by `key`
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`, sorted by key.
@@ -917,30 +1065,47 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     /// by key. [`Range`] is an (half-open) range bounded inclusively below and
     /// exclusively above.
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>>;
+}
+
+/// Write operations for database transactions
+///
+/// This trait extends [`IDatabaseTransactionOpsCore`] with write operations.
+/// It exists to support databases that distinguish between read-only and
+/// read-write transactions (like redb).
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCoreWrite: IDatabaseTransactionOpsCore {
+    /// Insert entry
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>>;
+
+    /// Remove entry by `key`
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Delete keys matching prefix
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()>;
 }
+
+/// Marker trait for read-only database transactions
+///
+/// Implemented by transaction types that only support read operations.
+/// This allows databases like redb to use true read transactions that
+/// don't block writers.
+pub trait IRawDatabaseReadTransaction: IDatabaseTransactionOpsCore + MaybeSend + Debug {}
+
+impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for Box<T> {}
+
+impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for &mut T {}
 
 #[apply(async_trait_maybe_send!)]
 impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -958,6 +1123,24 @@ where
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreWrite for Box<T>
+where
+    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
@@ -970,20 +1153,8 @@ impl<T> IDatabaseTransactionOpsCore for &mut T
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -1002,6 +1173,24 @@ where
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreWrite for &mut T
+where
+    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         (**self).raw_remove_by_prefix(key_prefix).await
@@ -1009,73 +1198,27 @@ where
 }
 
 /// Additional operations (only some) database transactions expose, on top of
-/// [`IDatabaseTransactionOpsCore`]
+/// [`IDatabaseTransactionOpsCoreWrite`]
 ///
 /// In certain contexts exposing these operations would be a problem, so they
 /// are moved to a separate trait.
-#[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
-    /// Create a savepoint during the transaction that can be rolled back to
-    /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
-    /// atomically remove the writes that were applied since the savepoint
-    /// was created.
-    ///
-    /// Warning: Avoid using this in fedimint client code as not all database
-    /// transaction implementations will support setting a savepoint during
-    /// a transaction.
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()>;
+pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCoreWrite + MaybeSend {}
 
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()>;
-}
+impl<T> IDatabaseTransactionOps for Box<T> where T: IDatabaseTransactionOps + ?Sized {}
 
-#[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOps for Box<T>
-where
-    T: IDatabaseTransactionOps + ?Sized,
-{
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).set_tx_savepoint().await
-    }
+impl<T> IDatabaseTransactionOps for &mut T where T: IDatabaseTransactionOps + ?Sized {}
 
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).rollback_tx_to_savepoint().await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOps for &mut T
-where
-    T: IDatabaseTransactionOps + ?Sized,
-{
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).set_tx_savepoint().await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).rollback_tx_to_savepoint().await
-    }
-}
-
-/// Like [`IDatabaseTransactionOpsCore`], but typed
+/// Read-only typed database operations
 ///
-/// Implemented via blanket impl for everything that implements
-/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
-/// [`WithDecoders`]).
+/// This trait contains only read operations and is implemented by both
+/// `ReadDatabaseTransaction` and `WriteDatabaseTransaction`. Functions that
+/// only need to read from the database should use this trait bound to accept
+/// both transaction types.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOpsCoreTyped<'a> {
+pub trait IReadDatabaseTransactionOpsCoreTyped<'a> {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
-
-    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync;
-
-    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync;
 
     async fn find_by_range<K>(
         &mut self,
@@ -1122,6 +1265,27 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
     where
         KP: DatabaseLookup + MaybeSend + MaybeSync,
         KP::Record: DatabaseKey;
+}
+
+/// Like [`IDatabaseTransactionOpsCore`], but typed
+///
+/// Implemented via blanket impl for everything that implements
+/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
+/// [`WithDecoders`]).
+///
+/// This trait extends [`IReadDatabaseTransactionOpsCoreTyped`] with write
+/// operations.
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCoreTyped<'a>: IReadDatabaseTransactionOpsCoreTyped<'a> {
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
 
     async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1132,10 +1296,10 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         KP: DatabaseLookup + MaybeSend + MaybeSync;
 }
 
-// blanket implementation of typed ops for anything that implements raw ops and
-// has decoders
+// blanket implementation of read-only typed ops for anything that implements
+// raw ops and has decoders
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
+impl<T> IReadDatabaseTransactionOpsCoreTyped<'_> for T
 where
     T: IDatabaseTransactionOpsCore + WithDecoders,
 {
@@ -1151,32 +1315,6 @@ where
         raw.map(|value_bytes| {
             decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
         })
-    }
-
-    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync,
-    {
-        let key_bytes = key.to_bytes();
-        self.raw_insert_bytes(&key_bytes, &value.to_bytes())
-            .await
-            .expect("Unrecoverable error occurred while inserting entry into the database")
-            .map(|value_bytes| {
-                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
-            })
-    }
-
-    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync,
-    {
-        if let Some(prev) = self.insert_entry(key, value).await {
-            panic!(
-                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
-            );
-        }
     }
 
     async fn find_by_range<K>(
@@ -1266,6 +1404,41 @@ where
                 }),
         )
     }
+}
+
+// blanket implementation of write typed ops for anything that implements raw
+// ops (including write), has decoders, and implements the read trait
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
+where
+    T: IDatabaseTransactionOpsCore + IDatabaseTransactionOpsCoreWrite + WithDecoders,
+{
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        let key_bytes = key.to_bytes();
+        self.raw_insert_bytes(&key_bytes, &value.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while inserting entry into the database")
+            .map(|value_bytes| {
+                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
+            })
+    }
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        if let Some(prev) = self.insert_entry(key, value).await {
+            panic!(
+                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
+            );
+        }
+    }
+
     async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
@@ -1278,6 +1451,7 @@ where
                 decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
             })
     }
+
     async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
     where
         KP: DatabaseLookup + MaybeSend + MaybeSync,
@@ -1402,33 +1576,11 @@ where
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        self.add_notification_key(key)?;
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .raw_insert_bytes(key, value)
-            .await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.raw
             .as_mut()
             .ok_or(DatabaseError::TransactionConsumed)?
             .raw_get_bytes(key)
-            .await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.add_notification_key(key)?;
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .raw_remove_entry(key)
             .await
     }
 
@@ -1461,6 +1613,31 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCoreWrite for BaseDatabaseTransaction<Tx> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_insert_bytes(key, value)
+            .await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_remove_entry(key)
+            .await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         self.raw
@@ -1471,26 +1648,7 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .rollback_tx_to_savepoint()
-            .await?;
-        Ok(())
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .set_tx_savepoint()
-            .await?;
-        Ok(())
-    }
-}
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {}
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
@@ -1588,6 +1746,510 @@ pub struct Committable;
 ///
 /// Opposite of [`Committable`].
 pub struct NonCommittable;
+
+/// A high level read-only database transaction handle
+///
+/// This type only exposes read operations and cannot be committed.
+/// It uses a true read transaction internally when available (e.g., with redb),
+/// allowing concurrent readers without blocking writers.
+pub struct ReadDatabaseTransaction<'tx> {
+    tx: Box<dyn IRawDatabaseReadTransaction + 'tx>,
+    decoders: ModuleDecoderRegistry,
+}
+
+impl fmt::Debug for ReadDatabaseTransaction<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ReadDatabaseTransaction")
+    }
+}
+
+impl WithDecoders for ReadDatabaseTransaction<'_> {
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
+    }
+}
+
+impl<'tx> ReadDatabaseTransaction<'tx> {
+    /// Create a new read-only transaction
+    pub fn new(
+        tx: impl IRawDatabaseReadTransaction + 'tx,
+        decoders: ModuleDecoderRegistry,
+    ) -> Self {
+        Self {
+            tx: Box::new(tx),
+            decoders,
+        }
+    }
+
+    /// Create a new read-only transaction prefixed with the given module id
+    pub fn with_prefix_module_id<'a: 'tx>(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (ReadDatabaseTransaction<'a>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            ReadDatabaseTransaction {
+                tx: Box::new(PrefixReadTransaction {
+                    inner: self.tx,
+                    prefix,
+                }),
+                decoders: self.decoders,
+            },
+            global_dbtx_access_token,
+        )
+    }
+
+    /// Get [`ReadDatabaseTransaction`] isolated to a `prefix`
+    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> ReadDatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        ReadDatabaseTransaction {
+            tx: Box::new(PrefixReadTransaction {
+                inner: self.tx,
+                prefix,
+            }),
+            decoders: self.decoders,
+        }
+    }
+
+    /// Get a reference to this transaction
+    pub fn to_ref<'s, 'a>(&'s mut self) -> ReadDatabaseTransaction<'a>
+    where
+        's: 'a,
+    {
+        ReadDatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders: self.decoders.clone(),
+        }
+    }
+
+    /// Get a reference to this transaction with a module prefix
+    pub fn to_ref_with_prefix_module_id<'a>(
+        &'a mut self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (ReadDatabaseTransaction<'a>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            ReadDatabaseTransaction {
+                tx: Box::new(PrefixReadTransaction {
+                    inner: &mut self.tx,
+                    prefix,
+                }),
+                decoders: self.decoders.clone(),
+            },
+            global_dbtx_access_token,
+        )
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_get_bytes(key).await
+    }
+
+    async fn raw_find_by_range(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_range(key_range).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+}
+
+/// A high level write database transaction handle
+///
+/// `Cap` is a session type controlling whether this transaction can be
+/// committed.
+pub struct WriteDatabaseTransaction<'tx, Cap = NonCommittable> {
+    tx: Box<dyn IDatabaseTransaction + 'tx>,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: MaybeRef<'tx, CommitTracker>,
+    on_commit_hooks: MaybeRef<'tx, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
+    capability: marker::PhantomData<Cap>,
+    /// Permit ensuring only one write transaction exists at a time.
+    /// Held for the lifetime of the transaction and released on drop.
+    #[allow(unused)]
+    write_permit: Arc<OwnedSemaphorePermit>,
+}
+
+impl<Cap> fmt::Debug for WriteDatabaseTransaction<'_, Cap> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "WriteDatabaseTransaction {{ tx: {:?}, decoders={:?} }}",
+            self.tx, self.decoders
+        ))
+    }
+}
+
+impl<Cap> WithDecoders for WriteDatabaseTransaction<'_, Cap> {
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
+    }
+}
+
+impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
+    /// Convert into a non-committable version
+    pub fn into_nc(self) -> WriteDatabaseTransaction<'tx, NonCommittable> {
+        WriteDatabaseTransaction {
+            tx: self.tx,
+            decoders: self.decoders,
+            commit_tracker: self.commit_tracker,
+            on_commit_hooks: self.on_commit_hooks,
+            capability: PhantomData::<NonCommittable>,
+            write_permit: self.write_permit,
+        }
+    }
+
+    /// Get a reference to a non-committeable version
+    pub fn to_ref_nc<'s, 'a>(&'s mut self) -> WriteDatabaseTransaction<'a, NonCommittable>
+    where
+        's: 'a,
+    {
+        self.to_ref().into_nc()
+    }
+
+    /// Get [`WriteDatabaseTransaction`] isolated to a `prefix`
+    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> WriteDatabaseTransaction<'a, Cap>
+    where
+        'tx: 'a,
+    {
+        WriteDatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: self.tx,
+                global_dbtx_access_token: None,
+                prefix,
+            }),
+            decoders: self.decoders,
+            commit_tracker: self.commit_tracker,
+            on_commit_hooks: self.on_commit_hooks,
+            capability: self.capability,
+            write_permit: self.write_permit,
+        }
+    }
+
+    /// Get [`WriteDatabaseTransaction`] isolated to a prefix of a given
+    /// `module_instance_id`, allowing the module to access global_dbtx
+    /// with the right access token.
+    pub fn with_prefix_module_id<'a: 'tx>(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (WriteDatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            WriteDatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: self.tx,
+                    global_dbtx_access_token: Some(global_dbtx_access_token),
+                    prefix,
+                }),
+                decoders: self.decoders,
+                commit_tracker: self.commit_tracker,
+                on_commit_hooks: self.on_commit_hooks,
+                capability: self.capability,
+                write_permit: self.write_permit,
+            },
+            global_dbtx_access_token,
+        )
+    }
+
+    /// Get [`WriteDatabaseTransaction`] to `self`
+    pub fn to_ref<'s, 'a>(&'s mut self) -> WriteDatabaseTransaction<'a, Cap>
+    where
+        's: 'a,
+    {
+        let decoders = self.decoders.clone();
+
+        WriteDatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders,
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: self.capability,
+            write_permit: self.write_permit.clone(),
+        }
+    }
+
+    /// Convert to a [`DatabaseTransaction`] for compatibility with APIs that
+    /// haven't been migrated to [`WriteDatabaseTransaction`] yet.
+    pub fn as_legacy_dbtx<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
+    where
+        's: 'a,
+    {
+        DatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders: self.decoders.clone(),
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: PhantomData,
+        }
+    }
+
+    /// Get [`WriteDatabaseTransaction`] isolated to a `prefix` of `self`
+    pub fn to_ref_with_prefix<'a>(
+        &'a mut self,
+        prefix: Vec<u8>,
+    ) -> WriteDatabaseTransaction<'a, Cap>
+    where
+        'tx: 'a,
+    {
+        WriteDatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: &mut self.tx,
+                global_dbtx_access_token: None,
+                prefix,
+            }),
+            decoders: self.decoders.clone(),
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: self.capability,
+            write_permit: self.write_permit.clone(),
+        }
+    }
+
+    pub fn to_ref_with_prefix_module_id<'a>(
+        &'a mut self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (WriteDatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            WriteDatabaseTransaction {
+                tx: Box::new(PrefixDatabaseTransaction {
+                    inner: &mut self.tx,
+                    global_dbtx_access_token: Some(global_dbtx_access_token),
+                    prefix,
+                }),
+                decoders: self.decoders.clone(),
+                commit_tracker: match self.commit_tracker {
+                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+                },
+                on_commit_hooks: match self.on_commit_hooks {
+                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+                },
+                capability: self.capability,
+                write_permit: self.write_permit.clone(),
+            },
+            global_dbtx_access_token,
+        )
+    }
+
+    /// Is this `Database` a global, unpartitioned `Database`
+    pub fn is_global(&self) -> bool {
+        self.tx.is_global()
+    }
+
+    /// `Err` if [`Self::is_global`] is not true
+    pub fn ensure_global(&self) -> DatabaseResult<()> {
+        if !self.is_global() {
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not global"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// `Err` if [`Self::is_global`] is true
+    pub fn ensure_isolated(&self) -> DatabaseResult<()> {
+        if self.is_global() {
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not isolated"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Cancel the tx to avoid debugging warnings about uncommitted writes
+    pub fn ignore_uncommitted(&mut self) -> &mut Self {
+        self.commit_tracker.ignore_uncommitted = true;
+        self
+    }
+
+    /// Create warnings about uncommitted writes
+    pub fn warn_uncommitted(&mut self) -> &mut Self {
+        self.commit_tracker.ignore_uncommitted = false;
+        self
+    }
+
+    /// Register a hook that will be run after commit succeeds.
+    #[instrument(target = LOG_DB, level = "trace", skip_all)]
+    pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
+        self.on_commit_hooks.push(Box::new(f));
+    }
+
+    pub fn global_dbtx<'a>(
+        &'a mut self,
+        access_token: GlobalDBTxAccessToken,
+    ) -> WriteDatabaseTransaction<'a, Cap>
+    where
+        'tx: 'a,
+    {
+        let decoders = self.decoders.clone();
+
+        WriteDatabaseTransaction {
+            tx: Box::new(self.tx.global_dbtx(access_token)),
+            decoders,
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: self.capability,
+            write_permit: self.write_permit.clone(),
+        }
+    }
+}
+
+impl<'tx> WriteDatabaseTransaction<'tx, Committable> {
+    pub fn new(
+        dbtx: Box<dyn IDatabaseTransaction + 'tx>,
+        decoders: ModuleDecoderRegistry,
+        write_permit: OwnedSemaphorePermit,
+    ) -> Self {
+        Self {
+            tx: dbtx,
+            decoders,
+            commit_tracker: MaybeRef::Owned(CommitTracker {
+                is_committed: false,
+                has_writes: false,
+                ignore_uncommitted: false,
+            }),
+            on_commit_hooks: MaybeRef::Owned(vec![]),
+            capability: PhantomData,
+            write_permit: Arc::new(write_permit),
+        }
+    }
+
+    pub async fn commit_tx_result(mut self) -> DatabaseResult<()> {
+        self.commit_tracker.is_committed = true;
+        let commit_result = self.tx.commit_tx().await;
+
+        // Run commit hooks in case commit was successful
+        if commit_result.is_ok() {
+            for hook in self.on_commit_hooks.deref_mut().drain(..) {
+                hook();
+            }
+        }
+
+        commit_result
+    }
+
+    pub async fn commit_tx(mut self) {
+        self.commit_tracker.is_committed = true;
+        self.commit_tx_result()
+            .await
+            .expect("Unrecoverable error occurred while committing to the database.");
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Cap> IDatabaseTransactionOpsCore for WriteDatabaseTransaction<'_, Cap>
+where
+    Cap: Send,
+{
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_get_bytes(key).await
+    }
+
+    async fn raw_find_by_range(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_range(key_range).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Cap> IDatabaseTransactionOpsCoreWrite for WriteDatabaseTransaction<'_, Cap>
+where
+    Cap: Send,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_remove_entry(key).await
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_remove_by_prefix(key_prefix).await
+    }
+}
+
+impl IDatabaseTransactionOps for WriteDatabaseTransaction<'_, Committable> {}
 
 /// A high level database transaction handle
 ///
@@ -1935,21 +2597,8 @@ impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        self.commit_tracker.has_writes = true;
-        self.tx.raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.tx.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_range(
@@ -1971,22 +2620,33 @@ where
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Cap> IDatabaseTransactionOpsCoreWrite for DatabaseTransaction<'_, Cap>
+where
+    Cap: Send,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_remove_entry(key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         self.commit_tracker.has_writes = true;
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
-#[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.tx.set_tx_savepoint().await
-    }
 
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.tx.rollback_tx_to_savepoint().await
-    }
-}
+impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {}
 
 impl<T> DatabaseKeyPrefix for T
 where
@@ -2249,7 +2909,7 @@ impl From<anyhow::Error> for DatabaseError {
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, val)| {
                     (
@@ -2268,7 +2928,7 @@ macro_rules! push_db_pair_items {
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, _)| key)
                 .collect::<Vec<$key_type>>()
@@ -2650,7 +3310,8 @@ mod test_utils {
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
     use crate::db::{
-        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped,
+        IReadDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
     };
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
@@ -2930,47 +3591,6 @@ mod test_utils {
         // Verify dbtx2 can see committed transactions
         let mut dbtx2 = db.begin_transaction().await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await, Some(TestVal(2)));
-    }
-
-    pub async fn verify_rollback_to_savepoint(db: Database) {
-        let mut dbtx_rollback = db.begin_transaction().await;
-
-        dbtx_rollback
-            .insert_entry(&TestKey(20), &TestVal(2000))
-            .await;
-
-        dbtx_rollback
-            .set_tx_savepoint()
-            .await
-            .expect("Error setting transaction savepoint");
-
-        dbtx_rollback
-            .insert_entry(&TestKey(21), &TestVal(2001))
-            .await;
-
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await,
-            Some(TestVal(2000))
-        );
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(21)).await,
-            Some(TestVal(2001))
-        );
-
-        dbtx_rollback
-            .rollback_tx_to_savepoint()
-            .await
-            .expect("Error setting transaction savepoint");
-
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await,
-            Some(TestVal(2000))
-        );
-
-        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
-
-        // Commit to suppress the warning message
-        dbtx_rollback.commit_tx().await;
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
@@ -3458,7 +4078,8 @@ mod test_utils {
         use crate::db::{
             AutocommitError, BaseDatabaseTransaction, DatabaseError, DatabaseResult,
             IDatabaseTransaction, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-            IRawDatabase, IRawDatabaseTransaction,
+            IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
+            IRawDatabaseTransaction,
         };
 
         #[derive(Debug)]
@@ -3467,7 +4088,13 @@ mod test_utils {
         #[async_trait]
         impl IRawDatabase for FakeDatabase {
             type Transaction<'a> = FakeTransaction<'a>;
+            type ReadTransaction<'a> = FakeTransaction<'a>;
+
             async fn begin_transaction(&self) -> FakeTransaction {
+                FakeTransaction(PhantomData)
+            }
+
+            async fn begin_read_transaction(&self) -> FakeTransaction {
                 FakeTransaction(PhantomData)
             }
 
@@ -3479,21 +4106,11 @@ mod test_utils {
         #[derive(Debug)]
         struct FakeTransaction<'a>(PhantomData<&'a ()>);
 
+        impl IRawDatabaseReadTransaction for FakeTransaction<'_> {}
+
         #[async_trait]
         impl IDatabaseTransactionOpsCore for FakeTransaction<'_> {
-            async fn raw_insert_bytes(
-                &mut self,
-                _key: &[u8],
-                _value: &[u8],
-            ) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
             async fn raw_get_bytes(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
-            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
@@ -3511,10 +4128,6 @@ mod test_utils {
                 unimplemented!()
             }
 
-            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-                unimplemented!()
-            }
-
             async fn raw_find_by_prefix_sorted_descending(
                 &mut self,
                 _key_prefix: &[u8],
@@ -3524,15 +4137,25 @@ mod test_utils {
         }
 
         #[async_trait]
-        impl IDatabaseTransactionOps for FakeTransaction<'_> {
-            async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
+        impl IDatabaseTransactionOpsCoreWrite for FakeTransaction<'_> {
+            async fn raw_insert_bytes(
+                &mut self,
+                _key: &[u8],
+                _value: &[u8],
+            ) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
-            async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
+            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
                 unimplemented!()
             }
         }
+
+        impl IDatabaseTransactionOps for FakeTransaction<'_> {}
 
         #[async_trait]
         impl IRawDatabaseTransaction for FakeTransaction<'_> {

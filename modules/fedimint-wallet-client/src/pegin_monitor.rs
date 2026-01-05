@@ -10,6 +10,7 @@ use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::Amounts;

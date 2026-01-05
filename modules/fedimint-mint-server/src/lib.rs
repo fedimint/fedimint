@@ -16,8 +16,9 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped,
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -451,14 +452,14 @@ impl ServerModule for Mint {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -482,7 +483,7 @@ impl ServerModule for Mint {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b MintInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, MintInputError> {
@@ -520,7 +521,7 @@ impl ServerModule for Mint {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
@@ -576,7 +577,7 @@ impl ServerModule for Mint {
     #[doc(hidden)]
     async fn verify_output_submission<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         output: &'a MintOutput,
         _out_point: OutPoint,
     ) -> Result<(), MintOutputError> {
@@ -595,7 +596,7 @@ impl ServerModule for Mint {
 
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -651,7 +652,7 @@ impl ServerModule for Mint {
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, nonce: Nonce| -> bool {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(dbtx.get_value(&NonceKey(nonce)).await.is_some())
                 }
             },
@@ -660,7 +661,7 @@ impl ServerModule for Mint {
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, blind_nonce: BlindNonce| -> bool {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(dbtx.get_value(&BlindNonceKey(blind_nonce)).await.is_some())
                 }
             },
@@ -669,7 +670,7 @@ impl ServerModule for Mint {
 }
 
 fn calculate_mint_issued_ecash_metrics(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     amount: Amount,
     fee: Amount,
 ) {
@@ -686,7 +687,7 @@ fn calculate_mint_issued_ecash_metrics(
 }
 
 fn calculate_mint_redeemed_ecash_metrics(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     amount: Amount,
     fee: Amount,
 ) {

@@ -68,11 +68,16 @@ where
     DB: IRawDatabase,
 {
     type Transaction<'a> = DB::Transaction<'a>;
+    type ReadTransaction<'a> = DB::ReadTransaction<'a>;
 
     async fn begin_transaction<'a>(
         &'a self,
     ) -> <Locked<DB> as fedimint_core::db::IRawDatabase>::Transaction<'_> {
         self.inner.begin_transaction().await
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        self.inner.begin_read_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> fedimint_core::db::DatabaseResult<()> {

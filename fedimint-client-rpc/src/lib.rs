@@ -11,7 +11,9 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::task::{MaybeSend, MaybeSync};

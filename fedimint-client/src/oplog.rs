@@ -7,7 +7,10 @@ use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
 };
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::util::BoxStream;

@@ -35,7 +35,10 @@ pub use connection_limits::ConnectionLimits;
 use fedimint_aead::random_salt;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
