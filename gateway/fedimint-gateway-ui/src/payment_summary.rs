@@ -4,6 +4,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use axum::extract::{Query, State};
 use axum::response::Html;
 use fedimint_core::config::FederationId;
+use fedimint_core::module::serde_json;
 use fedimint_core::time::now;
 use fedimint_gateway_common::{
     FederationInfo, PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
@@ -258,7 +259,7 @@ where
         .api
         .handle_payment_log_msg(PaymentLogPayload {
             end_position: None,
-            pagination_size: 50,
+            pagination_size: 10,
             federation_id,
             event_kinds: vec![],
         })
@@ -281,7 +282,7 @@ where
                     }
                 }
                 tbody {
-                    @for entry in entries {
+                    @for (idx, entry) in entries.iter().enumerate() {
                         tr {
                             td {
                                 code {
@@ -290,6 +291,31 @@ where
                             }
                             td {
                                 (format_timestamp(entry.as_raw().ts_usecs))
+                            }
+                            td {
+                                button
+                                    class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    onclick=(format!(
+                                        "document.getElementById('payment-details-{}').classList.toggle('d-none');",
+                                        idx
+                                    ))
+                                {
+                                    "Details"
+                                }
+                            }
+                        }
+
+                        // Expandable details row
+                        tr
+                            id=(format!("payment-details-{}", idx))
+                            class="d-none"
+                        {
+                            td colspan="3" {
+                                pre class="bg-dark text-light p-3 rounded small mb-0" {
+                                    (serde_json::to_string_pretty(entry)
+                                        .unwrap_or_else(|_| "<invalid json>".to_string()))
+                                }
                             }
                         }
                     }
