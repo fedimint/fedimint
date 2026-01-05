@@ -25,10 +25,11 @@ use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayInfo, LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
-    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawPreviewPayload,
-    WithdrawPreviewResponse, WithdrawResponse,
+    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
+    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
+    ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
+    WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -184,6 +185,11 @@ pub trait IAdminGateway {
         &self,
         payload: WithdrawPreviewPayload,
     ) -> Result<WithdrawPreviewResponse, Self::Error>;
+
+    async fn handle_payment_log_msg(
+        &self,
+        payload: PaymentLogPayload,
+    ) -> Result<PaymentLogResponse, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
