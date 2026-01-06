@@ -837,11 +837,19 @@ impl FedimintCli {
         let root_secret = RootSecret::StandardDoubleDerive(
             Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
         );
-        let client = builder
+
+        let preview = builder
             .preview(cli.make_endpoints().await.map_err_cli()?, &invite_code)
             .await
-            .map_err_cli()?
-            .recover(db, root_secret, None)
+            .map_err_cli()?;
+
+        let backup = preview
+            .download_backup_from_federation(root_secret.clone())
+            .await
+            .map_err_cli()?;
+
+        let client = preview
+            .recover(db, root_secret, backup)
             .await
             .map(Arc::new)
             .map_err_cli()?;
