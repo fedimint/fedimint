@@ -2,18 +2,17 @@ use std::collections::BTreeMap;
 use std::pin::pin;
 use std::sync::Arc;
 
-use anyhow::Context as _;
 use async_stream::stream;
 use fedimint_client_module::meta::{FetchKind, MetaSource, MetaValue, MetaValues};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use serde::de::DeserializeOwned;
 use tokio::sync::Notify;
 use tokio_stream::Stream;
-use tracing::{instrument, warn};
+use tracing::warn;
 
 use crate::Client;
 use crate::db::{
@@ -28,7 +27,7 @@ pub struct MetaService<S: ?Sized = dyn MetaSource> {
     source: S,
 }
 
-pub type MetaEntries = BTreeMap<String, String>;
+pub type MetaEntries = BTreeMap<String, serde_json::Value>;
 
 impl<S: MetaSource + ?Sized> MetaService<S> {
     pub fn new(source: S) -> Arc<MetaService>
@@ -77,7 +76,18 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
                 field.to_string(),
             )))
             .await
-            .and_then(|value| parse_meta_value_static::<V>(&value.0.0).ok());
+            .and_then(|value| {
+                serde_json::from_value(value.0.0)
+                    .inspect_err(|err| {
+                        warn!(target: LOG_CLIENT,
+                        %field,
+                        type = std::any::type_name::<V>(),
+                        err = %err.fmt_compact(),
+                        "Failed to deserialize meta value as the requested type")
+                    })
+                    .ok()
+            });
+
         Some(MetaValue {
             fetch_time: info.last_updated,
             value,
@@ -237,30 +247,5 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         dbtx.commit_tx().await;
         // notify everyone about changes
         self.meta_update_notify.notify_waiters();
-    }
-}
-
-/// Tries to parse `str_value` as JSON. In the special case that `V` is `String`
-/// we return the raw `str_value` if JSON parsing fails. This necessary since
-/// the spec wasn't clear enough in the beginning.
-#[instrument(target = LOG_CLIENT, err)] // log on every failure
-pub fn parse_meta_value_static<V: DeserializeOwned + 'static>(
-    str_value: &str,
-) -> anyhow::Result<V> {
-    let res = serde_json::from_str(str_value)
-        .with_context(|| format!("Decoding meta field value '{str_value}' failed"));
-
-    // In the past we encoded some string fields as "just a string" without quotes,
-    // this code ensures that old meta values still parse since config is hard to
-    // change
-    if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
-        let string_ret = Box::new(str_value.to_owned());
-        let ret: Box<V> = unsafe {
-            // We can transmute a String to V because we know that V==String
-            std::mem::transmute(string_ret)
-        };
-        Ok(*ret)
-    } else {
-        res
     }
 }

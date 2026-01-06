@@ -4,13 +4,14 @@ use std::time::{Duration, SystemTime};
 use anyhow::{Context as _, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{FmtCompact as _, backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use serde::{Deserialize, Serialize, de};
+use tracing::debug;
 
 #[apply(async_trait_maybe_send!)]
 pub trait MetaSource: MaybeSend + MaybeSync + 'static {
@@ -67,11 +68,12 @@ impl MetaSource for LegacyMetaSource {
         fetch_kind: FetchKind,
         last_revision: Option<u64>,
     ) -> anyhow::Result<MetaValues> {
-        let config_iter = client_config
-            .global
-            .meta
-            .iter()
-            .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
+        let config_iter = client_config.global.meta.iter().map(|(key, value)| {
+            (
+                MetaFieldKey(key.clone()),
+                MetaFieldValue(serde_json::Value::String(value.clone())),
+            )
+        });
         let backoff = match fetch_kind {
             // need to be fast the first time.
             FetchKind::Initial => backoff_util::aggressive_backoff(),
@@ -93,8 +95,63 @@ impl MetaSource for LegacyMetaSource {
 )]
 pub struct MetaFieldKey(pub String);
 
-#[derive(Encodable, Decodable, Debug, Clone, Serialize, Deserialize)]
-pub struct MetaFieldValue(pub String);
+#[derive(Debug, Clone, Serialize)]
+pub struct MetaFieldValue(pub serde_json::Value);
+
+// In the past we did not support native serde_values as values,
+// which required users to make the the complex meta values a json-escaped
+// strings which is ... bleh.
+//
+// This custom Deserialize impl. "unpeals" the extra layer of json-escaping,
+// if it passes, trying to support the old values like it. We probably
+// should remove this workaround in some future.
+impl<'de> Deserialize<'de> for MetaFieldValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        let final_value = if let serde_json::Value::String(s) = &value {
+            // Try to parse the string as JSON
+            match serde_json::from_str::<serde_json::Value>(s) {
+                Ok(parsed) => parsed,
+                Err(_) => value, // If parsing fails, use the original string value
+            }
+        } else {
+            value
+        };
+
+        Ok(MetaFieldValue(final_value))
+    }
+}
+
+impl Encodable for MetaFieldValue {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        let s = serde_json::to_string(&self).expect("Can't fail");
+
+        s.consensus_encode(writer)
+    }
+}
+
+impl Decodable for MetaFieldValue {
+    fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let s = String::consensus_decode_partial(r, modules)?;
+
+        Ok(Self(serde_json::from_str(&s).unwrap_or_else(|err| {
+            debug!(
+                target: LOG_CLIENT,
+                err = %err.fmt_compact(),
+                s = %s,
+                "Failed to decode meta value in the db as json, falling back to string"
+            );
+            serde_json::Value::String(s)
+        })))
+    }
+}
 
 pub async fn fetch_meta_overrides(
     reqwest: &reqwest::Client,
@@ -129,14 +186,7 @@ pub async fn fetch_meta_overrides(
         .remove(&federation_id)
         .with_context(|| anyhow::format_err!("No entry for federation {federation_id} in {url}"))?
         .into_iter()
-        .filter_map(|(key, value)| {
-            if let serde_json::Value::String(value_str) = value {
-                Some((MetaFieldKey(key), MetaFieldValue(value_str)))
-            } else {
-                warn!(target: LOG_CLIENT, "Meta override map contained non-string key: {key}, ignoring");
-                None
-            }
-        })
+        .map(|(key, value)| (MetaFieldKey(key), MetaFieldValue(value)))
         .collect::<BTreeMap<_, _>>();
 
     Ok(meta_fields)
