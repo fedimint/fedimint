@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_REISSUE_NOTES_PER_TX"],"enum":["MintRecoveryState"],"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRecovery","MintRecoveryStateV2"]};
+window.SIDEBAR_ITEMS = {"enum":["MintRecoveryState"],"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRecovery","MintRecoveryStateV2"]};

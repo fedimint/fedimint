@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ReceivePaymentStatus"],"struct":["NoteCreated","NoteSpent","OOBNotesReissued","OOBNotesSpent","ReceivePaymentEvent","ReceivePaymentUpdateEvent","RecoveryReissuanceStarted","SendPaymentEvent"]};
+window.SIDEBAR_ITEMS = {"enum":["ReceivePaymentStatus"],"struct":["NoteCreated","NoteSpent","OOBNotesReissued","OOBNotesSpent","ReceivePaymentEvent","ReceivePaymentUpdateEvent","SendPaymentEvent"]};
