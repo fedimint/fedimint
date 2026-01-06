@@ -32,15 +32,23 @@ pub fn render(gateway_info: &GatewayInfo) -> Markup {
                                     }
 
                                     td {
-                                        table class="table table-borderless table-sm mb-0" {
+                                        table class="table table-borderless table-sm mb-0 w-100" {
                                             tbody {
                                                 tr {
-                                                    td class="fw-semibold pe-2" { "URL:" }
-                                                    td { (url.to_string()) }
+                                                    td class="fw-semibold pe-2 align-top" {
+                                                        "URL:"
+                                                    }
+                                                    td class="text-break small" {
+                                                        (url.to_string())
+                                                    }
                                                 }
                                                 tr {
-                                                    td class="fw-semibold pe-2" { "ID:" }
-                                                    td { (pubkey.to_string()) }
+                                                    td class="fw-semibold pe-2 align-top" {
+                                                        "ID:"
+                                                    }
+                                                    td class="text-break font-monospace small" {
+                                                        (pubkey.to_string())
+                                                    }
                                                 }
                                             }
                                         }
