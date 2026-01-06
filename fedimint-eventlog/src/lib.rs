@@ -148,6 +148,10 @@ impl EventLogId {
     pub fn saturating_sub(self, rhs: u64) -> EventLogId {
         Self(self.0.saturating_sub(rhs))
     }
+
+    pub fn checked_sub(self, rhs: u64) -> Option<EventLogId> {
+        self.0.checked_sub(rhs).map(EventLogId)
+    }
 }
 
 impl From<EventLogId> for u64 {
@@ -161,6 +165,12 @@ impl FromStr for EventLogId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         u64::from_str(s).map(Self)
+    }
+}
+
+impl fmt::Display for EventLogId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

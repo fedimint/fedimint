@@ -6,6 +6,7 @@ use axum::response::Html;
 use fedimint_core::config::FederationId;
 use fedimint_core::module::serde_json;
 use fedimint_core::time::now;
+use fedimint_eventlog::EventLogId;
 use fedimint_gateway_common::{
     FederationInfo, PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse,
@@ -52,10 +53,10 @@ fn render_tabs(
     html! {
         div class="card h-100" {
             div class="card-header dashboard-header" {
-                ul class="nav nav-tabs card-header-tabs" role="tablist" {
-                    li class="nav-item" {
+                ul class="nav nav-tabs card-header-tabs w-100" role="tablist" {
+                    li class="nav-item flex-fill text-center" {
                         button
-                            class="nav-link active"
+                            class="nav-link active w-100"
                             data-bs-toggle="tab"
                             data-bs-target="#payment-summary"
                             type="button"
@@ -63,14 +64,14 @@ fn render_tabs(
                             "Summary"
                         }
                     }
-                    li class="nav-item" {
+                    li class="nav-item flex-fill text-center" {
                         button
-                            class="nav-link"
+                            class="nav-link w-100"
                             data-bs-toggle="tab"
                             data-bs-target="#payment-log"
                             type="button"
                         {
-                            "Payment Log"
+                            "Payment Events"
                         }
                     }
                 }
@@ -235,9 +236,7 @@ where
             Err(_) => {
                 return Html(
                     html! {
-                        div class="alert alert-danger mb-0" {
-                            "Invalid federation ID."
-                        }
+                        div class="alert alert-danger mb-0" { "Invalid federation ID." }
                     }
                     .into_string(),
                 );
@@ -246,89 +245,108 @@ where
         None => {
             return Html(
                 html! {
-                    div class="alert alert-warning mb-0" {
-                        "No federation selected."
-                    }
+                    div class="alert alert-warning mb-0" { "No federation selected." }
                 }
                 .into_string(),
             );
         }
     };
 
+    let pagination_size = 10;
+
+    // Use end_position query param if present
+    let end_position = params
+        .get("end_position")
+        .and_then(|v| v.parse::<EventLogId>().ok());
+
     let result = state
         .api
         .handle_payment_log_msg(PaymentLogPayload {
-            end_position: None,
-            pagination_size: 10,
+            end_position,
+            pagination_size,
             federation_id,
             event_kinds: vec![],
         })
         .await;
 
-    Html(render_payment_log_result(&result).into_string())
+    Html(render_payment_log_result(&result, federation_id).into_string())
 }
 
-fn render_payment_log_result<E>(result: &Result<PaymentLogResponse, E>) -> Markup
+fn render_payment_log_result<E>(
+    result: &Result<PaymentLogResponse, E>,
+    federation_id: FederationId,
+) -> Markup
 where
     E: std::fmt::Display,
 {
     match result {
-        Ok(PaymentLogResponse(entries)) if !entries.is_empty() => html! {
-            table class="table table-sm table-hover mb-0" {
-                thead {
-                    tr {
-                        th { "Event Kind" }
-                        th { "Timestamp" }
-                    }
-                }
-                tbody {
-                    @for (idx, entry) in entries.iter().enumerate() {
-                        tr {
-                            td {
-                                code {
-                                    (entry.as_raw().kind)
+        Ok(PaymentLogResponse(entries)) if !entries.is_empty() => {
+            // Compute next end_position as last entry position - 1
+            let next_end_position = entries.last().expect("Cannot be empty").id().checked_sub(1);
+
+            html! {
+                div {
+                    table class="table table-sm table-hover mb-2" {
+                        thead {
+                            tr {
+                                th { "Event Kind" }
+                                th { "Timestamp" }
+                                th { "Details" }
+                            }
+                        }
+                        tbody {
+                            @for (idx, entry) in entries.iter().enumerate() {
+                                tr {
+                                    td { code { (entry.as_raw().kind) } }
+                                    td { (format_timestamp(entry.as_raw().ts_usecs)) }
+                                    td {
+                                        button
+                                            class="btn btn-sm btn-outline-secondary"
+                                            type="button"
+                                            onclick=(format!(
+                                                "document.getElementById('payment-details-{}').classList.toggle('d-none');",
+                                                idx
+                                            ))
+                                        {
+                                            "Details"
+                                        }
+                                    }
                                 }
-                            }
-                            td {
-                                (format_timestamp(entry.as_raw().ts_usecs))
-                            }
-                            td {
-                                button
-                                    class="btn btn-sm btn-outline-secondary"
-                                    type="button"
-                                    onclick=(format!(
-                                        "document.getElementById('payment-details-{}').classList.toggle('d-none');",
-                                        idx
-                                    ))
-                                {
-                                    "Details"
+
+                                tr id=(format!("payment-details-{}", idx)) class="d-none" {
+                                    td colspan="3" {
+                                        pre class="bg-dark text-light p-3 rounded small mb-0" {
+                                            (serde_json::to_string_pretty(entry).unwrap_or_else(|_| "<invalid json>".to_string()))
+                                        }
+                                    }
                                 }
                             }
                         }
+                    }
 
-                        // Expandable details row
-                        tr
-                            id=(format!("payment-details-{}", idx))
-                            class="d-none"
-                        {
-                            td colspan="3" {
-                                pre class="bg-dark text-light p-3 rounded small mb-0" {
-                                    (serde_json::to_string_pretty(entry)
-                                        .unwrap_or_else(|_| "<invalid json>".to_string()))
-                                }
+                    @if let Some(next_pos) = next_end_position {
+                        div class="d-flex justify-content-end" {
+                            button
+                                class="btn btn-sm btn-outline-primary"
+                                type="button"
+                                hx-get=(PAYMENT_LOG_ROUTE)
+                                hx-target="#payment-log-content"
+                                hx-include="closest form"
+                                hx-vals=(serde_json::json!({
+                                    "federation_id": federation_id.to_string(),
+                                    "end_position": next_pos
+                                }))
+                            {
+                                "Next"
                             }
                         }
                     }
                 }
             }
-        },
-
+        }
         Ok(_) => html! {
-            div class="text-muted" {
-                "No payment events found for this federation."
-            }
+            div class="text-muted" { "No payment events found for this federation." }
         },
-
         Err(e) => html! {
             div class="alert alert-danger mb-0" {
                 strong { "Failed to load payment log: " }
