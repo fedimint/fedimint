@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["parse_meta_value_static"],"struct":["MetaService"],"type":["MetaEntries"]};
+window.SIDEBAR_ITEMS = {"struct":["MetaService"],"type":["MetaEntries"]};
