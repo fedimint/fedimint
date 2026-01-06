@@ -402,17 +402,22 @@ impl IDatabaseTransactionOps for RocksDbTransaction<'_> {
 impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
-            self.0.commit().map_err(|e| {
-                // RocksDB optimistic transactions return errors on write conflicts
-                // The error message typically contains "Resource busy" for conflicts
-                let error_string = e.to_string();
-                if error_string.contains("Resource busy") || error_string.contains("Conflict") {
-                    DatabaseError::WriteConflict
-                } else {
-                    DatabaseError::backend(e)
+            match self.0.commit() {
+                Ok(()) => Ok(()),
+                Err(err) => {
+                    // RocksDB's OptimisticTransactionDB can return Busy/TryAgain errors
+                    // when concurrent transactions conflict on the same keys.
+                    // These are retriable - return WriteConflict so autocommit retries.
+                    // See: https://github.com/fedimint/fedimint/issues/8077
+                    match err.kind() {
+                        rocksdb::ErrorKind::Busy
+                        | rocksdb::ErrorKind::TryAgain
+                        | rocksdb::ErrorKind::MergeInProgress
+                        | rocksdb::ErrorKind::TimedOut => Err(DatabaseError::WriteConflict),
+                        _ => Err(DatabaseError::backend(err)),
+                    }
                 }
-            })?;
-            Ok(())
+            }
         })
     }
 }
@@ -632,6 +637,56 @@ mod fedimint_rocksdb_tests {
     async fn test_dbtx_write_conflict() {
         fedimint_core::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
             .await;
+    }
+
+    /// Test that concurrent transaction conflicts are handled gracefully
+    /// with autocommit retry logic instead of panicking.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_concurrent_transaction_conflict_with_autocommit() {
+        use std::sync::Arc;
+
+        let db = Arc::new(open_temp_db("fcb-rocksdb-test-concurrent-conflict"));
+
+        // Spawn multiple concurrent tasks that all write to the same key
+        // This will trigger optimistic transaction conflicts
+        let mut handles = Vec::new();
+
+        for i in 0u64..10 {
+            let db_clone = Arc::clone(&db);
+            let handle =
+                fedimint_core::runtime::spawn("rocksdb-transient-error-test", async move {
+                    for j in 0u64..10 {
+                        // Use autocommit which handles retriable errors with retry logic
+                        let result = db_clone
+                            .autocommit::<_, _, anyhow::Error>(
+                                |dbtx, _| {
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    let val = (i * 100 + j) as u8;
+                                    Box::pin(async move {
+                                        // All transactions write to the same key to force conflicts
+                                        dbtx.insert_entry(&TestKey(vec![0]), &TestVal(vec![val]))
+                                            .await;
+                                        Ok(())
+                                    })
+                                },
+                                None, // unlimited retries
+                            )
+                            .await;
+
+                        // Should succeed after retries, must NOT panic with "Resource busy"
+                        assert!(
+                            result.is_ok(),
+                            "Transaction should succeed after retries, got: {result:?}",
+                        );
+                    }
+                });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks - none should panic
+        for handle in handles {
+            handle.await.expect("Task should not panic");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
