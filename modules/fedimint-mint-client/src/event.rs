@@ -71,21 +71,6 @@ impl Event for OOBNotesReissued {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
-/// Event that is emitted when ecash is reissued as part of a recovery process
-#[derive(Serialize, Deserialize)]
-pub struct RecoveryReissuanceStarted {
-    /// The amount of ecash that was recovered and is being reissued
-    pub amount: Amount,
-    /// The operation id of the recovery process
-    pub operation_id: OperationId,
-}
-
-impl Event for RecoveryReissuanceStarted {
-    const MODULE: Option<ModuleKind> = Some(KIND);
-    const KIND: EventKind = EventKind::from_static("recovered-notes-reissued");
-    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
-}
-
 /// Event emitted when e-cash is sent out-of-band.
 /// This is a final event - once e-cash is sent, the operation is complete.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
