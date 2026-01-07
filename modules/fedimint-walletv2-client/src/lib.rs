@@ -197,6 +197,11 @@ impl ClientModuleInit for WalletClientInit {
 }
 
 impl WalletClientModule {
+    /// Returns the Bitcoin network for this federation.
+    pub fn get_network(&self) -> bitcoin::Network {
+        self.cfg.network
+    }
+
     /// Fetch the total value of bitcoin controlled by the federation.
     pub async fn total_value(&self) -> FederationResult<bitcoin::Amount> {
         self.module_api

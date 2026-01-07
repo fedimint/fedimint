@@ -19,8 +19,9 @@ use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV,
-    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set, is_env_var_set_opt,
+    FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_ENABLE_MODULE_WALLETV2_ENV,
+    FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    is_env_var_set_opt,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::rustls::install_crypto_provider;
@@ -411,7 +412,13 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     let mut server_gens = ServerModuleInitRegistry::new();
 
     server_gens.attach(MintInit);
-    server_gens.attach(WalletInit);
+
+    // Wallet modules are mutually exclusive
+    if is_env_var_set(FM_ENABLE_MODULE_WALLETV2_ENV) {
+        server_gens.attach(fedimint_walletv2_server::WalletInit);
+    } else {
+        server_gens.attach(WalletInit);
+    }
 
     if is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(true) {
         server_gens.attach(LightningInit);
@@ -420,8 +427,6 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     if is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(true) {
         server_gens.attach(fedimint_lnv2_server::LightningInit);
     }
-
-    server_gens.attach(fedimint_walletv2_server::WalletInit);
 
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);

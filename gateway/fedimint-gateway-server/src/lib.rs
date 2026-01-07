@@ -309,7 +309,11 @@ async fn calculate_max_withdrawable(
     client: &ClientHandleArc,
     address: &Address,
 ) -> AdminResult<WithdrawDetails> {
-    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let wallet_module = client
+        .get_first_module::<WalletClientModule>()
+        .map_err(|_| AdminGatewayError::WithdrawError {
+            failure_reason: "Withdrawal not yet supported with walletv2 module".to_string(),
+        })?;
 
     let balance = client.get_balance_for_btc().await.map_err(|err| {
         AdminGatewayError::Unexpected(anyhow!(
@@ -493,6 +497,7 @@ impl Gateway {
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
+        registry.attach(fedimint_walletv2_client::WalletClientInit);
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
@@ -1084,15 +1089,25 @@ impl Gateway {
     /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
     /// specific connected federation.
     pub async fn handle_address_msg(&self, payload: DepositAddressPayload) -> AdminResult<Address> {
-        let (_, address, _) = self
-            .select_client(payload.federation_id)
-            .await?
+        let client = self.select_client(payload.federation_id).await?;
+
+        if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
+            let (_, address, _) = wallet_module
+                .allocate_deposit_address_expert_only(())
+                .await?;
+            return Ok(address);
+        }
+
+        if let Ok(wallet_module) = client
             .value()
-            .get_first_module::<WalletClientModule>()
-            .expect("Must have client module")
-            .allocate_deposit_address_expert_only(())
-            .await?;
-        Ok(address)
+            .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+        {
+            return Ok(wallet_module.receive().await);
+        }
+
+        Err(AdminGatewayError::Unexpected(anyhow!(
+            "No wallet module found"
+        )))
     }
 
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a
@@ -1192,14 +1207,27 @@ impl Gateway {
         &self,
         payload: DepositAddressRecheckPayload,
     ) -> AdminResult<()> {
-        self.select_client(payload.federation_id)
-            .await?
+        let client = self.select_client(payload.federation_id).await?;
+
+        if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
+            wallet_module
+                .recheck_pegin_address_by_address(payload.address)
+                .await?;
+            return Ok(());
+        }
+
+        // Walletv2 auto-claims deposits, so this is a no-op
+        if client
             .value()
-            .get_first_module::<WalletClientModule>()
-            .expect("Must have client module")
-            .recheck_pegin_address_by_address(payload.address)
-            .await?;
-        Ok(())
+            .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        Err(AdminGatewayError::Unexpected(anyhow!(
+            "No wallet module found"
+        )))
     }
 
     /// Handles a request to receive ecash into the gateway.
