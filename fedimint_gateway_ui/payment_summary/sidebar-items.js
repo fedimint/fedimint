@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["format_duration","render","render_stats_table","render_summary"]};
+window.SIDEBAR_ITEMS = {"fn":["format_duration","format_timestamp","payment_log_fragment_handler","render","render_payment_log_result","render_payment_log_tab_initial","render_stats_table","render_summary_body","render_summary_tab","render_tabs"]};
