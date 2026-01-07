@@ -1193,65 +1193,6 @@ impl Gateway {
         Ok(ReceiveEcashResponse { amount })
     }
 
-    /// Queries the client log for payment events and returns to the user.
-    pub async fn handle_payment_log_msg(
-        &self,
-        PaymentLogPayload {
-            end_position,
-            pagination_size,
-            federation_id,
-            event_kinds,
-        }: PaymentLogPayload,
-    ) -> AdminResult<PaymentLogResponse> {
-        const BATCH_SIZE: u64 = 10_000;
-        let federation_manager = self.federation_manager.read().await;
-        let client = federation_manager
-            .client(&federation_id)
-            .ok_or(FederationNotConnected {
-                federation_id_prefix: federation_id.to_prefix(),
-            })?
-            .value();
-
-        let event_kinds = if event_kinds.is_empty() {
-            ALL_GATEWAY_EVENTS.to_vec()
-        } else {
-            event_kinds
-        };
-
-        let end_position = if let Some(position) = end_position {
-            position
-        } else {
-            let mut dbtx = client.db().begin_transaction_nc().await;
-            dbtx.get_next_event_log_id().await
-        };
-
-        let mut start_position = end_position.saturating_sub(BATCH_SIZE);
-
-        let mut payment_log = Vec::new();
-
-        while payment_log.len() < pagination_size {
-            let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
-            let mut filtered_batch = batch
-                .into_iter()
-                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
-                .collect::<Vec<_>>();
-            filtered_batch.reverse();
-            payment_log.extend(filtered_batch);
-
-            // Compute the start position for the next batch query
-            start_position = start_position.saturating_sub(BATCH_SIZE);
-
-            if start_position == EventLogId::LOG_START {
-                break;
-            }
-        }
-
-        // Truncate the payment log to the expected pagination size
-        payment_log.truncate(pagination_size);
-
-        Ok(PaymentLogResponse(payment_log))
-    }
-
     /// Retrieves an invoice by the payment hash if it exists, otherwise returns
     /// `None`.
     pub async fn handle_get_invoice_msg(
@@ -2393,6 +2334,65 @@ impl IAdminGateway for Gateway {
             total_cost,
             mint_fees,
         })
+    }
+
+    /// Queries the client log for payment events and returns to the user.
+    async fn handle_payment_log_msg(
+        &self,
+        PaymentLogPayload {
+            end_position,
+            pagination_size,
+            federation_id,
+            event_kinds,
+        }: PaymentLogPayload,
+    ) -> AdminResult<PaymentLogResponse> {
+        const BATCH_SIZE: u64 = 10_000;
+        let federation_manager = self.federation_manager.read().await;
+        let client = federation_manager
+            .client(&federation_id)
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })?
+            .value();
+
+        let event_kinds = if event_kinds.is_empty() {
+            ALL_GATEWAY_EVENTS.to_vec()
+        } else {
+            event_kinds
+        };
+
+        let end_position = if let Some(position) = end_position {
+            position
+        } else {
+            let mut dbtx = client.db().begin_transaction_nc().await;
+            dbtx.get_next_event_log_id().await
+        };
+
+        let mut start_position = end_position.saturating_sub(BATCH_SIZE);
+
+        let mut payment_log = Vec::new();
+
+        while payment_log.len() < pagination_size {
+            let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
+            let mut filtered_batch = batch
+                .into_iter()
+                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
+                .collect::<Vec<_>>();
+            filtered_batch.reverse();
+            payment_log.extend(filtered_batch);
+
+            // Compute the start position for the next batch query
+            start_position = start_position.saturating_sub(BATCH_SIZE);
+
+            if start_position == EventLogId::LOG_START {
+                break;
+            }
+        }
+
+        // Truncate the payment log to the expected pagination size
+        payment_log.truncate(pagination_size);
+
+        Ok(PaymentLogResponse(payment_log))
     }
 
     fn get_password_hash(&self) -> String {

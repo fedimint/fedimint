@@ -1,12 +1,23 @@
+use std::collections::HashMap;
 use std::time::{Duration, UNIX_EPOCH};
 
+use axum::extract::{Query, State};
+use axum::response::Html;
+use fedimint_core::config::FederationId;
+use fedimint_core::module::serde_json;
 use fedimint_core::time::now;
-use fedimint_gateway_common::{PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse};
+use fedimint_eventlog::EventLogId;
+use fedimint_gateway_common::{
+    FederationInfo, PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentSummaryResponse,
+};
+use fedimint_ui_common::UiState;
+use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::DynGatewayApi;
+use crate::{DynGatewayApi, PAYMENT_LOG_ROUTE};
 
-pub async fn render<E>(api: &DynGatewayApi<E>) -> Markup
+pub async fn render<E>(api: &DynGatewayApi<E>, federations: &[FederationInfo]) -> Markup
 where
     E: std::fmt::Display,
 {
@@ -32,25 +43,72 @@ where
         })
         .await;
 
-    match payment_summary {
-        Ok(summary) => render_summary(&summary),
-        Err(e) => html! {
-            div class="card h-100 border-danger" {
-                div class="card-header dashboard-header bg-danger text-white" {
-                    "Payment Summary"
-                }
-                div class="card-body" {
-                    div class="alert alert-danger mb-0" {
-                        strong { "Failed to fetch payment summary: " }
-                        (e.to_string())
+    render_tabs(payment_summary, federations)
+}
+
+fn render_tabs(
+    summary: Result<PaymentSummaryResponse, impl std::fmt::Display>,
+    federations: &[FederationInfo],
+) -> Markup {
+    html! {
+        div class="card h-100" {
+            div class="card-header dashboard-header" {
+                ul class="nav nav-tabs card-header-tabs w-100" role="tablist" {
+                    li class="nav-item flex-fill text-center" {
+                        button
+                            class="nav-link active w-100"
+                            data-bs-toggle="tab"
+                            data-bs-target="#payment-summary"
+                            type="button"
+                        {
+                            "Summary"
+                        }
+                    }
+                    li class="nav-item flex-fill text-center" {
+                        button
+                            class="nav-link w-100"
+                            data-bs-toggle="tab"
+                            data-bs-target="#payment-log"
+                            type="button"
+                        {
+                            "Payment Events"
+                        }
                     }
                 }
+            }
+
+            div class="card-body tab-content" {
+                div
+                    class="tab-pane fade show active"
+                    id="payment-summary"
+                {
+                    (render_summary_tab(summary))
+                }
+
+                div
+                    class="tab-pane fade"
+                    id="payment-log"
+                {
+                    (render_payment_log_tab_initial(federations))
+                }
+            }
+        }
+    }
+}
+
+fn render_summary_tab(summary: Result<PaymentSummaryResponse, impl std::fmt::Display>) -> Markup {
+    match summary {
+        Ok(summary) => render_summary_body(&summary),
+        Err(e) => html! {
+            div class="alert alert-danger mb-0" {
+                strong { "Failed to load payment summary: " }
+                (e.to_string())
             }
         },
     }
 }
 
-fn render_summary(summary: &PaymentSummaryResponse) -> Markup {
+fn render_summary_body(summary: &PaymentSummaryResponse) -> Markup {
     html! {
         div class="card h-100" {
             div class="card-header dashboard-header" { "Payment Summary (Last 24h)" }
@@ -109,6 +167,203 @@ fn render_stats_table(title: &str, stats: &PaymentStats, title_class: &str) -> M
             }
         }
     }
+}
+
+fn render_payment_log_tab_initial(federations: &[FederationInfo]) -> Markup {
+    html! {
+        div {
+            form class="mb-3 d-flex gap-2 align-items-end" {
+                div class="flex-grow-1" {
+                    label class="form-label fw-bold" {
+                        "Federation"
+                    }
+
+                    select
+                        class="form-select form-select-sm"
+                        name="federation_id"
+                        hx-get=(PAYMENT_LOG_ROUTE)
+                        hx-trigger="change"
+                        hx-target="#payment-log-content"
+                        hx-include="this"
+                    {
+                        option value="" selected disabled {
+                            "Select a federation…"
+                        }
+
+                        @for fed in federations {
+                            option value=(fed.federation_id.to_string()) {
+                                (fed.federation_name.clone().unwrap_or_default())
+                            }
+                        }
+                    }
+                }
+
+                button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    title="Refresh payment log"
+                    hx-get=(PAYMENT_LOG_ROUTE)
+                    hx-target="#payment-log-content"
+                    hx-include="closest form"
+                {
+                    "↻ Refresh"
+                }
+            }
+
+            div
+                id="payment-log-content"
+                class="mt-3"
+            {
+                div class="text-muted" {
+                    "Select a federation to view payment events."
+                }
+            }
+        }
+    }
+}
+
+pub async fn payment_log_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Query(params): Query<HashMap<String, String>>,
+) -> Html<String>
+where
+    E: std::fmt::Display + std::fmt::Debug,
+{
+    let federation_id = match params.get("federation_id") {
+        Some(v) => match v.parse::<FederationId>() {
+            Ok(id) => id,
+            Err(_) => {
+                return Html(
+                    html! {
+                        div class="alert alert-danger mb-0" { "Invalid federation ID." }
+                    }
+                    .into_string(),
+                );
+            }
+        },
+        None => {
+            return Html(
+                html! {
+                    div class="alert alert-warning mb-0" { "No federation selected." }
+                }
+                .into_string(),
+            );
+        }
+    };
+
+    let pagination_size = 10;
+
+    // Use end_position query param if present
+    let end_position = params
+        .get("end_position")
+        .and_then(|v| v.parse::<EventLogId>().ok());
+
+    let result = state
+        .api
+        .handle_payment_log_msg(PaymentLogPayload {
+            end_position,
+            pagination_size,
+            federation_id,
+            event_kinds: vec![],
+        })
+        .await;
+
+    Html(render_payment_log_result(&result, federation_id).into_string())
+}
+
+fn render_payment_log_result<E>(
+    result: &Result<PaymentLogResponse, E>,
+    federation_id: FederationId,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    match result {
+        Ok(PaymentLogResponse(entries)) if !entries.is_empty() => {
+            // Compute next end_position as last entry position - 1
+            let next_end_position = entries.last().expect("Cannot be empty").id().checked_sub(1);
+
+            html! {
+                div {
+                    table class="table table-sm table-hover mb-2" {
+                        thead {
+                            tr {
+                                th { "Event Kind" }
+                                th { "Timestamp" }
+                                th { "Details" }
+                            }
+                        }
+                        tbody {
+                            @for (idx, entry) in entries.iter().enumerate() {
+                                tr {
+                                    td { code { (entry.as_raw().kind) } }
+                                    td { (format_timestamp(entry.as_raw().ts_usecs)) }
+                                    td {
+                                        button
+                                            class="btn btn-sm btn-outline-secondary"
+                                            type="button"
+                                            onclick=(format!(
+                                                "document.getElementById('payment-details-{}').classList.toggle('d-none');",
+                                                idx
+                                            ))
+                                        {
+                                            "Details"
+                                        }
+                                    }
+                                }
+
+                                tr id=(format!("payment-details-{}", idx)) class="d-none" {
+                                    td colspan="3" {
+                                        pre class="bg-dark text-light p-3 rounded small mb-0" {
+                                            (serde_json::to_string_pretty(entry).unwrap_or_else(|_| "<invalid json>".to_string()))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    @if let Some(next_pos) = next_end_position {
+                        div class="d-flex justify-content-end" {
+                            button
+                                class="btn btn-sm btn-outline-primary"
+                                type="button"
+                                hx-get=(PAYMENT_LOG_ROUTE)
+                                hx-target="#payment-log-content"
+                                hx-include="closest form"
+                                hx-vals=(serde_json::json!({
+                                    "federation_id": federation_id.to_string(),
+                                    "end_position": next_pos
+                                }))
+                            {
+                                "Next"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(_) => html! {
+            div class="text-muted" { "No payment events found for this federation." }
+        },
+        Err(e) => html! {
+            div class="alert alert-danger mb-0" {
+                strong { "Failed to load payment log: " }
+                (e.to_string())
+            }
+        },
+    }
+}
+
+fn format_timestamp(ts_usecs: u64) -> String {
+    let secs = ts_usecs / 1_000_000;
+    let nanos = (ts_usecs % 1_000_000) * 1_000;
+
+    let ts = UNIX_EPOCH + Duration::new(secs, nanos as u32);
+    let dt: chrono::DateTime<chrono::Utc> = ts.into();
+
+    dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
 fn format_duration(d: Duration) -> String {

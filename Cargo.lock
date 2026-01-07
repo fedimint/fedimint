@@ -3484,6 +3484,7 @@ dependencies = [
  "chrono",
  "fedimint-bitcoind",
  "fedimint-core",
+ "fedimint-eventlog",
  "fedimint-gateway-common",
  "fedimint-ln-common",
  "fedimint-mint-client",

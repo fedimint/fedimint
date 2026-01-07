@@ -12,10 +12,10 @@
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
 use std::borrow::Cow;
-use std::ops;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use std::{fmt, ops};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -148,6 +148,10 @@ impl EventLogId {
     pub fn saturating_sub(self, rhs: u64) -> EventLogId {
         Self(self.0.saturating_sub(rhs))
     }
+
+    pub fn checked_sub(self, rhs: u64) -> Option<EventLogId> {
+        self.0.checked_sub(rhs).map(EventLogId)
+    }
 }
 
 impl From<EventLogId> for u64 {
@@ -161,6 +165,12 @@ impl FromStr for EventLogId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         u64::from_str(s).map(Self)
+    }
+}
+
+impl fmt::Display for EventLogId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -182,6 +192,12 @@ impl<'s> From<&'s str> for EventKind {
 impl From<String> for EventKind {
     fn from(value: String) -> Self {
         Self(Cow::Owned(value))
+    }
+}
+
+impl fmt::Display for EventKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
