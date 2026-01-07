@@ -7,7 +7,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{PeerId, TransactionId};
+use fedimint_core::PeerId;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_common::Denomination;
 use tbs::{aggregate_signature_shares, AggregatePublicKey, BlindedSignatureShare, PublicKeyShare};
@@ -61,7 +61,7 @@ impl State for MintOutputStateMachine {
             OutputSMState::Pending => vec![StateTransition::new(
                 Self::await_signature_shares(
                     global_context.clone(),
-                    self.common.range.map(|range| range.txid()),
+                    self.common.range,
                     self.common.issuance_requests.clone(),
                     context.tbs_pks.clone(),
                     context.root_secret.clone(),
@@ -91,19 +91,24 @@ impl State for MintOutputStateMachine {
 impl MintOutputStateMachine {
     async fn await_signature_shares(
         global_context: DynGlobalClientContext,
-        txid: Option<TransactionId>,
+        range: Option<OutPointRange>,
         issuance_requests: Vec<NoteIssuanceRequest>,
         tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
         root_secret: DerivableSecret,
     ) -> Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String> {
-        if let Some(txid) = txid {
-            global_context.await_tx_accepted(txid).await?;
-        }
+        if let Some(range) = range {
+            global_context.await_tx_accepted(range.txid).await?;
 
-        global_context
-            .module_api()
-            .fetch_signature_shares(issuance_requests, tbs_pks, root_secret)
-            .await
+            global_context
+                .module_api()
+                .fetch_signature_shares(range, issuance_requests, tbs_pks, root_secret)
+                .await
+        } else {
+            global_context
+                .module_api()
+                .fetch_signature_shares_recovery(issuance_requests, tbs_pks, root_secret)
+                .await
+        }
     }
 
     async fn transition_outcome_ready(
@@ -184,7 +189,11 @@ pub fn verify_blind_shares(
 
         ensure!(
             tbs::verify_signature_share(
-                issuance::blinded_message(request.tweak, root_secret),
+                issuance::blinded_message(&issuance::output_secret(
+                    request.denomination,
+                    request.tweak,
+                    root_secret,
+                )),
                 *share,
                 *amount_key
             ),

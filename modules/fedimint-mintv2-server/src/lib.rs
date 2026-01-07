@@ -33,7 +33,7 @@ use fedimint_mintv2_common::config::{
 };
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
-    SIGNATURE_SHARES_ENDPOINT,
+    SIGNATURE_SHARES_ENDPOINT, SIGNATURE_SHARES_RECOVERY_ENDPOINT,
 };
 use fedimint_mintv2_common::{
     Denomination, MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes,
@@ -56,8 +56,9 @@ use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
 
 use crate::db::{
-    BlindedSignatureShareKey, BlindedSignatureSharePrefix, DbKeyPrefix, IssuanceCounterKey,
-    IssuanceCounterPrefix, NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
+    BlindedSignatureShareKey, BlindedSignatureSharePrefix, BlindedSignatureShareRecoveryKey,
+    BlindedSignatureShareRecoveryPrefix, DbKeyPrefix, IssuanceCounterKey, IssuanceCounterPrefix,
+    NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -87,7 +88,17 @@ impl ModuleInit for MintInit {
                         BlindedSignatureShareKey,
                         BlindedSignatureShare,
                         mint,
-                        "Output Outcomes"
+                        "Blinded Signature Shares"
+                    );
+                }
+                DbKeyPrefix::BlindedSignatureShareRecovery => {
+                    push_db_pair_items!(
+                        dbtx,
+                        BlindedSignatureShareRecoveryPrefix,
+                        BlindedSignatureShareRecoveryKey,
+                        BlindedSignatureShare,
+                        mint,
+                        "Blinded Signature Shares (Recovery)"
                     );
                 }
                 DbKeyPrefix::MintAuditItem => {
@@ -384,7 +395,7 @@ impl ServerModule for Mint {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
-        _outpoint: OutPoint,
+        outpoint: OutPoint,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -396,7 +407,12 @@ impl ServerModule for Mint {
             .map(|key| tbs::sign_message(output.nonce, *key))
             .ok_or(MintOutputError::InvalidAmountTier)?;
 
-        dbtx.insert_new_entry(&BlindedSignatureShareKey(output.nonce), &signature)
+        // Store by outpoint for efficient range-based retrieval
+        dbtx.insert_new_entry(&BlindedSignatureShareKey(outpoint), &signature)
+            .await;
+
+        // Store by blinded message for recovery
+        dbtx.insert_new_entry(&BlindedSignatureShareRecoveryKey(output.nonce), &signature)
             .await;
 
         let new_count = dbtx
@@ -454,11 +470,26 @@ impl ServerModule for Mint {
             api_endpoint! {
                 SIGNATURE_SHARES_ENDPOINT,
                 ApiVersion::new(0, 1),
+                async |_module: &Mint, context, range: fedimint_core::OutPointRange| -> Vec<BlindedSignatureShare> {
+                    let start_key = BlindedSignatureShareKey(range.start_out_point());
+                    let end_key = BlindedSignatureShareKey(range.end_out_point());
+
+                    Ok(context.dbtx()
+                        .find_by_range(start_key..end_key)
+                        .await
+                        .map(|entry| entry.1)
+                        .collect()
+                        .await)
+                }
+            },
+            api_endpoint! {
+                SIGNATURE_SHARES_RECOVERY_ENDPOINT,
+                ApiVersion::new(0, 1),
                 async |_module: &Mint, context, messages: Vec<tbs::BlindedMessage>| -> Vec<BlindedSignatureShare> {
                     let mut shares = Vec::new();
 
                     for message in messages {
-                        let share = context.dbtx().get_value(&BlindedSignatureShareKey(message))
+                        let share = context.dbtx().get_value(&BlindedSignatureShareRecoveryKey(message))
                             .await
                             .ok_or(ApiError::bad_request("No blinded signature share found".to_string()))?;
 

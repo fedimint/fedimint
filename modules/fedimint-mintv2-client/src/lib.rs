@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::too_many_lines)]
 
 mod api;
 #[cfg(feature = "cli")]
@@ -73,7 +74,9 @@ use crate::issuance::NoteIssuanceRequest;
 use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
 
 const TARGET_PER_DENOMINATION: usize = 3;
-const SLICE_SIZE: u64 = 10;
+const SLICE_SIZE: u64 = 10000;
+const PARALLEL_HASH_REQUESTS: usize = 10;
+const PARALLEL_SLICE_REQUESTS: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub struct SpendableNote {
@@ -149,8 +152,6 @@ impl ClientModuleInit for MintClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
     ) -> anyhow::Result<()> {
-        const PARALLEL_REQUESTS: usize = 3;
-
         let mut state = if let Some(state) = args
             .db()
             .begin_transaction_nc()
@@ -174,20 +175,26 @@ impl ClientModuleInit for MintClientInit {
 
         let peer_selector = PeerSelector::new(args.api().all_peers().clone());
 
-        let mut recovery_stream = Box::pin(
-            futures::stream::iter(
-                (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+        let mut recovery_stream = futures::stream::iter(
+            (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+        )
+        .map(|start| {
+            let api = args.module_api().clone();
+            let end = std::cmp::min(start + SLICE_SIZE, state.total_items);
+
+            async move { (start, end, api.fetch_recovery_slice_hash(start, end).await) }
+        })
+        .buffered(PARALLEL_HASH_REQUESTS)
+        .map(|(start, end, hash)| {
+            download_slice_with_hash(
+                args.module_api().clone(),
+                peer_selector.clone(),
+                start,
+                end,
+                hash,
             )
-            .map(|start| {
-                download_verified_slice(
-                    args.module_api().clone(),
-                    peer_selector.clone(),
-                    start,
-                    std::cmp::min(start + SLICE_SIZE, state.total_items),
-                )
-            })
-            .buffered(PARALLEL_REQUESTS),
-        );
+        })
+        .buffered(PARALLEL_SLICE_REQUESTS);
 
         let tweak_grind_seed = args.module_root_secret().to_random_bytes::<32>();
 
@@ -207,12 +214,17 @@ impl ClientModuleInit for MintClientInit {
                         if !issuance::check_tweak(*tweak, tweak_grind_seed) {
                             continue;
                         }
-                        if !issuance::check_nonce(*tweak, args.module_root_secret(), *nonce_hash) {
+                        let output_secret = issuance::output_secret(
+                            *denomination,
+                            *tweak,
+                            args.module_root_secret(),
+                        );
+
+                        if !issuance::check_nonce(&output_secret, *nonce_hash) {
                             continue;
                         }
 
-                        let computed_nonce_hash =
-                            issuance::nonce(*tweak, args.module_root_secret()).consensus_hash();
+                        let computed_nonce_hash = issuance::nonce(&output_secret).consensus_hash();
 
                         // Ignore possible duplicate nonces
                         if !state.nonces.insert(computed_nonce_hash) {
@@ -972,15 +984,14 @@ impl PeerSelector {
 }
 
 /// Download a slice with hash verification and peer selection
-async fn download_verified_slice(
+async fn download_slice_with_hash(
     module_api: DynModuleApi,
     peer_selector: PeerSelector,
     start: u64,
     end: u64,
+    expected_hash: sha256::Hash,
 ) -> Vec<RecoveryItem> {
     const TIMEOUT: Duration = Duration::from_secs(3);
-
-    let expected_hash = module_api.fetch_recovery_slice_hash(start, end).await;
 
     loop {
         let peer = peer_selector.choose_peer();
