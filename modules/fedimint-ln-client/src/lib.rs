@@ -85,7 +85,7 @@ use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
@@ -118,8 +118,8 @@ const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 // 24 hours. Many wallets default to 1 hour, but it's a bad user experience if
 // invoices expire too quickly
 const DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24);
-static LNURL_ASYNC_CLIENT: Lazy<lnurl::AsyncClient> =
-    Lazy::new(|| lnurl::AsyncClient::from_client(reqwest::Client::new()));
+static LNURL_ASYNC_CLIENT: LazyLock<lnurl::AsyncClient> =
+    LazyLock::new(|| lnurl::AsyncClient::from_client(reqwest::Client::new()));
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
