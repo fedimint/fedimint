@@ -166,6 +166,9 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<Address> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Enable walletv2 module instead of wallet v1
+    std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "1");
+
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
