@@ -25,6 +25,8 @@ anyhow = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-ecash-migration-common = { workspace = true }
+fedimint-ecash-migration-server = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-common = { workspace = true }

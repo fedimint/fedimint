@@ -1,0 +1,48 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-ecash-migration-tests contains integration tests for the ecash migration module"
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-ecash-migration-tests"
+publish = false
+version = { workspace = true }
+
+[[bin]]
+name = "ecash-migration-module-tests"
+path = "bin/tests.rs"
+
+[[test]]
+name = "fedimint_ecash_migration_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin_hashes = { workspace = true }
+bls12_381 = { workspace = true }
+devimint = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
+fedimint-ecash-migration-client = { workspace = true }
+fedimint-ecash-migration-common = { workspace = true }
+fedimint-ecash-migration-server = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-mint-common = { workspace = true }
+fedimint-server = { workspace = true }
+fedimint-testing = { workspace = true }
+ff = { workspace = true }
+futures = { workspace = true }
+group = { workspace = true }
+rand = { workspace = true }
+serde_json = { workspace = true }
+tbs = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
