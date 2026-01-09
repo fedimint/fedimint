@@ -13,7 +13,7 @@ use fedimint_core::PeerId;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::ApiAuth;
-use fedimint_core::task::{self, block_in_place, block_on};
+use fedimint_core::task::{self};
 use fedimint_core::time::now;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::util::backoff_util::custom_backoff;
@@ -23,7 +23,7 @@ use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV,
@@ -84,7 +84,7 @@ pub struct ProcessHandle(Arc<Mutex<ProcessHandleInner>>);
 impl ProcessHandle {
     pub async fn terminate(&self) -> Result<()> {
         let mut inner = self.0.lock().await;
-        inner.terminate().await?;
+        inner.terminate();
         Ok(())
     }
 
@@ -106,43 +106,51 @@ pub struct ProcessHandleInner {
 }
 
 impl ProcessHandleInner {
-    async fn terminate(&mut self) -> anyhow::Result<()> {
-        if let Some(child) = self.child.as_mut() {
+    fn terminate(&mut self) {
+        if let Some(mut child) = self.child.take() {
             debug!(
                 target: LOG_DEVIMINT,
-                name=%self.name,
-                signal="SIGTERM",
+                name = %self.name,
+                signal = "SIGTERM",
+                name = %self.name,
+                signal = "SIGTERM",
                 "sending signal to terminate child process"
             );
 
-            send_sigterm(child);
+            send_sigterm(&child);
 
-            if (fedimint_core::runtime::timeout(Duration::from_secs(2), child.wait()).await)
-                .is_err()
-            {
-                debug!(
-                    target: LOG_DEVIMINT,
-                    name=%self.name,
-                    signal="SIGKILL",
-                    "sending signal to terminate child process"
-                );
+            for _ in 0..10 {
+                if let Ok(Some(_)) = child.try_wait() {
+                    return;
+                }
+            }
 
-                send_sigkill(child);
+            debug!(
+                target: LOG_DEVIMINT,
+                name = %self.name,
+                signal = "SIGKILL",
+                "sending signal to terminate child process"
+            );
 
-                match fedimint_core::runtime::timeout(Duration::from_secs(5), child.wait()).await {
-                    Ok(Ok(_)) => {}
-                    Ok(Err(err)) => {
-                        bail!("Failed to terminate child process {}: {}", self.name, err);
-                    }
-                    Err(_) => {
-                        bail!("Failed to terminate child process {}: timeout", self.name);
-                    }
+            send_sigkill(&child);
+
+            for _ in 0..10 {
+                if let Ok(Some(_)) = child.try_wait() {
+                    break;
+                }
+            }
+            match child.try_wait() {
+                Ok(Some(_)) => {}
+                other => {
+                    debug!(
+                        target: LOG_DEVIMINT,
+                        name = %self.name,
+                        res = ?other,
+                        "Process possibly not terminated"
+                    );
                 }
             }
         }
-        // only drop the child handle if succeeded to terminate
-        self.child.take();
-        Ok(())
     }
 
     async fn await_terminated(&mut self) -> anyhow::Result<()> {
@@ -177,14 +185,7 @@ impl Drop for ProcessHandleInner {
             return;
         }
 
-        block_in_place(|| {
-            if let Err(err) = block_on(self.terminate()) {
-                warn!(target: LOG_DEVIMINT,
-                        name=%self.name,
-                        err = %err.fmt_compact_anyhow(),
-                        "Error terminating process on drop");
-            }
-        });
+        self.terminate();
     }
 }
 
