@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::ModuleKind;
 use crate::encoding::{Decodable, Encodable};
+use crate::invite_code::InviteCode;
 
 /// The state of the server returned via APIs
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq, Encodable, Decodable)]
@@ -60,4 +61,12 @@ pub struct SetLocalParamsRequest {
 pub struct GuardianConfigBackup {
     #[serde(with = "crate::hex::serde")]
     pub tar_archive_bytes: Vec<u8>,
+}
+
+/// Announcement that a federation is being decommissioned, with optional
+/// successor federation invite code for users to migrate to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct DecommissionAnnouncement {
+    /// Optional invite code for the successor federation
+    pub successor: Option<InviteCode>,
 }

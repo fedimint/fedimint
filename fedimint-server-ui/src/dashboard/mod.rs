@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod bitcoin;
 pub(crate) mod consensus_explorer;
+pub mod decommission;
 pub mod general;
 pub mod invite;
 pub mod latency;
@@ -24,8 +25,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput,
-    METRICS_ROUTE, login_submit_response,
+    CHANGE_PASSWORD_ROUTE, CLEAR_DECOMMISSION_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE,
+    EXPLORER_ROUTE, LoginInput, METRICS_ROUTE, SET_DECOMMISSION_ROUTE, login_submit_response,
 };
 
 // Dashboard login form handler
@@ -189,6 +190,7 @@ async fn dashboard_view(
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
+    let decommission_announcement = state.api.decommission_announcement().await;
 
     let content = html! {
         div class="row gy-4" {
@@ -244,36 +246,31 @@ async fn dashboard_view(
             }
         }
 
-        // Guardian Configuration Backup section
+        // Guardian Configuration Backup and Decommission Announcement section
         div class="row gy-4 mt-4" {
-            div class="col-12" {
-                div class="card" {
+            div class="col-lg-6" {
+                div class="card h-100" {
                     div class="card-header bg-warning text-dark" {
                         h5 class="mb-0" { "Guardian Configuration Backup" }
                     }
                     div class="card-body" {
-                        div class="row" {
-                            div class="col-lg-6 mb-3 mb-lg-0" {
-                                p {
-                                    "You only need to download this backup once."
-                                }
-                                p {
-                                    "Use it to restore your guardian if your server fails."
-                                }
-                                a href="/download-backup" class="btn btn-outline-warning btn-lg mt-2" {
-                                    "Download Guardian Backup"
-                                }
-                            }
-                            div class="col-lg-6" {
-                                div class="alert alert-warning mb-0" {
-                                    strong { "Security Warning" }
-                                    br;
-                                    "Store this file securely since anyone with it and your password can run your guardian node."
-                                }
-                            }
+                        p {
+                            "You only need to download this backup once. "
+                            "Use it to restore your guardian if your server fails."
+                        }
+                        div class="alert alert-warning" {
+                            strong { "Security Warning" }
+                            br;
+                            "Store this file securely since anyone with it and your password can run your guardian node."
+                        }
+                        a href="/download-backup" class="btn btn-outline-warning" {
+                            "Download Guardian Backup"
                         }
                     }
                 }
+            }
+            div class="col-lg-6" {
+                (decommission::render(decommission_announcement.as_ref()))
             }
         }
 
@@ -337,6 +334,14 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
         .route(CHANGE_PASSWORD_ROUTE, post(change_password))
         .route(METRICS_ROUTE, get(metrics_handler))
+        .route(
+            SET_DECOMMISSION_ROUTE,
+            post(decommission::post_set_decommission),
+        )
+        .route(
+            CLEAR_DECOMMISSION_ROUTE,
+            post(decommission::post_clear_decommission),
+        )
         .with_static_routes();
 
     // routeradd LNv2 gateway routes if the module exists

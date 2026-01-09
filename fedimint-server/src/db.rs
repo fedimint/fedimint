@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use bitcoin::hex::DisplayHex as _;
+use fedimint_core::admin_client::DecommissionAnnouncement;
 use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCore as _, MODULE_GLOBAL_PREFIX,
 };
@@ -19,6 +20,7 @@ pub enum DbKeyPrefix {
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
     ServerInfo = 0x07,
+    DecommissionAnnouncement = 0x08,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -65,5 +67,15 @@ impl_db_record!(
     key = ServerInfoKey,
     value = ServerInfo,
     db_prefix = DbKeyPrefix::ServerInfo,
+    notify_on_modify = false,
+);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct DecommissionAnnouncementKey;
+
+impl_db_record!(
+    key = DecommissionAnnouncementKey,
+    value = DecommissionAnnouncement,
+    db_prefix = DbKeyPrefix::DecommissionAnnouncement,
     notify_on_modify = false,
 );

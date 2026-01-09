@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_core::admin_client::GuardianConfigBackup;
+use fedimint_core::admin_client::{DecommissionAnnouncement, GuardianConfigBackup};
 use fedimint_core::bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
@@ -98,6 +98,12 @@ pub trait IDashboardApi {
         current_password: &str,
         guardian_auth: &GuardianAuthToken,
     ) -> Result<(), String>;
+
+    /// Get the current decommission announcement, if set
+    async fn decommission_announcement(&self) -> Option<DecommissionAnnouncement>;
+
+    /// Set or clear the decommission announcement
+    async fn set_decommission_announcement(&self, announcement: Option<DecommissionAnnouncement>);
 
     /// Create a trait object
     fn into_dyn(self) -> DynDashboardApi

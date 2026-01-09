@@ -78,6 +78,9 @@
 /// Federation Api announcement handling
 mod api_announcements;
 
+/// Decommission announcement handling
+mod decommission;
+
 /// Core [`Client`]
 mod client;
 

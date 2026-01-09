@@ -33,6 +33,7 @@ use fedimint_client_module::{
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::admin_client::DecommissionAnnouncement;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -194,6 +195,20 @@ impl Client {
 
     pub fn api_clone(&self) -> DynGlobalApi {
         self.api.clone()
+    }
+
+    /// Get the decommission announcement from local DB cache.
+    ///
+    /// This is a fast, non-blocking read from the local database. The value
+    /// is refreshed daily by a background task. Returns `None` if no
+    /// decommission has been announced or if the cache hasn't been populated
+    /// yet.
+    pub async fn decommission_announcement(&self) -> Option<DecommissionAnnouncement> {
+        self.db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&crate::db::DecommissionAnnouncementKey)
+            .await
     }
 
     /// Returns a stream that emits the current connection status of all peers
