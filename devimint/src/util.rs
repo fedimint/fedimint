@@ -177,12 +177,25 @@ impl Drop for ProcessHandleInner {
             return;
         }
 
+        if std::thread::panicking() {
+            // Doing block_in_place + block on trickery
+            // breaks down during panics, so let's just
+            // try to kill it and move on
+            if let Some(mut child) = self.child.take() {
+                send_sigterm(&child);
+                let _ = child.try_wait();
+            }
+            return;
+        }
+
         block_in_place(|| {
             if let Err(err) = block_on(self.terminate()) {
-                warn!(target: LOG_DEVIMINT,
-                        name=%self.name,
-                        err = %err.fmt_compact_anyhow(),
-                        "Error terminating process on drop");
+                warn!(
+                    target: LOG_DEVIMINT,
+                    name=%self.name,
+                    err = %err.fmt_compact_anyhow(),
+                    "Error terminating process on drop"
+                );
             }
         });
     }
