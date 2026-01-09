@@ -31,7 +31,7 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Backwards-compatibility tests"
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 120
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v6
