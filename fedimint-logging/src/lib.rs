@@ -186,10 +186,18 @@ impl TracingSetup {
                 // Jaeger now supports OTLP natively, so we use OTLP instead of the deprecated
                 // Jaeger exporter. Configure with OTEL_EXPORTER_OTLP_ENDPOINT env var
                 // (defaults to http://localhost:4317)
-                let exporter = opentelemetry_otlp::SpanExporter::builder()
+                let exporter = match opentelemetry_otlp::SpanExporter::builder()
                     .with_tonic()
                     .build()
-                    .expect("Failed to create OTLP span exporter");
+                {
+                    Ok(exporter) => exporter,
+                    Err(e) => {
+                        eprintln!(
+                            "Failed to create OTLP span exporter, continuing without telemetry: {e}"
+                        );
+                        return None;
+                    }
+                };
 
                 // Build the tracer provider with the OTLP exporter
                 let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -223,9 +231,9 @@ impl TracingSetup {
 
 pub fn shutdown() {
     #[cfg(feature = "telemetry")]
-    if let Some(provider) = TRACER_PROVIDER.get() {
-        if let Err(e) = provider.shutdown() {
-            eprintln!("Error shutting down tracer provider: {e}");
-        }
+    if let Some(provider) = TRACER_PROVIDER.get()
+        && let Err(e) = provider.shutdown()
+    {
+        eprintln!("Error shutting down tracer provider: {e}");
     }
 }
