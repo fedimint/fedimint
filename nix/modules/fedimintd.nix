@@ -254,16 +254,16 @@ in
       assertions = [
         {
           assertion = lib.all (
-            fedimintdName: cfg:
+            cfg:
             (cfg.bitcoin.bitcoindUrl != null)
             -> (cfg.bitcoin.bitcoindUser != null && cfg.bitcoin.bitcoindPassword != null)
           ) (lib.mapAttrsToList (name: cfg: cfg) eachFedimintd);
           message = "If bitcoindUrl is set, both bitcoindUser and bitcoindPassword must also be set. Embedded credentials in the bitcoindUrl are not supported anymore, please remove them.";
         }
         {
-          assertion = lib.all (
-            fedimintdName: cfg: (cfg.bitcoin.bitcoindUrl != null || cfg.bitcoin.esploraUrl != null)
-          ) (lib.mapAttrsToList (name: cfg: cfg) eachFedimintd);
+          assertion = lib.all (cfg: (cfg.bitcoin.bitcoindUrl != null || cfg.bitcoin.esploraUrl != null)) (
+            lib.mapAttrsToList (name: cfg: cfg) eachFedimintd
+          );
           message = "Either bitcoindUrl or esploraUrl must be set for each fedimintd instance";
         }
       ];
