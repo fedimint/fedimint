@@ -609,4 +609,9 @@ impl Meta {
 
         Ok(submissions)
     }
+
+    /// Get the consensus data as JSON
+    pub async fn get_consensus_json(&self) -> Option<serde_json::Value> {
+        self.handle_get_consensus_request_ui().await.ok().flatten()
+    }
 }

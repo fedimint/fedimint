@@ -29,7 +29,6 @@ pub(crate) struct SetupInput {
     pub name: String,
     #[serde(default)]
     pub is_lead: bool,
-    pub federation_name: String,
     #[serde(default)] // will not be sent if disabled
     pub enable_base_fees: bool,
     #[serde(default)] // list of enabled module kinds
@@ -141,8 +140,6 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 }
 
                 div class="toggle-content mt-3" {
-                    input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation Name";
-
                     div class="form-check mt-3" {
                         input type="checkbox" class="form-check-input" id="enable_base_fees" name="enable_base_fees" checked value="true";
 
@@ -208,12 +205,6 @@ async fn setup_submit(
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
     // Only use these settings if is_lead is true
-    let federation_name = if input.is_lead {
-        Some(input.federation_name)
-    } else {
-        None
-    };
-
     let disable_base_fees = if input.is_lead {
         Some(!input.enable_base_fees)
     } else {
@@ -237,7 +228,6 @@ async fn setup_submit(
         .set_local_parameters(
             ApiAuth(input.password),
             input.name,
-            federation_name,
             disable_base_fees,
             enabled_modules,
         )

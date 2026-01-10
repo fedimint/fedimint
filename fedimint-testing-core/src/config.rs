@@ -57,7 +57,6 @@ pub fn local_config_gen_params(
                     p2p_url: p2p_url.parse().expect("Should parse"),
                     cert: tls_keys[peer].0.as_ref().to_vec(),
                 },
-                federation_name: None,
                 disable_base_fees: Some(!enable_mint_fees),
                 enabled_modules: None,
             };

@@ -283,6 +283,7 @@ pub async fn post_delete(
 // <https://fedibtc.github.io/fedi-docs/docs/fedi/meta_fields/federation-metadata-configurations>
 const WELL_KNOWN_KEYS: &[&str] = &[
     "welcome_message",
+    "federation_name",
     "fedi:pinned_message",
     "fedi:federation_icon_url",
     "fedi:tos_url",
