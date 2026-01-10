@@ -14,7 +14,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=9a22c690bc3c15291c3c70f662c855b5bdaffc0e";
+      url = "github:dpc/flakebox?rev=3e20ed1239ea83da3790ae2f2d207b508b429c2b";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
@@ -139,7 +139,6 @@
             just.importPaths = [ "justfile.fedimint.just" ];
             # we have a custom final check
             just.rules.final-check.enable = false;
-            rust.pre-commit.leftover-dbg.enable = false;
             git.pre-commit.trailing_newline = false;
             git.pre-commit.hooks = {
               check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
@@ -155,7 +154,7 @@
           # the newer (clang 18, clang 19) toolchains, which causes
           # fedimint-cli segfault randomly, but only in Nix sandbox (?!).
           # Supper weird.
-          stdenv = p: p.clang_20.stdenv;
+          stdenv = p: p.llvmPackages_20.stdenv;
           clang = pkgs.llvmPackages_20.clang;
           libclang = pkgs.llvmPackages_20.libclang.lib;
           clang-unwrapped = pkgs.llvmPackages_20.clang-unwrapped;
