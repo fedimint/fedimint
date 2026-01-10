@@ -1,4 +1,5 @@
 pub mod announcement;
+pub mod guardian_metadata;
 mod http_auth;
 
 use std::fmt::{self, Formatter};
