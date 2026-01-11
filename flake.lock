@@ -436,17 +436,17 @@
         "wild": "wild"
       },
       "locked": {
-        "lastModified": 1762577276,
-        "narHash": "sha256-4hDlMtyHITW9boM6zdJIaDp/mvSiUwO/BdCCLQjxEw4=",
+        "lastModified": 1768010000,
+        "narHash": "sha256-/oUVHAj020wdMzgmBtojT58hwHkS9/CoHp/2x1k6dEE=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "9a22c690bc3c15291c3c70f662c855b5bdaffc0e",
+        "rev": "3e20ed1239ea83da3790ae2f2d207b508b429c2b",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "9a22c690bc3c15291c3c70f662c855b5bdaffc0e",
+        "rev": "3e20ed1239ea83da3790ae2f2d207b508b429c2b",
         "type": "github"
       }
     },
