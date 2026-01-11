@@ -1,5 +1,7 @@
 use fedimint_gateway_common::ChainSource;
+use fedimint_logging::LOG_GATEWAY_UI;
 use maud::{Markup, html};
+use tracing::debug;
 
 use crate::DynGatewayApi;
 
@@ -7,6 +9,7 @@ pub async fn render<E>(api: &DynGatewayApi<E>) -> Markup
 where
     E: std::fmt::Display,
 {
+    debug!(target: LOG_GATEWAY_UI, "Getting bitcoin chain source...");
     let (blockchain_info, chain_source, network) = api.get_chain_source().await;
 
     // Determine block height and synced status

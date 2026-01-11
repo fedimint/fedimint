@@ -32,6 +32,7 @@ use fedimint_gateway_common::{
     WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
+use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -40,6 +41,7 @@ use fedimint_ui_common::{
 };
 use lightning_invoice::Bolt11Invoice;
 use maud::html;
+use tracing::debug;
 
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{
@@ -243,6 +245,7 @@ where
     E: std::fmt::Display,
 {
     let gatewayd_version = state.api.gatewayd_version();
+    debug!(target: LOG_GATEWAY_UI, "Getting gateway info...");
     let gateway_info = match state.api.handle_get_info().await {
         Ok(info) => info,
         Err(err) => {

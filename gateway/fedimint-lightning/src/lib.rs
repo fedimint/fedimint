@@ -246,6 +246,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         amount: Option<Amount>,
         payer_note: Option<String>,
     ) -> Result<Preimage, LightningRpcError>;
+
+    fn sync_wallet(&self) -> Result<(), LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
@@ -289,6 +291,9 @@ impl dyn ILnRpcClient {
 
     /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
     pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
+        self.sync_wallet()?;
+
+        // Wait for the Lightning node to sync
         retry(
             "Wait for chain sync",
             backoff_util::background_backoff(),

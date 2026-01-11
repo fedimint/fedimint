@@ -341,4 +341,8 @@ impl ILnRpcClient for FakeLightningTest {
             failure_reason: "FakeLightningTest does not support Bolt12".to_string(),
         })
     }
+
+    fn sync_wallet(&self) -> Result<(), LightningRpcError> {
+        Ok(())
+    }
 }

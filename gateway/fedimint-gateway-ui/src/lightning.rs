@@ -14,11 +14,13 @@ use fedimint_gateway_common::{
     GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentStatus, SendOnchainRequest,
 };
+use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, PreEscaped, html};
 use qrcode::QrCode;
 use qrcode::render::svg;
+use tracing::debug;
 
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
@@ -31,6 +33,7 @@ pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Ma
 where
     E: std::fmt::Display,
 {
+    debug!(target: LOG_GATEWAY_UI, "Listing lightning channels...");
     // Try to load channels
     let channels_result = api.handle_list_channels_msg().await;
 
@@ -66,6 +69,7 @@ where
     };
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
+    debug!(target: LOG_GATEWAY_UI, "Getting all balances...");
     let balances_result = api.handle_get_balances_msg().await;
     let now = now();
     let start = now
@@ -80,6 +84,7 @@ where
         .duration_since(UNIX_EPOCH)
         .expect("Cannot be before epoch")
         .as_secs();
+    debug!(target: LOG_GATEWAY_UI, "Listing lightning transactions...");
     let transactions_result = api
         .handle_list_transactions_msg(ListTransactionsPayload {
             start_secs,
