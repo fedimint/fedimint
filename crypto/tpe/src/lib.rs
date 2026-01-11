@@ -7,14 +7,34 @@ pub use bls12_381::{G1Affine, G2Affine};
 use bls12_381::{G1Projective, G2Projective, Scalar, pairing};
 use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::hex;
 use group::ff::Field;
 use group::{Curve, Group};
 use rand_chacha::ChaChaRng;
 use rand_chacha::rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+const FINGERPRINT_TAG: &[u8] = b"TPE_SKS_FP";
+
+#[derive(Copy, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct SecretKeyShare(#[serde(with = "bls12_381_serde::scalar")] pub Scalar);
+
+impl std::fmt::Debug for SecretKeyShare {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
+            f.debug_tuple("SecretKeyShare")
+                .field(&self.0.to_bytes())
+                .finish()
+        } else {
+            // Show fingerprint instead of actual secret
+            let mut hash_data = Vec::with_capacity(FINGERPRINT_TAG.len() + 32);
+            hash_data.extend_from_slice(FINGERPRINT_TAG);
+            hash_data.extend_from_slice(&self.0.to_bytes());
+            let hash = sha256::Hash::hash(&hash_data);
+            write!(f, "SecretKeyShare#<{}>", hex::encode(&hash[..8]))
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "bls12_381_serde::g1")] pub G1Affine);

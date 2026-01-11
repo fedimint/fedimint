@@ -1,6 +1,207 @@
+use std::sync::LazyLock;
 use std::{cmp, fmt, ops, thread_local};
 
 use serde_json::Value;
+
+use crate::envs::{FM_DEBUG_SHOW_SECRETS_ENV, is_env_var_set};
+
+/// global flag to check if secrets should be shown in debug output or not 
+/// controlled by `FM_DEBUG_SHOW_SECRETS` environment variable.
+static SHOW_SECRETS: LazyLock<bool> = LazyLock::new(|| is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV));
+
+/// this will check if any secrets should be shown in debug/display output.
+///
+/// returns `true` if:
+/// - `FM_DEBUG_SHOW_SECRETS` environment variable is set to a truthy value
+///
+/// this is useful for debugging but should NEVER be enabled in production.
+pub fn show_secrets() -> bool {
+    *SHOW_SECRETS
+}
+
+/// a wrapper type for sensitive data that controls how it appears in
+/// `Debug` and `Display` output.
+///
+/// by default, sensitive data is redacted and only shows a fingerprint.
+/// When `FM_DEBUG_SHOW_SECRETS` is set OR alt-mode (`{:#?}`) is used,
+/// the actual value is shown.
+///
+/// # Example
+///
+/// ```ignore
+/// use fedimint_core::fmt_utils::SensitiveString;
+///
+/// let secret = SensitiveString::new("my-secret-api-key".to_string());
+///
+/// // normal debug: shows redacted
+/// assert_eq!(format!("{:?}", secret), "SensitiveString(REDACTED)");
+///
+/// // Alt-mode debug: shows actual value (for debugging)
+/// assert!(format!("{:#?}", secret).contains("my-secret-api-key"));
+/// ```
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SensitiveString(String);
+
+impl SensitiveString {
+    pub fn new(s: String) -> Self {
+        Self(s)
+    }
+
+    /// Get the inner value. Use with caution!
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    /// Get a reference to the inner value. Use with caution!
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for SensitiveString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if show_secrets() || f.alternate() {
+            write!(f, "SensitiveString({:?})", self.0)
+        } else {
+            write!(f, "SensitiveString(REDACTED)")
+        }
+    }
+}
+
+impl fmt::Display for SensitiveString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if show_secrets() || f.alternate() {
+            write!(f, "{}", self.0)
+        } else {
+            write!(f, "REDACTED")
+        }
+    }
+}
+
+impl From<String> for SensitiveString {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
+impl From<&str> for SensitiveString {
+    fn from(s: &str) -> Self {
+        Self::new(s.to_string())
+    }
+}
+
+/// Formats sensitive data for Debug output with fingerprint-based redaction.
+///
+/// This trait can be implemented for types containing sensitive data
+/// to provide safe debug output that doesn't leak secrets.
+///
+/// # Behavior
+///
+/// - **Normal mode** (`{:?}`): Shows a hash-based fingerprint of the data
+/// - **Alt mode** (`{:#?}`) or `FM_DEBUG_SHOW_SECRETS` set: Shows actual value
+///
+/// # Example
+///
+/// ```ignore
+/// use fedimint_core::fmt_utils::SensitiveDebug;
+///
+/// struct MySecretKey([u8; 32]);
+///
+/// impl SensitiveDebug for MySecretKey {
+///     fn sensitive_debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         // Called when secrets should be shown
+///         write!(f, "MySecretKey({:?})", self.0)
+///     }
+///
+///     fn fingerprint(&self) -> String {
+///         // Return a safe fingerprint for normal debug output
+///         use bitcoin_hashes::{sha256, Hash};
+///         let hash = sha256::Hash::hash(&self.0);
+///         hex::encode(&hash.as_byte_array()[..8])
+///     }
+/// }
+/// ```
+pub trait SensitiveDebug {
+    /// format the actual sensitive data (called when secrets should be shown)
+    fn sensitive_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+
+    /// return a safe fingerprint/hash of the data for redacted output.
+    /// this should NOT reveal the actual secret but can help identify
+    /// which secret is being referenced.
+    fn fingerprint(&self) -> String;
+
+    /// the type name to show in debug output
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+}
+
+/// a helper struct to wrap any `SensitiveDebug` implementor for formatting.
+pub struct SensitiveDebugWrapper<'a, T: SensitiveDebug>(pub &'a T);
+
+impl<T: SensitiveDebug> fmt::Debug for SensitiveDebugWrapper<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if show_secrets() || f.alternate() {
+            self.0.sensitive_debug(f)
+        } else {
+            write!(f, "{}#<{}>", self.0.type_name(), self.0.fingerprint())
+        }
+    }
+}
+
+impl<T: SensitiveDebug> fmt::Display for SensitiveDebugWrapper<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if show_secrets() || f.alternate() {
+            self.0.sensitive_debug(f)
+        } else {
+            write!(f, "<{}>", self.0.fingerprint())
+        }
+    }
+}
+
+/// here is macro to implement `Debug` for a type containing sensitive data.
+///
+/// this macro generates a `Debug` implementation that:
+///  Shows actual data when `FM_DEBUG_SHOW_SECRETS` is set or alt-mode is used
+///  Shows a fingerprint otherwise
+///
+/// # Usage
+///
+/// ```ignore
+/// use fedimint_core::impl_sensitive_debug;
+///
+/// struct SecretKey {
+///     key: [u8; 32],
+/// }
+///
+/// impl_sensitive_debug!(SecretKey, |s: &Self| {
+///     // Return bytes to hash for fingerprint
+///     &s.key
+/// });
+/// ```
+#[macro_export]
+macro_rules! impl_sensitive_debug {
+    ($type:ty, |$self:ident| $fingerprint_data:expr) => {
+        impl ::core::fmt::Debug for $type {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                if $crate::fmt_utils::show_secrets() || f.alternate() {
+                    // Show actual data in alt mode or when secrets are enabled
+                    f.debug_struct(stringify!($type))
+                        .field("(sensitive)", &"<shown>")
+                        .finish_non_exhaustive()
+                } else {
+                    // Show fingerprint only
+                    let $self = self;
+                    let data: &[u8] = $fingerprint_data;
+                    use ::bitcoin::hashes::{sha256, Hash as _};
+                    let hash = sha256::Hash::hash(data);
+                    let fingerprint = ::hex::encode(&hash.as_byte_array()[..8]);
+                    write!(f, "{}#<{}>", stringify!($type), fingerprint)
+                }
+            }
+        }
+    };
+}
 
 pub fn rust_log_full_enabled() -> bool {
     // this will be called only once per-thread for best performance
