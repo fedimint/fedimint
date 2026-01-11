@@ -1,0 +1,36 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-mint-load-tests contains load tests for the mint module"
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-mint-load-tests"
+publish = false
+version = { workspace = true }
+
+[[bin]]
+name = "mint-reissue-load-test"
+path = "bin/reissue_load_test.rs"
+
+[[bin]]
+name = "mint-recovery-test"
+path = "bin/recovery_test.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+devimint = { workspace = true }
+fedimint-bip39 = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-connectors = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-rocksdb = { workspace = true }
+fedimint-wallet-client = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
