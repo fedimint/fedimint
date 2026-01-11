@@ -40,6 +40,7 @@ fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 fedimint-wallet-server = { workspace = true }
+fedimint-walletv2-client = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
