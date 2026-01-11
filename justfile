@@ -38,8 +38,7 @@ format:
   if [ ! -f Cargo.toml ]; then
     cd {{invocation_directory()}}
   fi
-  cargo fmt --all
-  nixfmt $(git ls-files | grep "\.nix$")
+  treefmt
 
 
 # run lints (git pre-commit hook)
