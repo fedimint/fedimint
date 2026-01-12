@@ -260,7 +260,7 @@ lightning-invoice = { version = "0.33.2", features = ["std"] }
 lightning-types = "0.2.0"
 lnurl-rs = { version = "0.9.0", default-features = false }
 lockable = "0.1.1"
-lru = "0.13.0"
+lru = "0.16.3"
 macro_rules_attribute = "0.2.2"
 maud = "0.27.0"
 miniscript = "12.3.4"
