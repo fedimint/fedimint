@@ -871,21 +871,21 @@
 <a href=#871 id=871 data-nosnippet>871</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#872 id=872 data-nosnippet>872</a>
 <a href=#873 id=873 data-nosnippet>873</a>    <span class="comment">// Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
-<a href=#874 id=874 data-nosnippet>874</a>    </span><span class="kw">let </span>final_lnd_outgoing_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#875 id=875 data-nosnippet>875</a>    <span class="kw">let </span>final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#876 id=876 data-nosnippet>876</a>    <span class="macro">anyhow::ensure!</span>(
-<a href=#877 id=877 data-nosnippet>877</a>        almost_equal(
-<a href=#878 id=878 data-nosnippet>878</a>            final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
-<a href=#879 id=879 data-nosnippet>879</a>            <span class="number">2_000_000</span>,
-<a href=#880 id=880 data-nosnippet>880</a>            <span class="number">3_000
-<a href=#881 id=881 data-nosnippet>881</a>        </span>)
-<a href=#882 id=882 data-nosnippet>882</a>        .is_ok(),
-<a href=#883 id=883 data-nosnippet>883</a>        <span class="string">"LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
-<a href=#884 id=884 data-nosnippet>884</a>        (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
-<a href=#885 id=885 data-nosnippet>885</a>    );
-<a href=#886 id=886 data-nosnippet>886</a>
-<a href=#887 id=887 data-nosnippet>887</a>    <span class="comment">// INCOMING: fedimint-cli receives from LDK via LND gateway
-<a href=#888 id=888 data-nosnippet>888</a>    </span><span class="macro">info!</span>(<span class="string">"Testing incoming payment from LDK to client via LND gateway"</span>);
+<a href=#874 id=874 data-nosnippet>874</a>    </span><span class="kw">let </span>final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#875 id=875 data-nosnippet>875</a>    <span class="macro">anyhow::ensure!</span>(
+<a href=#876 id=876 data-nosnippet>876</a>        almost_equal(
+<a href=#877 id=877 data-nosnippet>877</a>            final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
+<a href=#878 id=878 data-nosnippet>878</a>            <span class="number">2_000_000</span>,
+<a href=#879 id=879 data-nosnippet>879</a>            <span class="number">3_000
+<a href=#880 id=880 data-nosnippet>880</a>        </span>)
+<a href=#881 id=881 data-nosnippet>881</a>        .is_ok(),
+<a href=#882 id=882 data-nosnippet>882</a>        <span class="string">"LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
+<a href=#883 id=883 data-nosnippet>883</a>        (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
+<a href=#884 id=884 data-nosnippet>884</a>    );
+<a href=#885 id=885 data-nosnippet>885</a>
+<a href=#886 id=886 data-nosnippet>886</a>    <span class="comment">// INCOMING: fedimint-cli receives from LDK via LND gateway
+<a href=#887 id=887 data-nosnippet>887</a>    </span><span class="macro">info!</span>(<span class="string">"Testing incoming payment from LDK to client via LND gateway"</span>);
+<a href=#888 id=888 data-nosnippet>888</a>    <span class="kw">let </span>initial_lnd_incoming_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#889 id=889 data-nosnippet>889</a>    <span class="kw">let </span>recv = ln_invoice(
 <a href=#890 id=890 data-nosnippet>890</a>        <span class="kw-2">&amp;</span>client,
 <a href=#891 id=891 data-nosnippet>891</a>        Amount::from_msats(<span class="number">1_300_000</span>),
@@ -910,13 +910,13 @@
 <a href=#910 id=910 data-nosnippet>910</a>    <span class="kw">let </span>final_lnd_incoming_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#911 id=911 data-nosnippet>911</a>    <span class="macro">anyhow::ensure!</span>(
 <a href=#912 id=912 data-nosnippet>912</a>        almost_equal(
-<a href=#913 id=913 data-nosnippet>913</a>            final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance,
+<a href=#913 id=913 data-nosnippet>913</a>            final_lnd_incoming_client_balance - initial_lnd_incoming_client_balance,
 <a href=#914 id=914 data-nosnippet>914</a>            <span class="number">1_300_000</span>,
 <a href=#915 id=915 data-nosnippet>915</a>            <span class="number">2_000
 <a href=#916 id=916 data-nosnippet>916</a>        </span>)
 <a href=#917 id=917 data-nosnippet>917</a>        .is_ok(),
 <a href=#918 id=918 data-nosnippet>918</a>        <span class="string">"Client balance changed by {} on LND incoming payment, expected 1_300_000"</span>,
-<a href=#919 id=919 data-nosnippet>919</a>        (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
+<a href=#919 id=919 data-nosnippet>919</a>        (final_lnd_incoming_client_balance - initial_lnd_incoming_client_balance)
 <a href=#920 id=920 data-nosnippet>920</a>    );
 <a href=#921 id=921 data-nosnippet>921</a>    <span class="macro">anyhow::ensure!</span>(
 <a href=#922 id=922 data-nosnippet>922</a>        almost_equal(
