@@ -77,7 +77,7 @@ for `nix develop`.
 Fedimint uses a [Cachix](https://www.cachix.org/) binary cache to cache builds.
 To benefit from this cache and avoid building everything from scratch, you must
 ensure that your user is a [trusted user](https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-trusted-users).
-You can do this by modifying `/etc/nix/nix.conf`, adding the following line.
+You can do this by modifying `/etc/nix/nix.conf` (or `/etc/nix/nix.custom.conf` when using the Determinate Nix installer), adding the following line.
 
 ```
 trusted-users = the_name_of_your_user
