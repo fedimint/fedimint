@@ -1,0 +1,24 @@
+[package]
+authors = { workspace = true }
+description = "client for devimintd"
+edition = { workspace = true }
+license = { workspace = true }
+name = "devimintd-client"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "devimintd_client"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+devimint = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }

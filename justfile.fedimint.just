@@ -150,6 +150,9 @@ exit-mprocs:
 devimint-env *PARAMS:
   ./scripts/dev/devimint-env.sh {{PARAMS}}
 
+devimintd-env *PARAMS:
+  ./scripts/dev/devimintd-env.sh {{PARAMS}}
+
 # Spawn devimint pre-dkg on fixed port numbers (useful for UI work)
 devimint-env-pre-dkg *PARAMS:
   @>&2 echo "fedimint-0 UI: http://localhost:2002"

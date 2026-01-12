@@ -21,6 +21,7 @@ bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
+devimintd-client = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }

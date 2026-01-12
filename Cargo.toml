@@ -6,6 +6,8 @@ members = [
     "crypto/tbs",
     "crypto/tpe",
     "devimint",
+    "devimintd",
+    "devimintd-client",
     "docs",
     "fedimint-api-client",
     "fedimint-bip39",
@@ -158,6 +160,7 @@ criterion = "0.5.1"
 # It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
 curve25519-dalek = ">=4.1.3"
 devimint = { path = "./devimint", version = "=0.10.0-alpha" }
+devimintd-client = { path = "./devimintd-client", version = "=0.10.0-alpha" }
 dirs = "6.0.0"
 erased-serde = "0.4"
 esplora-client = { version = "0.12.0", default-features = false, features = [
@@ -333,6 +336,7 @@ tracing-opentelemetry = "0.29.0"
 tracing-subscriber = "0.3.20"
 tracing-test = "0.2.5"
 url = "2.5.4"
+uuid = "1.10"
 wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.43"

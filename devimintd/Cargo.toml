@@ -1,0 +1,29 @@
+[package]
+authors = { workspace = true }
+description = "devimint as a server"
+edition = { workspace = true }
+license = { workspace = true }
+name = "devimintd"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[[bin]]
+name = "devimintd"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+clap = { workspace = true }
+devimint = { workspace = true }
+devimintd-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
+listenfd = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = "3"
+tokio = { workspace = true, features = ["full"] }
+tower-http = { workspace = true, features = ["cors"] }
+tracing = { workspace = true }

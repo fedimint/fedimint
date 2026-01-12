@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use std::time::Duration;
 use std::{env, fs};
 
@@ -29,6 +30,7 @@ use fedimint_wallet_client::WalletClientModule;
 use fedimint_wallet_client::config::WalletClientConfig;
 use fs_lock::FileLock;
 use futures::future::{join_all, try_join_all};
+use tempfile::TempDir;
 use tokio::task::{JoinSet, spawn_blocking};
 use tokio::time::Instant;
 use tracing::{debug, info};
@@ -86,21 +88,28 @@ pub struct Client {
     name: String,
 }
 
-impl Client {
-    fn clients_dir() -> PathBuf {
-        let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
-            .expect("FM_DATA_DIR_ENV not set")
-            .parse()
-            .expect("FM_DATA_DIR_ENV invalid");
-        data_dir.join("clients")
+static CLIENTS_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    if let Ok(data_dir) = env::var(FM_DATA_DIR_ENV) {
+        data_dir
+            .parse::<PathBuf>()
+            .expect("FM_DATA_DIR_ENV invalid")
+            .join("clients")
+    } else {
+        // when used in devimintd client, env var won't set, so create a temp dir per
+        // process
+        TempDir::with_prefix("dvclients-")
+            .expect("failed to create tempdir")
+            .keep()
     }
+});
 
+impl Client {
     fn client_dir(&self) -> PathBuf {
-        Self::clients_dir().join(&self.name)
+        CLIENTS_DIR.join(&self.name)
     }
 
     pub fn client_name_lock(name: &str) -> Result<FileLock> {
-        let lock_path = Self::clients_dir().join(format!(".{name}.lock"));
+        let lock_path = CLIENTS_DIR.join(format!(".{name}.lock"));
         let file_lock = std::fs::OpenOptions::new()
             .write(true)
             .create(true)

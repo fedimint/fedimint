@@ -37,6 +37,8 @@ rules:
     exclude:
       # doesn't run in wasm
       - devimint/
+      # doesn't run in wasm
+      - devimintd/
       # server only
       - fedimint-server/
 
@@ -213,4 +215,3 @@ rules:
 #   pattern: "error!(...)"
 #   message: "Don't use error logging level, use `crit!` wrapper to avoid conflating any `error` with `error logging level`"
 #   severity: WARNING
-
