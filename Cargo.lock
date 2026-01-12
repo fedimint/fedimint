@@ -3487,6 +3487,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-gateway-common",
  "fedimint-ln-common",
+ "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-ui-common",
  "fedimint-wallet-client",
