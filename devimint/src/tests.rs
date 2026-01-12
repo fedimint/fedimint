@@ -871,7 +871,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?;
 
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
-    let final_lnd_outgoing_client_balance = client.balance().await?;
     let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
         almost_equal(
@@ -886,6 +885,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // INCOMING: fedimint-cli receives from LDK via LND gateway
     info!("Testing incoming payment from LDK to client via LND gateway");
+    let initial_lnd_incoming_client_balance = client.balance().await?;
     let recv = ln_invoice(
         &client,
         Amount::from_msats(1_300_000),
@@ -910,13 +910,13 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_lnd_incoming_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
         almost_equal(
-            final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance,
+            final_lnd_incoming_client_balance - initial_lnd_incoming_client_balance,
             1_300_000,
             2_000
         )
         .is_ok(),
         "Client balance changed by {} on LND incoming payment, expected 1_300_000",
-        (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
+        (final_lnd_incoming_client_balance - initial_lnd_incoming_client_balance)
     );
     anyhow::ensure!(
         almost_equal(
