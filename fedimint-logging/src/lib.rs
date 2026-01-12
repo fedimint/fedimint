@@ -65,6 +65,11 @@ pub const LOG_BITCOIND_CORE: &str = "fm::bitcoind::bitcoincore";
 pub const LOG_BITCOIND: &str = "fm::bitcoind";
 pub const LOG_BITCOIN: &str = "fm::bitcoin";
 
+/// Global tracer provider for proper shutdown
+#[cfg(feature = "telemetry")]
+static TRACER_PROVIDER: std::sync::OnceLock<opentelemetry_sdk::trace::SdkTracerProvider> =
+    std::sync::OnceLock::new();
+
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
 pub struct TracingSetup {
@@ -85,7 +90,19 @@ impl TracingSetup {
         self
     }
 
-    /// Setup telemetry through Jaeger <https://docs.rs/tracing-jaeger>
+    /// Setup telemetry export via OTLP (OpenTelemetry Protocol).
+    ///
+    /// This uses the OTLP exporter which is compatible with Jaeger (since
+    /// v1.35), the OpenTelemetry Collector, and many other observability
+    /// backends.
+    ///
+    /// Configure the endpoint with `OTEL_EXPORTER_OTLP_ENDPOINT` environment
+    /// variable (defaults to `http://localhost:4317` for gRPC).
+    ///
+    /// To use with Jaeger:
+    /// ```bash
+    /// docker run -d -p4317:4317 -p16686:16686 jaegertracing/all-in-one:latest
+    /// ```
     #[cfg(feature = "telemetry")]
     pub fn with_jaeger(&mut self, enabled: bool) -> &mut Self {
         self.with_jaeger = enabled;
@@ -163,12 +180,40 @@ impl TracingSetup {
         let telemetry_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
             #[cfg(feature = "telemetry")]
             if self.with_jaeger {
-                // TODO: https://github.com/fedimint/fedimint/issues/4591
-                #[allow(deprecated)]
-                let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                    .with_service_name("fedimint")
-                    .install_simple()
-                    .unwrap();
+                use opentelemetry::trace::TracerProvider as _;
+
+                // Create OTLP exporter using gRPC (tonic)
+                // Jaeger now supports OTLP natively, so we use OTLP instead of the deprecated
+                // Jaeger exporter. Configure with OTEL_EXPORTER_OTLP_ENDPOINT env var
+                // (defaults to http://localhost:4317)
+                let exporter = match opentelemetry_otlp::SpanExporter::builder()
+                    .with_tonic()
+                    .build()
+                {
+                    Ok(exporter) => exporter,
+                    Err(e) => {
+                        eprintln!(
+                            "Failed to create OTLP span exporter, continuing without telemetry: {e}"
+                        );
+                        return None;
+                    }
+                };
+
+                // Build the tracer provider with the OTLP exporter
+                let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+                    .with_batch_exporter(exporter)
+                    .with_resource(
+                        opentelemetry_sdk::Resource::builder()
+                            .with_service_name("fedimint")
+                            .build(),
+                    )
+                    .build();
+
+                // Store provider for shutdown and set as global
+                let _ = TRACER_PROVIDER.set(tracer_provider.clone());
+                opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+
+                let tracer = tracer_provider.tracer("fedimint");
 
                 return Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed());
             }
@@ -186,5 +231,9 @@ impl TracingSetup {
 
 pub fn shutdown() {
     #[cfg(feature = "telemetry")]
-    opentelemetry::global::shutdown_tracer_provider();
+    if let Some(provider) = TRACER_PROVIDER.get()
+        && let Err(e) = provider.shutdown()
+    {
+        eprintln!("Error shutting down tracer provider: {e}");
+    }
 }
