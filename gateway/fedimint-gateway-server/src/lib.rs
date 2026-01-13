@@ -26,7 +26,7 @@ mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fmt::Display;
+use std::fmt::{Display, write};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -78,8 +78,9 @@ use fedimint_gateway_common::{
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
+    WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -162,16 +163,24 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 /// ```
 #[derive(Clone, Debug)]
 pub enum GatewayState {
+    NotConfigured {
+        tx: tokio::sync::broadcast::Sender<()>,
+    },
     Disconnected,
     Syncing,
     Connected,
-    Running { lightning_context: LightningContext },
-    ShuttingDown { lightning_context: LightningContext },
+    Running {
+        lightning_context: LightningContext,
+    },
+    ShuttingDown {
+        lightning_context: LightningContext,
+    },
 }
 
 impl Display for GatewayState {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            GatewayState::NotConfigured { .. } => write!(f, "NotConfigured"),
             GatewayState::Disconnected => write!(f, "Disconnected"),
             GatewayState::Syncing => write!(f, "Syncing"),
             GatewayState::Connected => write!(f, "Connected"),
@@ -214,7 +223,7 @@ pub struct Gateway {
     federation_manager: Arc<RwLock<FederationManager>>,
 
     // The mnemonic for the gateway
-    mnemonic: Mnemonic,
+    mnemonic: Option<Mnemonic>,
 
     /// The mode that specifies the lightning connection parameters
     lightning_mode: LightningMode,
@@ -535,7 +544,7 @@ impl Gateway {
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
-            mnemonic: Self::load_or_generate_mnemonic(&gateway_db).await?,
+            mnemonic: Self::load_mnemonic(&gateway_db).await,
             lightning_mode,
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
@@ -606,7 +615,8 @@ impl Gateway {
         install_crypto_provider().await;
         self.register_clients_timer();
         self.load_clients().await?;
-        self.start_gateway(runtime);
+        let (tx, rx) = tokio::sync::broadcast::channel::<()>(4);
+        self.start_gateway(runtime, rx.resubscribe(), tx);
         self.spawn_backup_task();
         // start webserver last to avoid handling requests before fully initialized
         let handle = self.task_group.make_handle();
@@ -664,7 +674,12 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    fn start_gateway(&self, runtime: Arc<tokio::runtime::Runtime>) {
+    fn start_gateway(
+        &self,
+        runtime: Arc<tokio::runtime::Runtime>,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
+        tx: tokio::sync::broadcast::Sender<()>,
+    ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
         let self_copy = self.clone();
@@ -677,6 +692,14 @@ impl Gateway {
                     if handle.is_shutting_down() {
                         info!(target: LOG_GATEWAY, "Gateway lightning payment stream handler loop is shutting down");
                         break;
+                    }
+
+                    if self_copy.mnemonic.is_none() {
+                        info!(target: LOG_GATEWAY, "Mnemonic is not set, setting state to NotConfigured...");
+                        self_copy.set_gateway_state(GatewayState::NotConfigured { tx: tx.clone() }).await;
+
+                        info!(target: LOG_GATEWAY, "Waiting for the mnemonic to be set.");
+                        let _ = rx.recv().await;
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
@@ -1240,6 +1263,36 @@ impl Gateway {
         })
     }
 
+    pub async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
+        // Verify the state is NotConfigured
+        let GatewayState::NotConfigured { tx } = self.get_state().await else {
+            return Err(AdminGatewayError::MnemonicError(anyhow!(
+                "Gateway is not is NotConfigured state"
+            )));
+        };
+
+        let mnemonic = if let Some(words) = payload.words {
+            info!(target: LOG_GATEWAY, "Using user provided mnemonic");
+            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
+                AdminGatewayError::MnemonicError(anyhow!(format!(
+                    "Seed phrase provided in environment was invalid {e:?}"
+                )))
+            })?
+        } else {
+            debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
+            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+        };
+
+        Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
+            .await
+            .map_err(AdminGatewayError::MnemonicError)?;
+
+        // Alert the gateway to continue
+        let _ = tx.send(());
+
+        Ok(())
+    }
+
     /// Registers the gateway with each specified federation.
     async fn register_federations(
         &self,
@@ -1310,6 +1363,13 @@ impl Gateway {
             })
     }
 
+    async fn load_mnemonic(gateway_db: &Database) -> Option<Mnemonic> {
+        let secret = Client::load_decodable_client_secret::<Vec<u8>>(gateway_db)
+            .await
+            .ok()?;
+        Mnemonic::from_entropy(&secret).ok()
+    }
+
     /// Loads a mnemonic from the database or generates a new one if the
     /// mnemonic does not exist. Before generating a new mnemonic, this
     /// function will check if a mnemonic has been provided in the environment
@@ -1361,8 +1421,11 @@ impl Gateway {
             let federation_index = config.federation_index;
             match Box::pin(Spanned::try_new(
                 info_span!(target: LOG_GATEWAY, "client", federation_id  = %federation_id.clone()),
-                self.client_builder
-                    .build(config, Arc::new(self.clone()), &self.mnemonic),
+                self.client_builder.build(
+                    config,
+                    Arc::new(self.clone()),
+                    &self.mnemonic.clone().expect("Mnemonic should be set"),
+                ),
             ))
             .await
             {
@@ -1533,7 +1596,7 @@ impl Gateway {
                         self.network,
                         lightning_port,
                         alias.clone(),
-                        self.mnemonic.clone(),
+                        self.mnemonic.clone().expect("mnemonic should be set"),
                         runtime.clone(),
                     )
                     .map(Box::new)
@@ -1731,7 +1794,7 @@ impl IAdminGateway for Gateway {
                 .recover(
                     federation_config.clone(),
                     Arc::new(self.clone()),
-                    &self.mnemonic,
+                    &self.mnemonic.clone().expect("mnemonic should be set"),
                 )
                 .await?;
         }
@@ -1741,7 +1804,7 @@ impl IAdminGateway for Gateway {
             .build(
                 federation_config.clone(),
                 Arc::new(self.clone()),
-                &self.mnemonic,
+                &self.mnemonic.clone().expect("mnemonic should be set"),
             )
             .await?;
 
@@ -1906,6 +1969,8 @@ impl IAdminGateway for Gateway {
     async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
         let words = self
             .mnemonic
+            .clone()
+            .expect("mnemonic should be set")
             .words()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();

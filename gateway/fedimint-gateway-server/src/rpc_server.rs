@@ -26,7 +26,7 @@ use fedimint_gateway_common::{
     PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
     PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
+    SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -392,6 +392,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
         is_authenticated,
         authenticated_routes,
     );
+    let authenticated_routes = register_post_handler(
+        handlers,
+        MNEMONIC_ENDPOINT,
+        set_mnemonic,
+        is_authenticated,
+        authenticated_routes,
+    );
     let authenticated_routes = authenticated_routes.layer(middleware::from_fn(auth_middleware));
 
     Router::new()
@@ -642,6 +649,15 @@ async fn mnemonic(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn set_mnemonic(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SetMnemonicPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    gateway.handle_set_mnemonic_msg(payload).await?;
+    Ok(Json(json!({})))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
