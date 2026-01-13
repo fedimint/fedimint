@@ -146,6 +146,11 @@ function lnv1_lnv2_swap() {
 }
 export -f lnv1_lnv2_swap
 
+function ecash_migration_module() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/ecash-migration-module-test.sh
+}
+export -f ecash_migration_module
+
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
 }
@@ -255,6 +260,14 @@ function bckn_bitcoind_lnv2() {
 }
 export -f bckn_bitcoind_lnv2
 
+function test_ecash_liability_migration() {
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=ecash-migration ./scripts/tests/backend-test.sh
+  fi
+}
+export -f test_ecash_liability_migration
+
 function bckn_gw_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -358,6 +371,7 @@ tests_to_run_in_parallel+=(
   "bckn_bitcoind_wallet"
   "bckn_bitcoind_ln"
   "bckn_bitcoind_lnv2"
+  "test_ecash_liability_migration"
   "bckn_gw_client"
   "bckn_gw_not_client"
   "bckn_esplora"
@@ -376,6 +390,7 @@ tests_to_run_in_parallel+=(
   "lnv2_module_payments"
   "lnv2_module_lnurl_pay"
   "lnv1_lnv2_swap"
+  "ecash_migration_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"

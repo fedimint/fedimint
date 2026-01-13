@@ -26,6 +26,7 @@ use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_ecash_migration_server::EcashMigrationInit;
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::MetaInit;
@@ -422,6 +423,8 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);
     }
+
+    server_gens.attach(EcashMigrationInit);
 
     if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         server_gens.attach(UnknownInit);
