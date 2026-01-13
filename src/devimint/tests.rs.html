@@ -37,7 +37,7 @@
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">crate</span>::federation::Client;
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">use crate</span>::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 <a href=#42 id=42 data-nosnippet>42</a>
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub struct </span>Stats {
@@ -787,10 +787,10 @@
 <a href=#787 id=787 data-nosnippet>787</a>    </span><span class="macro">info!</span>(<span class="string">"Testing LND gateway"</span>);
 <a href=#788 id=788 data-nosnippet>788</a>
 <a href=#789 id=789 data-nosnippet>789</a>    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-<a href=#790 id=790 data-nosnippet>790</a>    <span class="comment">// Gatewayd did not support default fees before v0.8.0
+<a href=#790 id=790 data-nosnippet>790</a>    <span class="comment">// Gatewayd did not support default fees before v0.8.2
 <a href=#791 id=791 data-nosnippet>791</a>    // In order for the amount tests to pass, we need to reliably set the fees to
 <a href=#792 id=792 data-nosnippet>792</a>    // 0,0.
-<a href=#793 id=793 data-nosnippet>793</a>    </span><span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_8_0_ALPHA {
+<a href=#793 id=793 data-nosnippet>793</a>    </span><span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_8_2 {
 <a href=#794 id=794 data-nosnippet>794</a>        gw_lnd
 <a href=#795 id=795 data-nosnippet>795</a>            .set_federation_routing_fee(fed_id.clone(), <span class="number">0</span>, <span class="number">0</span>)
 <a href=#796 id=796 data-nosnippet>796</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
