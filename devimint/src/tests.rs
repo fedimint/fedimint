@@ -37,7 +37,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::version_constants::{VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -787,10 +787,10 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing LND gateway");
 
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    // Gatewayd did not support default fees before v0.8.0
+    // Gatewayd did not support default fees before v0.8.2
     // In order for the amount tests to pass, we need to reliably set the fees to
     // 0,0.
-    if gatewayd_version < *VERSION_0_8_0_ALPHA {
+    if gatewayd_version < *VERSION_0_8_2 {
         gw_lnd
             .set_federation_routing_fee(fed_id.clone(), 0, 0)
             .await?;
