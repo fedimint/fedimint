@@ -59,6 +59,7 @@ pub const LOG_CLIENT_MODULE_WALLET: &str = "fm::client::module::wallet";
 pub const LOG_CLIENT_MODULE_GW: &str = "fm::client::module::gw";
 pub const LOG_CLIENT_MODULE_GWV2: &str = "fm::client::module::gwv2";
 pub const LOG_GATEWAY: &str = "fm::gw";
+pub const LOG_GATEWAY_UI: &str = "fm::gw::ui";
 pub const LOG_LIGHTNING: &str = "fm::gw::lightning";
 pub const LOG_BITCOIND_ESPLORA: &str = "fm::bitcoind::esplora";
 pub const LOG_BITCOIND_CORE: &str = "fm::bitcoind::bitcoincore";
