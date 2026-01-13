@@ -74,6 +74,13 @@ impl DerivableSecret {
         }
     }
 
+    pub fn tweak(&self, tweak: &[u8]) -> DerivableSecret {
+        DerivableSecret {
+            level: self.level,
+            kdf: Hkdf::from_prk(self.kdf.derive_hmac(tweak)),
+        }
+    }
+
     /// Derive a federation-ID-based child key from self.
     ///
     /// This is useful to ensure that the same root secret is not reused
