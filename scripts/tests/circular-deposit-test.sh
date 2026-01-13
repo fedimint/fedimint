@@ -9,4 +9,4 @@ build_workspace
 add_target_dir_to_path
 make_fm_test_marker
 
-wallet-module-tests circular-deposit
+devimintd wallet-module-tests circular-deposit

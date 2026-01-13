@@ -39,6 +39,7 @@ build_workspace
 # Avoid re-building tests in parallel in all test derivations
 >&2 echo "Pre-building tests..."
 build_workspace_tests
+add_target_dir_to_path
 
 # We've just built everything there is to built, so we should not have a
 # need to be build things again from now on, but since cargo does not
@@ -462,7 +463,7 @@ parallel_args+=(
 
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
-echo "$parsed_test_commands" | shuf | if parallel \
+echo "$parsed_test_commands" | shuf | if devimintd parallel \
   "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
 else

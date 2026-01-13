@@ -690,6 +690,7 @@ checksum = "5b098575ebe77cb6d14fc7f32749631a6e44edbef6b796f89b020e99ba20d425"
 dependencies = [
  "axum-core 0.5.5",
  "axum-macros",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -708,8 +709,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper 1.0.2",
  "tokio",
+ "tokio-tungstenite",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -2339,10 +2342,46 @@ dependencies = [
  "serde",
  "serde_json",
  "substring",
+ "tempfile",
  "tokio",
  "tokio-rustls 0.26.2",
  "tower-http",
  "tracing",
+]
+
+[[package]]
+name = "devimintd"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "axum 0.8.7",
+ "clap",
+ "devimint",
+ "devimintd-client",
+ "fedimint-core",
+ "fedimint-logging",
+ "listenfd",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
+name = "devimintd-client"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "devimint",
+ "fedimint-core",
+ "fedimint-logging",
+ "reqwest 0.12.22",
+ "serde",
+ "serde_json",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -4594,6 +4633,7 @@ dependencies = [
  "bitcoincore-rpc",
  "clap",
  "devimint",
+ "devimintd-client",
  "fedimint-api-client",
  "fedimint-client",
  "fedimint-client-module",
@@ -6854,6 +6894,17 @@ name = "linux-raw-sys"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
+
+[[package]]
+name = "listenfd"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b87bc54a4629b4294d0b3ef041b64c40c611097a677d9dc07b2c67739fe39dba"
+dependencies = [
+ "libc",
+ "uuid",
+ "winapi",
+]
 
 [[package]]
 name = "litemap"
@@ -10442,6 +10493,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11755,6 +11818,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "tungstenite"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8628dcc84e5a09eb3d8423d6cb682965dea9133204e8fb3efee74c2a0c259442"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http 1.3.1",
+ "httparse",
+ "log",
+ "rand 0.9.1",
+ "sha1",
+ "thiserror 2.0.12",
+ "utf-8",
+]
+
+[[package]]
 name = "typed-index-collections"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11993,6 +12073,12 @@ dependencies = [
  "percent-encoding",
  "serde",
 ]
+
+[[package]]
+name = "utf-8"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "utf8_iter"
