@@ -20,12 +20,6 @@ pub const FM_GATEWAY_NETWORK_ENV: &str = "FM_GATEWAY_NETWORK";
 /// include in LNv1 invoices.
 pub const FM_NUMBER_OF_ROUTE_HINTS_ENV: &str = "FM_NUMBER_OF_ROUTE_HINTS";
 
-/// Environment variable that specifies the mnemonic that the gateway should use
-/// for ecash and the LDK Node should use for onchain funds. If not set, a
-/// mnemonic will be generated. This environment variable can be used for
-/// recovering from an existing mnemonic.
-pub const FM_GATEWAY_MNEMONIC_ENV: &str = "FM_GATEWAY_MNEMONIC";
-
 /// Environment variable that instructs the gateway to run in "debug mode",
 /// which allows errors to return to clients without redacting private
 /// information.
