@@ -110,4 +110,8 @@ impl IServerBitcoinRpc for BitcoindClient {
             block_in_place(|| self.client.get_blockchain_info())?.verification_progress,
         ))
     }
+
+    async fn get_genesis_block_hash(&self) -> anyhow::Result<BlockHash> {
+        self.get_block_hash(0).await
+    }
 }

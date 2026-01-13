@@ -403,4 +403,8 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
         Ok(None)
     }
+
+    async fn get_genesis_block_hash(&self) -> anyhow::Result<bitcoin::BlockHash> {
+        self.get_block_hash(0).await
+    }
 }
