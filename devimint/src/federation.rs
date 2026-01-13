@@ -860,10 +860,19 @@ impl Federation {
                 .1
                 .fees;
             let total_fee = fees.amount().to_sat() * 1000;
+            // Walletv2 charges a module fee on top of the on-chain fee:
+            // 100 sats base + 1% of amount (amount is in msats)
+            let tolerance = if crate::util::supports_wallet_v2() {
+                let amount_sats = amount / 1000;
+                let module_fee_sats = 100 + amount_sats / 100;
+                module_fee_sats * 1000 + 2000
+            } else {
+                2000
+            };
             crate::util::almost_equal(
                 after_fed_ecash_balance.msats,
                 prev_balance - amount - total_fee,
-                2000,
+                tolerance,
             )
             .map_err(|e| {
                 anyhow::anyhow!(
