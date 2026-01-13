@@ -62,6 +62,7 @@ fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true }
+fedimint-walletv2-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
