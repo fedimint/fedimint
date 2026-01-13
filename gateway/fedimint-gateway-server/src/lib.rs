@@ -304,17 +304,81 @@ struct WithdrawDetails {
     peg_out_fees: PegOutFees,
 }
 
+/// Executes a withdrawal using the walletv2 module
+async fn withdraw_v2(
+    client: &ClientHandleArc,
+    wallet_module: &fedimint_walletv2_client::WalletClientModule,
+    address: &Address,
+    amount: BitcoinAmountOrAll,
+) -> AdminResult<WithdrawResponse> {
+    let fee = wallet_module
+        .send_fee()
+        .await
+        .map_err(|e| AdminGatewayError::WithdrawError {
+            failure_reason: e.to_string(),
+        })?;
+
+    let withdraw_amount = match amount {
+        BitcoinAmountOrAll::All => {
+            let balance = bitcoin::Amount::from_sat(
+                client
+                    .get_balance_for_btc()
+                    .await
+                    .map_err(|err| {
+                        AdminGatewayError::Unexpected(anyhow!(
+                            "Balance not available: {}",
+                            err.fmt_compact_anyhow()
+                        ))
+                    })?
+                    .msats
+                    / 1000,
+            );
+            balance
+                .checked_sub(fee)
+                .ok_or_else(|| AdminGatewayError::WithdrawError {
+                    failure_reason: format!("Insufficient funds. Balance: {balance} Fee: {fee}"),
+                })?
+        }
+        BitcoinAmountOrAll::Amount(a) => a,
+    };
+
+    let operation_id = wallet_module
+        .send(address.as_unchecked().clone(), withdraw_amount, Some(fee))
+        .await
+        .map_err(|e| AdminGatewayError::WithdrawError {
+            failure_reason: e.to_string(),
+        })?;
+
+    let result = wallet_module
+        .await_final_send_operation_state(operation_id)
+        .await;
+
+    // Convert flat fee to PegOutFees format for API compatibility
+    let fees = PegOutFees::new(fee.to_sat(), 4000);
+
+    match result {
+        fedimint_walletv2_client::FinalSendOperationState::Success(txid) => {
+            info!(target: LOG_GATEWAY, amount = %withdraw_amount, address = %address, "Sent funds via walletv2");
+            Ok(WithdrawResponse { txid, fees })
+        }
+        fedimint_walletv2_client::FinalSendOperationState::Aborted => {
+            Err(AdminGatewayError::WithdrawError {
+                failure_reason: "Withdrawal transaction was aborted".to_string(),
+            })
+        }
+        fedimint_walletv2_client::FinalSendOperationState::Failure => {
+            Err(AdminGatewayError::WithdrawError {
+                failure_reason: "Withdrawal failed".to_string(),
+            })
+        }
+    }
+}
+
 /// Calculates an estimated max withdrawable amount on-chain
 async fn calculate_max_withdrawable(
     client: &ClientHandleArc,
     address: &Address,
 ) -> AdminResult<WithdrawDetails> {
-    let wallet_module = client
-        .get_first_module::<WalletClientModule>()
-        .map_err(|_| AdminGatewayError::WithdrawError {
-            failure_reason: "Withdrawal not yet supported with walletv2 module".to_string(),
-        })?;
-
     let balance = client.get_balance_for_btc().await.map_err(|err| {
         AdminGatewayError::Unexpected(anyhow!(
             "Balance not available: {}",
@@ -322,12 +386,30 @@ async fn calculate_max_withdrawable(
         ))
     })?;
 
-    let peg_out_fees = wallet_module
-        .get_withdraw_fees(
-            address,
-            bitcoin::Amount::from_sat(balance.sats_round_down()),
-        )
-        .await?;
+    let peg_out_fees = if let Ok(wallet_module) = client.get_first_module::<WalletClientModule>() {
+        wallet_module
+            .get_withdraw_fees(
+                address,
+                bitcoin::Amount::from_sat(balance.sats_round_down()),
+            )
+            .await?
+    } else if let Ok(wallet_module) =
+        client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+    {
+        let fee = wallet_module
+            .send_fee()
+            .await
+            .map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: e.to_string(),
+            })?;
+        // Convert flat fee to PegOutFees format: PegOutFees::new(sats, 4000) gives
+        // exact amount
+        PegOutFees::new(fee.to_sat(), 4000)
+    } else {
+        return Err(AdminGatewayError::Unexpected(anyhow!(
+            "No wallet module found"
+        )));
+    };
 
     let max_withdrawable_before_mint_fees = balance
         .checked_sub(peg_out_fees.amount().into())
@@ -2277,6 +2359,15 @@ impl IAdminGateway for Gateway {
         };
 
         let client = self.select_client(federation_id).await?;
+
+        // Try walletv2 first, then fall back to wallet v1
+        if let Ok(wallet_module) = client
+            .value()
+            .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+        {
+            return withdraw_v2(client.value(), &wallet_module, &address, amount).await;
+        }
+
         let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
 
         // If fees are provided (from UI preview flow), use them directly
@@ -2376,7 +2467,6 @@ impl IAdminGateway for Gateway {
             })?;
 
         let client = self.select_client(payload.federation_id).await?;
-        let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
 
         let WithdrawDetails {
             amount,
@@ -2386,13 +2476,33 @@ impl IAdminGateway for Gateway {
             BitcoinAmountOrAll::All => {
                 calculate_max_withdrawable(client.value(), &address_checked).await?
             }
-            BitcoinAmountOrAll::Amount(btc_amount) => WithdrawDetails {
-                amount: btc_amount.into(),
-                mint_fees: None,
-                peg_out_fees: wallet_module
-                    .get_withdraw_fees(&address_checked, btc_amount)
-                    .await?,
-            },
+            BitcoinAmountOrAll::Amount(btc_amount) => {
+                // Try walletv2 first, then fall back to wallet v1
+                if let Ok(wallet_module) = client
+                    .value()
+                    .get_first_module::<fedimint_walletv2_client::WalletClientModule>(
+                ) {
+                    let fee = wallet_module.send_fee().await.map_err(|e| {
+                        AdminGatewayError::WithdrawError {
+                            failure_reason: e.to_string(),
+                        }
+                    })?;
+                    WithdrawDetails {
+                        amount: btc_amount.into(),
+                        mint_fees: None,
+                        peg_out_fees: PegOutFees::new(fee.to_sat(), 4000),
+                    }
+                } else {
+                    let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
+                    WithdrawDetails {
+                        amount: btc_amount.into(),
+                        mint_fees: None,
+                        peg_out_fees: wallet_module
+                            .get_withdraw_fees(&address_checked, btc_amount)
+                            .await?,
+                    }
+                }
+            }
         };
 
         let total_cost = amount
