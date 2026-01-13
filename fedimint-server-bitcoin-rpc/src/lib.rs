@@ -149,4 +149,18 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         // We're always in sync, just like esplora
         self.esplora_client.get_sync_progress().await
     }
+
+    async fn get_genesis_block_hash(&self) -> Result<BlockHash> {
+        match self.bitcoind_client.get_genesis_block_hash().await {
+            Ok(hash) => Ok(hash),
+            Err(e) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %e.fmt_compact_anyhow(),
+                    "BitcoindClient failed for get_genesis_block_hash, falling back to EsploraClient"
+                );
+                self.esplora_client.get_genesis_block_hash().await
+            }
+        }
+    }
 }

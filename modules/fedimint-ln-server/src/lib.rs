@@ -1318,6 +1318,10 @@ mod tests {
         async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
             Err(anyhow::anyhow!("Mock sync percentage error"))
         }
+
+        async fn get_genesis_block_hash(&self) -> anyhow::Result<BlockHash> {
+            Err(anyhow::anyhow!("Mock genesis block hash error"))
+        }
     }
 
     const MINTS: u16 = 4;

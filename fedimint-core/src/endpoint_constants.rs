@@ -38,3 +38,4 @@ pub const SUBMIT_API_ANNOUNCEMENT_ENDPOINT: &str = "submit_api_announcement";
 pub const SIGN_API_ANNOUNCEMENT_ENDPOINT: &str = "sign_api_announcement";
 pub const FEDIMINTD_VERSION_ENDPOINT: &str = "fedimintd_version";
 pub const CHANGE_PASSWORD_ENDPOINT: &str = "change_password";
+pub const CHAIN_ID_ENDPOINT: &str = "chain_id";
