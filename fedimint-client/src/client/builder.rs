@@ -25,6 +25,7 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -56,7 +57,7 @@ use crate::api_announcements::{
 use crate::backup::{ClientBackup, Metadata};
 use crate::client::PrimaryModuleCandidates;
 use crate::db::{
-    self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
+    self, ApiSecretKey, ChainIdKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
     PendingClientConfigKey, apply_migrations_client_module_dbtx,
 };
@@ -273,6 +274,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
+        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&db_no_decoders).await {
             bail!("Client database already initialized")
@@ -321,6 +323,7 @@ impl ClientBuilder {
             stopped,
             preview_prefetch_api_announcements,
             preview_prefetch_api_version_set,
+            prefetch_chain_id,
         )
         .await
     }
@@ -389,11 +392,16 @@ impl ClientBuilder {
         prefetch_api: Option<DynGlobalApi>,
         prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     ) -> anyhow::Result<ClientPreview> {
-        let preview_prefetch_api_version_set = prefetch_api.map(|api| {
+        let preview_prefetch_api_version_set = prefetch_api.as_ref().map(|api| {
             JitTry::new_try({
                 let config = config.clone();
+                let api = api.clone();
                 || async move { Client::fetch_common_api_versions(&config, &api).await }
             })
+        });
+
+        let prefetch_chain_id = prefetch_api.map(|api| {
+            JitTry::new_try(|| async move { api.chain_id().await.map_err(anyhow::Error::from) })
         });
 
         Ok(ClientPreview {
@@ -403,6 +411,7 @@ impl ClientBuilder {
             api_secret,
             prefetch_api_announcements,
             preview_prefetch_api_version_set,
+            prefetch_chain_id,
         })
     }
 
@@ -464,6 +473,7 @@ impl ClientBuilder {
                 request_hook,
                 None,
                 None,
+                None, // chain_id should already be cached for existing clients
             )
             .await?;
         if !stopped {
@@ -486,6 +496,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
+        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -500,6 +511,7 @@ impl ClientBuilder {
                 request_hook,
                 preview_prefetch_api_announcements,
                 preview_prefetch_api_version_set,
+                prefetch_chain_id,
             )
             .await?;
         if !stopped {
@@ -525,6 +537,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
+        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
     ) -> anyhow::Result<ClientHandle> {
         debug!(
             target: LOG_CLIENT,
@@ -615,6 +628,23 @@ impl ClientBuilder {
 
         // Asynchronously refetch client config and compare with existing
         Self::load_and_refresh_client_config_static(&config, &api, &db, &task_group);
+
+        // Try to cache chain_id if not already cached
+        // This is best-effort - if the server doesn't support the endpoint yet, we'll
+        // try again on subsequent starts
+        if let Some(prefetch_chain_id) = prefetch_chain_id {
+            match prefetch_chain_id.get_try().await {
+                Ok(chain_id) => {
+                    debug!(target: LOG_CLIENT, %chain_id, "Caching prefetched chain ID");
+                    let mut dbtx = db.begin_transaction().await;
+                    dbtx.insert_entry(&ChainIdKey, chain_id).await;
+                    dbtx.commit_tx().await;
+                }
+                Err(err) => {
+                    debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Failed to prefetch chain ID, will retry on next start");
+                }
+            }
+        }
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -929,6 +959,39 @@ impl ClientBuilder {
                     .await
                 }
             });
+
+        // If chain_id is not cached yet, spawn a background task to fetch it
+        // This handles the case where join/open happened before the server supported
+        // the chain_id endpoint
+        if client_inner
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ChainIdKey)
+            .await
+            .is_none()
+        {
+            client_inner
+                .task_group
+                .spawn_cancellable("fetch-chain-id", {
+                    let client_inner = client_inner.clone();
+                    async move {
+                        client_inner.api.wait_for_initialized_connections().await;
+                        match client_inner.api.chain_id().await {
+                            Ok(chain_id) => {
+                                debug!(target: LOG_CLIENT, %chain_id, "Caching chain ID from background fetch");
+                                let mut dbtx = client_inner.db.begin_transaction().await;
+                                dbtx.insert_entry(&ChainIdKey, &chain_id).await;
+                                dbtx.commit_tx().await;
+                            }
+                            Err(err) => {
+                                debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Background chain ID fetch failed, will retry on next start");
+                            }
+                        }
+                    }
+                });
+        }
+
         let client_iface = std::sync::Arc::<Client>::downgrade(&client_inner);
 
         let client_arc = ClientHandle::new(client_inner);
@@ -1138,6 +1201,7 @@ pub struct ClientPreview {
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set:
         Option<JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
+    prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
 }
 
 impl ClientPreview {
@@ -1242,6 +1306,7 @@ impl ClientPreview {
                 InitMode::Fresh,
                 self.prefetch_api_announcements,
                 self.preview_prefetch_api_version_set,
+                self.prefetch_chain_id,
             )
             .await?;
 
@@ -1280,6 +1345,7 @@ impl ClientPreview {
                 },
                 self.prefetch_api_announcements,
                 self.preview_prefetch_api_version_set,
+                self.prefetch_chain_id,
             )
             .await?;
 
