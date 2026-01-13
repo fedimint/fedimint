@@ -12,7 +12,6 @@ mod api;
 mod cli;
 mod client_db;
 mod ecash;
-mod event;
 mod input;
 pub mod issuance;
 mod output;
@@ -25,7 +24,6 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Context as _};
 use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
-use event::NoteSpent;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{
@@ -922,15 +920,6 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         spendable_note: &SpendableNote,
     ) {
-        self.client_ctx
-            .log_event(
-                dbtx,
-                NoteSpent {
-                    nonce: spendable_note.nonce(),
-                },
-            )
-            .await;
-
         dbtx.remove_entry(&SpendableNoteKey(spendable_note.clone()))
             .await
             .expect("Must deleted existing spendable note");

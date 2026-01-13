@@ -14,7 +14,6 @@ use tbs::{aggregate_signature_shares, AggregatePublicKey, BlindedSignatureShare,
 
 use crate::api::MintV2ModuleApi;
 use crate::client_db::SpendableNoteKey;
-use crate::event::NoteCreated;
 use crate::{issuance, MintClientContext, MintClientModule, NoteIssuanceRequest};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -112,7 +111,7 @@ impl MintOutputStateMachine {
     }
 
     async fn transition_outcome_ready(
-        client_ctx: ClientContext<MintClientModule>,
+        _client_ctx: ClientContext<MintClientModule>,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         signature_shares: Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String>,
         old_state: MintOutputStateMachine,
@@ -146,15 +145,6 @@ impl MintOutputStateMachine {
                     state: OutputSMState::Failure,
                 };
             }
-
-            client_ctx
-                .log_event(
-                    &mut dbtx.module_tx(),
-                    NoteCreated {
-                        nonce: spendable_note.nonce(),
-                    },
-                )
-                .await;
 
             dbtx.module_tx()
                 .insert_new_entry(&SpendableNoteKey(spendable_note), &())
