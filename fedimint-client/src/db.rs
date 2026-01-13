@@ -8,6 +8,7 @@ use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::oplog::{JsonStringed, OperationLogEntry, OperationOutcome};
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
+use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -58,6 +59,7 @@ pub enum DbKeyPrefix {
     EventLog = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG,
     UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
     EventLogTrimable = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG_TRIMABLE,
+    ChainId = 0x3c,
     ClientModuleRecovery = 0x40,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
@@ -276,6 +278,16 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ApiSecretKey, query_prefix = ApiSecretKeyPrefix);
+
+/// Cached chain ID (bitcoin block hash at height 1) from the federation
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ChainIdKey;
+
+impl_db_record!(
+    key = ChainIdKey,
+    value = BlockHash,
+    db_prefix = DbKeyPrefix::ChainId
+);
 
 /// Client metadata that will be stored/restored on backup&recovery
 #[derive(Debug, Encodable, Decodable, Serialize)]
