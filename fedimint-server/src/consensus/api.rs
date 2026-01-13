@@ -993,7 +993,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> BlockHash {
                 fedimint
                     .bitcoin_rpc_connection
-                    .get_genesis_block_hash()
+                    .get_chain_id()
                     .await
                     .map_err(|e| ApiError::server_error(e.to_string()))
             }
