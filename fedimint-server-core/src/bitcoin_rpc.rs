@@ -14,12 +14,44 @@ use tracing::debug;
 
 use crate::dashboard_ui::ServerBitcoinRpcStatus;
 
+// Well-known genesis block hashes for different Bitcoin networks
+// <https://blockstream.info/api/block-height/1>
+const MAINNET_CHAIN_ID_STR: &str =
+    "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048";
+// <https://blockstream.info/testnet/api/block-height/1>
+const TESTNET_CHAIN_ID_STR: &str =
+    "00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206";
+// <https://mempool.space/signet/api/block-height/1>
+const SIGNET_4_CHAIN_ID_STR: &str =
+    "00000086d6b2636cb2a392d45edc4ec544a10024d30141c9adf4bfd9de533b53";
+// <https://mutinynet.com/api/block-height/1>
+const MUTINYNET_CHAIN_ID_STR: &str =
+    "000002855893a0a9b24eaffc5efc770558a326fee4fc10c9da22fc19cd2954f9";
+
+/// Derives the Bitcoin network from a chain ID (block height 1 block hash).
+///
+/// Returns the corresponding `Network` for well-known genesis hashes,
+/// or `Network::Regtest` for unknown hashes (custom/private networks).
+pub fn network_from_chain_id(chain_id: BlockHash) -> Network {
+    match chain_id.to_string().as_str() {
+        MAINNET_CHAIN_ID_STR => Network::Bitcoin,
+        TESTNET_CHAIN_ID_STR => Network::Testnet,
+        SIGNET_4_CHAIN_ID_STR => Network::Signet,
+        MUTINYNET_CHAIN_ID_STR => Network::Signet,
+        _ => {
+            // Unknown genesis hash - treat as regtest/custom network
+            Network::Regtest
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ServerBitcoinRpcMonitor {
     rpc: DynServerBitcoinRpc,
     status_receiver: watch::Receiver<Option<ServerBitcoinRpcStatus>>,
-    /// Cached genesis block hash - fetched once and never changes
-    genesis_block_hash: OnceLock<BlockHash>,
+    /// Cached chain ID (block hash at height 1) - fetched once and never
+    /// changes
+    chain_id: OnceLock<BlockHash>,
 }
 
 impl ServerBitcoinRpcMonitor {
@@ -55,12 +87,13 @@ impl ServerBitcoinRpcMonitor {
         Self {
             rpc,
             status_receiver,
-            genesis_block_hash: OnceLock::new(),
+            chain_id: OnceLock::new(),
         }
     }
 
     async fn fetch_status(rpc: &DynServerBitcoinRpc) -> Result<ServerBitcoinRpcStatus> {
-        let network = rpc.get_network().await?;
+        let chain_id = rpc.get_chain_id().await?;
+        let network = network_from_chain_id(chain_id);
         let block_count = rpc.get_block_count().await?;
         let sync_progress = rpc.get_sync_progress().await?;
 
@@ -114,11 +147,11 @@ impl ServerBitcoinRpcMonitor {
         }
     }
 
-    /// Returns the genesis block hash, caching the result after the first
-    /// successful fetch.
-    pub async fn get_genesis_block_hash(&self) -> Result<BlockHash> {
+    /// Returns the chain ID, caching the result after the
+    /// first successful fetch.
+    pub async fn get_chain_id(&self) -> Result<BlockHash> {
         // Return cached value if available
-        if let Some(hash) = self.genesis_block_hash.get() {
+        if let Some(hash) = self.chain_id.get() {
             return Ok(*hash);
         }
 
@@ -128,9 +161,9 @@ impl ServerBitcoinRpcMonitor {
         );
 
         // Fetch from RPC and cache
-        let hash = self.rpc.get_genesis_block_hash().await?;
-        // It's OK if another task already set the value - the genesis hash is immutable
-        let _ = self.genesis_block_hash.set(hash);
+        let hash = self.rpc.get_chain_id().await?;
+        // It's OK if another task already set the value - the chain ID is immutable
+        let _ = self.chain_id.set(hash);
 
         Ok(hash)
     }
@@ -141,8 +174,8 @@ impl Clone for ServerBitcoinRpcMonitor {
         Self {
             rpc: self.rpc.clone(),
             status_receiver: self.status_receiver.clone(),
-            genesis_block_hash: self
-                .genesis_block_hash
+            chain_id: self
+                .chain_id
                 .get()
                 .copied()
                 .map(|h| {
@@ -164,9 +197,6 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
 
     /// Returns the Bitcoin RPC url
     fn get_url(&self) -> SafeUrl;
-
-    /// Returns the Bitcoin network the node is connected to
-    async fn get_network(&self) -> Result<Network>;
 
     /// Returns the current block count
     async fn get_block_count(&self) -> Result<u64>;
@@ -212,8 +242,12 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
     async fn get_sync_progress(&self) -> Result<Option<f64>>;
 
-    /// Returns the genesis block hash (block hash at height 0)
-    async fn get_genesis_block_hash(&self) -> Result<BlockHash>;
+    /// Returns the chain ID (block hash at height 1)
+    ///
+    /// The chain ID uniquely identifies which Bitcoin network this node is
+    /// connected to. Use [`network_from_chain_id`] to derive the `Network`
+    /// enum from the chain ID.
+    async fn get_chain_id(&self) -> Result<BlockHash>;
 
     fn into_dyn(self) -> DynServerBitcoinRpc
     where

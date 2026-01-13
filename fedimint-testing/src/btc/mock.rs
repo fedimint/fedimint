@@ -345,10 +345,6 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         "http://mock".parse().unwrap()
     }
 
-    async fn get_network(&self) -> Result<bitcoin::Network> {
-        Ok(bitcoin::Network::Regtest)
-    }
-
     async fn get_block_count(&self) -> Result<u64> {
         Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
@@ -404,7 +400,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn get_genesis_block_hash(&self) -> anyhow::Result<bitcoin::BlockHash> {
+    async fn get_chain_id(&self) -> anyhow::Result<bitcoin::BlockHash> {
         self.get_block_hash(0).await
     }
 }
