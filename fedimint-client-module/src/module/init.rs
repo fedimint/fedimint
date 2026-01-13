@@ -3,6 +3,7 @@ pub mod recovery;
 use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
@@ -38,6 +39,10 @@ where
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub task_group: TaskGroup,
     pub connector_registry: ConnectorRegistry,
+    /// Optional Bitcoin RPC client provided by the application.
+    /// Modules like the wallet module can use this instead of creating
+    /// their own RPC client (e.g., defaulting to Esplora).
+    pub bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -107,6 +112,14 @@ where
     pub fn connector_registry(&self) -> &ConnectorRegistry {
         &self.connector_registry
     }
+
+    /// Returns the optional Bitcoin RPC client provided by the application.
+    ///
+    /// Modules that need Bitcoin RPC access (like the wallet module) can use
+    /// this instead of creating their own client.
+    pub fn bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
+        self.bitcoind_rpc.as_ref()
+    }
 }
 
 pub struct ClientModuleRecoverArgs<C>
@@ -127,6 +140,8 @@ where
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub progress_tx: tokio::sync::watch::Sender<RecoveryProgress>,
     pub task_group: TaskGroup,
+    /// Optional Bitcoin RPC client provided by the application.
+    pub bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 impl<C> ClientModuleRecoverArgs<C>
@@ -205,6 +220,11 @@ where
         } else if self.progress_tx.send(progress).is_err() {
             warn!(target: LOG_CLIENT, "Module trying to send a recovery progress but nothing is listening");
         }
+    }
+
+    /// Returns the optional Bitcoin RPC client provided by the application.
+    pub fn bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
+        self.bitcoind_rpc.as_ref()
     }
 }
 

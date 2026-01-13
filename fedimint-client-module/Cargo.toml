@@ -30,6 +30,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-api-client = { workspace = true }
+fedimint-bitcoind = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }

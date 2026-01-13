@@ -242,9 +242,15 @@ impl ClientModuleInit for WalletClientInit {
 
         let db = args.db().clone();
 
-        let btc_rpc = self.0.clone().unwrap_or(create_esplora_rpc(
-            &WalletClientModule::get_rpc_config(args.cfg()).url,
-        )?);
+        // Priority: args.bitcoind_rpc() > self.0 > create esplora from config
+        let btc_rpc = args
+            .bitcoind_rpc()
+            .cloned()
+            .or_else(|| self.0.clone())
+            .map_or_else(
+                || create_esplora_rpc(&WalletClientModule::get_rpc_config(args.cfg()).url),
+                Ok,
+            )?;
 
         let module_api = args.module_api().clone();
 

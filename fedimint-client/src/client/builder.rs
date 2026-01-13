@@ -12,6 +12,7 @@ use fedimint_api_client::api::global_api::with_request_hook::{
 };
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
 use fedimint_api_client::download_from_invite_code;
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
@@ -122,6 +123,10 @@ pub struct ClientBuilder {
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
+    /// Optional Bitcoin RPC client to be used by modules that need Bitcoin
+    /// access (e.g., the wallet module). If not set, modules will use their
+    /// default backends (typically Esplora).
+    bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 impl ClientBuilder {
@@ -144,6 +149,7 @@ impl ClientBuilder {
             request_hook: Arc::new(|api| api),
             iroh_enable_dht: true,
             iroh_enable_next: true,
+            bitcoind_rpc: None,
         }
     }
 
@@ -158,6 +164,7 @@ impl ClientBuilder {
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
             iroh_enable_next: client.iroh_enable_next,
+            bitcoind_rpc: None,
         }
     }
 
@@ -173,6 +180,24 @@ impl ClientBuilder {
 
     pub fn stopped(&mut self) {
         self.stopped = true;
+    }
+
+    /// Set a custom Bitcoin RPC client to be used by modules.
+    ///
+    /// Modules that need Bitcoin RPC access (like the wallet module) will use
+    /// this client instead of creating their own (e.g., defaulting to Esplora).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use fedimint_bitcoind::DynBitcoindRpc;
+    ///
+    /// let custom_rpc: DynBitcoindRpc = /* your custom implementation */;
+    /// builder.with_bitcoind_rpc(custom_rpc);
+    /// ```
+    pub fn with_bitcoind_rpc(&mut self, rpc: DynBitcoindRpc) -> &mut Self {
+        self.bitcoind_rpc = Some(rpc);
+        self
     }
     /// Build the [`Client`] with a custom wrapper around its api request logic
     ///
@@ -669,6 +694,7 @@ impl ClientBuilder {
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
                         let task_group = task_group.clone();
                         let module_init = module_init.clone();
+                        let bitcoind_rpc = self.bitcoind_rpc.clone();
                         (
                             Box::pin(async move {
                                 module_init
@@ -688,6 +714,7 @@ impl ClientBuilder {
                                         snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
+                                        bitcoind_rpc,
                                     )
                                     .await
                                     .inspect_err(|err| {
@@ -786,6 +813,7 @@ impl ClientBuilder {
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
                                 connectors.clone(),
+                                self.bitcoind_rpc.clone(),
                             )
                             .await?;
 
