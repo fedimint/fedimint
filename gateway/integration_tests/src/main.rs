@@ -14,7 +14,7 @@ use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_10_0_ALPHA};
+use devimint::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_8_2, VERSION_0_10_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -363,9 +363,10 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .out_json()
                     .await?;
 
-
-                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_8_0_ALPHA {
+                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_8_2 {
                     (0, 0)
+                } else if gatewayd_version >= *VERSION_0_8_0_ALPHA {
+                    (2000, 3000)
                 } else {
                     (50000, 5000)
                 };
