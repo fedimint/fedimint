@@ -15,6 +15,7 @@ use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, FinalClientIface,
@@ -162,6 +163,12 @@ pub struct Client {
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
+    /// User-provided Bitcoin RPC client for modules to use
+    ///
+    /// Stored here for potential future access; currently passed to modules
+    /// during initialization.
+    #[allow(dead_code)]
+    user_bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
