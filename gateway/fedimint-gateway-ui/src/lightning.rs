@@ -37,36 +37,46 @@ where
     // Try to load channels
     let channels_result = api.handle_list_channels_msg().await;
 
-    // Extract LightningInfo status
-    let (block_height, status_badge, network, alias, pubkey) = match &gateway_info.lightning_info {
-        LightningInfo::Connected {
-            network,
-            block_height,
-            synced_to_chain,
-            alias,
-            public_key,
-        } => {
-            let badge = if *synced_to_chain {
-                html! { span class="badge bg-success" { "🟢 Synced" } }
-            } else {
-                html! { span class="badge bg-warning" { "🟡 Syncing" } }
-            };
+    let (block_height, status_badge, network, alias, pubkey) =
+        if gateway_info.gateway_state == "Syncing" {
             (
-                *block_height,
-                badge,
-                *network,
-                Some(alias.clone()),
-                Some(*public_key),
+                0,
+                html! { span class="badge bg-warning" { "🟡 Syncing" } },
+                Network::Bitcoin,
+                None,
+                None,
             )
-        }
-        LightningInfo::NotConnected => (
-            0,
-            html! { span class="badge bg-danger" { "❌ Not Connected" } },
-            Network::Bitcoin,
-            None,
-            None,
-        ),
-    };
+        } else {
+            match &gateway_info.lightning_info {
+                LightningInfo::Connected {
+                    network,
+                    block_height,
+                    synced_to_chain,
+                    alias,
+                    public_key,
+                } => {
+                    let badge = if *synced_to_chain {
+                        html! { span class="badge bg-success" { "🟢 Synced" } }
+                    } else {
+                        html! { span class="badge bg-warning" { "🟡 Syncing" } }
+                    };
+                    (
+                        *block_height,
+                        badge,
+                        *network,
+                        Some(alias.clone()),
+                        Some(*public_key),
+                    )
+                }
+                LightningInfo::NotConnected => (
+                    0,
+                    html! { span class="badge bg-danger" { "❌ Not Connected" } },
+                    Network::Bitcoin,
+                    None,
+                    None,
+                ),
+            }
+        };
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
     debug!(target: LOG_GATEWAY_UI, "Getting all balances...");
