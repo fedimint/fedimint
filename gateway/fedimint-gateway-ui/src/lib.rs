@@ -5,6 +5,7 @@ mod general;
 mod lightning;
 mod mnemonic;
 mod payment_summary;
+mod setup;
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -27,9 +28,9 @@ use fedimint_gateway_common::{
     GatewayInfo, LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
     MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
     PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse,
+    ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_GATEWAY_UI;
@@ -55,6 +56,7 @@ use crate::lightning::{
     wallet_fragment_handler,
 };
 use crate::payment_summary::payment_log_fragment_handler;
+use crate::setup::{create_wallet_handler, recover_wallet_form, recover_wallet_handler};
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
@@ -77,6 +79,8 @@ pub(crate) const WITHDRAW_PREVIEW_ROUTE: &str = "/ui/federations/withdraw-previe
 pub(crate) const WITHDRAW_CONFIRM_ROUTE: &str = "/ui/federations/withdraw-confirm";
 pub(crate) const SPEND_ECASH_ROUTE: &str = "/ui/federations/spend";
 pub(crate) const PAYMENT_LOG_ROUTE: &str = "/ui/payment-log";
+pub(crate) const CREATE_WALLET_ROUTE: &str = "/ui/wallet/create";
+pub(crate) const RECOVER_WALLET_ROUTE: &str = "/ui/wallet/recover";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -201,6 +205,13 @@ pub trait IAdminGateway {
     async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
 
     fn lightning_mode(&self) -> LightningMode;
+
+    async fn is_configured(&self) -> bool;
+
+    async fn handle_set_mnemonic_ui_msg(
+        &self,
+        payload: SetMnemonicPayload,
+    ) -> Result<(), Self::Error>;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
@@ -244,6 +255,13 @@ async fn dashboard_view<E>(
 where
     E: std::fmt::Display,
 {
+    // If gateway is not configured, show setup view instead of dashboard
+    if !state.api.is_configured().await {
+        return setup::setup_view(State(state), Query(msg))
+            .await
+            .into_response();
+    }
+
     let gatewayd_version = state.api.gatewayd_version();
     debug!(target: LOG_GATEWAY_UI, "Getting gateway info...");
     let gateway_info = match state.api.handle_get_info().await {
@@ -389,6 +407,11 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(WITHDRAW_PREVIEW_ROUTE, post(withdraw_preview_handler))
         .route(WITHDRAW_CONFIRM_ROUTE, post(withdraw_confirm_handler))
         .route(PAYMENT_LOG_ROUTE, get(payment_log_fragment_handler))
+        .route(CREATE_WALLET_ROUTE, post(create_wallet_handler))
+        .route(
+            RECOVER_WALLET_ROUTE,
+            get(recover_wallet_form).post(recover_wallet_handler),
+        )
         .with_static_routes();
 
     app.with_state(UiState::new(api))

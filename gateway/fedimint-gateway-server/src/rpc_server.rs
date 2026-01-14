@@ -118,12 +118,22 @@ async fn not_configured_middleware(
         gateway.get_state().await,
         GatewayState::NotConfigured { .. }
     ) {
-        let is_post = request.method() == axum::http::Method::POST;
+        let method = request.method().clone();
         let path = request.uri().path();
-        let is_mnemonic_endpoint =
-            path == MNEMONIC_ENDPOINT || path == format!("/{V1_API_ENDPOINT}/{MNEMONIC_ENDPOINT}");
 
-        if !(is_post && is_mnemonic_endpoint) {
+        // Allow the API mnemonic endpoint (for CLI usage)
+        let is_mnemonic_api = method == axum::http::Method::POST
+            && (path == MNEMONIC_ENDPOINT
+                || path == format!("/{V1_API_ENDPOINT}/{MNEMONIC_ENDPOINT}"));
+
+        // Allow UI setup routes (login, setup page, assets, wallet create/recover)
+        let is_setup_route = path == "/"
+            || path == "/login"
+            || path.starts_with("/assets/")
+            || path == "/ui/wallet/create"
+            || path == "/ui/wallet/recover";
+
+        if !is_mnemonic_api && !is_setup_route {
             return Err(StatusCode::NOT_FOUND);
         }
     }
