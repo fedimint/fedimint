@@ -2460,6 +2460,14 @@ impl IAdminGateway for Gateway {
     fn lightning_mode(&self) -> LightningMode {
         self.lightning_mode.clone()
     }
+
+    async fn is_configured(&self) -> bool {
+        !matches!(self.get_state().await, GatewayState::NotConfigured { .. })
+    }
+
+    async fn handle_set_mnemonic_ui_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
+        self.handle_set_mnemonic_msg(payload).await
+    }
 }
 
 // LNv2 Gateway implementation
