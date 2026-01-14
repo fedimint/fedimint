@@ -1288,6 +1288,8 @@ impl Gateway {
             .await
             .map_err(AdminGatewayError::MnemonicError)?;
 
+        self.set_gateway_state(GatewayState::Disconnected).await;
+
         // Alert the gateway to continue
         let _ = tx.send(());
 
