@@ -19,7 +19,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, Feerate};
+use fedimint_core::{Amount, ChainId, Feerate};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use rand::rngs::OsRng;
 use tracing::debug;
@@ -400,7 +400,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn get_chain_id(&self) -> anyhow::Result<bitcoin::BlockHash> {
-        self.get_block_hash(0).await
+    async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+        self.get_block_hash(1).await.map(ChainId::new)
     }
 }

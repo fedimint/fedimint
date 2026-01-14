@@ -33,7 +33,6 @@ use fedimint_client_module::{
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -60,7 +59,7 @@ use fedimint_core::util::{
     BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
 use fedimint_core::{
-    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
+    Amount, ChainId, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
     maybe_add_send_sync, runtime,
 };
 use fedimint_derive_secret::DerivableSecret;
@@ -351,7 +350,7 @@ impl Client {
     /// This is cached in the database after the first successful fetch.
     /// The chain ID uniquely identifies which bitcoin network the federation
     /// operates on (mainnet, testnet, signet, regtest).
-    pub async fn chain_id(&self) -> anyhow::Result<BlockHash> {
+    pub async fn chain_id(&self) -> anyhow::Result<ChainId> {
         // Check cache first
         if let Some(chain_id) = self
             .db

@@ -8,7 +8,6 @@ use bitcoin::secp256k1;
 use fedimint_connectors::ServerResult;
 use fedimint_core::admin_client::{GuardianConfigBackup, SetLocalParamsRequest, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::endpoint_constants::{
@@ -37,7 +36,7 @@ use fedimint_core::session_outcome::{
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
+use fedimint_core::{ChainId, NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
 use futures::stream::BoxStream;
@@ -575,7 +574,7 @@ where
         .await
     }
 
-    async fn chain_id(&self) -> FederationResult<BlockHash> {
+    async fn chain_id(&self) -> FederationResult<ChainId> {
         self.request_current_consensus(CHAIN_ID_ENDPOINT.to_owned(), ApiRequestErased::default())
             .await
     }

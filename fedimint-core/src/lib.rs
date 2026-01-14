@@ -142,6 +142,75 @@ mod txid {
 }
 pub use txid::TransactionId;
 
+/// Bitcoin chain identifier
+///
+/// This is a newtype wrapper around [`bitcoin::BlockHash`] representing the
+/// block hash at height 1, which uniquely identifies a Bitcoin chain (mainnet,
+/// testnet, signet, regtest, or custom networks), unlike genesis block hash
+/// which is often the same for same types of networks (e.g. mutinynet vs
+/// signet4).
+///
+/// Using a distinct type instead of raw `BlockHash` provides type safety and
+/// makes the intent clearer when passing chain identifiers through APIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encodable, Decodable)]
+pub struct ChainId(pub bitcoin::BlockHash);
+
+impl ChainId {
+    /// Create a new `ChainId` from a `BlockHash`
+    pub fn new(block_hash: bitcoin::BlockHash) -> Self {
+        Self(block_hash)
+    }
+
+    /// Get the inner `BlockHash`
+    pub fn block_hash(&self) -> bitcoin::BlockHash {
+        self.0
+    }
+}
+
+impl From<bitcoin::BlockHash> for ChainId {
+    fn from(block_hash: bitcoin::BlockHash) -> Self {
+        Self(block_hash)
+    }
+}
+
+impl From<ChainId> for bitcoin::BlockHash {
+    fn from(chain_id: ChainId) -> Self {
+        chain_id.0
+    }
+}
+
+impl std::fmt::Display for ChainId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for ChainId {
+    type Err = bitcoin::hashes::hex::HexToArrayError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        bitcoin::BlockHash::from_str(s).map(Self)
+    }
+}
+
+impl Serialize for ChainId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ChainId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        bitcoin::BlockHash::deserialize(deserializer).map(Self)
+    }
+}
+
 /// Amount of bitcoin to send, or `All` to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone)]
 pub enum BitcoinAmountOrAll {

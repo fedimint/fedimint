@@ -15,7 +15,6 @@ use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, Setu
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME_KEY};
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
@@ -55,7 +54,7 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
-use fedimint_core::{OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
+use fedimint_core::{ChainId, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::dashboard_ui::{
@@ -990,7 +989,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             CHAIN_ID_ENDPOINT,
             ApiVersion::new(0, 9),
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> BlockHash {
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> ChainId {
                 fedimint
                     .bitcoin_rpc_connection
                     .get_chain_id()

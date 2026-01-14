@@ -3,9 +3,9 @@ use std::sync::OnceLock;
 
 use anyhow::Context;
 use bitcoin::{BlockHash, Transaction};
-use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompact, SafeUrl};
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
@@ -14,7 +14,7 @@ use tracing::info;
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
-    cached_chain_id: OnceLock<BlockHash>,
+    cached_chain_id: OnceLock<ChainId>,
 }
 
 impl EsploraClient {
@@ -95,12 +95,12 @@ impl IServerBitcoinRpc for EsploraClient {
         Ok(None)
     }
 
-    async fn get_chain_id(&self) -> anyhow::Result<BlockHash> {
+    async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
         if let Some(chain_id) = self.cached_chain_id.get() {
             return Ok(*chain_id);
         }
 
-        let chain_id = self.get_block_hash(0).await?;
+        let chain_id = ChainId::new(self.get_block_hash(1).await?);
         let _ = self.cached_chain_id.set(chain_id);
         Ok(chain_id)
     }

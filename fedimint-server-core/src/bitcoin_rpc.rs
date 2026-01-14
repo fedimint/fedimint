@@ -3,11 +3,11 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
-use fedimint_core::Feerate;
 use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
 use tracing::debug;
@@ -32,7 +32,7 @@ const MUTINYNET_CHAIN_ID_STR: &str =
 ///
 /// Returns the corresponding `Network` for well-known genesis hashes,
 /// or `Network::Regtest` for unknown hashes (custom/private networks).
-pub fn network_from_chain_id(chain_id: BlockHash) -> Network {
+pub fn network_from_chain_id(chain_id: ChainId) -> Network {
     match chain_id.to_string().as_str() {
         MAINNET_CHAIN_ID_STR => Network::Bitcoin,
         TESTNET_CHAIN_ID_STR => Network::Testnet,
@@ -51,7 +51,7 @@ pub struct ServerBitcoinRpcMonitor {
     status_receiver: watch::Receiver<Option<ServerBitcoinRpcStatus>>,
     /// Cached chain ID (block hash at height 1) - fetched once and never
     /// changes
-    chain_id: OnceLock<BlockHash>,
+    chain_id: OnceLock<ChainId>,
 }
 
 impl ServerBitcoinRpcMonitor {
@@ -149,10 +149,10 @@ impl ServerBitcoinRpcMonitor {
 
     /// Returns the chain ID, caching the result after the
     /// first successful fetch.
-    pub async fn get_chain_id(&self) -> Result<BlockHash> {
+    pub async fn get_chain_id(&self) -> Result<ChainId> {
         // Return cached value if available
-        if let Some(hash) = self.chain_id.get() {
-            return Ok(*hash);
+        if let Some(chain_id) = self.chain_id.get() {
+            return Ok(*chain_id);
         }
 
         ensure!(
@@ -161,11 +161,11 @@ impl ServerBitcoinRpcMonitor {
         );
 
         // Fetch from RPC and cache
-        let hash = self.rpc.get_chain_id().await?;
+        let chain_id = self.rpc.get_chain_id().await?;
         // It's OK if another task already set the value - the chain ID is immutable
-        let _ = self.chain_id.set(hash);
+        let _ = self.chain_id.set(chain_id);
 
-        Ok(hash)
+        Ok(chain_id)
     }
 }
 
@@ -247,7 +247,7 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// The chain ID uniquely identifies which Bitcoin network this node is
     /// connected to. Use [`network_from_chain_id`] to derive the `Network`
     /// enum from the chain ID.
-    async fn get_chain_id(&self) -> Result<BlockHash>;
+    async fn get_chain_id(&self) -> Result<ChainId>;
 
     fn into_dyn(self) -> DynServerBitcoinRpc
     where
