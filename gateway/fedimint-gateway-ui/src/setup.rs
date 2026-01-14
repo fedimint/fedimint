@@ -10,7 +10,18 @@ use crate::{DashboardQuery, DynGatewayApi, RECOVER_WALLET_ROUTE, redirect_error}
 
 #[derive(Deserialize)]
 pub struct RecoverWalletForm {
-    pub words: String,
+    pub word1: String,
+    pub word2: String,
+    pub word3: String,
+    pub word4: String,
+    pub word5: String,
+    pub word6: String,
+    pub word7: String,
+    pub word8: String,
+    pub word9: String,
+    pub word10: String,
+    pub word11: String,
+    pub word12: String,
 }
 
 /// Renders the main setup page with two options:
@@ -95,23 +106,25 @@ where
         }
 
         form action=(RECOVER_WALLET_ROUTE) method="post" {
-            div class="mb-3" {
-                label for="words" class="form-label" {
-                    "Recovery Phrase"
-                }
-                textarea
-                    class="form-control"
-                    id="words"
-                    name="words"
-                    rows="3"
-                    placeholder="Enter your 12 words separated by spaces"
-                    required
-                    autocomplete="off"
-                    autocapitalize="none"
-                    spellcheck="false"
-                {}
-                div class="form-text" {
-                    "Enter all 12 words in order, separated by spaces."
+            div class="row g-2 mb-3" {
+                @for i in 1..=12 {
+                    div class="col-6" {
+                        div class="input-group" {
+                            span class="input-group-text" style="min-width: 3rem; justify-content: center;" {
+                                (i)
+                            }
+                            input
+                                type="text"
+                                class="form-control"
+                                id=(format!("word{}", i))
+                                name=(format!("word{}", i))
+                                placeholder=(format!("Word {}", i))
+                                required
+                                autocomplete="off"
+                                autocapitalize="none"
+                                spellcheck="false";
+                        }
+                    }
                 }
             }
 
@@ -135,8 +148,25 @@ pub async fn recover_wallet_handler<E>(
 where
     E: std::fmt::Display,
 {
-    // Normalize the words (trim, collapse whitespace)
-    let words = form.words.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Collect and normalize the 12 words into a single space-separated string
+    let words = [
+        &form.word1,
+        &form.word2,
+        &form.word3,
+        &form.word4,
+        &form.word5,
+        &form.word6,
+        &form.word7,
+        &form.word8,
+        &form.word9,
+        &form.word10,
+        &form.word11,
+        &form.word12,
+    ]
+    .iter()
+    .map(|w| w.trim())
+    .collect::<Vec<_>>()
+    .join(" ");
 
     match state
         .api
