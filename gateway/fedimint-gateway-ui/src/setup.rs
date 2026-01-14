@@ -1,9 +1,10 @@
 use axum::Form;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
+use bip39::Language;
 use fedimint_gateway_common::SetMnemonicPayload;
 use fedimint_ui_common::{ROOT_ROUTE, UiState, login_layout};
-use maud::html;
+use maud::{PreEscaped, html};
 use serde::Deserialize;
 
 use crate::{DashboardQuery, DynGatewayApi, RECOVER_WALLET_ROUTE, redirect_error};
@@ -139,6 +140,31 @@ where
                     "Recover Wallet"
                 }
             }
+        }
+
+        // Embed BIP39 word list and validation script
+        script {
+            (PreEscaped(format!(
+                "const BIP39_WORDS = {};",
+                serde_json::to_string(&Language::English.word_list().to_vec()).expect("Failed to serialize BIP39 word list")
+            )))
+            (PreEscaped(r#"
+                const wordSet = new Set(BIP39_WORDS.map(w => w.toLowerCase()));
+
+                document.querySelectorAll('input[id^="word"]').forEach(input => {
+                    input.addEventListener('input', function() {
+                        const value = this.value.trim().toLowerCase();
+                        this.classList.remove('is-valid', 'is-invalid');
+                        if (value.length > 0) {
+                            if (wordSet.has(value)) {
+                                this.classList.add('is-valid');
+                            } else {
+                                this.classList.add('is-invalid');
+                            }
+                        }
+                    });
+                });
+            "#))
         }
     };
 
