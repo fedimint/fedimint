@@ -337,6 +337,8 @@ jobs:
             image: fedimint/gateway-cli
           - name: fedimint-recurringd
             image: fedimint/fedimint-recurringd
+          - name: fedimint-recurringdv2
+            image: fedimint/fedimint-recurringdv2
           - name: devtools
             image: fedimint/devtools
     runs-on: ${{ matrix.platform.runs-on }}
@@ -415,7 +417,7 @@ jobs:
       - name: Create and push multi-arch manifests
         run: |
           # hardcode container names since they're not available as outputs from the container job
-          containers="fedimintd fedimint-cli gatewayd gateway-cli fedimint-recurringd devtools"
+          containers="fedimintd fedimint-cli gatewayd gateway-cli fedimint-recurringd fedimint-recurringdv2 devtools"
 
           # Reference the following blog post for multi arch images with nix and docker manifest
           # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos
