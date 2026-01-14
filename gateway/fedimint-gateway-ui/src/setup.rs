@@ -7,7 +7,9 @@ use fedimint_ui_common::{ROOT_ROUTE, UiState, login_layout};
 use maud::{PreEscaped, html};
 use serde::Deserialize;
 
-use crate::{DashboardQuery, DynGatewayApi, RECOVER_WALLET_ROUTE, redirect_error};
+use crate::{
+    CREATE_WALLET_ROUTE, DashboardQuery, DynGatewayApi, RECOVER_WALLET_ROUTE, redirect_error,
+};
 
 #[derive(Deserialize)]
 pub struct RecoverWalletForm {
@@ -50,7 +52,7 @@ where
 
         div class="d-grid gap-3" {
             // Create New Wallet button
-            form action="/ui/wallet/create" method="post" {
+            form action=(CREATE_WALLET_ROUTE) method="post" {
                 button type="submit" class="btn btn-primary btn-lg w-100" {
                     div class="fw-bold" { "Create New Wallet" }
                     small class="text-white-50" {
@@ -69,7 +71,7 @@ where
         }
     };
 
-    Html(login_layout("Gateway Setup", content).into_string())
+    Html(login_layout("Setup Gateway", content).into_string())
 }
 
 /// Handler for creating a new wallet (generates new mnemonic)
@@ -81,7 +83,7 @@ where
 {
     match state
         .api
-        .handle_set_mnemonic_ui_msg(SetMnemonicPayload { words: None })
+        .handle_set_mnemonic_msg(SetMnemonicPayload { words: None })
         .await
     {
         Ok(()) => Redirect::to(ROOT_ROUTE).into_response(),
@@ -201,7 +203,7 @@ where
 
     match state
         .api
-        .handle_set_mnemonic_ui_msg(SetMnemonicPayload { words: Some(words) })
+        .handle_set_mnemonic_msg(SetMnemonicPayload { words: Some(words) })
         .await
     {
         Ok(()) => Redirect::to(ROOT_ROUTE).into_response(),

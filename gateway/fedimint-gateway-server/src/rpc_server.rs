@@ -126,12 +126,7 @@ async fn not_configured_middleware(
             && (path == MNEMONIC_ENDPOINT
                 || path == format!("/{V1_API_ENDPOINT}/{MNEMONIC_ENDPOINT}"));
 
-        // Allow UI setup routes (login, setup page, assets, wallet create/recover)
-        let is_setup_route = path == "/"
-            || path == "/login"
-            || path.starts_with("/assets/")
-            || path == "/ui/wallet/create"
-            || path == "/ui/wallet/recover";
+        let is_setup_route = fedimint_gateway_ui::is_allowed_setup_route(path);
 
         if !is_mnemonic_api && !is_setup_route {
             return Err(StatusCode::NOT_FOUND);

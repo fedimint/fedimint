@@ -98,6 +98,14 @@ fn redirect_error(msg: String) -> impl IntoResponse {
     Redirect::to(&format!("/?ui_error={}", encoded))
 }
 
+pub fn is_allowed_setup_route(path: &str) -> bool {
+    path == ROOT_ROUTE
+        || path == LOGIN_ROUTE
+        || path.starts_with("/assets/")
+        || path == CREATE_WALLET_ROUTE
+        || path == RECOVER_WALLET_ROUTE
+}
+
 #[async_trait]
 pub trait IAdminGateway {
     type Error;
@@ -208,10 +216,8 @@ pub trait IAdminGateway {
 
     async fn is_configured(&self) -> bool;
 
-    async fn handle_set_mnemonic_ui_msg(
-        &self,
-        payload: SetMnemonicPayload,
-    ) -> Result<(), Self::Error>;
+    async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload)
+    -> Result<(), Self::Error>;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
