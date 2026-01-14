@@ -105,10 +105,15 @@ where
             "Enter your 12-word recovery phrase to restore your wallet."
         }
 
+        div class="alert alert-warning mb-3" {
+            strong { "Note: " }
+            "After recovery, you will need to re-join the federations you were previously connected to in order to recover your ecash."
+        }
+
         form action=(RECOVER_WALLET_ROUTE) method="post" {
-            div class="row g-2 mb-3" {
+            div class="d-flex flex-column flex-wrap gap-2 mb-3" style="height: 19.5rem;" {
                 @for i in 1..=12 {
-                    div class="col-6" {
+                    div style="width: calc(50% - 0.25rem);" {
                         div class="input-group" {
                             span class="input-group-text" style="min-width: 3rem; justify-content: center;" {
                                 (i)
