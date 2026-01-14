@@ -153,6 +153,7 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
+///    NotConfigured -- create or recover wallet --> Disconnected
 ///    Disconnected -- establish lightning connection --> Connected
 ///    Connected -- load federation clients --> Running
 ///    Connected -- not synced to chain --> Syncing
@@ -221,8 +222,6 @@ pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
 
-    // The mnemonic for the gateway
-    //mnemonic: Option<Mnemonic>,
     /// The mode that specifies the lightning connection parameters
     lightning_mode: LightningMode,
 
@@ -1262,38 +1261,6 @@ impl Gateway {
         Ok(PayOfferResponse {
             preimage: preimage.to_string(),
         })
-    }
-
-    pub async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
-        // Verify the state is NotConfigured
-        let GatewayState::NotConfigured { tx } = self.get_state().await else {
-            return Err(AdminGatewayError::MnemonicError(anyhow!(
-                "Gateway is not is NotConfigured state"
-            )));
-        };
-
-        let mnemonic = if let Some(words) = payload.words {
-            info!(target: LOG_GATEWAY, "Using user provided mnemonic");
-            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
-                AdminGatewayError::MnemonicError(anyhow!(format!(
-                    "Seed phrase provided in environment was invalid {e:?}"
-                )))
-            })?
-        } else {
-            debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
-        };
-
-        Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
-            .await
-            .map_err(AdminGatewayError::MnemonicError)?;
-
-        self.set_gateway_state(GatewayState::Disconnected).await;
-
-        // Alert the gateway to continue
-        let _ = tx.send(());
-
-        Ok(())
     }
 
     /// Registers the gateway with each specified federation.
@@ -2442,6 +2409,38 @@ impl IAdminGateway for Gateway {
         Ok(PaymentLogResponse(payment_log))
     }
 
+    async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
+        // Verify the state is NotConfigured
+        let GatewayState::NotConfigured { tx } = self.get_state().await else {
+            return Err(AdminGatewayError::MnemonicError(anyhow!(
+                "Gateway is not is NotConfigured state"
+            )));
+        };
+
+        let mnemonic = if let Some(words) = payload.words {
+            info!(target: LOG_GATEWAY, "Using user provided mnemonic");
+            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
+                AdminGatewayError::MnemonicError(anyhow!(format!(
+                    "Seed phrase provided in environment was invalid {e:?}"
+                )))
+            })?
+        } else {
+            debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
+            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+        };
+
+        Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
+            .await
+            .map_err(AdminGatewayError::MnemonicError)?;
+
+        self.set_gateway_state(GatewayState::Disconnected).await;
+
+        // Alert the gateway to continue
+        let _ = tx.send(());
+
+        Ok(())
+    }
+
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
@@ -2465,10 +2464,6 @@ impl IAdminGateway for Gateway {
 
     async fn is_configured(&self) -> bool {
         !matches!(self.get_state().await, GatewayState::NotConfigured { .. })
-    }
-
-    async fn handle_set_mnemonic_ui_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
-        self.handle_set_mnemonic_msg(payload).await
     }
 }
 
