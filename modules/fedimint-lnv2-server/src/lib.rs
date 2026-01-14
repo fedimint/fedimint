@@ -591,7 +591,7 @@ impl ServerModule for Lightning {
 
     async fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
         None
@@ -891,7 +891,7 @@ impl Lightning {
     }
 
     async fn add_gateway(db: Database, gateway: SafeUrl) -> bool {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let is_new_entry = dbtx.insert_entry(&GatewayKey(gateway), &()).await.is_none();
 
@@ -901,7 +901,7 @@ impl Lightning {
     }
 
     async fn remove_gateway(db: Database, gateway: SafeUrl) -> bool {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let entry_existed = dbtx.remove_entry(&GatewayKey(gateway)).await.is_some();
 

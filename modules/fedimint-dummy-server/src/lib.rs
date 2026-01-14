@@ -301,7 +301,7 @@ impl ServerModule for Dummy {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
         // check whether or not the output has been processed

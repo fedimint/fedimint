@@ -875,7 +875,7 @@ impl ServerModule for Wallet {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<WalletOutputOutcome> {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point)).await
@@ -1026,7 +1026,7 @@ impl ServerModule for Wallet {
                     check_auth(context)?;
 
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     dbtx.to_ref().insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
                     dbtx.commit_tx_result().await?;
                     Ok(())

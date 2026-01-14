@@ -215,7 +215,7 @@ impl ServerModule for Empty {
 
     async fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<EmptyOutputOutcome> {
         None

@@ -711,7 +711,7 @@ impl Database {
         &'a self,
         key: &K,
         checker: impl Fn(Option<K::Value>) -> Option<T>,
-    ) -> (T, DatabaseTransaction<'a, Committable>)
+    ) -> (T, ReadDatabaseTransaction<'a>)
     where
         K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
@@ -720,10 +720,10 @@ impl Database {
             // register for notification
             let notify = self.inner.register(&key_bytes);
 
-            // check for value in db
-            let mut tx = self.inner.begin_transaction().await;
+            // check for value in db using a read transaction
+            let mut read_tx = self.begin_read_transaction().await;
 
-            let maybe_value_bytes = tx
+            let maybe_value_bytes = read_tx
                 .raw_get_bytes(&key_bytes)
                 .await
                 .expect("Unrecoverable error when reading from database")
@@ -732,10 +732,7 @@ impl Database {
                 });
 
             if let Some(value) = checker(maybe_value_bytes) {
-                return (
-                    value,
-                    DatabaseTransaction::new(tx, self.module_decoders.clone()),
-                );
+                return (value, read_tx);
             }
 
             // key not found, try again

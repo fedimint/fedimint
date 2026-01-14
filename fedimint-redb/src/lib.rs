@@ -315,6 +315,7 @@ mod tests {
     #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq)]
     struct TestValue(String);
 
+    #[allow(dead_code)]
     #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, PartialOrd, Ord)]
     struct TestKeyPrefix;
 

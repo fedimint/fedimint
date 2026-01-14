@@ -568,7 +568,7 @@ impl ServerModule for Mint {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<MintOutputOutcome> {
         dbtx.get_value(&MintOutputOutcomeKey(out_point)).await

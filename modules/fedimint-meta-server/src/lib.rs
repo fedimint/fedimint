@@ -413,7 +413,7 @@ impl ServerModule for Meta {
 
     async fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<MetaOutputOutcome> {
         None
@@ -438,7 +438,7 @@ impl ServerModule for Meta {
                         None => return Err(ApiError::bad_request("Missing password".to_string())),
                         Some(auth) => {
                             let db = context.db();
-                            let mut dbtx = db.begin_transaction().await;
+                            let mut dbtx = db.begin_write_transaction().await;
                             module.handle_submit_request(&mut dbtx.to_ref_nc(), &auth, &request).await?;
                             dbtx.commit_tx_result().await?;
                         }
@@ -486,7 +486,7 @@ impl ServerModule for Meta {
 impl Meta {
     async fn handle_submit_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         _auth: &ApiAuth,
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {
@@ -551,7 +551,7 @@ impl Meta {
 impl Meta {
     /// UI helper to submit a value change with default auth
     pub async fn handle_submit_request_ui(&self, value: Value) -> Result<(), ApiError> {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         self.handle_submit_request(
             &mut dbtx.to_ref_nc(),

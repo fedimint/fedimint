@@ -19,8 +19,8 @@ use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Committable, Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -167,7 +167,7 @@ impl ConsensusApi {
     pub async fn await_transaction(
         &self,
         txid: TransactionId,
-    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>) {
+    ) -> (Vec<ModuleInstanceId>, ReadDatabaseTransaction<'_>) {
         self.db
             .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
             .await
@@ -189,7 +189,7 @@ impl ConsensusApi {
             .modules
             .get_expect(module_id)
             .output_status(
-                &mut dbtx.to_ref_with_prefix_module_id(module_id).0.into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(module_id).0,
                 outpoint,
                 module_id,
             )
@@ -218,7 +218,7 @@ impl ConsensusApi {
                 .modules
                 .get_expect(*module_id)
                 .output_status(
-                    &mut dbtx.to_ref_with_prefix_module_id(*module_id).0.into_nc(),
+                    &mut dbtx.to_ref_with_prefix_module_id(*module_id).0,
                     outpoint,
                     *module_id,
                 )
@@ -503,36 +503,29 @@ impl ConsensusApi {
     }
 
     async fn sign_api_announcement(&self, new_url: SafeUrl) -> SignedApiAnnouncement {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let new_url_inner = new_url.clone();
-                    Box::pin(async move {
-                        let new_nonce = dbtx
-                            .get_value(&ApiAnnouncementKey(self.cfg.local.identity))
-                            .await
-                            .map_or(0, |a| a.api_announcement.nonce + 1);
-                        let announcement = ApiAnnouncement {
-                            api_url: new_url_inner,
-                            nonce: new_nonce,
-                        };
-                        let ctx = secp256k1::Secp256k1::new();
-                        let signed_announcement = announcement
-                            .sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                        dbtx.insert_entry(
-                            &ApiAnnouncementKey(self.cfg.local.identity),
-                            &signed_announcement,
-                        )
-                        .await;
-
-                        Result::<_, ()>::Ok(signed_announcement)
-                    })
-                },
-                None,
-            )
+        let new_nonce = dbtx
+            .get_value(&ApiAnnouncementKey(self.cfg.local.identity))
             .await
-            .expect("Will not terminate on error")
+            .map_or(0, |a| a.api_announcement.nonce + 1);
+        let announcement = ApiAnnouncement {
+            api_url: new_url,
+            nonce: new_nonce,
+        };
+        let ctx = secp256k1::Secp256k1::new();
+        let signed_announcement =
+            announcement.sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+
+        dbtx.insert_entry(
+            &ApiAnnouncementKey(self.cfg.local.identity),
+            &signed_announcement,
+        )
+        .await;
+
+        dbtx.commit_tx().await;
+
+        signed_announcement
     }
 
     /// Changes the guardian password by re-encrypting the private config and

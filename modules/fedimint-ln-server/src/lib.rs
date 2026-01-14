@@ -807,7 +807,7 @@ impl ServerModule for Lightning {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&ContractUpdateKey(out_point))
@@ -929,7 +929,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await;
                     dbtx.commit_tx_result().await?;
                     Ok(())
@@ -949,7 +949,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     let result = module.remove_gateway(remove_gateway_request.clone(), &mut dbtx.to_ref_nc()).await;
                     match result {
                         Ok(()) => {
@@ -1152,7 +1152,7 @@ impl Lightning {
 
     async fn register_gateway(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         gateway: LightningGatewayAnnouncement,
     ) {
         // Garbage collect expired gateways (since we're already writing to the DB)
@@ -1169,7 +1169,7 @@ impl Lightning {
         .await;
     }
 
-    async fn delete_expired_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn delete_expired_gateways(&self, dbtx: &mut WriteDatabaseTransaction<'_>) {
         let expired_gateway_keys = dbtx
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
@@ -1210,7 +1210,7 @@ impl Lightning {
     async fn remove_gateway(
         &self,
         remove_gateway_request: RemoveGatewayRequest,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> anyhow::Result<()> {
         let fed_public_key = self.cfg.consensus.threshold_pub_keys.public_key();
         let gateway_id = remove_gateway_request.gateway_id;

@@ -195,7 +195,7 @@ impl ServerModule for Unknown {
 
     async fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<UnknownOutputOutcome> {
         unreachable!()

@@ -20,7 +20,7 @@ use fedimint_core::core::{
     Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome, ModuleInstanceId, ModuleKind,
 };
-use fedimint_core::db::{DatabaseTransaction, ReadDatabaseTransaction, WriteDatabaseTransaction};
+use fedimint_core::db::{ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
@@ -139,7 +139,7 @@ pub trait ServerModule: Debug + Sized {
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
@@ -276,7 +276,7 @@ pub trait IServerModule: Debug {
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome>;
@@ -460,7 +460,7 @@ where
     /// See [`ServerModule::output_status`]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
