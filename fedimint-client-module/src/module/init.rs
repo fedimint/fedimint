@@ -3,6 +3,7 @@ pub mod recovery;
 use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
@@ -38,6 +39,12 @@ where
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub task_group: TaskGroup,
     pub connector_registry: ConnectorRegistry,
+    /// User-provided Bitcoin RPC client
+    ///
+    /// If set by the application using `ClientBuilder::with_bitcoind_rpc`,
+    /// modules (particularly the wallet module) can use this instead of
+    /// creating their own Bitcoin RPC connection.
+    pub user_bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -107,6 +114,14 @@ where
     pub fn connector_registry(&self) -> &ConnectorRegistry {
         &self.connector_registry
     }
+
+    /// Returns the user-provided Bitcoin RPC client, if any
+    ///
+    /// Modules (particularly the wallet module) should check this first
+    /// before creating their own Bitcoin RPC connection.
+    pub fn user_bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
+        self.user_bitcoind_rpc.as_ref()
+    }
 }
 
 pub struct ClientModuleRecoverArgs<C>
@@ -127,6 +142,12 @@ where
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub progress_tx: tokio::sync::watch::Sender<RecoveryProgress>,
     pub task_group: TaskGroup,
+    /// User-provided Bitcoin RPC client
+    ///
+    /// If set by the application using `ClientBuilder::with_bitcoind_rpc`,
+    /// modules (particularly the wallet module) can use this instead of
+    /// creating their own Bitcoin RPC connection.
+    pub user_bitcoind_rpc: Option<DynBitcoindRpc>,
 }
 
 impl<C> ClientModuleRecoverArgs<C>
@@ -205,6 +226,14 @@ where
         } else if self.progress_tx.send(progress).is_err() {
             warn!(target: LOG_CLIENT, "Module trying to send a recovery progress but nothing is listening");
         }
+    }
+
+    /// Returns the user-provided Bitcoin RPC client, if any
+    ///
+    /// Modules (particularly the wallet module) should check this first
+    /// before creating their own Bitcoin RPC connection.
+    pub fn user_bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
+        self.user_bitcoind_rpc.as_ref()
     }
 }
 

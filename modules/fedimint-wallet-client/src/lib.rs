@@ -313,9 +313,15 @@ impl ClientModuleInit for WalletClientInit {
 
         let db = args.db().clone();
 
-        let btc_rpc = self.0.clone().unwrap_or(create_esplora_rpc(
-            &WalletClientModule::get_rpc_config(args.cfg()).url,
-        )?);
+        // Priority: user-provided bitcoind RPC from ClientBuilder > WalletClientInit
+        // constructor > create from config
+        let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
+            user_rpc.clone()
+        } else {
+            self.0.clone().unwrap_or(create_esplora_rpc(
+                &WalletClientModule::get_rpc_config(args.cfg()).url,
+            )?)
+        };
 
         let module_api = args.module_api().clone();
 

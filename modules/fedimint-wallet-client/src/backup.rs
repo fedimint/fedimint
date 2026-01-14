@@ -205,9 +205,15 @@ impl RecoveryFromHistory for WalletRecovery {
         snapshot: Option<&WalletModuleBackup>,
     ) -> anyhow::Result<(Self, u64)> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Starting new recovery");
-        let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
-            &WalletClientModule::get_rpc_config(args.cfg()).url,
-        )?);
+        // Priority: user-provided bitcoind RPC from ClientBuilder > WalletClientInit
+        // constructor > create from config
+        let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
+            user_rpc.clone()
+        } else {
+            init.0.clone().unwrap_or(create_esplora_rpc(
+                &WalletClientModule::get_rpc_config(args.cfg()).url,
+            )?)
+        };
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -283,9 +289,15 @@ impl RecoveryFromHistory for WalletRecovery {
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
-        let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
-            &WalletClientModule::get_rpc_config(args.cfg()).url,
-        )?);
+        // Priority: user-provided bitcoind RPC from ClientBuilder > WalletClientInit
+        // constructor > create from config
+        let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
+            user_rpc.clone()
+        } else {
+            init.0.clone().unwrap_or(create_esplora_rpc(
+                &WalletClientModule::get_rpc_config(args.cfg()).url,
+            )?)
+        };
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),

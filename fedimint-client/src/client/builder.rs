@@ -12,6 +12,7 @@ use fedimint_api_client::api::global_api::with_request_hook::{
 };
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
 use fedimint_api_client::download_from_invite_code;
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
@@ -122,6 +123,7 @@ pub struct ClientBuilder {
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
+    bitcoind_rpc_factory: Option<BitcoindRpcFactory>,
 }
 
 impl ClientBuilder {
@@ -144,6 +146,7 @@ impl ClientBuilder {
             request_hook: Arc::new(|api| api),
             iroh_enable_dht: true,
             iroh_enable_next: true,
+            bitcoind_rpc_factory: None,
         }
     }
 
@@ -158,6 +161,9 @@ impl ClientBuilder {
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
             iroh_enable_next: client.iroh_enable_next,
+            // Note: bitcoind_rpc_factory is not cloned from existing client
+            // since it's a one-time factory that's consumed during build
+            bitcoind_rpc_factory: None,
         }
     }
 
@@ -202,6 +208,36 @@ impl ClientBuilder {
     /// using Iroh to connect to the federation
     pub fn with_iroh_enable_next(mut self, iroh_enable_next: bool) -> Self {
         self.iroh_enable_next = iroh_enable_next;
+        self
+    }
+
+    /// Set a factory function for creating a Bitcoin RPC client
+    ///
+    /// This allows applications to provide their own Bitcoin RPC client
+    /// implementation. The factory is called during client initialization
+    /// if the chain ID is available, and the resulting client is passed to
+    /// modules (particularly the wallet module).
+    ///
+    /// The factory receives the [`ChainId`] (block hash at height 1) so
+    /// applications can configure the Bitcoin RPC client for the correct
+    /// network.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = Client::builder()
+    ///     .with_bitcoind_rpc(|chain_id| async move {
+    ///         Some(my_custom_bitcoind_rpc(chain_id))
+    ///     })
+    ///     .join(db, root_secret)
+    ///     .await?;
+    /// ```
+    pub fn with_bitcoind_rpc<F, Fut>(mut self, factory: F) -> Self
+    where
+        F: FnOnce(ChainId) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<DynBitcoindRpc>> + Send + 'static,
+    {
+        self.bitcoind_rpc_factory = Some(Box::new(move |chain_id| Box::pin(factory(chain_id))));
         self
     }
 
@@ -524,7 +560,7 @@ impl ClientBuilder {
     /// Build a [`Client`] but do not start the executor
     #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
-        self,
+        mut self,
         connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
@@ -645,6 +681,22 @@ impl ClientBuilder {
             }
         }
 
+        // Create user-provided bitcoin RPC client if factory was provided
+        let user_bitcoind_rpc = if let Some(factory) = self.bitcoind_rpc_factory.take() {
+            // Try to get the chain_id from the database
+            let chain_id = db.begin_transaction_nc().await.get_value(&ChainIdKey).await;
+
+            if let Some(chain_id) = chain_id {
+                debug!(target: LOG_CLIENT, %chain_id, "Creating user-provided bitcoind RPC client");
+                factory(chain_id).await
+            } else {
+                debug!(target: LOG_CLIENT, "Chain ID not available, skipping user-provided bitcoind RPC creation");
+                None
+            }
+        } else {
+            None
+        };
+
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
@@ -698,6 +750,7 @@ impl ClientBuilder {
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
                         let task_group = task_group.clone();
                         let module_init = module_init.clone();
+                        let user_bitcoind_rpc = user_bitcoind_rpc.clone();
                         (
                             Box::pin(async move {
                                 module_init
@@ -717,6 +770,7 @@ impl ClientBuilder {
                                         snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
+                                        user_bitcoind_rpc,
                                     )
                                     .await
                                     .inspect_err(|err| {
@@ -815,6 +869,7 @@ impl ClientBuilder {
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
                                 connectors.clone(),
+                                user_bitcoind_rpc.clone(),
                             )
                             .await?;
 
@@ -913,6 +968,7 @@ impl ClientBuilder {
             meta_service: self.meta_service,
             iroh_enable_dht: self.iroh_enable_dht,
             iroh_enable_next: self.iroh_enable_next,
+            user_bitcoind_rpc,
         });
         client_inner
             .task_group

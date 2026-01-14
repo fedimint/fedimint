@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -55,6 +56,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
         task_group: TaskGroup,
+        user_bitcoind_rpc: Option<DynBitcoindRpc>,
     ) -> anyhow::Result<()>;
 
     #[allow(clippy::too_many_arguments)]
@@ -74,6 +76,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
         connector_registry: ConnectorRegistry,
+        user_bitcoind_rpc: Option<DynBitcoindRpc>,
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn>;
@@ -121,6 +124,7 @@ where
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
         task_group: TaskGroup,
+        user_bitcoind_rpc: Option<DynBitcoindRpc>,
     ) -> anyhow::Result<()> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         let snapshot: Option<&<<Self as ClientModuleInit>::Module as ClientModule>::Backup> =
@@ -153,6 +157,7 @@ where
                 ),
                 progress_tx,
                 task_group,
+                user_bitcoind_rpc,
             },
             snapshot,
         )
@@ -176,6 +181,7 @@ where
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
         connector_registry: ConnectorRegistry,
+        user_bitcoind_rpc: Option<DynBitcoindRpc>,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         let (module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
@@ -201,6 +207,7 @@ where
                 ),
                 task_group,
                 connector_registry,
+                user_bitcoind_rpc,
             },
         )
         .await?
