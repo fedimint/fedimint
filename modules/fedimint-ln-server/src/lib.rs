@@ -1257,7 +1257,7 @@ mod tests {
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Amount, ChainId, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{LightningClientConfig, LightningConfig, Network};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1315,7 +1315,7 @@ mod tests {
             Err(anyhow::anyhow!("Mock sync percentage error"))
         }
 
-        async fn get_chain_id(&self) -> anyhow::Result<BlockHash> {
+        async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
             Err(anyhow::anyhow!("Mock chain id error"))
         }
     }

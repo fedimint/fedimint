@@ -8,7 +8,6 @@ use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::oplog::{JsonStringed, OperationLogEntry, OperationOutcome};
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -19,7 +18,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{ChainId, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_eventlog::{
     DB_KEY_PREFIX_EVENT_LOG, DB_KEY_PREFIX_UNORDERED_EVENT_LOG, EventLogId, UnordedEventLogId,
 };
@@ -285,7 +284,7 @@ pub struct ChainIdKey;
 
 impl_db_record!(
     key = ChainIdKey,
-    value = BlockHash,
+    value = ChainId,
     db_prefix = DbKeyPrefix::ChainId
 );
 

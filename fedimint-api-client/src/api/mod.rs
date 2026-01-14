@@ -18,7 +18,6 @@ use fedimint_connectors::{
 };
 use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, ModuleKind, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -35,7 +34,8 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
-    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
+    ChainId, NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
+    util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::{BoxStream, FuturesUnordered};
@@ -566,7 +566,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
 
     /// Returns the bitcoin genesis block hash (chain ID) from the federation
-    async fn chain_id(&self) -> FederationResult<BlockHash>;
+    async fn chain_id(&self) -> FederationResult<ChainId>;
 }
 
 pub fn deserialize_outcome<R>(

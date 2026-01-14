@@ -25,7 +25,6 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -39,7 +38,7 @@ use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSu
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
-use fedimint_core::{NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
+use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
@@ -274,7 +273,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
+        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&db_no_decoders).await {
             bail!("Client database already initialized")
@@ -496,7 +495,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
+        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -537,7 +536,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
+        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
     ) -> anyhow::Result<ClientHandle> {
         debug!(
             target: LOG_CLIENT,
@@ -1201,7 +1200,7 @@ pub struct ClientPreview {
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set:
         Option<JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
-    prefetch_chain_id: Option<JitTryAnyhow<BlockHash>>,
+    prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
 }
 
 impl ClientPreview {

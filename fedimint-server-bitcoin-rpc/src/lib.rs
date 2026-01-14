@@ -3,9 +3,9 @@ pub mod esplora;
 
 use anyhow::Result;
 use bitcoin::{BlockHash, Transaction};
-use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::warn;
@@ -124,9 +124,9 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         self.esplora_client.get_sync_progress().await
     }
 
-    async fn get_chain_id(&self) -> Result<BlockHash> {
+    async fn get_chain_id(&self) -> Result<ChainId> {
         match self.bitcoind_client.get_chain_id().await {
-            Ok(hash) => Ok(hash),
+            Ok(chain_id) => Ok(chain_id),
             Err(e) => {
                 warn!(
                     target: LOG_SERVER,

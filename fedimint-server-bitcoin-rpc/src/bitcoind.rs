@@ -4,10 +4,10 @@ use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::jsonrpc::Error::Rpc;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
-use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
@@ -99,7 +99,7 @@ impl IServerBitcoinRpc for BitcoindClient {
         ))
     }
 
-    async fn get_chain_id(&self) -> anyhow::Result<BlockHash> {
-        self.get_block_hash(0).await
+    async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+        self.get_block_hash(0).await.map(ChainId::new)
     }
 }
