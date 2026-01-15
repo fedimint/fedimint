@@ -18,7 +18,7 @@ use fedimint_core::db::{
     IRawDatabaseTransaction, PrefixStream,
 };
 use futures::stream;
-use redb::{ReadableTable, TableDefinition};
+use redb::{ReadableDatabase, ReadableTable, TableDefinition};
 
 const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("fedimint");
 

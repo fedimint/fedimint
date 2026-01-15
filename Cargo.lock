@@ -3091,7 +3091,7 @@ dependencies = [
  "futures",
  "gloo-utils",
  "imbl",
- "redb",
+ "redb 2.6.0",
  "tempfile",
  "tokio",
  "tracing",
@@ -4201,7 +4201,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
- "redb",
+ "redb 3.1.0",
  "tempfile",
  "tokio",
  "tracing",
@@ -8907,6 +8907,15 @@ name = "redb"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cef6a6d3a65ea334d6cdfb31fa2525c20184b7aa7bd1ad1e2e37502610d4609f"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "redb"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae323eb086579a3769daa2c753bb96deb95993c534711e0dbe881b5192906a06"
 dependencies = [
  "libc",
 ]
