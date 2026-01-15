@@ -211,13 +211,13 @@
 <a href=#211 id=211 data-nosnippet>211</a>                                        }
 <a href=#212 id=212 data-nosnippet>212</a>                                        @<span class="kw">if let </span><span class="prelude-val">Some</span>(a) = alias {
 <a href=#213 id=213 data-nosnippet>213</a>                                            tr {
-<a href=#214 id=214 data-nosnippet>214</a>                                                th { <span class="string">"Lightning Alias" </span>}
+<a href=#214 id=214 data-nosnippet>214</a>                                                th { <span class="string">"Alias" </span>}
 <a href=#215 id=215 data-nosnippet>215</a>                                                td { (a) }
 <a href=#216 id=216 data-nosnippet>216</a>                                            }
 <a href=#217 id=217 data-nosnippet>217</a>                                        }
 <a href=#218 id=218 data-nosnippet>218</a>                                        @<span class="kw">if let </span><span class="prelude-val">Some</span>(pk) = pubkey {
 <a href=#219 id=219 data-nosnippet>219</a>                                            tr {
-<a href=#220 id=220 data-nosnippet>220</a>                                                th { <span class="string">"Lightning Public Key" </span>}
+<a href=#220 id=220 data-nosnippet>220</a>                                                th { <span class="string">"Public Key" </span>}
 <a href=#221 id=221 data-nosnippet>221</a>                                                td { (pk) }
 <a href=#222 id=222 data-nosnippet>222</a>                                            }
 <a href=#223 id=223 data-nosnippet>223</a>                                        }
@@ -893,12 +893,12 @@
 <a href=#893 id=893 data-nosnippet>893</a>                                                div style=<span class="string">"font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" </span>{
 <a href=#894 id=894 data-nosnippet>894</a>                                                    span {
 <a href=#895 id=895 data-nosnippet>895</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" </span>{}
-<a href=#896 id=896 data-nosnippet>896</a>                                                        <span class="string">"Outbound"
-<a href=#897 id=897 data-nosnippet>897</a>                                                    </span>}
+<a href=#896 id=896 data-nosnippet>896</a>                                                        (<span class="macro">format!</span>(<span class="string">"Outbound ({})"</span>, ch.outbound_liquidity_sats))
+<a href=#897 id=897 data-nosnippet>897</a>                                                    }
 <a href=#898 id=898 data-nosnippet>898</a>                                                    span {
 <a href=#899 id=899 data-nosnippet>899</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" </span>{}
-<a href=#900 id=900 data-nosnippet>900</a>                                                        <span class="string">"Inbound"
-<a href=#901 id=901 data-nosnippet>901</a>                                                    </span>}
+<a href=#900 id=900 data-nosnippet>900</a>                                                        (<span class="macro">format!</span>(<span class="string">"Inbound ({})"</span>, ch.inbound_liquidity_sats))
+<a href=#901 id=901 data-nosnippet>901</a>                                                    }
 <a href=#902 id=902 data-nosnippet>902</a>                                                }
 <a href=#903 id=903 data-nosnippet>903</a>                                            }
 <a href=#904 id=904 data-nosnippet>904</a>                                        }
