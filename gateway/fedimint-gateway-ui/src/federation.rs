@@ -95,8 +95,7 @@ pub fn render(fed: &FederationInfo) -> Markup {
                             button type="submit"
                                 class="btn btn-outline-danger btn-sm"
                                 title="Leave Federation"
-                                onclick=(format!("return confirm('Are you sure you want to leave {}? You will need to re-connect the federation to access any remaining balance.');",
-                                    fed.federation_name.clone().unwrap_or_else(|| "this federation".to_string())))
+                                onclick=("return confirm('Are you sure you want to leave this federation? You will need to re-connect the federation to access any remaining balance.');")
                             { "📤" }
                         }
                     }
