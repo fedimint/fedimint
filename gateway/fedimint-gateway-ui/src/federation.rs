@@ -57,6 +57,14 @@ pub fn scripts() -> Markup {
                 hint.textContent = 'Copied!';
                 setTimeout(() => hint.textContent = 'Click to copy', 2000);
             }
+
+            // Initialize Bootstrap tooltips
+            document.addEventListener('DOMContentLoaded', function() {
+                var tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                tooltipTriggerList.forEach(function(el) {
+                    new bootstrap.Tooltip(el);
+                });
+            });
             "#))
         }
     )
@@ -164,19 +172,31 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                     table class="table table-sm mb-2" {
                                         tbody {
                                             tr {
-                                                th { "Lightning Base Fee" }
+                                                th {
+                                                    "Lightning Base Fee "
+                                                    span class="text-muted" data-bs-toggle="tooltip" title="Fixed fee in millisatoshis charged for outgoing Lightning payments" { "ⓘ" }
+                                                }
                                                 td { (fed.config.lightning_fee.base) }
                                             }
                                             tr {
-                                                th { "Lightning PPM" }
+                                                th {
+                                                    "Lightning PPM "
+                                                    span class="text-muted" data-bs-toggle="tooltip" title="Variable fee in parts per million (0.0001%) of outgoing Lightning payment amounts" { "ⓘ" }
+                                                }
                                                 td { (fed.config.lightning_fee.parts_per_million) }
                                             }
                                             tr {
-                                                th { "Transaction Base Fee" }
+                                                th {
+                                                    "Transaction Base Fee "
+                                                    span class="text-muted" data-bs-toggle="tooltip" title="Fixed fee in millisatoshis to cover the transaction fees charged by the federation" { "ⓘ" }
+                                                }
                                                 td { (fed.config.transaction_fee.base) }
                                             }
                                             tr {
-                                                th { "Transaction PPM" }
+                                                th {
+                                                    "Transaction PPM "
+                                                    span class="text-muted" data-bs-toggle="tooltip" title="Variable fee in parts per million (0.0001%) to cover the federation's transaction fees" { "ⓘ" }
+                                                }
                                                 td { (fed.config.transaction_fee.parts_per_million) }
                                             }
                                         }
@@ -201,7 +221,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                         table class="table table-sm mb-2" {
                                             tbody {
                                                 tr {
-                                                    th { "Lightning Base Fee" }
+                                                    th {
+                                                        "Lightning Base Fee "
+                                                        span class="text-muted" data-bs-toggle="tooltip" title="Fixed fee in millisatoshis charged for outgoing Lightning payments" { "ⓘ" }
+                                                    }
                                                     td {
                                                         input type="number"
                                                             class="form-control form-control-sm"
@@ -210,7 +233,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                                     }
                                                 }
                                                 tr {
-                                                    th { "Lightning PPM" }
+                                                    th {
+                                                        "Lightning PPM "
+                                                        span class="text-muted" data-bs-toggle="tooltip" title="Variable fee in parts per million (0.0001%) of outgoing Lightning payment amounts" { "ⓘ" }
+                                                    }
                                                     td {
                                                         input type="number"
                                                             class="form-control form-control-sm"
@@ -219,7 +245,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                                     }
                                                 }
                                                 tr {
-                                                    th { "Transaction Base Fee" }
+                                                    th {
+                                                        "Transaction Base Fee "
+                                                        span class="text-muted" data-bs-toggle="tooltip" title="Fixed fee in millisatoshis to cover the transaction fees charged by the federation" { "ⓘ" }
+                                                    }
                                                     td {
                                                         input type="number"
                                                             class="form-control form-control-sm"
@@ -228,7 +257,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                                     }
                                                 }
                                                 tr {
-                                                    th { "Transaction PPM" }
+                                                    th {
+                                                        "Transaction PPM "
+                                                        span class="text-muted" data-bs-toggle="tooltip" title="Variable fee in parts per million (0.0001%) to cover the federation's transaction fees" { "ⓘ" }
+                                                    }
                                                     td {
                                                         input type="number"
                                                             class="form-control form-control-sm"
