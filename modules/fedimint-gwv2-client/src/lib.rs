@@ -332,7 +332,7 @@ impl GatewayClientModuleV2 {
             state: SendSMState::Sending,
         });
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
@@ -346,7 +346,7 @@ impl GatewayClientModuleV2 {
 
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 OutgoingPaymentStarted {
                     operation_start,
                     outgoing_contract: payload.contract.clone(),
@@ -463,10 +463,10 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 IncomingPaymentStarted {
                     operation_start,
                     incoming_contract_commitment: commitment,
@@ -531,10 +531,10 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 IncomingPaymentStarted {
                     operation_start,
                     incoming_contract_commitment: commitment,

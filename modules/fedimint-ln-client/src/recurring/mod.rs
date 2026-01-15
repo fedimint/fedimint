@@ -18,7 +18,10 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
@@ -231,7 +234,7 @@ impl LightningClientModule {
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
         // TODO: validate invoice hash etc.
-        let mut dbtx = client.module_db().begin_transaction().await;
+        let mut dbtx = client.module_db().begin_write_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,
@@ -288,7 +291,7 @@ impl LightningClientModule {
     #[allow(clippy::pedantic)]
     async fn create_recurring_receive_operation(
         client: &ClientContext<Self>,
-        dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,

@@ -8,8 +8,8 @@ use fedimint_client_module::oplog::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped,
+    Database, IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
@@ -62,7 +62,7 @@ impl OperationLog {
 
     pub async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
@@ -249,7 +249,7 @@ impl IOperationLog for OperationLog {
 
     async fn get_operation_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         OperationLog::get_operation_dbtx(dbtx, operation_id).await
@@ -257,7 +257,7 @@ impl IOperationLog for OperationLog {
 
     async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: serde_json::Value,

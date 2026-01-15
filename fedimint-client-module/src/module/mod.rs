@@ -16,6 +16,7 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::{
     Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable, ReadDatabaseTransaction,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -70,7 +71,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     // TODO: unify
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange>;
@@ -103,7 +104,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     #[allow(clippy::too_many_arguments)]
     async fn log_event_json(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         module_kind: Option<ModuleKind>,
         module_id: ModuleInstanceId,
         kind: EventKind,
@@ -491,7 +492,7 @@ where
         sms: Vec<DynState>,
     ) -> anyhow::Result<()> {
         let db = self.module_db();
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         {
             let dbtx = &mut dbtx.global_dbtx(self.global_dbtx_access_token);
 
@@ -517,7 +518,7 @@ where
 
     pub async fn manual_operation_start_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
@@ -537,7 +538,7 @@ where
     /// transaction.
     async fn manual_operation_start_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
@@ -614,7 +615,7 @@ where
 
     pub async fn claim_inputs<I, S>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         inputs: ClientInputBundle<I, S>,
         operation_id: OperationId,
     ) -> anyhow::Result<OutPointRange>
@@ -628,7 +629,7 @@ where
 
     async fn claim_inputs_dyn(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
     ) -> anyhow::Result<OutPointRange> {
@@ -647,7 +648,7 @@ where
 
     pub async fn add_state_machines_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.client
@@ -659,7 +660,7 @@ where
 
     pub async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
@@ -676,10 +677,9 @@ where
             .await;
     }
 
-    pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
+    pub async fn log_event<E>(&self, dbtx: &mut WriteDatabaseTransaction<'_>, event: E)
     where
         E: Event + Send,
-        Cap: Send,
     {
         if <E as Event>::MODULE != Some(<M as ClientModule>::kind()) {
             warn!(
@@ -866,7 +866,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   of calling `create_change_output` and have to be injected later.
     async fn create_final_inputs_and_outputs(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut WriteDatabaseTransaction<'_>,
         _operation_id: OperationId,
         _unit: AmountUnit,
         _input_amount: Amount,
@@ -1006,7 +1006,7 @@ pub trait IClientModule: Debug {
     async fn create_final_inputs_and_outputs(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         unit: AmountUnit,
         input_amount: Amount,
@@ -1108,7 +1108,7 @@ where
     async fn create_final_inputs_and_outputs(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         unit: AmountUnit,
         input_amount: Amount,

@@ -9,8 +9,8 @@ use fedimint_client_module::module::init::recovery::{
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped as _, ReadDatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped as _,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{
@@ -115,7 +115,7 @@ impl RecoveryFromHistory for MintRecovery {
 
     async fn store_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         common: &RecoveryFromHistoryCommon,
     ) {
         dbtx.ensure_isolated()
@@ -127,7 +127,7 @@ impl RecoveryFromHistory for MintRecovery {
         .await;
     }
 
-    async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn delete_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>) {
         dbtx.remove_entry(&RecoveryStateKey).await;
     }
 
@@ -135,7 +135,7 @@ impl RecoveryFromHistory for MintRecovery {
         dbtx.get_value(&RecoveryFinalizedKey).await
     }
 
-    async fn store_finalized(dbtx: &mut DatabaseTransaction<'_>, state: bool) {
+    async fn store_finalized(dbtx: &mut WriteDatabaseTransaction<'_>, state: bool) {
         dbtx.insert_entry(&RecoveryFinalizedKey, &state).await;
     }
 
@@ -162,7 +162,7 @@ impl RecoveryFromHistory for MintRecovery {
     }
 
     /// Handle session outcome, adjusting the current state
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn finalize_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()> {
         let finalized = self.state.clone().finalize();
 
         let restored_amount = finalized
@@ -193,7 +193,7 @@ impl RecoveryFromHistory for MintRecovery {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
             self.client_ctx
                 .log_event(
-                    dbtx,
+                    &mut dbtx.to_ref_nc(),
                     NoteCreated {
                         nonce: note.nonce(),
                     },
@@ -222,7 +222,7 @@ impl RecoveryFromHistory for MintRecovery {
         for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
             self.client_ctx
                 .add_state_machines_dbtx(
-                    dbtx,
+                    &mut dbtx.to_ref_nc(),
                     self.client_ctx
                         .map_dyn(vec![MintClientStateMachines::Output(
                             MintOutputStateMachine {

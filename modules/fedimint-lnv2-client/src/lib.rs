@@ -646,11 +646,11 @@ impl LightningClientModule {
             .await
             .map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 SendPaymentEvent {
                     operation_id,
                     amount: send_fee.add_to(amount),

@@ -20,7 +20,7 @@ use std::{fmt, ops};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, WithDecoders,
+    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, WithDecoders, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;
@@ -615,6 +615,58 @@ where
 /// Implement write operations for DatabaseTransaction
 #[apply(async_trait_maybe_send!)]
 impl<'tx, Cap> DBTransactionEventLogExt for DatabaseTransaction<'tx, Cap>
+where
+    Cap: Send,
+{
+    async fn log_event_raw(
+        &mut self,
+        log_ordering_wakeup_tx: watch::Sender<()>,
+        kind: EventKind,
+        module_kind: Option<ModuleKind>,
+        module_id: Option<ModuleInstanceId>,
+        payload: Vec<u8>,
+        persist: EventPersistence,
+    ) {
+        assert_eq!(
+            module_kind.is_some(),
+            module_id.is_some(),
+            "Events of modules must have module_id set"
+        );
+
+        let unordered_id = UnordedEventLogId::new();
+        trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, "New unordered event log event");
+
+        if self
+            .insert_entry(
+                &unordered_id,
+                &UnorderedEventLogEntry {
+                    flags: match persist {
+                        EventPersistence::Transient => 0,
+                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
+                    },
+                    inner: EventLogEntry {
+                        kind,
+                        module: module_kind.map(|kind| (kind, module_id.unwrap())),
+                        ts_usecs: unordered_id.ts_usecs,
+                        payload,
+                    },
+                },
+            )
+            .await
+            .is_some()
+        {
+            panic!("Trying to overwrite event in the client event log");
+        }
+        self.on_commit(move || {
+            log_ordering_wakeup_tx.send_replace(());
+        });
+    }
+}
+
+/// Implement write operations for WriteDatabaseTransaction
+#[apply(async_trait_maybe_send!)]
+impl<'tx, Cap> DBTransactionEventLogExt for WriteDatabaseTransaction<'tx, Cap>
 where
     Cap: Send,
 {

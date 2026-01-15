@@ -146,7 +146,7 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
     // Issue e-cash and check if the blind nonce is added to the index
     let client_mint = client.get_first_module::<MintClientModule>()?;
 
-    let mut dbtx = client_mint.db.begin_transaction().await;
+    let mut dbtx = client_mint.db.begin_write_transaction().await;
     let operation_id = OperationId::new_random();
     let issuance_req = client_mint
         .create_output(&mut dbtx.to_ref_nc(), operation_id, 1, Amount::from_sats(1))
@@ -872,7 +872,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))

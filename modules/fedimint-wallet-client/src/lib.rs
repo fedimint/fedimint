@@ -47,8 +47,8 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -645,7 +645,7 @@ impl WalletClientModule {
 
     async fn allocate_deposit_address_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> (OperationId, Address, TweakIdx) {
         dbtx.ensure_isolated().expect("Must be isolated db");
 
@@ -876,54 +876,43 @@ impl WalletClientModule {
     {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
+
+        let mut dbtx = self.db.begin_write_transaction().await;
+
         let (operation_id, address, tweak_idx) = self
-            .db
-            .autocommit(
-                move |dbtx, _| {
-                    let extra_meta_value_inner = extra_meta_value.clone();
-                    Box::pin(async move {
-                        let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner(dbtx)
-                            .await;
+            .allocate_deposit_address_inner(&mut dbtx.to_ref_nc())
+            .await;
 
-                        self.client_ctx.manual_operation_start_dbtx(
-                            dbtx,
-                            operation_id,
-                            WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta {
-                                variant: WalletOperationMetaVariant::Deposit {
-                                    address: address.clone().into_unchecked(),
-                                    tweak_idx: Some(tweak_idx),
-                                    expires_at: None,
-                                },
-                                extra_meta: extra_meta_value_inner,
-                            },
-                            vec![]
-                        ).await?;
-
-                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
-
-                        // Begin watching the script address
-                        self.rpc.watch_script_history(&address.script_pubkey()).await?;
-
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
-
-                        Ok((operation_id, address, tweak_idx))
-                    })
+        self.client_ctx
+            .manual_operation_start_dbtx(
+                &mut dbtx.to_ref_nc(),
+                operation_id,
+                WalletCommonInit::KIND.as_str(),
+                WalletOperationMeta {
+                    variant: WalletOperationMetaVariant::Deposit {
+                        address: address.clone().into_unchecked(),
+                        tweak_idx: Some(tweak_idx),
+                        expires_at: None,
+                    },
+                    extra_meta: extra_meta_value,
                 },
-                Some(100),
+                vec![],
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+            .await?;
+
+        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
+
+        // Begin watching the script address
+        self.rpc
+            .watch_script_history(&address.script_pubkey())
+            .await?;
+
+        let sender = self.pegin_monitor_wakeup_sender.clone();
+        dbtx.on_commit(move || {
+            sender.send_replace(());
+        });
+
+        dbtx.commit_tx().await;
 
         Ok((operation_id, address, tweak_idx))
     }
@@ -1318,11 +1307,11 @@ impl WalletClientModule {
                 )
                 .await?;
 
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
             self.client_ctx
                 .log_event(
-                    &mut dbtx,
+                    &mut dbtx.to_ref_nc(),
                     SendPaymentEvent {
                         operation_id,
                         amount: amount + fee.amount(),
@@ -1486,7 +1475,7 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.
-async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> TweakIdx {
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut WriteDatabaseTransaction<'_>) -> TweakIdx {
     let index = dbtx
         .get_value(&NextPegInTweakIndexKey)
         .await

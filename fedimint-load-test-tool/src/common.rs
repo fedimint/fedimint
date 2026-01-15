@@ -378,7 +378,7 @@ pub async fn try_remint_denomination(
     quantity: u16,
 ) -> anyhow::Result<()> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
-    let mut dbtx = client.db().begin_transaction().await;
+    let mut dbtx = client.db().begin_write_transaction().await;
     let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).0;
     let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();

@@ -58,7 +58,7 @@ async fn test_operation_log_update() {
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let op_log = OperationLog::new(db.clone());
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     op_log
         .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
         .await;
@@ -97,7 +97,7 @@ async fn test_operation_log_update_from_stream() {
     let db = MemDatabase::new().into_database();
     let op_log = OperationLog::new(db.clone());
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     op_log
         .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
         .await;
@@ -139,7 +139,7 @@ async fn test_pagination() {
     let op_log = OperationLog::new(db.clone());
 
     for operation_idx in 0u8..98 {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         op_log
             .add_operation_log_entry_dbtx(
                 &mut dbtx.to_ref_nc(),
@@ -286,7 +286,7 @@ async fn test_pagination_empty_then_not() {
     let page = op_log.paginate_operations_rev(10, None).await;
     assert!(page.is_empty());
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     op_log
         .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), OperationId([0; 32]), "foo", "bar")
         .await;

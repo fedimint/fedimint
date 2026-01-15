@@ -1,7 +1,7 @@
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{DynState, State, StateTransition};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::{Amount, TransactionId};
@@ -85,7 +85,7 @@ impl State for DummyStateMachine {
     }
 }
 
-async fn add_funds(amount: Amount, unit: AmountUnit, mut dbtx: DatabaseTransaction<'_>) {
+async fn add_funds(amount: Amount, unit: AmountUnit, mut dbtx: WriteDatabaseTransaction<'_>) {
     let funds = get_funds(&mut dbtx, unit).await + amount;
     dbtx.insert_entry(&DummyClientFundsKey { unit }, &funds)
         .await;

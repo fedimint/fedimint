@@ -38,10 +38,9 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
-    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, ReadDatabaseTransaction,
-    WriteDatabaseTransaction,
+    Database, DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore as _,
+    IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped, NonCommittable,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
@@ -420,7 +419,7 @@ impl Client {
 
     pub async fn add_state_machines(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.executor.add_state_machines_dbtx(dbtx, states).await
@@ -466,7 +465,7 @@ impl Client {
     /// Adds funding to a transaction or removes over-funding via change.
     async fn finalize_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
@@ -551,11 +550,6 @@ impl Client {
     /// ## Errors
     /// The function will return an error if the operation with given ID already
     /// exists.
-    ///
-    /// ## Panics
-    /// The function will panic if the database transaction collides with
-    /// other and fails with others too often, this should not happen except for
-    /// excessively concurrent scenarios.
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
@@ -567,55 +561,33 @@ impl Client {
         F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
-        let operation_type = operation_type.to_owned();
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-        let autocommit_res = self
-            .db
-            .autocommit(
-                |dbtx, _| {
-                    let operation_type = operation_type.clone();
-                    let tx_builder = tx_builder.clone();
-                    let operation_meta_gen = operation_meta_gen.clone();
-                    Box::pin(async move {
-                        if Client::operation_exists_dbtx(dbtx, operation_id).await {
-                            bail!("There already exists an operation with id {operation_id:?}")
-                        }
+        if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
+            bail!("There already exists an operation with id {operation_id:?}")
+        }
 
-                        let out_point_range = self
-                            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
-                            .await?;
+        let out_point_range = self
+            .finalize_and_submit_transaction_inner(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
+            .await?;
 
-                        self.operation_log()
-                            .add_operation_log_entry_dbtx(
-                                dbtx,
-                                operation_id,
-                                &operation_type,
-                                operation_meta_gen(out_point_range),
-                            )
-                            .await;
-
-                        Ok(out_point_range)
-                    })
-                },
-                Some(100), // TODO: handle what happens after 100 retries
+        self.operation_log()
+            .add_operation_log_entry_dbtx(
+                &mut dbtx.to_ref_nc(),
+                operation_id,
+                operation_type,
+                operation_meta_gen(out_point_range),
             )
             .await;
 
-        match autocommit_res {
-            Ok(txid) => Ok(txid),
-            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
-            Err(AutocommitError::CommitFailed {
-                attempts,
-                last_error,
-            }) => panic!(
-                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
-            ),
-        }
+        dbtx.commit_tx().await;
+
+        Ok(out_point_range)
     }
 
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
@@ -1783,34 +1755,32 @@ impl Client {
     where
         E: Event + Send,
     {
-        let mut dbtx = self.db.begin_transaction().await;
-        self.log_event_dbtx(&mut dbtx, module_id, event).await;
+        let mut dbtx = self.db.begin_write_transaction().await;
+        self.log_event_dbtx(&mut dbtx.to_ref_nc(), module_id, event)
+            .await;
         dbtx.commit_tx().await;
     }
 
-    pub async fn log_event_dbtx<E, Cap>(
+    pub async fn log_event_dbtx<E>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         module_id: Option<ModuleInstanceId>,
         event: E,
     ) where
         E: Event + Send,
-        Cap: Send,
     {
         dbtx.log_event(self.log_ordering_wakeup_tx.clone(), module_id, event)
             .await;
     }
 
-    pub async fn log_event_raw_dbtx<Cap>(
+    pub async fn log_event_raw_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
         persist: EventPersistence,
-    ) where
-        Cap: Send,
-    {
+    ) {
         let module_id = module.as_ref().map(|m| m.1);
         let module_kind = module.map(|m| m.0);
         dbtx.log_event_raw(
@@ -2056,7 +2026,7 @@ impl ClientContextIface for Client {
 
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
@@ -2110,7 +2080,7 @@ impl ClientContextIface for Client {
 
     async fn log_event_json(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         module_kind: Option<ModuleKind>,
         module_id: ModuleInstanceId,
         kind: EventKind,
