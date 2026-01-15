@@ -374,6 +374,7 @@ impl Gateway {
                 iroh_listen,
                 iroh_dns: None,
                 iroh_relays: vec![],
+                skip_setup: true,
             },
             gateway_db,
             client_builder,
@@ -492,7 +493,17 @@ impl Gateway {
         let gateway_state = if Self::load_mnemonic(&gateway_db).await.is_some() {
             GatewayState::Disconnected
         } else {
-            GatewayState::NotConfigured { tx }
+            // Generate a mnemonic if `skip_setup` is true
+            if gateway_parameters.skip_setup {
+                info!(target: LOG_GATEWAY, "skip_setup is true, generating mnemonic...");
+                let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut OsRng);
+                Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
+                    .await
+                    .map_err(AdminGatewayError::MnemonicError)?;
+                GatewayState::Disconnected
+            } else {
+                GatewayState::NotConfigured { tx }
+            }
         };
 
         info!(
