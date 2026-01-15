@@ -718,7 +718,7 @@ where
 
 /// Trims old entries from the trimable event log
 async fn trim_trimable_log(db: &Database, current_time_usecs: u64) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
 
     let current_trimable_id = dbtx.get_next_event_log_trimable_id().await;
     let min_id_threshold = current_trimable_id
@@ -774,7 +774,7 @@ pub async fn run_event_log_ordering_task(
         .await;
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let unordered_events = dbtx
             .find_by_prefix(&UnorderedEventLogIdPrefixAll)
@@ -861,14 +861,14 @@ pub trait EventLogNonTrimableTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         pos: EventLogId,
     ) -> anyhow::Result<()>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> anyhow::Result<Option<EventLogId>>;
 }
 pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
@@ -879,14 +879,14 @@ pub trait EventLogTrimableTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         pos: EventLogTrimableId,
     ) -> anyhow::Result<()>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> anyhow::Result<Option<EventLogTrimableId>>;
 }
 pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
@@ -898,18 +898,18 @@ pub async fn handle_events<F, R>(
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+    F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
     let mut next_key: EventLogId = tracker
-        .load(&mut db.begin_transaction_nc().await)
+        .load(&mut db.begin_write_transaction().await.to_ref_nc())
         .await?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
@@ -922,6 +922,8 @@ where
                 dbtx.commit_tx().await;
             }
             _ => {
+                drop(dbtx);
+
                 if log_event_added.changed().await.is_err() {
                     break Ok(());
                 }
@@ -937,17 +939,17 @@ pub async fn handle_trimable_events<F, R>(
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+    F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
     let mut next_key: EventLogTrimableId = tracker
-        .load(&mut db.begin_transaction_nc().await)
+        .load(&mut db.begin_write_transaction().await.to_ref_nc())
         .await?
         .unwrap_or_default();
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
@@ -959,6 +961,8 @@ where
                 dbtx.commit_tx().await;
             }
             _ => {
+                drop(dbtx);
+
                 if log_event_added.changed().await.is_err() {
                     break Ok(());
                 }

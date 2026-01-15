@@ -1813,7 +1813,7 @@ impl Client {
             // Store position in the event log
             async fn store(
                 &mut self,
-                dbtx: &mut DatabaseTransaction<NonCommittable>,
+                dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
                 pos: EventLogTrimableId,
             ) -> anyhow::Result<()> {
                 dbtx.insert_entry(&DefaultApplicationEventLogKey, &pos)
@@ -1824,7 +1824,7 @@ impl Client {
             /// Load the last previous stored position (or None if never stored)
             async fn load(
                 &mut self,
-                dbtx: &mut DatabaseTransaction<NonCommittable>,
+                dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
             ) -> anyhow::Result<Option<EventLogTrimableId>> {
                 Ok(dbtx.get_value(&DefaultApplicationEventLogKey).await)
             }
@@ -1845,7 +1845,7 @@ impl Client {
         handler_fn: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_events(
@@ -1881,7 +1881,7 @@ impl Client {
         handler_fn: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_trimable_events(
