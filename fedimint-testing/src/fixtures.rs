@@ -254,9 +254,6 @@ impl Fixtures {
             env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
         ))
         .expect("Failed to parse default esplora server");
-        let bitcoin_rpc = fedimint_bitcoind::EsploraClient::new(&esplora_server_url)
-            .expect("Could not create EsploraClient")
-            .into_dyn();
         let esplora_chain_source = ChainSource::Esplora {
             server_url: esplora_server_url,
         };
@@ -285,7 +282,6 @@ impl Fixtures {
             fedimint_gateway_server::GatewayState::Running { lightning_context },
             esplora_chain_source,
             None,
-            bitcoin_rpc,
         )
         .await
         .expect("Failed to create gateway")
