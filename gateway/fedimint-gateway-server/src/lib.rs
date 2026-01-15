@@ -46,7 +46,7 @@ use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
-use fedimint_bitcoind::{BlockchainInfo, EsploraClient, IBitcoindRpc};
+use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -248,9 +248,6 @@ pub struct Gateway {
     /// The source of the Bitcoin blockchain data
     chain_source: ChainSource,
 
-    /// Client to get blockchain information
-    bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
-
     /// The default routing fees for new federations
     default_routing_fees: PaymentFee,
 
@@ -350,7 +347,6 @@ impl Gateway {
         gateway_state: GatewayState,
         chain_source: ChainSource,
         iroh_listen: Option<SocketAddr>,
-        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -373,7 +369,6 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
-            bitcoin_rpc,
         )
         .await
     }
@@ -476,7 +471,7 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc.clone()));
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
@@ -494,7 +489,6 @@ impl Gateway {
             client_builder,
             GatewayState::Disconnected,
             chain_source,
-            dyn_bitcoin_rpc,
         )
         .await
     }
@@ -508,7 +502,6 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
-        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let num_route_hints = gateway_parameters.num_route_hints;
         let network = gateway_parameters.network;
@@ -546,7 +539,6 @@ impl Gateway {
             num_route_hints,
             network,
             chain_source,
-            bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
             iroh_sk,
@@ -2412,12 +2404,8 @@ impl IAdminGateway for Gateway {
         gatewayd_version.to_string()
     }
 
-    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network) {
-        if let Ok(info) = self.bitcoin_rpc.get_info().await {
-            (Some(info), self.chain_source.clone(), self.network)
-        } else {
-            (None, self.chain_source.clone(), self.network)
-        }
+    async fn get_chain_source(&self) -> (ChainSource, Network) {
+        (self.chain_source.clone(), self.network)
     }
 
     fn lightning_mode(&self) -> LightningMode {
