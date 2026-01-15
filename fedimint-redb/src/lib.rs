@@ -17,7 +17,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
     IRawDatabaseTransaction, PrefixStream,
 };
-use futures::stream;
+use futures::{StreamExt as _, stream};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
 
 const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("fedimint");
@@ -296,6 +296,33 @@ impl IRawDatabaseTransaction for RedbWriteTransaction {
     async fn commit_tx(self) -> DatabaseResult<()> {
         self.tx.commit().map_err(DatabaseError::backend)
     }
+}
+
+/// Migrates all data from one database to another.
+///
+/// This function copies all key-value pairs from the source database
+/// to the destination database. It is useful for migrating from
+/// one database backend to another, e.g., RocksDB to redb.
+pub async fn migrate_database<S, D>(source: &S, dest: &D) -> DatabaseResult<()>
+where
+    S: IRawDatabase,
+    D: IRawDatabase,
+{
+    let mut read_tx = source.begin_read_transaction().await;
+    let mut write_tx = dest.begin_transaction().await;
+
+    let mut all_entries = read_tx.raw_find_by_prefix(&[]).await?;
+
+    while let Some((key, value)) = all_entries.next().await {
+        write_tx.raw_insert_bytes(&key, &value).await?;
+    }
+
+    drop(all_entries);
+    drop(read_tx);
+
+    write_tx.commit_tx().await?;
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -37,8 +37,11 @@ pub const SALT_FILE: &str = "private.salt";
 /// send a password in via the API
 pub const PLAINTEXT_PASSWORD: &str = "password.private";
 
-/// Database file name
+/// Database file name (legacy RocksDB directory)
 pub const DB_FILE: &str = "database";
+
+/// Database file name (redb file)
+pub const REDB_FILE: &str = "database.redb";
 
 pub const JSON_EXT: &str = "json";
 

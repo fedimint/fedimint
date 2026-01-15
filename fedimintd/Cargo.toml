@@ -35,6 +35,7 @@ fedimint-metrics = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-redb = { workspace = true }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-server-bitcoin-rpc = { workspace = true }
 fedimint-server-core = { workspace = true }

@@ -4672,6 +4672,7 @@ dependencies = [
  "fedimint-mint-common",
  "fedimint-mint-server",
  "fedimint-redb",
+ "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-server-bitcoin-rpc",
  "fedimint-server-core",

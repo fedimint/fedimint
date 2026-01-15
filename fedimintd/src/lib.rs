@@ -10,7 +10,7 @@ mod metrics;
 
 use std::env;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -30,9 +30,10 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
-use fedimint_redb::RedbDatabase;
+use fedimint_redb::{RedbDatabase, migrate_database};
+use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ConfigGenSettings;
-use fedimint_server::config::io::DB_FILE;
+use fedimint_server::config::io::{DB_FILE, REDB_FILE};
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
@@ -229,6 +230,57 @@ impl ServerOpts {
     }
 }
 
+/// Migrates data from `RocksDB` to redb if needed.
+///
+/// This migration is performed when:
+/// - The redb database file does not exist
+/// - The `RocksDB` database directory exists
+///
+/// After migration, the `RocksDB` directory is preserved as a backup.
+async fn migrate_rocksdb_to_redb_if_needed(data_dir: &Path) -> anyhow::Result<()> {
+    let rocksdb_path = data_dir.join(DB_FILE);
+    let redb_path = data_dir.join(REDB_FILE);
+
+    // If no rocksdb exists either, this is a fresh install or migration is complete
+    if !rocksdb_path.exists() {
+        return Ok(());
+    }
+
+    // Migration needed: rocksdb exists but redb doesn't
+    info!(
+        target: LOG_CORE,
+        "Migrating database from RocksDB to redb..."
+    );
+
+    // Open RocksDB
+    let rocksdb = RocksDb::build(&rocksdb_path)
+        .open()
+        .await
+        .context("Failed to open RocksDB for migration")?;
+
+    // Create new redb
+    let redb = RedbDatabase::open(&redb_path).context("Failed to create redb for migration")?;
+
+    // Copy all data
+    migrate_database(&rocksdb, &redb)
+        .await
+        .context("Failed to migrate data from RocksDB to redb")?;
+
+    // Drop database handles before renaming
+    drop(rocksdb);
+    drop(redb);
+
+    // Rename the old RocksDB directory to indicate migration completed
+    std::fs::rename(&rocksdb_path, data_dir.join(format!("{DB_FILE}.migrated")))?;
+
+    info!(
+        target: LOG_CORE,
+        "Database migration complete"
+    );
+
+    Ok(())
+}
+
 /// Block the thread and run a Fedimintd server
 ///
 /// # Arguments
@@ -306,8 +358,13 @@ pub async fn run(
         available_modules: module_init_registry.kinds(),
     };
 
+    // Migrate from RocksDB to redb if needed
+    migrate_rocksdb_to_redb_if_needed(&server_opts.data_dir)
+        .await
+        .expect("Failed to migrate database from RocksDB to redb");
+
     let db = Database::new(
-        RedbDatabase::open(server_opts.data_dir.join(DB_FILE)).unwrap(),
+        RedbDatabase::open(server_opts.data_dir.join(REDB_FILE)).unwrap(),
         ModuleRegistry::default(),
     );
 
