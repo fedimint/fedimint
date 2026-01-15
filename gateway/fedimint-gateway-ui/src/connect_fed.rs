@@ -20,6 +20,10 @@ pub fn render() -> Markup {
                         label class="form-label" { "Invite Code" }
                         input type="text" class="form-control" name="invite_code" required;
                     }
+                    div class="mb-3 form-check" {
+                        input type="checkbox" class="form-check-input" name="recover" value="true" id="recover-checkbox";
+                        label class="form-check-label" for="recover-checkbox" { "Recover" }
+                    }
                     button type="submit" class="btn btn-primary" { "Submit" }
                 }
             }
