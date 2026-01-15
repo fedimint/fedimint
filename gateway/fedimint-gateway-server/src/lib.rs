@@ -122,6 +122,7 @@ use rand::rngs::OsRng;
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
+use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
 use crate::rpc_server::run_webserver;
@@ -495,10 +496,23 @@ impl Gateway {
         let gateway_state = if Self::load_mnemonic(&gateway_db).await.is_some() {
             GatewayState::Disconnected
         } else {
-            // Generate a mnemonic if `skip_setup` is true
+            // Generate a mnemonic or use one from an environment variable if `skip_setup`
+            // is true
             if gateway_parameters.skip_setup {
-                info!(target: LOG_GATEWAY, "skip_setup is true, generating mnemonic...");
-                let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut OsRng);
+                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
+                    info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
+                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
+                        |e| {
+                            AdminGatewayError::MnemonicError(anyhow!(format!(
+                                "Seed phrase provided in environment was invalid {e:?}"
+                            )))
+                        },
+                    )?
+                } else {
+                    debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
+                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+                };
+
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
                     .map_err(AdminGatewayError::MnemonicError)?;
