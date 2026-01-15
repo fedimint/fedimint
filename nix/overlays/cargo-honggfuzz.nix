@@ -1,3 +1,3 @@
 final: prev: {
-  cargo-hongfuzz = prev.callPackage ../pkgs/cargo-honggfuzz.nix { };
+  cargo-honggfuzz = prev.callPackage ../pkgs/cargo-honggfuzz.nix { };
 }

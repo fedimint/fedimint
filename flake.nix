@@ -386,7 +386,7 @@
                   with pkgs;
                   commonShellArgs.nativeBuildInputs
                   ++ [
-                    cargo-hongfuzz
+                    cargo-honggfuzz
                     lldb
                     clang
                   ];
