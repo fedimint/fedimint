@@ -28,9 +28,12 @@ fn main() -> Result<(), anyhow::Error> {
     runtime.block_on(async {
         handle_version_hash_command(fedimint_build_code_version_env!());
         TracingSetup::default().init()?;
-        let (tx, rx) = tokio::sync::broadcast::channel::<()>(4);
-        let gatewayd = Gateway::new_with_default_modules(tx).await?;
-        let shutdown_receiver = gatewayd.clone().run(runtime.clone(), rx).await?;
+        let (mnemonic_sender, mnemonic_receiver) = tokio::sync::broadcast::channel::<()>(4);
+        let gatewayd = Gateway::new_with_default_modules(mnemonic_sender).await?;
+        let shutdown_receiver = gatewayd
+            .clone()
+            .run(runtime.clone(), mnemonic_receiver)
+            .await?;
         shutdown_receiver.await;
         gatewayd.unannounce_from_all_federations().await;
         info!(target: LOG_GATEWAY, "Gatewayd exiting...");

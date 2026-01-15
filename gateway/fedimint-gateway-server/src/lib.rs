@@ -164,7 +164,9 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 #[derive(Clone, Debug)]
 pub enum GatewayState {
     NotConfigured {
-        tx: tokio::sync::broadcast::Sender<()>,
+        // Broadcast channel to alert gateway background threads that the mnemonic has been
+        // created/set.
+        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
     },
     Disconnected,
     Syncing,
@@ -415,7 +417,7 @@ impl Gateway {
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
     /// `Gateway` modules.
     pub async fn new_with_default_modules(
-        tx: tokio::sync::broadcast::Sender<()>,
+        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
     ) -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
         let gateway_parameters = opts.to_gateway_parameters()?;
@@ -502,7 +504,7 @@ impl Gateway {
                     .map_err(AdminGatewayError::MnemonicError)?;
                 GatewayState::Disconnected
             } else {
-                GatewayState::NotConfigured { tx }
+                GatewayState::NotConfigured { mnemonic_sender }
             }
         };
 
@@ -626,16 +628,16 @@ impl Gateway {
     pub async fn run(
         self,
         runtime: Arc<tokio::runtime::Runtime>,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
         self.register_clients_timer();
         self.load_clients().await?;
-        self.start_gateway(runtime, rx.resubscribe());
+        self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
         // start webserver last to avoid handling requests before fully initialized
         let handle = self.task_group.make_handle();
-        run_webserver(Arc::new(self), rx.resubscribe()).await?;
+        run_webserver(Arc::new(self), mnemonic_receiver.resubscribe()).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
@@ -692,7 +694,7 @@ impl Gateway {
     fn start_gateway(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
-        mut rx: tokio::sync::broadcast::Receiver<()>,
+        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
     ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
@@ -710,7 +712,7 @@ impl Gateway {
 
                     if let GatewayState::NotConfigured{ .. } = self_copy.get_state().await {
                         info!(target: LOG_GATEWAY, "Waiting for the mnemonic to be set before starting lightning receive loop.");
-                        let _ = rx.recv().await;
+                        let _ = mnemonic_receiver.recv().await;
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
@@ -2420,9 +2422,11 @@ impl IAdminGateway for Gateway {
         Ok(PaymentLogResponse(payment_log))
     }
 
+    /// Set the gateway's root mnemonic by generating a new one or using the
+    /// words provided in `SetMnemonicPayload`.
     async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
         // Verify the state is NotConfigured
-        let GatewayState::NotConfigured { tx } = self.get_state().await else {
+        let GatewayState::NotConfigured { mnemonic_sender } = self.get_state().await else {
             return Err(AdminGatewayError::MnemonicError(anyhow!(
                 "Gateway is not is NotConfigured state"
             )));
@@ -2446,8 +2450,8 @@ impl IAdminGateway for Gateway {
 
         self.set_gateway_state(GatewayState::Disconnected).await;
 
-        // Alert the gateway to continue
-        let _ = tx.send(());
+        // Alert the gateway background threads that the mnemonic has been set
+        let _ = mnemonic_sender.send(());
 
         Ok(())
     }
