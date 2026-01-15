@@ -1429,7 +1429,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(WalletInit);
         validate_migrations_server(module, "wallet-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -1632,7 +1632,7 @@ mod fedimint_migration_tests {
             module,
             "wallet-client",
             |db, _, _| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 for prefix in client_db::DbKeyPrefix::iter() {
                     match prefix {
                         client_db::DbKeyPrefix::NextPegInTweakIndex => {

@@ -9,7 +9,7 @@ use fedimint_client_module::oplog::{
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
@@ -45,7 +45,7 @@ impl OperationLog {
     /// result. If no entry exists yet the DB will be queried on each call till
     /// an entry is present.
     async fn get_oldest_operation_log_key(&self) -> Option<ChronologicalOperationLogKey> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         self.oldest_entry
             .get_or_try_init(move || async move {
                 dbtx.find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
@@ -119,7 +119,7 @@ impl OperationLog {
             return vec![];
         };
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         let mut operation_log_keys = Vec::with_capacity(32);
 
         // Find all the operation log keys in the requested window. Since we decided to
@@ -164,15 +164,11 @@ impl OperationLog {
     }
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
-        Self::get_operation_dbtx(
-            &mut self.db.begin_transaction_nc().await.into_nc(),
-            operation_id,
-        )
-        .await
+        Self::get_operation_dbtx(&mut self.db.begin_read_transaction().await, operation_id).await
     }
 
-    pub async fn get_operation_dbtx(
-        dbtx: &mut DatabaseTransaction<'_>,
+    pub async fn get_operation_dbtx<'a>(
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         dbtx.get_value(&OperationLogKey { operation_id }).await

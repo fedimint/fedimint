@@ -152,7 +152,7 @@ async fn test_trim_trimable_log() {
 
     // Verify all entries were inserted
     {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         let count = dbtx
             .find_by_prefix(&EventLogTrimableIdPrefixAll)
             .await
@@ -173,7 +173,7 @@ async fn test_trim_trimable_log() {
 
     // Verify the expected number of entries were deleted
     {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         let remaining_count = dbtx
             .find_by_prefix(&EventLogTrimableIdPrefixAll)
             .await

@@ -405,7 +405,7 @@ where
     .await
     .context("Error applying migrations to temp database")?;
 
-    let mut global_dbtx = db.begin_transaction_nc().await;
+    let mut global_dbtx = db.begin_read_transaction().await;
     let active_states = global_dbtx
         .find_by_prefix(&ActiveStateKeyPrefix)
         .await
@@ -538,7 +538,7 @@ mod fedimint_migration_tests {
         let _ = TracingSetup::default().init();
 
         validate_migrations_core_client("fedimint-client", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
             // Checks that client config migrated to ClientConfig with broadcast_public_keys
             ensure!(
                 dbtx.get_value(&ClientConfigKey).await.is_some(),

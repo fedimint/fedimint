@@ -1295,7 +1295,7 @@ mod fedimint_migration_tests {
             module,
             "lightning-server",
             |db| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
@@ -1444,7 +1444,7 @@ mod fedimint_migration_tests {
             module,
             "lightning-client",
             |db, active_states, inactive_states| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
                     match prefix {

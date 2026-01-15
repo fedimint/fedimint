@@ -20,9 +20,10 @@ use std::{fmt, ops};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, NonCommittable,
+    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, WithDecoders,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
@@ -492,8 +493,36 @@ impl_db_lookup!(
     query_prefix = EventLogTrimableIdPrefix
 );
 
+/// Read-only event log operations that work with both read and write
+/// transactions
 #[apply(async_trait_maybe_send!)]
-pub trait DBTransactionEventLogExt {
+pub trait DBTransactionEventLogReadExt {
+    /// Next [`EventLogId`] to use for new ordered events.
+    ///
+    /// Used by ordering task, though might be
+    /// useful to get the current count of events.
+    async fn get_next_event_log_id(&mut self) -> EventLogId;
+
+    /// Next [`EventLogTrimableId`] to use for new ordered trimable events
+    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
+
+    /// Read a part of the event log.
+    async fn get_event_log(
+        &mut self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>;
+
+    async fn get_event_log_trimable(
+        &mut self,
+        pos: Option<EventLogTrimableId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>;
+}
+
+/// Write operations for the event log
+#[apply(async_trait_maybe_send!)]
+pub trait DBTransactionEventLogExt: DBTransactionEventLogReadExt {
     #[allow(clippy::too_many_arguments)]
     async fn log_event_raw(
         &mut self,
@@ -527,30 +556,63 @@ pub trait DBTransactionEventLogExt {
         )
         .await;
     }
+}
 
-    /// Next [`EventLogId`] to use for new ordered events.
-    ///
-    /// Used by ordering task, though might be
-    /// useful to get the current count of events.
-    async fn get_next_event_log_id(&mut self) -> EventLogId;
+/// Implement read operations for any type that supports reading from the
+/// database
+#[apply(async_trait_maybe_send!)]
+impl<'a, T> DBTransactionEventLogReadExt for T
+where
+    T: IReadDatabaseTransactionOpsCoreTyped<'a> + WithDecoders + MaybeSend,
+{
+    async fn get_next_event_log_id(&mut self) -> EventLogId {
+        self.find_by_prefix_sorted_descending(&EventLogIdPrefixAll)
+            .await
+            .next()
+            .await
+            .map(|(k, _v)| k.next())
+            .unwrap_or_default()
+    }
 
-    /// Next [`EventLogTrimableId`] to use for new ordered trimable events
-    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
+    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId {
+        EventLogTrimableId(
+            self.find_by_prefix_sorted_descending(&EventLogTrimableIdPrefixAll)
+                .await
+                .next()
+                .await
+                .map(|(k, _v)| k.0.next())
+                .unwrap_or_default(),
+        )
+    }
 
-    /// Read a part of the event log.
     async fn get_event_log(
         &mut self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>;
+    ) -> Vec<PersistedLogEntry> {
+        let pos = pos.unwrap_or_default();
+        self.find_by_range(pos..pos.saturating_add(limit))
+            .await
+            .map(|(k, v)| PersistedLogEntry { id: k, inner: v })
+            .collect()
+            .await
+    }
 
     async fn get_event_log_trimable(
         &mut self,
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>;
+    ) -> Vec<PersistedLogEntry> {
+        let pos = pos.unwrap_or_default();
+        self.find_by_range(pos..pos.saturating_add(limit))
+            .await
+            .map(|(k, v)| PersistedLogEntry { id: k.0, inner: v })
+            .collect()
+            .await
+    }
 }
 
+/// Implement write operations for DatabaseTransaction
 #[apply(async_trait_maybe_send!)]
 impl<'tx, Cap> DBTransactionEventLogExt for DatabaseTransaction<'tx, Cap>
 where
@@ -599,52 +661,6 @@ where
         self.on_commit(move || {
             log_ordering_wakeup_tx.send_replace(());
         });
-    }
-
-    async fn get_next_event_log_id(&mut self) -> EventLogId {
-        self.find_by_prefix_sorted_descending(&EventLogIdPrefixAll)
-            .await
-            .next()
-            .await
-            .map(|(k, _v)| k.next())
-            .unwrap_or_default()
-    }
-
-    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId {
-        EventLogTrimableId(
-            self.find_by_prefix_sorted_descending(&EventLogTrimableIdPrefixAll)
-                .await
-                .next()
-                .await
-                .map(|(k, _v)| k.0.next())
-                .unwrap_or_default(),
-        )
-    }
-
-    async fn get_event_log(
-        &mut self,
-        pos: Option<EventLogId>,
-        limit: u64,
-    ) -> Vec<PersistedLogEntry> {
-        let pos = pos.unwrap_or_default();
-        self.find_by_range(pos..pos.saturating_add(limit))
-            .await
-            .map(|(k, v)| PersistedLogEntry { id: k, inner: v })
-            .collect()
-            .await
-    }
-
-    async fn get_event_log_trimable(
-        &mut self,
-        pos: Option<EventLogTrimableId>,
-        limit: u64,
-    ) -> Vec<PersistedLogEntry> {
-        let pos = pos.unwrap_or_default();
-        self.find_by_range(pos..pos.saturating_add(limit))
-            .await
-            .map(|(k, v)| PersistedLogEntry { id: k.0, inner: v })
-            .collect()
-            .await
     }
 }
 
@@ -695,12 +711,12 @@ pub async fn run_event_log_ordering_task(
     trim_trimable_log(&db, current_time_usecs).await;
 
     let mut next_entry_id = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .get_next_event_log_id()
         .await;
     let mut next_entry_id_trimable = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .get_next_event_log_trimable_id()
         .await;

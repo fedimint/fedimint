@@ -7,7 +7,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, VERSION_THAT_INTRODUCED_GET_SESSION_STATUS,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, ReadDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -68,7 +68,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// continue recovery if it was previously terminated before completion.
     async fn load_dbtx(
         init: &Self::Init,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>>;
 
@@ -89,7 +89,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// Read the finalization status
     ///
     /// See [`Self::load_dbtx`].
-    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool>;
+    async fn load_finalized(dbtx: &mut ReadDatabaseTransaction<'_>) -> Option<bool>;
 
     /// Store finalization status
     ///
@@ -379,7 +379,7 @@ where
         let db = self.db();
         let client_ctx = self.context();
 
-        if Recovery::load_finalized(&mut db.begin_transaction_nc().await)
+        if Recovery::load_finalized(&mut db.begin_read_transaction().await)
             .await
             .unwrap_or_default()
         {
@@ -415,7 +415,7 @@ where
         let (mut state, mut common_state) =
             // TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
             // we could just ... start from scratch? at least being able to force this behavior might be useful
-            if let Some((state, common_state)) = Recovery::load_dbtx(init, &mut db.begin_transaction_nc().await, self).await? {
+            if let Some((state, common_state)) = Recovery::load_dbtx(init, &mut db.begin_read_transaction().await, self).await? {
                 (state, common_state)
             } else {
                 let (state, start_session) = Recovery::new(init, self, snapshot).await?;

@@ -359,7 +359,7 @@ impl Executor {
         Vec<(DynState, ActiveStateMeta)>,
         Vec<(DynState, InactiveStateMeta)>,
     ) {
-        let mut dbtx = self.inner.db.begin_transaction_nc().await;
+        let mut dbtx = self.inner.db.begin_read_transaction().await;
         let active_states: Vec<_> = dbtx
             .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
@@ -828,7 +828,7 @@ impl ExecutorInner {
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ActiveStateKeyPrefix)
             .await
@@ -853,7 +853,7 @@ impl ExecutorInner {
             return None;
         }
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ActiveStateKeyDb(ActiveStateKey::from_state(state.clone())))
             .await
@@ -861,7 +861,7 @@ impl ExecutorInner {
 
     async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&InactiveStateKeyPrefix)
             .await

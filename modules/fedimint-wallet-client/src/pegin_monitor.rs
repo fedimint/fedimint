@@ -59,7 +59,7 @@ impl NextActions {
 impl NextActions {
     /// Calculate next actions from the database
     async fn from_db_state(db: &Database) -> Self {
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -348,7 +348,7 @@ async fn check_idx_pegins(
         };
 
         if db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&claimed_peg_in_key)
             .await

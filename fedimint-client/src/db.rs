@@ -982,7 +982,7 @@ pub async fn remove_old_and_persist_new_inactive_states(
 /// If an encoded client secret is not present in the database, or if
 /// decoding fails, an error is returned.
 pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
-    let mut tx = db.begin_transaction_nc().await;
+    let mut tx = db.begin_read_transaction().await;
     let client_secret = tx.get_value(&EncodedClientSecretKey).await;
 
     match client_secret {

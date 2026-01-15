@@ -425,7 +425,7 @@ impl ClientBuilder {
         let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
 
         match db_no_decoders
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ClientPreRootSecretHashKey)
             .await
@@ -705,7 +705,7 @@ impl ClientBuilder {
                 let recovery = match init_state.does_require_recovery() {
                     Some(snapshot) => {
                         match db
-                            .begin_transaction_nc()
+                            .begin_read_transaction()
                             .await
                             .get_value(&ClientModuleRecovery { module_instance_id })
                             .await
@@ -952,7 +952,7 @@ impl ClientBuilder {
     }
 
     async fn load_init_state(db: &Database) -> InitState {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.get_value(&ClientInitStateKey)
             .await
             .unwrap_or_else(|| {

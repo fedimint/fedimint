@@ -155,7 +155,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
 
     validate_migrations_global(
         |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {

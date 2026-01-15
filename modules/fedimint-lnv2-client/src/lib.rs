@@ -461,7 +461,7 @@ impl LightningClientModule {
             && let Some(gateway) = self
                 .client_ctx
                 .module_db()
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
                 .await

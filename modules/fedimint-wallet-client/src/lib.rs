@@ -457,7 +457,7 @@ impl ClientModule for WalletClientModule {
         // fetch consensus height first
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         let next_pegin_tweak_idx = dbtx
             .get_value(&NextPegInTweakIndexKey)
             .await
@@ -1049,7 +1049,7 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1065,7 +1065,7 @@ impl WalletClientModule {
         let data = self.data.clone();
         let Some((tweak_idx, _)) = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1089,7 +1089,7 @@ impl WalletClientModule {
             .client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1108,16 +1108,16 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PegInTweakIndexKey(tweak_idx))
             .await
             .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
     }
 
-    pub async fn get_claimed_pegins(
+    pub async fn get_claimed_pegins<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
         tweak_idx: TweakIdx,
     ) -> Vec<(
         bitcoin::OutPoint,
@@ -1238,7 +1238,7 @@ impl WalletClientModule {
         loop {
             let pegins = self
                 .get_claimed_pegins(
-                    &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                    &mut self.client_ctx.module_db().begin_read_transaction().await,
                     tweak_idx,
                 )
                 .await;

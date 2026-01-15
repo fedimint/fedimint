@@ -534,7 +534,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
     {
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -554,7 +554,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -574,7 +574,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             first_note_undecoded,
         ): (_, SpendableNoteUndecoded) = client_mint
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&fedimint_mint_client::client_db::NoteKeyPrefix)
             .await
@@ -606,7 +606,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -628,7 +628,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -657,7 +657,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -679,7 +679,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -731,7 +731,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -753,7 +753,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -981,7 +981,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(MintInit);
         validate_migrations_server(module, "mint-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -1055,7 +1055,7 @@ mod fedimint_migration_tests {
             module,
             "mint-client",
             |db, _, _| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
                     match prefix {

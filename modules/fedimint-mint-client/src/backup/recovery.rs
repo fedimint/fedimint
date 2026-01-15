@@ -10,7 +10,7 @@ use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _, ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{
@@ -87,11 +87,9 @@ impl RecoveryFromHistory for MintRecovery {
 
     async fn load_dbtx(
         _init: &Self::Init,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
-        dbtx.ensure_isolated()
-            .expect("Must be in prefixed database");
         Ok(dbtx
             .get_value(&RecoveryStateKey)
             .await
@@ -133,7 +131,7 @@ impl RecoveryFromHistory for MintRecovery {
         dbtx.remove_entry(&RecoveryStateKey).await;
     }
 
-    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool> {
+    async fn load_finalized(dbtx: &mut ReadDatabaseTransaction<'_>) -> Option<bool> {
         dbtx.get_value(&RecoveryFinalizedKey).await
     }
 

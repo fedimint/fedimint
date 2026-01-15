@@ -13,7 +13,7 @@ use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
-    IReadDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _, ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::{backoff_util, retry};
@@ -214,7 +214,7 @@ impl RecoveryFromHistory for WalletRecovery {
 
     async fn load_dbtx(
         init: &WalletClientInit,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
@@ -265,7 +265,7 @@ impl RecoveryFromHistory for WalletRecovery {
         dbtx.remove_entry(&RecoveryStateKey).await;
     }
 
-    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool> {
+    async fn load_finalized(dbtx: &mut ReadDatabaseTransaction<'_>) -> Option<bool> {
         dbtx.get_value(&RecoveryFinalizedKey).await
     }
 

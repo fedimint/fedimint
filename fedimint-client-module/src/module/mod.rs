@@ -14,7 +14,9 @@ use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable, ReadDatabaseTransaction,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
@@ -113,14 +115,14 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         &self,
         operation_id: OperationId,
         module_id: ModuleInstanceId,
-        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+        dbtx: &'dbtx mut ReadDatabaseTransaction<'_>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (ActiveStateKey, ActiveStateMeta)> + 'dbtx)>>;
 
     async fn read_operation_inactive_states<'dbtx>(
         &self,
         operation_id: OperationId,
         module_id: ModuleInstanceId,
-        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+        dbtx: &'dbtx mut ReadDatabaseTransaction<'_>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (InactiveStateKey, InactiveStateMeta)> + 'dbtx)>>;
 }
 
@@ -890,7 +892,11 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Returns the balance held by this module and available for funding
     /// transactions.
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
+        _unit: AmountUnit,
+    ) -> Amount {
         unimplemented!()
     }
 
@@ -1016,7 +1022,7 @@ pub trait IClientModule: Debug {
     async fn get_balance(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         unit: AmountUnit,
     ) -> Amount;
 
@@ -1136,7 +1142,7 @@ where
     async fn get_balance(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         unit: AmountUnit,
     ) -> Amount {
         <T as ClientModule>::get_balance(

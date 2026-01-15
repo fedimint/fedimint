@@ -612,7 +612,7 @@ impl RpcGlobalState {
 
     /// Fetch mnemonic from database
     async fn get_mnemonic_from_db(&self) -> anyhow::Result<Option<Mnemonic>> {
-        let mut dbtx = self.unified_database.begin_transaction_nc().await;
+        let mut dbtx = self.unified_database.begin_read_transaction().await;
 
         if let Some(mnemonic_entropy) = dbtx.get_value(&MnemonicKey).await {
             let mnemonic = Mnemonic::from_entropy(&mnemonic_entropy)?;

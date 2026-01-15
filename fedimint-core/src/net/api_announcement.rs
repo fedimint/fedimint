@@ -91,7 +91,7 @@ where
     P::Record: DatabaseRecord<Value = SignedApiAnnouncement> + DatabaseKey + MaybeSend + MaybeSync,
 {
     let mut db_api_urls = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .find_by_prefix(db_key_prefix)
         .await

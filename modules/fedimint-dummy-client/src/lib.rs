@@ -30,7 +30,7 @@ use fedimint_client_module::transaction::{
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -39,6 +39,7 @@ use fedimint_core::module::{
     MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
@@ -229,7 +230,11 @@ impl ClientModule for DummyClientModule {
         stream.next_or_pending().await
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtc: &mut ReadDatabaseTransaction<'_>,
+        unit: AmountUnit,
+    ) -> Amount {
         get_funds(dbtc, unit).await
     }
 
@@ -408,19 +413,22 @@ impl DummyClientModule {
 
     /// Get balance for a specific amount unit
     pub async fn get_balance(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         Ok(get_funds(&mut dbtx, unit).await)
     }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+async fn get_funds<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    unit: AmountUnit,
+) -> Amount {
     let funds = dbtx.get_value(&DummyClientFundsKey { unit }).await;
     funds.unwrap_or(Amount::ZERO)
 }
 
-async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
-    use fedimint_core::db::IReadDatabaseTransactionOpsCoreTyped;
-
+async fn get_funds_all<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+) -> Amounts {
     let funds_entries = dbtx
         .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)
         .await

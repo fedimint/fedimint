@@ -1174,7 +1174,7 @@ impl LightningClientModule {
         &self,
         gateway_id: &secp256k1::PublicKey,
     ) -> Option<LightningGateway> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
         let gateways = dbtx
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
@@ -1256,7 +1256,7 @@ impl LightningClientModule {
 
     /// Returns all gateways that are currently in the gateway cache.
     pub async fn list_gateways(&self) -> Vec<LightningGatewayAnnouncement> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
         dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
             .await
             .map(|(_, gw)| gw.unanchor())

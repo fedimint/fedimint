@@ -323,7 +323,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(DummyInit);
         validate_migrations_server(module, "dummy-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
                     DbKeyPrefix::Funds => {
@@ -377,7 +377,7 @@ mod fedimint_migration_tests {
         let module = DynClientModuleInit::from(DummyClientInit);
 
         validate_migrations_client::<_, _, DummyClientModule>(module, "dummy-client", |db, active_states, inactive_states| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             // After applying migrations, validate that `ClientName` cannot currently be
             // read

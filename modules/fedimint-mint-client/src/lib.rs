@@ -67,6 +67,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -75,6 +76,7 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
@@ -810,7 +812,11 @@ impl ClientModule for MintClientModule {
         self.await_output_finalized(operation_id, out_point).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
+        unit: AmountUnit,
+    ) -> Amount {
         if unit != AmountUnit::BITCOIN {
             return Amount::ZERO;
         }
@@ -821,7 +827,9 @@ impl ClientModule for MintClientModule {
 
     async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
         Amounts::new_bitcoin(
-            <Self as ClientModule>::get_balance(self, dbtx, AmountUnit::BITCOIN).await,
+            self.get_note_counts_by_denomination(dbtx)
+                .await
+                .total_amount(),
         )
     }
 
@@ -910,7 +918,7 @@ impl ClientModule for MintClientModule {
                     yield serde_json::to_value(value)?;
                 }
                 "note_counts_by_denomination" => {
-                    let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+                    let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
                     let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
                     yield serde_json::to_value(note_counts)?;
                 }
@@ -1117,9 +1125,9 @@ impl MintClientModule {
     }
 
     /// Returns the number of held e-cash notes per denomination
-    pub async fn get_note_counts_by_denomination(
+    pub async fn get_note_counts_by_denomination<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
     ) -> TieredCounts {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
@@ -1138,7 +1146,10 @@ impl MintClientModule {
         since = "0.5.0",
         note = "Use `get_note_counts_by_denomination` instead"
     )]
-    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+    pub async fn get_wallet_summary<'a>(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
 
@@ -1148,7 +1159,7 @@ impl MintClientModule {
     /// notes will be spent. Notes that are uneconomical to spend (fee >= value)
     /// are excluded from the calculation since the wallet won't spend them.
     pub async fn estimate_spend_all_fees(&self) -> Amount {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
         let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
 
         note_counts
@@ -1843,7 +1854,12 @@ impl MintClientModule {
         // Create outputs for reissuance using the existing create_output function
         let output_bundle = self
             .create_output(
-                &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                &mut self
+                    .client_ctx
+                    .module_db()
+                    .begin_transaction()
+                    .await
+                    .into_nc(),
                 operation_id,
                 1, // notes_per_denomination
                 amount,
@@ -2152,7 +2168,7 @@ impl MintClientModule {
     pub async fn reused_note_secrets(&self) -> Vec<(Amount, NoteIssuanceRequest, BlindNonce)> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ReusedNoteIndices)
             .await

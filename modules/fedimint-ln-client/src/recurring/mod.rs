@@ -130,7 +130,7 @@ impl LightningClientModule {
         db: &fedimint_core::db::Database,
     ) -> Vec<(u64, RecurringPaymentCodeEntry)> {
         assert!(!db.is_global(), "Needs to run in module context");
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -401,7 +401,7 @@ impl LightningClientModule {
     pub async fn list_recurring_payment_codes(&self) -> BTreeMap<u64, RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -416,7 +416,7 @@ impl LightningClientModule {
     ) -> Option<RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,

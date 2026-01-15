@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use fedimint_client::ClientHandle;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
+    DBTransactionEventLogReadExt, Event, EventKind, EventLogId, PersistedLogEntry,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,

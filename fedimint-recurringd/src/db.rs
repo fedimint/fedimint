@@ -38,7 +38,7 @@ impl FederationDbPrefix {
 }
 
 async fn load_federation_clients(db: &Database) -> Vec<(FederationId, FederationDbPrefix)> {
-    let mut dbtx = db.begin_transaction_nc().await;
+    let mut dbtx = db.begin_read_transaction().await;
     dbtx.find_by_prefix(&FederationClientPrefix)
         .await
         .map(|(k, v)| (k.federation_id, v.db_prefix))

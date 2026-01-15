@@ -5,9 +5,9 @@ use std::sync::Arc;
 use async_stream::stream;
 use fedimint_client_module::meta::{FetchKind, MetaSource, MetaValue, MetaValues};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::task::MaybeSend;
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_logging::LOG_CLIENT;
@@ -72,7 +72,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         db: &Database,
         field: &str,
     ) -> Option<MetaValue<V>> {
-        let dbtx = &mut db.begin_transaction_nc().await;
+        let dbtx = &mut db.begin_read_transaction().await;
         let info = dbtx.get_value(&MetaServiceInfoKey).await?;
         let value = dbtx
             .get_value(&MetaFieldKey(fedimint_client_module::meta::MetaFieldKey(
@@ -114,7 +114,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
     }
 
     async fn entries_from_db(&self, db: &Database) -> Option<MetaEntries> {
-        let dbtx = &mut db.begin_transaction_nc().await;
+        let dbtx = &mut db.begin_read_transaction().await;
         let info = dbtx.get_value(&MetaServiceInfoKey).await;
         #[allow(clippy::question_mark)] // more readable
         if info.is_none() {
@@ -129,7 +129,10 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         Some(entries)
     }
 
-    async fn current_revision(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
+    async fn current_revision<'a>(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    ) -> Option<u64> {
         dbtx.get_value(&MetaServiceInfoKey)
             .await
             .map(|x| x.revision)
@@ -187,7 +190,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
     /// Caller should run this method in a task.
     pub(crate) async fn update_continuously(&self, client: &Client) -> ! {
         let mut current_revision = self
-            .current_revision(&mut client.db().begin_transaction_nc().await)
+            .current_revision(&mut client.db().begin_read_transaction().await)
             .await;
         let client_config = client.config().await;
         let meta_values = self

@@ -438,7 +438,7 @@ impl RecurringInvoiceServer {
 
         let mut notified = self.invoice_generated.notified();
         loop {
-            let mut dbtx = self.db.begin_transaction_nc().await;
+            let mut dbtx = self.db.begin_read_transaction().await;
             if let Some(invoice_entry) = dbtx
                 .get_value(&PaymentCodeInvoiceKey {
                     payment_code_id,
@@ -482,7 +482,7 @@ impl RecurringInvoiceServer {
         payment_code_id: PaymentCodeId,
     ) -> Result<PaymentCodeEntry, RecurringPaymentError> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PaymentCodeKey { payment_code_id })
             .await
@@ -574,7 +574,7 @@ impl RecurringInvoiceServer {
         let migrations = Self::migrations();
         let schema_version: u64 = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&SchemaVersionKey)
             .await

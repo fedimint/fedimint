@@ -294,7 +294,7 @@ impl Client {
     }
 
     async fn load_previous_backup(&self) -> Option<ClientBackup> {
-        let mut dbtx = self.db().begin_transaction_nc().await;
+        let mut dbtx = self.db().begin_read_transaction().await;
         dbtx.get_value(&LastBackupKey).await
     }
 

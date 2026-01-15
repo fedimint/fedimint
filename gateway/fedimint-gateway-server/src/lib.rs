@@ -67,7 +67,7 @@ use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry}
 use fedimint_core::{
     Amount, BitcoinAmountOrAll, crit, fedimint_build_code_version_env, get_network_for_address,
 };
-use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+use fedimint_eventlog::{DBTransactionEventLogReadExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
     ConnectFedPayload, ConnectorType, CreateInvoiceForOperatorPayload, CreateOfferPayload,

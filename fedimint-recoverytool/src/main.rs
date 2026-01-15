@@ -196,7 +196,7 @@ async fn process_and_print_tweak_source(
             };
 
             let utxos: Vec<ImportableWallet> = db
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
@@ -224,7 +224,7 @@ async fn process_and_print_tweak_source(
             .with_fallback();
 
             let db = get_db(db, decoders).await;
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             let mut change_tweak_idx: u64 = 0;
 

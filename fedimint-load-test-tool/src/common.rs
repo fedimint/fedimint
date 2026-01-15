@@ -347,7 +347,7 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
         .get_note_counts_by_denomination(
             &mut client
                 .db()
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .to_ref_with_prefix_module_id(mint_client.id)
                 .0,
