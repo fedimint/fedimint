@@ -299,7 +299,7 @@ impl Client {
     }
 
     async fn store_last_backup(&self, backup: &ClientBackup) {
-        let mut dbtx = self.db().begin_transaction().await;
+        let mut dbtx = self.db().begin_write_transaction().await;
         dbtx.insert_entry(&LastBackupKey, backup).await;
         dbtx.commit_tx().await;
     }

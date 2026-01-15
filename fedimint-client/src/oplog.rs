@@ -184,7 +184,7 @@ impl OperationLog {
         let outcome_json =
             JsonStringed(serde_json::to_value(outcome).expect("Outcome is not serializable"));
 
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut operation = Self::get_operation_dbtx(&mut dbtx.to_ref_nc(), operation_id)
             .await
             .expect("Operation exists");

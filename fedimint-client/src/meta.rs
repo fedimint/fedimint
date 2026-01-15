@@ -236,7 +236,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
     }
 
     async fn save_meta_values(&self, client: &Client, meta_values: &MetaValues) {
-        let mut dbtx = client.db().begin_transaction().await;
+        let mut dbtx = client.db().begin_write_transaction().await;
         dbtx.remove_by_prefix(&MetaFieldPrefix).await;
         dbtx.insert_entry(
             &MetaServiceInfoKey,
