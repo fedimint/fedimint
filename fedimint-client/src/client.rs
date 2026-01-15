@@ -41,6 +41,7 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _,
     IReadDatabaseTransactionOpsCoreTyped, NonCommittable, ReadDatabaseTransaction,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
@@ -234,7 +235,7 @@ impl Client {
         db: &Database,
         secret: T,
     ) -> anyhow::Result<()> {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Don't overwrite an existing secret
         if dbtx.get_value(&EncodedClientSecretKey).await.is_some() {
@@ -962,7 +963,7 @@ impl Client {
                 Ok(o) => {
                     // Save the response to the database right away, just to
                     // not lose it
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     dbtx.insert_entry(
                         &PeerLastApiVersionsSummaryKey(peer_id),
                         &PeerLastApiVersionsSummary(o),
@@ -1062,7 +1063,7 @@ impl Client {
     /// Used when we have a pre-calculated API version set that should be stored
     /// for later use.
     pub async fn write_api_version_cache(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         api_version_set: ApiVersionSet,
     ) {
         debug!(
@@ -1094,7 +1095,7 @@ impl Client {
             peer_api_versions.len()
         );
 
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         // Calculate common API version set from individual responses
         let client_supported_versions =
             Self::supported_api_versions_summary_static(config, client_module_init);
@@ -1301,7 +1302,7 @@ impl Client {
             value = ?common_api_versions,
             "Updating the cached common api versions"
         );
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let _ = dbtx
             .insert_entry(
                 &CachedApiVersionSetKey,
