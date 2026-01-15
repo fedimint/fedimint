@@ -238,7 +238,7 @@ impl ClientModule for DummyClientModule {
         get_funds(dbtc, unit).await
     }
 
-    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         get_funds_all(dbtx).await
     }
 

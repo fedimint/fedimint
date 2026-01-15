@@ -902,7 +902,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Returns the balance held by this module and available for funding
     /// transactions.
-    async fn get_balances(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, _dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         unimplemented!()
     }
 
@@ -967,7 +967,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn leave(&self, _dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()> {
         bail!("Unable to determine if safe to leave the federation: Not implemented")
     }
 }

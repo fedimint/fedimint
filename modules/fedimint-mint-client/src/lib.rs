@@ -813,7 +813,7 @@ impl ClientModule for MintClientModule {
             .total_amount()
     }
 
-    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         Amounts::new_bitcoin(
             self.get_note_counts_by_denomination(dbtx)
                 .await
@@ -827,7 +827,7 @@ impl ClientModule for MintClientModule {
         ))
     }
 
-    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn leave(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()> {
         let balance = ClientModule::get_balances(self, dbtx).await;
 
         for (unit, amount) in balance {
