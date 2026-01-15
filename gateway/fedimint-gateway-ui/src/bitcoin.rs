@@ -10,23 +10,7 @@ where
     E: std::fmt::Display,
 {
     debug!(target: LOG_GATEWAY_UI, "Getting bitcoin chain source...");
-    let (blockchain_info, chain_source, network) = api.get_chain_source().await;
-
-    // Determine block height and synced status
-    let (block_height, status_badge) = match blockchain_info {
-        Some(info) => {
-            let badge = if info.synced {
-                html! { span class="badge bg-success" { "🟢 Synced" } }
-            } else {
-                html! { span class="badge bg-warning" { "🟡 Syncing" } }
-            };
-            (info.block_height, badge)
-        }
-        None => (
-            0,
-            html! { span class="badge bg-danger" { "❌ Not Connected" } },
-        ),
-    };
+    let (chain_source, network) = api.get_chain_source().await;
 
     html! {
         div class="card h-100" {
@@ -51,14 +35,6 @@ where
                         tr {
                             th { "Network" }
                             td { (network) }
-                        }
-                        tr {
-                            th { "Block Height" }
-                            td { (block_height) }
-                        }
-                        tr {
-                            th { "Status" }
-                            td { (status_badge) }
                         }
 
                         @match &chain_source {
