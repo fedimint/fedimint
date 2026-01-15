@@ -15,7 +15,7 @@ use fedimint_core::core::{
     OperationId,
 };
 use fedimint_core::db::{
-    Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable, ReadDatabaseTransaction,
+    Database, GlobalDBTxAccessToken, NonCommittable, ReadDatabaseTransaction,
     WriteDatabaseTransaction,
 };
 use fedimint_core::invite_code::InviteCode;
