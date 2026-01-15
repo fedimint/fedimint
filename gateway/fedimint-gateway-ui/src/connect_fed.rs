@@ -15,7 +15,12 @@ pub fn render() -> Markup {
         div class="card h-100" {
             div class="card-header dashboard-header" { "Connect a new Federation" }
             div class="card-body" {
-                form method="post" action=(CONNECT_FEDERATION_ROUTE) {
+                form method="post" action=(CONNECT_FEDERATION_ROUTE)
+                    onsubmit="var btn = this.querySelector('button[type=submit]'); \
+                              var isRecover = this.querySelector('#recover-checkbox').checked; \
+                              btn.disabled = true; \
+                              btn.innerHTML = '<span class=\"spinner-border spinner-border-sm\" role=\"status\"></span> ' + (isRecover ? 'Recovering...' : 'Connecting...');"
+                {
                     div class="mb-3" {
                         label class="form-label" { "Invite Code" }
                         input type="text" class="form-control" name="invite_code" required;
