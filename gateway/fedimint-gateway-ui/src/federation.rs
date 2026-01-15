@@ -86,7 +86,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                         form method="post" action={(format!("/ui/federations/{}/leave", fed.federation_id))} {
                             button type="submit"
                                 class="btn btn-outline-danger btn-sm"
-                                title="Leave Federation" { "📤" }
+                                title="Leave Federation"
+                                onclick=(format!("return confirm('Are you sure you want to leave {}? You will need to re-connect the federation to access any remaining balance.');",
+                                    fed.federation_name.clone().unwrap_or_else(|| "this federation".to_string())))
+                            { "📤" }
                         }
                     }
                     div class="card-body" {
