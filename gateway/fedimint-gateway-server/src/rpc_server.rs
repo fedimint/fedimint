@@ -51,7 +51,7 @@ use crate::{Gateway, GatewayState};
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(
     gateway: Arc<Gateway>,
-    mut rx: tokio::sync::broadcast::Receiver<()>,
+    mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
     let task_group = gateway.task_group.clone();
     let mut handlers = Handlers::new();
@@ -84,9 +84,11 @@ pub async fn run_webserver(
     });
     info!(target: LOG_GATEWAY, listen = %gateway.listen, "Successfully started webserver");
 
+    // Don't start the Iroh endpoint until the mnemonic has been set via HTTP or the
+    // UI
     if let GatewayState::NotConfigured { .. } = gateway.get_state().await {
         info!(target: LOG_GATEWAY, "Waiting for the mnemonic to be set before starting iroh loop.");
-        let _ = rx.recv().await;
+        let _ = mnemonic_receiver.recv().await;
     }
 
     start_iroh_endpoint(&gateway, task_group, Arc::new(handlers)).await?;
