@@ -211,13 +211,13 @@ where
                                         }
                                         @if let Some(a) = alias {
                                             tr {
-                                                th { "Lightning Alias" }
+                                                th { "Alias" }
                                                 td { (a) }
                                             }
                                         }
                                         @if let Some(pk) = pubkey {
                                             tr {
-                                                th { "Lightning Public Key" }
+                                                th { "Public Key" }
                                                 td { (pk) }
                                             }
                                         }
