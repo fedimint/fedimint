@@ -28,6 +28,7 @@ bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 fedimint-api-client = { workspace = true }
+fedimint-bip39 = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }

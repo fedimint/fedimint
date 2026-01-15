@@ -55,7 +55,7 @@ where
             form action=(CREATE_WALLET_ROUTE) method="post" {
                 button type="submit" class="btn btn-primary btn-lg w-100" {
                     div class="fw-bold" { "Create New Wallet" }
-                    small class="text-white-50" {
+                    small class="text-white" {
                         "Generate a new 12-word recovery phrase"
                     }
                 }
@@ -64,7 +64,7 @@ where
             // Recover Wallet button
             a href=(RECOVER_WALLET_ROUTE) class="btn btn-outline-secondary btn-lg w-100" {
                 div class="fw-bold" { "Recover Wallet" }
-                small {
+                small class="text-secondary" {
                     "Use an existing 12-word recovery phrase"
                 }
             }

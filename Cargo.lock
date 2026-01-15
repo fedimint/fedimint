@@ -4369,6 +4369,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "fedimint-api-client",
+ "fedimint-bip39",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-client-module",
