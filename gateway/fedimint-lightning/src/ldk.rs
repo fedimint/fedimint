@@ -62,7 +62,8 @@ pub struct GatewayLdkClient {
     /// opening. The `Sender` is used to communicate the `OutPoint` back to
     /// the API handler from the event handler when the channel has been
     /// opened and is now pending.
-    pending_channels: Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<OutPoint>>>>,
+    pending_channels:
+        Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -175,7 +176,9 @@ impl GatewayLdkClient {
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
-        pending_channels: Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<OutPoint>>>>,
+        pending_channels: Arc<
+            RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
+        >,
     ) {
         // We manually check for task termination in case we receive a payment while the
         // task is shutting down. In that case, we want to finish the payment
@@ -222,7 +225,29 @@ impl GatewayLdkClient {
                 info!(target: LOG_LIGHTNING, %channel_id, "LDK Channel is pending");
                 let mut channels = pending_channels.write().await;
                 if let Some(sender) = channels.remove(&UserChannelId(user_channel_id)) {
-                    let _ = sender.send(funding_txo);
+                    let _ = sender.send(Ok(funding_txo));
+                } else {
+                    debug!(
+                        ?user_channel_id,
+                        "No channel pending channel open for user channel id"
+                    );
+                }
+            }
+            ldk_node::Event::ChannelClosed {
+                channel_id,
+                user_channel_id,
+                counterparty_node_id: _,
+                reason,
+            } => {
+                info!(target: LOG_LIGHTNING, %channel_id, "LDK Channel is closed");
+                let mut channels = pending_channels.write().await;
+                if let Some(sender) = channels.remove(&UserChannelId(user_channel_id)) {
+                    let reason = if let Some(reason) = reason {
+                        reason.to_string()
+                    } else {
+                        "Channel has been closed".to_string()
+                    };
+                    let _ = sender.send(Err(anyhow::anyhow!(reason)));
                 } else {
                     debug!(
                         ?user_channel_id,
@@ -533,7 +558,7 @@ impl ILnRpcClient for GatewayLdkClient {
             Some(push_amount_sats * 1000)
         };
 
-        let (tx, rx) = oneshot::channel::<OutPoint>();
+        let (tx, rx) = oneshot::channel::<anyhow::Result<OutPoint>>();
 
         {
             let mut channels = self.pending_channels.write().await;
@@ -557,16 +582,22 @@ impl ILnRpcClient for GatewayLdkClient {
             channels.insert(UserChannelId(user_channel_id), tx);
         }
 
-        let outpoint = rx
+        match rx
             .await
             .map_err(|err| LightningRpcError::FailedToOpenChannel {
                 failure_reason: err.to_string(),
-            })?;
-        let funding_txid = outpoint.txid;
+            })? {
+            Ok(outpoint) => {
+                let funding_txid = outpoint.txid;
 
-        Ok(OpenChannelResponse {
-            funding_txid: funding_txid.to_string(),
-        })
+                Ok(OpenChannelResponse {
+                    funding_txid: funding_txid.to_string(),
+                })
+            }
+            Err(err) => Err(LightningRpcError::FailedToOpenChannel {
+                failure_reason: err.to_string(),
+            }),
+        }
     }
 
     async fn close_channels_with_peer(
