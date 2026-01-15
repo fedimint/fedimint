@@ -893,11 +893,11 @@ where
                                                 div style="font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" {
                                                     span {
                                                         span style="display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" {}
-                                                        "Outbound"
+                                                        (format!("Outbound ({})", ch.outbound_liquidity_sats))
                                                     }
                                                     span {
                                                         span style="display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" {}
-                                                        "Inbound"
+                                                        (format!("Inbound ({})", ch.inbound_liquidity_sats))
                                                     }
                                                 }
                                             }
