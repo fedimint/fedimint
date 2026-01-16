@@ -17,7 +17,6 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use fedimint_bitcoind::BlockchainInfo;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_core::task::TaskGroup;
@@ -198,7 +197,7 @@ pub trait IAdminGateway {
 
     fn gatewayd_version(&self) -> String;
 
-    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
+    async fn get_chain_source(&self) -> (ChainSource, Network);
 
     fn lightning_mode(&self) -> LightningMode;
 }
