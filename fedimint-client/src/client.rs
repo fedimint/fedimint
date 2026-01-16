@@ -38,7 +38,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore as _,
+    Database, DatabaseRecord, IDatabaseTransactionOpsCore as _,
     IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped, NonCommittable,
     ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
@@ -1572,36 +1572,17 @@ impl Client {
     pub async fn get_guardian_public_keys_blocking(
         &self,
     ) -> BTreeMap<PeerId, fedimint_core::secp256k1::PublicKey> {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async move {
-                        let config = self.config().await;
+        let config = self.config().await;
 
-                        let guardian_pub_keys = self
-                            .get_or_backfill_broadcast_public_keys(dbtx, config)
-                            .await;
-
-                        Result::<_, ()>::Ok(guardian_pub_keys)
-                    })
-                },
-                None,
-            )
-            .await
-            .expect("Will retry forever")
-    }
-
-    async fn get_or_backfill_broadcast_public_keys(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        config: ClientConfig,
-    ) -> BTreeMap<PeerId, PublicKey> {
         match config.global.broadcast_public_keys {
             Some(guardian_pub_keys) => guardian_pub_keys,
             _ => {
+                // Fetch config update before acquiring write transaction to avoid deadlock
                 let (guardian_pub_keys, new_config) = self.fetch_and_update_config(config).await;
 
+                let mut dbtx = self.db.begin_write_transaction().await;
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
+                dbtx.commit_tx().await;
                 *(self.config.write().await) = new_config;
                 guardian_pub_keys
             }
