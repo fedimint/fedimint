@@ -1278,11 +1278,25 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
-        let prev_payment_result = self
-            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
-            .await;
+
+        // Read phase: get previous payment result and gateway info
+        let (prev_payment_result, gateways) = {
+            let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
+
+            let prev_payment_result = self
+                .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref())
+                .await;
+
+            let gateways = dbtx
+                .find_by_prefix(&LightningGatewayKeyPrefix)
+                .await
+                .map(|(_, gw)| gw.info)
+                .collect::<Vec<_>>()
+                .await;
+
+            (prev_payment_result, gateways)
+        };
 
         if let Some(completed_payment) = prev_payment_result.completed_payment {
             return Ok(completed_payment);
@@ -1305,32 +1319,14 @@ impl LightningClientModule {
         let operation_id =
             LightningClientModule::get_payment_operation_id(invoice.payment_hash(), next_index);
 
-        let new_payment_result = PaymentResult {
-            index: next_index,
-            completed_payment: None,
-        };
-
-        dbtx.insert_entry(
-            &PaymentResultKey {
-                payment_hash: *invoice.payment_hash(),
-            },
-            &new_payment_result,
-        )
-        .await;
-
         let markers = self.client_ctx.get_internal_payment_markers()?;
 
         let mut is_internal_payment = invoice_has_internal_payment_markers(&invoice, markers);
         if !is_internal_payment {
-            let gateways = dbtx
-                .find_by_prefix(&LightningGatewayKeyPrefix)
-                .await
-                .map(|(_, gw)| gw.info)
-                .collect::<Vec<_>>()
-                .await;
             is_internal_payment = invoice_routes_back_to_federation(&invoice, gateways);
         }
 
+        // API phase: create output and verify contract (no transaction held)
         let (pay_type, client_output, client_output_sm, contract_id) = if is_internal_payment {
             let (output, output_sm, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
@@ -1400,6 +1396,7 @@ impl LightningClientModule {
         let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
             serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
+        let payment_hash = *invoice.payment_hash();
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint {
@@ -1416,8 +1413,15 @@ impl LightningClientModule {
             extra_meta: extra_meta.clone(),
         };
 
-        // Write the new payment index into the database, fail the payment if the commit
-        // to the database fails.
+        // Write phase: insert the new payment index into the database
+        let new_payment_result = PaymentResult {
+            index: next_index,
+            completed_payment: None,
+        };
+
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
+        dbtx.insert_entry(&PaymentResultKey { payment_hash }, &new_payment_result)
+            .await;
         dbtx.commit_tx_result().await?;
 
         self.client_ctx

@@ -805,27 +805,34 @@ impl WalletClientModule {
     /// verified the version, it must be online to fetch the latest wallet
     /// module consensus version.
     pub async fn supports_safe_deposit(&self) -> bool {
-        let mut dbtx = self.db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = self
+            .db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        let already_verified_supports_safe_deposit =
-            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
-
-        already_verified_supports_safe_deposit || {
-            match self.module_api.module_consensus_version().await {
-                Ok(module_consensus_version) => {
-                    let supported_version =
-                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
-
-                    if supported_version {
-                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                        dbtx.commit_tx().await;
-                    }
-
-                    supported_version
-                }
-                Err(_) => false,
-            }
+        if already_verified {
+            return true;
         }
+
+        // API phase: fetch module consensus version (no transaction held)
+        let Ok(module_consensus_version) = self.module_api.module_consensus_version().await else {
+            return false;
+        };
+
+        let supported_version = SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+        // Write phase: persist the result if supported
+        if supported_version {
+            let mut dbtx = self.db.begin_write_transaction().await;
+            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+            dbtx.commit_tx().await;
+        }
+
+        supported_version
     }
 
     /// Allocates a deposit address controlled by the federation, guaranteeing
@@ -1447,23 +1454,30 @@ impl WalletClientModule {
 /// supports safe deposits, saving the result in the db once it does.
 async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        if already_verified {
             break;
         }
 
+        // API phase: fetch module consensus version (no transaction held)
         module_api.wait_for_initialized_connections().await;
 
         if let Ok(module_consensus_version) = module_api.module_consensus_version().await
             && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
         {
+            // Write phase: persist the result
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
             dbtx.commit_tx().await;
             break;
         }
-
-        drop(dbtx);
 
         if is_running_in_test_env() {
             // Even in tests we don't want to spam the federation with requests about it

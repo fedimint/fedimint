@@ -46,7 +46,7 @@ impl MintClientModule {
         let mut summary = RepairSummary::default();
 
         let module_api = self.client_ctx.module_api();
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
         // First check if any of our notes are already spent and remove them
         let spent_notes: Vec<NoteKey> = dbtx

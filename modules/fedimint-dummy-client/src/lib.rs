@@ -375,8 +375,6 @@ impl DummyClientModule {
 
     /// Wait to receive money at an outpoint
     pub async fn receive_money_hack(&self, outpoint: OutPoint) -> anyhow::Result<()> {
-        let mut dbtx = self.db.begin_transaction().await;
-
         #[allow(deprecated)]
         let outcome = self
             .client_ctx
@@ -398,9 +396,9 @@ impl DummyClientModule {
         // before. The actual state machine is supposed to update the balance,
         // but `receive_money` is typically paired with `send_money` which
         // creates a state machine only on the sender's client.
+        let mut dbtx = self.db.begin_write_transaction().await;
         dbtx.insert_entry(&DummyClientFundsKey { unit: outcome.1 }, &outcome.0)
             .await;
-
         dbtx.commit_tx().await;
 
         Ok(())

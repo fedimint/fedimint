@@ -419,23 +419,33 @@ impl LightningClientModule {
         // if possible, such that the payment does not go over lightning, reducing
         // fees and latency.
 
-        if let Ok(gateways) = self.module_api.gateways().await {
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        // API phase: fetch gateways and their routing info (no transaction held)
+        let Ok(gateways) = self.module_api.gateways().await else {
+            return;
+        };
 
-            for gateway in gateways {
-                if let Ok(Some(routing_info)) = self
-                    .gateway_conn
-                    .routing_info(gateway.clone(), &self.federation_id)
-                    .await
-                {
-                    dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
-                        .await;
-                }
-            }
+        let mut gateway_entries = Vec::new();
 
-            if let Err(e) = dbtx.commit_tx_result().await {
-                warn!("Failed to commit the updated gateway mapping to the database: {e}");
+        for gateway in gateways {
+            if let Ok(Some(routing_info)) = self
+                .gateway_conn
+                .routing_info(gateway.clone(), &self.federation_id)
+                .await
+            {
+                gateway_entries.push((routing_info.lightning_public_key, gateway));
             }
+        }
+
+        // Write phase: persist the gateway mappings
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
+
+        for (lightning_public_key, gateway) in gateway_entries {
+            dbtx.insert_entry(&GatewayKey(lightning_public_key), &gateway)
+                .await;
+        }
+
+        if let Err(e) = dbtx.commit_tx_result().await {
+            warn!("Failed to commit the updated gateway mapping to the database: {e}");
         }
     }
 
@@ -1097,18 +1107,23 @@ impl LightningClientModule {
     }
 
     async fn receive_lnurl(&self, custom_meta: Value) {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        let stream_index = dbtx
+        // Read phase: get the current stream index
+        let stream_index = self
+            .client_ctx
+            .module_db()
+            .begin_read_transaction()
+            .await
             .get_value(&IncomingContractStreamIndexKey)
             .await
             .unwrap_or(0);
 
+        // API phase: fetch incoming contracts (no transaction held)
         let (contracts, next_index) = self
             .module_api
             .await_incoming_contracts(stream_index, 128)
             .await;
 
+        // Process contracts (these operations manage their own transactions)
         for contract in &contracts {
             if let Some(operation_id) = self
                 .receive_incoming_contract(
@@ -1126,6 +1141,9 @@ impl LightningClientModule {
                     .ok();
             }
         }
+
+        // Write phase: update the stream index
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
         dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
             .await;
