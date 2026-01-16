@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicU8;
 use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
-    IReadDatabaseTransactionOpsCoreTyped as _, NonCommittable, WriteDatabaseTransaction,
+    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
+    IReadDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
@@ -38,7 +38,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
     ) -> anyhow::Result<()> {
         dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
@@ -48,7 +48,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
     ) -> anyhow::Result<Option<EventLogId>> {
         Ok(dbtx.get_value(&TestEventLogIdKey).await)
     }
