@@ -1982,7 +1982,11 @@ impl MintClientModule {
     /// have already been spent this operation will fail which can be
     /// observed using [`MintClientModule::subscribe_spend_notes`].
     pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self
+            .client_ctx
+            .module_db()
+            .begin_write_transaction()
+            .await;
         dbtx.insert_entry(&CancelledOOBSpendKey(operation_id), &())
             .await;
         if let Err(e) = dbtx.commit_tx_result().await {

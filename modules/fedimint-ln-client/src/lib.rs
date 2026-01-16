@@ -1192,7 +1192,7 @@ impl LightningClientModule {
         self.update_gateway_cache_merge
             .merge(async {
                 let gateways = self.module_api.fetch_gateways().await?;
-                let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+                let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
                 // Remove all previous gateway entries
                 dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
