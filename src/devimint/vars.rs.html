@@ -176,101 +176,102 @@
 <a href=#176 id=176 data-nosnippet>176</a>
 <a href=#177 id=177 data-nosnippet>177</a>        <span class="comment">// TODO(support:v0.5): Remove this. It was used prior to `FM_GATEWAY_BCRYPT_PASSWORD_HASH` to provide a plaintext password to the gateway.
 <a href=#178 id=178 data-nosnippet>178</a>        </span>FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>; env: <span class="string">"FM_GATEWAY_PASSWORD"</span>;
-<a href=#179 id=179 data-nosnippet>179</a>
-<a href=#180 id=180 data-nosnippet>180</a>        <span class="comment">// Bcrypt hash of "theresnosecondbest" with a cost of 10.
-<a href=#181 id=181 data-nosnippet>181</a>        </span>FM_GATEWAY_BCRYPT_PASSWORD_HASH: String = <span class="string">"$2y$10$Q/UTDeO84VGG1mRncxw.Nubqyi/HsNRJ40k0TSexFy9eVess1yi/u"</span>; env: <span class="string">"FM_GATEWAY_BCRYPT_PASSWORD_HASH"</span>;
-<a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>        FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = <span class="string">"1"</span>; env: <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
-<a href=#184 id=184 data-nosnippet>184</a>        FM_GATEWAY_NETWORK: String = <span class="string">"regtest"</span>; env: <span class="string">"FM_GATEWAY_NETWORK"</span>;
-<a href=#185 id=185 data-nosnippet>185</a>        FM_DEFAULT_ROUTING_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_DEFAULT_ROUTING_FEES"</span>;
-<a href=#186 id=186 data-nosnippet>186</a>
-<a href=#187 id=187 data-nosnippet>187</a>        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>); env: <span class="string">"FM_FAUCET_BIND_ADDR"</span>;
-<a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>        <span class="comment">// clients env: "// ";
-<a href=#190 id=190 data-nosnippet>190</a>        </span>FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">"{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}"</span>,
-<a href=#191 id=191 data-nosnippet>191</a>            lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">" "</span>),
-<a href=#192 id=192 data-nosnippet>192</a>            lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR)); env: <span class="string">"FM_LNCLI"</span>;
-<a href=#193 id=193 data-nosnippet>193</a>        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}"</span>,             bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">" "</span>),
-<a href=#194 id=194 data-nosnippet>194</a>            datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR)); env: <span class="string">"FM_BTC_CLIENT"</span>;
-<a href=#195 id=195 data-nosnippet>195</a>
-<a href=#196 id=196 data-nosnippet>196</a>        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{fedimint_cli} --data-dir {datadir}"</span>,
-<a href=#197 id=197 data-nosnippet>197</a>            fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
-<a href=#198 id=198 data-nosnippet>198</a>            datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));  env: <span class="string">"FM_MINT_CLIENT"</span>;
-<a href=#199 id=199 data-nosnippet>199</a>        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>); env: <span class="string">"FM_MINT_RPC_CLIENT"</span>;
-<a href=#200 id=200 data-nosnippet>200</a>        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
-<a href=#201 id=201 data-nosnippet>201</a>            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
-<a href=#202 id=202 data-nosnippet>202</a>        FM_GWCLI_LDK: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/"</span>,
-<a href=#203 id=203 data-nosnippet>203</a>            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LDK"</span>;
-<a href=#204 id=204 data-nosnippet>204</a>        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>)); env: <span class="string">"FM_DB_TOOL"</span>;
-<a href=#205 id=205 data-nosnippet>205</a>
-<a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// fedimint config variables
-<a href=#207 id=207 data-nosnippet>207</a>        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_TEST_BITCOIND_RPC"</span>;
-<a href=#208 id=208 data-nosnippet>208</a>        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIN_RPC_URL"</span>;
-<a href=#209 id=209 data-nosnippet>209</a>        FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
-<a href=#210 id=210 data-nosnippet>210</a>        FM_BITCOIND_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIND_URL"</span>;
-<a href=#211 id=211 data-nosnippet>211</a>        FM_BITCOIND_USERNAME: String = <span class="string">"bitcoin"</span>; env: <span class="string">"FM_BITCOIND_USERNAME"</span>;
-<a href=#212 id=212 data-nosnippet>212</a>        FM_BITCOIND_PASSWORD: String = <span class="string">"bitcoin"</span>; env: <span class="string">"FM_BITCOIND_PASSWORD"</span>;
-<a href=#213 id=213 data-nosnippet>213</a>        FM_DEFAULT_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
-<a href=#214 id=214 data-nosnippet>214</a>        FM_DEFAULT_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a>        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string(); env: <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE"</span>;
-<a href=#217 id=217 data-nosnippet>217</a>    }
-<a href=#218 id=218 data-nosnippet>218</a>}
-<a href=#219 id=219 data-nosnippet>219</a>
-<a href=#220 id=220 data-nosnippet>220</a><span class="kw">impl </span>Global {
-<a href=#221 id=221 data-nosnippet>221</a>    <span class="kw">pub async fn </span>new(
-<a href=#222 id=222 data-nosnippet>222</a>        test_dir: <span class="kw-2">&amp;</span>Path,
-<a href=#223 id=223 data-nosnippet>223</a>        num_feds: usize,
-<a href=#224 id=224 data-nosnippet>224</a>        fed_size: usize,
-<a href=#225 id=225 data-nosnippet>225</a>        offline_nodes: usize,
-<a href=#226 id=226 data-nosnippet>226</a>        federations_base_port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
-<a href=#227 id=227 data-nosnippet>227</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>federations_base_port = <span class="kw">if let </span><span class="prelude-val">Some</span>(federations_base_port) = federations_base_port {
-<a href=#229 id=229 data-nosnippet>229</a>            federations_base_port
-<a href=#230 id=230 data-nosnippet>230</a>        } <span class="kw">else </span>{
-<a href=#231 id=231 data-nosnippet>231</a>            port_alloc(
-<a href=#232 id=232 data-nosnippet>232</a>                (PORTS_PER_FEDIMINTD <span class="kw">as </span>usize * fed_size * num_feds)
-<a href=#233 id=233 data-nosnippet>233</a>                    .try_into()
-<a href=#234 id=234 data-nosnippet>234</a>                    .unwrap(),
-<a href=#235 id=235 data-nosnippet>235</a>            )<span class="question-mark">?
-<a href=#236 id=236 data-nosnippet>236</a>        </span>};
-<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span>num_gateways: usize = <span class="number">3</span>;
-<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>gw_base_port = port_alloc(num_gateways <span class="kw">as </span>u16).unwrap();
-<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw">let </span>this = <span class="self">Self</span>::init(
-<a href=#240 id=240 data-nosnippet>240</a>            test_dir,
-<a href=#241 id=241 data-nosnippet>241</a>            num_feds,
-<a href=#242 id=242 data-nosnippet>242</a>            fed_size,
-<a href=#243 id=243 data-nosnippet>243</a>            offline_nodes,
-<a href=#244 id=244 data-nosnippet>244</a>            federations_base_port,
-<a href=#245 id=245 data-nosnippet>245</a>            num_gateways,
-<a href=#246 id=246 data-nosnippet>246</a>            gw_base_port,
-<a href=#247 id=247 data-nosnippet>247</a>        )
-<a href=#248 id=248 data-nosnippet>248</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#249 id=249 data-nosnippet>249</a>        <span class="prelude-val">Ok</span>(this)
-<a href=#250 id=250 data-nosnippet>250</a>    }
-<a href=#251 id=251 data-nosnippet>251</a>}
-<a href=#252 id=252 data-nosnippet>252</a>
-<a href=#253 id=253 data-nosnippet>253</a><span class="macro">declare_vars!</span> {
-<a href=#254 id=254 data-nosnippet>254</a>    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, federation_name: String, peer_id: PeerId, overrides: <span class="kw-2">&amp;</span>FedimintdPeerOverrides) =&gt; {
-<a href=#255 id=255 data-nosnippet>255</a>        FM_IN_DEVIMINT: String = <span class="string">"1"</span>.to_string(); env: FM_IN_DEVIMINT_ENV;
-<a href=#256 id=256 data-nosnippet>256</a>        FM_BIND_P2P: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_BIND_P2P"</span>;
-<a href=#257 id=257 data-nosnippet>257</a>        FM_BIND_API_WS: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_WS"</span>;
-<a href=#258 id=258 data-nosnippet>258</a>        FM_BIND_API_IROH: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_IROH"</span>;
-<a href=#259 id=259 data-nosnippet>259</a>        <span class="comment">// for backwards compatibility with old versions
-<a href=#260 id=260 data-nosnippet>260</a>        </span>FM_BIND_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API"</span>;
-<a href=#261 id=261 data-nosnippet>261</a>        FM_P2P_URL: String =  <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_P2P_URL"</span>;
-<a href=#262 id=262 data-nosnippet>262</a>        FM_API_URL: String =  <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_API_URL"</span>;
-<a href=#263 id=263 data-nosnippet>263</a>        FM_BIND_UI: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: <span class="string">"FM_BIND_UI"</span>;
-<a href=#264 id=264 data-nosnippet>264</a>        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS_API"</span>;
-<a href=#265 id=265 data-nosnippet>265</a>        FM_BIND_METRICS: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS"</span>;
-<a href=#266 id=266 data-nosnippet>266</a>        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{federation_name}-{peer_id}"</span>))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
-<a href=#267 id=267 data-nosnippet>267</a>
-<a href=#268 id=268 data-nosnippet>268</a>        FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;
-<a href=#269 id=269 data-nosnippet>269</a>        FM_IROH_API_SECRET_KEY_OVERRIDE : String = overrides.api.secret_key(); env: FM_IROH_API_SECRET_KEY_OVERRIDE_ENV;
-<a href=#270 id=270 data-nosnippet>270</a>
-<a href=#271 id=271 data-nosnippet>271</a>        <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
-<a href=#272 id=272 data-nosnippet>272</a>        // rpc settings over command-line etc. so always will use the right ones.
-<a href=#273 id=273 data-nosnippet>273</a>        </span>FM_FORCE_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>, globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
-<a href=#274 id=274 data-nosnippet>274</a>        FM_FORCE_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
-<a href=#275 id=275 data-nosnippet>275</a>    }
-<a href=#276 id=276 data-nosnippet>276</a>}</code></pre></div></section></main></body></html>
+<a href=#179 id=179 data-nosnippet>179</a>        FM_GATEWAY_SKIP_SETUP: String = <span class="string">"true"</span>; env: <span class="string">"FM_GATEWAY_SKIP_SETUP"</span>;
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="comment">// Bcrypt hash of "theresnosecondbest" with a cost of 10.
+<a href=#182 id=182 data-nosnippet>182</a>        </span>FM_GATEWAY_BCRYPT_PASSWORD_HASH: String = <span class="string">"$2y$10$Q/UTDeO84VGG1mRncxw.Nubqyi/HsNRJ40k0TSexFy9eVess1yi/u"</span>; env: <span class="string">"FM_GATEWAY_BCRYPT_PASSWORD_HASH"</span>;
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>        FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = <span class="string">"1"</span>; env: <span class="string">"FM_GATEWAY_SKIP_WAIT_FOR_SYNC"</span>;
+<a href=#185 id=185 data-nosnippet>185</a>        FM_GATEWAY_NETWORK: String = <span class="string">"regtest"</span>; env: <span class="string">"FM_GATEWAY_NETWORK"</span>;
+<a href=#186 id=186 data-nosnippet>186</a>        FM_DEFAULT_ROUTING_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_DEFAULT_ROUTING_FEES"</span>;
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a>        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>); env: <span class="string">"FM_FAUCET_BIND_ADDR"</span>;
+<a href=#189 id=189 data-nosnippet>189</a>
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="comment">// clients env: "// ";
+<a href=#191 id=191 data-nosnippet>191</a>        </span>FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">"{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}"</span>,
+<a href=#192 id=192 data-nosnippet>192</a>            lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">" "</span>),
+<a href=#193 id=193 data-nosnippet>193</a>            lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR)); env: <span class="string">"FM_LNCLI"</span>;
+<a href=#194 id=194 data-nosnippet>194</a>        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}"</span>,             bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">" "</span>),
+<a href=#195 id=195 data-nosnippet>195</a>            datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR)); env: <span class="string">"FM_BTC_CLIENT"</span>;
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a>        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{fedimint_cli} --data-dir {datadir}"</span>,
+<a href=#198 id=198 data-nosnippet>198</a>            fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
+<a href=#199 id=199 data-nosnippet>199</a>            datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));  env: <span class="string">"FM_MINT_CLIENT"</span>;
+<a href=#200 id=200 data-nosnippet>200</a>        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>); env: <span class="string">"FM_MINT_RPC_CLIENT"</span>;
+<a href=#201 id=201 data-nosnippet>201</a>        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
+<a href=#202 id=202 data-nosnippet>202</a>            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
+<a href=#203 id=203 data-nosnippet>203</a>        FM_GWCLI_LDK: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/"</span>,
+<a href=#204 id=204 data-nosnippet>204</a>            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LDK"</span>;
+<a href=#205 id=205 data-nosnippet>205</a>        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>)); env: <span class="string">"FM_DB_TOOL"</span>;
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="comment">// fedimint config variables
+<a href=#208 id=208 data-nosnippet>208</a>        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_TEST_BITCOIND_RPC"</span>;
+<a href=#209 id=209 data-nosnippet>209</a>        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIN_RPC_URL"</span>;
+<a href=#210 id=210 data-nosnippet>210</a>        FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
+<a href=#211 id=211 data-nosnippet>211</a>        FM_BITCOIND_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIND_URL"</span>;
+<a href=#212 id=212 data-nosnippet>212</a>        FM_BITCOIND_USERNAME: String = <span class="string">"bitcoin"</span>; env: <span class="string">"FM_BITCOIND_USERNAME"</span>;
+<a href=#213 id=213 data-nosnippet>213</a>        FM_BITCOIND_PASSWORD: String = <span class="string">"bitcoin"</span>; env: <span class="string">"FM_BITCOIND_PASSWORD"</span>;
+<a href=#214 id=214 data-nosnippet>214</a>        FM_DEFAULT_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
+<a href=#215 id=215 data-nosnippet>215</a>        FM_DEFAULT_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string(); env: <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE"</span>;
+<a href=#218 id=218 data-nosnippet>218</a>    }
+<a href=#219 id=219 data-nosnippet>219</a>}
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a><span class="kw">impl </span>Global {
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">pub async fn </span>new(
+<a href=#223 id=223 data-nosnippet>223</a>        test_dir: <span class="kw-2">&amp;</span>Path,
+<a href=#224 id=224 data-nosnippet>224</a>        num_feds: usize,
+<a href=#225 id=225 data-nosnippet>225</a>        fed_size: usize,
+<a href=#226 id=226 data-nosnippet>226</a>        offline_nodes: usize,
+<a href=#227 id=227 data-nosnippet>227</a>        federations_base_port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+<a href=#228 id=228 data-nosnippet>228</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>federations_base_port = <span class="kw">if let </span><span class="prelude-val">Some</span>(federations_base_port) = federations_base_port {
+<a href=#230 id=230 data-nosnippet>230</a>            federations_base_port
+<a href=#231 id=231 data-nosnippet>231</a>        } <span class="kw">else </span>{
+<a href=#232 id=232 data-nosnippet>232</a>            port_alloc(
+<a href=#233 id=233 data-nosnippet>233</a>                (PORTS_PER_FEDIMINTD <span class="kw">as </span>usize * fed_size * num_feds)
+<a href=#234 id=234 data-nosnippet>234</a>                    .try_into()
+<a href=#235 id=235 data-nosnippet>235</a>                    .unwrap(),
+<a href=#236 id=236 data-nosnippet>236</a>            )<span class="question-mark">?
+<a href=#237 id=237 data-nosnippet>237</a>        </span>};
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>num_gateways: usize = <span class="number">3</span>;
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw">let </span>gw_base_port = port_alloc(num_gateways <span class="kw">as </span>u16).unwrap();
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="kw">let </span>this = <span class="self">Self</span>::init(
+<a href=#241 id=241 data-nosnippet>241</a>            test_dir,
+<a href=#242 id=242 data-nosnippet>242</a>            num_feds,
+<a href=#243 id=243 data-nosnippet>243</a>            fed_size,
+<a href=#244 id=244 data-nosnippet>244</a>            offline_nodes,
+<a href=#245 id=245 data-nosnippet>245</a>            federations_base_port,
+<a href=#246 id=246 data-nosnippet>246</a>            num_gateways,
+<a href=#247 id=247 data-nosnippet>247</a>            gw_base_port,
+<a href=#248 id=248 data-nosnippet>248</a>        )
+<a href=#249 id=249 data-nosnippet>249</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#250 id=250 data-nosnippet>250</a>        <span class="prelude-val">Ok</span>(this)
+<a href=#251 id=251 data-nosnippet>251</a>    }
+<a href=#252 id=252 data-nosnippet>252</a>}
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a><span class="macro">declare_vars!</span> {
+<a href=#255 id=255 data-nosnippet>255</a>    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, federation_name: String, peer_id: PeerId, overrides: <span class="kw-2">&amp;</span>FedimintdPeerOverrides) =&gt; {
+<a href=#256 id=256 data-nosnippet>256</a>        FM_IN_DEVIMINT: String = <span class="string">"1"</span>.to_string(); env: FM_IN_DEVIMINT_ENV;
+<a href=#257 id=257 data-nosnippet>257</a>        FM_BIND_P2P: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_BIND_P2P"</span>;
+<a href=#258 id=258 data-nosnippet>258</a>        FM_BIND_API_WS: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_WS"</span>;
+<a href=#259 id=259 data-nosnippet>259</a>        FM_BIND_API_IROH: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_IROH"</span>;
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="comment">// for backwards compatibility with old versions
+<a href=#261 id=261 data-nosnippet>261</a>        </span>FM_BIND_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API"</span>;
+<a href=#262 id=262 data-nosnippet>262</a>        FM_P2P_URL: String =  <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_P2P_URL"</span>;
+<a href=#263 id=263 data-nosnippet>263</a>        FM_API_URL: String =  <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_API_URL"</span>;
+<a href=#264 id=264 data-nosnippet>264</a>        FM_BIND_UI: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: <span class="string">"FM_BIND_UI"</span>;
+<a href=#265 id=265 data-nosnippet>265</a>        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS_API"</span>;
+<a href=#266 id=266 data-nosnippet>266</a>        FM_BIND_METRICS: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS"</span>;
+<a href=#267 id=267 data-nosnippet>267</a>        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{federation_name}-{peer_id}"</span>))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>        FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;
+<a href=#270 id=270 data-nosnippet>270</a>        FM_IROH_API_SECRET_KEY_OVERRIDE : String = overrides.api.secret_key(); env: FM_IROH_API_SECRET_KEY_OVERRIDE_ENV;
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
+<a href=#273 id=273 data-nosnippet>273</a>        // rpc settings over command-line etc. so always will use the right ones.
+<a href=#274 id=274 data-nosnippet>274</a>        </span>FM_FORCE_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>, globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
+<a href=#275 id=275 data-nosnippet>275</a>        FM_FORCE_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
+<a href=#276 id=276 data-nosnippet>276</a>    }
+<a href=#277 id=277 data-nosnippet>277</a>}</code></pre></div></section></main></body></html>

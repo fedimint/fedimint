@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_wallet_handler","recover_wallet_form","recover_wallet_handler","setup_view"],"struct":["RecoverWalletForm"]};

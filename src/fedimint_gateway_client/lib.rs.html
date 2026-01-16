@@ -18,8 +18,8 @@
 <a href=#18 id=18 data-nosnippet>18</a>    PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload,
 <a href=#19 id=19 data-nosnippet>19</a>    PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse,
 <a href=#20 id=20 data-nosnippet>20</a>    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-<a href=#21 id=21 data-nosnippet>21</a>    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT,
-<a href=#22 id=22 data-nosnippet>22</a>    WithdrawPayload, WithdrawResponse,
+<a href=#21 id=21 data-nosnippet>21</a>    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+<a href=#22 id=22 data-nosnippet>22</a>    WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 <a href=#23 id=23 data-nosnippet>23</a>};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_ln_common::Method;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_ln_common::client::GatewayApi;
@@ -336,4 +336,14 @@
 <a href=#336 id=336 data-nosnippet>336</a>            <span class="prelude-val">Some</span>(payload),
 <a href=#337 id=337 data-nosnippet>337</a>        )
 <a href=#338 id=338 data-nosnippet>338</a>        .<span class="kw">await
-<a href=#339 id=339 data-nosnippet>339</a></span>}</code></pre></div></section></main></body></html>
+<a href=#339 id=339 data-nosnippet>339</a></span>}
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a><span class="kw">pub async fn </span>set_mnemonic(
+<a href=#342 id=342 data-nosnippet>342</a>    client: <span class="kw-2">&amp;</span>GatewayApi,
+<a href=#343 id=343 data-nosnippet>343</a>    base_url: <span class="kw-2">&amp;</span>SafeUrl,
+<a href=#344 id=344 data-nosnippet>344</a>    payload: SetMnemonicPayload,
+<a href=#345 id=345 data-nosnippet>345</a>) -&gt; ServerResult&lt;()&gt; {
+<a href=#346 id=346 data-nosnippet>346</a>    client
+<a href=#347 id=347 data-nosnippet>347</a>        .request(base_url, Method::POST, MNEMONIC_ENDPOINT, <span class="prelude-val">Some</span>(payload))
+<a href=#348 id=348 data-nosnippet>348</a>        .<span class="kw">await
+<a href=#349 id=349 data-nosnippet>349</a></span>}</code></pre></div></section></main></body></html>

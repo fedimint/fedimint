@@ -28,11 +28,15 @@
 <a href=#28 id=28 data-nosnippet>28</a>    runtime.block_on(<span class="kw">async </span>{
 <a href=#29 id=29 data-nosnippet>29</a>        handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
 <a href=#30 id=30 data-nosnippet>30</a>        TracingSetup::default().init()<span class="question-mark">?</span>;
-<a href=#31 id=31 data-nosnippet>31</a>        <span class="kw">let </span>gatewayd = Gateway::new_with_default_modules().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">let </span>shutdown_receiver = gatewayd.clone().run(runtime.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#33 id=33 data-nosnippet>33</a>        shutdown_receiver.<span class="kw">await</span>;
-<a href=#34 id=34 data-nosnippet>34</a>        gatewayd.unannounce_from_all_federations().<span class="kw">await</span>;
-<a href=#35 id=35 data-nosnippet>35</a>        <span class="macro">info!</span>(target: LOG_GATEWAY, <span class="string">"Gatewayd exiting..."</span>);
-<a href=#36 id=36 data-nosnippet>36</a>        <span class="prelude-val">Ok</span>(())
-<a href=#37 id=37 data-nosnippet>37</a>    })
-<a href=#38 id=38 data-nosnippet>38</a>}</code></pre></div></section></main></body></html>
+<a href=#31 id=31 data-nosnippet>31</a>        <span class="kw">let </span>(mnemonic_sender, mnemonic_receiver) = tokio::sync::broadcast::channel::&lt;()&gt;(<span class="number">4</span>);
+<a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">let </span>gatewayd = Gateway::new_with_default_modules(mnemonic_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="kw">let </span>shutdown_receiver = gatewayd
+<a href=#34 id=34 data-nosnippet>34</a>            .clone()
+<a href=#35 id=35 data-nosnippet>35</a>            .run(runtime.clone(), mnemonic_receiver)
+<a href=#36 id=36 data-nosnippet>36</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#37 id=37 data-nosnippet>37</a>        shutdown_receiver.<span class="kw">await</span>;
+<a href=#38 id=38 data-nosnippet>38</a>        gatewayd.unannounce_from_all_federations().<span class="kw">await</span>;
+<a href=#39 id=39 data-nosnippet>39</a>        <span class="macro">info!</span>(target: LOG_GATEWAY, <span class="string">"Gatewayd exiting..."</span>);
+<a href=#40 id=40 data-nosnippet>40</a>        <span class="prelude-val">Ok</span>(())
+<a href=#41 id=41 data-nosnippet>41</a>    })
+<a href=#42 id=42 data-nosnippet>42</a>}</code></pre></div></section></main></body></html>
