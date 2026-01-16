@@ -12,7 +12,7 @@ use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalCl
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped,
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
     IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
     MODULE_GLOBAL_PREFIX, apply_migrations_dbtx, create_database_version_dbtx,
     get_current_database_version,
@@ -20,6 +20,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::task::MaybeSend;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_eventlog::{
     DB_KEY_PREFIX_EVENT_LOG, DB_KEY_PREFIX_UNORDERED_EVENT_LOG, EventLogId, UnordedEventLogId,
@@ -98,7 +99,9 @@ pub(crate) enum DbKeyPrefixInternalReserved {
     DefaultApplicationEventLogPos = 0xd0,
 }
 
-pub(crate) async fn verify_client_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
+pub(crate) async fn verify_client_db_integrity_dbtx<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + IDatabaseTransactionOpsCore),
+) {
     let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
 
     let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");
@@ -868,8 +871,8 @@ pub async fn apply_migrations_client_module_dbtx(
 /// id so we are forced to return all active states. Once we do a db migration
 /// to add `module_instance_id` to `ActiveStateKey`, this can be improved to
 /// only read the module's relevant states.
-pub async fn get_active_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+pub async fn get_active_states<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&ActiveStateKeyPrefixBytes)
@@ -890,8 +893,8 @@ pub async fn get_active_states(
 /// id so we are forced to return all inactive states. Once we do a db migration
 /// to add `module_instance_id` to `InactiveStateKey`, this can be improved to
 /// only read the module's relevant states.
-pub async fn get_inactive_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+pub async fn get_inactive_states<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes)

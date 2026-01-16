@@ -1012,7 +1012,10 @@ impl MintClientModule {
         since = "0.5.0",
         note = "Use `get_note_counts_by_denomination` instead"
     )]
-    pub async fn get_notes_tier_counts(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+    pub async fn get_notes_tier_counts<'a>(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
 

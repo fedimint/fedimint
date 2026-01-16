@@ -735,10 +735,10 @@ impl LightningClientModule {
         }
     }
 
-    pub async fn get_prev_payment_result(
+    pub async fn get_prev_payment_result<'a>(
         &self,
         payment_hash: &sha256::Hash,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
     ) -> PaymentResult {
         let prev_result = dbtx
             .get_value(&PaymentResultKey {
