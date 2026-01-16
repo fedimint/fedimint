@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true, features = ["cookie"] }
 bcrypt = { workspace = true }
+bip39 = { workspace = true }
 bitcoin = { workspace = true }
 chrono = { workspace = true }
 fedimint-bitcoind = { workspace = true }
@@ -32,6 +33,7 @@ lightning-invoice = { workspace = true }
 maud = { workspace = true }
 qrcode = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true }
 

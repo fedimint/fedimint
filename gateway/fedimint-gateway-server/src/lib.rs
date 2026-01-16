@@ -78,8 +78,9 @@ use fedimint_gateway_common::{
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
+    WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -153,6 +154,7 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
+///    NotConfigured -- create or recover wallet --> Disconnected
 ///    Disconnected -- establish lightning connection --> Connected
 ///    Connected -- load federation clients --> Running
 ///    Connected -- not synced to chain --> Syncing
@@ -162,16 +164,26 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 /// ```
 #[derive(Clone, Debug)]
 pub enum GatewayState {
+    NotConfigured {
+        // Broadcast channel to alert gateway background threads that the mnemonic has been
+        // created/set.
+        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+    },
     Disconnected,
     Syncing,
     Connected,
-    Running { lightning_context: LightningContext },
-    ShuttingDown { lightning_context: LightningContext },
+    Running {
+        lightning_context: LightningContext,
+    },
+    ShuttingDown {
+        lightning_context: LightningContext,
+    },
 }
 
 impl Display for GatewayState {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            GatewayState::NotConfigured { .. } => write!(f, "NotConfigured"),
             GatewayState::Disconnected => write!(f, "Disconnected"),
             GatewayState::Syncing => write!(f, "Syncing"),
             GatewayState::Connected => write!(f, "Connected"),
@@ -212,9 +224,6 @@ enum ReceivePaymentStreamAction {
 pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
-
-    // The mnemonic for the gateway
-    mnemonic: Mnemonic,
 
     /// The mode that specifies the lightning connection parameters
     lightning_mode: LightningMode,
@@ -364,6 +373,7 @@ impl Gateway {
                 iroh_listen,
                 iroh_dns: None,
                 iroh_relays: vec![],
+                skip_setup: true,
             },
             gateway_db,
             client_builder,
@@ -402,7 +412,9 @@ impl Gateway {
 
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
     /// `Gateway` modules.
-    pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
+    pub async fn new_with_default_modules(
+        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+    ) -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
         let gateway_parameters = opts.to_gateway_parameters()?;
         let decoders = ModuleDecoderRegistry::default();
@@ -476,6 +488,35 @@ impl Gateway {
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
 
+        let gateway_state = if Self::load_mnemonic(&gateway_db).await.is_some() {
+            GatewayState::Disconnected
+        } else {
+            // Generate a mnemonic or use one from an environment variable if `skip_setup`
+            // is true
+            if gateway_parameters.skip_setup {
+                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
+                    info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
+                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
+                        |e| {
+                            AdminGatewayError::MnemonicError(anyhow!(format!(
+                                "Seed phrase provided in environment was invalid {e:?}"
+                            )))
+                        },
+                    )?
+                } else {
+                    debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
+                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+                };
+
+                Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
+                    .await
+                    .map_err(AdminGatewayError::MnemonicError)?;
+                GatewayState::Disconnected
+            } else {
+                GatewayState::NotConfigured { mnemonic_sender }
+            }
+        };
+
         info!(
             target: LOG_GATEWAY,
             version = %fedimint_build_code_version_env!(),
@@ -487,7 +528,7 @@ impl Gateway {
             gateway_parameters,
             gateway_db,
             client_builder,
-            GatewayState::Disconnected,
+            gateway_state,
             chain_source,
         )
         .await
@@ -528,7 +569,6 @@ impl Gateway {
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
-            mnemonic: Self::load_or_generate_mnemonic(&gateway_db).await?,
             lightning_mode,
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
@@ -594,15 +634,16 @@ impl Gateway {
     pub async fn run(
         self,
         runtime: Arc<tokio::runtime::Runtime>,
+        mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
         self.register_clients_timer();
         self.load_clients().await?;
-        self.start_gateway(runtime);
+        self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
         // start webserver last to avoid handling requests before fully initialized
         let handle = self.task_group.make_handle();
-        run_webserver(Arc::new(self)).await?;
+        run_webserver(Arc::new(self), mnemonic_receiver.resubscribe()).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
@@ -656,7 +697,11 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted payments from the
     /// lightning node.
-    fn start_gateway(&self, runtime: Arc<tokio::runtime::Runtime>) {
+    fn start_gateway(
+        &self,
+        runtime: Arc<tokio::runtime::Runtime>,
+        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+    ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
         let self_copy = self.clone();
@@ -669,6 +714,11 @@ impl Gateway {
                     if handle.is_shutting_down() {
                         info!(target: LOG_GATEWAY, "Gateway lightning payment stream handler loop is shutting down");
                         break;
+                    }
+
+                    if let GatewayState::NotConfigured{ .. } = self_copy.get_state().await {
+                        info!(target: LOG_GATEWAY, "Waiting for the mnemonic to be set before starting lightning receive loop.");
+                        let _ = mnemonic_receiver.recv().await;
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
@@ -1302,42 +1352,21 @@ impl Gateway {
             })
     }
 
-    /// Loads a mnemonic from the database or generates a new one if the
-    /// mnemonic does not exist. Before generating a new mnemonic, this
-    /// function will check if a mnemonic has been provided in the environment
-    /// variable and use that if provided.
-    async fn load_or_generate_mnemonic(gateway_db: &Database) -> AdminResult<Mnemonic> {
-        Ok(
-            if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(gateway_db).await {
-                Mnemonic::from_entropy(&entropy)
-                    .map_err(|e| AdminGatewayError::MnemonicError(anyhow!(e.to_string())))?
-            } else {
-                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
-                    info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
-                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
-                        |e| {
-                            AdminGatewayError::MnemonicError(anyhow!(format!(
-                                "Seed phrase provided in environment was invalid {e:?}"
-                            )))
-                        },
-                    )?
-                } else {
-                    debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
-                };
-
-                Client::store_encodable_client_secret(gateway_db, mnemonic.to_entropy())
-                    .await
-                    .map_err(AdminGatewayError::MnemonicError)?;
-                mnemonic
-            },
-        )
+    async fn load_mnemonic(gateway_db: &Database) -> Option<Mnemonic> {
+        let secret = Client::load_decodable_client_secret::<Vec<u8>>(gateway_db)
+            .await
+            .ok()?;
+        Mnemonic::from_entropy(&secret).ok()
     }
 
     /// Reads the connected federation client configs from the Gateway's
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) -> AdminResult<()> {
+        if let GatewayState::NotConfigured { .. } = self.get_state().await {
+            return Ok(());
+        }
+
         let mut federation_manager = self.federation_manager.write().await;
 
         let configs = {
@@ -1349,12 +1378,16 @@ impl Gateway {
             federation_manager.set_next_index(max_federation_index + 1);
         }
 
+        let mnemonic = Self::load_mnemonic(&self.gateway_db)
+            .await
+            .expect("mnemonic should be set");
+
         for (federation_id, config) in configs {
             let federation_index = config.federation_index;
             match Box::pin(Spanned::try_new(
                 info_span!(target: LOG_GATEWAY, "client", federation_id  = %federation_id.clone()),
                 self.client_builder
-                    .build(config, Arc::new(self.clone()), &self.mnemonic),
+                    .build(config, Arc::new(self.clone()), &mnemonic),
             ))
             .await
             {
@@ -1515,6 +1548,9 @@ impl Gateway {
                 lightning_port,
                 alias,
             } => {
+                let mnemonic = Self::load_mnemonic(&self.gateway_db)
+                    .await
+                    .expect("mnemonic should be set");
                 // Retrieving the fees inside of LDK can sometimes fail/time out. To prevent
                 // crashing the gateway, we wait a bit and just try
                 // to re-create the client. The gateway cannot proceed until this succeeds.
@@ -1525,7 +1561,7 @@ impl Gateway {
                         self.network,
                         lightning_port,
                         alias.clone(),
-                        self.mnemonic.clone(),
+                        mnemonic.clone(),
                         runtime.clone(),
                     )
                     .map(Box::new)
@@ -1717,24 +1753,19 @@ impl IAdminGateway for Gateway {
             _connector: ConnectorType::Tcp,
         };
 
+        let mnemonic = Self::load_mnemonic(&self.gateway_db)
+            .await
+            .expect("mnemonic should be set");
         let recover = payload.recover.unwrap_or(false);
         if recover {
             self.client_builder
-                .recover(
-                    federation_config.clone(),
-                    Arc::new(self.clone()),
-                    &self.mnemonic,
-                )
+                .recover(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
                 .await?;
         }
 
         let client = self
             .client_builder
-            .build(
-                federation_config.clone(),
-                Arc::new(self.clone()),
-                &self.mnemonic,
-            )
+            .build(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
             .await?;
 
         if recover {
@@ -1896,8 +1927,10 @@ impl IAdminGateway for Gateway {
     /// returns a vector of federations that are not using the mnemonic
     /// backup strategy.
     async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
-        let words = self
-            .mnemonic
+        let mnemonic = Self::load_mnemonic(&self.gateway_db)
+            .await
+            .expect("mnemonic should be set");
+        let words = mnemonic
             .words()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>();
@@ -2395,6 +2428,40 @@ impl IAdminGateway for Gateway {
         Ok(PaymentLogResponse(payment_log))
     }
 
+    /// Set the gateway's root mnemonic by generating a new one or using the
+    /// words provided in `SetMnemonicPayload`.
+    async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
+        // Verify the state is NotConfigured
+        let GatewayState::NotConfigured { mnemonic_sender } = self.get_state().await else {
+            return Err(AdminGatewayError::MnemonicError(anyhow!(
+                "Gateway is not is NotConfigured state"
+            )));
+        };
+
+        let mnemonic = if let Some(words) = payload.words {
+            info!(target: LOG_GATEWAY, "Using user provided mnemonic");
+            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
+                AdminGatewayError::MnemonicError(anyhow!(format!(
+                    "Seed phrase provided in environment was invalid {e:?}"
+                )))
+            })?
+        } else {
+            debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
+            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+        };
+
+        Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
+            .await
+            .map_err(AdminGatewayError::MnemonicError)?;
+
+        self.set_gateway_state(GatewayState::Disconnected).await;
+
+        // Alert the gateway background threads that the mnemonic has been set
+        let _ = mnemonic_sender.send(());
+
+        Ok(())
+    }
+
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
@@ -2410,6 +2477,10 @@ impl IAdminGateway for Gateway {
 
     fn lightning_mode(&self) -> LightningMode {
         self.lightning_mode.clone()
+    }
+
+    async fn is_configured(&self) -> bool {
+        !matches!(self.get_state().await, GatewayState::NotConfigured { .. })
     }
 }
 
