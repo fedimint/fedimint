@@ -1305,18 +1305,9 @@ impl Client {
 
     /// Set the client [`Metadata`]
     pub async fn set_metadata(&self, metadata: &Metadata) {
-        self.db
-            .autocommit::<_, _, anyhow::Error>(
-                |dbtx, _| {
-                    Box::pin(async {
-                        Self::set_metadata_dbtx(dbtx, metadata).await;
-                        Ok(())
-                    })
-                },
-                None,
-            )
-            .await
-            .expect("Failed to autocommit metadata");
+        let mut dbtx = self.db.begin_write_transaction().await;
+        dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
+        dbtx.commit_tx().await;
     }
 
     pub fn has_pending_recoveries(&self) -> bool {
@@ -1388,11 +1379,6 @@ impl Client {
             sleep(Duration::from_millis(100)).await;
         }
         Ok(())
-    }
-
-    /// Set the client [`Metadata`]
-    pub async fn set_metadata_dbtx(dbtx: &mut DatabaseTransaction<'_>, metadata: &Metadata) {
-        dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
     }
 
     fn spawn_module_recoveries_task(
