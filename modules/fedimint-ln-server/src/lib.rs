@@ -1291,10 +1291,6 @@ mod tests {
             "http://mock".parse().unwrap()
         }
 
-        async fn get_network(&self) -> anyhow::Result<Network> {
-            Err(anyhow::anyhow!("Mock network error"))
-        }
-
         async fn get_block_count(&self) -> anyhow::Result<u64> {
             Err(anyhow::anyhow!("Mock block count error"))
         }
@@ -1317,6 +1313,10 @@ mod tests {
 
         async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
             Err(anyhow::anyhow!("Mock sync percentage error"))
+        }
+
+        async fn get_chain_id(&self) -> anyhow::Result<BlockHash> {
+            Err(anyhow::anyhow!("Mock chain id error"))
         }
     }
 
