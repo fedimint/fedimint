@@ -723,10 +723,8 @@ impl ClientModule for MintClientModule {
     }
 
     async fn backup(&self) -> anyhow::Result<EcashBackup> {
-        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
-        let backup = self.prepare_plaintext_ecash_backup(&mut dbtx).await?;
-        dbtx.commit_tx().await;
-        Ok(backup)
+        let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
+        self.prepare_plaintext_ecash_backup(&mut dbtx).await
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
@@ -1406,8 +1404,8 @@ impl MintClientModule {
             .collect::<anyhow::Result<TieredMulti<_>>>()
     }
 
-    async fn get_all_spendable_notes<Cap: Send>(
-        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
+    async fn get_all_spendable_notes<'a>(
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
     ) -> TieredMulti<SpendableNoteUndecoded> {
         (dbtx
             .find_by_prefix(&NoteKeyPrefix)
@@ -1419,9 +1417,9 @@ impl MintClientModule {
             .collect()
     }
 
-    async fn get_next_note_index<Cap: Send>(
+    async fn get_next_note_index<'a>(
         &self,
-        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(

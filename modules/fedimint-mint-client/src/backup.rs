@@ -1,6 +1,6 @@
 use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::WriteDatabaseTransaction;
+use fedimint_core::db::ReadDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_mint_common::KIND;
@@ -75,9 +75,9 @@ impl IntoDynInstance for EcashBackup {
 }
 
 impl MintClientModule {
-    pub async fn prepare_plaintext_ecash_backup<Cap: Send>(
+    pub async fn prepare_plaintext_ecash_backup(
         &self,
-        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> anyhow::Result<EcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
         let session_count = self.client_ctx.global_api().session_count().await?;
