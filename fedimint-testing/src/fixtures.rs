@@ -4,10 +4,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_client::Client;
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
+use fedimint_client::secret::RootSecretStrategy;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -25,6 +28,7 @@ use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
+use rand::rngs::OsRng;
 
 use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinTest;
@@ -203,6 +207,11 @@ impl Fixtures {
             .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)))
             .unwrap();
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
+
+        let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut OsRng);
+        Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
+            .await
+            .expect("Could not generate root secret for gateway");
 
         let registry = self
             .clients

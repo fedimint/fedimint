@@ -176,6 +176,7 @@ declare_vars! {
 
         // TODO(support:v0.5): Remove this. It was used prior to `FM_GATEWAY_BCRYPT_PASSWORD_HASH` to provide a plaintext password to the gateway.
         FM_GATEWAY_PASSWORD: String = "theresnosecondbest"; env: "FM_GATEWAY_PASSWORD";
+        FM_GATEWAY_SKIP_SETUP: String = "true"; env: "FM_GATEWAY_SKIP_SETUP";
 
         // Bcrypt hash of "theresnosecondbest" with a cost of 10.
         FM_GATEWAY_BCRYPT_PASSWORD_HASH: String = "$2y$10$Q/UTDeO84VGG1mRncxw.Nubqyi/HsNRJ40k0TSexFy9eVess1yi/u"; env: "FM_GATEWAY_BCRYPT_PASSWORD_HASH";

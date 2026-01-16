@@ -18,8 +18,8 @@ use fedimint_gateway_common::{
     PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload,
     PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse,
     SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT,
-    WithdrawPayload, WithdrawResponse,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+    WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -335,5 +335,15 @@ pub async fn pay_offer(
             PAY_OFFER_FOR_OPERATOR_ENDPOINT,
             Some(payload),
         )
+        .await
+}
+
+pub async fn set_mnemonic(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: SetMnemonicPayload,
+) -> ServerResult<()> {
+    client
+        .request(base_url, Method::POST, MNEMONIC_ENDPOINT, Some(payload))
         .await
 }

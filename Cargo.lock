@@ -3480,6 +3480,7 @@ dependencies = [
  "axum 0.8.7",
  "axum-extra",
  "bcrypt",
+ "bip39",
  "bitcoin",
  "chrono",
  "fedimint-bitcoind",
@@ -3495,6 +3496,7 @@ dependencies = [
  "maud",
  "qrcode",
  "serde",
+ "serde_json",
  "tracing",
  "url",
 ]
@@ -4368,6 +4370,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "fedimint-api-client",
+ "fedimint-bip39",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-client-module",
