@@ -362,7 +362,7 @@ where
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
     let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default()).await?;
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), db_prefix.to_string())
         .await
         .context("Error applying core client migrations to temp database")?;

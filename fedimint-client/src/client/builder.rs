@@ -224,7 +224,7 @@ impl ClientBuilder {
                 continue;
             };
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             apply_migrations_client_module_dbtx(
                 &mut dbtx.to_ref_nc(),
                 kind.to_string(),
@@ -236,7 +236,7 @@ impl ClientBuilder {
                 && is_running_in_test_env()
             {
                 verify_module_db_integrity_dbtx(
-                    &mut dbtx.to_ref_nc(),
+                    &mut dbtx.as_legacy_dbtx(),
                     *module_id,
                     kind,
                     &used_db_prefixes,
@@ -285,7 +285,7 @@ impl ClientBuilder {
         // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = db_no_decoders.begin_transaction().await;
+            let mut dbtx = db_no_decoders.begin_write_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(&crate::db::ClientConfigKey, &config)
                 .await;
@@ -438,8 +438,7 @@ impl ClientBuilder {
             }
             _ => {
                 debug!(target: LOG_CLIENT, "Backfilling secret hash");
-                // Note: no need for dbtx autocommit, we are the only writer ATM
-                let mut dbtx = db_no_decoders.begin_transaction().await;
+                let mut dbtx = db_no_decoders.begin_write_transaction().await;
                 dbtx.insert_entry(
                     &ClientPreRootSecretHashKey,
                     &pre_root_secret.derive_pre_root_secret_hash(),
@@ -732,7 +731,7 @@ impl ClientBuilder {
                             }
                             _ => {
                                 let progress = RecoveryProgress::none();
-                                let mut dbtx = db.begin_transaction().await;
+                                let mut dbtx = db.begin_write_transaction().await;
                                 dbtx.log_event(
                                     log_ordering_wakeup_tx.clone(),
                                     None,
@@ -798,7 +797,7 @@ impl ClientBuilder {
         };
 
         if init_state.is_pending() && module_recoveries.is_empty() {
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&ClientInitStateKey, &init_state.into_complete())
                 .await;
             dbtx.commit_tx().await;
@@ -1013,7 +1012,7 @@ impl ClientBuilder {
         if let Some(pending_config) = Client::get_pending_config_from_db(db).await {
             debug!(target: LOG_CLIENT, "Found pending client config, migrating to current config");
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             // Update the main config with the pending config
             dbtx.insert_entry(&crate::db::ClientConfigKey, &pending_config)
                 .await;
@@ -1115,7 +1114,7 @@ impl ClientBuilder {
         if current_config != &fetched_config {
             debug!(target: LOG_CLIENT, "Detected federation config change, saving as pending config");
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&PendingClientConfigKey, &fetched_config)
                 .await;
             dbtx.commit_tx().await;

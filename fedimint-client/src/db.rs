@@ -11,11 +11,10 @@ use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
-    IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
-    MODULE_GLOBAL_PREFIX, apply_migrations_dbtx, create_database_version_dbtx,
-    get_current_database_version,
+    Database, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
+    IReadDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX, WriteDatabaseTransaction,
+    apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;
@@ -696,11 +695,11 @@ pub fn get_core_client_database_migrations()
 ///
 /// TODO: This should be private.
 pub async fn apply_migrations_core_client_dbtx(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     kind: String,
 ) -> Result<(), anyhow::Error> {
     apply_migrations_dbtx(
-        dbtx,
+        &mut dbtx.as_legacy_dbtx(),
         (),
         kind,
         get_core_client_database_migrations(),
@@ -725,7 +724,7 @@ pub async fn apply_migrations_client_module(
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     apply_migrations_client_module_dbtx(
         &mut dbtx.to_ref_nc(),
         kind,
@@ -739,7 +738,7 @@ pub async fn apply_migrations_client_module(
 }
 
 pub async fn apply_migrations_client_module_dbtx(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
@@ -757,7 +756,7 @@ pub async fn apply_migrations_client_module_dbtx(
 
     // First write the database version to disk if it does not exist.
     create_database_version_dbtx(
-        dbtx,
+        &mut dbtx.as_legacy_dbtx(),
         target_version,
         Some(module_instance_id),
         kind.clone(),
@@ -813,6 +812,7 @@ pub async fn apply_migrations_client_module_dbtx(
 
                 migration(
                     &mut dbtx
+                        .as_legacy_dbtx()
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
                         .into_nc(),
@@ -914,7 +914,7 @@ pub async fn get_inactive_states<'a>(
 /// re-writing with the new set of active states. `new_active_states` is
 /// expected to contain all active states, not just the newly created states.
 pub async fn remove_old_and_persist_new_active_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     new_active_states: Vec<(Vec<u8>, OperationId)>,
     states_to_remove: Vec<(Vec<u8>, OperationId)>,
     module_instance_id: ModuleInstanceId,
@@ -948,7 +948,7 @@ pub async fn remove_old_and_persist_new_active_states(
 /// and re-writing with the new set of inactive states. `new_inactive_states` is
 /// expected to contain all inactive states, not just the newly created states.
 pub async fn remove_old_and_persist_new_inactive_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     new_inactive_states: Vec<(Vec<u8>, OperationId)>,
     states_to_remove: Vec<(Vec<u8>, OperationId)>,
     module_instance_id: ModuleInstanceId,

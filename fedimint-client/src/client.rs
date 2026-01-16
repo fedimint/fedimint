@@ -1913,7 +1913,7 @@ impl Client {
     pub(crate) async fn run_core_migrations(
         db_no_decoders: &Database,
     ) -> Result<(), anyhow::Error> {
-        let mut dbtx = db_no_decoders.begin_transaction().await;
+        let mut dbtx = db_no_decoders.begin_write_transaction().await;
         apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
             .await?;
         if is_running_in_test_env() {
