@@ -513,24 +513,13 @@ impl ExecutorInner {
                 target: LOG_CLIENT_REACTOR,
                 module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream."
             );
-            self.db
-                .autocommit::<_, _, anyhow::Error>(
-                    |dbtx, _| {
-                        Box::pin(async {
-                            let k = InactiveStateKey::from_state(state.clone());
-                            let v = ActiveStateMeta::default().into_inactive();
-                            dbtx.remove_entry(&ActiveStateKeyDb(ActiveStateKey::from_state(
-                                state.clone(),
-                            )))
-                            .await;
-                            dbtx.insert_entry(&InactiveStateKeyDb(k), &v).await;
-                            Ok(())
-                        })
-                    },
-                    None,
-                )
-                .await
-                .expect("Autocommit here can't fail");
+            let mut dbtx = self.db.begin_write_transaction().await;
+            let k = InactiveStateKey::from_state(state.clone());
+            let v = ActiveStateMeta::default().into_inactive();
+            dbtx.remove_entry(&ActiveStateKeyDb(ActiveStateKey::from_state(state.clone())))
+                .await;
+            dbtx.insert_entry(&InactiveStateKeyDb(k), &v).await;
+            dbtx.commit_tx().await;
         }
 
         transitions
