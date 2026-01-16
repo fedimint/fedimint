@@ -10,6 +10,7 @@ use bitcoin::Network;
 use bitcoin::hashes::sha256;
 use fedimint_core::Amount;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
@@ -291,7 +292,12 @@ impl dyn ILnRpcClient {
 
     /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
     pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
-        self.sync_wallet()?;
+        // In devimint, we explicitly sync the onchain wallet to start the sync quicker
+        // than background sync would. In production, background sync is
+        // sufficient
+        if is_env_var_set(FM_IN_DEVIMINT_ENV) {
+            self.sync_wallet()?;
+        }
 
         // Wait for the Lightning node to sync
         retry(
