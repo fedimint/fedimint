@@ -5,7 +5,7 @@ use fedimint_client_module::oplog::{JsonStringed, OperationOutcome, UpdateStream
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
+    Database, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt, WriteDatabaseTransaction,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use futures::stream::StreamExt;
@@ -179,7 +179,7 @@ async fn test_pagination_empty() {
 
 #[tokio::test]
 async fn test_pagination_multiple_operations_same_time() {
-    async fn insert_oplog(dbtx: &mut DatabaseTransaction<'_>, idx: u8, time: u64) {
+    async fn insert_oplog(dbtx: &mut WriteDatabaseTransaction<'_>, idx: u8, time: u64) {
         let operation_id = OperationId([idx; 32]);
         // Some time in the 2010s
         let creation_time = SystemTime::UNIX_EPOCH
@@ -228,14 +228,14 @@ async fn test_pagination_multiple_operations_same_time() {
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let op_log = OperationLog::new(db.clone());
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     for operation_idx in 0u8..10 {
         insert_oplog(&mut dbtx.to_ref_nc(), operation_idx, 1).await;
     }
     dbtx.commit_tx().await;
     assert_pages(&op_log, vec![vec![9, 8, 7, 6, 5, 4, 3, 2, 1, 0], vec![]]).await;
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     for operation_idx in 10u8..16 {
         insert_oplog(&mut dbtx.to_ref_nc(), operation_idx, 2).await;
     }
@@ -254,7 +254,7 @@ async fn test_pagination_multiple_operations_same_time() {
     )
     .await;
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     for operation_idx in 22u8..31 {
         // 9 times one operation every 10 days
         insert_oplog(
