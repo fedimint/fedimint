@@ -643,7 +643,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
     // Check that already used blind nonces are detected and repaired
     {
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
             NextECashNoteIndexKey(Amount::from_msats(1));
         let old_nonce_index = dbtx
@@ -692,7 +692,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
     // Check that already used blind nonces with gaps in between are detected and
     // repaired
     {
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
             NextECashNoteIndexKey(Amount::from_msats(1));
         let old_nonce_index = dbtx
@@ -723,7 +723,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             Some(ReissueExternalNotesState::Done)
         );
 
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))
             .await
             .expect("Failed to insert test note index");
@@ -828,7 +828,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))

@@ -779,7 +779,7 @@ mod fedimint_rocksdb_tests {
                 RocksDb::build(&path).open().await.unwrap(),
                 ModuleDecoderRegistry::default(),
             );
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&TestKey(vec![0]), &TestVal(vec![3]))
                 .await;
             dbtx.insert_entry(&TestKey(vec![254]), &TestVal(vec![1]))

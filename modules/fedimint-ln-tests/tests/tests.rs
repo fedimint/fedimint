@@ -860,7 +860,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -984,7 +984,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))

@@ -368,7 +368,7 @@ mod tests {
         let db = open_temp_db("test_basic");
 
         // Write some data
-        let mut tx = db.begin_transaction().await;
+        let mut tx = db.begin_write_transaction().await;
         tx.insert_entry(&TestKey(1), &TestValue("hello".to_string()))
             .await;
         tx.insert_entry(&TestKey(2), &TestValue("world".to_string()))
@@ -393,13 +393,13 @@ mod tests {
         let db = open_temp_db("test_remove");
 
         // Write and commit
-        let mut tx = db.begin_transaction().await;
+        let mut tx = db.begin_write_transaction().await;
         tx.insert_entry(&TestKey(1), &TestValue("hello".to_string()))
             .await;
         tx.commit_tx().await;
 
         // Remove and commit
-        let mut tx = db.begin_transaction().await;
+        let mut tx = db.begin_write_transaction().await;
         let old = tx.remove_entry(&TestKey(1)).await;
         assert_eq!(old, Some(TestValue("hello".to_string())));
         tx.commit_tx().await;

@@ -27,7 +27,7 @@ use super::{
 use crate::GatewayPublicKeyV0;
 
 async fn create_gatewayd_db_data(db: Database) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     let federation_id = FederationId::dummy();
     let invite_code = InviteCode::new(
         SafeUrl::from_str("http://myexamplefed.com").expect("SafeUrl parsing can't fail"),
@@ -152,7 +152,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     async fn create_isolated_record(prefix: Vec<u8>, db: &Database) {
         // Create an isolated database the old way where there was no prefix
         let isolated_db = db.with_prefix(prefix);
-        let mut isolated_dbtx = isolated_db.begin_transaction().await;
+        let mut isolated_dbtx = isolated_db.begin_write_transaction().await;
 
         // Insert a record into the isolated db (doesn't matter what it is)
         isolated_dbtx
@@ -174,7 +174,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             .expect("invalid federation ID");
     let _ = TracingSetup::default().init();
     let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     dbtx.insert_new_entry(
         &FederationConfigKey {
             id: conflicting_fed_id,

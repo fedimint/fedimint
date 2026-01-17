@@ -197,7 +197,7 @@ where
             data_prepare(isolated_db).await;
 
             let (active_states, inactive_states) = state_machine_prepare();
-            let mut global_dbtx = db.begin_transaction().await;
+            let mut global_dbtx = db.begin_write_transaction().await;
 
             for state in active_states {
                 global_dbtx
@@ -498,7 +498,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let federation_id = FederationId::dummy();
 
