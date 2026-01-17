@@ -52,7 +52,7 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Committable, Database, DatabaseTransaction, apply_migrations};
+use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -81,7 +81,9 @@ use fedimint_gateway_common::{
     SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
     WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
-use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
+use fedimint_gateway_server_db::{
+    GatewayDbtxNcExt as _, GatewayDbtxReadExt as _, get_gatewayd_database_migrations,
+};
 pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
@@ -561,7 +563,7 @@ impl Gateway {
         gateway_db: &Database,
         protocol: RegisteredProtocol,
     ) -> secp256k1::Keypair {
-        let mut dbtx = gateway_db.begin_transaction().await;
+        let mut dbtx = gateway_db.begin_write_transaction().await;
         let keypair = dbtx.load_or_create_gateway_keypair(protocol).await;
         dbtx.commit_tx().await;
         keypair
@@ -570,7 +572,7 @@ impl Gateway {
     /// Returns `iroh::SecretKey` and saves it to the database if it does not
     /// exist
     async fn load_or_create_iroh_key(gateway_db: &Database) -> iroh::SecretKey {
-        let mut dbtx = gateway_db.begin_transaction().await;
+        let mut dbtx = gateway_db.begin_write_transaction().await;
         let iroh_sk = dbtx.load_or_create_iroh_key().await;
         dbtx.commit_tx().await;
         iroh_sk
@@ -625,12 +627,8 @@ impl Gateway {
                 let mut interval = tokio::time::interval(BACKUP_UPDATE_INTERVAL);
                 interval.tick().await;
                 loop {
-                    {
-                        let mut dbtx = self_copy.gateway_db.begin_transaction().await;
-                        self_copy.backup_all_federations(&mut dbtx).await;
-                        dbtx.commit_tx().await;
-                        interval.tick().await;
-                    }
+                    self_copy.backup_all_federations().await;
+                    interval.tick().await;
                 }
             });
     }
@@ -638,7 +636,7 @@ impl Gateway {
     /// Loops through all federations and checks their last save backup time. If
     /// the last saved backup time is past the threshold time, backup the
     /// federation.
-    pub async fn backup_all_federations(&self, dbtx: &mut DatabaseTransaction<'_, Committable>) {
+    pub async fn backup_all_federations(&self) {
         /// How long the federation manager should wait to backup the ecash for
         /// each federation
         const BACKUP_THRESHOLD_DURATION: Duration = Duration::from_secs(24 * 60 * 60);
@@ -647,18 +645,38 @@ impl Gateway {
         let threshold = now
             .checked_sub(BACKUP_THRESHOLD_DURATION)
             .expect("Cannot be negative");
-        for (id, last_backup) in dbtx.load_backup_records().await {
-            match last_backup {
-                Some(backup_time) if backup_time < threshold => {
-                    let fed_manager = self.federation_manager.read().await;
-                    fed_manager.backup_federation(&id, dbtx, now).await;
-                }
-                None => {
-                    let fed_manager = self.federation_manager.read().await;
-                    fed_manager.backup_federation(&id, dbtx, now).await;
-                }
-                _ => {}
+
+        // Phase 1: Read which federations need backup
+        let federations_needing_backup: Vec<FederationId> = {
+            let mut dbtx = self.gateway_db.begin_read_transaction().await;
+            dbtx.load_backup_records()
+                .await
+                .into_iter()
+                .filter_map(|(id, last_backup)| match last_backup {
+                    Some(backup_time) if backup_time < threshold => Some(id),
+                    None => Some(id),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Phase 2: Perform backups without holding dbtx
+        let fed_manager = self.federation_manager.read().await;
+        let mut successful_backups = Vec::new();
+        for id in federations_needing_backup {
+            if fed_manager.backup_federation_to_remote(&id).await {
+                successful_backups.push(id);
             }
+        }
+        drop(fed_manager);
+
+        // Phase 3: Record successful backups
+        if !successful_backups.is_empty() {
+            let mut dbtx = self.gateway_db.begin_write_transaction().await;
+            for id in successful_backups {
+                dbtx.save_federation_backup_record(id, Some(now)).await;
+            }
+            dbtx.commit_tx().await;
         }
     }
 
@@ -1666,18 +1684,25 @@ impl IAdminGateway for Gateway {
         // Lock the federation manager before starting the db transaction to reduce the
         // chance of db write conflicts.
         let mut federation_manager = self.federation_manager.write().await;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let federation_info = federation_manager
-            .leave_federation(
-                payload.federation_id,
-                &mut dbtx.to_ref_nc(),
-                self.registrations.values().collect(),
-            )
+        // Phase 1: Get federation info before doing any client operations
+        let federation_info = {
+            let mut dbtx = self.gateway_db.begin_write_transaction().await;
+            federation_manager
+                .federation_info(payload.federation_id, &mut dbtx.to_ref_nc())
+                .await?
+        };
+
+        // Phase 2: Unannounce and shutdown client (no dbtx held)
+        federation_manager
+            .leave_federation(payload.federation_id, self.registrations.values().collect())
             .await?;
 
+        // Phase 3: Remove federation config from database
+        let mut dbtx = self.gateway_db.begin_write_transaction().await;
         dbtx.remove_federation_config(payload.federation_id).await;
         dbtx.commit_tx().await;
+
         Ok(federation_info)
     }
 
@@ -1795,7 +1820,7 @@ impl IAdminGateway for Gateway {
             .await,
         );
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.gateway_db.begin_write_transaction().await;
         dbtx.save_federation_config(&federation_config).await;
         dbtx.save_federation_backup_record(federation_id, None)
             .await;
@@ -1822,7 +1847,7 @@ impl IAdminGateway for Gateway {
             transaction_parts_per_million,
         }: SetFeesPayload,
     ) -> AdminResult<()> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.gateway_db.begin_write_transaction().await;
         let mut fed_configs = if let Some(fed_id) = federation_id {
             dbtx.load_federation_configs()
                 .await
@@ -1860,6 +1885,7 @@ impl IAdminGateway for Gateway {
                     .ok_or(FederationNotConnected {
                         federation_id_prefix: federation_id.to_prefix(),
                     })?;
+            // Note: client.config() is cached and does not acquire a DB lock
             let client_config = client.value().config().await;
             let contains_lnv2 = client_config
                 .modules
@@ -2564,7 +2590,7 @@ impl Gateway {
             )
             .await?;
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.gateway_db.begin_write_transaction().await;
 
         if dbtx
             .save_registered_incoming_contract(
@@ -2864,7 +2890,7 @@ impl IGatewayClientV1 for Gateway {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> std::result::Result<(), OutgoingPaymentError> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.gateway_db.begin_write_transaction().await;
         if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
             if secret_hash != preimage_auth {
                 return Err(OutgoingPaymentError {
