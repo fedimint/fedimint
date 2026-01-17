@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::SECP256K1;
@@ -211,7 +211,7 @@ impl_db_record!(
 );
 
 type DbMigration =
-    for<'a> fn(&'a RecurringInvoiceServer, DatabaseTransaction<'a>) -> BoxFuture<'a, ()>;
+    for<'a> fn(&'a RecurringInvoiceServer, WriteDatabaseTransaction<'a>) -> BoxFuture<'a, ()>;
 
 impl RecurringInvoiceServer {
     pub(crate) fn migrations() -> BTreeMap<u64, DbMigration> {
@@ -226,7 +226,7 @@ impl RecurringInvoiceServer {
 
     /// Backfill DB fix for bug that caused "holes" in invoice indices keeping
     /// the client from syncing. See <https://github.com/fedimint/fedimint/pull/7653>.
-    async fn db_migration_v1(&self, mut dbtx: DatabaseTransaction<'_>) {
+    async fn db_migration_v1(&self, mut dbtx: WriteDatabaseTransaction<'_>) {
         const BACKFILL_AMOUNT: Amount = Amount::from_msats(111111);
 
         let mut payment_codes = dbtx
@@ -289,7 +289,7 @@ impl RecurringInvoiceServer {
                 };
 
                 self.save_bolt11_invoice(
-                    &mut dbtx,
+                    &mut dbtx.as_legacy_dbtx(),
                     initial_operation_id,
                     payment_code_id,
                     missing_index,

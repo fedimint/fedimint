@@ -81,17 +81,17 @@ pub async fn run(
 
     let mut global_dbtx = db.begin_write_transaction().await;
     apply_migrations_server_dbtx(
-        &mut global_dbtx.as_legacy_dbtx(),
+        &mut global_dbtx.to_ref_nc(),
         Arc::new(ServerDbMigrationContext),
         "fedimint-server".to_string(),
         get_global_database_migrations(),
     )
     .await?;
 
-    update_server_info_version_dbtx(&mut global_dbtx.as_legacy_dbtx(), &code_version_str).await;
+    update_server_info_version_dbtx(&mut global_dbtx.to_ref_nc(), &code_version_str).await;
 
     if is_running_in_test_env() {
-        verify_server_db_integrity_dbtx(&mut global_dbtx.as_legacy_dbtx()).await;
+        verify_server_db_integrity_dbtx(&mut global_dbtx.to_ref_nc()).await;
     }
     global_dbtx.commit_tx_result().await?;
 
@@ -125,7 +125,7 @@ pub async fn run(
 
                 let mut dbtx = db.begin_write_transaction().await;
                 apply_migrations_dbtx(
-                    &mut dbtx.as_legacy_dbtx(),
+                    &mut dbtx.to_ref_nc(),
                     Arc::new(ServerDbMigrationContext) as Arc<_>,
                     module_init.module_kind().to_string(),
                     module_init.get_database_migrations(),
@@ -138,7 +138,7 @@ pub async fn run(
                     && is_running_in_test_env()
                 {
                     verify_module_db_integrity_dbtx(
-                        &mut dbtx.as_legacy_dbtx(),
+                        &mut dbtx.to_ref_nc(),
                         *module_id,
                         module_init.module_kind(),
                         &used_db_prefixes,

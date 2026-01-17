@@ -219,9 +219,9 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     create_isolated_record(conflicting_fed_id.consensus_encode_to_vec(), &db).await;
     create_isolated_record(nonconflicting_fed_id.consensus_encode_to_vec(), &db).await;
 
-    let mut migration_dbtx = db.begin_transaction().await;
+    let mut migration_dbtx = db.begin_write_transaction().await;
     migrate_federation_configs(&mut migration_dbtx.to_ref_nc()).await?;
-    migration_dbtx.commit_tx().await;
+    migration_dbtx.commit_tx_result().await?;
 
     let mut dbtx = db.begin_read_transaction().await;
 

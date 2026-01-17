@@ -2949,7 +2949,7 @@ macro_rules! push_db_key_items {
 /// different (module-typed, type erased, server/client, etc.) contexts might be
 /// needed, while the database migration logic is kind of generic over that.
 pub struct DbMigrationFnContext<'tx, C> {
-    dbtx: DatabaseTransaction<'tx>,
+    dbtx: WriteDatabaseTransaction<'tx>,
     module_instance_id: Option<ModuleInstanceId>,
     ctx: C,
     __please_use_constructor: (),
@@ -2957,7 +2957,7 @@ pub struct DbMigrationFnContext<'tx, C> {
 
 impl<'tx, C> DbMigrationFnContext<'tx, C> {
     pub fn new(
-        dbtx: DatabaseTransaction<'tx>,
+        dbtx: WriteDatabaseTransaction<'tx>,
         module_instance_id: Option<ModuleInstanceId>,
         ctx: C,
     ) -> Self {
@@ -2977,13 +2977,13 @@ impl<'tx, C> DbMigrationFnContext<'tx, C> {
 
     // TODO: this method is currently visible to the module itself, and it shouldn't
     #[doc(hidden)]
-    pub fn split_dbtx_ctx<'s>(&'s mut self) -> (&'s mut DatabaseTransaction<'tx>, &'s C) {
+    pub fn split_dbtx_ctx<'s>(&'s mut self) -> (&'s mut WriteDatabaseTransaction<'tx>, &'s C) {
         let Self { dbtx, ctx, .. } = self;
 
         (dbtx, ctx)
     }
 
-    pub fn dbtx(&'_ mut self) -> DatabaseTransaction<'_> {
+    pub fn dbtx(&'_ mut self) -> WriteDatabaseTransaction<'_> {
         if let Some(module_instance_id) = self.module_instance_id {
             self.dbtx.to_ref_with_prefix_module_id(module_instance_id).0
         } else {
@@ -3064,7 +3064,7 @@ pub async fn apply_migrations<C>(
 where
     C: Clone,
 {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     apply_migrations_dbtx(
         &mut dbtx.to_ref_nc(),
         ctx,
@@ -3091,7 +3091,7 @@ where
 /// and as long as the correct migrations are supplied in the migrations map,
 /// the module will be able to read and write from the database successfully.
 pub async fn apply_migrations_dbtx<C>(
-    global_dbtx: &mut DatabaseTransaction<'_>,
+    global_dbtx: &mut WriteDatabaseTransaction<'_>,
     ctx: C,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, DbMigrationFn<C>>,
@@ -3185,8 +3185,7 @@ pub async fn create_database_version(
     kind: String,
     is_new_db: bool,
 ) -> std::result::Result<(), anyhow::Error> {
-    let mut dbtx = db.begin_transaction().await;
-
+    let mut dbtx = db.begin_write_transaction().await;
     create_database_version_dbtx(
         &mut dbtx.to_ref_nc(),
         target_db_version,
@@ -3195,16 +3194,16 @@ pub async fn create_database_version(
         is_new_db,
     )
     .await?;
-
-    dbtx.commit_tx_result().await?;
-    Ok(())
+    dbtx.commit_tx_result()
+        .await
+        .map_err(|e| anyhow::Error::msg(e.to_string()))
 }
 
 /// Creates the `DatabaseVersion` inside the database if it does not exist. If
 /// necessary, this function will migrate the legacy database version to the
 /// expected `DatabaseVersionKey`.
 pub async fn create_database_version_dbtx(
-    global_dbtx: &mut DatabaseTransaction<'_>,
+    global_dbtx: &mut WriteDatabaseTransaction<'_>,
     target_db_version: DatabaseVersion,
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
@@ -3265,7 +3264,7 @@ pub async fn create_database_version_dbtx(
 /// exist, use `target_db_version` if the database is new. Otherwise, return
 /// `DatabaseVersion(0)` to ensure all migrations are run.
 async fn remove_current_db_version_if_exists(
-    version_dbtx: &mut DatabaseTransaction<'_>,
+    version_dbtx: &mut WriteDatabaseTransaction<'_>,
     is_new_db: bool,
     target_db_version: DatabaseVersion,
 ) -> DatabaseVersion {
@@ -4058,6 +4057,7 @@ mod test_utils {
             let key_v2 = TestKey(key.1);
             dbtx.insert_new_entry(&key_v2, &val).await;
         }
+        drop(dbtx);
         Ok(())
     }
 
@@ -4211,7 +4211,7 @@ where
 }
 
 pub async fn verify_module_db_integrity_dbtx(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut impl IDatabaseTransactionOpsCore,
     module_id: ModuleInstanceId,
     module_kind: ModuleKind,
     prefixes: &BTreeSet<u8>,

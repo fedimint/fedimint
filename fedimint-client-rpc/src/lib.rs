@@ -559,7 +559,7 @@ impl RpcGlobalState {
         let mnemonic =
             Mnemonic::parse_in_normalized(fedimint_bip39::Language::English, &all_words)?;
 
-        let mut dbtx = self.unified_database.begin_transaction().await;
+        let mut dbtx = self.unified_database.begin_write_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
             anyhow::bail!(
@@ -581,7 +581,7 @@ impl RpcGlobalState {
         let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
         let words: Vec<String> = mnemonic.words().map(|w| w.to_string()).collect();
 
-        let mut dbtx = self.unified_database.begin_transaction().await;
+        let mut dbtx = self.unified_database.begin_write_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
             anyhow::bail!(

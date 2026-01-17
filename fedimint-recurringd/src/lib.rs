@@ -185,7 +185,7 @@ impl RecurringInvoiceServer {
             },
         };
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
         if let Some(existing_code) = dbtx
             .insert_entry(
                 &PaymentCodeKey {
@@ -365,9 +365,9 @@ impl RecurringInvoiceServer {
         Ok((operation_id, federation_client.federation_id(), invoice))
     }
 
-    async fn save_bolt11_invoice(
+    async fn save_bolt11_invoice<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
         operation_id: OperationId,
         payment_code_id: PaymentCodeId,
         invoice_index: u64,
@@ -584,7 +584,7 @@ impl RecurringInvoiceServer {
             .into_iter()
             .skip_while(|(target_schema, _)| *target_schema <= schema_version)
         {
-            let mut dbtx = self.db.begin_transaction().await;
+            let mut dbtx = self.db.begin_write_transaction().await;
             dbtx.insert_entry(&SchemaVersionKey, &target_schema).await;
 
             migration_fn(self, dbtx.to_ref_nc()).await;

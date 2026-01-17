@@ -845,7 +845,7 @@ async fn migrate_to_v5(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
 }
 
 async fn migrate_federation_configs(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
 ) -> Result<(), anyhow::Error> {
     // We need to migrate all isolated database entries to be behind the 0x10
     // prefix. The problem is, if there is a `FederationId` that starts with

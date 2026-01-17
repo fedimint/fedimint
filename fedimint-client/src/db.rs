@@ -699,7 +699,7 @@ pub async fn apply_migrations_core_client_dbtx(
     kind: String,
 ) -> Result<(), anyhow::Error> {
     apply_migrations_dbtx(
-        &mut dbtx.as_legacy_dbtx(),
+        &mut dbtx.to_ref_nc(),
         (),
         kind,
         get_core_client_database_migrations(),
@@ -756,7 +756,7 @@ pub async fn apply_migrations_client_module_dbtx(
 
     // First write the database version to disk if it does not exist.
     create_database_version_dbtx(
-        &mut dbtx.as_legacy_dbtx(),
+        &mut dbtx.to_ref_nc(),
         target_version,
         Some(module_instance_id),
         kind.clone(),
