@@ -542,6 +542,11 @@ impl Database {
     }
 
     /// Begin a new committable database transaction
+    /// Begin a new committable database transaction
+    ///
+    /// **Deprecated**: Use [`Self::begin_write_transaction`] for write
+    /// operations or [`Self::begin_read_transaction`] for read-only operations.
+    #[doc(hidden)]
     pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, Committable>
     where
         's: 'tx,
@@ -554,9 +559,9 @@ impl Database {
 
     /// Begin a new non-committable database transaction
     ///
-    /// Note: This still uses a write transaction internally. For a true read
-    /// transaction that doesn't block writers, use
-    /// [`Self::begin_read_transaction`].
+    /// **Deprecated**: Use [`Self::begin_write_transaction`] for write
+    /// operations or [`Self::begin_read_transaction`] for read-only operations.
+    #[doc(hidden)]
     pub async fn begin_transaction_nc<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, NonCommittable>
     where
         's: 'tx,
@@ -654,7 +659,10 @@ impl Database {
                 .checked_add(1)
                 .expect("db autocommit attempt counter overflowed");
 
-            let mut dbtx = self.begin_transaction().await;
+            let mut dbtx = DatabaseTransaction::<Committable>::new(
+                self.inner.begin_transaction().await,
+                self.module_decoders.clone(),
+            );
 
             let tx_fn_res = tx_fn(&mut dbtx.to_ref_nc(), PhantomData).await;
             let val = match tx_fn_res {
