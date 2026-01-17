@@ -2833,13 +2833,13 @@ dependencies = [
  "fedimint-client",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-lnv2-client",
  "fedimint-logging",
  "fedimint-meta-client",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
  "fs-lock",
@@ -2971,7 +2971,7 @@ dependencies = [
  "fedimint-client-rpc",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
+ "fedimint-redb",
  "js-sys",
  "serde_json",
  "tracing",
@@ -3077,25 +3077,6 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
  "z32",
-]
-
-[[package]]
-name = "fedimint-cursed-redb"
-version = "0.11.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "fedimint-core",
- "fedimint-db-locked",
- "fedimint-logging",
- "futures",
- "gloo-utils",
- "imbl",
- "redb 2.6.0",
- "tempfile",
- "tokio",
- "tracing",
- "web-sys",
 ]
 
 [[package]]
@@ -3391,7 +3372,6 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-derive-secret",
  "fedimint-dummy-client",
  "fedimint-dummy-common",
@@ -3411,6 +3391,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-logging",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-tonic-lnd",
@@ -4199,12 +4180,15 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fedimint-core",
+ "fedimint-db-locked",
  "fedimint-logging",
  "futures",
- "redb 3.1.0",
+ "gloo-utils",
+ "redb",
  "tempfile",
  "tokio",
  "tracing",
+ "web-sys",
 ]
 
 [[package]]
@@ -4640,11 +4624,11 @@ dependencies = [
  "fedimint-client",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-derive-secret",
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-wallet-client",
  "futures",
  "gloo-net",
@@ -8905,18 +8889,9 @@ dependencies = [
 
 [[package]]
 name = "redb"
-version = "2.6.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef6a6d3a65ea334d6cdfb31fa2525c20184b7aa7bd1ad1e2e37502610d4609f"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "redb"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae323eb086579a3769daa2c753bb96deb95993c534711e0dbe881b5192906a06"
+checksum = "84b1de48a7cf7ba193e81e078d17ee2b786236eed1d3f7c60f8a09545efc4925"
 dependencies = [
  "libc",
 ]

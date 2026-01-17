@@ -423,12 +423,9 @@ impl Gateway {
                     decoders,
                 )
             }
-            DatabaseBackend::CursedRedb => {
-                debug!(target: LOG_GATEWAY, "Using CursedRedb database backend");
-                Database::new(
-                    fedimint_cursed_redb::MemAndRedb::new(db_path).await?,
-                    decoders,
-                )
+            DatabaseBackend::Redb => {
+                debug!(target: LOG_GATEWAY, "Using Redb database backend");
+                Database::new(fedimint_redb::RedbDatabase::new(db_path).await?, decoders)
             }
         };
 

@@ -1,11 +1,11 @@
 use std::io;
 
 use anyhow::{Context as _, Result};
-use redb::{Database, StorageBackend};
+use redb::StorageBackend;
 use web_sys::wasm_bindgen::JsValue;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
-use crate::MemAndRedb;
+use crate::RedbDatabase;
 
 #[derive(Debug)]
 struct WasmBackend {
@@ -87,12 +87,12 @@ impl StorageBackend for WasmBackend {
 unsafe impl Send for WasmBackend {}
 unsafe impl Sync for WasmBackend {}
 
-impl MemAndRedb {
-    pub fn new(file: FileSystemSyncAccessHandle) -> Result<Self> {
+impl RedbDatabase {
+    pub fn new_wasm(file: FileSystemSyncAccessHandle) -> Result<Self> {
         let backend = WasmBackend::new(file);
-        let db = Database::builder()
+        let db = redb::Database::builder()
             .create_with_backend(backend)
             .context("Failed to create/open redb database")?;
-        Ok(Self::new_from_redb(db)?)
+        Self::from_redb(db).map_err(|e| anyhow::anyhow!("{}", e))
     }
 }

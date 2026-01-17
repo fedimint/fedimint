@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use fedimint_client_rpc::{RpcGlobalState, RpcRequest, RpcResponse, RpcResponseHandler};
 use fedimint_core::db::Database;
-use fedimint_cursed_redb::MemAndRedb;
+use fedimint_redb::RedbDatabase;
 use wasm_bindgen::prelude::{JsError, JsValue, wasm_bindgen};
 use web_sys::FileSystemSyncAccessHandle;
 
@@ -29,8 +29,8 @@ impl RpcHandler {
     #[wasm_bindgen(constructor)]
     pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
         // Create the database directly
-        let cursed_db = MemAndRedb::new(sync_handle).unwrap();
-        let database = Database::new(cursed_db, Default::default());
+        let redb = RedbDatabase::new_wasm(sync_handle).unwrap();
+        let database = Database::new(redb, Default::default());
         let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()
             .await

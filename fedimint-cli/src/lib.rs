@@ -217,9 +217,9 @@ enum DatabaseBackend {
     /// Use RocksDB database backend
     #[value(name = "rocksdb")]
     RocksDb,
-    /// Use CursedRedb database backend (hybrid memory/redb)
-    #[value(name = "cursed-redb")]
-    CursedRedb,
+    /// Use Redb database backend
+    #[value(name = "redb", alias = "cursed-redb")]
+    Redb,
 }
 
 #[derive(Parser, Clone)]
@@ -344,11 +344,11 @@ impl Opts {
                     .map_err_cli_msg("could not open rocksdb database")?
                     .into())
             }
-            DatabaseBackend::CursedRedb => {
-                debug!(target: LOG_CLIENT, "Using CursedRedb database backend");
-                Ok(fedimint_cursed_redb::MemAndRedb::new(db_path)
+            DatabaseBackend::Redb => {
+                debug!(target: LOG_CLIENT, "Using Redb database backend");
+                Ok(fedimint_redb::RedbDatabase::new(db_path)
                     .await
-                    .map_err_cli_msg("could not open cursed redb database")?
+                    .map_err_cli_msg("could not open redb database")?
                     .into())
             }
         }

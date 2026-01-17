@@ -45,7 +45,6 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-cursed-redb = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
@@ -60,6 +59,7 @@ fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
+fedimint-redb = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }

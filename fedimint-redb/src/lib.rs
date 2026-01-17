@@ -6,21 +6,26 @@
 //! uses `begin_read_transaction` for reads and `begin_write_transaction` for
 //! writes.
 
+#[cfg(not(target_family = "wasm"))]
+mod native;
+#[cfg(target_family = "wasm")]
+mod wasm;
+
 use std::fmt::Debug;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use fedimint_core::db::{
     DatabaseError, DatabaseResult, IRawDatabase, IRawDatabaseReadTransaction,
     IRawWriteDatabaseTransaction, IReadDatabaseTransactionOps, IWriteDatabaseTransactionOps,
     PrefixStream,
 };
+use fedimint_core::{apply, async_trait_maybe_send};
 use futures::{StreamExt as _, stream};
-use redb::{ReadableDatabase, ReadableTable, TableDefinition};
+use redb::{ReadableTable, TableDefinition};
 
-const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("fedimint");
+const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("fedimint_kv");
 
 /// A redb-backed database for Fedimint server.
 #[derive(Clone)]
@@ -40,7 +45,13 @@ impl RedbDatabase {
     /// Creates the fedimint table if it doesn't exist.
     pub fn open(path: impl AsRef<Path>) -> DatabaseResult<Self> {
         let db = redb::Database::create(path).map_err(DatabaseError::backend)?;
+        Self::from_redb(db)
+    }
 
+    /// Creates a RedbDatabase from an existing redb::Database.
+    ///
+    /// Creates the fedimint table if it doesn't exist.
+    pub fn from_redb(db: redb::Database) -> DatabaseResult<Self> {
         // Create the table if it doesn't exist
         let tx = db.begin_write().map_err(DatabaseError::backend)?;
         tx.open_table(TABLE).map_err(DatabaseError::backend)?;
@@ -77,7 +88,7 @@ impl Debug for RedbWriteTransaction {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IRawDatabase for RedbDatabase {
     type WriteTransaction<'a> = RedbWriteTransaction;
     type ReadTransaction<'a> = RedbReadTransaction;
@@ -111,7 +122,7 @@ impl IRawDatabase for RedbDatabase {
 
 impl IRawDatabaseReadTransaction for RedbReadTransaction {}
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IReadDatabaseTransactionOps for RedbReadTransaction {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let entry = self
@@ -171,7 +182,7 @@ impl IReadDatabaseTransactionOps for RedbReadTransaction {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IReadDatabaseTransactionOps for RedbWriteTransaction {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let table = self.tx.open_table(TABLE).map_err(DatabaseError::backend)?;
@@ -238,7 +249,7 @@ impl IReadDatabaseTransactionOps for RedbWriteTransaction {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IWriteDatabaseTransactionOps for RedbWriteTransaction {
     async fn raw_insert_bytes(
         &mut self,
@@ -289,7 +300,7 @@ impl IWriteDatabaseTransactionOps for RedbWriteTransaction {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IRawWriteDatabaseTransaction for RedbWriteTransaction {
     async fn commit_tx(self) -> DatabaseResult<()> {
         self.tx.commit().map_err(DatabaseError::backend)

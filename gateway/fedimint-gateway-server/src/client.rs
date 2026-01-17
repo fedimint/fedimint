@@ -139,11 +139,11 @@ impl GatewayClientBuilder {
                         .map_err(AdminGatewayError::ClientCreationError)?;
                     Database::new(rocksdb, ModuleDecoderRegistry::default())
                 }
-                DatabaseBackend::CursedRedb => {
-                    let cursed_redb = fedimint_cursed_redb::MemAndRedb::new(db_path.clone())
+                DatabaseBackend::Redb => {
+                    let redb = fedimint_redb::RedbDatabase::new(db_path.clone())
                         .await
                         .map_err(AdminGatewayError::ClientCreationError)?;
-                    Database::new(cursed_redb, ModuleDecoderRegistry::default())
+                    Database::new(redb, ModuleDecoderRegistry::default())
                 }
             };
             let root_secret = RootSecret::Custom(self.client_plainrootsecret(&db).await?);

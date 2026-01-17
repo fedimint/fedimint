@@ -364,7 +364,9 @@ pub async fn run(
         .expect("Failed to migrate database from RocksDB to redb");
 
     let db = Database::new(
-        RedbDatabase::open(server_opts.data_dir.join(REDB_FILE)).unwrap(),
+        RedbDatabase::new(server_opts.data_dir.join(REDB_FILE))
+            .await
+            .expect("Failed to open redb database"),
         ModuleRegistry::default(),
     );
 

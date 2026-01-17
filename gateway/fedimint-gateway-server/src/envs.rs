@@ -35,7 +35,7 @@ pub const FM_DEBUG_GATEWAY_ENV: &str = "FM_DEBUG_GATEWAY";
 /// bitcoin node to sync to the chain.
 pub const FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV: &str = "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
 
-/// Environment variable to select database backend (rocksdb or cursed-redb)
+/// Environment variable to select database backend (rocksdb or redb)
 pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
 
 /// The username to use when connecting to a bitcoin node over RPC

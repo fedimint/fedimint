@@ -19,9 +19,9 @@ pub enum DatabaseBackend {
     /// Use RocksDB database backend
     #[value(name = "rocksdb")]
     RocksDb,
-    /// Use CursedRedb database backend (hybrid memory/redb)
-    #[value(name = "cursed-redb")]
-    CursedRedb,
+    /// Use Redb database backend
+    #[value(name = "redb", alias = "cursed-redb")]
+    Redb,
 }
 
 /// Command line parameters for starting the gateway. `mode`, `data_dir`,
