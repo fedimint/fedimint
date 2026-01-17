@@ -1167,37 +1167,29 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        let db_key = PegInTweakIndexKey(tweak_idx);
-                        let db_val = dbtx
-                            .get_value(&db_key)
-                            .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                        dbtx.insert_entry(
-                            &db_key,
-                            &PegInTweakIndexData {
-                                next_check_time: Some(fedimint_core::time::now()),
-                                ..db_val
-                            },
-                        )
-                        .await;
+        let db_key = PegInTweakIndexKey(tweak_idx);
+        let db_val = dbtx
+            .get_value(&db_key)
+            .await
+            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
 
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
+        dbtx.insert_entry(
+            &db_key,
+            &PegInTweakIndexData {
+                next_check_time: Some(fedimint_core::time::now()),
+                ..db_val
+            },
+        )
+        .await;
 
-                        Ok::<_, anyhow::Error>(())
-                    })
-                },
-                Some(100),
-            )
-            .await?;
+        let sender = self.pegin_monitor_wakeup_sender.clone();
+        dbtx.on_commit(move || {
+            sender.send_replace(());
+        });
 
+        dbtx.commit_tx().await;
         Ok(())
     }
 

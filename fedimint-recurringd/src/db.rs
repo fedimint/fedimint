@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitError, Database, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::SECP256K1;
@@ -55,34 +55,21 @@ pub async fn try_add_federation_database(
     federation_id: FederationId,
     db_prefix: FederationDbPrefix,
 ) -> Result<(), FederationDbPrefix> {
-    db.autocommit(
-        |dbtx, _| {
-            Box::pin(async move {
-                if let Some(federation_db_entry) =
-                    dbtx.get_value(&FederationClientKey { federation_id }).await
-                {
-                    return Err(federation_db_entry.db_prefix);
-                }
+    let mut dbtx = db.begin_write_transaction().await;
 
-                dbtx.insert_new_entry(
-                    &FederationClientKey { federation_id },
-                    &FederationClientEntry { db_prefix },
-                )
-                .await;
+    if let Some(federation_db_entry) = dbtx.get_value(&FederationClientKey { federation_id }).await
+    {
+        return Err(federation_db_entry.db_prefix);
+    }
 
-                Ok(())
-            })
-        },
-        None,
+    dbtx.insert_new_entry(
+        &FederationClientKey { federation_id },
+        &FederationClientEntry { db_prefix },
     )
-    .await
-    .map_err(|e| match e {
-        AutocommitError::CommitFailed { .. } => unreachable!("will keep retrying"),
-        AutocommitError::ClosureError { error, .. } => {
-            // TODO: clean up DB once parallel joins are enabled
-            error
-        }
-    })
+    .await;
+
+    dbtx.commit_tx().await;
+    Ok(())
 }
 
 pub async fn load_federation_client_databases(db: &Database) -> HashMap<FederationId, Database> {
@@ -289,7 +276,7 @@ impl RecurringInvoiceServer {
                 };
 
                 self.save_bolt11_invoice(
-                    &mut dbtx.as_legacy_dbtx(),
+                    &mut dbtx.to_ref(),
                     initial_operation_id,
                     payment_code_id,
                     missing_index,

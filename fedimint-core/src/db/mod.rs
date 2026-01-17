@@ -53,21 +53,6 @@
 //!
 //! // Commit the transaction
 //! tx.commit_tx_result().await.expect("commit failed");
-//!
-//! // For operations that may need to be retried due to conflicts, use the
-//! // `autocommit` function:
-//!
-//! db.autocommit(
-//!     |dbtx, _| {
-//!         Box::pin(async move {
-//!             dbtx.insert_entry(&TestKey(1), &TestVal(100)).await;
-//!             anyhow::Ok(())
-//!         })
-//!     },
-//!     None,
-//! )
-//! .await
-//! .unwrap();
 //! # }
 //! ```
 //!
@@ -114,15 +99,11 @@ use std::ops::{self, DerefMut, Range};
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
 use bitcoin::hex::DisplayHex as _;
-use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
-use fedimint_util_error::FmtCompact as _;
 use futures::{Stream, StreamExt};
 use macro_rules_attribute::apply;
-use rand::Rng;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -133,7 +114,7 @@ use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
-use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, timing};
+use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 
 pub mod mem_impl;
 pub mod notifications;
@@ -205,56 +186,6 @@ pub trait DatabaseValue: Sized + Debug {
 }
 
 pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, Vec<u8>)> + 'a)>>;
-
-/// Just ignore this type, it's only there to make compiler happy
-///
-/// See <https://users.rust-lang.org/t/argument-requires-that-is-borrowed-for-static/66503/2?u=yandros> for details.
-pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
-
-/// Error returned when the autocommit function fails
-#[derive(Debug, Error)]
-pub enum AutocommitError<E> {
-    /// Committing the transaction failed too many times, giving up
-    #[error("Commit Failed: {last_error}")]
-    CommitFailed {
-        /// Number of attempts
-        attempts: usize,
-        /// Last error on commit
-        last_error: DatabaseError,
-    },
-    /// Error returned by the closure provided to `autocommit`. If returned no
-    /// commit was attempted in that round
-    #[error("Closure error: {error}")]
-    ClosureError {
-        /// The attempt on which the closure returned an error
-        ///
-        /// Values other than 0 typically indicate a logic error since the
-        /// closure given to `autocommit` should not have side effects
-        /// and thus keep succeeding if it succeeded once.
-        attempts: usize,
-        /// Error returned by the closure
-        error: E,
-    },
-}
-
-pub trait AutocommitResultExt<T, E> {
-    /// Unwraps the "commit failed" error variant. Use this in cases where
-    /// autocommit is instructed to run indefinitely and commit will thus never
-    /// fail.
-    fn unwrap_autocommit(self) -> std::result::Result<T, E>;
-}
-
-impl<T, E> AutocommitResultExt<T, E> for std::result::Result<T, AutocommitError<E>> {
-    fn unwrap_autocommit(self) -> std::result::Result<T, E> {
-        match self {
-            Ok(value) => Ok(value),
-            Err(AutocommitError::CommitFailed { .. }) => {
-                panic!("`unwrap_autocommit` called on a autocommit result with finite retries");
-            }
-            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
-        }
-    }
-}
 
 /// Raw database implementation
 ///
@@ -606,109 +537,6 @@ impl Database {
 
     pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
-    }
-
-    /// Runs a closure with a reference to a database transaction and tries to
-    /// commit the transaction if the closure returns `Ok` and rolls it back
-    /// otherwise. If committing fails the closure is run for up to
-    /// `max_attempts` times. If `max_attempts` is `None` it will run
-    /// `usize::MAX` times which is close enough to infinite times.
-    ///
-    /// The closure `tx_fn` provided should not have side effects outside of the
-    /// database transaction provided, or if it does these should be
-    /// idempotent, since the closure might be run multiple times.
-    ///
-    /// # Lifetime Parameters
-    ///
-    /// The higher rank trait bound (HRTB) `'a` that is applied to the the
-    /// mutable reference to the database transaction ensures that the
-    /// reference lives as least as long as the returned future of the
-    /// closure.
-    ///
-    /// Further, the reference to self (`'s`) must outlive the
-    /// `DatabaseTransaction<'dt>`. In other words, the
-    /// `DatabaseTransaction` must live as least as long as `self` and that is
-    /// true as the `DatabaseTransaction` is only dropped at the end of the
-    /// `loop{}`.
-    ///
-    /// # Panics
-    ///
-    /// This function panics when the given number of maximum attempts is zero.
-    /// `max_attempts` must be greater or equal to one.
-    pub async fn autocommit<'s, 'dbtx, F, T, E>(
-        &'s self,
-        tx_fn: F,
-        max_attempts: Option<usize>,
-    ) -> std::result::Result<T, AutocommitError<E>>
-    where
-        's: 'dbtx,
-        for<'r, 'o> F: Fn(
-            &'r mut DatabaseTransaction<'o>,
-            PhantomBound<'dbtx, 'o>,
-        ) -> BoxFuture<'r, std::result::Result<T, E>>,
-    {
-        assert_ne!(max_attempts, Some(0));
-        let mut curr_attempts: usize = 0;
-
-        loop {
-            // The `checked_add()` function is used to catch the `usize` overflow.
-            // With `usize=32bit` and an assumed time of 1ms per iteration, this would crash
-            // after ~50 days. But if that's the case, something else must be wrong.
-            // With `usize=64bit` it would take much longer, obviously.
-            curr_attempts = curr_attempts
-                .checked_add(1)
-                .expect("db autocommit attempt counter overflowed");
-
-            let mut dbtx = DatabaseTransaction::<Committable>::new(
-                self.inner.begin_transaction().await,
-                self.module_decoders.clone(),
-            );
-
-            let tx_fn_res = tx_fn(&mut dbtx.to_ref_nc(), PhantomData).await;
-            let val = match tx_fn_res {
-                Ok(val) => val,
-                Err(err) => {
-                    dbtx.ignore_uncommitted();
-                    return Err(AutocommitError::ClosureError {
-                        attempts: curr_attempts,
-                        error: err,
-                    });
-                }
-            };
-
-            let _timing /* logs on drop */ = timing::TimeReporter::new("autocommit - commit_tx");
-
-            match dbtx.commit_tx_result().await {
-                Ok(()) => {
-                    return Ok(val);
-                }
-                Err(err) => {
-                    if max_attempts.is_some_and(|max_att| max_att <= curr_attempts) {
-                        warn!(
-                            target: LOG_DB,
-                            curr_attempts,
-                            err = %err.fmt_compact(),
-                            "Database commit failed in an autocommit block - terminating"
-                        );
-                        return Err(AutocommitError::CommitFailed {
-                            attempts: curr_attempts,
-                            last_error: err,
-                        });
-                    }
-
-                    let delay = (2u64.pow(curr_attempts.min(7) as u32) * 10).min(1000);
-                    let delay = rand::thread_rng().gen_range(delay..(2 * delay));
-                    warn!(
-                        target: LOG_DB,
-                        curr_attempts,
-                        err = %err.fmt_compact(),
-                        delay_ms = %delay,
-                        "Database commit failed in an autocommit block - retrying"
-                    );
-                    crate::runtime::sleep(Duration::from_millis(delay)).await;
-                }
-            }
-        }
     }
 
     /// Waits for key to be notified.
@@ -4049,125 +3877,6 @@ mod test_utils {
         }
         drop(dbtx);
         Ok(())
-    }
-
-    #[cfg(test)]
-    #[tokio::test]
-    async fn test_autocommit() {
-        use std::marker::PhantomData;
-        use std::ops::Range;
-        use std::path::Path;
-
-        use anyhow::anyhow;
-        use async_trait::async_trait;
-
-        use crate::ModuleDecoderRegistry;
-        use crate::db::{
-            AutocommitError, BaseDatabaseTransaction, DatabaseError, DatabaseResult,
-            IDatabaseTransaction, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-            IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
-            IRawDatabaseTransaction,
-        };
-
-        #[derive(Debug)]
-        struct FakeDatabase;
-
-        #[async_trait]
-        impl IRawDatabase for FakeDatabase {
-            type Transaction<'a> = FakeTransaction<'a>;
-            type ReadTransaction<'a> = FakeTransaction<'a>;
-
-            async fn begin_transaction(&self) -> FakeTransaction {
-                FakeTransaction(PhantomData)
-            }
-
-            async fn begin_read_transaction(&self) -> FakeTransaction {
-                FakeTransaction(PhantomData)
-            }
-
-            fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
-                Ok(())
-            }
-        }
-
-        #[derive(Debug)]
-        struct FakeTransaction<'a>(PhantomData<&'a ()>);
-
-        impl IRawDatabaseReadTransaction for FakeTransaction<'_> {}
-
-        #[async_trait]
-        impl IDatabaseTransactionOpsCore for FakeTransaction<'_> {
-            async fn raw_get_bytes(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
-            async fn raw_find_by_range(
-                &mut self,
-                _key_range: Range<&[u8]>,
-            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
-                unimplemented!()
-            }
-
-            async fn raw_find_by_prefix(
-                &mut self,
-                _key_prefix: &[u8],
-            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
-                unimplemented!()
-            }
-
-            async fn raw_find_by_prefix_sorted_descending(
-                &mut self,
-                _key_prefix: &[u8],
-            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
-                unimplemented!()
-            }
-        }
-
-        #[async_trait]
-        impl IDatabaseTransactionOpsCoreWrite for FakeTransaction<'_> {
-            async fn raw_insert_bytes(
-                &mut self,
-                _key: &[u8],
-                _value: &[u8],
-            ) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
-            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
-            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-                unimplemented!()
-            }
-        }
-
-        impl IDatabaseTransactionOps for FakeTransaction<'_> {}
-
-        #[async_trait]
-        impl IRawDatabaseTransaction for FakeTransaction<'_> {
-            async fn commit_tx(self) -> DatabaseResult<()> {
-                use crate::db::DatabaseError;
-
-                Err(DatabaseError::Other(anyhow::anyhow!("Can't commit!")))
-            }
-        }
-
-        let db = Database::new(FakeDatabase, ModuleDecoderRegistry::default());
-        let err = db
-            .autocommit::<_, _, ()>(|_dbtx, _| Box::pin(async { Ok(()) }), Some(5))
-            .await
-            .unwrap_err();
-
-        match err {
-            AutocommitError::CommitFailed {
-                attempts: failed_attempts,
-                ..
-            } => {
-                assert_eq!(failed_attempts, 5);
-            }
-            AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
-        }
     }
 }
 

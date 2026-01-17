@@ -186,40 +186,31 @@ async fn check_and_claim_idx_pegins(
         Ok(outcomes) => {
             let next_check_time = CheckOutcome::retry_delay_vec(&outcomes, due_val.creation_time)
                 .map(|duration| now + duration);
-            db
-                .autocommit(
-                    |dbtx, _| {
-                        Box::pin(async {
-                            let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
-                            let claimed_sender = pengin_claimed_sender.clone();
-                            dbtx.on_commit(move || {
-                                claimed_sender.send_replace(());
-                            });
+            let mut dbtx = db.begin_write_transaction().await;
+            let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
-                            let peg_in_tweak_index_data = PegInTweakIndexData {
-                                next_check_time,
-                                last_check_time: Some(now),
-                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
-                                ..due_val
-                            };
-                            trace!(
-                                target: LOG_CLIENT_MODULE_WALLET,
-                                tweak_idx=%due_key.0,
-                                due_in_secs=?next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
-                                data=?peg_in_tweak_index_data,
-                                "Updating"
-                            );
-                            dbtx
-                                .insert_entry(&due_key, &peg_in_tweak_index_data)
-                                .await;
+            let claimed_sender = pengin_claimed_sender.clone();
+            dbtx.on_commit(move || {
+                claimed_sender.send_replace(());
+            });
 
-                            Ok::<_, anyhow::Error>(())
-                        })
-                    },
-                    None,
-                )
-                .await?;
+            let peg_in_tweak_index_data = PegInTweakIndexData {
+                next_check_time,
+                last_check_time: Some(now),
+                claimed: [due_val.claimed.clone(), claimed_now].concat(),
+                ..due_val
+            };
+            trace!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                tweak_idx=%due_key.0,
+                due_in_secs=?next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
+                data=?peg_in_tweak_index_data,
+                "Updating"
+            );
+            dbtx.insert_entry(&due_key, &peg_in_tweak_index_data).await;
+
+            dbtx.commit_tx().await;
         }
         Err(err) => {
             debug!(target: LOG_CLIENT_MODULE_WALLET, err = %err.fmt_compact_anyhow(), tweak_idx=%due_key.0, "Error checking tweak_idx");
