@@ -16,8 +16,7 @@
 //! ```rust
 //! use fedimint_core::db::mem_impl::MemDatabase;
 //! use fedimint_core::db::{
-//!     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-//!     IReadDatabaseTransactionOpsCoreTyped,
+//!     Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
 //! };
 //! use fedimint_core::encoding::{Decodable, Encodable};
 //! use fedimint_core::impl_db_record;
@@ -470,34 +469,6 @@ impl Database {
         }
 
         Ok(())
-    }
-
-    /// Begin a new committable database transaction
-    /// Begin a new committable database transaction
-    ///
-    /// **Deprecated**: Use [`Self::begin_write_transaction`] for write
-    /// operations or [`Self::begin_read_transaction`] for read-only operations.
-    #[doc(hidden)]
-    pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, Committable>
-    where
-        's: 'tx,
-    {
-        DatabaseTransaction::<Committable>::new(
-            self.inner.begin_transaction().await,
-            self.module_decoders.clone(),
-        )
-    }
-
-    /// Begin a new non-committable database transaction
-    ///
-    /// **Deprecated**: Use [`Self::begin_write_transaction`] for write
-    /// operations or [`Self::begin_read_transaction`] for read-only operations.
-    #[doc(hidden)]
-    pub async fn begin_transaction_nc<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, NonCommittable>
-    where
-        's: 'tx,
-    {
-        self.begin_transaction().await.into_nc()
     }
 
     /// Begin a new read-only database transaction
@@ -1532,13 +1503,13 @@ impl Drop for CommitTracker {
             if self.ignore_uncommitted {
                 trace!(
                     target: LOG_DB,
-                    "DatabaseTransaction has writes and has not called commit, but that's expected."
+                    "WriteDatabaseTransaction has writes and has not called commit, but that's expected."
                 );
             } else {
                 warn!(
                     target: LOG_DB,
                     location = ?backtrace::Backtrace::new(),
-                    "DatabaseTransaction has writes and has not called commit."
+                    "WriteDatabaseTransaction has writes and has not called commit."
                 );
             }
         }
@@ -1570,12 +1541,13 @@ impl<T> ops::DerefMut for MaybeRef<'_, T> {
     }
 }
 
-/// Session type for [`DatabaseTransaction`] that is allowed to commit
+/// Session type for [`WriteDatabaseTransaction`] that is allowed to commit
 ///
 /// Opposite of [`NonCommittable`].
 pub struct Committable;
 
-/// Session type for a [`DatabaseTransaction`] that is not allowed to commit
+/// Session type for a [`WriteDatabaseTransaction`] that is not allowed to
+/// commit
 ///
 /// Opposite of [`Committable`].
 pub struct NonCommittable;
@@ -1834,27 +1806,6 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
         }
     }
 
-    /// Convert to a [`DatabaseTransaction`] for compatibility with APIs that
-    /// haven't been migrated to [`WriteDatabaseTransaction`] yet.
-    pub fn as_legacy_dbtx<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
-    where
-        's: 'a,
-    {
-        DatabaseTransaction {
-            tx: Box::new(&mut self.tx),
-            decoders: self.decoders.clone(),
-            commit_tracker: match self.commit_tracker {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            on_commit_hooks: match self.on_commit_hooks {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            capability: PhantomData,
-        }
-    }
-
     /// Get [`WriteDatabaseTransaction`] isolated to a `prefix` of `self`
     pub fn to_ref_with_prefix<'a>(
         &'a mut self,
@@ -2084,32 +2035,6 @@ where
 
 impl IDatabaseTransactionOps for WriteDatabaseTransaction<'_, Committable> {}
 
-/// A high level database transaction handle
-///
-/// `Cap` is a session type
-pub struct DatabaseTransaction<'tx, Cap = NonCommittable> {
-    tx: Box<dyn IDatabaseTransaction + 'tx>,
-    decoders: ModuleDecoderRegistry,
-    commit_tracker: MaybeRef<'tx, CommitTracker>,
-    on_commit_hooks: MaybeRef<'tx, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
-    capability: marker::PhantomData<Cap>,
-}
-
-impl<Cap> fmt::Debug for DatabaseTransaction<'_, Cap> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!(
-            "DatabaseTransaction {{ tx: {:?}, decoders={:?} }}",
-            self.tx, self.decoders
-        ))
-    }
-}
-
-impl<Cap> WithDecoders for DatabaseTransaction<'_, Cap> {
-    fn decoders(&self) -> &ModuleDecoderRegistry {
-        &self.decoders
-    }
-}
-
 #[instrument(target = LOG_DB, level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
 fn decode_value<V: DatabaseValue>(
     value_bytes: &[u8],
@@ -2155,219 +2080,6 @@ fn decode_key_expect<K: DatabaseKey>(key_bytes: &[u8], decoders: &ModuleDecoderR
     })
 }
 
-impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
-    /// Convert into a non-committable version
-    pub fn into_nc(self) -> DatabaseTransaction<'tx, NonCommittable> {
-        DatabaseTransaction {
-            tx: self.tx,
-            decoders: self.decoders,
-            commit_tracker: self.commit_tracker,
-            on_commit_hooks: self.on_commit_hooks,
-            capability: PhantomData::<NonCommittable>,
-        }
-    }
-
-    /// Get a reference to a non-committeable version
-    pub fn to_ref_nc<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
-    where
-        's: 'a,
-    {
-        self.to_ref().into_nc()
-    }
-
-    /// Get [`DatabaseTransaction`] isolated to a `prefix`
-    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> DatabaseTransaction<'a, Cap>
-    where
-        'tx: 'a,
-    {
-        DatabaseTransaction {
-            tx: Box::new(PrefixDatabaseTransaction {
-                inner: self.tx,
-                global_dbtx_access_token: None,
-                prefix,
-            }),
-            decoders: self.decoders,
-            commit_tracker: self.commit_tracker,
-            on_commit_hooks: self.on_commit_hooks,
-            capability: self.capability,
-        }
-    }
-
-    /// Get [`DatabaseTransaction`] isolated to a prefix of a given
-    /// `module_instance_id`, allowing the module to access global_dbtx
-    /// with the right access token.
-    pub fn with_prefix_module_id<'a: 'tx>(
-        self,
-        module_instance_id: ModuleInstanceId,
-    ) -> (DatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
-    where
-        'tx: 'a,
-    {
-        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
-        (
-            DatabaseTransaction {
-                tx: Box::new(PrefixDatabaseTransaction {
-                    inner: self.tx,
-                    global_dbtx_access_token: Some(global_dbtx_access_token),
-                    prefix,
-                }),
-                decoders: self.decoders,
-                commit_tracker: self.commit_tracker,
-                on_commit_hooks: self.on_commit_hooks,
-                capability: self.capability,
-            },
-            global_dbtx_access_token,
-        )
-    }
-
-    /// Get [`DatabaseTransaction`] to `self`
-    pub fn to_ref<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, Cap>
-    where
-        's: 'a,
-    {
-        let decoders = self.decoders.clone();
-
-        DatabaseTransaction {
-            tx: Box::new(&mut self.tx),
-            decoders,
-            commit_tracker: match self.commit_tracker {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            on_commit_hooks: match self.on_commit_hooks {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            capability: self.capability,
-        }
-    }
-
-    /// Get [`DatabaseTransaction`] isolated to a `prefix` of `self`
-    pub fn to_ref_with_prefix<'a>(&'a mut self, prefix: Vec<u8>) -> DatabaseTransaction<'a, Cap>
-    where
-        'tx: 'a,
-    {
-        DatabaseTransaction {
-            tx: Box::new(PrefixDatabaseTransaction {
-                inner: &mut self.tx,
-                global_dbtx_access_token: None,
-                prefix,
-            }),
-            decoders: self.decoders.clone(),
-            commit_tracker: match self.commit_tracker {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            on_commit_hooks: match self.on_commit_hooks {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            capability: self.capability,
-        }
-    }
-
-    pub fn to_ref_with_prefix_module_id<'a>(
-        &'a mut self,
-        module_instance_id: ModuleInstanceId,
-    ) -> (DatabaseTransaction<'a, Cap>, GlobalDBTxAccessToken)
-    where
-        'tx: 'a,
-    {
-        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
-        (
-            DatabaseTransaction {
-                tx: Box::new(PrefixDatabaseTransaction {
-                    inner: &mut self.tx,
-                    global_dbtx_access_token: Some(global_dbtx_access_token),
-                    prefix,
-                }),
-                decoders: self.decoders.clone(),
-                commit_tracker: match self.commit_tracker {
-                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-                },
-                on_commit_hooks: match self.on_commit_hooks {
-                    MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                    MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-                },
-                capability: self.capability,
-            },
-            global_dbtx_access_token,
-        )
-    }
-
-    /// Is this `Database` a global, unpartitioned `Database`
-    pub fn is_global(&self) -> bool {
-        self.tx.is_global()
-    }
-
-    /// `Err` if [`Self::is_global`] is not true
-    pub fn ensure_global(&self) -> DatabaseResult<()> {
-        if !self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not global"
-            )));
-        }
-
-        Ok(())
-    }
-
-    /// `Err` if [`Self::is_global`] is true
-    pub fn ensure_isolated(&self) -> DatabaseResult<()> {
-        if self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not isolated"
-            )));
-        }
-
-        Ok(())
-    }
-
-    /// Cancel the tx to avoid debugging warnings about uncommitted writes
-    pub fn ignore_uncommitted(&mut self) -> &mut Self {
-        self.commit_tracker.ignore_uncommitted = true;
-        self
-    }
-
-    /// Create warnings about uncommitted writes
-    pub fn warn_uncommitted(&mut self) -> &mut Self {
-        self.commit_tracker.ignore_uncommitted = false;
-        self
-    }
-
-    /// Register a hook that will be run after commit succeeds.
-    #[instrument(target = LOG_DB, level = "trace", skip_all)]
-    pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
-        self.on_commit_hooks.push(Box::new(f));
-    }
-
-    pub fn global_dbtx<'a>(
-        &'a mut self,
-        access_token: GlobalDBTxAccessToken,
-    ) -> DatabaseTransaction<'a, Cap>
-    where
-        'tx: 'a,
-    {
-        let decoders = self.decoders.clone();
-
-        DatabaseTransaction {
-            tx: Box::new(self.tx.global_dbtx(access_token)),
-            decoders,
-            commit_tracker: match self.commit_tracker {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            on_commit_hooks: match self.on_commit_hooks {
-                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
-                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
-            },
-            capability: self.capability,
-        }
-    }
-}
-
 /// Code used to access `global_dbtx`
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GlobalDBTxAccessToken(u32);
@@ -2387,99 +2099,6 @@ impl GlobalDBTxAccessToken {
         Self(prefix.iter().fold(0, |acc, b| acc + u32::from(*b)) + 513)
     }
 }
-
-impl<'tx> DatabaseTransaction<'tx, Committable> {
-    pub fn new(dbtx: Box<dyn IDatabaseTransaction + 'tx>, decoders: ModuleDecoderRegistry) -> Self {
-        Self {
-            tx: dbtx,
-            decoders,
-            commit_tracker: MaybeRef::Owned(CommitTracker {
-                is_committed: false,
-                has_writes: false,
-                ignore_uncommitted: false,
-            }),
-            on_commit_hooks: MaybeRef::Owned(vec![]),
-            capability: PhantomData,
-        }
-    }
-
-    pub async fn commit_tx_result(mut self) -> DatabaseResult<()> {
-        self.commit_tracker.is_committed = true;
-        let commit_result = self.tx.commit_tx().await;
-
-        // Run commit hooks in case commit was successful
-        if commit_result.is_ok() {
-            for hook in self.on_commit_hooks.deref_mut().drain(..) {
-                hook();
-            }
-        }
-
-        commit_result
-    }
-
-    pub async fn commit_tx(mut self) {
-        self.commit_tracker.is_committed = true;
-        self.commit_tx_result()
-            .await
-            .expect("Unrecoverable error occurred while committing to the database.");
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
-where
-    Cap: Send,
-{
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.tx.raw_get_bytes(key).await
-    }
-
-    async fn raw_find_by_range(
-        &mut self,
-        key_range: Range<&[u8]>,
-    ) -> DatabaseResult<PrefixStream<'_>> {
-        self.tx.raw_find_by_range(key_range).await
-    }
-
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
-        self.tx.raw_find_by_prefix(key_prefix).await
-    }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> DatabaseResult<PrefixStream<'_>> {
-        self.tx
-            .raw_find_by_prefix_sorted_descending(key_prefix)
-            .await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<Cap> IDatabaseTransactionOpsCoreWrite for DatabaseTransaction<'_, Cap>
-where
-    Cap: Send,
-{
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        self.commit_tracker.has_writes = true;
-        self.tx.raw_insert_bytes(key, value).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.tx.raw_remove_entry(key).await
-    }
-
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
-        self.commit_tracker.has_writes = true;
-        self.tx.raw_remove_by_prefix(key_prefix).await
-    }
-}
-
-impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {}
 
 impl<T> DatabaseKeyPrefix for T
 where
@@ -3137,8 +2756,8 @@ mod test_utils {
     use tokio::join;
 
     use super::{
-        Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
-        DbMigrationFn, apply_migrations,
+        Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0, DbMigrationFn,
+        apply_migrations,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;

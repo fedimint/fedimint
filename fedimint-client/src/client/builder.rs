@@ -236,7 +236,7 @@ impl ClientBuilder {
                 && is_running_in_test_env()
             {
                 verify_module_db_integrity_dbtx(
-                    &mut dbtx.as_legacy_dbtx(),
+                    &mut dbtx.to_ref_nc(),
                     *module_id,
                     kind,
                     &used_db_prefixes,

@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -85,7 +85,7 @@ impl_db_record!(
 /// removing `DummyClientFundsKeyV0` and inserting `DummyClientFundsKeyV1`.
 /// The new key/value pair has an `Amount` as the value.
 pub async fn migrate_to_v1(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
 ) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
     if dbtx.remove_entry(&DummyClientFundsKeyV0).await.is_some() {
         // Since this is a dummy migration, we can insert any value for the client
