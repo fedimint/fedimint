@@ -32,6 +32,7 @@ use fedimint_server::consensus::db::{
 use fedimint_server::core::ServerModule;
 use fedimint_server::db::DbKeyPrefix;
 use fedimint_server::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
+use fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix;
 use fedimint_testing_core::db::{
     BYTE_32, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_with_decoders,
     validate_migrations_global,
@@ -223,6 +224,14 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                             .await;
 
                         assert_eq!(announcements.len(), 1);
+                    }
+                    DbKeyPrefix::GuardianMetadata => {
+                        // Guardian metadata is optional, just verify we can query it
+                        let _metadata = dbtx
+                            .find_by_prefix(&GuardianMetadataPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
                     }
                 }
             }
