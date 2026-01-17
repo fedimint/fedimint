@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
-use fedimint_core::db::{DatabaseTransaction, NonCommittable, WriteDatabaseTransaction};
+use fedimint_core::db::{NonCommittable, ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
@@ -237,7 +237,7 @@ impl FederationManager {
 
     pub async fn federation_info_all_federations(
         &self,
-        mut dbtx: DatabaseTransaction<'_, NonCommittable>,
+        mut dbtx: ReadDatabaseTransaction<'_>,
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {

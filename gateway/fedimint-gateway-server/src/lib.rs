@@ -52,7 +52,7 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
+use fedimint_core::db::{Database, ReadDatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -82,7 +82,7 @@ use fedimint_gateway_common::{
     WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{
-    GatewayDbtxNcExt as _, GatewayDbtxReadExt as _, get_gatewayd_database_migrations,
+    GatewayDbtxNcExt as _, GatewayDbtxReadExt, get_gatewayd_database_migrations,
 };
 pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
@@ -591,7 +591,7 @@ impl Gateway {
     /// Reads and serializes structures from the Gateway's database for the
     /// purpose for serializing to JSON for inspection.
     pub async fn dump_database(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> {
         dbtx.dump_database(prefix_names).await
@@ -649,7 +649,7 @@ impl Gateway {
         // Phase 1: Read which federations need backup
         let federations_needing_backup: Vec<FederationId> = {
             let mut dbtx = self.gateway_db.begin_read_transaction().await;
-            dbtx.load_backup_records()
+            GatewayDbtxReadExt::load_backup_records(&mut dbtx)
                 .await
                 .into_iter()
                 .filter_map(|(id, last_backup)| match last_backup {
@@ -788,7 +788,7 @@ impl Gateway {
         if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             // Re-register the gateway with all federations after connecting to the
             // lightning node
-            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            let mut dbtx = self.gateway_db.begin_read_transaction().await;
             let all_federations_configs =
                 dbtx.load_federation_configs().await.into_iter().collect();
             self.register_federations(&all_federations_configs, &self.task_group)
@@ -1367,7 +1367,7 @@ impl Gateway {
         let mut federation_manager = self.federation_manager.write().await;
 
         let configs = {
-            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            let mut dbtx = self.gateway_db.begin_read_transaction().await;
             dbtx.load_federation_configs().await
         };
 
@@ -1411,7 +1411,7 @@ impl Gateway {
                 loop {
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
-                        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+                        let mut dbtx = gateway.gateway_db.begin_read_transaction().await;
                         let all_federations_configs = dbtx.load_federation_configs().await.into_iter().collect();
                         gateway.register_federations(&all_federations_configs, &register_task_group).await;
                     } else {
@@ -1586,7 +1586,7 @@ impl IAdminGateway for Gateway {
             });
         };
 
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let dbtx = self.gateway_db.begin_read_transaction().await;
         let federations = self
             .federation_manager
             .read()
@@ -1985,7 +1985,7 @@ impl IAdminGateway for Gateway {
     /// Returns the ecash, lightning, and onchain balances for the gateway and
     /// the gateway's lightning node.
     async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let dbtx = self.gateway_db.begin_read_transaction().await;
         let federation_infos = self
             .federation_manager
             .read()
@@ -2398,7 +2398,7 @@ impl IAdminGateway for Gateway {
         let end_position = if let Some(position) = end_position {
             position
         } else {
-            let mut dbtx = client.db().begin_transaction_nc().await;
+            let mut dbtx = client.db().begin_read_transaction().await;
             dbtx.get_next_event_log_id().await
         };
 
@@ -2479,7 +2479,7 @@ impl Gateway {
     ) -> Result<Option<RoutingInfo>> {
         let context = self.get_lightning_context().await?;
 
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let mut dbtx = self.gateway_db.begin_read_transaction().await;
         let fed_config = dbtx.load_federation_config(*federation_id).await.ok_or(
             PublicGatewayError::FederationNotConnected(FederationNotConnected {
                 federation_id_prefix: federation_id.to_prefix(),
@@ -2663,7 +2663,7 @@ impl Gateway {
     ) -> std::result::Result<VerifyResponse, String> {
         let registered_contract = self
             .gateway_db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .load_registered_incoming_contract(PaymentImage::Hash(payment_hash))
             .await
@@ -2715,7 +2715,7 @@ impl Gateway {
     ) -> Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
             .gateway_db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .load_registered_incoming_contract(payment_image)
             .await
@@ -2931,7 +2931,7 @@ impl IGatewayClientV1 for Gateway {
     }
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {
-        let mut gateway_dbtx = self.gateway_db.begin_transaction_nc().await;
+        let mut gateway_dbtx = self.gateway_db.begin_read_transaction().await;
         gateway_dbtx
             .load_federation_config(federation_id)
             .await

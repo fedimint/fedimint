@@ -90,7 +90,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
     let _ = TracingSetup::default().init();
     validate_migrations_global(
         |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -213,7 +213,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     migrate_federation_configs(&mut migration_dbtx.to_ref_nc()).await?;
     migration_dbtx.commit_tx().await;
 
-    let mut dbtx = db.begin_transaction_nc().await;
+    let mut dbtx = db.begin_read_transaction().await;
 
     let num_configs = dbtx
         .find_by_prefix(&FederationConfigKeyPrefix)
@@ -225,11 +225,11 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
 
     // Verify that the client databases migrated successfully.
     let isolated_db = db.get_client_database(&conflicting_fed_id);
-    let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+    let mut isolated_dbtx = isolated_db.begin_read_transaction().await;
     assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
 
     let isolated_db = db.get_client_database(&nonconflicting_fed_id);
-    let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+    let mut isolated_dbtx = isolated_db.begin_read_transaction().await;
     assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
 
     Ok(())

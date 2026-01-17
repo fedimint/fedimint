@@ -3493,7 +3493,7 @@ mod test_utils {
         dbtx.commit_tx().await;
 
         // Verify finding by prefix returns the correct set of key pairs
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
 
         let returned_keys = dbtx
             .find_by_range(TestKey(55)..TestKey(56))
@@ -3670,8 +3670,14 @@ mod test_utils {
             let s_after = read_dbtx.get_value(&TestKey(spent_input_key)).await;
 
             // Snapshot isolation: read tx should still see None
-            assert_eq!(a_after, None, "snapshot isolation violated for tx_accepted_key at iteration {i}");
-            assert_eq!(s_after, None, "snapshot isolation violated for spent_input_key at iteration {i}");
+            assert_eq!(
+                a_after, None,
+                "snapshot isolation violated for tx_accepted_key at iteration {i}"
+            );
+            assert_eq!(
+                s_after, None,
+                "snapshot isolation violated for spent_input_key at iteration {i}"
+            );
 
             // A new read transaction should see the committed values
             drop(read_dbtx);

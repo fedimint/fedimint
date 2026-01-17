@@ -179,7 +179,7 @@ impl GatewayClientBuilder {
     /// Verifies that the saved `ClientConfig` contains the expected
     /// federation's config.
     async fn verify_client_config(db: &Database, federation_id: FederationId) -> AdminResult<()> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         if let Some(config) = dbtx.get_value(&ClientConfigKey).await
             && config.calculate_federation_id() != federation_id
         {

@@ -1,3 +1,5 @@
+#![allow(clippy::significant_drop_tightening)]
+
 use tokio::sync::oneshot;
 
 use super::mem_impl::MemDatabase;
@@ -165,7 +167,10 @@ async fn test_prefix_global_dbtx() {
     }
 
     assert_eq!(
-        db.begin_transaction_nc().await.get_value(&TestKey(1)).await,
+        db.begin_read_transaction()
+            .await
+            .get_value(&TestKey(1))
+            .await,
         Some(TestVal(1))
     );
 
@@ -182,7 +187,10 @@ async fn test_prefix_global_dbtx() {
     }
 
     assert_eq!(
-        db.begin_transaction_nc().await.get_value(&TestKey(2)).await,
+        db.begin_read_transaction()
+            .await
+            .get_value(&TestKey(2))
+            .await,
         Some(TestVal(2))
     );
 }

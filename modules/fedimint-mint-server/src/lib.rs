@@ -16,9 +16,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
-    ReadDatabaseTransaction, WriteDatabaseTransaction,
+    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -81,7 +80,7 @@ impl ModuleInit for MintInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

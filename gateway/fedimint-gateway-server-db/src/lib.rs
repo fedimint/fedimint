@@ -476,6 +476,139 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
     }
 }
 
+impl GatewayDbtxNcExt for ReadDatabaseTransaction<'_> {
+    async fn save_federation_config(&mut self, _config: &FederationConfig) {
+        panic!("Cannot save federation config with a read-only transaction");
+    }
+
+    async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0> {
+        self.find_by_prefix(&FederationConfigKeyPrefixV0)
+            .await
+            .map(|(key, config): (FederationConfigKeyV0, FederationConfigV0)| (key.id, config))
+            .collect::<BTreeMap<FederationId, FederationConfigV0>>()
+            .await
+    }
+
+    async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig> {
+        self.find_by_prefix(&FederationConfigKeyPrefix)
+            .await
+            .map(|(key, config): (FederationConfigKey, FederationConfig)| (key.id, config))
+            .collect::<BTreeMap<FederationId, FederationConfig>>()
+            .await
+    }
+
+    async fn load_federation_config(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<FederationConfig> {
+        self.get_value(&FederationConfigKey { id: federation_id })
+            .await
+    }
+
+    async fn remove_federation_config(&mut self, _federation_id: FederationId) {
+        panic!("Cannot remove federation config with a read-only transaction");
+    }
+
+    async fn load_or_create_gateway_keypair(&mut self, _protocol: RegisteredProtocol) -> Keypair {
+        panic!("Cannot create gateway keypair with a read-only transaction");
+    }
+
+    async fn save_new_preimage_authentication(
+        &mut self,
+        _payment_hash: sha256::Hash,
+        _preimage_auth: sha256::Hash,
+    ) {
+        panic!("Cannot save preimage authentication with a read-only transaction");
+    }
+
+    async fn load_preimage_authentication(
+        &mut self,
+        payment_hash: sha256::Hash,
+    ) -> Option<sha256::Hash> {
+        self.get_value(&PreimageAuthentication { payment_hash })
+            .await
+    }
+
+    async fn save_registered_incoming_contract(
+        &mut self,
+        _federation_id: FederationId,
+        _incoming_amount: Amount,
+        _contract: IncomingContract,
+    ) -> Option<RegisteredIncomingContract> {
+        panic!("Cannot save registered incoming contract with a read-only transaction");
+    }
+
+    async fn load_registered_incoming_contract(
+        &mut self,
+        payment_image: PaymentImage,
+    ) -> Option<RegisteredIncomingContract> {
+        self.get_value(&RegisteredIncomingContractKey(payment_image))
+            .await
+    }
+
+    async fn dump_database(
+        &mut self,
+        prefix_names: Vec<String>,
+    ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> {
+        let mut gateway_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::FederationConfig => {
+                    push_db_pair_items!(
+                        self,
+                        FederationConfigKeyPrefix,
+                        FederationConfigKey,
+                        FederationConfig,
+                        gateway_items,
+                        "Federation Config"
+                    );
+                }
+                DbKeyPrefix::GatewayPublicKey => {
+                    push_db_pair_items!(
+                        self,
+                        GatewayPublicKeyPrefix,
+                        GatewayPublicKey,
+                        Keypair,
+                        gateway_items,
+                        "Gateway Public Keys"
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        gateway_items
+    }
+
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
+        panic!("Cannot create iroh key with a read-only transaction");
+    }
+
+    async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>> {
+        GatewayDbtxReadExt::load_backup_records(self).await
+    }
+
+    async fn load_backup_record(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<Option<SystemTime>> {
+        self.get_value(&FederationBackupKey { federation_id }).await
+    }
+
+    async fn save_federation_backup_record(
+        &mut self,
+        _federation_id: FederationId,
+        _backup_time: Option<SystemTime>,
+    ) {
+        panic!("Cannot save federation backup record with a read-only transaction");
+    }
+}
+
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 enum DbKeyPrefix {

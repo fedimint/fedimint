@@ -10,7 +10,7 @@ use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client_module::sm::Context;
 use fedimint_core::core::{Decoder, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, ReadDatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseVersion, ReadDatabaseTransaction};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
@@ -94,7 +94,7 @@ impl ModuleInit for EmptyClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

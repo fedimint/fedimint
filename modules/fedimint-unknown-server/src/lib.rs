@@ -11,9 +11,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, ReadDatabaseTransaction, WriteDatabaseTransaction,
-};
+use fedimint_core::db::{DatabaseVersion, ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -46,7 +44,7 @@ impl ModuleInit for UnknownInit {
     /// Dumps all database items for debugging
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(vec![].into_iter())
