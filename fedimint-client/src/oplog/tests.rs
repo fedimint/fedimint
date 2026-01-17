@@ -5,7 +5,7 @@ use fedimint_client_module::oplog::{JsonStringed, OperationOutcome, UpdateStream
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt, WriteDatabaseTransaction,
+    Database, IRawDatabaseExt, IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use futures::stream::StreamExt;

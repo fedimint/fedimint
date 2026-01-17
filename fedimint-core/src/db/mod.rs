@@ -16,7 +16,7 @@
 //! ```rust
 //! use fedimint_core::db::mem_impl::MemDatabase;
 //! use fedimint_core::db::{
-//!     Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+//!     Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
 //! };
 //! use fedimint_core::encoding::{Decodable, Encodable};
 //! use fedimint_core::impl_db_record;
@@ -188,7 +188,7 @@ pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, 
 
 /// Raw database implementation
 ///
-/// This and [`IRawDatabaseTransaction`] are meant to be implemented
+/// This and [`IRawWriteDatabaseTransaction`] are meant to be implemented
 /// by crates like `fedimint-rocksdb` to provide a concrete implementation
 /// of a database to be used by Fedimint.
 ///
@@ -196,14 +196,14 @@ pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, 
 /// functionality that Fedimint needs (and adds) on top of it.
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
-    /// A raw database transaction type
-    type Transaction<'a>: IRawDatabaseTransaction + Debug;
+    /// A raw write database transaction type
+    type WriteTransaction<'a>: IRawWriteDatabaseTransaction + Debug;
 
     /// A raw read-only database transaction type
     type ReadTransaction<'a>: IRawDatabaseReadTransaction + Debug;
 
-    /// Start a database transaction
-    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
+    /// Start a write database transaction
+    async fn begin_write_transaction<'a>(&'a self) -> Self::WriteTransaction<'a>;
 
     /// Start a read-only database transaction
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a>;
@@ -217,11 +217,11 @@ impl<T> IRawDatabase for Box<T>
 where
     T: IRawDatabase,
 {
-    type Transaction<'a> = <T as IRawDatabase>::Transaction<'a>;
+    type WriteTransaction<'a> = <T as IRawDatabase>::WriteTransaction<'a>;
     type ReadTransaction<'a> = <T as IRawDatabase>::ReadTransaction<'a>;
 
-    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
-        (**self).begin_transaction().await
+    async fn begin_write_transaction<'a>(&'a self) -> Self::WriteTransaction<'a> {
+        (**self).begin_write_transaction().await
     }
 
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
@@ -258,8 +258,8 @@ where
 /// key notification system.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
-    /// Start a database transaction
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
+    /// Start a write database transaction
+    async fn begin_write_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
     /// Start a read-only database transaction
     async fn begin_read_transaction<'a>(
         &'a self,
@@ -282,8 +282,8 @@ impl<T> IDatabase for Arc<T>
 where
     T: IDatabase + ?Sized,
 {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
-        (**self).begin_transaction().await
+    async fn begin_write_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+        (**self).begin_write_transaction().await
     }
     async fn begin_read_transaction<'a>(
         &'a self,
@@ -322,9 +322,9 @@ impl<RawDatabase> fmt::Debug for BaseDatabase<RawDatabase> {
 
 #[apply(async_trait_maybe_send!)]
 impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase<RawDatabase> {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+    async fn begin_write_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         Box::new(BaseDatabaseTransaction::new(
-            self.raw.begin_transaction().await,
+            self.raw.begin_write_transaction().await,
             self.notifications.clone(),
         ))
     }
@@ -500,7 +500,7 @@ impl Database {
             .await
             .expect("semaphore is never closed");
         WriteDatabaseTransaction::<Committable>::new(
-            self.inner.begin_transaction().await,
+            self.inner.begin_write_transaction().await,
             self.module_decoders.clone(),
             permit,
         )
@@ -595,9 +595,9 @@ impl<Inner> IDatabase for PrefixDatabase<Inner>
 where
     Inner: Debug + MaybeSend + MaybeSync + 'static + IDatabase,
 {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+    async fn begin_write_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         Box::new(PrefixDatabaseTransaction {
-            inner: self.inner.begin_transaction().await,
+            inner: self.inner.begin_write_transaction().await,
             global_dbtx_access_token: self.global_dbtx_access_token,
             prefix: self.prefix.clone(),
         })
@@ -666,9 +666,9 @@ impl<Inner> PrefixReadTransaction<Inner> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Inner> IDatabaseTransactionOpsCore for PrefixReadTransaction<Inner>
+impl<Inner> IReadDatabaseTransactionOps for PrefixReadTransaction<Inner>
 where
-    Inner: IDatabaseTransactionOpsCore + MaybeSend,
+    Inner: IReadDatabaseTransactionOps + MaybeSend,
 {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
@@ -704,7 +704,7 @@ where
 }
 
 impl<Inner> IRawDatabaseReadTransaction for PrefixReadTransaction<Inner> where
-    Inner: IDatabaseTransactionOpsCore + MaybeSend + Debug
+    Inner: IReadDatabaseTransactionOps + MaybeSend + Debug
 {
 }
 
@@ -775,9 +775,9 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
+impl<Inner> IReadDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
 where
-    Inner: IDatabaseTransactionOpsCore,
+    Inner: IReadDatabaseTransactionOps,
 {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
@@ -816,9 +816,9 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Inner> IDatabaseTransactionOpsCoreWrite for PrefixDatabaseTransaction<Inner>
+impl<Inner> IWriteDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
 where
-    Inner: IDatabaseTransactionOpsCoreWrite,
+    Inner: IWriteDatabaseTransactionOps,
 {
     async fn raw_insert_bytes(
         &mut self,
@@ -840,18 +840,13 @@ where
     }
 }
 
-impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner> where
-    Inner: IDatabaseTransactionOps
-{
-}
-
 /// Core raw read operations database transactions supports
 ///
 /// Used to enforce the same signature on all types supporting it.
 /// This trait contains only read operations. Write operations are in
-/// [`IDatabaseTransactionOpsCoreWrite`].
+/// [`IWriteDatabaseTransactionOps`].
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOpsCore: MaybeSend {
+pub trait IReadDatabaseTransactionOps: MaybeSend {
     /// Get key value
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
@@ -873,11 +868,11 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
 
 /// Write operations for database transactions
 ///
-/// This trait extends [`IDatabaseTransactionOpsCore`] with write operations.
+/// This trait extends [`IReadDatabaseTransactionOps`] with write operations.
 /// It exists to support databases that distinguish between read-only and
 /// read-write transactions (like redb).
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOpsCoreWrite: IDatabaseTransactionOpsCore {
+pub trait IWriteDatabaseTransactionOps: IReadDatabaseTransactionOps {
     /// Insert entry
     async fn raw_insert_bytes(
         &mut self,
@@ -897,16 +892,16 @@ pub trait IDatabaseTransactionOpsCoreWrite: IDatabaseTransactionOpsCore {
 /// Implemented by transaction types that only support read operations.
 /// This allows databases like redb to use true read transactions that
 /// don't block writers.
-pub trait IRawDatabaseReadTransaction: IDatabaseTransactionOpsCore + MaybeSend + Debug {}
+pub trait IRawDatabaseReadTransaction: IReadDatabaseTransactionOps + MaybeSend + Debug {}
 
 impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for Box<T> {}
 
 impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for &mut T {}
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCore for Box<T>
+impl<T> IReadDatabaseTransactionOps for Box<T>
 where
-    T: IDatabaseTransactionOpsCore + ?Sized,
+    T: IReadDatabaseTransactionOps + ?Sized,
 {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
@@ -931,9 +926,9 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCoreWrite for Box<T>
+impl<T> IWriteDatabaseTransactionOps for Box<T>
 where
-    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+    T: IWriteDatabaseTransactionOps + ?Sized,
 {
     async fn raw_insert_bytes(
         &mut self,
@@ -953,9 +948,9 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCore for &mut T
+impl<T> IReadDatabaseTransactionOps for &mut T
 where
-    T: IDatabaseTransactionOpsCore + ?Sized,
+    T: IReadDatabaseTransactionOps + ?Sized,
 {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
@@ -980,9 +975,9 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCoreWrite for &mut T
+impl<T> IWriteDatabaseTransactionOps for &mut T
 where
-    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+    T: IWriteDatabaseTransactionOps + ?Sized,
 {
     async fn raw_insert_bytes(
         &mut self,
@@ -1000,17 +995,6 @@ where
         (**self).raw_remove_by_prefix(key_prefix).await
     }
 }
-
-/// Additional operations (only some) database transactions expose, on top of
-/// [`IDatabaseTransactionOpsCoreWrite`]
-///
-/// In certain contexts exposing these operations would be a problem, so they
-/// are moved to a separate trait.
-pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCoreWrite + MaybeSend {}
-
-impl<T> IDatabaseTransactionOps for Box<T> where T: IDatabaseTransactionOps + ?Sized {}
-
-impl<T> IDatabaseTransactionOps for &mut T where T: IDatabaseTransactionOps + ?Sized {}
 
 /// Read-only typed database operations
 ///
@@ -1019,7 +1003,7 @@ impl<T> IDatabaseTransactionOps for &mut T where T: IDatabaseTransactionOps + ?S
 /// only need to read from the database should use this trait bound to accept
 /// both transaction types.
 #[apply(async_trait_maybe_send!)]
-pub trait IReadDatabaseTransactionOpsCoreTyped<'a> {
+pub trait IReadDatabaseTransactionOpsTyped<'a> {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
@@ -1071,16 +1055,16 @@ pub trait IReadDatabaseTransactionOpsCoreTyped<'a> {
         KP::Record: DatabaseKey;
 }
 
-/// Like [`IDatabaseTransactionOpsCore`], but typed
+/// Like [`IReadDatabaseTransactionOps`], but typed
 ///
 /// Implemented via blanket impl for everything that implements
-/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
+/// [`IReadDatabaseTransactionOps`] that has decoders (implements
 /// [`WithDecoders`]).
 ///
-/// This trait extends [`IReadDatabaseTransactionOpsCoreTyped`] with write
+/// This trait extends [`IReadDatabaseTransactionOpsTyped`] with write
 /// operations.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOpsCoreTyped<'a>: IReadDatabaseTransactionOpsCoreTyped<'a> {
+pub trait IWriteDatabaseTransactionOpsTyped<'a>: IReadDatabaseTransactionOpsTyped<'a> {
     async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
@@ -1103,9 +1087,9 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a>: IReadDatabaseTransactionOpsCoreT
 // blanket implementation of read-only typed ops for anything that implements
 // raw ops and has decoders
 #[apply(async_trait_maybe_send!)]
-impl<T> IReadDatabaseTransactionOpsCoreTyped<'_> for T
+impl<T> IReadDatabaseTransactionOpsTyped<'_> for T
 where
-    T: IDatabaseTransactionOpsCore + WithDecoders,
+    T: IReadDatabaseTransactionOps + WithDecoders,
 {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1213,9 +1197,9 @@ where
 // blanket implementation of write typed ops for anything that implements raw
 // ops (including write), has decoders, and implements the read trait
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
+impl<T> IWriteDatabaseTransactionOpsTyped<'_> for T
 where
-    T: IDatabaseTransactionOpsCore + IDatabaseTransactionOpsCoreWrite + WithDecoders,
+    T: IReadDatabaseTransactionOps + IWriteDatabaseTransactionOps + WithDecoders,
 {
     async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
@@ -1267,14 +1251,14 @@ where
 }
 
 /// A database type that has decoders, which allows it to implement
-/// [`IDatabaseTransactionOpsCoreTyped`]
+/// [`IWriteDatabaseTransactionOpsTyped`]
 pub trait WithDecoders {
     fn decoders(&self) -> &ModuleDecoderRegistry;
 }
 
 /// Raw database transaction (e.g. rocksdb implementation)
 #[apply(async_trait_maybe_send!)]
-pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+pub trait IRawWriteDatabaseTransaction: MaybeSend + IWriteDatabaseTransactionOps {
     async fn commit_tx(self) -> DatabaseResult<()>;
 }
 
@@ -1282,7 +1266,7 @@ pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
 ///
 /// See [`IDatabase`] for more info.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug {
+pub trait IDatabaseTransaction: MaybeSend + IWriteDatabaseTransactionOps + fmt::Debug {
     /// Commit the transaction
     async fn commit_tx(&mut self) -> DatabaseResult<()>;
 
@@ -1337,7 +1321,7 @@ where
     }
 }
 
-/// Struct that implements `IRawDatabaseTransaction` and can be wrapped
+/// Struct that implements `IRawWriteDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
 struct BaseDatabaseTransaction<Tx> {
     // TODO: merge options
@@ -1359,7 +1343,7 @@ where
 }
 impl<Tx> BaseDatabaseTransaction<Tx>
 where
-    Tx: IRawDatabaseTransaction,
+    Tx: IRawWriteDatabaseTransaction,
 {
     fn new(dbtx: Tx, notifications: Arc<Notifications>) -> Self {
         Self {
@@ -1379,7 +1363,7 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
+impl<Tx: IRawWriteDatabaseTransaction> IReadDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.raw
             .as_mut()
@@ -1420,7 +1404,9 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCoreWrite for BaseDatabaseTransaction<Tx> {
+impl<Tx: IRawWriteDatabaseTransaction> IWriteDatabaseTransactionOps
+    for BaseDatabaseTransaction<Tx>
+{
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -1452,10 +1438,8 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCoreWrite for BaseDatab
     }
 }
 
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {}
-
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
+impl<Tx: IRawWriteDatabaseTransaction + fmt::Debug> IDatabaseTransaction
     for BaseDatabaseTransaction<Tx>
 {
     async fn commit_tx(&mut self) -> DatabaseResult<()> {
@@ -1657,7 +1641,7 @@ impl<'tx> ReadDatabaseTransaction<'tx> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
+impl IReadDatabaseTransactionOps for ReadDatabaseTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_get_bytes(key).await
     }
@@ -1980,7 +1964,7 @@ impl<'tx> WriteDatabaseTransaction<'tx, Committable> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Cap> IDatabaseTransactionOpsCore for WriteDatabaseTransaction<'_, Cap>
+impl<Cap> IReadDatabaseTransactionOps for WriteDatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
@@ -2010,7 +1994,7 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Cap> IDatabaseTransactionOpsCoreWrite for WriteDatabaseTransaction<'_, Cap>
+impl<Cap> IWriteDatabaseTransactionOps for WriteDatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
@@ -2032,8 +2016,6 @@ where
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
-
-impl IDatabaseTransactionOps for WriteDatabaseTransaction<'_, Committable> {}
 
 #[instrument(target = LOG_DB, level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
 fn decode_value<V: DatabaseValue>(
@@ -2361,7 +2343,7 @@ impl From<anyhow::Error> for DatabaseError {
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, val)| {
                     (
@@ -2380,7 +2362,7 @@ macro_rules! push_db_pair_items {
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, _)| key)
                 .collect::<Vec<$key_type>>()
@@ -2762,8 +2744,7 @@ mod test_utils {
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
     use crate::db::{
-        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped,
-        IReadDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+        IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, MODULE_GLOBAL_PREFIX,
     };
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
@@ -3529,7 +3510,7 @@ where
 }
 
 pub async fn verify_module_db_integrity_dbtx(
-    dbtx: &mut impl IDatabaseTransactionOpsCore,
+    dbtx: &mut impl IReadDatabaseTransactionOps,
     module_id: ModuleInstanceId,
     module_kind: ModuleKind,
     prefixes: &BTreeSet<u8>,

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};

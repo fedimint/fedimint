@@ -7,8 +7,8 @@ use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::db::{
-    Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersion, DatabaseVersionKeyV0, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;

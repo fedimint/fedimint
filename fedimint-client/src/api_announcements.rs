@@ -6,7 +6,7 @@ use anyhow::{Context, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;

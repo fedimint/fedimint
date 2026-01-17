@@ -19,7 +19,7 @@ use super::{
     BTreeMap, Connector, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
-    IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
+    IWriteDatabaseTransactionOpsTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
     PreimageAuthentication, PreimageAuthenticationPrefix, StreamExt,
     get_gatewayd_database_migrations, migrate_federation_configs, secp256k1, sha256,
 };

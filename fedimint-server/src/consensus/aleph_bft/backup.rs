@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
 };
 use futures::StreamExt as _;
 use tracing::info;

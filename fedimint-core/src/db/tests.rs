@@ -4,8 +4,8 @@ use tokio::sync::oneshot;
 
 use super::mem_impl::MemDatabase;
 use super::{
-    Database, GlobalDBTxAccessToken, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
-    IReadDatabaseTransactionOpsCoreTyped, TestKey, TestVal, future_returns_shortly,
+    Database, GlobalDBTxAccessToken, IRawDatabaseExt, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, TestKey, TestVal, future_returns_shortly,
 };
 use crate::runtime::spawn;
 

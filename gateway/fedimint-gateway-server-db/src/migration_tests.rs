@@ -4,7 +4,7 @@ use anyhow::ensure;
 use bitcoin::hashes::Hash;
 use fedimint_core::PeerId;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{Database, IReadDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{ConnectorType, RegisteredProtocol};
@@ -20,7 +20,7 @@ use super::{
     BTreeMap, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
-    IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
+    IWriteDatabaseTransactionOpsTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
     PreimageAuthentication, PreimageAuthenticationPrefix, StreamExt,
     get_gatewayd_database_migrations, migrate_federation_configs, secp256k1, sha256,
 };

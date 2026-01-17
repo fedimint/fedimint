@@ -46,7 +46,7 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -738,7 +738,7 @@ impl LightningClientModule {
     pub async fn get_prev_payment_result<'a>(
         &self,
         payment_hash: &sha256::Hash,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> PaymentResult {
         let prev_result = dbtx
             .get_value(&PaymentResultKey {

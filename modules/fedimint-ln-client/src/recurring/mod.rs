@@ -19,8 +19,7 @@ use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{
-    IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
-    WriteDatabaseTransaction,
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};

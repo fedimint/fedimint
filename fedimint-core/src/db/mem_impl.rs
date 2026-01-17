@@ -7,9 +7,8 @@ use imbl::OrdMap;
 use macro_rules_attribute::apply;
 
 use super::{
-    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
-    IRawDatabaseTransaction,
+    DatabaseError, DatabaseResult, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawWriteDatabaseTransaction, IReadDatabaseTransactionOps, IWriteDatabaseTransactionOps,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -71,11 +70,11 @@ impl MemDatabase {
 
 #[apply(async_trait_maybe_send!)]
 impl IRawDatabase for MemDatabase {
-    type Transaction<'a> = MemTransaction<'a>;
+    type WriteTransaction<'a> = MemTransaction<'a>;
     // Fallback: use write transaction as read transaction for now
     type ReadTransaction<'a> = MemTransaction<'a>;
 
-    async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
+    async fn begin_write_transaction<'a>(&'a self) -> MemTransaction<'a> {
         let db_copy = self.data.read().expect("Poisoned rwlock").clone();
         MemTransaction {
             operations: Vec::new(),
@@ -86,7 +85,7 @@ impl IRawDatabase for MemDatabase {
 
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         // Fallback: use write transaction as read transaction
-        self.begin_transaction().await
+        self.begin_write_transaction().await
     }
 
     fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
@@ -99,7 +98,7 @@ impl IRawDatabaseReadTransaction for MemTransaction<'_> {}
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
+impl IReadDatabaseTransactionOps for MemTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
     }
@@ -143,7 +142,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOpsCoreWrite for MemTransaction<'_> {
+impl IWriteDatabaseTransactionOps for MemTransaction<'_> {
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -185,10 +184,8 @@ impl IDatabaseTransactionOpsCoreWrite for MemTransaction<'_> {
     }
 }
 
-impl IDatabaseTransactionOps for MemTransaction<'_> {}
-
 #[apply(async_trait_maybe_send!)]
-impl IRawDatabaseTransaction for MemTransaction<'_> {
+impl IRawWriteDatabaseTransaction for MemTransaction<'_> {
     #[allow(clippy::significant_drop_tightening)]
     async fn commit_tx(self) -> DatabaseResult<()> {
         let mut data = self.db.data.write().expect("Poisoned rwlock");

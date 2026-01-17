@@ -32,7 +32,7 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction,
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{

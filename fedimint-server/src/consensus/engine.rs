@@ -12,7 +12,7 @@ use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::Decodable;

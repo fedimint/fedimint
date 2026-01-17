@@ -13,9 +13,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::db::{
-    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
-    IRawDatabaseTransaction, PrefixStream,
+    DatabaseError, DatabaseResult, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawWriteDatabaseTransaction, IReadDatabaseTransactionOps, IWriteDatabaseTransactionOps,
+    PrefixStream,
 };
 use futures::{StreamExt as _, stream};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
@@ -79,10 +79,10 @@ impl Debug for RedbWriteTransaction {
 
 #[async_trait]
 impl IRawDatabase for RedbDatabase {
-    type Transaction<'a> = RedbWriteTransaction;
+    type WriteTransaction<'a> = RedbWriteTransaction;
     type ReadTransaction<'a> = RedbReadTransaction;
 
-    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
+    async fn begin_write_transaction<'a>(&'a self) -> Self::WriteTransaction<'a> {
         RedbWriteTransaction {
             tx: self
                 .db
@@ -112,7 +112,7 @@ impl IRawDatabase for RedbDatabase {
 impl IRawDatabaseReadTransaction for RedbReadTransaction {}
 
 #[async_trait]
-impl IDatabaseTransactionOpsCore for RedbReadTransaction {
+impl IReadDatabaseTransactionOps for RedbReadTransaction {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let entry = self
             .table
@@ -172,7 +172,7 @@ impl IDatabaseTransactionOpsCore for RedbReadTransaction {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCore for RedbWriteTransaction {
+impl IReadDatabaseTransactionOps for RedbWriteTransaction {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let table = self.tx.open_table(TABLE).map_err(DatabaseError::backend)?;
 
@@ -239,7 +239,7 @@ impl IDatabaseTransactionOpsCore for RedbWriteTransaction {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCoreWrite for RedbWriteTransaction {
+impl IWriteDatabaseTransactionOps for RedbWriteTransaction {
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -289,10 +289,8 @@ impl IDatabaseTransactionOpsCoreWrite for RedbWriteTransaction {
     }
 }
 
-impl IDatabaseTransactionOps for RedbWriteTransaction {}
-
 #[async_trait]
-impl IRawDatabaseTransaction for RedbWriteTransaction {
+impl IRawWriteDatabaseTransaction for RedbWriteTransaction {
     async fn commit_tx(self) -> DatabaseResult<()> {
         self.tx.commit().map_err(DatabaseError::backend)
     }
@@ -309,7 +307,7 @@ where
     D: IRawDatabase,
 {
     let mut read_tx = source.begin_read_transaction().await;
-    let mut write_tx = dest.begin_transaction().await;
+    let mut write_tx = dest.begin_write_transaction().await;
 
     let mut all_entries = read_tx.raw_find_by_prefix(&[]).await?;
 
@@ -328,7 +326,7 @@ where
 #[cfg(test)]
 mod tests {
     use fedimint_core::db::{
-        Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+        Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleRegistry;

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_stream::stream;
 use fedimint_client_module::meta::{FetchKind, MetaSource, MetaValue, MetaValues};
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
 };
 use fedimint_core::task::MaybeSend;
 use fedimint_core::task::waiter::Waiter;
@@ -131,7 +131,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
 
     async fn current_revision<'a>(
         &self,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> Option<u64> {
         dbtx.get_value(&MetaServiceInfoKey)
             .await

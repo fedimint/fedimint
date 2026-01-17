@@ -14,7 +14,7 @@ use clap::{Parser, Subcommand};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::module::init::ClientModuleInit;
 use fedimint_core::db::{
-    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreWrite as _, IRawDatabaseExt,
+    IRawDatabaseExt, IReadDatabaseTransactionOps as _, IWriteDatabaseTransactionOps as _,
 };
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;

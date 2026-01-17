@@ -8,7 +8,7 @@ use fedimint_client_module::oplog::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped as _,
     WriteDatabaseTransaction,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -168,7 +168,7 @@ impl OperationLog {
     }
 
     pub async fn get_operation_dbtx<'a>(
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         dbtx.get_value(&OperationLogKey { operation_id }).await

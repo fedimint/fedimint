@@ -38,9 +38,9 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseRecord, IDatabaseTransactionOpsCore as _,
-    IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped, NonCommittable,
-    ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Database, DatabaseRecord, IReadDatabaseTransactionOps as _, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped as _, NonCommittable, ReadDatabaseTransaction,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
@@ -661,7 +661,7 @@ impl Client {
     }
 
     pub async fn operation_exists_dbtx<'a>(
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         operation_id: OperationId,
     ) -> bool {
         let active_state_exists = dbtx

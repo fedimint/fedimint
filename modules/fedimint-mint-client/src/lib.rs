@@ -65,8 +65,8 @@ use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Committable, Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Committable, Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -1014,7 +1014,7 @@ impl MintClientModule {
     )]
     pub async fn get_notes_tier_counts<'a>(
         &self,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
@@ -1116,7 +1116,7 @@ impl MintClientModule {
     /// Returns the number of held e-cash notes per denomination
     pub async fn get_note_counts_by_denomination<'a>(
         &self,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredCounts {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
@@ -1137,7 +1137,7 @@ impl MintClientModule {
     )]
     pub async fn get_wallet_summary<'a>(
         &self,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
@@ -1408,7 +1408,7 @@ impl MintClientModule {
     }
 
     async fn get_all_spendable_notes<'a>(
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredMulti<SpendableNoteUndecoded> {
         (dbtx
             .find_by_prefix(&NoteKeyPrefix)
@@ -1422,7 +1422,7 @@ impl MintClientModule {
 
     async fn get_next_note_index<'a>(
         &self,
-        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(

@@ -28,7 +28,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped as _,
+    Database, IReadDatabaseTransactionOpsTyped as _, IWriteDatabaseTransactionOpsTyped as _,
     verify_module_db_integrity_dbtx,
 };
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;

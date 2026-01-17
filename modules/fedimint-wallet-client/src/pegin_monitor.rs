@@ -8,7 +8,7 @@ use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped as _, IReadDatabaseTransactionOpsCoreTyped as _,
+    Database, IReadDatabaseTransactionOpsTyped as _, IWriteDatabaseTransactionOpsTyped as _,
     WriteDatabaseTransaction,
 };
 use fedimint_core::envs::is_running_in_test_env;

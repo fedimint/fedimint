@@ -16,8 +16,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOps as _,
+    IWriteDatabaseTransactionOpsTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{

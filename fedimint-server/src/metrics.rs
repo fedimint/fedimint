@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use fedimint_core::backup::ClientBackupKeyPrefix;
-use fedimint_core::db::{Database, IReadDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_metrics::prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, register_histogram_vec_with_registry,

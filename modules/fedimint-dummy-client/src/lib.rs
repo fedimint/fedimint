@@ -29,8 +29,8 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -417,7 +417,7 @@ impl DummyClientModule {
 }
 
 async fn get_funds<'a>(
-    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     unit: AmountUnit,
 ) -> Amount {
     let funds = dbtx.get_value(&DummyClientFundsKey { unit }).await;
@@ -425,7 +425,7 @@ async fn get_funds<'a>(
 }
 
 async fn get_funds_all<'a>(
-    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
 ) -> Amounts {
     let funds_entries = dbtx
         .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)

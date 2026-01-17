@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseVersion, IReadDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
+    DatabaseVersion, IReadDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;

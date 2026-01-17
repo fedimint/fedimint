@@ -19,7 +19,7 @@ use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Committable, Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    Committable, Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]

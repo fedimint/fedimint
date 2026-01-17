@@ -24,7 +24,7 @@ pub enum DbKeyPrefix {
 }
 
 pub(crate) async fn verify_server_db_integrity_dbtx(
-    dbtx: &mut impl fedimint_core::db::IDatabaseTransactionOpsCore,
+    dbtx: &mut impl fedimint_core::db::IReadDatabaseTransactionOps,
 ) {
     let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
 

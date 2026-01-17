@@ -6,9 +6,9 @@ use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     Database, DatabaseVersion, GeneralDbMigrationFn, GeneralDbMigrationFnContext,
-    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped,
-    IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
-    ReadDatabaseTransaction, WriteDatabaseTransaction,
+    IReadDatabaseTransactionOps as _, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOps as _, IWriteDatabaseTransactionOpsTyped, ReadDatabaseTransaction,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};

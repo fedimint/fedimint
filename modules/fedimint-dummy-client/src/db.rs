@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction};
+use fedimint_core::db::{IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;

@@ -16,8 +16,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
@@ -735,7 +735,7 @@ impl Lightning {
 
     async fn consensus_block_count(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> u64 {
         let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
@@ -761,7 +761,7 @@ impl Lightning {
 
     async fn consensus_unix_time(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> u64 {
         let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 

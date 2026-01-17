@@ -13,9 +13,9 @@ use std::str::FromStr;
 use anyhow::{Context as _, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
-    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
-    IRawDatabaseTransaction, PrefixStream,
+    DatabaseError, DatabaseResult, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawWriteDatabaseTransaction, IReadDatabaseTransactionOps, IWriteDatabaseTransactionOps,
+    PrefixStream,
 };
 use fedimint_core::task::block_in_place;
 use fedimint_db_locked::{Locked, LockedBuilder};
@@ -212,11 +212,11 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 
 #[async_trait]
 impl IRawDatabase for RocksDb {
-    type Transaction<'a> = RocksDbTransaction<'a>;
+    type WriteTransaction<'a> = RocksDbTransaction<'a>;
     // Fallback: use write transaction as read transaction for now
     type ReadTransaction<'a> = RocksDbTransaction<'a>;
 
-    async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
+    async fn begin_write_transaction<'a>(&'a self) -> RocksDbTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
 
@@ -229,7 +229,7 @@ impl IRawDatabase for RocksDb {
 
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         // Fallback: use write transaction as read transaction
-        self.begin_transaction().await
+        self.begin_write_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -246,10 +246,10 @@ impl IRawDatabaseReadTransaction for RocksDbTransaction<'_> {}
 
 #[async_trait]
 impl IRawDatabase for RocksDbReadOnly {
-    type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
+    type WriteTransaction<'a> = RocksDbReadOnlyTransaction<'a>;
     type ReadTransaction<'a> = RocksDbReadOnlyTransaction<'a>;
 
-    async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
+    async fn begin_write_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
     }
 
@@ -270,7 +270,7 @@ impl IRawDatabase for RocksDbReadOnly {
 impl IRawDatabaseReadTransaction for RocksDbReadOnlyTransaction<'_> {}
 
 #[async_trait]
-impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
+impl IReadDatabaseTransactionOps for RocksDbTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
@@ -344,7 +344,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCoreWrite for RocksDbTransaction<'_> {
+impl IWriteDatabaseTransactionOps for RocksDbTransaction<'_> {
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -396,10 +396,8 @@ impl IDatabaseTransactionOpsCoreWrite for RocksDbTransaction<'_> {
     }
 }
 
-impl IDatabaseTransactionOps for RocksDbTransaction<'_> {}
-
 #[async_trait]
-impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
+impl IRawWriteDatabaseTransaction for RocksDbTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
             match self.0.commit() {
@@ -423,7 +421,7 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
+impl IReadDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
@@ -497,7 +495,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCoreWrite for RocksDbReadOnlyTransaction<'_> {
+impl IWriteDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
     async fn raw_insert_bytes(
         &mut self,
         _key: &[u8],
@@ -515,10 +513,8 @@ impl IDatabaseTransactionOpsCoreWrite for RocksDbReadOnlyTransaction<'_> {
     }
 }
 
-impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {}
-
 #[async_trait]
-impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
+impl IRawWriteDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         panic!("Cannot commit a read only transaction");
     }
@@ -527,7 +523,7 @@ impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
     use fedimint_core::db::{
-        Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+        Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};

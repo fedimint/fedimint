@@ -4,7 +4,7 @@ use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    DatabaseRecord, IDatabaseTransactionOpsCoreWrite as _, WriteDatabaseTransaction,
+    DatabaseRecord, IWriteDatabaseTransactionOps as _, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;

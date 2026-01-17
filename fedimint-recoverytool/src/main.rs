@@ -12,7 +12,7 @@ use bitcoin::network::Network;
 use bitcoin::secp256k1::{PublicKey, SECP256K1, SecretKey};
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, IReadDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::module::CommonModuleInit;

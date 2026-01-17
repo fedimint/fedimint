@@ -8,7 +8,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IRawDatabase, IReadDatabaseTransactionOpsCoreTyped,
+    Database, IRawDatabase, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};

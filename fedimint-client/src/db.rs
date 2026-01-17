@@ -11,9 +11,9 @@ use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
-    IReadDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX, WriteDatabaseTransaction,
+    Database, DatabaseVersion, DatabaseVersionKey, IReadDatabaseTransactionOps,
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOps as _,
+    IWriteDatabaseTransactionOpsTyped, MODULE_GLOBAL_PREFIX, WriteDatabaseTransaction,
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -99,7 +99,7 @@ pub(crate) enum DbKeyPrefixInternalReserved {
 }
 
 pub(crate) async fn verify_client_db_integrity_dbtx<'a>(
-    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + IDatabaseTransactionOpsCore),
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + IReadDatabaseTransactionOps),
 ) {
     let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
 
@@ -871,7 +871,7 @@ pub async fn apply_migrations_client_module_dbtx(
 /// to add `module_instance_id` to `ActiveStateKey`, this can be improved to
 /// only read the module's relevant states.
 pub async fn get_active_states<'a>(
-    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&ActiveStateKeyPrefixBytes)
@@ -893,7 +893,7 @@ pub async fn get_active_states<'a>(
 /// to add `module_instance_id` to `InactiveStateKey`, this can be improved to
 /// only read the module's relevant states.
 pub async fn get_inactive_states<'a>(
-    dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'a> + MaybeSend),
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes)

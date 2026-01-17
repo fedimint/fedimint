@@ -67,13 +67,13 @@ impl<DB> IRawDatabase for Locked<DB>
 where
     DB: IRawDatabase,
 {
-    type Transaction<'a> = DB::Transaction<'a>;
+    type WriteTransaction<'a> = DB::WriteTransaction<'a>;
     type ReadTransaction<'a> = DB::ReadTransaction<'a>;
 
-    async fn begin_transaction<'a>(
+    async fn begin_write_transaction<'a>(
         &'a self,
-    ) -> <Locked<DB> as fedimint_core::db::IRawDatabase>::Transaction<'_> {
-        self.inner.begin_transaction().await
+    ) -> <Locked<DB> as fedimint_core::db::IRawDatabase>::WriteTransaction<'_> {
+        self.inner.begin_write_transaction().await
     }
 
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {

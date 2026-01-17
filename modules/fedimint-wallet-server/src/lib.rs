@@ -45,8 +45,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -1271,7 +1271,7 @@ impl Wallet {
 
     pub async fn consensus_block_count(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> u32 {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
@@ -1295,7 +1295,7 @@ impl Wallet {
 
     pub async fn consensus_fee_rate(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> Feerate {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
@@ -1319,7 +1319,7 @@ impl Wallet {
 
     async fn consensus_module_consensus_version(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> ModuleConsensusVersion {
         let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
 
@@ -1562,7 +1562,7 @@ impl Wallet {
 
     async fn block_is_known(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IWriteDatabaseTransactionOpsTyped<'_>,
         block_hash: BlockHash,
     ) -> bool {
         dbtx.get_value(&BlockHashKey(block_hash)).await.is_some()
@@ -1608,7 +1608,7 @@ impl Wallet {
 
     async fn available_utxos(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
@@ -1618,7 +1618,7 @@ impl Wallet {
 
     pub async fn get_wallet_value(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> bitcoin::Amount {
         let sat_sum = self
             .available_utxos(dbtx)
@@ -1631,7 +1631,7 @@ impl Wallet {
 
     async fn get_wallet_summary(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> WalletSummary {
         fn partition_peg_out_and_change(
             transactions: Vec<Transaction>,

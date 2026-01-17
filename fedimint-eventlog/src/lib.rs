@@ -19,8 +19,8 @@ use std::{fmt, ops};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
-    NonCommittable, WithDecoders, WriteDatabaseTransaction,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, NonCommittable,
+    WithDecoders, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;
@@ -563,7 +563,7 @@ pub trait DBTransactionEventLogExt: DBTransactionEventLogReadExt {
 #[apply(async_trait_maybe_send!)]
 impl<'a, T> DBTransactionEventLogReadExt for T
 where
-    T: IReadDatabaseTransactionOpsCoreTyped<'a> + WithDecoders + MaybeSend,
+    T: IReadDatabaseTransactionOpsTyped<'a> + WithDecoders + MaybeSend,
 {
     async fn get_next_event_log_id(&mut self) -> EventLogId {
         self.find_by_prefix_sorted_descending(&EventLogIdPrefixAll)

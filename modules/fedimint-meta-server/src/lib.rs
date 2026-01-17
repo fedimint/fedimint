@@ -19,9 +19,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, ReadDatabaseTransaction,
-    WriteDatabaseTransaction,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    NonCommittable, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
@@ -218,7 +217,7 @@ pub struct Meta {
 
 impl Meta {
     async fn get_desired(
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
     ) -> Vec<(MetaKey, MetaDesiredValue)> {
         dbtx.find_by_prefix(&MetaDesiredKeyPrefix)
             .await
@@ -228,7 +227,7 @@ impl Meta {
     }
 
     async fn get_submission(
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
         key: MetaKey,
         peer_id: PeerId,
     ) -> Option<MetaSubmissionValue> {
@@ -236,7 +235,7 @@ impl Meta {
     }
 
     async fn get_consensus(
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
         key: MetaKey,
     ) -> Option<MetaValue> {
         dbtx.get_value(&MetaConsensusKey(key))
@@ -512,7 +511,7 @@ impl Meta {
 
     async fn handle_get_consensus_request(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
         req: &GetConsensusRequest,
     ) -> Result<Option<MetaConsensusValue>, ApiError> {
         Ok(dbtx.get_value(&MetaConsensusKey(req.0)).await)
@@ -520,7 +519,7 @@ impl Meta {
 
     async fn handle_get_consensus_revision_request(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
         req: &GetConsensusRequest,
     ) -> Result<Option<u64>, ApiError> {
         Ok(dbtx
@@ -531,7 +530,7 @@ impl Meta {
 
     async fn handle_get_submissions_request(
         &self,
-        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsTyped<'_>,
         _auth: &ApiAuth,
         req: &GetSubmissionsRequest,
     ) -> Result<BTreeMap<PeerId, MetaValue>, ApiError> {

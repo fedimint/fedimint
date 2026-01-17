@@ -9,8 +9,8 @@ use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{
-    Database, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction,
+    Database, DatabaseVersionKey, IReadDatabaseTransactionOps, IReadDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -28,7 +28,7 @@ use strum::IntoEnumIterator;
 
 macro_rules! push_db_pair_items_no_serde {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+        let db_items = IReadDatabaseTransactionOpsTyped::find_by_prefix($dbtx, &$prefix_type)
             .await
             .map(|(key, val)| {
                 (

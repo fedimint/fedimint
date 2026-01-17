@@ -6,7 +6,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, IDatabaseTransactionOpsCoreTyped};
+use crate::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, IWriteDatabaseTransactionOpsTyped};
 use crate::task::{MaybeSend, MaybeSync};
 
 #[derive(Default)]
@@ -25,7 +25,7 @@ impl Audit {
 
     pub async fn add_items<KP, F>(
         &mut self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IWriteDatabaseTransactionOpsTyped<'_>,
         module_instance_id: ModuleInstanceId,
         key_prefix: &KP,
         to_milli_sat: F,
