@@ -1,6 +1,78 @@
+use std::sync::LazyLock;
 use std::{cmp, fmt, ops, thread_local};
 
 use serde_json::Value;
+
+use crate::envs::{FM_DEBUG_SHOW_SECRETS_ENV, is_env_var_set};
+
+/// Global flag defining if secrets should be shown in debug output or not,
+/// controlled by `FM_DEBUG_SHOW_SECRETS` environment variable.
+///
+/// Since logging may happen frequently the value is cached here instead of
+/// being evaluated every time.
+static SHOW_SECRETS: LazyLock<bool> = LazyLock::new(|| is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV));
+
+/// this will check if any secrets should be shown in debug/display output.
+///
+/// returns `true` if:
+/// - `FM_DEBUG_SHOW_SECRETS` environment variable is set to a truthy value
+///
+/// This is useful for debugging but should NEVER be enabled in production.
+pub fn show_secrets() -> bool {
+    *SHOW_SECRETS
+}
+
+/// Macro to implement `Debug` for a type containing sensitive data.
+///
+/// This macro generates a `Debug` implementation that:
+/// - Shows actual data when `FM_DEBUG_SHOW_SECRETS` is set or alt-mode is used
+/// - Shows a fingerprint otherwise
+///
+/// # Usage
+///
+/// ```ignore
+/// use fedimint_core::impl_sensitive_debug;
+///
+/// struct SecretKey {
+///     key: [u8; 32],
+/// }
+///
+/// impl_sensitive_debug!(SecretKey,
+///     |s: &Self, f: &mut ::core::fmt::Formatter<'_>| {
+///         // Format when showing secrets
+///         f.debug_struct("SecretKey")
+///             .field("key", &hex::encode(&s.key))
+///             .finish()
+///     },
+///     |s: &Self| {
+///         // Return bytes to hash for fingerprint
+///         &s.key
+///     }
+/// );
+/// ```
+#[macro_export]
+macro_rules! impl_sensitive_debug {
+    ($type:ty, |$self:ident, $f:ident| $show_impl:expr, |$self2:ident| $fingerprint_data:expr) => {
+        impl ::core::fmt::Debug for $type {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                if $crate::fmt_utils::show_secrets() || f.alternate() {
+                    // Show actual data in alt mode or when secrets are enabled
+                    let $self = self;
+                    let $f = f;
+                    $show_impl
+                } else {
+                    // Show fingerprint only
+                    let $self2 = self;
+                    let data: &[u8] = $fingerprint_data;
+                    use $crate::bitcoin::hashes::{Hash as _, sha256};
+                    let hash = sha256::Hash::hash(data);
+                    let fingerprint = $crate::hex::encode(&hash.as_byte_array()[..8]);
+                    write!(f, "{}#<{}>", stringify!($type), fingerprint)
+                }
+            }
+        }
+    };
+}
 
 pub fn rust_log_full_enabled() -> bool {
     // this will be called only once per-thread for best performance
