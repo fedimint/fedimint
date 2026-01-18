@@ -31,7 +31,6 @@ pub trait ISetupApi {
         &self,
         auth: ApiAuth,
         name: String,
-        federation_name: Option<String>,
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
     ) -> Result<String>;
