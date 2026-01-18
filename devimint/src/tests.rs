@@ -37,7 +37,9 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::version_constants::{
+    VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA,
+};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -1674,6 +1676,13 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // a session is generated we don't wait for another.
     let last_tx_session = client.get_session_count().await?;
 
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    let db_path = if fedimintd_version >= *VERSION_0_11_0_ALPHA {
+        format!("{data_dir}/fedimintd-default-0/fedimintd.redb")
+    } else {
+        format!("{data_dir}/fedimintd-default-0/database")
+    };
+
     info!("Recovering using utxos method");
     let output = cmd!(
         crate::util::Recoverytool,
@@ -1681,7 +1690,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "{data_dir}/fedimintd-default-0",
         "utxos",
         "--db",
-        "{data_dir}/fedimintd-default-0/database"
+        &db_path
     )
     .env(FM_PASSWORD_ENV, "pass")
     .out_json()
@@ -1747,7 +1756,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "{data_dir}/fedimintd-default-0",
         "epochs",
         "--db",
-        "{data_dir}/fedimintd-default-0/database"
+        &db_path
     )
     .env(FM_PASSWORD_ENV, "pass")
     .out_json()

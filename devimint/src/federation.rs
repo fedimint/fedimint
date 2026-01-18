@@ -37,8 +37,8 @@ use super::external::Bitcoind;
 use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
-use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
-use crate::version_constants::VERSION_0_10_0_ALPHA;
+use crate::util::{FedimintCli, FedimintdCmd, poll, poll_simple, poll_with_timeout};
+use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
 use crate::{poll_almost_equal, poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -200,10 +200,17 @@ impl Client {
     pub async fn new_forked(&self, name: impl ToString) -> Result<Client> {
         let new = Client::create(name).await?;
 
+        let fedimint_cli_version = FedimintCli::version_or_default().await;
+        let db_name = if fedimint_cli_version >= *VERSION_0_11_0_ALPHA {
+            "client.redb"
+        } else {
+            "client.db"
+        };
+
         cmd!(
             "cp",
             "-R",
-            self.client_dir().join("client.db").display(),
+            self.client_dir().join(db_name).display(),
             new.client_dir().display()
         )
         .run()
