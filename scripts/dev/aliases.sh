@@ -11,5 +11,5 @@ alias fedimint-dbtool-fedimintd-1="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR/fedimi
 alias fedimint-dbtool-fedimintd-2="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR/fedimintd-2 FM_PASSWORD=pass \$FM_DB_TOOL --database \$FM_DATA_DIR/fedimintd-2/fedimintd.redb"
 alias fedimint-dbtool-fedimintd-3="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR/fedimintd-3 FM_PASSWORD=pass \$FM_DB_TOOL --database \$FM_DATA_DIR/fedimintd-3/fedimintd.redb"
 alias fedimint-dbtool-client="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR FM_PASSWORD=clientpass \$FM_DB_TOOL --database \$FM_CLIENT_DIR/client.redb"
-alias fedimint-dbtool-gw-cln="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR FM_PASSWORD=clientpass \$FM_DB_TOOL --database \$FM_DATA_DIR/gw-cln/gatewayd.db"
-alias fedimint-dbtool-gw-lnd="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR FM_PASSWORD=clientpass \$FM_DB_TOOL --database \$FM_DATA_DIR/gw-lnd/gatewayd.db"
+alias fedimint-dbtool-gw-cln="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR FM_PASSWORD=clientpass \$FM_DB_TOOL --database \$FM_DATA_DIR/gw-cln/gatewayd.redb"
+alias fedimint-dbtool-gw-lnd="env FM_DBTOOL_CONFIG_DIR=\$FM_DATA_DIR FM_PASSWORD=clientpass \$FM_DB_TOOL --database \$FM_DATA_DIR/gw-lnd/gatewayd.redb"

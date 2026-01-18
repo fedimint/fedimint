@@ -10,23 +10,24 @@ use fedimint_client::{Client, ClientBuilder, RootSecret};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
-use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::db::{
+    Database, IRawDatabase, IReadDatabaseTransactionOps, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOps,
+};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_gateway_common::FederationConfig;
 use fedimint_gateway_server_db::GatewayDbExt as _;
 use fedimint_gw_client::GatewayClientInit;
 use fedimint_gwv2_client::GatewayClientInitV2;
+use tracing::info;
 
-use crate::config::DatabaseBackend;
 use crate::error::AdminGatewayError;
-use crate::{AdminResult, Gateway};
+use crate::{AdminResult, Gateway, LOG_GATEWAY};
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
-    db_backend: DatabaseBackend,
     connectors: ConnectorRegistry,
 }
 
@@ -34,13 +35,11 @@ impl GatewayClientBuilder {
     pub async fn new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
-        db_backend: DatabaseBackend,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             connectors: ConnectorRegistry::build_from_client_env()?.bind().await?,
             work_dir,
             registry,
-            db_backend,
         })
     }
 
@@ -128,24 +127,18 @@ impl GatewayClientBuilder {
     ) -> AdminResult<fedimint_client::ClientHandleArc> {
         let invite_code = config.invite_code.clone();
         let federation_id = invite_code.federation_id();
-        let db_path = self.work_dir.join(format!("{federation_id}.db"));
 
-        let (db, root_secret) = if db_path.exists() {
-            let db = match self.db_backend {
-                DatabaseBackend::RocksDb => {
-                    let rocksdb = fedimint_rocksdb::RocksDb::build(db_path.clone())
-                        .open()
-                        .await
-                        .map_err(AdminGatewayError::ClientCreationError)?;
-                    Database::new(rocksdb, ModuleDecoderRegistry::default())
-                }
-                DatabaseBackend::Redb => {
-                    let redb = fedimint_redb::RedbDatabase::new(db_path.clone())
-                        .await
-                        .map_err(AdminGatewayError::ClientCreationError)?;
-                    Database::new(redb, ModuleDecoderRegistry::default())
-                }
-            };
+        // Check for legacy per-federation database (pre-v0.5.0)
+        // If it exists, migrate it to the prefixed gateway database
+        let legacy_db_path = self.work_dir.join(format!("{federation_id}.db"));
+        let (db, root_secret) = if legacy_db_path.exists() {
+            // Migrate legacy database to prefixed gateway database
+            self.migrate_legacy_federation_database(&gateway.gateway_db, &federation_id)
+                .await
+                .map_err(AdminGatewayError::ClientCreationError)?;
+
+            // Now load from the prefixed database and use the legacy root secret
+            let db = gateway.gateway_db.get_client_database(&federation_id);
             let root_secret = RootSecret::Custom(self.client_plainrootsecret(&db).await?);
             (db, root_secret)
         } else {
@@ -174,6 +167,82 @@ impl GatewayClientBuilder {
         }
         .map(Arc::new)
         .map_err(AdminGatewayError::ClientCreationError)
+    }
+
+    /// Migrates a legacy per-federation RocksDB database into the main gateway
+    /// database as a prefixed sub-database.
+    async fn migrate_legacy_federation_database(
+        &self,
+        gateway_db: &Database,
+        federation_id: &FederationId,
+    ) -> anyhow::Result<()> {
+        use futures::StreamExt;
+
+        let legacy_path = self.work_dir.join(format!("{federation_id}.db"));
+        let target_db = gateway_db.get_client_database(federation_id);
+
+        if legacy_path.is_dir() {
+            // It's RocksDB - migrate to prefixed gateway database
+            info!(
+                target: LOG_GATEWAY,
+                %federation_id,
+                "Migrating legacy federation database to gateway database..."
+            );
+
+            let rocksdb = fedimint_rocksdb::RocksDb::build(&legacy_path)
+                .open()
+                .await?;
+
+            // Copy all data from legacy database to prefixed gateway database
+            let mut read_tx = rocksdb.begin_read_transaction().await;
+            let mut write_tx = target_db.begin_write_transaction().await;
+
+            let mut entries = read_tx.raw_find_by_prefix(&[]).await?;
+            while let Some((key, value)) = entries.next().await {
+                write_tx.raw_insert_bytes(&key, &value).await?;
+            }
+            drop(entries);
+            drop(read_tx);
+            write_tx.commit_tx().await;
+
+            drop(rocksdb);
+        } else {
+            // It's already redb at legacy path - migrate to prefixed gateway database
+            info!(
+                target: LOG_GATEWAY,
+                %federation_id,
+                "Migrating legacy redb federation database to gateway database..."
+            );
+
+            let redb = fedimint_redb::RedbDatabase::open(&legacy_path)?;
+
+            // Copy all data from legacy database to prefixed gateway database
+            let mut read_tx = redb.begin_read_transaction().await;
+            let mut write_tx = target_db.begin_write_transaction().await;
+
+            let mut entries = read_tx.raw_find_by_prefix(&[]).await?;
+            while let Some((key, value)) = entries.next().await {
+                write_tx.raw_insert_bytes(&key, &value).await?;
+            }
+            drop(entries);
+            drop(read_tx);
+            write_tx.commit_tx().await;
+
+            drop(redb);
+        }
+
+        std::fs::rename(
+            &legacy_path,
+            self.work_dir.join(format!("{federation_id}.db.migrated")),
+        )?;
+
+        info!(
+            target: LOG_GATEWAY,
+            %federation_id,
+            "Legacy federation database migration complete"
+        );
+
+        Ok(())
     }
 
     /// Verifies that the saved `ClientConfig` contains the expected

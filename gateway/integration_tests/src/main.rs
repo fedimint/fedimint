@@ -14,7 +14,9 @@ use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_8_2, VERSION_0_10_0_ALPHA};
+use devimint::version_constants::{
+    VERSION_0_8_0_ALPHA, VERSION_0_8_2, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA,
+};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -118,12 +120,18 @@ async fn stop_and_recover_gateway(
         .expect("Data dir is not set")
         .parse()
         .expect("Could not parse data dir");
-    let gw_db = data_dir.join(gw_name.clone()).join("gatewayd.db");
+    let gatewayd_version = util::Gatewayd::version_or_default().await;
+    let db_name = if gatewayd_version >= *VERSION_0_11_0_ALPHA {
+        "gatewayd.redb"
+    } else {
+        "gatewayd.db"
+    };
+    let gw_db = data_dir.join(gw_name.clone()).join(db_name);
     if gw_db.is_file() {
         // db is single file on redb
-        remove_file(gw_db)?;
+        remove_file(&gw_db)?;
     } else {
-        remove_dir_all(gw_db)?;
+        remove_dir_all(&gw_db)?;
     }
     info!(target: LOG_TEST, "Deleted the Gateway's database");
 

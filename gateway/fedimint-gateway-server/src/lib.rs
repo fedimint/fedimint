@@ -28,6 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
@@ -38,8 +39,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid, secp256k1};
 use clap::Parser;
 use client::GatewayClientBuilder;
+use config::GatewayOpts;
 pub use config::GatewayParameters;
-use config::{DatabaseBackend, GatewayOpts};
 use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
@@ -142,9 +143,11 @@ pub const DEFAULT_NETWORK: Network = Network::Regtest;
 pub type Result<T> = std::result::Result<T, PublicGatewayError>;
 pub type AdminResult<T> = std::result::Result<T, AdminGatewayError>;
 
-/// Name of the gateway's database that is used for metadata and configuration
-/// storage.
-const DB_FILE: &str = "gatewayd.db";
+/// Name of the gateway's legacy RocksDB database directory.
+const DB_FILE_ROCKSDB: &str = "gatewayd.db";
+
+/// Name of the gateway's redb database file.
+const DB_FILE_REDB: &str = "gatewayd.redb";
 
 /// Name of the folder that the gateway uses to store its node database when
 /// running in LDK mode.
@@ -414,20 +417,7 @@ impl Gateway {
         let gateway_parameters = opts.to_gateway_parameters()?;
         let decoders = ModuleDecoderRegistry::default();
 
-        let db_path = opts.data_dir.join(DB_FILE);
-        let gateway_db = match opts.db_backend {
-            DatabaseBackend::RocksDb => {
-                debug!(target: LOG_GATEWAY, "Using RocksDB database backend");
-                Database::new(
-                    fedimint_rocksdb::RocksDb::build(db_path).open().await?,
-                    decoders,
-                )
-            }
-            DatabaseBackend::Redb => {
-                debug!(target: LOG_GATEWAY, "Using Redb database backend");
-                Database::new(fedimint_redb::RedbDatabase::new(db_path).await?, decoders)
-            }
-        };
+        let gateway_db = load_or_migrate_gateway_database(&opts.data_dir, decoders).await?;
 
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -477,8 +467,7 @@ impl Gateway {
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc.clone()));
 
-        let client_builder =
-            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
+        let client_builder = GatewayClientBuilder::new(opts.data_dir.clone(), registry).await?;
 
         info!(
             target: LOG_GATEWAY,
@@ -3026,4 +3015,72 @@ impl IGatewayClientV1 for Gateway {
             .await?;
         Ok(Some((contract, client)))
     }
+}
+
+/// Loads the gateway database, migrating from RocksDB to redb if necessary.
+///
+/// Detection logic:
+/// - `gatewayd.redb` exists → use it (already on redb)
+/// - `gatewayd.db` is a directory → RocksDB, migrate to `gatewayd.redb`
+/// - `gatewayd.db` is a file → already redb at legacy path, move to
+///   `gatewayd.redb`
+/// - Nothing exists → create fresh `gatewayd.redb`
+async fn load_or_migrate_gateway_database(
+    data_dir: &Path,
+    decoders: ModuleDecoderRegistry,
+) -> anyhow::Result<Database> {
+    let redb_path = data_dir.join(DB_FILE_REDB);
+    let legacy_path = data_dir.join(DB_FILE_ROCKSDB);
+
+    // If new redb path already exists, use it
+    if redb_path.exists() {
+        return Ok(Database::new(
+            fedimint_redb::RedbDatabase::new(&redb_path).await?,
+            decoders,
+        ));
+    }
+
+    // Check legacy path
+    if legacy_path.exists() {
+        if legacy_path.is_dir() {
+            // It's RocksDB - migrate
+            info!(
+                target: LOG_GATEWAY,
+                "Migrating gateway database from RocksDB to redb..."
+            );
+
+            let rocksdb = fedimint_rocksdb::RocksDb::build(&legacy_path)
+                .open()
+                .await?;
+            let redb = fedimint_redb::RedbDatabase::open(&redb_path)?;
+            fedimint_redb::migrate_database(&rocksdb, &redb).await?;
+            drop(rocksdb);
+            drop(redb);
+
+            std::fs::rename(&legacy_path, data_dir.join("gatewayd.db.migrated"))?;
+
+            info!(
+                target: LOG_GATEWAY,
+                "Gateway database migration complete"
+            );
+        } else {
+            // It's already redb at legacy path - move to new path
+            info!(
+                target: LOG_GATEWAY,
+                "Moving redb from legacy path to new path..."
+            );
+            std::fs::rename(&legacy_path, &redb_path)?;
+            // Also move the lock file if it exists
+            let lock_file = data_dir.join("gatewayd.db.lock");
+            if lock_file.exists() {
+                std::fs::rename(&lock_file, data_dir.join("gatewayd.redb.lock"))?;
+            }
+        }
+    }
+
+    // Open (new or migrated) redb at canonical path
+    Ok(Database::new(
+        fedimint_redb::RedbDatabase::new(&redb_path).await?,
+        decoders,
+    ))
 }
