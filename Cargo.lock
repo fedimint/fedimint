@@ -4029,6 +4029,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-mint-load-tests"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "devimint",
+ "fedimint-bip39",
+ "fedimint-client",
+ "fedimint-connectors",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-rocksdb",
+ "fedimint-wallet-client",
+ "futures",
+ "rand 0.8.5",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-mint-server"
 version = "0.11.0-alpha"
 dependencies = [
