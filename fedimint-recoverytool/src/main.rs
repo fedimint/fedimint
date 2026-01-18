@@ -21,6 +21,7 @@ use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
+use fedimint_redb::RedbDatabase;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
@@ -122,12 +123,20 @@ fn get_wallet_module_id(cfg: &ServerConfig) -> anyhow::Result<ModuleInstanceId> 
 }
 
 async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
-    Database::new(
-        RocksDbReadOnly::open_read_only(path)
-            .await
-            .expect("Error opening readonly DB"),
-        module_decoders,
-    )
+    // Detect database type: RocksDB is a directory, redb is a file
+    if path.is_dir() {
+        Database::new(
+            RocksDbReadOnly::open_read_only(path)
+                .await
+                .expect("Error opening RocksDB"),
+            module_decoders,
+        )
+    } else {
+        Database::new(
+            RedbDatabase::open(path).expect("Error opening redb"),
+            module_decoders,
+        )
+    }
 }
 
 #[tokio::main]

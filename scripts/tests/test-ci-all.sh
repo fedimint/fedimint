@@ -379,8 +379,7 @@ tests_to_run_in_parallel+=(
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"
-  # TODO: re-enable once recoverytool is migrated to redb
-  # "recoverytool_tests"
+  "recoverytool_tests"
   "guardian_backup"
   "meta_module"
   "mint_client_sanity"

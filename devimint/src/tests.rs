@@ -1604,7 +1604,9 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
 
-    let DevFed { bitcoind, fed, .. } = dev_fed;
+    let DevFed {
+        bitcoind, mut fed, ..
+    } = dev_fed;
 
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
@@ -1671,10 +1673,19 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
     fed.finalize_mempool_tx().await?;
 
-    // We are done transacting and save the current session id so we can wait for
-    // the next session later on. We already save it here so that if in the meantime
-    // a session is generated we don't wait for another.
+    // We need to wait for a session to be generated to make sure we have the signed
+    // session outcome in our DB before shutting down the federation
     let last_tx_session = client.get_session_count().await?;
+    client.wait_session_outcome(last_tx_session).await?;
+
+    // Shutdown the federation before running recoverytool since redb does not
+    // support opening a database that is already opened by another process
+    info!("Shutting down federation for recovery");
+    fed.terminate_all_servers().await?;
+
+    // Wait for database file handles to be fully released
+    fedimint_core::task::sleep_in_test("wait for federation shutdown", Duration::from_secs(2))
+        .await;
 
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     let db_path = if fedimintd_version >= *VERSION_0_11_0_ALPHA {
@@ -1740,14 +1751,9 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         - balances_before.mine.immature
         - balances_before.mine.trusted;
 
-    // We need to wait for a session to be generated to make sure we have the signed
-    // session outcome in our DB. If there ever is another problem here: wait for
-    // fedimintd-0 specifically to acknowledge the session switch. In practice this
-    // should be sufficiently synchronous though.
-    client.wait_session_outcome(last_tx_session).await?;
-
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
+
     info!("Recovering using epochs method");
 
     let outputs = cmd!(
