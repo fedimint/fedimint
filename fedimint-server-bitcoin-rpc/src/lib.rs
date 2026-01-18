@@ -2,10 +2,10 @@ pub mod bitcoind;
 pub mod esplora;
 
 use anyhow::Result;
-use bitcoin::{BlockHash, Network, Transaction};
-use fedimint_core::Feerate;
+use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::warn;
@@ -50,32 +50,6 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
 
     fn get_url(&self) -> SafeUrl {
         self.bitcoind_client.get_url()
-    }
-
-    async fn get_network(&self) -> Result<Network> {
-        match self.bitcoind_client.get_network().await {
-            Ok(bitcoind_network) => {
-                // Assert that bitcoind network matches esplora network, if available
-                //
-                // This is OK to do every time, as first success is cached internally.
-                if let Ok(esplora_network) = self.esplora_client.get_network().await {
-                    assert_eq!(
-                        bitcoind_network, esplora_network,
-                        "Network mismatch: bitcoind reported {bitcoind_network:?} but esplora reported {esplora_network:?}",
-                    );
-                }
-                Ok(bitcoind_network)
-            }
-            Err(e) => {
-                warn!(
-                    target: LOG_SERVER,
-                    error = %e.fmt_compact_anyhow(),
-                    "BitcoindClient failed for get_network, falling back to EsploraClient"
-                );
-
-                self.esplora_client.get_network().await
-            }
-        }
     }
 
     async fn get_block_count(&self) -> Result<u64> {
@@ -148,5 +122,19 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
     async fn get_sync_progress(&self) -> Result<Option<f64>> {
         // We're always in sync, just like esplora
         self.esplora_client.get_sync_progress().await
+    }
+
+    async fn get_chain_id(&self) -> Result<ChainId> {
+        match self.bitcoind_client.get_chain_id().await {
+            Ok(chain_id) => Ok(chain_id),
+            Err(e) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %e.fmt_compact_anyhow(),
+                    "BitcoindClient failed for get_chain_id, falling back to EsploraClient"
+                );
+                self.esplora_client.get_chain_id().await
+            }
+        }
     }
 }
