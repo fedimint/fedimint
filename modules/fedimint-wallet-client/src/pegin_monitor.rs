@@ -12,14 +12,14 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::module::Amounts;
+use fedimint_core::module::{serde_json, Amounts};
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{BitcoinHash, TransactionId, secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
-use fedimint_wallet_common::WalletInput;
 use fedimint_wallet_common::txoproof::PegInProof;
+use fedimint_wallet_common::{WalletCommonInit, WalletInput};
 use futures::StreamExt as _;
 use secp256k1::Keypair;
 use tokio::sync::watch;
@@ -31,7 +31,9 @@ use crate::client_db::{
     PegInTweakIndexPrefix, TweakIdx,
 };
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{
+    WalletClientModule, WalletClientModuleData, WalletOperationMeta, WalletOperationMetaVariant,
+};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -405,7 +407,7 @@ async fn claim_peg_in(
     tweak_idx: TweakIdx,
     tweak_key: Keypair,
     transaction: &bitcoin::Transaction,
-    operation_id: OperationId,
+    address_operation_id: OperationId,
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
     federation_knows_utxo: bool,
@@ -419,9 +421,10 @@ async fn claim_peg_in(
         out_idx: u32,
         tweak_key: Keypair,
         txout_proof: TxOutProof,
-        operation_id: OperationId,
+        address_operation_id: OperationId,
+        receive_operation_id: OperationId,
         federation_knows_utxo: bool,
-    ) -> Option<OutPointRange> {
+    ) -> Option<(OutPointRange, bitcoin::Amount)> {
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
@@ -431,6 +434,7 @@ async fn claim_peg_in(
         .expect("TODO: handle API returning faulty proofs");
 
         let amount = pegin_proof.tx_output().value.into();
+        let btc_amount = pegin_proof.tx_output().value;
         let wallet_input = if federation_knows_utxo {
             WalletInput::new_v1(&pegin_proof)
         } else {
@@ -465,50 +469,79 @@ async fn claim_peg_in(
             .log_event(
                 dbtx,
                 ReceivePaymentEvent {
-                    operation_id,
+                    operation_id: address_operation_id,
+                    receive_operation_id,
                     amount,
                     txid,
                 },
             )
             .await;
 
-        Some(
+        Some((
             client_ctx
                 .claim_inputs(
                     dbtx,
                     ClientInputBundle::new_no_sm(vec![client_input]),
-                    operation_id,
+                    receive_operation_id,
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
-        )
+            btc_amount,
+        ))
     }
 
     let tx_out_proof = &tx_out_proof;
 
     debug!(target: LOG_CLIENT_MODULE_WALLET, %out_point, "Claiming a peg-in");
 
+    // Generate a new operation ID for this specific deposit claim
+    let receive_operation_id = OperationId::new_random();
+
     client_ctx
         .module_db()
         .autocommit(
             |dbtx, _| {
                 Box::pin(async {
-                    let maybe_change_range = claim_peg_in_inner(
+                    let maybe_claim_result = claim_peg_in_inner(
                         client_ctx,
                         dbtx,
                         transaction,
                         out_point.vout,
                         tweak_key,
                         tx_out_proof.clone(),
-                        operation_id,
+                        address_operation_id,
+                        receive_operation_id,
                         federation_knows_utxo,
                     )
                     .await;
 
-                    let claimed_pegin_data = if let Some(change_range) = maybe_change_range {
+                    let claimed_pegin_data = if let Some((change_range, btc_amount)) = maybe_claim_result {
+                        let claim_txid = change_range.txid();
+                        let change: Vec<_> = change_range.into_iter().collect();
+
+                        client_ctx
+                            .manual_operation_start_dbtx(
+                                dbtx,
+                                receive_operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta {
+                                    variant: WalletOperationMetaVariant::ReceiveDeposit {
+                                        address_operation_id,
+                                        tweak_idx,
+                                        btc_out_point: out_point,
+                                        amount: btc_amount,
+                                        claim_txid,
+                                        change: change.clone(),
+                                    },
+                                    extra_meta: serde_json::Value::Null,
+                                },
+                                vec![],
+                            )
+                            .await?;
+
                         ClaimedPegInData {
-                            claim_txid: change_range.txid(),
-                            change: change_range.into_iter().collect(),
+                            claim_txid,
+                            change,
                         }
                     } else {
                         ClaimedPegInData {
