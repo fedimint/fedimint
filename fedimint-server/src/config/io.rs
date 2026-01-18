@@ -41,7 +41,7 @@ pub const PLAINTEXT_PASSWORD: &str = "password.private";
 pub const DB_FILE: &str = "database";
 
 /// Database file name (redb file)
-pub const REDB_FILE: &str = "database.redb";
+pub const REDB_FILE: &str = "fedimintd.redb";
 
 pub const JSON_EXT: &str = "json";
 
