@@ -18,8 +18,5 @@ pub const FM_IROH_ENABLE_NEXT_ENV: &str = "FM_IROH_ENABLE_NEXT";
 // Api authentication secret
 pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
 
-// Env variable to select database backend (rocksdb or redb)
-pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
-
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";

@@ -29,7 +29,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
-use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
+use envs::{FM_API_SECRET_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
@@ -212,16 +212,6 @@ impl fmt::Display for CliError {
     }
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum DatabaseBackend {
-    /// Use RocksDB database backend
-    #[value(name = "rocksdb")]
-    RocksDb,
-    /// Use Redb database backend
-    #[value(name = "redb", alias = "cursed-redb")]
-    Redb,
-}
-
 #[derive(Parser, Clone)]
 #[command(version)]
 struct Opts {
@@ -249,10 +239,6 @@ struct Opts {
     // Enable using (in parallel) unstable/next Iroh stack
     #[arg(long, env = FM_IROH_ENABLE_NEXT_ENV)]
     iroh_enable_next: Option<bool>,
-
-    /// Database backend to use.
-    #[arg(long, env = FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
-    db_backend: DatabaseBackend,
 
     /// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
@@ -334,25 +320,69 @@ impl Opts {
 
     async fn load_database(&self) -> CliResult<Database> {
         debug!(target: LOG_CLIENT, "Loading client database");
-        let db_path = self.data_dir_create().await?.join("client.db");
-        match self.db_backend {
-            DatabaseBackend::RocksDb => {
-                debug!(target: LOG_CLIENT, "Using RocksDB database backend");
-                Ok(fedimint_rocksdb::RocksDb::build(db_path)
-                    .open()
-                    .await
-                    .map_err_cli_msg("could not open rocksdb database")?
-                    .into())
-            }
-            DatabaseBackend::Redb => {
-                debug!(target: LOG_CLIENT, "Using Redb database backend");
-                Ok(fedimint_redb::RedbDatabase::new(db_path)
-                    .await
-                    .map_err_cli_msg("could not open redb database")?
-                    .into())
+        let data_dir = self.data_dir_create().await?;
+        load_or_migrate_database(data_dir)
+            .await
+            .map_err_cli_msg("could not open database")
+    }
+}
+
+/// Loads the client database, migrating from RocksDB to redb if necessary.
+///
+/// Detection logic:
+/// - `client.redb` exists → use it (already on redb)
+/// - `client.db` is a directory → RocksDB, migrate to `client.redb`
+/// - `client.db` is a file → already redb at legacy path, move to `client.redb`
+/// - Nothing exists → create fresh `client.redb`
+async fn load_or_migrate_database(data_dir: &Path) -> anyhow::Result<Database> {
+    let redb_path = data_dir.join("client.redb");
+    let legacy_path = data_dir.join("client.db");
+
+    // If new redb path already exists, use it
+    if redb_path.exists() {
+        return Ok(fedimint_redb::RedbDatabase::new(&redb_path).await?.into());
+    }
+
+    // Check legacy path
+    if legacy_path.exists() {
+        if legacy_path.is_dir() {
+            // It's RocksDB - migrate
+            info!(
+                target: LOG_CLIENT,
+                "Migrating client database from RocksDB to redb..."
+            );
+
+            let rocksdb = fedimint_rocksdb::RocksDb::build(&legacy_path)
+                .open()
+                .await?;
+            let redb = fedimint_redb::RedbDatabase::open(&redb_path)?;
+            fedimint_redb::migrate_database(&rocksdb, &redb).await?;
+            drop(rocksdb);
+            drop(redb);
+
+            std::fs::rename(&legacy_path, data_dir.join("client.db.migrated"))?;
+
+            info!(
+                target: LOG_CLIENT,
+                "Client database migration complete"
+            );
+        } else {
+            // It's already redb at legacy path - move to new path
+            info!(
+                target: LOG_CLIENT,
+                "Moving redb from legacy path to new path..."
+            );
+            std::fs::rename(&legacy_path, &redb_path)?;
+            // Also move the lock file if it exists
+            let lock_file = data_dir.join("client.db.lock");
+            if lock_file.exists() {
+                std::fs::rename(&lock_file, data_dir.join("client.redb.lock"))?;
             }
         }
     }
+
+    // Open (new or migrated) redb at canonical path
+    Ok(fedimint_redb::RedbDatabase::new(&redb_path).await?.into())
 }
 
 async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> {
