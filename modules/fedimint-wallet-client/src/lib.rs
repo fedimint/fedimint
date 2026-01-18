@@ -76,7 +76,7 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use crate::api::WalletFederationApi;
-use crate::backup::WalletRecovery;
+use crate::backup::recover_esplora_only;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
     PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, SupportsSafeDepositPrefix,
@@ -267,20 +267,16 @@ impl ClientModuleInit for WalletClientInit {
         })
     }
 
-    /// Wallet recovery
+    /// Wallet recovery using Esplora-only approach.
     ///
-    /// Query bitcoin rpc for history of addresses from last known used
-    /// addresses (or index 0) until `MAX_GAP` unused ones.
-    ///
-    /// Notably does not persist the progress of addresses being queried,
-    /// because it is not expected that it would take long enough to bother.
+    /// Scans Bitcoin addresses via Esplora from index 0 using a gap limit
+    /// to find all peg-in addresses.
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-        snapshot: Option<&<Self::Module as ClientModule>::Backup>,
+        _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        args.recover_from_history::<WalletRecovery>(self, snapshot)
-            .await
+        recover_esplora_only(args, self).await
     }
 
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
@@ -1548,7 +1544,8 @@ mod tests {
 
     use super::*;
     use crate::backup::{
-        RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
+        ONCHAIN_RECOVER_MAX_GAP, RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome,
+        recover_scan_idxes_for_activity,
     };
 
     #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
@@ -1557,18 +1554,19 @@ mod tests {
         {
             let last_checked = AtomicBool::new(false);
             let last_checked = &last_checked;
+            let gap = ONCHAIN_RECOVER_MAX_GAP;
             assert_eq!(
                 recover_scan_idxes_for_activity(
                     TweakIdx(0),
                     &BTreeSet::new(),
                     |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(9) => {
+                        Ok(match cur_idx.0 {
+                            x if x == gap - 1 => {
                                 last_checked.store(true, Ordering::SeqCst);
                                 vec![]
                             }
-                            TweakIdx(10) => panic!("Shouldn't happen"),
-                            TweakIdx(11) => {
+                            x if x == gap => panic!("Shouldn't happen"),
+                            x if x == gap + 1 => {
                                 vec![0usize] /* just for type inference */
                             }
                             _ => vec![],
@@ -1589,20 +1587,23 @@ mod tests {
         {
             let last_checked = AtomicBool::new(false);
             let last_checked = &last_checked;
+            let gap = ONCHAIN_RECOVER_MAX_GAP;
+            // With indices 1 and 2 already used, last_used_idx starts at 2
+            // So we scan from 0, skip 1 and 2, and continue until 2 + gap
             assert_eq!(
                 recover_scan_idxes_for_activity(
                     TweakIdx(0),
                     &BTreeSet::from([TweakIdx(1), TweakIdx(2)]),
                     |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(1) => panic!("Shouldn't happen: already used (1)"),
-                            TweakIdx(2) => panic!("Shouldn't happen: already used (2)"),
-                            TweakIdx(11) => {
+                        Ok(match cur_idx.0 {
+                            1 => panic!("Shouldn't happen: already used (1)"),
+                            2 => panic!("Shouldn't happen: already used (2)"),
+                            x if x == 2 + gap - 1 => {
                                 last_checked.store(true, Ordering::SeqCst);
                                 vec![]
                             }
-                            TweakIdx(12) => panic!("Shouldn't happen"),
-                            TweakIdx(13) => {
+                            x if x == 2 + gap => panic!("Shouldn't happen"),
+                            x if x == 2 + gap + 1 => {
                                 vec![0usize] /* just for type inference */
                             }
                             _ => vec![],
@@ -1623,18 +1624,20 @@ mod tests {
         {
             let last_checked = AtomicBool::new(false);
             let last_checked = &last_checked;
+            let gap = ONCHAIN_RECOVER_MAX_GAP;
+            // Starting from index 10, finding activity at 10, then scanning until 10 + gap
             assert_eq!(
                 recover_scan_idxes_for_activity(
                     TweakIdx(10),
                     &BTreeSet::new(),
                     |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(10) => vec![()],
-                            TweakIdx(19) => {
+                        Ok(match cur_idx.0 {
+                            10 => vec![()],
+                            x if x == 10 + gap - 1 => {
                                 last_checked.store(true, Ordering::SeqCst);
                                 vec![]
                             }
-                            TweakIdx(20) => panic!("Shouldn't happen"),
+                            x if x == 10 + gap => panic!("Shouldn't happen"),
                             _ => vec![],
                         })
                     }
