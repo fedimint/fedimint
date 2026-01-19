@@ -16,7 +16,6 @@ use fedimint_gateway_common::{
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
-use ldk_node::config::{BackgroundSyncConfig, EsploraSyncConfig};
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
@@ -129,16 +128,7 @@ impl GatewayLdkClient {
                 );
             }
             ChainSource::Esplora { server_url } => {
-                node_builder.set_chain_source_esplora(
-                    get_esplora_url(server_url)?,
-                    Some(EsploraSyncConfig {
-                        background_sync_config: Some(BackgroundSyncConfig {
-                            onchain_wallet_sync_interval_secs: 30,
-                            lightning_wallet_sync_interval_secs: 30,
-                            fee_rate_cache_update_interval_secs: 30,
-                        }),
-                    }),
-                );
+                node_builder.set_chain_source_esplora(get_esplora_url(server_url)?, None);
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {
