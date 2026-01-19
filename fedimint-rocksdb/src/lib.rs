@@ -222,15 +222,6 @@ impl IRawDatabase for RocksDb {
 
         RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options))
     }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        let checkpoint =
-            rocksdb::checkpoint::Checkpoint::new(&self.0).map_err(DatabaseError::backend)?;
-        checkpoint
-            .create_checkpoint(backup_path)
-            .map_err(DatabaseError::backend)?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -238,15 +229,6 @@ impl IRawDatabase for RocksDbReadOnly {
     type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        let checkpoint =
-            rocksdb::checkpoint::Checkpoint::new(&self.0).map_err(DatabaseError::backend)?;
-        checkpoint
-            .create_checkpoint(backup_path)
-            .map_err(DatabaseError::backend)?;
-        Ok(())
     }
 }
 

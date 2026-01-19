@@ -95,7 +95,6 @@ pub async fn run(
     bitcoin_rpc: DynServerBitcoinRpc,
     setup_ui_router: SetupUiRouter,
     dashboard_ui_router: DashboardUiRouter,
-    db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
@@ -188,7 +187,6 @@ pub async fn run(
         bitcoin_rpc,
         settings.ui_bind,
         dashboard_ui_router,
-        db_checkpoint_retention,
         iroh_api_limits,
     ))
     .await?;

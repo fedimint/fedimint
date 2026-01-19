@@ -108,7 +108,6 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::marker::{self, PhantomData};
 use std::ops::{self, DerefMut, Range};
-use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -267,9 +266,6 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
-
-    // Checkpoint the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -281,10 +277,6 @@ where
 
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
         (**self).begin_transaction().await
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        (**self).checkpoint(backup_path)
     }
 }
 
@@ -323,9 +315,6 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// The prefix len of this database refers to the global (as opposed to
     /// module-isolated) key space
     fn is_global(&self) -> bool;
-
-    /// Checkpoints the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -345,10 +334,6 @@ where
 
     fn is_global(&self) -> bool {
         (**self).is_global()
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        (**self).checkpoint(backup_path)
     }
 }
 
@@ -383,10 +368,6 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
 
     fn is_global(&self) -> bool {
         true
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.raw.checkpoint(backup_path)
     }
 }
 
@@ -523,10 +504,6 @@ impl Database {
         's: 'tx,
     {
         self.begin_transaction().await.into_nc()
-    }
-
-    pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.inner.checkpoint(backup_path)
     }
 
     /// Runs a closure with a reference to a database transaction and tries to
@@ -738,10 +715,6 @@ where
         } else {
             self.inner.is_global()
         }
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.inner.checkpoint(backup_path)
     }
 }
 
@@ -3334,7 +3307,6 @@ mod test_utils {
     async fn test_autocommit() {
         use std::marker::PhantomData;
         use std::ops::Range;
-        use std::path::Path;
 
         use anyhow::anyhow;
         use async_trait::async_trait;
@@ -3354,10 +3326,6 @@ mod test_utils {
             type Transaction<'a> = FakeTransaction<'a>;
             async fn begin_transaction(&self) -> FakeTransaction {
                 FakeTransaction(PhantomData)
-            }
-
-            fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
-                Ok(())
             }
         }
 

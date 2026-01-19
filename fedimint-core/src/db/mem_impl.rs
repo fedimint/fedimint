@@ -1,6 +1,5 @@
 use std::fmt::{self, Debug};
 use std::ops::Range;
-use std::path::Path;
 
 use futures::{StreamExt, stream};
 use imbl::OrdMap;
@@ -78,10 +77,6 @@ impl IRawDatabase for MemDatabase {
             tx_data: db_copy,
             db: self,
         }
-    }
-
-    fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
-        Ok(())
     }
 }
 

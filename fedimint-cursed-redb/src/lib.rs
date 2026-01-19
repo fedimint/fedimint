@@ -2,7 +2,6 @@
 
 use std::fmt::Debug;
 use std::ops::Range;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use fedimint_core::db::{
@@ -95,10 +94,6 @@ impl IRawDatabase for MemAndRedb {
             },
             db: self,
         }
-    }
-
-    fn checkpoint(&self, _: &Path) -> DatabaseResult<()> {
-        unimplemented!()
     }
 }
 
