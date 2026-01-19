@@ -114,10 +114,6 @@ impl IRawDatabase for RedbDatabase {
 
         RedbReadTransaction { table }
     }
-
-    fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
-        Ok(())
-    }
 }
 
 impl IRawDatabaseReadTransaction for RedbReadTransaction {}

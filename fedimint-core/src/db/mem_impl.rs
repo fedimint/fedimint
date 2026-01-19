@@ -1,6 +1,5 @@
 use std::fmt::{self, Debug};
 use std::ops::Range;
-use std::path::Path;
 
 use futures::{StreamExt, stream};
 use imbl::OrdMap;
@@ -86,10 +85,6 @@ impl IRawDatabase for MemDatabase {
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         // Fallback: use write transaction as read transaction
         self.begin_write_transaction().await
-    }
-
-    fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
-        Ok(())
     }
 }
 

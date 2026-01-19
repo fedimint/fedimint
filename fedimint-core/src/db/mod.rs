@@ -95,7 +95,6 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::marker::{self, PhantomData};
 use std::ops::{self, DerefMut, Range};
-use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -207,9 +206,6 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Start a read-only database transaction
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a>;
-
-    // Checkpoint the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -226,10 +222,6 @@ where
 
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         (**self).begin_read_transaction().await
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        (**self).checkpoint(backup_path)
     }
 }
 
@@ -272,9 +264,6 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// The prefix len of this database refers to the global (as opposed to
     /// module-isolated) key space
     fn is_global(&self) -> bool;
-
-    /// Checkpoints the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -299,10 +288,6 @@ where
 
     fn is_global(&self) -> bool {
         (**self).is_global()
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        (**self).checkpoint(backup_path)
     }
 }
 
@@ -342,10 +327,6 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
 
     fn is_global(&self) -> bool {
         true
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.raw.checkpoint(backup_path)
     }
 }
 
@@ -506,10 +487,6 @@ impl Database {
         )
     }
 
-    pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.inner.checkpoint(backup_path)
-    }
-
     /// Waits for key to be notified.
     ///
     /// Calls the `checker` when value of the key may have changed.
@@ -625,10 +602,6 @@ where
             inner: self.inner.begin_read_transaction().await,
             prefix: self.prefix.clone(),
         })
-    }
-
-    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
-        self.inner.checkpoint(backup_path)
     }
 }
 

@@ -79,8 +79,4 @@ where
     async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         self.inner.begin_read_transaction().await
     }
-
-    fn checkpoint(&self, backup_path: &Path) -> fedimint_core::db::DatabaseResult<()> {
-        self.inner.checkpoint(backup_path)
-    }
 }

@@ -276,7 +276,7 @@ impl FederationTestBuilder {
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
-            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().keep();
+            let data_dir = tempfile::Builder::new().tempdir().unwrap().keep();
             let code_version_str = env!("CARGO_PKG_VERSION");
 
             let connector = TlsTcpConnector::new(
@@ -317,12 +317,11 @@ impl FederationTestBuilder {
                     module_init_registry,
                     &subgroup,
                     ApiSecrets::default(),
-                    checkpoint_dir,
+                    data_dir,
                     code_version_str.to_string(),
                     bitcoin_rpc_connection,
                     ui_bind,
                     Box::new(|_| axum::Router::new()),
-                    1,
                     ConnectionLimits {
                         max_connections: 1000,
                         max_requests_per_connection: 100,

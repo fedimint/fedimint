@@ -74,7 +74,6 @@ pub async fn run(
     dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
-    db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
@@ -303,8 +302,6 @@ pub async fn run(
         shutdown_receiver,
         modules: module_registry,
         task_group: task_group.clone(),
-        data_dir,
-        db_checkpoint_retention,
     }
     .run()
     .await?;

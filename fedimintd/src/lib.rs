@@ -46,9 +46,9 @@ use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_IROH_API_MAX_CONNECTIONS_ENV,
+    FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
 };
 use futures::FutureExt as _;
 use tracing::{debug, error, info};
@@ -164,10 +164,6 @@ struct ServerOpts {
     /// Optional URLs of the Iroh relays to use for registering
     #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh")]
     iroh_relays: Vec<SafeUrl>,
-
-    /// Number of checkpoints from the current session to retain on disk
-    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
-    db_checkpoint_retention: u64,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
@@ -426,7 +422,6 @@ pub async fn run(
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
-            server_opts.db_checkpoint_retention,
             fedimint_server::ConnectionLimits::new(
                 server_opts.iroh_api_max_connections,
                 server_opts.iroh_api_max_requests_per_connection,
