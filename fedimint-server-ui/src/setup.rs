@@ -12,7 +12,8 @@ use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, login_form_response};
-use maud::{DOCTYPE, Markup, html};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
+use qrcode::QrCode;
 use serde::Deserialize;
 
 use crate::{common_head, login_submit_response};
@@ -305,6 +306,23 @@ async fn federation_setup(
             h4 { "Your setup code" }
 
             p { "Share it with other guardians." }
+
+            @let qr_svg = QrCode::new(&our_connection_info)
+                .expect("Failed to generate QR code")
+                .render::<qrcode::render::svg::Color>()
+                .build();
+
+            div class="text-center mb-3" {
+                div class="border rounded p-2 bg-white d-inline-block" style="width: 250px; max-width: 100%;" {
+                    div style="width: 100%; height: auto; overflow: hidden;" {
+                        (PreEscaped(format!(r#"<div style="width: 100%; height: auto;">{}</div>"#,
+                            qr_svg.replace("width=", "data-width=")
+                                  .replace("height=", "data-height=")
+                                  .replace("<svg", r#"<svg style="width: 100%; height: auto; display: block;""#))))
+                    }
+                }
+            }
+
             div class="alert alert-info mb-3" {
                 (our_connection_info)
             }
