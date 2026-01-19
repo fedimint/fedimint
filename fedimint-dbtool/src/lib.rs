@@ -13,7 +13,9 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::module::init::ClientModuleInit;
-use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
+use fedimint_core::db::{
+    IRawDatabaseExt, IReadDatabaseTransactionOps as _, IWriteDatabaseTransactionOps as _,
+};
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;
@@ -158,7 +160,7 @@ impl FedimintDBTool {
         match &options.command {
             DbCommand::List { prefix } => {
                 let rocksdb = open_db(options).await;
-                let mut dbtx = rocksdb.begin_transaction().await;
+                let mut dbtx = rocksdb.begin_write_transaction().await;
                 let prefix_iter = dbtx
                     .raw_find_by_prefix(prefix)
                     .await?
@@ -171,7 +173,7 @@ impl FedimintDBTool {
             }
             DbCommand::Write { key, value } => {
                 let rocksdb = open_db(options).await;
-                let mut dbtx = rocksdb.begin_transaction().await;
+                let mut dbtx = rocksdb.begin_write_transaction().await;
                 dbtx.raw_insert_bytes(key, value)
                     .await
                     .expect("Error inserting entry into RocksDb");
@@ -179,7 +181,7 @@ impl FedimintDBTool {
             }
             DbCommand::Delete { key } => {
                 let rocksdb = open_db(options).await;
-                let mut dbtx = rocksdb.begin_transaction().await;
+                let mut dbtx = rocksdb.begin_write_transaction().await;
                 dbtx.raw_remove_entry(key)
                     .await
                     .expect("Error removing entry from RocksDb");
@@ -233,7 +235,7 @@ impl FedimintDBTool {
             }
             DbCommand::DeletePrefix { prefix } => {
                 let rocksdb = open_db(options).await;
-                let mut dbtx = rocksdb.begin_transaction().await;
+                let mut dbtx = rocksdb.begin_write_transaction().await;
                 dbtx.raw_remove_by_prefix(prefix).await?;
                 dbtx.commit_tx().await;
             }

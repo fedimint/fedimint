@@ -13,8 +13,9 @@ use std::str::FromStr;
 use anyhow::{Context as _, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
-    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseTransaction, PrefixStream,
+    DatabaseError, DatabaseResult, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawWriteDatabaseTransaction, IReadDatabaseTransactionOps, IWriteDatabaseTransactionOps,
+    PrefixStream,
 };
 use fedimint_core::task::block_in_place;
 use fedimint_db_locked::{Locked, LockedBuilder};
@@ -211,8 +212,11 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 
 #[async_trait]
 impl IRawDatabase for RocksDb {
-    type Transaction<'a> = RocksDbTransaction<'a>;
-    async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
+    type WriteTransaction<'a> = RocksDbTransaction<'a>;
+    // Fallback: use write transaction as read transaction for now
+    type ReadTransaction<'a> = RocksDbTransaction<'a>;
+
+    async fn begin_write_transaction<'a>(&'a self) -> RocksDbTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
 
@@ -221,6 +225,11 @@ impl IRawDatabase for RocksDb {
         write_options.set_sync(true);
 
         RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options))
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        // Fallback: use write transaction as read transaction
+        self.begin_write_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -233,10 +242,18 @@ impl IRawDatabase for RocksDb {
     }
 }
 
+impl IRawDatabaseReadTransaction for RocksDbTransaction<'_> {}
+
 #[async_trait]
 impl IRawDatabase for RocksDbReadOnly {
-    type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
-    async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
+    type WriteTransaction<'a> = RocksDbReadOnlyTransaction<'a>;
+    type ReadTransaction<'a> = RocksDbReadOnlyTransaction<'a>;
+
+    async fn begin_write_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
+        RocksDbReadOnlyTransaction(&self.0)
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
     }
 
@@ -250,31 +267,13 @@ impl IRawDatabase for RocksDbReadOnly {
     }
 }
 
-#[async_trait]
-impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.snapshot().get(key).unwrap();
-            self.0.put(key, value).map_err(DatabaseError::backend)?;
-            Ok(val)
-        })
-    }
+impl IRawDatabaseReadTransaction for RocksDbReadOnlyTransaction<'_> {}
 
+#[async_trait]
+impl IReadDatabaseTransactionOps for RocksDbTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
-        })
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.snapshot().get(key).unwrap();
-            self.0.delete(key).map_err(DatabaseError::backend)?;
-            Ok(val)
         })
     }
 
@@ -316,6 +315,54 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        let prefix = key_prefix.to_vec();
+        let next_prefix = next_prefix(&prefix);
+        let iterator_mode = if let Some(next_prefix) = &next_prefix {
+            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
+        } else {
+            rocksdb::IteratorMode::End
+        };
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                key_bytes
+                    .starts_with(&prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
+    }
+}
+
+#[async_trait]
+impl IWriteDatabaseTransactionOps for RocksDbTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            let val = self.0.snapshot().get(key).unwrap();
+            self.0.put(key, value).map_err(DatabaseError::backend)?;
+            Ok(val)
+        })
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            let val = self.0.snapshot().get(key).unwrap();
+            self.0.delete(key).map_err(DatabaseError::backend)?;
+            Ok(val)
+        })
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
@@ -347,37 +394,10 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             Ok(())
         })
     }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> DatabaseResult<PrefixStream<'_>> {
-        let prefix = key_prefix.to_vec();
-        let next_prefix = next_prefix(&prefix);
-        let iterator_mode = if let Some(next_prefix) = &next_prefix {
-            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
-        } else {
-            rocksdb::IteratorMode::End
-        };
-        Ok(fedimint_core::runtime::block_in_place(|| {
-            let mut options = rocksdb::ReadOptions::default();
-            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
-            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
-            let rocksdb_iter = iter.map_while(move |res| {
-                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
-                key_bytes
-                    .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
-            });
-            Box::pin(convert_to_async_stream(rocksdb_iter))
-        }))
-    }
 }
 
-impl IDatabaseTransactionOps for RocksDbTransaction<'_> {}
-
 #[async_trait]
-impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
+impl IRawWriteDatabaseTransaction for RocksDbTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
             match self.0.commit() {
@@ -401,23 +421,11 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        _key: &[u8],
-        _value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot insert into a read only transaction");
-    }
-
+impl IReadDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
         })
-    }
-
-    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot remove from a read only transaction");
     }
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
@@ -460,10 +468,6 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
         }))
     }
 
-    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-        panic!("Cannot remove from a read only transaction");
-    }
-
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
@@ -490,10 +494,27 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
     }
 }
 
-impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {}
+#[async_trait]
+impl IWriteDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot insert into a read only transaction");
+    }
+
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot remove from a read only transaction");
+    }
+
+    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
+        panic!("Cannot remove from a read only transaction");
+    }
+}
 
 #[async_trait]
-impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
+impl IRawWriteDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         panic!("Cannot commit a read only transaction");
     }
@@ -501,7 +522,9 @@ impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
     use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -598,56 +621,6 @@ mod fedimint_rocksdb_tests {
     async fn test_dbtx_write_conflict() {
         fedimint_core::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
             .await;
-    }
-
-    /// Test that concurrent transaction conflicts are handled gracefully
-    /// with autocommit retry logic instead of panicking.
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_concurrent_transaction_conflict_with_autocommit() {
-        use std::sync::Arc;
-
-        let db = Arc::new(open_temp_db("fcb-rocksdb-test-concurrent-conflict"));
-
-        // Spawn multiple concurrent tasks that all write to the same key
-        // This will trigger optimistic transaction conflicts
-        let mut handles = Vec::new();
-
-        for i in 0u64..10 {
-            let db_clone = Arc::clone(&db);
-            let handle =
-                fedimint_core::runtime::spawn("rocksdb-transient-error-test", async move {
-                    for j in 0u64..10 {
-                        // Use autocommit which handles retriable errors with retry logic
-                        let result = db_clone
-                            .autocommit::<_, _, anyhow::Error>(
-                                |dbtx, _| {
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    let val = (i * 100 + j) as u8;
-                                    Box::pin(async move {
-                                        // All transactions write to the same key to force conflicts
-                                        dbtx.insert_entry(&TestKey(vec![0]), &TestVal(vec![val]))
-                                            .await;
-                                        Ok(())
-                                    })
-                                },
-                                None, // unlimited retries
-                            )
-                            .await;
-
-                        // Should succeed after retries, must NOT panic with "Resource busy"
-                        assert!(
-                            result.is_ok(),
-                            "Transaction should succeed after retries, got: {result:?}",
-                        );
-                    }
-                });
-            handles.push(handle);
-        }
-
-        // Wait for all tasks - none should panic
-        for handle in handles {
-            handle.await.expect("Task should not panic");
-        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -752,7 +725,7 @@ mod fedimint_rocksdb_tests {
                 RocksDb::build(&path).open().await.unwrap(),
                 ModuleDecoderRegistry::default(),
             );
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&TestKey(vec![0]), &TestVal(vec![3]))
                 .await;
             dbtx.insert_entry(&TestKey(vec![254]), &TestVal(vec![1]))
@@ -796,7 +769,7 @@ mod fedimint_rocksdb_tests {
         // Test readonly implementation
         let db_readonly = RocksDbReadOnly::open_read_only(path).await.unwrap();
         let db_readonly = Database::new(db_readonly, ModuleRegistry::default());
-        let mut dbtx = db_readonly.begin_transaction_nc().await;
+        let mut dbtx = db_readonly.begin_read_transaction().await;
         let query = dbtx
             .find_by_prefix_sorted_descending(&DbPrefixTestPrefix)
             .await

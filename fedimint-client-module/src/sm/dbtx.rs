@@ -1,16 +1,16 @@
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::WriteDatabaseTransaction;
 
 /// A transaction that acts as isolated for module code but can be accessed as a
 /// normal transaction in this crate.
 pub struct ClientSMDatabaseTransaction<'inner, 'parent> {
-    dbtx: &'inner mut DatabaseTransaction<'parent>,
+    dbtx: &'inner mut WriteDatabaseTransaction<'parent>,
     module_instance: ModuleInstanceId,
 }
 
 impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     pub fn new(
-        dbtx: &'inner mut DatabaseTransaction<'parent>,
+        dbtx: &'inner mut WriteDatabaseTransaction<'parent>,
         module_instance: ModuleInstanceId,
     ) -> Self {
         Self {
@@ -20,7 +20,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     }
 
     /// Returns the isolated database transaction for the module.
-    pub fn module_tx(&mut self) -> DatabaseTransaction<'_> {
+    pub fn module_tx(&mut self) -> WriteDatabaseTransaction<'_> {
         self.dbtx
             .to_ref_with_prefix_module_id(self.module_instance)
             .0
@@ -34,7 +34,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     // would be private, but after we've split fedimint-client-module and fedimint-client
     // we need to make it public.
     #[doc(hidden)]
-    pub fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent> {
+    pub fn global_tx(&mut self) -> &mut WriteDatabaseTransaction<'parent> {
         self.dbtx
     }
 

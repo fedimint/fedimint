@@ -19,13 +19,13 @@ use super::{
     BTreeMap, Connector, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
-    IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
+    IWriteDatabaseTransactionOpsTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
     PreimageAuthentication, PreimageAuthenticationPrefix, StreamExt,
     get_gatewayd_database_migrations, migrate_federation_configs, secp256k1, sha256,
 };
 
 async fn create_gatewayd_db_data(db: Database) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     let federation_id = FederationId::dummy();
     let invite_code = InviteCode::new(
         SafeUrl::from_str("http://myexamplefed.com").expect("SafeUrl parsing can't fail"),
@@ -90,7 +90,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
     let _ = TracingSetup::default().init();
     validate_migrations_global(
         |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -146,7 +146,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     async fn create_isolated_record(prefix: Vec<u8>, db: &Database) {
         // Create an isolated database the old way where there was no prefix
         let isolated_db = db.with_prefix(prefix);
-        let mut isolated_dbtx = isolated_db.begin_transaction().await;
+        let mut isolated_dbtx = isolated_db.begin_write_transaction().await;
 
         // Insert a record into the isolated db (doesn't matter what it is)
         isolated_dbtx
@@ -166,7 +166,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             .expect("invalid federation ID");
     let _ = TracingSetup::default().init();
     let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     dbtx.insert_new_entry(
         &FederationConfigKey {
             id: conflicting_fed_id,
@@ -209,11 +209,11 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     create_isolated_record(conflicting_fed_id.consensus_encode_to_vec(), &db).await;
     create_isolated_record(nonconflicting_fed_id.consensus_encode_to_vec(), &db).await;
 
-    let mut migration_dbtx = db.begin_transaction().await;
+    let mut migration_dbtx = db.begin_write_transaction().await;
     migrate_federation_configs(&mut migration_dbtx.to_ref_nc()).await?;
     migration_dbtx.commit_tx().await;
 
-    let mut dbtx = db.begin_transaction_nc().await;
+    let mut dbtx = db.begin_read_transaction().await;
 
     let num_configs = dbtx
         .find_by_prefix(&FederationConfigKeyPrefix)
@@ -225,11 +225,11 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
 
     // Verify that the client databases migrated successfully.
     let isolated_db = db.get_client_database(&conflicting_fed_id);
-    let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+    let mut isolated_dbtx = isolated_db.begin_read_transaction().await;
     assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
 
     let isolated_db = db.get_client_database(&nonconflicting_fed_id);
-    let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
+    let mut isolated_dbtx = isolated_db.begin_read_transaction().await;
     assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
 
     Ok(())

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::IWriteDatabaseTransactionOpsTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};

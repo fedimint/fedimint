@@ -5,7 +5,9 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::api_announcement::{SignedApiAnnouncement, override_api_urls};
@@ -191,31 +193,24 @@ pub(crate) async fn store_api_announcement_updates(
     db: &Database,
     announcements: &BTreeMap<PeerId, SignedApiAnnouncement>,
 ) {
-    db
-        .autocommit(
-            |dbtx, _|{
-                let announcements_inner = announcements.clone();
-            Box::pin(async move {
-                for (peer, new_announcement) in announcements_inner {
-                    let replace_current_announcement = dbtx
-                        .get_value(&ApiAnnouncementKey(peer))
-                        .await.is_none_or(|current_announcement| {
-                            current_announcement.api_announcement.nonce
-                                < new_announcement.api_announcement.nonce
-                        });
-                    if replace_current_announcement {
-                        debug!(target: LOG_CLIENT, ?peer, %new_announcement.api_announcement.api_url, "Updating API announcement");
-                        dbtx.insert_entry(&ApiAnnouncementKey(peer), &new_announcement)
-                            .await;
-                    }
-                }
+    let mut dbtx = db.begin_write_transaction().await;
 
-                Result::<(), ()>::Ok(())
-            })},
-            None,
-        )
-        .await
-        .expect("Will never return an error");
+    for (peer, new_announcement) in announcements {
+        let replace_current_announcement = dbtx
+            .get_value(&ApiAnnouncementKey(*peer))
+            .await
+            .is_none_or(|current_announcement| {
+                current_announcement.api_announcement.nonce
+                    < new_announcement.api_announcement.nonce
+            });
+        if replace_current_announcement {
+            debug!(target: LOG_CLIENT, ?peer, %new_announcement.api_announcement.api_url, "Updating API announcement");
+            dbtx.insert_entry(&ApiAnnouncementKey(*peer), new_announcement)
+                .await;
+        }
+    }
+
+    dbtx.commit_tx().await;
 }
 
 /// Returns a list of all peers and their respective API URLs taking into

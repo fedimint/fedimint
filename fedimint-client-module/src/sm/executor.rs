@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::WriteDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync};
@@ -129,7 +129,7 @@ pub trait IExecutor {
 
     async fn add_state_machines_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult;
 }

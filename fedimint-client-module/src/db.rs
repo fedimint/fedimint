@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseValue as _};
+use fedimint_core::db::{DatabaseValue as _, WriteDatabaseTransaction};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::BoxFuture;
@@ -9,7 +9,7 @@ use fedimint_core::util::BoxFuture;
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.
 pub type ClientModuleMigrationFn = for<'r, 'tx> fn(
-    &'r mut DatabaseTransaction<'tx>,
+    &'r mut WriteDatabaseTransaction<'tx>,
     Vec<(Vec<u8>, OperationId)>, // active states
     Vec<(Vec<u8>, OperationId)>, // inactive states
 ) -> BoxFuture<

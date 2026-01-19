@@ -66,7 +66,7 @@ where
 
         let client_strong = self.client.get();
         let db_states = {
-            let mut dbtx = client_strong.db().begin_transaction_nc().await;
+            let mut dbtx = client_strong.db().begin_read_transaction().await;
             let active_states = client_strong
                 .read_operation_active_states(operation_id, self.module_instance, &mut dbtx)
                 .await

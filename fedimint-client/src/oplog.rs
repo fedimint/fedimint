@@ -7,7 +7,10 @@ use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
 };
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped as _,
+    WriteDatabaseTransaction,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::util::BoxStream;
@@ -42,7 +45,7 @@ impl OperationLog {
     /// result. If no entry exists yet the DB will be queried on each call till
     /// an entry is present.
     async fn get_oldest_operation_log_key(&self) -> Option<ChronologicalOperationLogKey> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         self.oldest_entry
             .get_or_try_init(move || async move {
                 dbtx.find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
@@ -59,7 +62,7 @@ impl OperationLog {
 
     pub async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
@@ -116,7 +119,7 @@ impl OperationLog {
             return vec![];
         };
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         let mut operation_log_keys = Vec::with_capacity(32);
 
         // Find all the operation log keys in the requested window. Since we decided to
@@ -161,15 +164,11 @@ impl OperationLog {
     }
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
-        Self::get_operation_dbtx(
-            &mut self.db.begin_transaction_nc().await.into_nc(),
-            operation_id,
-        )
-        .await
+        Self::get_operation_dbtx(&mut self.db.begin_read_transaction().await, operation_id).await
     }
 
-    pub async fn get_operation_dbtx(
-        dbtx: &mut DatabaseTransaction<'_>,
+    pub async fn get_operation_dbtx<'a>(
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         dbtx.get_value(&OperationLogKey { operation_id }).await
@@ -185,7 +184,7 @@ impl OperationLog {
         let outcome_json =
             JsonStringed(serde_json::to_value(outcome).expect("Outcome is not serializable"));
 
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut operation = Self::get_operation_dbtx(&mut dbtx.to_ref_nc(), operation_id)
             .await
             .expect("Operation exists");
@@ -250,7 +249,7 @@ impl IOperationLog for OperationLog {
 
     async fn get_operation_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         OperationLog::get_operation_dbtx(dbtx, operation_id).await
@@ -258,7 +257,7 @@ impl IOperationLog for OperationLog {
 
     async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: serde_json::Value,
