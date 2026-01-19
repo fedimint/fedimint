@@ -418,6 +418,16 @@ async fn federation_setup(
             var qrScannerModal = null;
 
             function startQrScanner() {
+                // Check for Flutter override hook
+                if (typeof window.fedimintQrScannerOverride === 'function') {
+                    window.fedimintQrScannerOverride(function(result) {
+                        if (result) {
+                            document.getElementById('peer_info').value = result;
+                        }
+                    });
+                    return;
+                }
+
                 var modalEl = document.getElementById('qrScannerModal');
                 qrScannerModal = new bootstrap.Modal(modalEl);
 
