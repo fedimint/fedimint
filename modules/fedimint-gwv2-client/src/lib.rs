@@ -26,7 +26,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::ReadDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -72,7 +72,7 @@ impl ModuleInit for GatewayClientInitV2 {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(vec![].into_iter())
@@ -332,7 +332,7 @@ impl GatewayClientModuleV2 {
             state: SendSMState::Sending,
         });
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
@@ -346,7 +346,7 @@ impl GatewayClientModuleV2 {
 
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 OutgoingPaymentStarted {
                     operation_start,
                     outgoing_contract: payload.contract.clone(),
@@ -463,10 +463,10 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 IncomingPaymentStarted {
                     operation_start,
                     incoming_contract_commitment: commitment,
@@ -531,10 +531,10 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 IncomingPaymentStarted {
                     operation_start,
                     incoming_contract_commitment: commitment,

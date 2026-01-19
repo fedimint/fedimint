@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use fedimint_client::ClientHandle;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt, Event, EventKind, EventLogId, PersistedLogEntry,
+    DBTransactionEventLogReadExt, Event, EventKind, EventLogId, PersistedLogEntry,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentFailed, IncomingPaymentStarted,
@@ -52,7 +52,7 @@ pub async fn get_events_for_duration(
         .as_micros() as u64;
 
     let batch_end = {
-        let mut dbtx = client.db().begin_transaction_nc().await;
+        let mut dbtx = client.db().begin_read_transaction().await;
         dbtx.get_next_event_log_id().await
     };
 

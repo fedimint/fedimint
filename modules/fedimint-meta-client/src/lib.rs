@@ -23,7 +23,7 @@ use fedimint_client_module::module::{ClientModule, IClientModule};
 use fedimint_client_module::sm::Context;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{Decoder, ModuleKind};
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
+use fedimint_core::db::{DatabaseVersion, ReadDatabaseTransaction};
 use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
@@ -157,7 +157,7 @@ impl ModuleInit for MetaClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

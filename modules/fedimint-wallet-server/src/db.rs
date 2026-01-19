@@ -1,6 +1,6 @@
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::IWriteDatabaseTransactionOpsTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};

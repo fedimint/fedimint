@@ -51,10 +51,10 @@ be run to re-generate the database backup. `test_migrations` will need to be upd
 
 ### Interfaces
 
- - `IRawDatabase` and `IRawDatabaseTransaction` - The interfaces raw database crates implement.
+ - `IRawDatabase` and `IRawWriteDatabaseTransaction` - The interfaces raw database crates implement.
  - `IDatabase` and `IDatabaseTransaction` - The interfaces including key subscribe & notify functionality, added on top of databases.
  - `IDatabaseTransactionOps` and `IDatabaseTransactionCoreOps` - The interfaces of database transaction operations
- - `IDatabaseTransactionOpsCoreTyped` - Like `IDatabaseTransactionOps` but with typed keys and values. Implemented generically over everything implements `IDatabaseTransactionOps`.
+ - `IReadDatabaseTransactionOpsTyped` - Like `IDatabaseTransactionOps` but with typed keys and values. Implemented generically over everything implements `IDatabaseTransactionOps`.
 
 ### Structs
 #### Public
@@ -80,18 +80,18 @@ classDiagram
     PrefixDatabaseTransaction ..|> IDatabaseTransaction : implements
     PrefixDatabaseTransaction ..* IDatabaseTransaction : wraps
     BaseDatabaseTransaction ..|> IDatabaseTransaction : implements
-    BaseDatabaseTransaction ..* IRawDatabaseTransaction : wraps
-    MemTransaction ..|> IRawDatabaseTransaction : implements
-    RocksDbTransaction ..|> IRawDatabaseTransaction : implements
+    BaseDatabaseTransaction ..* IRawWriteDatabaseTransaction : wraps
+    MemTransaction ..|> IRawWriteDatabaseTransaction : implements
+    RocksDbTransaction ..|> IRawWriteDatabaseTransaction : implements
 
-    DatabaseTransactionRef ..|> IDatabaseTransactionOpsCore : implements
-    DatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
-    BaseDatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
-    PrefixDatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
-    MemTransaction ..|> IDatabaseTransactionOpsCore : implements
-    RocksDbTransaction ..|> IDatabaseTransactionOpsCore : implements
+    DatabaseTransactionRef ..|> IReadDatabaseTransactionOps : implements
+    DatabaseTransaction ..|> IReadDatabaseTransactionOps : implements
+    BaseDatabaseTransaction ..|> IReadDatabaseTransactionOps : implements
+    PrefixDatabaseTransaction ..|> IReadDatabaseTransactionOps : implements
+    MemTransaction ..|> IReadDatabaseTransactionOps : implements
+    RocksDbTransaction ..|> IReadDatabaseTransactionOps : implements
 
-    class IDatabaseTransactionOpsCore {
+    class IReadDatabaseTransactionOps {
       <<interface>>
       + raw_insert_bytes()
       + raw_get_bytes()
@@ -116,7 +116,7 @@ classDiagram
     }
 
     class BaseDatabaseTransaction {
-      - IRawDatabaseTransaction
+      - IRawWriteDatabaseTransaction
     }
 
     class RocksDbTransaction {

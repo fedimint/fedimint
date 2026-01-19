@@ -11,7 +11,7 @@ use jsonrpsee_core::Serialize;
 use serde::Deserialize;
 
 use crate::db::{
-    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IReadDatabaseTransactionOpsTyped,
 };
 use crate::task::MaybeSync;
 use crate::util::SafeUrl;
@@ -91,7 +91,7 @@ where
     P::Record: DatabaseRecord<Value = SignedApiAnnouncement> + DatabaseKey + MaybeSend + MaybeSync,
 {
     let mut db_api_urls = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .find_by_prefix(db_key_prefix)
         .await

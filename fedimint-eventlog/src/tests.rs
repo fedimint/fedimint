@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicU8;
 use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
-    NonCommittable,
+    IRawDatabaseExt as _, IReadDatabaseTransactionOpsTyped as _,
+    IWriteDatabaseTransactionOpsTyped as _, NonCommittable, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
@@ -38,7 +38,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         pos: EventLogId,
     ) -> anyhow::Result<()> {
         dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
@@ -48,7 +48,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> anyhow::Result<Option<EventLogId>> {
         Ok(dbtx.get_value(&TestEventLogIdKey).await)
     }
@@ -103,7 +103,7 @@ async fn sanity_handle_events() {
         ),
         async {
             for i in 0..=4 {
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_write_transaction().await;
                 dbtx.log_event_raw(
                     log_ordering_wakeup_tx.clone(),
                     EventKind::from(format!("{i}")),
@@ -133,7 +133,7 @@ async fn test_trim_trimable_log() {
 
     // Populate the trimable log with test entries
     {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         for i in 0..num_entries {
             let id = EventLogTrimableId::from(i as u64);
@@ -152,7 +152,7 @@ async fn test_trim_trimable_log() {
 
     // Verify all entries were inserted
     {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         let count = dbtx
             .find_by_prefix(&EventLogTrimableIdPrefixAll)
             .await
@@ -173,7 +173,7 @@ async fn test_trim_trimable_log() {
 
     // Verify the expected number of entries were deleted
     {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         let remaining_count = dbtx
             .find_by_prefix(&EventLogTrimableIdPrefixAll)
             .await
