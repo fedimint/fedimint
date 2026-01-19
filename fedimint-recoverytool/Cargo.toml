@@ -21,6 +21,7 @@ bitcoin = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-redb = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-wallet-server = { workspace = true }

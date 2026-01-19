@@ -10,7 +10,7 @@ mod metrics;
 
 use std::env;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -30,9 +30,10 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
+use fedimint_redb::{RedbDatabase, migrate_database};
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ConfigGenSettings;
-use fedimint_server::config::io::DB_FILE;
+use fedimint_server::config::io::{DB_FILE, REDB_FILE};
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
@@ -45,9 +46,9 @@ use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_IROH_API_MAX_CONNECTIONS_ENV,
+    FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
 };
 use futures::FutureExt as _;
 use tracing::{debug, error, info};
@@ -164,10 +165,6 @@ struct ServerOpts {
     #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh")]
     iroh_relays: Vec<SafeUrl>,
 
-    /// Number of checkpoints from the current session to retain on disk
-    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
-    db_checkpoint_retention: u64,
-
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
     bind_tokio_console: Option<SocketAddr>,
@@ -227,6 +224,57 @@ impl ServerOpts {
             Ok((url, password))
         }
     }
+}
+
+/// Migrates data from `RocksDB` to redb if needed.
+///
+/// This migration is performed when:
+/// - The redb database file does not exist
+/// - The `RocksDB` database directory exists
+///
+/// After migration, the `RocksDB` directory is preserved as a backup.
+async fn migrate_rocksdb_to_redb_if_needed(data_dir: &Path) -> anyhow::Result<()> {
+    let rocksdb_path = data_dir.join(DB_FILE);
+    let redb_path = data_dir.join(REDB_FILE);
+
+    // If no rocksdb exists either, this is a fresh install or migration is complete
+    if !rocksdb_path.exists() {
+        return Ok(());
+    }
+
+    // Migration needed: rocksdb exists but redb doesn't
+    info!(
+        target: LOG_CORE,
+        "Migrating database from RocksDB to redb..."
+    );
+
+    // Open RocksDB
+    let rocksdb = RocksDb::build(&rocksdb_path)
+        .open()
+        .await
+        .context("Failed to open RocksDB for migration")?;
+
+    // Create new redb
+    let redb = RedbDatabase::open(&redb_path).context("Failed to create redb for migration")?;
+
+    // Copy all data
+    migrate_database(&rocksdb, &redb)
+        .await
+        .context("Failed to migrate data from RocksDB to redb")?;
+
+    // Drop database handles before renaming
+    drop(rocksdb);
+    drop(redb);
+
+    // Rename the old RocksDB directory to indicate migration completed
+    std::fs::rename(&rocksdb_path, data_dir.join(format!("{DB_FILE}.migrated")))?;
+
+    info!(
+        target: LOG_CORE,
+        "Database migration complete"
+    );
+
+    Ok(())
 }
 
 /// Block the thread and run a Fedimintd server
@@ -306,11 +354,15 @@ pub async fn run(
         available_modules: module_init_registry.kinds(),
     };
 
+    // Migrate from RocksDB to redb if needed
+    migrate_rocksdb_to_redb_if_needed(&server_opts.data_dir)
+        .await
+        .expect("Failed to migrate database from RocksDB to redb");
+
     let db = Database::new(
-        RocksDb::build(server_opts.data_dir.join(DB_FILE))
-            .open()
+        RedbDatabase::new(server_opts.data_dir.join(REDB_FILE))
             .await
-            .unwrap(),
+            .expect("Failed to open redb database"),
         ModuleRegistry::default(),
     );
 
@@ -370,7 +422,6 @@ pub async fn run(
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
-            server_opts.db_checkpoint_retention,
             fedimint_server::ConnectionLimits::new(
                 server_opts.iroh_api_max_connections,
                 server_opts.iroh_api_max_requests_per_connection,

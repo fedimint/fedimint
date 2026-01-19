@@ -2833,13 +2833,13 @@ dependencies = [
  "fedimint-client",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-lnv2-client",
  "fedimint-logging",
  "fedimint-meta-client",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
  "fs-lock",
@@ -2971,7 +2971,7 @@ dependencies = [
  "fedimint-client-rpc",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
+ "fedimint-redb",
  "js-sys",
  "serde_json",
  "tracing",
@@ -3077,25 +3077,6 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
  "z32",
-]
-
-[[package]]
-name = "fedimint-cursed-redb"
-version = "0.11.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "fedimint-core",
- "fedimint-db-locked",
- "fedimint-logging",
- "futures",
- "gloo-utils",
- "imbl",
- "redb",
- "tempfile",
- "tokio",
- "tracing",
- "web-sys",
 ]
 
 [[package]]
@@ -3391,7 +3372,6 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-derive-secret",
  "fedimint-dummy-client",
  "fedimint-dummy-common",
@@ -3411,6 +3391,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-logging",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-tonic-lnd",
@@ -4113,6 +4094,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet-server",
@@ -4192,6 +4174,24 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+]
+
+[[package]]
+name = "fedimint-redb"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "fedimint-db-locked",
+ "fedimint-logging",
+ "futures",
+ "gloo-utils",
+ "redb",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "web-sys",
 ]
 
 [[package]]
@@ -4628,11 +4628,11 @@ dependencies = [
  "fedimint-client",
  "fedimint-connectors",
  "fedimint-core",
- "fedimint-cursed-redb",
  "fedimint-derive-secret",
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-mint-client",
+ "fedimint-redb",
  "fedimint-wallet-client",
  "futures",
  "gloo-net",
@@ -4659,6 +4659,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-mint-common",
  "fedimint-mint-server",
+ "fedimint-redb",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-server-bitcoin-rpc",
@@ -8892,9 +8893,9 @@ dependencies = [
 
 [[package]]
 name = "redb"
-version = "2.6.0"
+version = "2.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef6a6d3a65ea334d6cdfb31fa2525c20184b7aa7bd1ad1e2e37502610d4609f"
+checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
 dependencies = [
  "libc",
 ]

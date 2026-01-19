@@ -29,7 +29,8 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -38,6 +39,7 @@ use fedimint_core::module::{
     MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
@@ -112,7 +114,7 @@ impl ClientModule for DummyClientModule {
 
     async fn create_final_inputs_and_outputs(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         unit: AmountUnit,
         input_amount: Amount,
@@ -228,11 +230,15 @@ impl ClientModule for DummyClientModule {
         stream.next_or_pending().await
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtc: &mut ReadDatabaseTransaction<'_>,
+        unit: AmountUnit,
+    ) -> Amount {
         get_funds(dbtc, unit).await
     }
 
-    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         get_funds_all(dbtx).await
     }
 
@@ -369,8 +375,6 @@ impl DummyClientModule {
 
     /// Wait to receive money at an outpoint
     pub async fn receive_money_hack(&self, outpoint: OutPoint) -> anyhow::Result<()> {
-        let mut dbtx = self.db.begin_transaction().await;
-
         #[allow(deprecated)]
         let outcome = self
             .client_ctx
@@ -392,9 +396,9 @@ impl DummyClientModule {
         // before. The actual state machine is supposed to update the balance,
         // but `receive_money` is typically paired with `send_money` which
         // creates a state machine only on the sender's client.
+        let mut dbtx = self.db.begin_write_transaction().await;
         dbtx.insert_entry(&DummyClientFundsKey { unit: outcome.1 }, &outcome.0)
             .await;
-
         dbtx.commit_tx().await;
 
         Ok(())
@@ -407,19 +411,22 @@ impl DummyClientModule {
 
     /// Get balance for a specific amount unit
     pub async fn get_balance(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         Ok(get_funds(&mut dbtx, unit).await)
     }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+async fn get_funds<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
+    unit: AmountUnit,
+) -> Amount {
     let funds = dbtx.get_value(&DummyClientFundsKey { unit }).await;
     funds.unwrap_or(Amount::ZERO)
 }
 
-async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
-    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
-
+async fn get_funds_all<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
+) -> Amounts {
     let funds_entries = dbtx
         .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)
         .await
@@ -447,7 +454,7 @@ impl ModuleInit for DummyClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

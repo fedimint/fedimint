@@ -28,7 +28,8 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, IDatabaseTransactionOpsCoreTyped as _, verify_module_db_integrity_dbtx,
+    Database, IReadDatabaseTransactionOpsTyped as _, IWriteDatabaseTransactionOpsTyped as _,
+    verify_module_db_integrity_dbtx,
 };
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
@@ -223,7 +224,7 @@ impl ClientBuilder {
                 continue;
             };
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             apply_migrations_client_module_dbtx(
                 &mut dbtx.to_ref_nc(),
                 kind.to_string(),
@@ -284,7 +285,7 @@ impl ClientBuilder {
         // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = db_no_decoders.begin_transaction().await;
+            let mut dbtx = db_no_decoders.begin_write_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(&crate::db::ClientConfigKey, &config)
                 .await;
@@ -424,7 +425,7 @@ impl ClientBuilder {
         let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
 
         match db_no_decoders
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ClientPreRootSecretHashKey)
             .await
@@ -437,8 +438,7 @@ impl ClientBuilder {
             }
             _ => {
                 debug!(target: LOG_CLIENT, "Backfilling secret hash");
-                // Note: no need for dbtx autocommit, we are the only writer ATM
-                let mut dbtx = db_no_decoders.begin_transaction().await;
+                let mut dbtx = db_no_decoders.begin_write_transaction().await;
                 dbtx.insert_entry(
                     &ClientPreRootSecretHashKey,
                     &pre_root_secret.derive_pre_root_secret_hash(),
@@ -704,7 +704,7 @@ impl ClientBuilder {
                 let recovery = match init_state.does_require_recovery() {
                     Some(snapshot) => {
                         match db
-                            .begin_transaction_nc()
+                            .begin_read_transaction()
                             .await
                             .get_value(&ClientModuleRecovery { module_instance_id })
                             .await
@@ -731,7 +731,7 @@ impl ClientBuilder {
                             }
                             _ => {
                                 let progress = RecoveryProgress::none();
-                                let mut dbtx = db.begin_transaction().await;
+                                let mut dbtx = db.begin_write_transaction().await;
                                 dbtx.log_event(
                                     log_ordering_wakeup_tx.clone(),
                                     None,
@@ -797,7 +797,7 @@ impl ClientBuilder {
         };
 
         if init_state.is_pending() && module_recoveries.is_empty() {
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&ClientInitStateKey, &init_state.into_complete())
                 .await;
             dbtx.commit_tx().await;
@@ -951,7 +951,7 @@ impl ClientBuilder {
     }
 
     async fn load_init_state(db: &Database) -> InitState {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.get_value(&ClientInitStateKey)
             .await
             .unwrap_or_else(|| {
@@ -1012,7 +1012,7 @@ impl ClientBuilder {
         if let Some(pending_config) = Client::get_pending_config_from_db(db).await {
             debug!(target: LOG_CLIENT, "Found pending client config, migrating to current config");
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             // Update the main config with the pending config
             dbtx.insert_entry(&crate::db::ClientConfigKey, &pending_config)
                 .await;
@@ -1114,7 +1114,7 @@ impl ClientBuilder {
         if current_config != &fetched_config {
             debug!(target: LOG_CLIENT, "Detected federation config change, saving as pending config");
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_entry(&PendingClientConfigKey, &fetched_config)
                 .await;
             dbtx.commit_tx().await;

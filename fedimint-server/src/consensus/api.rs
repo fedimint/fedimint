@@ -19,7 +19,8 @@ use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -125,8 +126,8 @@ impl ConsensusApi {
 
         debug!(target: LOG_NET_API, %txid, "Received a submitted transaction");
 
-        // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        // Create write tx for validation (uses semaphore, but we won't commit)
+        let mut dbtx = self.db.begin_write_transaction().await;
         // we already processed the transaction before
         if dbtx
             .get_value(&AcceptedTransactionKey(txid))
@@ -166,7 +167,7 @@ impl ConsensusApi {
     pub async fn await_transaction(
         &self,
         txid: TransactionId,
-    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>) {
+    ) -> (Vec<ModuleInstanceId>, ReadDatabaseTransaction<'_>) {
         self.db
             .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
             .await
@@ -188,7 +189,7 @@ impl ConsensusApi {
             .modules
             .get_expect(module_id)
             .output_status(
-                &mut dbtx.to_ref_with_prefix_module_id(module_id).0.into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(module_id).0,
                 outpoint,
                 module_id,
             )
@@ -217,7 +218,7 @@ impl ConsensusApi {
                 .modules
                 .get_expect(*module_id)
                 .output_status(
-                    &mut dbtx.to_ref_with_prefix_module_id(*module_id).0.into_nc(),
+                    &mut dbtx.to_ref_with_prefix_module_id(*module_id).0,
                     outpoint,
                     *module_id,
                 )
@@ -231,7 +232,7 @@ impl ConsensusApi {
     }
 
     pub async fn session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+        get_finished_session_count_static(&mut self.db.begin_read_transaction().await).await
     }
 
     pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
@@ -242,7 +243,7 @@ impl ConsensusApi {
     }
 
     pub async fn session_status(&self, session_index: u64) -> SessionStatusV2 {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
 
         match session_index.cmp(&get_finished_session_count_static(&mut dbtx).await) {
             Ordering::Greater => SessionStatusV2::Initial,
@@ -314,11 +315,7 @@ impl ConsensusApi {
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
-        // Writes are related to compacting audit keys, which we can safely ignore
-        // within an API request since the compaction will happen when constructing an
-        // audit in the consensus server
-        dbtx.ignore_uncommitted();
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         let mut audit = Audit::default();
         let mut module_instance_id_to_kind: HashMap<ModuleInstanceId, String> = HashMap::new();
@@ -326,7 +323,10 @@ impl ConsensusApi {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(module_instance_id)
+                        .0
+                        .to_ref_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -398,7 +398,7 @@ impl ConsensusApi {
 
     async fn handle_backup_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Committable>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -437,7 +437,7 @@ impl ConsensusApi {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         id: PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
@@ -447,7 +447,7 @@ impl ConsensusApi {
     /// least ourselves)
     async fn api_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ApiAnnouncementPrefix)
             .await
@@ -476,83 +476,56 @@ impl ConsensusApi {
             return Err(ApiError::bad_request("Invalid signature".into()));
         }
 
-        // Use autocommit to handle potential transaction conflicts with retries
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let announcement = announcement.clone();
-                    Box::pin(async move {
-                        if let Some(existing_announcement) =
-                            dbtx.get_value(&ApiAnnouncementKey(peer_id)).await
-                        {
-                            // If the current announcement is semantically identical to the new one
-                            // (except for potentially having a
-                            // different, valid signature) we return ok to allow
-                            // the caller to stop submitting the value if they are in a retry loop.
-                            if existing_announcement.api_announcement
-                                == announcement.api_announcement
-                            {
-                                return Ok(());
-                            }
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                            // We only accept announcements with a nonce higher than the current one
-                            // to avoid replay attacks.
-                            if existing_announcement.api_announcement.nonce
-                                >= announcement.api_announcement.nonce
-                            {
-                                return Err(ApiError::bad_request(
-                                    "Outdated or redundant announcement".into(),
-                                ));
-                            }
-                        }
+        if let Some(existing_announcement) = dbtx.get_value(&ApiAnnouncementKey(peer_id)).await {
+            // If the current announcement is semantically identical to the new one
+            // (except for potentially having a different, valid signature) we return ok
+            // to allow the caller to stop submitting the value if they are in a retry
+            // loop.
+            if existing_announcement.api_announcement == announcement.api_announcement {
+                return Ok(());
+            }
 
-                        dbtx.insert_entry(&ApiAnnouncementKey(peer_id), &announcement)
-                            .await;
-                        Ok(())
-                    })
-                },
-                None,
-            )
-            .await
-            .map_err(|e| match e {
-                fedimint_core::db::AutocommitError::ClosureError { error, .. } => error,
-                fedimint_core::db::AutocommitError::CommitFailed { last_error, .. } => {
-                    ApiError::server_error(format!("Database commit failed: {last_error}"))
-                }
-            })
+            // We only accept announcements with a nonce higher than the current one
+            // to avoid replay attacks.
+            if existing_announcement.api_announcement.nonce >= announcement.api_announcement.nonce {
+                return Err(ApiError::bad_request(
+                    "Outdated or redundant announcement".into(),
+                ));
+            }
+        }
+
+        dbtx.insert_entry(&ApiAnnouncementKey(peer_id), &announcement)
+            .await;
+        dbtx.commit_tx().await;
+        Ok(())
     }
 
     async fn sign_api_announcement(&self, new_url: SafeUrl) -> SignedApiAnnouncement {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let new_url_inner = new_url.clone();
-                    Box::pin(async move {
-                        let new_nonce = dbtx
-                            .get_value(&ApiAnnouncementKey(self.cfg.local.identity))
-                            .await
-                            .map_or(0, |a| a.api_announcement.nonce + 1);
-                        let announcement = ApiAnnouncement {
-                            api_url: new_url_inner,
-                            nonce: new_nonce,
-                        };
-                        let ctx = secp256k1::Secp256k1::new();
-                        let signed_announcement = announcement
-                            .sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                        dbtx.insert_entry(
-                            &ApiAnnouncementKey(self.cfg.local.identity),
-                            &signed_announcement,
-                        )
-                        .await;
-
-                        Result::<_, ()>::Ok(signed_announcement)
-                    })
-                },
-                None,
-            )
+        let new_nonce = dbtx
+            .get_value(&ApiAnnouncementKey(self.cfg.local.identity))
             .await
-            .expect("Will not terminate on error")
+            .map_or(0, |a| a.api_announcement.nonce + 1);
+        let announcement = ApiAnnouncement {
+            api_url: new_url,
+            nonce: new_nonce,
+        };
+        let ctx = secp256k1::Secp256k1::new();
+        let signed_announcement =
+            announcement.sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+
+        dbtx.insert_entry(
+            &ApiAnnouncementKey(self.cfg.local.identity),
+            &signed_announcement,
+        )
+        .await;
+
+        dbtx.commit_tx().await;
+
+        signed_announcement
     }
 
     /// Changes the guardian password by re-encrypting the private config and
@@ -906,9 +879,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 let db = context.db();
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_write_transaction().await;
                 fedimint
-                    .handle_backup_request(&mut dbtx.to_ref_nc(), request).await?;
+                    .handle_backup_request(&mut dbtx, request).await?;
                 dbtx.commit_tx_result().await?;
                 Ok(())
 
@@ -919,7 +892,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, id: PublicKey| -> Option<ClientBackupSnapshot> {
                 let db = context.db();
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 Ok(fedimint
                     .handle_recover_request(&mut dbtx, id).await)
             }
@@ -967,7 +940,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
                 check_auth(context)?;
                 let db = context.db();
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 Ok(backup_statistics_static(&mut dbtx).await)
             }
         },
@@ -990,7 +963,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
 }
 
 pub(crate) async fn backup_statistics_static(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ReadDatabaseTransaction<'_>,
 ) -> BackupStatistics {
     const DAY_SECS: u64 = 24 * 60 * 60;
     const WEEK_SECS: u64 = 7 * DAY_SECS;

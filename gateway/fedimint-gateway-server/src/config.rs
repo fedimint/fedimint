@@ -15,16 +15,6 @@ use crate::envs::{
     FM_GATEWAY_SKIP_SETUP_ENV,
 };
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum DatabaseBackend {
-    /// Use RocksDB database backend
-    #[value(name = "rocksdb")]
-    RocksDb,
-    /// Use CursedRedb database backend (hybrid memory/redb)
-    #[value(name = "cursed-redb")]
-    CursedRedb,
-}
-
 /// Command line parameters for starting the gateway. `mode`, `data_dir`,
 /// `listen`, and `api_addr` are all required.
 #[derive(Parser)]
@@ -79,10 +69,6 @@ pub struct GatewayOpts {
         default_value_t = super::DEFAULT_NUM_ROUTE_HINTS
     )]
     num_route_hints: u32,
-
-    /// Database backend to use.
-    #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
-    pub db_backend: DatabaseBackend,
 
     /// The username to use when connecting to bitcoind
     #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]

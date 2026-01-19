@@ -3,7 +3,7 @@ use std::future;
 use std::time::SystemTime;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, WriteDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -42,13 +42,13 @@ pub trait IOperationLog {
 
     async fn get_operation_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
     ) -> Option<OperationLogEntry>;
 
     async fn add_operation_log_entry_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: serde_json::Value,

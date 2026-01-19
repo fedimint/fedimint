@@ -23,7 +23,7 @@ async-trait = { workspace = true }
 fedimint-client-rpc = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-cursed-redb = { workspace = true }
+fedimint-redb = { workspace = true }
 js-sys = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

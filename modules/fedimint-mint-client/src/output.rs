@@ -12,7 +12,7 @@ use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_core::core::{Decoder, OperationId};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::IWriteDatabaseTransactionOpsTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUTS_OUTCOMES_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;

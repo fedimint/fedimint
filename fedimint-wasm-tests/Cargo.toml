@@ -7,7 +7,7 @@ publish = false
 version = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["fedimint-cursed-redb"]
+normal = ["fedimint-redb"]
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -19,12 +19,12 @@ anyhow = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
-# currently unused, only to test compilation
-fedimint-cursed-redb = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-mint-client = { workspace = true }
+# currently unused, only to test compilation
+fedimint-redb = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 gloo-net = { workspace = true }

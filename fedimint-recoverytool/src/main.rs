@@ -12,7 +12,7 @@ use bitcoin::network::Network;
 use bitcoin::secp256k1::{PublicKey, SECP256K1, SecretKey};
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::module::CommonModuleInit;
@@ -21,6 +21,7 @@ use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
+use fedimint_redb::RedbDatabase;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
@@ -122,12 +123,20 @@ fn get_wallet_module_id(cfg: &ServerConfig) -> anyhow::Result<ModuleInstanceId> 
 }
 
 async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
-    Database::new(
-        RocksDbReadOnly::open_read_only(path)
-            .await
-            .expect("Error opening readonly DB"),
-        module_decoders,
-    )
+    // Detect database type: RocksDB is a directory, redb is a file
+    if path.is_dir() {
+        Database::new(
+            RocksDbReadOnly::open_read_only(path)
+                .await
+                .expect("Error opening RocksDB"),
+            module_decoders,
+        )
+    } else {
+        Database::new(
+            RedbDatabase::open(path).expect("Error opening redb"),
+            module_decoders,
+        )
+    }
 }
 
 #[tokio::main]
@@ -196,7 +205,7 @@ async fn process_and_print_tweak_source(
             };
 
             let utxos: Vec<ImportableWallet> = db
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
@@ -224,7 +233,7 @@ async fn process_and_print_tweak_source(
             .with_fallback();
 
             let db = get_db(db, decoders).await;
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             let mut change_tweak_idx: u64 = 0;
 

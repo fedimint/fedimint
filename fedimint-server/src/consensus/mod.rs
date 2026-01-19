@@ -74,12 +74,11 @@ pub async fn run(
     dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
-    db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
-    let mut global_dbtx = db.begin_transaction().await;
+    let mut global_dbtx = db.begin_write_transaction().await;
     apply_migrations_server_dbtx(
         &mut global_dbtx.to_ref_nc(),
         Arc::new(ServerDbMigrationContext),
@@ -123,7 +122,7 @@ pub async fn run(
             Some(module_init) => {
                 info!(target: LOG_CORE, "Initialise module {module_id}...");
 
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_write_transaction().await;
                 apply_migrations_dbtx(
                     &mut dbtx.to_ref_nc(),
                     Arc::new(ServerDbMigrationContext) as Arc<_>,
@@ -303,8 +302,6 @@ pub async fn run(
         shutdown_receiver,
         modules: module_registry,
         task_group: task_group.clone(),
-        data_dir,
-        db_checkpoint_retention,
     }
     .run()
     .await?;
@@ -366,11 +363,10 @@ fn submit_module_ci_proposals(
                     CONSENSUS_PROPOSAL_TIMEOUT,
                     module.consensus_proposal(
                         &mut db
-                            .begin_transaction_nc()
+                            .begin_read_transaction()
                             .await
                             .to_ref_with_prefix_module_id(module_id)
-                            .0
-                            .into_nc(),
+                            .0,
                         module_id,
                     ),
                 )

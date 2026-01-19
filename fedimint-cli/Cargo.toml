@@ -36,13 +36,13 @@ fedimint-bip39 = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-cursed-redb = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-logging = { workspace = true }
 fedimint-meta-client = { workspace = true, features = ["cli"] }
 fedimint-mint-client = { workspace = true, features = ["cli"] }
+fedimint-redb = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fs-lock = { workspace = true }
