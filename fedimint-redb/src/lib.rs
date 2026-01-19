@@ -42,9 +42,17 @@ impl Debug for RedbDatabase {
 impl RedbDatabase {
     /// Opens or creates a redb database at the given path.
     ///
+    /// If the database uses an older file format (v2), it will be automatically
+    /// upgraded to the latest format (v3).
+    ///
     /// Creates the fedimint table if it doesn't exist.
     pub fn open(path: impl AsRef<Path>) -> DatabaseResult<Self> {
-        let db = redb::Database::create(path).map_err(DatabaseError::backend)?;
+        let mut db = redb::Database::create(path).map_err(DatabaseError::backend)?;
+
+        // Upgrade to v3 file format if needed (v2 -> v3 migration)
+        // This is needed for databases created with redb < 3.0
+        db.upgrade().map_err(DatabaseError::backend)?;
+
         Self::from_redb(db)
     }
 

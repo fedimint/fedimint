@@ -22,7 +22,7 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 
 futures = { workspace = true }
-redb = "2.2.0"
+redb = "2.6.0"
 tracing = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
