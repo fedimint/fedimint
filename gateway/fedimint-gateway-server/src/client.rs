@@ -10,7 +10,7 @@ use fedimint_client::{Client, ClientBuilder, RootSecret};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_gateway_common::FederationConfig;
@@ -179,7 +179,7 @@ impl GatewayClientBuilder {
     /// Verifies that the saved `ClientConfig` contains the expected
     /// federation's config.
     async fn verify_client_config(db: &Database, federation_id: FederationId) -> AdminResult<()> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         if let Some(config) = dbtx.get_value(&ClientConfigKey).await
             && config.calculate_federation_id() != federation_id
         {

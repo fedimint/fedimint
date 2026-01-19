@@ -7,7 +7,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, VERSION_THAT_INTRODUCED_GET_SESSION_STATUS,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -68,7 +68,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// continue recovery if it was previously terminated before completion.
     async fn load_dbtx(
         init: &Self::Init,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>>;
 
@@ -77,24 +77,24 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// See [`Self::load_dbtx`].
     async fn store_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         common: &RecoveryFromHistoryCommon,
     );
 
     /// Delete the recovery state from the database
     ///
     /// See [`Self::load_dbtx`].
-    async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>);
+    async fn delete_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>);
 
     /// Read the finalization status
     ///
     /// See [`Self::load_dbtx`].
-    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool>;
+    async fn load_finalized(dbtx: &mut ReadDatabaseTransaction<'_>) -> Option<bool>;
 
     /// Store finalization status
     ///
     /// See [`Self::load_finalized`].
-    async fn store_finalized(dbtx: &mut DatabaseTransaction<'_>, state: bool);
+    async fn store_finalized(dbtx: &mut WriteDatabaseTransaction<'_>, state: bool);
 
     /// Handle session outcome, adjusting the current state
     ///
@@ -222,7 +222,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     ///
     /// Notably this function is running in a database-autocommit wrapper, so
     /// might be called again on database commit failure.
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()>;
+    async fn finalize_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()>;
 }
 
 impl<Init> ClientModuleRecoverArgs<Init>
@@ -379,7 +379,7 @@ where
         let db = self.db();
         let client_ctx = self.context();
 
-        if Recovery::load_finalized(&mut db.begin_transaction_nc().await)
+        if Recovery::load_finalized(&mut db.begin_read_transaction().await)
             .await
             .unwrap_or_default()
         {
@@ -415,7 +415,7 @@ where
         let (mut state, mut common_state) =
             // TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
             // we could just ... start from scratch? at least being able to force this behavior might be useful
-            if let Some((state, common_state)) = Recovery::load_dbtx(init, &mut db.begin_transaction_nc().await, self).await? {
+            if let Some((state, common_state)) = Recovery::load_dbtx(init, &mut db.begin_read_transaction().await, self).await? {
                 (state, common_state)
             } else {
                 let (state, start_session) = Recovery::new(init, self, snapshot).await?;
@@ -456,7 +456,7 @@ where
             )
             .await?;
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
             state.store_dbtx(&mut dbtx.to_ref_nc(), &common_state).await;
             dbtx.commit_tx().await;
 
@@ -472,7 +472,7 @@ where
 
         state.pre_finalize().await?;
 
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         state.store_dbtx(&mut dbtx.to_ref_nc(), &common_state).await;
         dbtx.commit_tx().await;
 
@@ -482,22 +482,11 @@ where
             "Finalizing restore"
         );
 
-        db.autocommit(
-            |dbtx, _| {
-                let state = state.clone();
-                {
-                    Box::pin(async move {
-                        state.delete_dbtx(dbtx).await;
-                        state.finalize_dbtx(dbtx).await?;
-                        Recovery::store_finalized(dbtx, true).await;
-
-                        Ok::<_, anyhow::Error>(())
-                    })
-                }
-            },
-            None,
-        )
-        .await?;
+        let mut dbtx = db.begin_write_transaction().await;
+        state.delete_dbtx(&mut dbtx.to_ref_nc()).await;
+        state.finalize_dbtx(&mut dbtx.to_ref_nc()).await?;
+        Recovery::store_finalized(&mut dbtx.to_ref_nc(), true).await;
+        dbtx.commit_tx().await;
 
         Ok(())
     }

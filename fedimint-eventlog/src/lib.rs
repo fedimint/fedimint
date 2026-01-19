@@ -19,9 +19,11 @@ use std::{fmt, ops};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, NonCommittable,
+    WithDecoders, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
@@ -491,8 +493,36 @@ impl_db_lookup!(
     query_prefix = EventLogTrimableIdPrefix
 );
 
+/// Read-only event log operations that work with both read and write
+/// transactions
 #[apply(async_trait_maybe_send!)]
-pub trait DBTransactionEventLogExt {
+pub trait DBTransactionEventLogReadExt {
+    /// Next [`EventLogId`] to use for new ordered events.
+    ///
+    /// Used by ordering task, though might be
+    /// useful to get the current count of events.
+    async fn get_next_event_log_id(&mut self) -> EventLogId;
+
+    /// Next [`EventLogTrimableId`] to use for new ordered trimable events
+    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
+
+    /// Read a part of the event log.
+    async fn get_event_log(
+        &mut self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>;
+
+    async fn get_event_log_trimable(
+        &mut self,
+        pos: Option<EventLogTrimableId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>;
+}
+
+/// Write operations for the event log
+#[apply(async_trait_maybe_send!)]
+pub trait DBTransactionEventLogExt: DBTransactionEventLogReadExt {
     #[allow(clippy::too_many_arguments)]
     async fn log_event_raw(
         &mut self,
@@ -526,80 +556,15 @@ pub trait DBTransactionEventLogExt {
         )
         .await;
     }
-
-    /// Next [`EventLogId`] to use for new ordered events.
-    ///
-    /// Used by ordering task, though might be
-    /// useful to get the current count of events.
-    async fn get_next_event_log_id(&mut self) -> EventLogId;
-
-    /// Next [`EventLogTrimableId`] to use for new ordered trimable events
-    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
-
-    /// Read a part of the event log.
-    async fn get_event_log(
-        &mut self,
-        pos: Option<EventLogId>,
-        limit: u64,
-    ) -> Vec<PersistedLogEntry>;
-
-    async fn get_event_log_trimable(
-        &mut self,
-        pos: Option<EventLogTrimableId>,
-        limit: u64,
-    ) -> Vec<PersistedLogEntry>;
 }
 
+/// Implement read operations for any type that supports reading from the
+/// database
 #[apply(async_trait_maybe_send!)]
-impl<'tx, Cap> DBTransactionEventLogExt for DatabaseTransaction<'tx, Cap>
+impl<'a, T> DBTransactionEventLogReadExt for T
 where
-    Cap: Send,
+    T: IReadDatabaseTransactionOpsTyped<'a> + WithDecoders + MaybeSend,
 {
-    async fn log_event_raw(
-        &mut self,
-        log_ordering_wakeup_tx: watch::Sender<()>,
-        kind: EventKind,
-        module_kind: Option<ModuleKind>,
-        module_id: Option<ModuleInstanceId>,
-        payload: Vec<u8>,
-        persist: EventPersistence,
-    ) {
-        assert_eq!(
-            module_kind.is_some(),
-            module_id.is_some(),
-            "Events of modules must have module_id set"
-        );
-
-        let unordered_id = UnordedEventLogId::new();
-        trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, "New unordered event log event");
-
-        if self
-            .insert_entry(
-                &unordered_id,
-                &UnorderedEventLogEntry {
-                    flags: match persist {
-                        EventPersistence::Transient => 0,
-                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
-                        EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
-                    },
-                    inner: EventLogEntry {
-                        kind,
-                        module: module_kind.map(|kind| (kind, module_id.unwrap())),
-                        ts_usecs: unordered_id.ts_usecs,
-                        payload,
-                    },
-                },
-            )
-            .await
-            .is_some()
-        {
-            panic!("Trying to overwrite event in the client event log");
-        }
-        self.on_commit(move || {
-            log_ordering_wakeup_tx.send_replace(());
-        });
-    }
-
     async fn get_next_event_log_id(&mut self) -> EventLogId {
         self.find_by_prefix_sorted_descending(&EventLogIdPrefixAll)
             .await
@@ -647,9 +612,61 @@ where
     }
 }
 
+/// Implement write operations for WriteDatabaseTransaction
+#[apply(async_trait_maybe_send!)]
+impl<'tx, Cap> DBTransactionEventLogExt for WriteDatabaseTransaction<'tx, Cap>
+where
+    Cap: Send,
+{
+    async fn log_event_raw(
+        &mut self,
+        log_ordering_wakeup_tx: watch::Sender<()>,
+        kind: EventKind,
+        module_kind: Option<ModuleKind>,
+        module_id: Option<ModuleInstanceId>,
+        payload: Vec<u8>,
+        persist: EventPersistence,
+    ) {
+        assert_eq!(
+            module_kind.is_some(),
+            module_id.is_some(),
+            "Events of modules must have module_id set"
+        );
+
+        let unordered_id = UnordedEventLogId::new();
+        trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, "New unordered event log event");
+
+        if self
+            .insert_entry(
+                &unordered_id,
+                &UnorderedEventLogEntry {
+                    flags: match persist {
+                        EventPersistence::Transient => 0,
+                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
+                    },
+                    inner: EventLogEntry {
+                        kind,
+                        module: module_kind.map(|kind| (kind, module_id.unwrap())),
+                        ts_usecs: unordered_id.ts_usecs,
+                        payload,
+                    },
+                },
+            )
+            .await
+            .is_some()
+        {
+            panic!("Trying to overwrite event in the client event log");
+        }
+        self.on_commit(move || {
+            log_ordering_wakeup_tx.send_replace(());
+        });
+    }
+}
+
 /// Trims old entries from the trimable event log
 async fn trim_trimable_log(db: &Database, current_time_usecs: u64) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
 
     let current_trimable_id = dbtx.get_next_event_log_trimable_id().await;
     let min_id_threshold = current_trimable_id
@@ -694,18 +711,18 @@ pub async fn run_event_log_ordering_task(
     trim_trimable_log(&db, current_time_usecs).await;
 
     let mut next_entry_id = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .get_next_event_log_id()
         .await;
     let mut next_entry_id_trimable = db
-        .begin_transaction_nc()
+        .begin_read_transaction()
         .await
         .get_next_event_log_trimable_id()
         .await;
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let unordered_events = dbtx
             .find_by_prefix(&UnorderedEventLogIdPrefixAll)
@@ -792,14 +809,14 @@ pub trait EventLogNonTrimableTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         pos: EventLogId,
     ) -> anyhow::Result<()>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> anyhow::Result<Option<EventLogId>>;
 }
 pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
@@ -810,14 +827,14 @@ pub trait EventLogTrimableTracker {
     // Store position in the event log
     async fn store(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         pos: EventLogTrimableId,
     ) -> anyhow::Result<()>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
-        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> anyhow::Result<Option<EventLogTrimableId>>;
 }
 pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
@@ -829,18 +846,18 @@ pub async fn handle_events<F, R>(
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+    F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
     let mut next_key: EventLogId = tracker
-        .load(&mut db.begin_transaction_nc().await)
+        .load(&mut db.begin_write_transaction().await.to_ref_nc())
         .await?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
@@ -853,6 +870,8 @@ where
                 dbtx.commit_tx().await;
             }
             _ => {
+                drop(dbtx);
+
                 if log_event_added.changed().await.is_err() {
                     break Ok(());
                 }
@@ -868,17 +887,17 @@ pub async fn handle_trimable_events<F, R>(
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+    F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
     let mut next_key: EventLogTrimableId = tracker
-        .load(&mut db.begin_transaction_nc().await)
+        .load(&mut db.begin_write_transaction().await.to_ref_nc())
         .await?
         .unwrap_or_default();
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
@@ -890,6 +909,8 @@ where
                 dbtx.commit_tx().await;
             }
             _ => {
+                drop(dbtx);
+
                 if log_event_added.changed().await.is_err() {
                     break Ok(());
                 }

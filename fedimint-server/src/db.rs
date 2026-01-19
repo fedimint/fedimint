@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
 
 use bitcoin::hex::DisplayHex as _;
-use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCore as _, MODULE_GLOBAL_PREFIX,
-};
+use fedimint_core::db::MODULE_GLOBAL_PREFIX;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
 use futures::StreamExt as _;
@@ -25,7 +23,9 @@ pub enum DbKeyPrefix {
     Module = MODULE_GLOBAL_PREFIX,
 }
 
-pub(crate) async fn verify_server_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
+pub(crate) async fn verify_server_db_integrity_dbtx(
+    dbtx: &mut impl fedimint_core::db::IReadDatabaseTransactionOps,
+) {
     let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
 
     let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");

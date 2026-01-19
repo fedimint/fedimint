@@ -20,7 +20,7 @@ use fedimint_core::core::{
     Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome, ModuleInstanceId, ModuleKind,
 };
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
@@ -70,7 +70,7 @@ pub trait ServerModule: Debug + Sized {
     /// the Fedimint developers.
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -82,7 +82,7 @@ pub trait ServerModule: Debug + Sized {
     /// space with redundant consensus items.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
@@ -103,7 +103,7 @@ pub trait ServerModule: Debug + Sized {
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         in_point: InPoint,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
@@ -118,7 +118,7 @@ pub trait ServerModule: Debug + Sized {
     /// `output_status`.
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, <Self::Common as ModuleCommon>::OutputError>;
@@ -139,7 +139,7 @@ pub trait ServerModule: Debug + Sized {
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
@@ -157,7 +157,7 @@ pub trait ServerModule: Debug + Sized {
     #[doc(hidden)]
     async fn verify_input_submission<'a, 'b, 'c>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'c>,
+        _dbtx: &mut WriteDatabaseTransaction<'c>,
         _input: &'b <Self::Common as ModuleCommon>::Input,
     ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
         Ok(())
@@ -169,7 +169,7 @@ pub trait ServerModule: Debug + Sized {
     #[doc(hidden)]
     async fn verify_output_submission<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _output: &'a <Self::Common as ModuleCommon>::Output,
         _out_point: OutPoint,
     ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
@@ -183,7 +183,7 @@ pub trait ServerModule: Debug + Sized {
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     );
@@ -210,7 +210,7 @@ pub trait IServerModule: Debug {
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynModuleConsensusItem>;
 
@@ -219,7 +219,7 @@ pub trait IServerModule: Debug {
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut WriteDatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
@@ -235,7 +235,7 @@ pub trait IServerModule: Debug {
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
     ) -> Result<InputMeta, DynInputError>;
@@ -250,7 +250,7 @@ pub trait IServerModule: Debug {
     /// `output_status`.
     async fn process_output<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut WriteDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, DynOutputError>;
@@ -259,7 +259,7 @@ pub trait IServerModule: Debug {
     #[doc(hidden)]
     async fn verify_input_submission<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b DynInput,
     ) -> Result<(), DynInputError>;
 
@@ -267,7 +267,7 @@ pub trait IServerModule: Debug {
     #[doc(hidden)]
     async fn verify_output_submission<'a>(
         &self,
-        _dbtx: &mut DatabaseTransaction<'a>,
+        _dbtx: &mut WriteDatabaseTransaction<'a>,
         _output: &DynOutput,
         _out_point: OutPoint,
     ) -> Result<(), DynOutputError>;
@@ -276,7 +276,7 @@ pub trait IServerModule: Debug {
     #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome>;
@@ -288,7 +288,7 @@ pub trait IServerModule: Debug {
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     );
@@ -325,7 +325,7 @@ where
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
@@ -340,7 +340,7 @@ where
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut WriteDatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -377,7 +377,7 @@ where
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
     ) -> Result<InputMeta, DynInputError> {
@@ -404,7 +404,7 @@ where
     /// `output_status`.
     async fn process_output<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut WriteDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, DynOutputError> {
@@ -423,7 +423,7 @@ where
 
     async fn verify_input_submission<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b DynInput,
     ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input_submission(
@@ -440,7 +440,7 @@ where
 
     async fn verify_output_submission<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut WriteDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<(), DynOutputError> {
@@ -460,7 +460,7 @@ where
     /// See [`ServerModule::output_status`]
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
@@ -477,7 +477,7 @@ where
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {

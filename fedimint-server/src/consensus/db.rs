@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseVersion, IReadDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
@@ -93,11 +95,8 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
     async fn get_module_history_stream<'s, 'tx>(
         &'s self,
         module_instance_id: ModuleInstanceId,
-        dbtx: &'s mut DatabaseTransaction<'tx>,
-    ) -> BoxStream<'s, DynModuleHistoryItem>
-    where
-        'tx: 's,
-    {
+        dbtx: &'s mut WriteDatabaseTransaction<'tx>,
+    ) -> BoxStream<'s, DynModuleHistoryItem> {
         dbtx.ensure_global().expect("Dbtx must be global");
 
         // Items of the currently ongoing session, that have already been processed. We

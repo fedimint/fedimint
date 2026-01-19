@@ -1,6 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -11,7 +9,10 @@ use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
@@ -55,9 +56,6 @@ use crate::metrics::{
     CONSENSUS_SESSION_COUNT,
 };
 
-// The name of the directory where the database checkpoints are stored.
-const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
-
 /// Runs the main server consensus loop
 pub struct ConsensusEngine {
     pub modules: ServerModuleRegistry,
@@ -70,8 +68,6 @@ pub struct ConsensusEngine {
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
     pub task_group: TaskGroup,
-    pub data_dir: PathBuf,
-    pub db_checkpoint_retention: u64,
 }
 
 impl ConsensusEngine {
@@ -95,8 +91,6 @@ impl ConsensusEngine {
 
     pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         assert_eq!(self.num_peers(), NumPeers::from(1));
-
-        self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
@@ -139,8 +133,6 @@ impl ConsensusEngine {
             )
             .await;
 
-            self.checkpoint_database(session_index);
-
             info!(target: LOG_CONSENSUS, "Session {session_index} completed");
 
             if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
@@ -156,8 +148,6 @@ impl ConsensusEngine {
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
-
-        self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
@@ -323,14 +313,12 @@ impl ConsensusEngine {
         self.complete_session(session_index, signed_session_outcome)
             .await;
 
-        self.checkpoint_database(session_index);
-
         Some(())
     }
 
     async fn is_recovery(&self) -> bool {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&AlephUnitsPrefix)
             .await
@@ -735,7 +723,7 @@ impl ConsensusEngine {
 
     pub async fn pending_accepted_items(&self) -> Vec<AcceptedItem> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&AcceptedItemPrefix)
             .await
@@ -749,7 +737,7 @@ impl ConsensusEngine {
         session_index: u64,
         signed_session_outcome: SignedSessionOutcome,
     ) {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
 
@@ -769,95 +757,6 @@ impl ConsensusEngine {
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
-    }
-
-    /// Returns the full path where the database checkpoints are stored.
-    fn db_checkpoints_dir(&self) -> PathBuf {
-        self.data_dir.join(DB_CHECKPOINTS_DIR)
-    }
-
-    /// Creates the directory within the data directory for storing the database
-    /// checkpoints or deletes checkpoints before `current_session` -
-    /// `checkpoint_retention`.
-    fn initialize_checkpoint_directory(&self, current_session: u64) -> anyhow::Result<()> {
-        let checkpoint_dir = self.db_checkpoints_dir();
-
-        if checkpoint_dir.exists() {
-            debug!(
-                target: LOG_CONSENSUS,
-                ?current_session,
-                "Removing database checkpoints up to `current_session`"
-            );
-
-            for checkpoint in fs::read_dir(checkpoint_dir)?.flatten() {
-                // Validate that the directory is a session index
-                if let Ok(file_name) = checkpoint.file_name().into_string()
-                    && let Ok(session) = file_name.parse::<u64>()
-                    && current_session >= self.db_checkpoint_retention
-                    && session < current_session - self.db_checkpoint_retention
-                {
-                    fs::remove_dir_all(checkpoint.path())?;
-                }
-            }
-        } else {
-            fs::create_dir_all(&checkpoint_dir)?;
-        }
-
-        Ok(())
-    }
-
-    /// Creates a backup of the database in the checkpoint directory. These
-    /// checkpoints can be used to restore the database in case the
-    /// federation falls out of consensus (recommended for experts only).
-    fn checkpoint_database(&self, session_index: u64) {
-        // If `checkpoint_retention` has been turned off, don't checkpoint the database
-        // at all.
-        if self.db_checkpoint_retention == 0 {
-            return;
-        }
-
-        let checkpoint_dir = self.db_checkpoints_dir();
-        let session_checkpoint_dir = checkpoint_dir.join(format!("{session_index}"));
-
-        {
-            let _timing /* logs on drop */ = timing::TimeReporter::new("database-checkpoint").level(Level::TRACE);
-            match self.db.checkpoint(&session_checkpoint_dir) {
-                Ok(()) => {
-                    debug!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, "Created db checkpoint");
-                }
-                Err(err) => {
-                    warn!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, err = %err.fmt_compact(), "Could not create db checkpoint");
-                }
-            }
-        }
-
-        {
-            // Check if any old checkpoint need to be cleaned up
-            let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").level(Level::TRACE);
-            if let Err(err) = self.delete_old_database_checkpoint(session_index, &checkpoint_dir) {
-                warn!(target: LOG_CONSENSUS, err = %err.fmt_compact_anyhow(), "Could not delete old checkpoints");
-            }
-        }
-    }
-
-    /// Deletes the database checkpoint directory equal to `session_index` -
-    /// `checkpoint_retention`
-    fn delete_old_database_checkpoint(
-        &self,
-        session_index: u64,
-        checkpoint_dir: &Path,
-    ) -> anyhow::Result<()> {
-        if self.db_checkpoint_retention > session_index {
-            return Ok(());
-        }
-
-        let delete_session_index = session_index - self.db_checkpoint_retention;
-        let checkpoint_to_delete = checkpoint_dir.join(delete_session_index.to_string());
-        if checkpoint_to_delete.exists() {
-            fs::remove_dir_all(checkpoint_to_delete)?;
-        }
-
-        Ok(())
     }
 
     #[instrument(target = LOG_CONSENSUS, skip(self, item), level = "info")]
@@ -893,7 +792,7 @@ impl ConsensusEngine {
             ])
             .set(session_index as i64);
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         dbtx.ignore_uncommitted();
 
@@ -964,7 +863,7 @@ impl ConsensusEngine {
                     &mut dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
-                        .into_nc(),
+                        .to_ref_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -997,7 +896,7 @@ impl ConsensusEngine {
 
     async fn process_consensus_item_with_db_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -1009,11 +908,11 @@ impl ConsensusEngine {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
 
-                let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id).0;
+                let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(instance_id).0;
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                    .process_consensus_item(&mut module_dbtx, &module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -1102,11 +1001,11 @@ impl ConsensusEngine {
     /// Returns the number of sessions already saved in the database. This count
     /// **does not** include the currently running session.
     async fn get_finished_session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+        get_finished_session_count_static(&mut self.db.begin_read_transaction().await).await
     }
 }
 
-pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+pub async fn get_finished_session_count_static(dbtx: &mut ReadDatabaseTransaction<'_>) -> u64 {
     dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
         .next()
