@@ -68,9 +68,23 @@ impl ClientModule for EmptyClientModule {
         unreachable!()
     }
 
+    async fn input_amount(
+        &self,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<Amounts> {
+        unreachable!()
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
+        _output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        unreachable!()
+    }
+
+    async fn output_amount(
+        &self,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
         unreachable!()

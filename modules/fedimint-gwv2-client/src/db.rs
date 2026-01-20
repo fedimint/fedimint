@@ -1,6 +1,4 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, impl_db_record};
 use fedimint_lnv2_common::contracts::LightningContract;
 use strum::EnumIter;
@@ -8,8 +6,6 @@ use strum::EnumIter;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    Gateway = 0x41,
-    IncomingContractStreamIndex = 0x42,
     OutpointContract = 0x43,
     #[allow(dead_code)]
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
@@ -30,22 +26,4 @@ impl_db_record!(
     key = OutpointContractKey,
     value = LightningContract,
     db_prefix = DbKeyPrefix::OutpointContract,
-);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct GatewayKey(pub PublicKey);
-
-impl_db_record!(
-    key = GatewayKey,
-    value = SafeUrl,
-    db_prefix = DbKeyPrefix::Gateway,
-);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct IncomingContractStreamIndexKey;
-
-impl_db_record!(
-    key = IncomingContractStreamIndexKey,
-    value = u64,
-    db_prefix = DbKeyPrefix::IncomingContractStreamIndex
 );
