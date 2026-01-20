@@ -6,6 +6,8 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::too_many_lines)]
 
+pub use fedimint_ln_common as common;
+
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;

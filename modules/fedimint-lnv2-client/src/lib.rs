@@ -4,6 +4,8 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
+pub use fedimint_lnv2_common as common;
+
 mod api;
 #[cfg(feature = "cli")]
 mod cli;

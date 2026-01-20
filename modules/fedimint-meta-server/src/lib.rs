@@ -3,6 +3,8 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 
+pub use fedimint_meta_common as common;
+
 pub mod db;
 
 use std::collections::BTreeMap;
