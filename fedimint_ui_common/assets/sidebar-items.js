@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["BOOTSTRAP_CSS_ROUTE","BOOTSTRAP_JS_ROUTE","HTMX_JS_ROUTE","LOGO_PNG_ROUTE","STYLE_CSS_ROUTE"],"fn":["get_static_asset","get_static_css","get_static_js","get_static_png"],"trait":["WithStaticRoutesExt"]};
+window.SIDEBAR_ITEMS = {"constant":["BOOTSTRAP_CSS_ROUTE","BOOTSTRAP_JS_ROUTE","HTML5_QRCODE_JS_ROUTE","HTMX_JS_ROUTE","LOGO_PNG_ROUTE","STYLE_CSS_ROUTE"],"fn":["get_static_asset","get_static_css","get_static_js","get_static_png"],"trait":["WithStaticRoutesExt"]};
