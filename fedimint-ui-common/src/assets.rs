@@ -7,6 +7,7 @@ use axum::routing::get;
 pub const BOOTSTRAP_CSS_ROUTE: &str = "/assets/bootstrap.min.css";
 pub const BOOTSTRAP_JS_ROUTE: &str = "/assets/bootstrap.bundle.min.js";
 pub const HTMX_JS_ROUTE: &str = "/assets/htmx.org-2.0.4.min.js";
+pub const HTML5_QRCODE_JS_ROUTE: &str = "/assets/html5-qrcode.min.js";
 pub const STYLE_CSS_ROUTE: &str = "/assets/style.css";
 pub const LOGO_PNG_ROUTE: &str = "/assets/logo.png";
 
@@ -51,6 +52,10 @@ where
         .route(
             HTMX_JS_ROUTE,
             get(|| async move { get_static_js(include_str!("../assets/htmx.org-2.0.4.min.js")) }),
+        )
+        .route(
+            HTML5_QRCODE_JS_ROUTE,
+            get(|| async move { get_static_js(include_str!("../assets/html5-qrcode.min.js")) }),
         )
         .route(
             STYLE_CSS_ROUTE,
