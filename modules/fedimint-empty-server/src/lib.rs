@@ -18,6 +18,7 @@ use fedimint_core::module::{
     ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items};
+pub use fedimint_empty_common as common;
 use fedimint_empty_common::config::{
     EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigPrivate,
 };

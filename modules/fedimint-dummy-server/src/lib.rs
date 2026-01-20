@@ -20,6 +20,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
+pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
 };

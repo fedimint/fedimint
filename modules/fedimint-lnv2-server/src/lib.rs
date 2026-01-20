@@ -2,6 +2,8 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
+pub use fedimint_lnv2_common as common;
+
 mod db;
 
 use std::collections::{BTreeMap, BTreeSet};
