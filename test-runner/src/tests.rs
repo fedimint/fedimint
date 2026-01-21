@@ -1,49 +1,63 @@
 use std::env;
 
 use anyhow::Result;
-use clap::{Parser, ValueEnum};
 use devimint::cmd;
 use devimint::util::is_backwards_compatibility_test;
+use itertools::iproduct;
+use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 
-use crate::test_wrapper::run_test;
+use crate::test_wrapper::wrap_test;
 use crate::util::set_env;
-use crate::versions::{Version, set_binary_version_base_executable};
+use crate::versions::{
+    ComponentVersions, Version, build_previous_versions_with_nix,
+    generate_backward_compat_version_matrix, set_binary_version_base_executable,
+};
+use crate::{
+    RunTestData, RunTestsArgs, prebuild_cargo_workspace, run_tests_with_parallel,
+    setup_basic_environment, update_resource_limit,
+};
 
-#[derive(Parser, Debug)]
-pub struct RunOneArgs {
-    /// Test to run
-    #[arg(value_enum)]
-    pub test: TestId,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TestArgs {
+    test: TestId,
+    fed_version: Version,
+    client_version: Version,
+    gateway_version: Version,
+    enable_lnv2: bool,
+}
 
-    /// Federation version
-    #[arg(long, default_value = "current")]
-    pub fed_version: Version,
+/// Run all tests with parallel
+pub async fn run_all_tests(args: RunTestsArgs) -> Result<()> {
+    fedimint_logging::TracingSetup::default().init()?;
+    setup_basic_environment()?;
+    update_resource_limit()?;
+    prebuild_cargo_workspace().await?;
+    build_previous_versions_with_nix(&args.previous_versions).await?;
+    let matrix = if args.previous_versions.is_empty() {
+        vec![ComponentVersions::all_current()]
+    } else {
+        generate_backward_compat_version_matrix(args.previous_versions.clone(), args.full_matrix)
+    };
 
-    /// Client version
-    #[arg(long, default_value = "current")]
-    pub client_version: Version,
-
-    /// Gateway version
-    #[arg(long, default_value = "current")]
-    pub gateway_version: Version,
-
-    /// Enable LNv2 module
-    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
-    pub enable_lnv2: bool,
+    run_tests_with_parallel(
+        &args.parallel_args,
+        generate_test_commands(&matrix, args.times),
+    )
+    .await
 }
 
 /// Run the test when running as the child.
-pub async fn run_one_test(args: RunOneArgs) -> Result<()> {
+pub async fn run_one_test(args: TestArgs) -> Result<()> {
     setup_test_env(&args)?;
 
-    let test_name = args.test.to_possible_value().expect("test has value");
-    let test_name = test_name.get_name();
+    let test_name = args.test.as_ref();
     let version_str = format_version_str(&args);
 
-    run_test(test_name, &version_str, async move || args.test.run().await).await
+    wrap_test(test_name, &version_str, async move || args.test.run().await).await
 }
 
-fn format_version_str(args: &RunOneArgs) -> String {
+fn format_version_str(args: &TestArgs) -> String {
     let is_backwards_compat = args.fed_version != Version::Current
         || args.client_version != Version::Current
         || args.gateway_version != Version::Current;
@@ -58,8 +72,8 @@ fn format_version_str(args: &RunOneArgs) -> String {
     }
 }
 
-// Setup test specific env
-fn setup_test_env(args: &RunOneArgs) -> anyhow::Result<()> {
+// Setup per test specific env
+fn setup_test_env(args: &TestArgs) -> anyhow::Result<()> {
     let is_backwards_compat = args.fed_version != Version::Current
         || args.client_version != Version::Current
         || args.gateway_version != Version::Current;
@@ -86,11 +100,37 @@ fn setup_test_env(args: &RunOneArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn generate_test_commands(matrix: &[ComponentVersions], times: usize) -> Vec<RunTestData> {
+    let tests = TestId::all();
+    let mut commands = Vec::new();
+
+    for (_, versions) in iproduct!(0..times, matrix) {
+        let enable_lnv2_flags = if versions.is_all_current() {
+            vec![true]
+        } else if versions.supports_lnv2() {
+            vec![false, true]
+        } else {
+            vec![false]
+        };
+
+        for (test, enable_lnv2) in iproduct!(tests, enable_lnv2_flags) {
+            commands.push(RunTestData::Normal(TestArgs {
+                test: *test,
+                fed_version: versions.fed.clone(),
+                gateway_version: versions.gateway.clone(),
+                client_version: versions.client.clone(),
+                enable_lnv2,
+            }));
+        }
+    }
+
+    commands
+}
+
 /// Define a list of tests for a clap argument
 macro_rules! define_tests {
     ($($name:ident),* $(,)?) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-        #[clap(rename_all = "snake_case")]
+        #[derive(Debug, Clone, Copy, AsRefStr, PartialEq, Eq, Serialize, Deserialize)]
         #[allow(non_camel_case_types)]
         pub enum TestId {
             $($name),*

@@ -30,7 +30,7 @@ on:
         description: 'Comma-separated tests to run. Options: fedimintd,fedimint-cli,gateway'
         required: false
         default: ''
-        
+
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -56,23 +56,23 @@ jobs:
           # read versions from manually triggered workflows
           # default needed for cron or manual workflow without params
           VERSIONS="${{ github.event.inputs.versions }}"
-          VERSIONS=${VERSIONS:="v0.8.2 current, v0.9.1 current, v0.10.0 current"}
+          VERSIONS=${VERSIONS:="0.8.2:current 0.9.1:current 0.10.0:current"}
 
           # if empty, defaults to all test kinds within script
           export TEST_KINDS="${{ github.event.inputs.test_kinds }}"
 
-          export FM_TEST_CI_ALL_JOBS
-          export FM_TEST_UPGRADE_TIMEOUT
+          export FM_TEST_RUNNER_JOBS
+          export FM_TEST_RUNNER_TIMEOUT
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # the GH runners become flaky with manual runs during the release
             # process, so we reduce parallelism for manual release testing
-            FM_TEST_CI_ALL_JOBS="5"
+            FM_TEST_RUNNER_JOBS="5"
             # some upgrade paths can take a long time, so we increase the timeout
-            FM_TEST_UPGRADE_TIMEOUT="3600"
+            FM_TEST_RUNNER_TIMEOUT="3600"
           else
-            unset FM_TEST_CI_ALL_JOBS
-            unset FM_TEST_UPGRADE_TIMEOUT
+            unset FM_TEST_RUNNER_JOBS
+            unset FM_TEST_RUNNER_TIMEOUT
           fi
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
@@ -90,7 +90,7 @@ jobs:
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             env -u RUSTC_WRAPPER \
-            scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
+            scripts/tests/run-with-nix-workspace-ci.sh ./scripts/dev/test-runner.sh run-upgrade "$VERSIONS"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'

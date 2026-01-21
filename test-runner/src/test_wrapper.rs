@@ -9,7 +9,7 @@ use rand::{Rng as _, thread_rng};
 use crate::util::set_env;
 
 /// Wraps the tests and print some debugging logs
-pub async fn run_test(
+pub async fn wrap_test(
     test_name: &str,
     version_str: &str,
     mut test: impl AsyncFnMut() -> Result<()>,

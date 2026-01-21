@@ -127,20 +127,6 @@ function version_lt() {
   [ "$v1" != "$(echo -e "$v1\n$v2" | sort -V | tail -n 1)" ]
 }
 
-function supports_lnv2() {
-  fed_version=$1
-  client_version=$2
-  gateway_version=$3
-
-  for version in "$fed_version" "$client_version" "$gateway_version"; do
-    if version_lt "$version" "$LNV2_STABLE_VERSION"; then
-        return 1
-    fi
-  done
-
-  return 0
-}
-
 # Returns true if the search string is contained in the array
 function contains() {
   local search_str="$1"

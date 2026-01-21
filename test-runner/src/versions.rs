@@ -6,6 +6,7 @@ use std::str::FromStr;
 use devimint::cmd;
 use devimint::util::nix_binary_version_env_var_name;
 use itertools::{Itertools as _, iproduct};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::util::set_env;
@@ -13,7 +14,7 @@ use crate::util::set_env;
 /// The version at which LNv2 became stable
 pub const LNV2_STABLE_VERSION: semver::Version = semver::Version::new(0, 7, 0);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Version {
     Tagged(semver::Version),
     Current,
@@ -158,6 +159,29 @@ pub fn generate_backward_compat_version_matrix(
     result
 }
 
+pub async fn build_previous_version_binary_with_nix(
+    binary: &str,
+    version: &semver::Version,
+) -> anyhow::Result<()> {
+    info!("Building {binary} {version} using nix");
+    // TODO: should we run concurrency?
+    let path = cmd!(
+        "nix",
+        "build",
+        "github:fedimint/fedimint/v{version}#{binary}",
+        "--no-link",
+        "--print-out-paths"
+    )
+    .out_string()
+    .await?;
+
+    set_env(
+        nix_binary_version_env_var_name(binary, version),
+        format!("{path}/bin/{binary}"),
+    );
+    Ok(())
+}
+
 /// Build binaries for previous version and sets env variables later used by
 /// set_binary_version_base_executable
 pub async fn build_previous_versions_with_nix(versions: &[semver::Version]) -> anyhow::Result<()> {
@@ -165,22 +189,7 @@ pub async fn build_previous_versions_with_nix(versions: &[semver::Version]) -> a
         ["fedimintd", "fedimint-cli", "gatewayd", "gateway-cli"],
         versions,
     ) {
-        info!("Building {binary} {version} using nix");
-        // TODO: should we run concurrency?
-        let path = cmd!(
-            "nix",
-            "build",
-            "github:fedimint/fedimint/v{version}#{binary}",
-            "--no-link",
-            "--print-out-paths"
-        )
-        .out_string()
-        .await?;
-
-        set_env(
-            nix_binary_version_env_var_name(binary, version),
-            format!("{path}/bin/{binary}"),
-        );
+        build_previous_version_binary_with_nix(binary, version).await?
     }
     Ok(())
 }

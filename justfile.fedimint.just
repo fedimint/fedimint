@@ -28,8 +28,8 @@ test-compatibility *VERSIONS="0.8.2 0.9.1 0.10.0":
 test-full-compatibility *VERSIONS="0.4.4":
   ./scripts/dev/test-runner.sh run --full-matrix {{VERSIONS}}
 
-test-upgrades *VERSIONS="v0.8.2 current, v0.9.1 current, v0.10.0 current":
-  ./scripts/tests/upgrade-test.sh {{VERSIONS}}
+test-upgrades *VERSIONS="0.8.2:current 0.9.1:current 0.10.0:current":
+  ./scripts/dev/test-runner.sh run-upgrade {{VERSIONS}}
 
 # `cargo udeps` check
 udeps:

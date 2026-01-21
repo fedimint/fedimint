@@ -17,7 +17,10 @@ fedimint-logging.workspace = true
 itertools.workspace = true
 nix = { workspace = true, features = ["resource"] }
 rand.workspace = true
-semver.workspace = true
+semver = { workspace = true, features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing.workspace = true

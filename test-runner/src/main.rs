@@ -1,6 +1,8 @@
 use std::env::current_exe;
+use std::fmt::Write;
 use std::io::{IsTerminal, stdout};
 use std::process::Stdio;
+use std::str::FromStr;
 use std::thread::available_parallelism;
 use std::{env, fs};
 
@@ -8,11 +10,11 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use devimint::cmd;
 use fedimint_core::envs::is_env_var_set;
-use itertools::iproduct;
 use nix::sys::resource::Resource::RLIMIT_NOFILE;
 use nix::sys::resource::{self};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
 use tokio::io::AsyncWriteExt;
 use tokio::process::ChildStdin;
@@ -20,14 +22,13 @@ use tracing::{info, warn};
 
 mod test_wrapper;
 mod tests;
+mod upgrade_tests;
 mod util;
 mod versions;
 
-use tests::{RunOneArgs, TestId, run_one_test};
 use util::set_env;
-use versions::{
-    ComponentVersions, build_previous_versions_with_nix, generate_backward_compat_version_matrix,
-};
+
+use crate::upgrade_tests::UpgradePath;
 
 #[derive(Parser)]
 #[command(about = "Run fedimint integration tests in parallel")]
@@ -40,43 +41,78 @@ struct Cli {
 enum Command {
     /// Run all tests in parallel
     Run(RunTestsArgs),
+    RunUpgrade(RunUpgradeArgs),
+
     /// Run a single test (called by parallel)
     #[clap(hide = true)]
-    RunOne(RunOneArgs),
+    RunOne {
+        data: RunTestData,
+    },
 }
 
-#[derive(Parser)]
-struct RunTestsArgs {
+/// Test command are sent as json over clap
+#[derive(Serialize, Deserialize, Clone)]
+enum RunTestData {
+    Normal(tests::TestArgs),
+    Upgrade(upgrade_tests::UpgradeTest),
+}
+
+impl FromStr for RunTestData {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Ok(serde_json::from_str(s)?)
+    }
+}
+
+#[derive(Parser, Debug)]
+pub struct RunTestsArgs {
     /// Previous versions to run backwards compat with.
-    #[arg(num_args = 0..)]
+    #[arg(num_args = 0.., value_delimiter = ' ')]
     previous_versions: Vec<semver::Version>,
 
     /// Use full version matrix instead of partial
     #[arg(long, env = "FM_FULL_VERSION_MATRIX")]
     full_matrix: bool,
 
+    /// Number of times to run the test suite
+    #[arg(long, env = "FM_TEST_RUNNER_TIMES", default_value = "1")]
+    times: usize,
+
+    #[clap(flatten)]
+    parallel_args: ParallelArgs,
+}
+
+#[derive(Parser, Debug)]
+pub struct RunUpgradeArgs {
+    /// Upgrade paths to tests.
+    #[arg(num_args = 1.., value_delimiter = ' ')]
+    upgrade_paths: Vec<UpgradePath>,
+
+    #[clap(flatten)]
+    parallel_args: ParallelArgs,
+}
+
+#[derive(Parser, Debug)]
+struct ParallelArgs {
     /// Number of parallel jobs (default: nproc/2 + 1)
-    #[arg(long, env = "FM_TEST_CI_ALL_JOBS")]
+    #[arg(long, env = "FM_TEST_RUNNER_JOBS")]
     jobs: Option<usize>,
 
     /// Timeout per test in seconds
-    #[arg(long, env = "FM_TEST_CI_ALL_TIMEOUT", default_value = "360")]
+    #[arg(long, env = "FM_TEST_RUNNER_TIMEOUT", default_value = "360")]
     timeout: u32,
 
     /// Max system load
-    #[arg(long, env = "FM_TEST_CI_ALL_MAX_LOAD")]
+    #[arg(long, env = "FM_TEST_RUNNER_MAX_LOAD")]
     max_load: Option<usize>,
 
     /// Delay between starting tests
-    #[arg(long, env = "FM_TEST_CI_ALL_DELAY", default_value = "0.5")]
+    #[arg(long, env = "FM_TEST_RUNNER_DELAY", default_value = "0.5")]
     delay: f32,
 
-    /// Number of times to run the test suite
-    #[arg(long, env = "FM_TEST_CI_ALL_TIMES", default_value = "1")]
-    times: usize,
-
     /// Show ETA (disabled in CI)
-    #[arg(long, env = "FM_TEST_CI_ALL_DISABLE_ETA")]
+    #[arg(long, env = "FM_TEST_RUNNER_DISABLE_ETA")]
     disable_eta: bool,
 }
 
@@ -85,24 +121,13 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Run(args) => run_tests(args).await,
-        Command::RunOne(args) => run_one_test(args).await,
+        Command::Run(args) => tests::run_all_tests(args).await,
+        Command::RunUpgrade(args) => upgrade_tests::run_all_tests(args).await,
+        Command::RunOne { data } => match data {
+            RunTestData::Normal(test_args) => tests::run_one_test(test_args).await,
+            RunTestData::Upgrade(upgrade_test) => upgrade_tests::run_one_test(upgrade_test).await,
+        },
     }
-}
-
-async fn run_tests(args: RunTestsArgs) -> Result<()> {
-    fedimint_logging::TracingSetup::default().init()?;
-    setup_basic_environment()?;
-    update_resource_limit()?;
-    prebuild_cargo_workspace().await?;
-    build_previous_versions_with_nix(&args.previous_versions).await?;
-    let matrix = if args.previous_versions.is_empty() {
-        vec![ComponentVersions::all_current()]
-    } else {
-        generate_backward_compat_version_matrix(args.previous_versions.clone(), args.full_matrix)
-    };
-
-    run_tests_with_parallel(&args, generate_test_commands(&matrix, args.times)).await
 }
 
 /// Basic env for all tests
@@ -199,35 +224,8 @@ fn add_target_dir_to_path() {
     );
 }
 
-fn generate_test_commands(matrix: &[ComponentVersions], times: usize) -> Vec<RunOneArgs> {
-    let tests = TestId::all();
-    let mut commands = Vec::new();
-
-    for (_, versions) in iproduct!(0..times, matrix) {
-        let enable_lnv2_flags = if versions.is_all_current() {
-            vec![true]
-        } else if versions.supports_lnv2() {
-            vec![false, true]
-        } else {
-            vec![false]
-        };
-
-        for (test, enable_lnv2) in iproduct!(tests, enable_lnv2_flags) {
-            commands.push(RunOneArgs {
-                test: *test,
-                fed_version: versions.fed.clone(),
-                gateway_version: versions.gateway.clone(),
-                client_version: versions.client.clone(),
-                enable_lnv2,
-            });
-        }
-    }
-
-    commands
-}
-
 /// Run all tests in parallel using parallel command.
-async fn run_tests_with_parallel(args: &RunTestsArgs, mut tests: Vec<RunOneArgs>) -> Result<()> {
+async fn run_tests_with_parallel(args: &ParallelArgs, mut tests: Vec<RunTestData>) -> Result<()> {
     let nproc = available_parallelism().map(|n| n.get()).unwrap_or(4);
 
     let in_ci = is_env_var_set("CI") || env::var("CARGO_PROFILE").as_deref() == Ok("ci");
@@ -258,7 +256,6 @@ async fn run_tests_with_parallel(args: &RunTestsArgs, mut tests: Vec<RunOneArgs>
 
     tests.shuffle(&mut thread_rng());
 
-    // write all command for parallel
     let mut child = parallel_cmd
         .cmd
         .stdin(Stdio::piped())
@@ -290,26 +287,17 @@ async fn run_tests_with_parallel(args: &RunTestsArgs, mut tests: Vec<RunOneArgs>
 
 async fn write_test_commands_into_parallel(
     stdin: &mut ChildStdin,
-    tests: Vec<RunOneArgs>,
+    tests: Vec<RunTestData>,
 ) -> anyhow::Result<()> {
-    use std::fmt::Write;
-
-    use clap::ValueEnum;
-
     let current_exe = current_exe()?;
     let current_exe = current_exe.to_str().expect("expect must be valid utf8");
 
     let mut stdin_data = String::new();
     for test in tests {
-        let test_value = test.test.to_possible_value().expect("test has value");
         writeln!(
             stdin_data,
-            "{current_exe} run-one {} --fed-version={} --client-version={} --gateway-version={} --enable-lnv2={}",
-            test_value.get_name(),
-            test.fed_version,
-            test.client_version,
-            test.gateway_version,
-            test.enable_lnv2,
+            "{current_exe} run-one {}",
+            serde_json::to_string(&test)?,
         )?;
     }
 

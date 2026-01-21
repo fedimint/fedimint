@@ -723,8 +723,8 @@ in
 
           patchShebangs ./scripts
           export CARGO_DENY_COMPILATION=1
-          export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
-          export FM_TEST_CI_ALL_DISABLE_ETA=true
+          export FM_TEST_RUNNER_TIMES=${builtins.toString times}
+          export FM_TEST_RUNNER_DISABLE_ETA=true
 
           if [ "$CARGO_PROFILE" = "ci" ]; then
             export CI=true
