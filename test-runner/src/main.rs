@@ -294,11 +294,9 @@ async fn write_test_commands_into_parallel(
 
     let mut stdin_data = String::new();
     for test in tests {
-        writeln!(
-            stdin_data,
-            "{current_exe} run-one {}",
-            serde_json::to_string(&test)?,
-        )?;
+        let data = serde_json::to_string(&test)?;
+        assert!(!data.contains("'")); // hopefully this is enough for escaping
+        writeln!(stdin_data, "{current_exe} run-one '{data}'",)?;
     }
 
     stdin.write_all(stdin_data.as_bytes()).await?;
