@@ -22,13 +22,13 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
-test-compatibility *VERSIONS="v0.7.2 v0.8.2 v0.9.1":
+test-compatibility *VERSIONS="v0.8.2 v0.9.1 v0.10.0":
   ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
 test-full-compatibility *VERSIONS="v0.4.4":
   env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
-test-upgrades *VERSIONS="v0.7.2 current, v0.8.2 current, v0.9.1":
+test-upgrades *VERSIONS="v0.8.2 current, v0.9.1 current, v0.10.0 current":
   ./scripts/tests/upgrade-test.sh {{VERSIONS}}
 
 # `cargo udeps` check
