@@ -24,5 +24,5 @@ export const migration: T.ExpectedExports.migration = compat.migrations.fromMapp
       ),
     },
   },
-  "0.9.1"
+  "0.10.0"
 );
