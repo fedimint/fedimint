@@ -16,6 +16,7 @@ function run_tests() {
 
   export FM_TEST_USE_REAL_DAEMONS=1
   export RUST_BACKTRACE=1
+  export RUST_LIB_BACKTRACE=0
   TEST_ARGS="${TEST_ARGS:-}"
   TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS --test-threads=1}"
   TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS --test-threads=$(($(nproc) * 2))}"

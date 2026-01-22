@@ -16,6 +16,7 @@ function devimint_env {
 
   export RUST_LOG=info
   export RUST_BACKTRACE=1
+  export RUST_LIB_BACKTRACE=0
 
   # For starship users, we can actually make the prompt distinct so there's
   # no confusion.
