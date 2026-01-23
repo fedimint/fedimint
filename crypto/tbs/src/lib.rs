@@ -31,8 +31,26 @@ fn hash_bytes_to_g1(data: &[u8]) -> G1Projective {
     G1Projective::random(&mut prng)
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct SecretKeyShare(#[serde(with = "bls12_381_serde::scalar")] pub Scalar);
+
+impl std::fmt::Debug for SecretKeyShare {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use sha3::Digest as _;
+        if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
+            f.debug_tuple("SecretKeyShare")
+                .field(&hex::encode(self.0.to_bytes()))
+                .finish()
+        } else {
+            // Show fingerprint instead of actual secret
+            let hash = sha3::Sha3_256::new()
+                .chain_update(FINGERPRINT_TAG)
+                .chain_update(self.0.to_bytes())
+                .finalize();
+            write!(f, "SecretKeyShare#<{}>", encode(&hash[..8]))
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "bls12_381_serde::g2")] pub G2Affine);
