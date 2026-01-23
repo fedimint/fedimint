@@ -1,6 +1,9 @@
 pub mod recovery;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -10,7 +13,8 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, CommonModuleInit, ModuleInit, MultiApiVersion};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{NumPeers, apply, async_trait_maybe_send};
+use fedimint_core::util::SafeUrl;
+use fedimint_core::{ChainId, NumPeers, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT;
 use tracing::warn;
@@ -20,6 +24,25 @@ use super::recovery::RecoveryProgress;
 use crate::db::ClientModuleMigrationFn;
 use crate::module::ClientModule;
 use crate::sm::ModuleNotifier;
+
+/// Factory function type for creating a Bitcoin RPC client from a chain ID.
+///
+/// This allows applications to provide their own Bitcoin RPC client
+/// implementation based on the chain the federation operates on.
+pub type BitcoindRpcFactory = Box<
+    dyn FnOnce(ChainId) -> Pin<Box<dyn Future<Output = Option<DynBitcoindRpc>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Factory function type for creating a Bitcoin RPC client from a URL.
+///
+/// This is used when the federation does not have ChainId support yet.
+/// The factory receives a URL (typically from the module config) and can be
+/// called to get an RPC client.
+pub type BitcoindRpcNoChainIdFactory = Arc<
+    dyn Fn(SafeUrl) -> Pin<Box<dyn Future<Output = Option<DynBitcoindRpc>> + Send>> + Send + Sync,
+>;
 
 pub struct ClientModuleInitArgs<C>
 where
@@ -45,6 +68,13 @@ where
     /// modules (particularly the wallet module) can use this instead of
     /// creating their own Bitcoin RPC connection.
     pub user_bitcoind_rpc: Option<DynBitcoindRpc>,
+    /// User-provided Bitcoin RPC factory for when ChainId is not available
+    ///
+    /// If set by the application using
+    /// `ClientBuilder::with_bitcoind_rpc_no_chain_id`, modules can call
+    /// this with a URL from their config to get an RPC client. This is used
+    /// as a fallback when `user_bitcoind_rpc` is None.
+    pub user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -122,6 +152,15 @@ where
     pub fn user_bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
         self.user_bitcoind_rpc.as_ref()
     }
+
+    /// Returns the user-provided Bitcoin RPC factory for when ChainId is not
+    /// available
+    ///
+    /// Modules can call this with a URL from their config to get an RPC client.
+    /// This is used as a fallback when `user_bitcoind_rpc()` returns None.
+    pub fn user_bitcoind_rpc_no_chain_id(&self) -> Option<&BitcoindRpcNoChainIdFactory> {
+        self.user_bitcoind_rpc_no_chain_id.as_ref()
+    }
 }
 
 pub struct ClientModuleRecoverArgs<C>
@@ -148,6 +187,13 @@ where
     /// modules (particularly the wallet module) can use this instead of
     /// creating their own Bitcoin RPC connection.
     pub user_bitcoind_rpc: Option<DynBitcoindRpc>,
+    /// User-provided Bitcoin RPC factory for when ChainId is not available
+    ///
+    /// If set by the application using
+    /// `ClientBuilder::with_bitcoind_rpc_no_chain_id`, modules can call
+    /// this with a URL from their config to get an RPC client. This is used
+    /// as a fallback when `user_bitcoind_rpc` is None.
+    pub user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
 }
 
 impl<C> ClientModuleRecoverArgs<C>
@@ -234,6 +280,15 @@ where
     /// before creating their own Bitcoin RPC connection.
     pub fn user_bitcoind_rpc(&self) -> Option<&DynBitcoindRpc> {
         self.user_bitcoind_rpc.as_ref()
+    }
+
+    /// Returns the user-provided Bitcoin RPC factory for when ChainId is not
+    /// available
+    ///
+    /// Modules can call this with a URL from their config to get an RPC client.
+    /// This is used as a fallback when `user_bitcoind_rpc()` returns None.
+    pub fn user_bitcoind_rpc_no_chain_id(&self) -> Option<&BitcoindRpcNoChainIdFactory> {
+        self.user_bitcoind_rpc_no_chain_id.as_ref()
     }
 }
 

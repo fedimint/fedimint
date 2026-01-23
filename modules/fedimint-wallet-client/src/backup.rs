@@ -205,14 +205,29 @@ impl RecoveryFromHistory for WalletRecovery {
         snapshot: Option<&WalletModuleBackup>,
     ) -> anyhow::Result<(Self, u64)> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Starting new recovery");
-        // Priority: user-provided bitcoind RPC from ClientBuilder > WalletClientInit
-        // constructor > create from config
+
+        let rpc_config = WalletClientModule::get_rpc_config(args.cfg());
+
+        // Priority:
+        // 1. user-provided bitcoind RPC from ClientBuilder::with_bitcoind_rpc
+        // 2. user-provided no-chain-id factory from
+        //    ClientBuilder::with_bitcoind_rpc_no_chain_id
+        // 3. WalletClientInit constructor
+        // 4. create from config (esplora)
         let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
             user_rpc.clone()
+        } else if let Some(factory) = args.user_bitcoind_rpc_no_chain_id() {
+            if let Some(rpc) = factory(rpc_config.url.clone()).await {
+                rpc
+            } else {
+                init.0
+                    .clone()
+                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+            }
         } else {
-            init.0.clone().unwrap_or(create_esplora_rpc(
-                &WalletClientModule::get_rpc_config(args.cfg()).url,
-            )?)
+            init.0
+                .clone()
+                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
         };
 
         let data = WalletClientModuleData {
@@ -289,14 +304,29 @@ impl RecoveryFromHistory for WalletRecovery {
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
-        // Priority: user-provided bitcoind RPC from ClientBuilder > WalletClientInit
-        // constructor > create from config
+
+        let rpc_config = WalletClientModule::get_rpc_config(args.cfg());
+
+        // Priority:
+        // 1. user-provided bitcoind RPC from ClientBuilder::with_bitcoind_rpc
+        // 2. user-provided no-chain-id factory from
+        //    ClientBuilder::with_bitcoind_rpc_no_chain_id
+        // 3. WalletClientInit constructor
+        // 4. create from config (esplora)
         let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
             user_rpc.clone()
+        } else if let Some(factory) = args.user_bitcoind_rpc_no_chain_id() {
+            if let Some(rpc) = factory(rpc_config.url.clone()).await {
+                rpc
+            } else {
+                init.0
+                    .clone()
+                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+            }
         } else {
-            init.0.clone().unwrap_or(create_esplora_rpc(
-                &WalletClientModule::get_rpc_config(args.cfg()).url,
-            )?)
+            init.0
+                .clone()
+                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
         };
 
         let data = WalletClientModuleData {

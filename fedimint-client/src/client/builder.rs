@@ -15,7 +15,9 @@ use fedimint_api_client::download_from_invite_code;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
-use fedimint_client_module::module::init::ClientModuleInit;
+use fedimint_client_module::module::init::{
+    BitcoindRpcFactory, BitcoindRpcNoChainIdFactory, ClientModuleInit,
+};
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientModuleRegistry, FinalClientIface, PrimaryModulePriority, PrimaryModuleSupport,
@@ -38,7 +40,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
@@ -124,6 +126,7 @@ pub struct ClientBuilder {
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
     bitcoind_rpc_factory: Option<BitcoindRpcFactory>,
+    bitcoind_rpc_no_chain_id_factory: Option<BitcoindRpcNoChainIdFactory>,
 }
 
 impl ClientBuilder {
@@ -147,6 +150,7 @@ impl ClientBuilder {
             iroh_enable_dht: true,
             iroh_enable_next: true,
             bitcoind_rpc_factory: None,
+            bitcoind_rpc_no_chain_id_factory: None,
         }
     }
 
@@ -164,6 +168,8 @@ impl ClientBuilder {
             // Note: bitcoind_rpc_factory is not cloned from existing client
             // since it's a one-time factory that's consumed during build
             bitcoind_rpc_factory: None,
+            // Clone the no-chain-id factory from the existing client
+            bitcoind_rpc_no_chain_id_factory: client.user_bitcoind_rpc_no_chain_id.clone(),
         }
     }
 
@@ -238,6 +244,37 @@ impl ClientBuilder {
         Fut: Future<Output = Option<DynBitcoindRpc>> + Send + 'static,
     {
         self.bitcoind_rpc_factory = Some(Box::new(move |chain_id| Box::pin(factory(chain_id))));
+        self
+    }
+
+    /// Set a factory function for creating a Bitcoin RPC client from a URL
+    ///
+    /// This is used as a fallback when the federation does not have ChainId
+    /// support yet. Unlike [`Self::with_bitcoind_rpc`], this factory receives
+    /// a [`SafeUrl`] (typically from the module config) and can be called
+    /// multiple times by different modules.
+    ///
+    /// The factory is only used if:
+    /// 1. No RPC was returned by [`Self::with_bitcoind_rpc`] (e.g., ChainId not
+    ///    available)
+    /// 2. The module doesn't have its own RPC configured
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = Client::builder()
+    ///     .with_bitcoind_rpc_no_chain_id(|url| async move {
+    ///         Some(my_custom_bitcoind_rpc_from_url(url))
+    ///     })
+    ///     .join(db, root_secret)
+    ///     .await?;
+    /// ```
+    pub fn with_bitcoind_rpc_no_chain_id<F, Fut>(mut self, factory: F) -> Self
+    where
+        F: Fn(SafeUrl) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<DynBitcoindRpc>> + Send + 'static,
+    {
+        self.bitcoind_rpc_no_chain_id_factory = Some(Arc::new(move |url| Box::pin(factory(url))));
         self
     }
 
@@ -751,6 +788,8 @@ impl ClientBuilder {
                         let task_group = task_group.clone();
                         let module_init = module_init.clone();
                         let user_bitcoind_rpc = user_bitcoind_rpc.clone();
+                        let user_bitcoind_rpc_no_chain_id =
+                            self.bitcoind_rpc_no_chain_id_factory.clone();
                         (
                             Box::pin(async move {
                                 module_init
@@ -771,6 +810,7 @@ impl ClientBuilder {
                                         progress_tx,
                                         task_group,
                                         user_bitcoind_rpc,
+                                        user_bitcoind_rpc_no_chain_id,
                                     )
                                     .await
                                     .inspect_err(|err| {
@@ -870,6 +910,7 @@ impl ClientBuilder {
                                 task_group.clone(),
                                 connectors.clone(),
                                 user_bitcoind_rpc.clone(),
+                                self.bitcoind_rpc_no_chain_id_factory.clone(),
                             )
                             .await?;
 
@@ -969,6 +1010,7 @@ impl ClientBuilder {
             iroh_enable_dht: self.iroh_enable_dht,
             iroh_enable_next: self.iroh_enable_next,
             user_bitcoind_rpc,
+            user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
         client_inner
             .task_group

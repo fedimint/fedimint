@@ -169,6 +169,12 @@ pub struct Client {
     /// during initialization.
     #[allow(dead_code)]
     user_bitcoind_rpc: Option<DynBitcoindRpc>,
+    /// User-provided Bitcoin RPC factory for when ChainId is not available
+    ///
+    /// This is used as a fallback when the federation doesn't support ChainId.
+    /// Modules can call this with a URL from their config to get an RPC client.
+    pub(crate) user_bitcoind_rpc_no_chain_id:
+        Option<fedimint_client_module::module::init::BitcoindRpcNoChainIdFactory>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
