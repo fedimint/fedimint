@@ -1,7 +1,7 @@
 services:
   gatewayd:
     image: fedimint/gatewayd:v0.10.0
-    entrypoint: /data/entrypoint.sh
+    command: gatewayd ldk
     restart: unless-stopped
     ports:
       - 8176:8176/tcp # ui
@@ -9,7 +9,6 @@ services:
       - 10010:10010/tcp # lightning
     volumes:
       - gatewayd_data:/data
-      - ./entrypoint.sh:/data/entrypoint.sh:ro
     environment:
       # Gateway Config
       FM_GATEWAY_DATA_DIR: /data
@@ -17,8 +16,13 @@ services:
       FM_GATEWAY_NETWORK: bitcoin
       FM_GATEWAY_IROH_LISTEN_ADDR: 0.0.0.0:8177
 
-      # REQUIRED: Set this password
-      APP_PASSWORD: ""
+      # REQUIRED: Set the password hash to your own password
+      # Run:
+      #
+      # docker run fedimint/gatewayd:v0.10.0 gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
+      #
+      # Then paste the result here.
+      FM_GATEWAY_BCRYPT_PASSWORD_HASH: ""
 
       # Esplora Config (comment out to disable esplora)
       FM_ESPLORA_URL: https://mempool.space/api/
