@@ -38,10 +38,12 @@ let
           description = "Extra Environment variables to pass to the fedimintd.";
           default = {
             RUST_BACKTRACE = "1";
+            RUST_LIB_BACKTRACE = "0";
           };
           example = {
             RUST_LOG = "info,fm=debug";
             RUST_BACKTRACE = "1";
+            RUST_LIB_BACKTRACE = "0";
           };
         };
 
