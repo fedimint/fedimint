@@ -634,7 +634,7 @@ in
         ''
         + lib.concatStringsSep "\n" (
           lib.replicate times ''
-            env RUST_BACKTRACE=1 RUST_LOG=info cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile nix-ccov --test-threads=$(($(nproc) * 2))
+            env RUST_BACKTRACE=1 RUST_LIB_BACKTRACE=0 RUST_LOG=info cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile nix-ccov --test-threads=$(($(nproc) * 2))
           ''
         )
         + ''
