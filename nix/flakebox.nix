@@ -1015,5 +1015,45 @@ in
       cmd = "cargo check --all-features";
       pnameSuffix = "all-feats";
     };
+
+    quickFuzz =
+      let
+        pname = "${commonArgs.pname}-cargo-hfuzz";
+        nativeBuildInputs = commonArgs.nativeBuildInputs ++ [
+
+          pkgs.cargo-hongfuzz
+          pkgs.lldb
+          pkgs.clang
+        ];
+        buildInputs = commonArgs.buildInputs ++ [
+          pkgs.libbfd_2_38
+          pkgs.libunwind.dev
+          pkgs.libopcodes_2_38
+          pkgs.pkgsStatic.libblocksruntime
+        ];
+        deps = craneLib.buildDepsOnly {
+          inherit pname nativeBuildInputs buildInputs;
+          buildPhaseCargoCommand = ''
+            cargo hfuzz build
+          '';
+          doCheck = false;
+        };
+      in
+      craneLib.mkCargoDerivation {
+        inherit pname nativeBuildInputs buildInputs;
+        cargoArtifacts = deps;
+        buildPhaseCargoCommand = ''
+          set -euo pipefail
+
+          export HFUZZ_RUN_ARGS="{{ARGS}}"
+          for target in $(ls fuzz/src/bin/ | sed -e 's/.rs$//g') ; do
+            >&2 echo "Fuzzing ''${target}"
+            env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" \
+              cargo hfuzz run ''${target}
+          done
+        '';
+        doInstallCargoArtifacts = false;
+        doCheck = false;
+      };
   }
 )
