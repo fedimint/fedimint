@@ -10205,6 +10205,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-runner"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "devimint",
+ "fedimint-core",
+ "fedimint-logging",
+ "itertools 0.14.0",
+ "nix",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
