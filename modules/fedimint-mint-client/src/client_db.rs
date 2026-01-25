@@ -28,6 +28,7 @@ pub enum DbKeyPrefix {
     RecoveryState = 0x2c,
     RecoveryFinalized = 0x2d,
     ReusedNoteIndices = 0x2e,
+    RecoveryStateV2 = 0x2f,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -124,6 +125,15 @@ impl_db_record!(
 impl_db_lookup!(
     key = CancelledOOBSpendKey,
     query_prefix = CancelledOOBSpendKeyPrefix,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct RecoveryStateV2Key;
+
+impl_db_record!(
+    key = RecoveryStateV2Key,
+    value = crate::backup::recovery::RecoveryStateV2,
+    db_prefix = DbKeyPrefix::RecoveryStateV2,
 );
 
 pub async fn migrate_to_v1(

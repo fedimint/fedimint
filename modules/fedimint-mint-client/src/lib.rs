@@ -33,23 +33,26 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::{Context as _, anyhow, bail, ensure};
+use api::MintFederationApi;
 use async_stream::{stream, try_stream};
-use backup::recovery::MintRecovery;
+use backup::recovery::{MintRecovery, RecoveryStateV2};
 use base64::Engine as _;
 use bitcoin_hashes::{Hash, HashEngine as BitcoinHashEngine, sha256, sha256t};
 use client_db::{
-    DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, ReusedNoteIndices, migrate_state_to_v2,
-    migrate_to_v1,
+    DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, RecoveryStateKey, RecoveryStateV2Key,
+    ReusedNoteIndices, migrate_state_to_v2, migrate_to_v1,
 };
 use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
+use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContext, ClientModule, IClientModule, OutPointRange, PrimaryModulePriority,
     PrimaryModuleSupport,
@@ -74,6 +77,8 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
+use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
@@ -110,6 +115,89 @@ use crate::output::{
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+
+#[derive(Clone)]
+struct PeerSelector {
+    latency: Arc<RwLock<BTreeMap<PeerId, Duration>>>,
+}
+
+impl PeerSelector {
+    fn new(peers: BTreeSet<PeerId>) -> Self {
+        let latency = peers
+            .into_iter()
+            .map(|peer| (peer, Duration::ZERO))
+            .collect();
+
+        Self {
+            latency: Arc::new(RwLock::new(latency)),
+        }
+    }
+
+    fn choose_peer(&self) -> PeerId {
+        let latency = self.latency.read().expect("poisoned");
+
+        let peer_a = latency.iter().choose(&mut thread_rng()).expect("no peers");
+        let peer_b = latency.iter().choose(&mut thread_rng()).expect("no peers");
+
+        if peer_a.1 <= peer_b.1 {
+            *peer_a.0
+        } else {
+            *peer_b.0
+        }
+    }
+
+    fn report(&self, peer: PeerId, duration: Duration) {
+        self.latency
+            .write()
+            .expect("poisoned")
+            .entry(peer)
+            .and_modify(|latency| *latency = *latency * 9 / 10 + duration / 10)
+            .or_insert(duration);
+    }
+
+    fn remove(&self, peer: PeerId) {
+        self.latency.write().expect("poisoned").remove(&peer);
+    }
+}
+
+/// Downloads a slice with a pre-fetched hash for verification
+async fn download_slice_with_hash(
+    module_api: DynModuleApi,
+    peer_selector: PeerSelector,
+    start: u64,
+    end: u64,
+    expected_hash: sha256::Hash,
+) -> Vec<RecoveryItem> {
+    const TIMEOUT: Duration = Duration::from_secs(30);
+
+    loop {
+        let peer = peer_selector.choose_peer();
+        let start_time = fedimint_core::time::now();
+
+        match tokio::time::timeout(TIMEOUT, module_api.fetch_recovery_slice(peer, start, end))
+            .await
+            .map_err(Into::into)
+            .and_then(|r| r)
+        {
+            Ok(data) => {
+                let elapsed = fedimint_core::time::now()
+                    .duration_since(start_time)
+                    .unwrap_or(Duration::ZERO);
+
+                peer_selector.report(peer, elapsed);
+
+                if data.consensus_hash::<sha256::Hash>() == expected_hash {
+                    return data;
+                }
+
+                peer_selector.remove(peer);
+            }
+            Err(..) => {
+                peer_selector.report(peer, TIMEOUT);
+            }
+        }
+    }
+}
 
 /// An encapsulation of [`FederationId`] and e-cash notes in the form of
 /// [`TieredMulti<SpendableNote>`] for the purpose of spending e-cash
@@ -466,6 +554,159 @@ pub enum MintOperationMetaVariant {
 #[derive(Debug, Clone)]
 pub struct MintClientInit;
 
+const SLICE_SIZE: u64 = 10000;
+const PARALLEL_HASH_REQUESTS: usize = 10;
+const PARALLEL_SLICE_REQUESTS: usize = 10;
+
+impl MintClientInit {
+    #[allow(clippy::too_many_lines)]
+    async fn recover_from_slices(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+    ) -> anyhow::Result<()> {
+        // Try to load existing state or create new one if we can fetch recovery count
+        let mut state = if let Some(state) = args
+            .db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecoveryStateV2Key)
+            .await
+        {
+            state
+        } else {
+            // Try to fetch recovery count - if this fails, the endpoint doesn't exist
+            let total_items = args.module_api().fetch_recovery_count().await?;
+
+            RecoveryStateV2::new(
+                total_items,
+                args.cfg().tbs_pks.tiers().copied().collect(),
+                args.module_root_secret(),
+            )
+        };
+
+        if state.next_index == state.total_items {
+            return Ok(());
+        }
+
+        let peer_selector = PeerSelector::new(args.api().all_peers().clone());
+
+        let mut recovery_stream = futures::stream::iter(
+            (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+        )
+        .map(move |start| {
+            let api = args.module_api().clone();
+            let end = std::cmp::min(start + SLICE_SIZE, state.total_items);
+
+            async move { (start, end, api.fetch_recovery_slice_hash(start, end).await) }
+        })
+        .buffered(PARALLEL_HASH_REQUESTS)
+        .map(move |(start, end, hash)| {
+            download_slice_with_hash(
+                args.module_api().clone(),
+                peer_selector.clone(),
+                start,
+                end,
+                hash,
+            )
+        })
+        .buffered(PARALLEL_SLICE_REQUESTS);
+
+        let secret = args.module_root_secret().clone();
+
+        loop {
+            let items = recovery_stream
+                .next()
+                .await
+                .expect("mint recovery stream finished before recovery is complete");
+
+            for item in &items {
+                match item {
+                    RecoveryItem::Output { amount, nonce } => {
+                        state.handle_output(*amount, *nonce, &secret);
+                    }
+                    RecoveryItem::Input { nonce } => {
+                        state.handle_input(*nonce);
+                    }
+                }
+            }
+
+            state.next_index += items.len() as u64;
+
+            let mut dbtx = args.db().begin_transaction().await;
+
+            dbtx.insert_entry(&RecoveryStateV2Key, &state).await;
+
+            if state.next_index == state.total_items {
+                // Finalize recovery - create state machines for pending outputs
+                let finalized = state.finalize();
+
+                // Collect blind nonces to fetch outpoints from server
+                let blind_nonces: Vec<BlindNonce> = finalized
+                    .pending_notes
+                    .iter()
+                    .map(|(_, req)| BlindNonce(req.blinded_message()))
+                    .collect();
+
+                // Fetch outpoints for all blind nonces
+                let outpoints = if blind_nonces.is_empty() {
+                    vec![]
+                } else {
+                    args.module_api()
+                        .fetch_blind_nonce_outpoints(blind_nonces)
+                        .await
+                        .context("Failed to fetch blind nonce outpoints")?
+                };
+
+                // Create state machines for pending notes
+                let state_machines: Vec<MintClientStateMachines> = finalized
+                    .pending_notes
+                    .into_iter()
+                    .zip(outpoints)
+                    .map(|((amount, issuance_request), out_point)| {
+                        MintClientStateMachines::Output(MintOutputStateMachine {
+                            common: MintOutputCommon {
+                                operation_id: OperationId::new_random(),
+                                out_point_range: OutPointRange::new_single(
+                                    out_point.txid,
+                                    out_point.out_idx,
+                                )
+                                .expect("Can't overflow"),
+                            },
+                            state: MintOutputStates::Created(output::MintOutputStatesCreated {
+                                amount,
+                                issuance_request,
+                            }),
+                        })
+                    })
+                    .collect();
+
+                let state_machines = args.context().map_dyn(state_machines).collect();
+
+                args.context()
+                    .add_state_machines_dbtx(&mut dbtx.to_ref_nc(), state_machines)
+                    .await?;
+
+                // Restore NextECashNoteIndexKey
+                for (amount, note_idx) in finalized.next_note_idx {
+                    dbtx.insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
+                        .await;
+                }
+
+                dbtx.commit_tx().await;
+
+                return Ok(());
+            }
+
+            dbtx.commit_tx().await;
+
+            args.update_recovery_progress(RecoveryProgress {
+                complete: state.next_index.try_into().unwrap_or(u32::MAX),
+                total: state.total_items.try_into().unwrap_or(u32::MAX),
+            });
+        }
+    }
+}
+
 impl ModuleInit for MintClientInit {
     type Common = MintCommonInit;
 
@@ -519,6 +760,7 @@ impl ModuleInit for MintClientInit {
                 }
                 DbKeyPrefix::RecoveryState
                 | DbKeyPrefix::ReusedNoteIndices
+                | DbKeyPrefix::RecoveryStateV2
                 | DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
@@ -555,8 +797,30 @@ impl ClientModuleInit for MintClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        args.recover_from_history::<MintRecovery>(self, snapshot)
-            .await
+        let mut dbtx = args.db().begin_transaction_nc().await;
+
+        // Check if V2 (slice-based) recovery state exists
+        if dbtx.get_value(&RecoveryStateV2Key).await.is_some() {
+            return self.recover_from_slices(args).await;
+        }
+
+        // Check if V1 (session-based) recovery state exists
+        if dbtx.get_value(&RecoveryStateKey).await.is_some() {
+            return args
+                .recover_from_history::<MintRecovery>(self, snapshot)
+                .await;
+        }
+
+        // No existing recovery state - determine which to use based on endpoint
+        // availability
+        if args.module_api().fetch_recovery_count().await.is_ok() {
+            // New endpoint available - use V2 slice-based recovery
+            self.recover_from_slices(args).await
+        } else {
+            // Old federation - use V1 session-based recovery
+            args.recover_from_history::<MintRecovery>(self, snapshot)
+                .await
+        }
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {

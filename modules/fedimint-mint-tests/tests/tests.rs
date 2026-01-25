@@ -1122,6 +1122,10 @@ mod fedimint_migration_tests {
                             info!("Validated RecoveryFinalized");
                         }
                         fedimint_mint_client::client_db::DbKeyPrefix::ReusedNoteIndices => {}
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryStateV2 => {
+                            // New prefix for slice-based recovery, no migration
+                            // needed
+                        }
                         fedimint_mint_client::client_db::DbKeyPrefix::ExternalReservedStart
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedEnd
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedStart =>
