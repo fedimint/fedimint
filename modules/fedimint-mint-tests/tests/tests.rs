@@ -1027,6 +1027,14 @@ mod fedimint_migration_tests {
                         // Would require an entire re-design of the way we test
                         // here, manually testing instead for now
                     }
+                    DbKeyPrefix::RecoveryItem => {
+                        // New prefix for slice-based recovery, no migration
+                        // needed
+                    }
+                    DbKeyPrefix::RecoveryBlindNonceOutpoint => {
+                        // New prefix for slice-based recovery, no migration
+                        // needed
+                    }
                 }
             }
 
