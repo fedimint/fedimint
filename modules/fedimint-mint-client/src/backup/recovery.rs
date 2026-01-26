@@ -1,15 +1,18 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::ops::Add;
 
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
     RecoveryFromHistory, RecoveryFromHistoryCommon,
 };
 use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_core::bitcoin::hashes::hash160;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::{
     Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply, async_trait_maybe_send,
 };
@@ -409,7 +412,6 @@ impl MintRecoveryStateV2 {
 
     /// Fill each tier pool to the gap limit
     fn fill_initial_pending_nonces(&mut self, amount: Amount, secret: &DerivableSecret) {
-        debug!(%amount, count=self.gap_limit, "Generating initial set of nonces for amount tier");
         for _ in 0..self.gap_limit {
             self.add_next_pending_nonce_in_pending_pool(amount, secret);
         }
@@ -574,4 +576,126 @@ impl MintRecoveryStateV2 {
             burned_total: self.burned_total,
         }
     }
+}
+
+const GAP_LIMIT: u64 = 100;
+
+/// Recovery state that can be checkpointed and resumed (slice-based recovery)
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct RecoveryStateV2 {
+    /// Next item index to download
+    pub next_index: u64,
+    /// Total items (for progress calculation)
+    pub total_items: u64,
+    /// Pending outputs - notes we've seen issued and are waiting to collect
+    pending_outputs: BTreeMap<hash160::Hash, (Amount, NoteIssuanceRequest)>,
+    /// Next nonces that we expect might soon get used.
+    pending_nonces: BTreeMap<(Amount, hash160::Hash), (NoteIssuanceRequest, u64)>,
+    /// Tail of pending. `pending_nonces` is filled by generating note with
+    /// this index and incrementing it.
+    next_pending_note_idx: BTreeMap<Amount, u64>,
+    /// `LastECashNoteIndex` but tracked in flight - max index of any note
+    /// that got a partial sig from the federation
+    last_used_nonce_idx: BTreeMap<Amount, u64>,
+}
+
+impl RecoveryStateV2 {
+    pub fn new(total_items: u64, amount_tiers: Vec<Amount>, secret: &DerivableSecret) -> Self {
+        let mut state = Self {
+            next_index: 0,
+            total_items,
+            pending_outputs: BTreeMap::default(),
+            pending_nonces: BTreeMap::default(),
+            next_pending_note_idx: BTreeMap::default(),
+            last_used_nonce_idx: BTreeMap::default(),
+        };
+
+        for amount in amount_tiers {
+            state.add_pending_nonces(amount, GAP_LIMIT, secret);
+        }
+
+        state
+    }
+
+    fn add_pending_nonces(&mut self, amount: Amount, count: u64, secret: &DerivableSecret) {
+        let next_idx = self
+            .next_pending_note_idx
+            .get(&amount)
+            .copied()
+            .unwrap_or_default();
+
+        self.next_pending_note_idx.insert(amount, next_idx + count);
+
+        for i in next_idx..(next_idx + count) {
+            let secret = MintClientModule::new_note_secret_static(secret, amount, NoteIndex(i));
+
+            let (request, blind_nonce) = NoteIssuanceRequest::new(SECP256K1, &secret);
+
+            let hash = blind_nonce.consensus_hash::<hash160::Hash>();
+
+            self.pending_nonces.insert((amount, hash), (request, i));
+        }
+    }
+
+    pub fn handle_output(
+        &mut self,
+        amount: Amount,
+        blind_nonce_hash: hash160::Hash,
+        secret: &DerivableSecret,
+    ) {
+        if let Some((request, idx)) = self.pending_nonces.remove(&(amount, blind_nonce_hash)) {
+            self.observe_nonce_idx_being_used(amount, idx, secret);
+
+            let hash = request.nonce().consensus_hash::<hash160::Hash>();
+
+            self.pending_outputs.insert(hash, (amount, request));
+        }
+    }
+
+    pub fn handle_input(&mut self, nonce_hash: hash160::Hash) {
+        self.pending_outputs.remove(&nonce_hash);
+    }
+
+    fn observe_nonce_idx_being_used(&mut self, amount: Amount, idx: u64, secret: &DerivableSecret) {
+        let last_used_nonce_idx = self
+            .last_used_nonce_idx
+            .get(&amount)
+            .copied()
+            .unwrap_or(idx);
+
+        self.last_used_nonce_idx
+            .insert(amount, max(last_used_nonce_idx, idx));
+
+        let next_pending_note_idx = self
+            .next_pending_note_idx
+            .get(&amount)
+            .copied()
+            .unwrap_or_default();
+
+        let missing = last_used_nonce_idx
+            .add(GAP_LIMIT)
+            .saturating_sub(next_pending_note_idx);
+
+        if missing > 0 {
+            self.add_pending_nonces(amount, missing, secret);
+        }
+    }
+
+    pub fn finalize(self) -> RecoveryStateV2Finalized {
+        RecoveryStateV2Finalized {
+            pending_notes: self.pending_outputs.into_values().collect(),
+            next_note_idx: self
+                .last_used_nonce_idx
+                .into_iter()
+                .map(|(amount, idx)| (amount, NoteIndex(idx + 1)))
+                .collect(),
+        }
+    }
+}
+
+pub struct RecoveryStateV2Finalized {
+    /// Pending notes that need state machines to collect signatures
+    pub pending_notes: Vec<(Amount, NoteIssuanceRequest)>,
+    /// Next note index per amount tier (for restoring `NextECashNoteIndexKey`)
+    pub next_note_idx: BTreeMap<Amount, NoteIndex>,
 }
