@@ -303,8 +303,8 @@ fn input_tweaks_and_peg_out_count(
                         .downcast_ref::<WalletInput>()
                         .expect("Instance id mapping incorrect")
                     {
-                        WalletInput::V0(input) => input.tweak_contract_key().serialize(),
-                        WalletInput::V1(input) => input.tweak_contract_key.serialize(),
+                        WalletInput::V0(input) => input.tweak_key().serialize(),
+                        WalletInput::V1(input) => input.tweak_key.serialize(),
                         WalletInput::Default { .. } => {
                             panic!("recoverytool only supports v0 wallet inputs")
                         }

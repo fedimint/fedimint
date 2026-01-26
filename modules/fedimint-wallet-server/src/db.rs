@@ -11,6 +11,7 @@ use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::common::{RecoveryItem, WalletInput};
 use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, Wallet, WalletOutputOutcome};
 
 #[repr(u8)]
@@ -33,6 +34,7 @@ pub enum DbKeyPrefix {
     // to be present for all past processed blocks, unless Federation
     // was started with fedimint 0.8 or later
     BlockHashByHeight = 0x43,
+    RecoveryItem = 0x44,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -284,3 +286,47 @@ impl_db_lookup!(
     key = ConsensusVersionVotingActivationKey,
     query_prefix = ConsensusVersionVotingActivationPrefix
 );
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct RecoveryItemKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecoveryItemKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryItemKey,
+    value = RecoveryItem,
+    db_prefix = DbKeyPrefix::RecoveryItem,
+);
+impl_db_lookup!(key = RecoveryItemKey, query_prefix = RecoveryItemKeyPrefix);
+
+/// Migrate to v2, backfilling recovery items from module history
+pub async fn migrate_to_v2(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
+) -> Result<(), anyhow::Error> {
+    let mut recovery_items = Vec::new();
+    let mut stream = ctx.get_typed_module_history_stream().await;
+
+    while let Some(history_item) = stream.next().await {
+        if let ModuleHistoryItem::Input(input) = history_item {
+            let (outpoint, script) = match &input {
+                WalletInput::V0(input) => {
+                    (input.0.outpoint(), input.tx_output().script_pubkey.clone())
+                }
+                WalletInput::V1(input) => (input.outpoint, input.tx_out.script_pubkey.clone()),
+                WalletInput::Default { .. } => continue,
+            };
+            recovery_items.push(RecoveryItem::Input { outpoint, script });
+        }
+    }
+
+    drop(stream);
+
+    for (index, item) in recovery_items.into_iter().enumerate() {
+        ctx.dbtx()
+            .insert_new_entry(&RecoveryItemKey(index as u64), &item)
+            .await;
+    }
+
+    Ok(())
+}

@@ -8,3 +8,5 @@ pub const SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "supported_module_
 pub const ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT: &str = "activate_consensus_version_voting";
 pub const WALLET_SUMMARY_ENDPOINT: &str = "wallet_summary";
 pub const UTXO_CONFIRMED_ENDPOINT: &str = "utxo_confirmed";
+pub const RECOVERY_COUNT_ENDPOINT: &str = "recovery_count";
+pub const RECOVERY_SLICE_ENDPOINT: &str = "recovery_slice";

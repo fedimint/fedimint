@@ -114,8 +114,8 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &PublicKey {
-        &self.tweak_contract_key
+    pub fn tweak_key(&self) -> PublicKey {
+        self.tweak_contract_key
     }
 
     pub fn identity(&self) -> (PublicKey, bitcoin::Txid) {
