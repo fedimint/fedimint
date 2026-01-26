@@ -11,9 +11,10 @@ use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT,
+    UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
-use fedimint_wallet_common::{PegOutFees, WalletSummary};
+use fedimint_wallet_common::{PegOutFees, RecoveryItem, WalletSummary};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
@@ -38,6 +39,13 @@ pub trait WalletFederationApi {
     async fn is_utxo_confirmed(&self, outpoint: bitcoin::OutPoint) -> FederationResult<bool>;
 
     async fn activate_consensus_version_voting(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// Returns the total number of recovery items stored on the federation
+    async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
+
+    /// Fetches recovery items in the range `[start, end)` via consensus
+    async fn fetch_recovery_slice(&self, start: u64, end: u64)
+    -> anyhow::Result<Vec<RecoveryItem>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -164,5 +172,27 @@ where
             auth,
         )
         .await
+    }
+
+    async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {
+        self.request_current_consensus::<u64>(
+            RECOVERY_COUNT_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
+        )
+        .await
+        .map_err(|e| anyhow!("{e}"))
+    }
+
+    async fn fetch_recovery_slice(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> anyhow::Result<Vec<RecoveryItem>> {
+        self.request_current_consensus::<Vec<RecoveryItem>>(
+            RECOVERY_SLICE_ENDPOINT.to_string(),
+            ApiRequestErased::new((start, end)),
+        )
+        .await
+        .map_err(|e| anyhow!("{e}"))
     }
 }
