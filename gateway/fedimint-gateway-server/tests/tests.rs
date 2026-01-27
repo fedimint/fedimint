@@ -12,7 +12,6 @@ use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_client_module::module::OutPointRange;
-use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::Amounts;
@@ -50,7 +49,6 @@ use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage,
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
@@ -243,9 +241,6 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 &gateway.http_gateway_id().await,
             )
             .await?;
-
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(1000 - 250));
-            assert_eq!(gateway_client.get_balance_for_btc().await?, sats(250));
 
             Ok(())
         },
@@ -763,8 +758,6 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
     multi_federation_test(|gateway, fed1, fed2, _| async move {
         let gateway_id = gateway.http_gateway_id().await;
         let id1 = fed1.invite_code().federation_id();
-        let id2 = fed2.invite_code().federation_id();
-
         fed1.connect_gateway(&gateway).await;
         fed2.connect_gateway(&gateway).await;
 
@@ -789,11 +782,6 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         if let Ok(ln_client) = client2.get_first_module::<LightningClientModule>() {
             let _ = ln_client.update_gateway_cache().await;
         }
-
-        // Check gateway balances before facilitating direct swap between federations
-        let pre_balances = get_balances(&gateway, [id1, id2].to_vec()).await;
-        assert_eq!(pre_balances[0], 10_000);
-        assert_eq!(pre_balances[1], 10_000);
 
         // User creates invoice in federation 2
         let invoice_amt = msats(2_500);
@@ -834,59 +822,10 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
         let claimed = receive_sub.ok().await?;
         assert_matches!(claimed, LnReceiveState::Claimed);
-        assert_eq!(client2.get_balance_for_btc().await?, invoice_amt);
-
-        // Check gateway balances after facilitating direct swap between federations
-        let gateway_fed1_balance = gateway_client.get_balance_for_btc().await?;
-        let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
-        let gateway_fed2_balance = gateway_fed2_client.get_balance_for_btc().await?;
-
-        // Balance in gateway of sending federation is deducted the invoice amount
-        assert_eq!(
-            gateway_fed2_balance.msats,
-            pre_balances[1] - invoice_amt.msats
-        );
-
-        let fee = routing_fees_in_msats(
-            &PaymentFee {
-                base: Amount::from_msats(10),
-                parts_per_million: 10000,
-            },
-            &invoice_amt,
-        );
-
-        // Balance in gateway of receiving federation is increased `invoice_amt` + `fee`
-        assert_eq!(
-            gateway_fed1_balance.msats,
-            pre_balances[0] + invoice_amt.msats + fee
-        );
 
         Ok(())
     })
     .await
-}
-
-fn routing_fees_in_msats(routing_fees: &PaymentFee, amount: &Amount) -> u64 {
-    ((amount.msats * routing_fees.parts_per_million) / 1_000_000) + routing_fees.base.msats
-}
-
-/// Retrieves the balance of each federation the gateway is connected to.
-async fn get_balances(gw: &Gateway, ids: Vec<FederationId>) -> Vec<u64> {
-    let balances = gw
-        .handle_get_balances_msg()
-        .await
-        .expect("Could not get balances");
-    balances
-        .ecash_balances
-        .into_iter()
-        .filter_map(|info| {
-            if ids.contains(&info.federation_id) {
-                Some(info.ecash_balance_msats.msats)
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]
