@@ -1,6 +1,7 @@
 pub mod error;
 pub mod http;
 pub mod iroh;
+pub mod metrics;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 pub mod tor;
 pub mod ws;
@@ -25,6 +26,7 @@ use tokio::sync::{OnceCell, SetOnce, broadcast, watch};
 use tracing::trace;
 
 use crate::error::ServerError;
+use crate::metrics::{CONNECTION_ATTEMPTS_TOTAL, CONNECTION_DURATION_SECONDS};
 use crate::ws::WebsocketConnector;
 
 pub type ServerResult<T> = Result<T, ServerError>;
@@ -353,9 +355,9 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let connector_key = url.scheme();
+        let scheme = url.scheme().to_string();
 
-        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
             return Err(ServerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -365,7 +367,11 @@ impl ConnectorRegistry {
         // Clone the init function to use in the async block
         let init_fn = connector_lazy.0.clone();
 
-        let conn = connector_lazy
+        let timer = CONNECTION_DURATION_SECONDS
+            .with_label_values(&[&scheme])
+            .start_timer();
+
+        let result = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
             .await
@@ -376,15 +382,23 @@ impl ConnectorRegistry {
                 ))
             })?
             .connect_guardian(url, api_secret)
-            .await
-            .inspect_err(|err| {
-                trace!(
-                    target: LOG_NET,
-                    %url,
-                    err = %err.fmt_compact(),
-                    "Connection failed"
-                );
-            })?;
+            .await;
+
+        timer.observe_duration();
+
+        let result_label = if result.is_ok() { "success" } else { "error" }.to_string();
+        CONNECTION_ATTEMPTS_TOTAL
+            .with_label_values(&[&scheme, &result_label])
+            .inc();
+
+        let conn = result.inspect_err(|err| {
+            trace!(
+                target: LOG_NET,
+                %url,
+                err = %err.fmt_compact(),
+                "Connection failed"
+            );
+        })?;
 
         trace!(
             target: LOG_NET,
@@ -420,9 +434,9 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let connector_key = url.scheme();
+        let scheme = url.scheme().to_string();
 
-        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
             return Err(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -432,7 +446,11 @@ impl ConnectorRegistry {
         // Clone the init function to use in the async block
         let init_fn = connector_lazy.0.clone();
 
-        let conn = connector_lazy
+        let timer = CONNECTION_DURATION_SECONDS
+            .with_label_values(&[&scheme])
+            .start_timer();
+
+        let result = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
             .await
@@ -443,9 +461,16 @@ impl ConnectorRegistry {
                 ))
             })?
             .connect_gateway(url)
-            .await?;
+            .await;
 
-        Ok(conn)
+        timer.observe_duration();
+
+        let result_label = if result.is_ok() { "success" } else { "error" }.to_string();
+        CONNECTION_ATTEMPTS_TOTAL
+            .with_label_values(&[&scheme, &result_label])
+            .inc();
+
+        result
     }
 }
 pub type DynConnector = Arc<dyn Connector>;
