@@ -8,6 +8,7 @@
 
 mod metrics;
 
+use std::convert::Infallible;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -27,7 +28,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_ln_server::LightningInit;
-use fedimint_logging::{LOG_CORE, TracingSetup};
+use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_rocksdb::RocksDb;
@@ -177,7 +178,7 @@ struct ServerOpts {
     with_jaeger: bool,
 
     /// Enable prometheus metrics
-    #[arg(long, env = FM_BIND_METRICS_ENV)]
+    #[arg(long, env = FM_BIND_METRICS_ENV, default_value = "127.0.0.1:8176")]
     bind_metrics: Option<SocketAddr>,
 
     /// Comma separated list of API secrets.
@@ -250,7 +251,7 @@ pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
     code_version_hash: &str,
     code_version_vendor_suffix: Option<&str>,
-) -> ! {
+) -> anyhow::Result<Infallible> {
     assert_eq!(
         env!("FEDIMINT_BUILD_CODE_VERSION").len(),
         code_version_hash.len(),
@@ -287,10 +288,12 @@ pub async fn run(
     let root_task_group = TaskGroup::new();
 
     if let Some(bind_metrics) = server_opts.bind_metrics.as_ref() {
-        root_task_group.spawn_cancellable(
-            "metrics-server",
-            fedimint_metrics::run_api_server(*bind_metrics, root_task_group.clone()),
+        info!(
+            target: LOG_SERVER,
+            url = %format!("http://{}/metrics", bind_metrics),
+            "Initializing metrics server",
         );
+        fedimint_metrics::spawn_api_server(*bind_metrics, root_task_group.clone()).await?;
     }
 
     let settings = ConfigGenSettings {
@@ -401,7 +404,6 @@ pub async fn run(
 
     drop(timing_total_runtime);
 
-    // Should we ever shut down without an error code?
     std::process::exit(-1);
 }
 

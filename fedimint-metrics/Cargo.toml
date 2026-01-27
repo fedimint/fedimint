@@ -16,11 +16,13 @@ path = "./src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
-axum = { workspace = true }
 fedimint-core = { workspace = true }
 prometheus = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
