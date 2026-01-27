@@ -1606,6 +1606,9 @@ mod fedimint_migration_tests {
                         );
                         info!("Validated ConsensusVersionVotingActivation");
                     }
+                    DbKeyPrefix::RecoveryItem => {
+                        // Recovery items are new and won't be in old snapshots
+                    }
                 }
             }
             Ok(())
