@@ -2994,6 +2994,7 @@ dependencies = [
  "curve25519-dalek",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-metrics",
  "futures",
  "iroh 0.35.0",
  "iroh 0.90.0",
