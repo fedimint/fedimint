@@ -303,8 +303,8 @@
 <a href=#303 id=303 data-nosnippet>303</a>                        .downcast_ref::&lt;WalletInput&gt;()
 <a href=#304 id=304 data-nosnippet>304</a>                        .expect(<span class="string">"Instance id mapping incorrect"</span>)
 <a href=#305 id=305 data-nosnippet>305</a>                    {
-<a href=#306 id=306 data-nosnippet>306</a>                        WalletInput::V0(input) =&gt; input.tweak_contract_key().serialize(),
-<a href=#307 id=307 data-nosnippet>307</a>                        WalletInput::V1(input) =&gt; input.tweak_contract_key.serialize(),
+<a href=#306 id=306 data-nosnippet>306</a>                        WalletInput::V0(input) =&gt; input.tweak_key().serialize(),
+<a href=#307 id=307 data-nosnippet>307</a>                        WalletInput::V1(input) =&gt; input.tweak_key.serialize(),
 <a href=#308 id=308 data-nosnippet>308</a>                        WalletInput::Default { .. } =&gt; {
 <a href=#309 id=309 data-nosnippet>309</a>                            <span class="macro">panic!</span>(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
 <a href=#310 id=310 data-nosnippet>310</a>                        }
