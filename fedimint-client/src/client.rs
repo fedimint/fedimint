@@ -207,6 +207,14 @@ impl Client {
         &self.task_group
     }
 
+    /// Returns all registered Prometheus metrics encoded in text format.
+    ///
+    /// This can be used by downstream clients to expose metrics via their own
+    /// HTTP server or print them for debugging purposes.
+    pub fn get_metrics() -> anyhow::Result<String> {
+        fedimint_metrics::get_metrics()
+    }
+
     /// Useful for our CLI tooling, not meant for external use
     #[doc(hidden)]
     pub fn executor(&self) -> &Executor {

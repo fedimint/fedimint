@@ -36,15 +36,17 @@ pub static AMOUNTS_BUCKETS_SATS: LazyLock<Vec<f64>> = LazyLock::new(|| {
     ]
 });
 
-async fn get_metrics() -> (StatusCode, String) {
+/// Returns all registered metrics encoded in Prometheus text format.
+pub fn get_metrics() -> anyhow::Result<String> {
     let metric_families = REGISTRY.gather();
-    let result = || -> anyhow::Result<String> {
-        let mut buffer = Vec::new();
-        let encoder = TextEncoder::new();
-        encoder.encode(&metric_families, &mut buffer)?;
-        Ok(String::from_utf8(buffer)?)
-    };
-    match result() {
+    let mut buffer = Vec::new();
+    let encoder = TextEncoder::new();
+    encoder.encode(&metric_families, &mut buffer)?;
+    Ok(String::from_utf8(buffer)?)
+}
+
+async fn get_metrics_handler() -> (StatusCode, String) {
+    match get_metrics() {
         Ok(result) => (StatusCode::OK, result),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")),
     }
@@ -54,7 +56,7 @@ pub async fn run_api_server(
     bind_address: SocketAddr,
     task_group: TaskGroup,
 ) -> anyhow::Result<TaskShutdownToken> {
-    let app = Router::new().route("/metrics", get(get_metrics));
+    let app = Router::new().route("/metrics", get(get_metrics_handler));
     let listener = TcpListener::bind(bind_address).await?;
     let serve = axum::serve(listener, app.into_make_service());
 
