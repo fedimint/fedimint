@@ -254,10 +254,10 @@ jsonrpsee-core = "0.24.9"
 jsonrpsee-types = "0.24.8"
 jsonrpsee-wasm-client = "0.24.9"
 jsonrpsee-ws-client = { version = "0.24.9", default-features = false }
-ldk-node = { version = "0.6.1", package = "fedimint-ldk-node" }
-lightning = "0.1.3"
-lightning-invoice = { version = "0.33.2", features = ["std"] }
-lightning-types = "0.2.0"
+ldk-node = { package = "fedimint-ldk-node", version = "0.7.0" }
+lightning = "0.2.0"
+lightning-invoice = { version = "0.34.0", features = ["std"] }
+lightning-types = "0.3.0"
 lnurl-rs = { version = "0.9.0", default-features = false }
 lockable = "0.1.1"
 lru = "0.16.3"

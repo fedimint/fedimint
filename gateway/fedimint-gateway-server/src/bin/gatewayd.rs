@@ -7,7 +7,6 @@
 //! It runs a webserver with a REST API that can be used by Fedimint
 //! clients to request routing of payments through the Lightning Network.
 //! The API also has endpoints for managing the gateway.
-
 use std::sync::Arc;
 
 use fedimint_core::fedimint_build_code_version_env;
