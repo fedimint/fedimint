@@ -6,13 +6,12 @@
 
 use core::cmp::Ordering;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientModule, PrimaryModulePriority, PrimaryModuleSupport};
-use fedimint_client_module::sm::{Context, ModuleNotifier};
+use fedimint_client_module::sm::Context;
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
@@ -22,11 +21,10 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, Secp256k1};
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput};
-use futures::{StreamExt, pin_mut};
 use states::DummyStateMachine;
 
 pub mod db;
@@ -34,7 +32,6 @@ pub mod states;
 
 pub struct DummyClientModule {
     key: Keypair,
-    notifier: ModuleNotifier<DummyStateMachine>,
     /// When true, `create_final_inputs_and_outputs` will fail with
     /// "Insufficient funds" when additional inputs are needed
     fail_insufficient_funds: AtomicBool,
@@ -95,7 +92,7 @@ impl ClientModule for DummyClientModule {
     async fn create_final_inputs_and_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
+        _operation_id: OperationId,
         _unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
@@ -145,17 +142,7 @@ impl ClientModule for DummyClientModule {
 
                 Ok((
                     ClientInputBundle::new(vec![], vec![]),
-                    ClientOutputBundle::new(
-                        vec![output],
-                        vec![fedimint_client_module::transaction::ClientOutputSM {
-                            state_machines: Arc::new(move |out_point_range| {
-                                vec![DummyStateMachine::Output(
-                                    out_point_range.txid(),
-                                    operation_id,
-                                )]
-                            }),
-                        }],
-                    ),
+                    ClientOutputBundle::new(vec![output], vec![]),
                 ))
             }
         }
@@ -163,31 +150,11 @@ impl ClientModule for DummyClientModule {
 
     async fn await_primary_module_output(
         &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
+        _operation_id: OperationId,
+        _out_point: OutPoint,
     ) -> anyhow::Result<()> {
-        let stream = self
-            .notifier
-            .subscribe(operation_id)
-            .await
-            .filter_map(|state| async move {
-                match state {
-                    DummyStateMachine::OutputDone(txid, _) => {
-                        if txid != out_point.txid {
-                            return None;
-                        }
-                        Some(Ok(()))
-                    }
-                    DummyStateMachine::Refund(_) => Some(Err(anyhow::anyhow!(
-                        "Error occurred processing the dummy transaction"
-                    ))),
-                    DummyStateMachine::Output(..) => None,
-                }
-            });
-
-        pin_mut!(stream);
-
-        stream.next_or_pending().await
+        // No state machine tracking needed - dummy module has infinite funds
+        Ok(())
     }
 
     async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
@@ -241,7 +208,6 @@ impl ClientModuleInit for DummyClientInit {
                 .module_root_secret()
                 .clone()
                 .to_secp_key(&Secp256k1::new()),
-            notifier: args.notifier().clone(),
             fail_insufficient_funds: AtomicBool::new(false),
         })
     }
