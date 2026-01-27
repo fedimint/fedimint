@@ -37,6 +37,7 @@ use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
+use fedimint_metrics::HistogramExt as _;
 use futures::stream::{BoxStream, FuturesUnordered};
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
@@ -666,7 +667,7 @@ impl FederationApi {
         let peer_str = peer.to_string();
         let timer = CLIENT_API_REQUEST_DURATION_SECONDS
             .with_label_values(&[&method_str, &peer_str])
-            .start_timer();
+            .start_timer_ext();
 
         let res = conn.request(method.clone(), request).await;
 
