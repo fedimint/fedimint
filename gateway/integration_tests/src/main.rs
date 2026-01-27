@@ -637,6 +637,7 @@ async fn esplora_test() -> anyhow::Result<()> {
                     name: "gateway-ldk-esplora".to_string(),
                     gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                     ldk_port: process_mgr.globals.FM_PORT_LDK,
+                    metrics_port: process_mgr.globals.FM_PORT_GW_LDK_METRICS,
                 },
                 0,
             )

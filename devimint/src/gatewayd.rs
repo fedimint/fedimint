@@ -28,7 +28,7 @@ use tracing::info;
 use crate::cmd;
 use crate::envs::{
     FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_IROH_LISTEN_ADDR_ENV,
-    FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
+    FM_GATEWAY_LISTEN_ADDR_ENV, FM_GATEWAY_METRICS_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
 };
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
@@ -47,6 +47,7 @@ pub struct Gatewayd {
     pub log_path: PathBuf,
     pub gw_port: u16,
     pub ldk_port: u16,
+    pub metrics_port: u16,
     pub gateway_id: String,
     pub iroh_gateway_id: Option<String>,
     pub iroh_port: u16,
@@ -61,17 +62,24 @@ impl Gatewayd {
         gateway_index: usize,
     ) -> Result<Self> {
         let ln_type = ln.ln_type();
-        let (gw_name, port, lightning_node_port) = match &ln {
+        let (gw_name, port, lightning_node_port, metrics_port) = match &ln {
             LightningNode::Lnd(_) => (
                 "gatewayd-lnd".to_string(),
                 process_mgr.globals.FM_PORT_GW_LND,
                 process_mgr.globals.FM_PORT_LND_LISTEN,
+                process_mgr.globals.FM_PORT_GW_LND_METRICS,
             ),
             LightningNode::Ldk {
                 name,
                 gw_port,
                 ldk_port,
-            } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
+                metrics_port,
+            } => (
+                name.to_owned(),
+                gw_port.to_owned(),
+                ldk_port.to_owned(),
+                metrics_port.to_owned(),
+            ),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
@@ -101,6 +109,10 @@ impl Gatewayd {
             (
                 FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV.to_owned(),
                 iroh_endpoint.secret_key(),
+            ),
+            (
+                FM_GATEWAY_METRICS_LISTEN_ADDR_ENV.to_owned(),
+                format!("127.0.0.1:{metrics_port}"),
             ),
         ]);
 
@@ -193,6 +205,7 @@ impl Gatewayd {
             log_path,
             gw_port: port,
             ldk_port: lightning_node_port,
+            metrics_port,
             gateway_id,
             iroh_gateway_id,
             iroh_port: iroh_endpoint.port(),
@@ -219,6 +232,7 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                metrics_port: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.

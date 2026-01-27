@@ -241,6 +241,9 @@ pub struct Gateway {
     /// The socket the gateway listens on.
     listen: SocketAddr,
 
+    /// The socket the gateway's metrics server listens on.
+    metrics_listen: SocketAddr,
+
     /// The task group for all tasks related to the gateway.
     task_group: TaskGroup,
 
@@ -360,6 +363,11 @@ impl Gateway {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
             .expect("Failed to version gateway API address");
+        // Default metrics listen to localhost on UI port + 1
+        let metrics_listen = SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            listen.port() + 1,
+        );
         Gateway::new(
             lightning_mode,
             GatewayParameters {
@@ -374,6 +382,7 @@ impl Gateway {
                 iroh_dns: None,
                 iroh_relays: vec![],
                 skip_setup: true,
+                metrics_listen,
             },
             gateway_db,
             client_builder,
@@ -574,6 +583,7 @@ impl Gateway {
             client_builder,
             gateway_db: gateway_db.clone(),
             listen: gateway_parameters.listen,
+            metrics_listen: gateway_parameters.metrics_listen,
             task_group,
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
             num_route_hints,
@@ -641,6 +651,8 @@ impl Gateway {
         self.load_clients().await?;
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
+        // start metrics server
+        fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
         let handle = self.task_group.make_handle();
         run_webserver(Arc::new(self), mnemonic_receiver.resubscribe()).await?;
