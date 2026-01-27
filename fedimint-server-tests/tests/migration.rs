@@ -10,8 +10,8 @@ use fedimint_core::db::{
     Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{AmountUnit, CommonModuleInit};
 use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
 use fedimint_core::secp256k1::Message;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
@@ -19,9 +19,7 @@ use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::{Amount, BitcoinHash, PeerId, TransactionId, anyhow};
-use fedimint_dummy_common::{
-    DummyCommonInit, DummyInput, DummyInputV1, DummyOutput, DummyOutputV1,
-};
+use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
 use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
@@ -66,21 +64,16 @@ async fn create_server_db_with_v0_data(db: Database) {
     let transaction = Transaction {
         inputs: vec![DynInput::from_typed::<DummyInput>(
             0,
-            DummyInputV1 {
+            DummyInput {
                 amount: Amount::ZERO,
-                unit: AmountUnit::BITCOIN,
-                account: key_pair.public_key(),
-            }
-            .into(),
+                key: key_pair.public_key(),
+            },
         )],
         outputs: vec![DynOutput::from_typed::<DummyOutput>(
             0,
-            DummyOutputV1 {
+            DummyOutput {
                 amount: Amount::ZERO,
-                unit: AmountUnit::BITCOIN,
-                account: key_pair.public_key(),
-            }
-            .into(),
+            },
         )],
         nonce: [0x42; 8],
         signatures: TransactionSignature::NaiveMultisig(vec![schnorr]),

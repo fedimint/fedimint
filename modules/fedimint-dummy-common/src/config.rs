@@ -1,6 +1,6 @@
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Amount, plugin_types_trait_impl_config};
+use fedimint_core::plugin_types_trait_impl_config;
 use serde::{Deserialize, Serialize};
 
 use crate::DummyCommonInit;
@@ -14,10 +14,7 @@ pub struct DummyConfig {
 
 /// Contains all the configuration for the client
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
-pub struct DummyClientConfig {
-    /// Accessible to clients
-    pub tx_fee: Amount,
-}
+pub struct DummyClientConfig;
 
 /// Locally unencrypted config unique to each member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -25,10 +22,7 @@ pub struct DummyConfigLocal;
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct DummyConfigConsensus {
-    /// Will be the same for all peers
-    pub tx_fee: Amount,
-}
+pub struct DummyConfigConsensus;
 
 /// Will be encrypted and not shared such as private key material
 #[derive(Clone, Debug, Serialize, Deserialize)]

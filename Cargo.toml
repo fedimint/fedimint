@@ -57,7 +57,6 @@ members = [
     "modules/fedimint-dummy-client",
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-server",
-    "modules/fedimint-dummy-tests",
     "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
     "modules/fedimint-empty-server",

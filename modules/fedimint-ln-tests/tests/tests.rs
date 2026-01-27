@@ -13,7 +13,7 @@ use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
-use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
+use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
@@ -86,13 +86,6 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
@@ -150,13 +143,6 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -291,13 +277,6 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fed = fixtures.new_fed_degraded().await;
     let gw = gateway(&fixtures, &fed).await;
     let client = fed.new_client().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>()?;
-
-    // Print money for client
-    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -360,13 +339,6 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -462,16 +434,9 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // generate a new keypair
     let keypair = Keypair::new_global(&mut OsRng);
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -595,13 +560,6 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let fed = fixtures.new_fed_degraded().await;
     let gw = gateway(&fixtures, &fed).await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     // generate a new keypair
     let keypair = Keypair::new_global(&mut OsRng);

@@ -10,7 +10,6 @@ use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -19,7 +18,7 @@ use fedimint_core::module::{
     Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
-use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
+use fedimint_core::{Amount, InPoint, OutPoint, PeerId};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
@@ -27,20 +26,14 @@ use fedimint_dummy_common::config::{
 use fedimint_dummy_common::{
     DummyCommonInit, DummyConsensusItem, DummyInput, DummyInputError, DummyModuleTypes,
     DummyOutput, DummyOutputError, DummyOutputOutcome, MODULE_CONSENSUS_VERSION,
-    broken_fed_public_key, fed_public_key,
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
     ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
-use futures::{FutureExt, StreamExt};
-use strum::IntoEnumIterator;
 
-use crate::db::{
-    DbKeyPrefix, DummyFundsKeyV1, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
-    migrate_to_v1, migrate_to_v2,
-};
+use crate::db::{DummyAssetsKey, DummyAssetsPrefix};
 
 pub mod db;
 
@@ -48,7 +41,6 @@ pub mod db;
 #[derive(Debug, Clone)]
 pub struct DummyInit;
 
-// TODO: Boilerplate-code
 impl ModuleInit for DummyInit {
     type Common = DummyCommonInit;
 
@@ -58,35 +50,12 @@ impl ModuleInit for DummyInit {
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        // TODO: Boilerplate-code
         let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
 
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::Funds => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummyFundsPrefixV1,
-                        DummyFundsKeyV1,
-                        Amount,
-                        items,
-                        "Dummy Funds"
-                    );
-                }
-                DbKeyPrefix::Outcome => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummyOutcomePrefix,
-                        DummyOutcomeKey,
-                        DummyOutputOutcome,
-                        items,
-                        "Dummy Outputs"
-                    );
-                }
-            }
+        if (prefix_names.is_empty() || prefix_names.contains(&"assets".to_string()))
+            && let Some(assets) = dbtx.get_value(&DummyAssetsKey).await
+        {
+            items.insert("Dummy Assets".to_string(), Box::new(assets));
         }
 
         Box::new(items.into_iter())
@@ -115,8 +84,8 @@ impl ServerModuleInit for DummyInit {
     }
 
     /// Initialize the module
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(Dummy::new(args.cfg().to_typed()?))
+    async fn init(&self, _args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Dummy)
     }
 
     /// Generates configs for all peers in a trusted manner for testing
@@ -125,15 +94,12 @@ impl ServerModuleInit for DummyInit {
         peers: &[PeerId],
         _args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        // Generate a config for each peer
         peers
             .iter()
             .map(|&peer| {
                 let config = DummyConfig {
                     private: DummyConfigPrivate,
-                    consensus: DummyConfigConsensus {
-                        tx_fee: Amount::ZERO,
-                    },
+                    consensus: DummyConfigConsensus,
                 };
                 (peer, config.to_erased())
             })
@@ -148,9 +114,7 @@ impl ServerModuleInit for DummyInit {
     ) -> anyhow::Result<ServerModuleConfig> {
         Ok(DummyConfig {
             private: DummyConfigPrivate,
-            consensus: DummyConfigConsensus {
-                tx_fee: Amount::ZERO,
-            },
+            consensus: DummyConfigConsensus,
         }
         .to_erased())
     }
@@ -158,12 +122,9 @@ impl ServerModuleInit for DummyInit {
     /// Converts the consensus config into the client config
     fn get_client_config(
         &self,
-        config: &ServerModuleConsensusConfig,
+        _config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<DummyClientConfig> {
-        let config = DummyConfigConsensus::from_erased(config)?;
-        Ok(DummyClientConfig {
-            tx_fee: config.tx_fee,
-        })
+        Ok(DummyClientConfig)
     }
 
     fn validate_config(
@@ -178,25 +139,13 @@ impl ServerModuleInit for DummyInit {
     fn get_database_migrations(
         &self,
     ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Dummy>> {
-        let mut migrations: BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Dummy>> =
-            BTreeMap::new();
-        migrations.insert(
-            DatabaseVersion(0),
-            Box::new(|ctx| migrate_to_v1(ctx).boxed()),
-        );
-        migrations.insert(
-            DatabaseVersion(1),
-            Box::new(|ctx| migrate_to_v2(ctx).boxed()),
-        );
-        migrations
+        BTreeMap::new()
     }
 }
 
 /// Dummy module
 #[derive(Debug)]
-pub struct Dummy {
-    pub cfg: DummyConfig,
-}
+pub struct Dummy;
 
 /// Implementation of consensus for the server module
 #[async_trait]
@@ -218,11 +167,6 @@ impl ServerModule for Dummy {
         _consensus_item: DummyConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        // WARNING: `process_consensus_item` should return an `Err` for items that do
-        // not change any internal consensus state. Failure to do so, will result in an
-        // (potentially significantly) increased consensus history size.
-        // If you are using this code as a template,
-        // make sure to read the [`ServerModule::process_consensus_item`] documentation,
         bail!("The dummy module does not use consensus items");
     }
 
@@ -232,42 +176,20 @@ impl ServerModule for Dummy {
         input: &'b DummyInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, DummyInputError> {
-        let DummyInput::V0(input) = input else {
-            return Err(DummyInputError::InvalidVersion);
-        };
-        let current_funds = dbtx
-            .get_value(&DummyFundsKeyV1(input.account))
+        // Add to federation assets (user is depositing value)
+        let current_assets = dbtx
+            .get_value(&DummyAssetsKey)
             .await
             .unwrap_or(Amount::ZERO);
-
-        // verify user has enough funds or is using the fed account
-        if input.amount > current_funds
-            && fed_public_key() != input.account
-            && broken_fed_public_key() != input.account
-        {
-            return Err(DummyInputError::NotEnoughFunds);
-        }
-
-        // Subtract funds from normal user, or print funds for the fed
-        let updated_funds = if fed_public_key() == input.account {
-            current_funds + input.amount
-        } else if broken_fed_public_key() == input.account {
-            // The printer is broken
-            current_funds
-        } else {
-            current_funds.saturating_sub(input.amount)
-        };
-
-        dbtx.insert_entry(&DummyFundsKeyV1(input.account), &updated_funds)
-            .await;
+        let updated_assets = current_assets + input.amount;
+        dbtx.insert_entry(&DummyAssetsKey, &updated_assets).await;
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(input.amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
+                fees: Amounts::ZERO,
             },
-            // IMPORTANT: include the pubkey to validate the user signed this tx
-            pub_key: input.account,
+            pub_key: input.key,
         })
     }
 
@@ -275,35 +197,29 @@ impl ServerModule for Dummy {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a DummyOutput,
-        out_point: OutPoint,
+        _out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, DummyOutputError> {
-        let DummyOutput::V0(output) = output else {
-            return Err(DummyOutputError::InvalidVersion);
-        };
-        // Add output funds to the user's account
-        let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
-        let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
-        dbtx.insert_entry(&DummyFundsKeyV1(output.account), &updated_funds)
-            .await;
-
-        // Update the output outcome the user can query
-        let outcome = DummyOutputOutcome(updated_funds, output.unit, output.account);
-        dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
-            .await;
+        // Subtract from federation assets (federation is paying out value)
+        let current_assets = dbtx
+            .get_value(&DummyAssetsKey)
+            .await
+            .unwrap_or(Amount::ZERO);
+        let updated_assets = current_assets.saturating_sub(output.amount);
+        dbtx.insert_entry(&DummyAssetsKey, &updated_assets).await;
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(output.amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
+            fees: Amounts::ZERO,
         })
     }
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        out_point: OutPoint,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
-        // check whether or not the output has been processed
-        dbtx.get_value(&DummyOutcomeKey(out_point)).await
+        // Dummy module doesn't track output outcomes
+        None
     }
 
     async fn audit(
@@ -312,34 +228,17 @@ impl ServerModule for Dummy {
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
+        // The assets value represents how much the federation has received via inputs
+        // minus how much it has paid out via outputs. A positive value means
+        // assets > liabilities.
         audit
-            .add_items(
-                dbtx,
-                module_instance_id,
-                &DummyFundsPrefixV1,
-                |k, v| match k {
-                    // the fed's test account is considered an asset (positive)
-                    // should be the bitcoin we own in a real module
-                    DummyFundsKeyV1(key)
-                        if key == fed_public_key() || key == broken_fed_public_key() =>
-                    {
-                        v.msats as i64
-                    }
-                    // a user's funds are a federation's liability (negative)
-                    DummyFundsKeyV1(_) => -(v.msats as i64),
-                },
-            )
+            .add_items(dbtx, module_instance_id, &DummyAssetsPrefix, |_k, v| {
+                v.msats as i64
+            })
             .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         Vec::new()
-    }
-}
-
-impl Dummy {
-    /// Create new module instance
-    pub fn new(cfg: DummyConfig) -> Dummy {
-        Dummy { cfg }
     }
 }

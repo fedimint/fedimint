@@ -3218,27 +3218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-dummy-tests"
-version = "0.11.0-alpha"
-dependencies = [
- "anyhow",
- "fedimint-client",
- "fedimint-client-module",
- "fedimint-core",
- "fedimint-dummy-client",
- "fedimint-dummy-common",
- "fedimint-dummy-server",
- "fedimint-logging",
- "fedimint-server",
- "fedimint-testing",
- "futures",
- "rand 0.8.5",
- "strum 0.27.1",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "fedimint-empty-client"
 version = "0.11.0-alpha"
 dependencies = [

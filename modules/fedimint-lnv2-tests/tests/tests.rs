@@ -7,8 +7,8 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::Amounts;
 use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, OutPoint, sats};
-use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
+use fedimint_core::{Amount, OutPoint};
+use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
@@ -46,16 +46,6 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
-
-    // Print money for client
-    let (op, outpoint) = client
-        .get_first_module::<DummyClientModule>()?
-        .print_money(sats(10_000))
-        .await?;
-
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
@@ -103,16 +93,6 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
-    // Print money for client
-    let (op, outpoint) = client
-        .get_first_module::<DummyClientModule>()?
-        .print_money(sats(10_000))
-        .await?;
-
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
-
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(
@@ -150,16 +130,6 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
-    // Print money for client
-    let (op, outpoint) = client
-        .get_first_module::<DummyClientModule>()?
-        .print_money(sats(10_000))
-        .await?;
-
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
-
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
@@ -187,16 +157,6 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
-
-    // Print money for client
-    let (op, outpoint) = client
-        .get_first_module::<DummyClientModule>()?
-        .print_money(sats(10_000))
-        .await?;
-
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
