@@ -519,69 +519,70 @@
 <a href=#519 id=519 data-nosnippet>519</a>                    name: <span class="string">"gateway-ldk-esplora"</span>.to_string(),
 <a href=#520 id=520 data-nosnippet>520</a>                    gw_port: process_mgr.globals.FM_PORT_GW_LDK,
 <a href=#521 id=521 data-nosnippet>521</a>                    ldk_port: process_mgr.globals.FM_PORT_LDK,
-<a href=#522 id=522 data-nosnippet>522</a>                },
-<a href=#523 id=523 data-nosnippet>523</a>                <span class="number">0</span>,
-<a href=#524 id=524 data-nosnippet>524</a>            )
-<a href=#525 id=525 data-nosnippet>525</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a>            <span class="macro">info!</span>(<span class="string">"Waiting for ldk gatewy to be ready..."</span>);
-<a href=#528 id=528 data-nosnippet>528</a>            poll(<span class="string">"Waiting for LDK to be ready"</span>, || <span class="kw">async </span>{
-<a href=#529 id=529 data-nosnippet>529</a>                <span class="kw">let </span>info = ldk.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#530 id=530 data-nosnippet>530</a>                <span class="kw">let </span>state: String = serde_json::from_value(info[<span class="string">"gateway_state"</span>].clone())
-<a href=#531 id=531 data-nosnippet>531</a>                    .expect(<span class="string">"Could not get gateway state"</span>);
-<a href=#532 id=532 data-nosnippet>532</a>                <span class="kw">if </span>state == <span class="string">"Running" </span>{
-<a href=#533 id=533 data-nosnippet>533</a>                    <span class="prelude-val">Ok</span>(())
-<a href=#534 id=534 data-nosnippet>534</a>                } <span class="kw">else </span>{
-<a href=#535 id=535 data-nosnippet>535</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-<a href=#536 id=536 data-nosnippet>536</a>                        <span class="string">"Gateway not running"
-<a href=#537 id=537 data-nosnippet>537</a>                    </span>)))
-<a href=#538 id=538 data-nosnippet>538</a>                }
-<a href=#539 id=539 data-nosnippet>539</a>            })
-<a href=#540 id=540 data-nosnippet>540</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#541 id=541 data-nosnippet>541</a>
-<a href=#542 id=542 data-nosnippet>542</a>            ldk.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#543 id=543 data-nosnippet>543</a>            <span class="macro">info!</span>(target:LOG_TEST, <span class="string">"ldk gateway successfully spawned and connected to esplora"</span>);
-<a href=#544 id=544 data-nosnippet>544</a>            <span class="prelude-val">Ok</span>(())
-<a href=#545 id=545 data-nosnippet>545</a>        },
-<a href=#546 id=546 data-nosnippet>546</a>        task_group,
-<a href=#547 id=547 data-nosnippet>547</a>    )
-<a href=#548 id=548 data-nosnippet>548</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#549 id=549 data-nosnippet>549</a>    <span class="prelude-val">Ok</span>(())
-<a href=#550 id=550 data-nosnippet>550</a>}
-<a href=#551 id=551 data-nosnippet>551</a>
-<a href=#552 id=552 data-nosnippet>552</a><span class="kw">async fn </span>get_transaction(
-<a href=#553 id=553 data-nosnippet>553</a>    gateway: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#554 id=554 data-nosnippet>554</a>    kind: PaymentKind,
-<a href=#555 id=555 data-nosnippet>555</a>    amount: Amount,
-<a href=#556 id=556 data-nosnippet>556</a>    status: PaymentStatus,
-<a href=#557 id=557 data-nosnippet>557</a>) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentDetails&gt; {
-<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">let </span>transactions = gateway
-<a href=#559 id=559 data-nosnippet>559</a>        .list_transactions(
-<a href=#560 id=560 data-nosnippet>560</a>            now() - Duration::from_secs(<span class="number">5 </span>* <span class="number">60</span>),
-<a href=#561 id=561 data-nosnippet>561</a>            now() + Duration::from_secs(<span class="number">5 </span>* <span class="number">60</span>),
-<a href=#562 id=562 data-nosnippet>562</a>        )
-<a href=#563 id=563 data-nosnippet>563</a>        .<span class="kw">await
-<a href=#564 id=564 data-nosnippet>564</a>        </span>.ok()<span class="question-mark">?</span>;
-<a href=#565 id=565 data-nosnippet>565</a>    transactions.into_iter().find(|details| {
-<a href=#566 id=566 data-nosnippet>566</a>        details.payment_kind == kind &amp;&amp; details.amount == amount &amp;&amp; details.status == status
-<a href=#567 id=567 data-nosnippet>567</a>    })
-<a href=#568 id=568 data-nosnippet>568</a>}
-<a href=#569 id=569 data-nosnippet>569</a>
-<a href=#570 id=570 data-nosnippet>570</a><span class="doccomment">/// Leaves the specified federation by issuing a `leave-fed` POST request to the
-<a href=#571 id=571 data-nosnippet>571</a>/// gateway.
-<a href=#572 id=572 data-nosnippet>572</a></span><span class="kw">async fn </span>leave_federation(gw: <span class="kw-2">&amp;</span>Gatewayd, fed_id: String, expected_scid: u64) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">let </span>leave_fed = <span class="macro">cmd!</span>(gw, <span class="string">"leave-fed"</span>, <span class="string">"--federation-id"</span>, fed_id.clone())
-<a href=#574 id=574 data-nosnippet>574</a>        .out_json()
-<a href=#575 id=575 data-nosnippet>575</a>        .<span class="kw">await
-<a href=#576 id=576 data-nosnippet>576</a>        </span>.expect(<span class="string">"Leaving the federation failed"</span>);
-<a href=#577 id=577 data-nosnippet>577</a>
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">let </span>federation_id: FederationId = serde_json::from_value(leave_fed[<span class="string">"federation_id"</span>].clone())<span class="question-mark">?</span>;
-<a href=#579 id=579 data-nosnippet>579</a>    <span class="macro">assert_eq!</span>(federation_id.to_string(), fed_id);
-<a href=#580 id=580 data-nosnippet>580</a>
-<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">let </span>scid = serde_json::from_value::&lt;u64&gt;(leave_fed[<span class="string">"config"</span>][<span class="string">"federation_index"</span>].clone())<span class="question-mark">?</span>;
-<a href=#582 id=582 data-nosnippet>582</a>
-<a href=#583 id=583 data-nosnippet>583</a>    <span class="macro">assert_eq!</span>(scid, expected_scid);
-<a href=#584 id=584 data-nosnippet>584</a>
-<a href=#585 id=585 data-nosnippet>585</a>    <span class="macro">info!</span>(target: LOG_TEST, federation_id = %fed_id, <span class="string">"Verified gateway left federation"</span>);
-<a href=#586 id=586 data-nosnippet>586</a>    <span class="prelude-val">Ok</span>(())
-<a href=#587 id=587 data-nosnippet>587</a>}</code></pre></div></section></main></body></html>
+<a href=#522 id=522 data-nosnippet>522</a>                    metrics_port: process_mgr.globals.FM_PORT_GW_LDK_METRICS,
+<a href=#523 id=523 data-nosnippet>523</a>                },
+<a href=#524 id=524 data-nosnippet>524</a>                <span class="number">0</span>,
+<a href=#525 id=525 data-nosnippet>525</a>            )
+<a href=#526 id=526 data-nosnippet>526</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#527 id=527 data-nosnippet>527</a>
+<a href=#528 id=528 data-nosnippet>528</a>            <span class="macro">info!</span>(<span class="string">"Waiting for ldk gatewy to be ready..."</span>);
+<a href=#529 id=529 data-nosnippet>529</a>            poll(<span class="string">"Waiting for LDK to be ready"</span>, || <span class="kw">async </span>{
+<a href=#530 id=530 data-nosnippet>530</a>                <span class="kw">let </span>info = ldk.get_info().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#531 id=531 data-nosnippet>531</a>                <span class="kw">let </span>state: String = serde_json::from_value(info[<span class="string">"gateway_state"</span>].clone())
+<a href=#532 id=532 data-nosnippet>532</a>                    .expect(<span class="string">"Could not get gateway state"</span>);
+<a href=#533 id=533 data-nosnippet>533</a>                <span class="kw">if </span>state == <span class="string">"Running" </span>{
+<a href=#534 id=534 data-nosnippet>534</a>                    <span class="prelude-val">Ok</span>(())
+<a href=#535 id=535 data-nosnippet>535</a>                } <span class="kw">else </span>{
+<a href=#536 id=536 data-nosnippet>536</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+<a href=#537 id=537 data-nosnippet>537</a>                        <span class="string">"Gateway not running"
+<a href=#538 id=538 data-nosnippet>538</a>                    </span>)))
+<a href=#539 id=539 data-nosnippet>539</a>                }
+<a href=#540 id=540 data-nosnippet>540</a>            })
+<a href=#541 id=541 data-nosnippet>541</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a>            ldk.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="macro">info!</span>(target:LOG_TEST, <span class="string">"ldk gateway successfully spawned and connected to esplora"</span>);
+<a href=#545 id=545 data-nosnippet>545</a>            <span class="prelude-val">Ok</span>(())
+<a href=#546 id=546 data-nosnippet>546</a>        },
+<a href=#547 id=547 data-nosnippet>547</a>        task_group,
+<a href=#548 id=548 data-nosnippet>548</a>    )
+<a href=#549 id=549 data-nosnippet>549</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="prelude-val">Ok</span>(())
+<a href=#551 id=551 data-nosnippet>551</a>}
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a><span class="kw">async fn </span>get_transaction(
+<a href=#554 id=554 data-nosnippet>554</a>    gateway: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#555 id=555 data-nosnippet>555</a>    kind: PaymentKind,
+<a href=#556 id=556 data-nosnippet>556</a>    amount: Amount,
+<a href=#557 id=557 data-nosnippet>557</a>    status: PaymentStatus,
+<a href=#558 id=558 data-nosnippet>558</a>) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentDetails&gt; {
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">let </span>transactions = gateway
+<a href=#560 id=560 data-nosnippet>560</a>        .list_transactions(
+<a href=#561 id=561 data-nosnippet>561</a>            now() - Duration::from_secs(<span class="number">5 </span>* <span class="number">60</span>),
+<a href=#562 id=562 data-nosnippet>562</a>            now() + Duration::from_secs(<span class="number">5 </span>* <span class="number">60</span>),
+<a href=#563 id=563 data-nosnippet>563</a>        )
+<a href=#564 id=564 data-nosnippet>564</a>        .<span class="kw">await
+<a href=#565 id=565 data-nosnippet>565</a>        </span>.ok()<span class="question-mark">?</span>;
+<a href=#566 id=566 data-nosnippet>566</a>    transactions.into_iter().find(|details| {
+<a href=#567 id=567 data-nosnippet>567</a>        details.payment_kind == kind &amp;&amp; details.amount == amount &amp;&amp; details.status == status
+<a href=#568 id=568 data-nosnippet>568</a>    })
+<a href=#569 id=569 data-nosnippet>569</a>}
+<a href=#570 id=570 data-nosnippet>570</a>
+<a href=#571 id=571 data-nosnippet>571</a><span class="doccomment">/// Leaves the specified federation by issuing a `leave-fed` POST request to the
+<a href=#572 id=572 data-nosnippet>572</a>/// gateway.
+<a href=#573 id=573 data-nosnippet>573</a></span><span class="kw">async fn </span>leave_federation(gw: <span class="kw-2">&amp;</span>Gatewayd, fed_id: String, expected_scid: u64) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">let </span>leave_fed = <span class="macro">cmd!</span>(gw, <span class="string">"leave-fed"</span>, <span class="string">"--federation-id"</span>, fed_id.clone())
+<a href=#575 id=575 data-nosnippet>575</a>        .out_json()
+<a href=#576 id=576 data-nosnippet>576</a>        .<span class="kw">await
+<a href=#577 id=577 data-nosnippet>577</a>        </span>.expect(<span class="string">"Leaving the federation failed"</span>);
+<a href=#578 id=578 data-nosnippet>578</a>
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">let </span>federation_id: FederationId = serde_json::from_value(leave_fed[<span class="string">"federation_id"</span>].clone())<span class="question-mark">?</span>;
+<a href=#580 id=580 data-nosnippet>580</a>    <span class="macro">assert_eq!</span>(federation_id.to_string(), fed_id);
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">let </span>scid = serde_json::from_value::&lt;u64&gt;(leave_fed[<span class="string">"config"</span>][<span class="string">"federation_index"</span>].clone())<span class="question-mark">?</span>;
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="macro">assert_eq!</span>(scid, expected_scid);
+<a href=#585 id=585 data-nosnippet>585</a>
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="macro">info!</span>(target: LOG_TEST, federation_id = %fed_id, <span class="string">"Verified gateway left federation"</span>);
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="prelude-val">Ok</span>(())
+<a href=#588 id=588 data-nosnippet>588</a>}</code></pre></div></section></main></body></html>

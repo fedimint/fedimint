@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CHANGE_PASSWORD_ROUTE","DOWNLOAD_BACKUP_ROUTE","EXPLORER_IDX_ROUTE","EXPLORER_ROUTE","LOG_UI"],"fn":["login_submit_response"],"mod":["dashboard","setup"],"struct":["PasswordChangeInput"]};
+window.SIDEBAR_ITEMS = {"constant":["CHANGE_PASSWORD_ROUTE","DOWNLOAD_BACKUP_ROUTE","EXPLORER_IDX_ROUTE","EXPLORER_ROUTE","LOG_UI","METRICS_ROUTE"],"fn":["login_submit_response"],"mod":["dashboard","setup"],"struct":["PasswordChangeInput"]};
