@@ -174,9 +174,7 @@ impl WalletClientInit {
 
         let mut state = RecoveryStateV2::new();
 
-        for _ in 0..FEDERATION_RECOVER_MAX_GAP {
-            state.generate_next_pending_script(&data);
-        }
+        state.refill_pending_pool_up_to(&data, TweakIdx(FEDERATION_RECOVER_MAX_GAP));
 
         for start in (0..total_items).step_by(SLICE_SIZE as usize) {
             let end = std::cmp::min(start + SLICE_SIZE, total_items);

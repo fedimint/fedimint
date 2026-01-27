@@ -141,7 +141,11 @@ impl RecoveryStateV2 {
         self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
     }
 
-    fn refill_pending_pool_up_to(&mut self, data: &WalletClientModuleData, tweak_idx: TweakIdx) {
+    pub fn refill_pending_pool_up_to(
+        &mut self,
+        data: &WalletClientModuleData,
+        tweak_idx: TweakIdx,
+    ) {
         while self.next_pending_tweak_idx < tweak_idx {
             self.generate_next_pending_script(data);
         }
