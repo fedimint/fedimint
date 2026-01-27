@@ -2,6 +2,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 use std::sync::LazyLock;
+use std::time::SystemTime;
 
 use prometheus::Registry;
 pub use prometheus::{
@@ -9,6 +10,39 @@ pub use prometheus::{
     TextEncoder, histogram_opts, opts, register_histogram_with_registry,
     register_int_counter_vec_with_registry,
 };
+
+/// A wasm-safe histogram timer that uses `fedimint_core::time::now` instead of
+/// `std::time::Instant`, which is not available on wasm targets.
+pub struct HistogramTimerExt {
+    histogram: Histogram,
+    start: SystemTime,
+}
+
+impl HistogramTimerExt {
+    /// Records the elapsed duration in seconds to the histogram.
+    pub fn observe_duration(self) {
+        let elapsed = fedimint_core::time::now()
+            .duration_since(self.start)
+            .unwrap_or_default();
+        self.histogram.observe(elapsed.as_secs_f64());
+    }
+}
+
+/// Extension trait for [`Histogram`] that provides a wasm-safe timer.
+pub trait HistogramExt {
+    /// Starts a wasm-safe timer that records duration on
+    /// [`HistogramTimerExt::observe_duration`].
+    fn start_timer_ext(&self) -> HistogramTimerExt;
+}
+
+impl HistogramExt for Histogram {
+    fn start_timer_ext(&self) -> HistogramTimerExt {
+        HistogramTimerExt {
+            histogram: self.clone(),
+            start: fedimint_core::time::now(),
+        }
+    }
+}
 
 // The server module depends on `axum` and `tokio` networking, which are not
 // available on wasm targets. Core metrics functionality (REGISTRY, get_metrics,
