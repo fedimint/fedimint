@@ -154,7 +154,7 @@ where
 // TODO: should probably move to DB
 pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
-const SLICE_SIZE: u64 = 10000;
+const SLICE_SIZE: u64 = 1000;
 
 impl WalletClientInit {
     pub fn new(rpc: DynBitcoindRpc) -> Self {
