@@ -4330,6 +4330,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-lnv2-server",
  "fedimint-meta-server",
+ "fedimint-metrics",
  "fedimint-server-core",
  "fedimint-ui-common",
  "fedimint-wallet-server",
