@@ -5,14 +5,20 @@ use std::time::SystemTime;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
-    GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersion, GeneralDbMigrationFn, GeneralDbMigrationFnContext,
+    IReadDatabaseTransactionOps as _, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOps as _, IWriteDatabaseTransactionOpsTyped, WithDecoders,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
+use fedimint_core::task::MaybeSend;
+use fedimint_core::{
+    Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record, push_db_pair_items,
+    secp256k1,
+};
 use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
 use fedimint_gateway_common::{ConnectorType, FederationConfig, RegisteredProtocol};
 use fedimint_ln_common::serde_routing_fees;
@@ -39,41 +45,22 @@ impl GatewayDbExt for Database {
     }
 }
 
-#[allow(async_fn_in_trait)]
-pub trait GatewayDbtxNcExt {
-    async fn save_federation_config(&mut self, config: &FederationConfig);
+/// Read-only extension trait for gateway database operations
+#[apply(async_trait_maybe_send!)]
+pub trait GatewayDbtxReadExt {
     async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0>;
+
     async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig>;
+
     async fn load_federation_config(
         &mut self,
         federation_id: FederationId,
     ) -> Option<FederationConfig>;
-    async fn remove_federation_config(&mut self, federation_id: FederationId);
-
-    /// Returns the keypair that uniquely identifies the gateway, creating it if
-    /// it does not exist. Remember to commit the transaction after calling this
-    /// method.
-    async fn load_or_create_gateway_keypair(&mut self, protocol: RegisteredProtocol) -> Keypair;
-
-    async fn save_new_preimage_authentication(
-        &mut self,
-        payment_hash: sha256::Hash,
-        preimage_auth: sha256::Hash,
-    );
 
     async fn load_preimage_authentication(
         &mut self,
         payment_hash: sha256::Hash,
     ) -> Option<sha256::Hash>;
-
-    /// Saves a registered incoming contract, returning the previous contract
-    /// with the same payment hash if it existed.
-    async fn save_registered_incoming_contract(
-        &mut self,
-        federation_id: FederationId,
-        incoming_amount: Amount,
-        contract: IncomingContract,
-    ) -> Option<RegisteredIncomingContract>;
 
     async fn load_registered_incoming_contract(
         &mut self,
@@ -87,10 +74,6 @@ pub trait GatewayDbtxNcExt {
         prefix_names: Vec<String>,
     ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>>;
 
-    /// Returns `iroh::SecretKey` and saves it to the database if it does not
-    /// exist
-    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
-
     /// Returns a `BTreeMap` that maps `FederationId` to its last backup time
     async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>>;
 
@@ -99,6 +82,37 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         federation_id: FederationId,
     ) -> Option<Option<SystemTime>>;
+}
+
+/// Write extension trait for gateway database operations
+#[apply(async_trait_maybe_send!)]
+pub trait GatewayDbtxWriteExt: GatewayDbtxReadExt {
+    async fn save_federation_config(&mut self, config: &FederationConfig);
+    async fn remove_federation_config(&mut self, federation_id: FederationId);
+
+    /// Returns the keypair that uniquely identifies the gateway, creating it if
+    /// it does not exist. Remember to commit the transaction after calling this
+    /// method.
+    async fn load_or_create_gateway_keypair(&mut self, protocol: RegisteredProtocol) -> Keypair;
+
+    async fn save_new_preimage_authentication(
+        &mut self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+    );
+
+    /// Saves a registered incoming contract, returning the previous contract
+    /// with the same payment hash if it existed.
+    async fn save_registered_incoming_contract(
+        &mut self,
+        federation_id: FederationId,
+        incoming_amount: Amount,
+        contract: IncomingContract,
+    ) -> Option<RegisteredIncomingContract>;
+
+    /// Returns `iroh::SecretKey` and saves it to the database if it does not
+    /// exist
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
 
     /// Saves the last backup time of a federation
     async fn save_federation_backup_record(
@@ -108,12 +122,12 @@ pub trait GatewayDbtxNcExt {
     );
 }
 
-impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
-    async fn save_federation_config(&mut self, config: &FederationConfig) {
-        let id = config.invite_code.federation_id();
-        self.insert_entry(&FederationConfigKey { id }, config).await;
-    }
-
+/// Blanket implementation for any type that supports reading from the database
+#[apply(async_trait_maybe_send!)]
+impl<'a, T> GatewayDbtxReadExt for T
+where
+    T: IReadDatabaseTransactionOpsTyped<'a> + WithDecoders + MaybeSend,
+{
     async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0> {
         self.find_by_prefix(&FederationConfigKeyPrefixV0)
             .await
@@ -138,62 +152,12 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             .await
     }
 
-    async fn remove_federation_config(&mut self, federation_id: FederationId) {
-        self.remove_entry(&FederationConfigKey { id: federation_id })
-            .await;
-    }
-
-    async fn load_or_create_gateway_keypair(&mut self, protocol: RegisteredProtocol) -> Keypair {
-        if let Some(key_pair) = self
-            .get_value(&GatewayPublicKey {
-                protocol: protocol.clone(),
-            })
-            .await
-        {
-            key_pair
-        } else {
-            let context = Secp256k1::new();
-            let (secret_key, _public_key) = context.generate_keypair(&mut OsRng);
-            let key_pair = Keypair::from_secret_key(&context, &secret_key);
-
-            self.insert_new_entry(&GatewayPublicKey { protocol }, &key_pair)
-                .await;
-            key_pair
-        }
-    }
-
-    async fn save_new_preimage_authentication(
-        &mut self,
-        payment_hash: sha256::Hash,
-        preimage_auth: sha256::Hash,
-    ) {
-        self.insert_new_entry(&PreimageAuthentication { payment_hash }, &preimage_auth)
-            .await;
-    }
-
     async fn load_preimage_authentication(
         &mut self,
         payment_hash: sha256::Hash,
     ) -> Option<sha256::Hash> {
         self.get_value(&PreimageAuthentication { payment_hash })
             .await
-    }
-
-    async fn save_registered_incoming_contract(
-        &mut self,
-        federation_id: FederationId,
-        incoming_amount: Amount,
-        contract: IncomingContract,
-    ) -> Option<RegisteredIncomingContract> {
-        self.insert_entry(
-            &RegisteredIncomingContractKey(contract.commitment.payment_image.clone()),
-            &RegisteredIncomingContract {
-                federation_id,
-                incoming_amount_msats: incoming_amount.msats,
-                contract,
-            },
-        )
-        .await
     }
 
     async fn load_registered_incoming_contract(
@@ -243,21 +207,6 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         gateway_items
     }
 
-    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
-        if let Some(iroh_sk) = self.get_value(&IrohKey).await {
-            iroh_sk
-        } else {
-            let iroh_sk = if let Ok(var) = std::env::var(FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV) {
-                iroh::SecretKey::from_str(&var).expect("Invalid overridden iroh secret key")
-            } else {
-                iroh::SecretKey::generate(&mut OsRng)
-            };
-
-            self.insert_new_entry(&IrohKey, &iroh_sk).await;
-            iroh_sk
-        }
-    }
-
     async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>> {
         self.find_by_prefix(&FederationBackupPrefix)
             .await
@@ -271,6 +220,83 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         federation_id: FederationId,
     ) -> Option<Option<SystemTime>> {
         self.get_value(&FederationBackupKey { federation_id }).await
+    }
+}
+
+/// Blanket implementation for any type that supports writing to the database
+#[apply(async_trait_maybe_send!)]
+impl<'a, T> GatewayDbtxWriteExt for T
+where
+    T: IWriteDatabaseTransactionOpsTyped<'a> + WithDecoders + MaybeSend,
+{
+    async fn save_federation_config(&mut self, config: &FederationConfig) {
+        let id = config.invite_code.federation_id();
+        self.insert_entry(&FederationConfigKey { id }, config).await;
+    }
+
+    async fn remove_federation_config(&mut self, federation_id: FederationId) {
+        self.remove_entry(&FederationConfigKey { id: federation_id })
+            .await;
+    }
+
+    async fn load_or_create_gateway_keypair(&mut self, protocol: RegisteredProtocol) -> Keypair {
+        if let Some(key_pair) = self
+            .get_value(&GatewayPublicKey {
+                protocol: protocol.clone(),
+            })
+            .await
+        {
+            key_pair
+        } else {
+            let context = Secp256k1::new();
+            let (secret_key, _public_key) = context.generate_keypair(&mut OsRng);
+            let key_pair = Keypair::from_secret_key(&context, &secret_key);
+
+            self.insert_new_entry(&GatewayPublicKey { protocol }, &key_pair)
+                .await;
+            key_pair
+        }
+    }
+
+    async fn save_new_preimage_authentication(
+        &mut self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+    ) {
+        self.insert_new_entry(&PreimageAuthentication { payment_hash }, &preimage_auth)
+            .await;
+    }
+
+    async fn save_registered_incoming_contract(
+        &mut self,
+        federation_id: FederationId,
+        incoming_amount: Amount,
+        contract: IncomingContract,
+    ) -> Option<RegisteredIncomingContract> {
+        self.insert_entry(
+            &RegisteredIncomingContractKey(contract.commitment.payment_image.clone()),
+            &RegisteredIncomingContract {
+                federation_id,
+                incoming_amount_msats: incoming_amount.msats,
+                contract,
+            },
+        )
+        .await
+    }
+
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
+        if let Some(iroh_sk) = self.get_value(&IrohKey).await {
+            iroh_sk
+        } else {
+            let iroh_sk = if let Ok(var) = std::env::var(FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV) {
+                iroh::SecretKey::from_str(&var).expect("Invalid overridden iroh secret key")
+            } else {
+                iroh::SecretKey::generate(&mut OsRng)
+            };
+
+            self.insert_new_entry(&IrohKey, &iroh_sk).await;
+            iroh_sk
+        }
     }
 
     async fn save_federation_backup_record(
@@ -652,7 +678,7 @@ async fn migrate_to_v5(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
 }
 
 async fn migrate_federation_configs(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
 ) -> Result<(), anyhow::Error> {
     // We need to migrate all isolated database entries to be behind the 0x10
     // prefix. The problem is, if there is a `FederationId` that starts with

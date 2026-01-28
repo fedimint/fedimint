@@ -8,8 +8,8 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitResultExt, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IRawDatabase,
+    Database, IRawDatabase, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -185,7 +185,7 @@ impl RecurringInvoiceServer {
             },
         };
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
         if let Some(existing_code) = dbtx
             .insert_entry(
                 &PaymentCodeKey {
@@ -277,97 +277,92 @@ impl RecurringInvoiceServer {
             .get_federation_client(payment_code.federation_id)
             .await?;
 
-        let (operation_id, invoice) = self
-            .db
-            .autocommit(
-                |dbtx, _| {
-                    let federation_client = federation_client.clone();
-                    let payment_code = payment_code.clone();
-                    Box::pin(async move {
-                        let invoice_index = self
-                            .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
-                            .await;
+        // First transaction: get the next invoice index and check for any existing
+        // invoice from a previous aborted call
+        let invoice_index = {
+            let mut dbtx = self.db.begin_write_transaction().await;
 
-                        // Check if the invoice index was already used in an aborted call to this
-                        // fn. If so:
-                        //   1. Save the previously generated invoice. We don't want to reuse it
-                        //      since it may be expired and in the future may contain call-specific
-                        //      data, but also want to allow the client to sync past it.
-                        //   2. Increment the invoice index to generate a new invoice since re-using
-                        //      the same index wouldn't work (operation id reuse is forbidden).
-                        let initial_operation_id =
-                            operation_id_from_user_key(payment_code.root_key, invoice_index);
-                        let invoice_index = if let Some(invoice) =
-                            Self::check_if_invoice_exists(&federation_client, initial_operation_id)
-                                .await
-                        {
-                            self.save_bolt11_invoice(
-                                dbtx,
-                                initial_operation_id,
-                                payment_code_id,
-                                invoice_index,
-                                invoice,
-                            )
-                            .await;
-                            self.get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
-                                .await
-                        } else {
-                            invoice_index
-                        };
+            let invoice_index = self
+                .get_next_invoice_index(&mut dbtx.to_ref(), payment_code_id)
+                .await;
 
-                        // This is where the main part starts: generate the invoice and save it to
-                        // the DB
-                        let federation_client_ln_module = federation_client.get_ln_module()?;
-                        let gateway = federation_client_ln_module
-                            .get_gateway(None, false)
-                            .await?
-                            .ok_or(RecurringPaymentError::NoGatewayFound)?;
+            // Check if the invoice index was already used in an aborted call to this
+            // fn. If so:
+            //   1. Save the previously generated invoice. We don't want to reuse it since
+            //      it may be expired and in the future may contain call-specific data, but
+            //      also want to allow the client to sync past it.
+            //   2. Increment the invoice index to generate a new invoice since re-using the
+            //      same index wouldn't work (operation id reuse is forbidden).
+            let initial_operation_id =
+                operation_id_from_user_key(payment_code.root_key, invoice_index);
+            let invoice_index = if let Some(invoice) =
+                Self::check_if_invoice_exists(&federation_client, initial_operation_id).await
+            {
+                self.save_bolt11_invoice(
+                    &mut dbtx.to_ref(),
+                    initial_operation_id,
+                    payment_code_id,
+                    invoice_index,
+                    invoice,
+                )
+                .await;
+                self.get_next_invoice_index(&mut dbtx.to_ref(), payment_code_id)
+                    .await
+            } else {
+                invoice_index
+            };
 
-                        let lnurl_meta = match payment_code.variant {
-                            PaymentCodeVariant::Lnurl { meta } => meta,
-                        };
-                        let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
-                        let description = Bolt11InvoiceDescription::Hash(meta_hash);
+            dbtx.commit_tx().await;
+            invoice_index
+        };
 
-                        // TODO: ideally creating the invoice would take a dbtx as argument so we
-                        // don't have to do the "check if invoice already exists" dance
-                        let (operation_id, invoice, _preimage) = federation_client_ln_module
-                            .create_bolt11_invoice_for_user_tweaked(
-                                amount,
-                                description,
-                                Some(DEFAULT_EXPIRY_TIME),
-                                payment_code.root_key.0,
-                                invoice_index,
-                                serde_json::Value::Null,
-                                Some(gateway),
-                            )
-                            .await?;
+        // Network operations outside of any transaction
+        let federation_client_ln_module = federation_client.get_ln_module()?;
+        let gateway = federation_client_ln_module
+            .get_gateway(None, false)
+            .await?
+            .ok_or(RecurringPaymentError::NoGatewayFound)?;
 
-                        self.save_bolt11_invoice(
-                            dbtx,
-                            operation_id,
-                            payment_code_id,
-                            invoice_index,
-                            invoice.clone(),
-                        )
-                        .await;
+        let lnurl_meta = match payment_code.variant {
+            PaymentCodeVariant::Lnurl { meta } => meta,
+        };
+        let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
+        let description = Bolt11InvoiceDescription::Hash(meta_hash);
 
-                        Result::<_, anyhow::Error>::Ok((operation_id, invoice))
-                    })
-                },
-                None,
+        // TODO: ideally creating the invoice would take a dbtx as argument so we
+        // don't have to do the "check if invoice already exists" dance
+        let (operation_id, invoice, _preimage) = federation_client_ln_module
+            .create_bolt11_invoice_for_user_tweaked(
+                amount,
+                description,
+                Some(DEFAULT_EXPIRY_TIME),
+                payment_code.root_key.0,
+                invoice_index,
+                serde_json::Value::Null,
+                Some(gateway),
             )
-            .await
-            .unwrap_autocommit()?;
+            .await?;
+
+        // Second transaction: save the generated invoice
+        let mut dbtx = self.db.begin_write_transaction().await;
+        self.save_bolt11_invoice(
+            &mut dbtx.to_ref(),
+            operation_id,
+            payment_code_id,
+            invoice_index,
+            invoice.clone(),
+        )
+        .await;
+        dbtx.commit_tx().await;
 
         await_invoice_confirmed(&federation_client.get_ln_module()?, operation_id).await?;
 
         Ok((operation_id, federation_client.federation_id(), invoice))
     }
 
-    async fn save_bolt11_invoice(
+    async fn save_bolt11_invoice<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         operation_id: OperationId,
         payment_code_id: PaymentCodeId,
         invoice_index: u64,
@@ -438,7 +433,7 @@ impl RecurringInvoiceServer {
 
         let mut notified = self.invoice_generated.notified();
         loop {
-            let mut dbtx = self.db.begin_transaction_nc().await;
+            let mut dbtx = self.db.begin_read_transaction().await;
             if let Some(invoice_entry) = dbtx
                 .get_value(&PaymentCodeInvoiceKey {
                     payment_code_id,
@@ -454,9 +449,9 @@ impl RecurringInvoiceServer {
         }
     }
 
-    async fn get_next_invoice_index(
+    async fn get_next_invoice_index<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         payment_code_id: PaymentCodeId,
     ) -> u64 {
         let next_index = dbtx
@@ -482,7 +477,7 @@ impl RecurringInvoiceServer {
         payment_code_id: PaymentCodeId,
     ) -> Result<PaymentCodeEntry, RecurringPaymentError> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PaymentCodeKey { payment_code_id })
             .await
@@ -574,7 +569,7 @@ impl RecurringInvoiceServer {
         let migrations = Self::migrations();
         let schema_version: u64 = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&SchemaVersionKey)
             .await
@@ -584,7 +579,7 @@ impl RecurringInvoiceServer {
             .into_iter()
             .skip_while(|(target_schema, _)| *target_schema <= schema_version)
         {
-            let mut dbtx = self.db.begin_transaction().await;
+            let mut dbtx = self.db.begin_write_transaction().await;
             dbtx.insert_entry(&SchemaVersionKey, &target_schema).await;
 
             migration_fn(self, dbtx.to_ref_nc()).await;

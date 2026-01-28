@@ -197,7 +197,8 @@ mod fedimint_migration_tests {
     use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKeyV0, IReadDatabaseTransactionOpsTyped,
+        IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::AmountUnit;
@@ -230,7 +231,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -252,7 +253,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Write example v0 `ClientFunds`
         dbtx.insert_new_entry(&DummyClientFundsKeyV0, &()).await;
@@ -322,7 +323,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(DummyInit);
         validate_migrations_server(module, "dummy-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
                     DbKeyPrefix::Funds => {
@@ -376,7 +377,7 @@ mod fedimint_migration_tests {
         let module = DynClientModuleInit::from(DummyClientInit);
 
         validate_migrations_client::<_, _, DummyClientModule>(module, "dummy-client", |db, active_states, inactive_states| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             // After applying migrations, validate that `ClientName` cannot currently be
             // read

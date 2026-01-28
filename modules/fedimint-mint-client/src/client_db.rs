@@ -3,7 +3,9 @@ use std::io::Cursor;
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
+use fedimint_core::db::{
+    DatabaseRecord, IWriteDatabaseTransactionOps as _, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
@@ -137,7 +139,7 @@ impl_db_record!(
 );
 
 pub async fn migrate_to_v1(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
 ) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
     dbtx.ensure_isolated().expect("Must be in our database");
     // between v0 and v1, we changed the format of `MintRecoveryState`, and instead

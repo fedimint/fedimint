@@ -18,7 +18,9 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
@@ -50,76 +52,70 @@ impl LightningClientModule {
         recurringd_api: SafeUrl,
         meta: &str,
     ) -> Result<RecurringPaymentCodeEntry, RecurringdApiError> {
-        self.client_ctx
-            .module_db()
-            .autocommit(
-                |dbtx, _| {
-                    let recurringd_api_inner = recurringd_api.clone();
-                    let new_recurring_payment_code = self.new_recurring_payment_code.clone();
-                    Box::pin(async move {
-                        let next_idx = dbtx
-                            .find_by_prefix_sorted_descending(&RecurringPaymentCodeKeyPrefix)
-                            .await
-                            .map(|(k, _)| k.derivation_idx)
-                            .next()
-                            .await
-                            .map_or(0, |last_idx| last_idx + 1);
+        // First transaction: get the next index
+        let (next_idx, payment_code_root_key) = {
+            let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
-                        let payment_code_root_key = self.get_payment_code_root_key(next_idx);
+            let next_idx = dbtx
+                .find_by_prefix_sorted_descending(&RecurringPaymentCodeKeyPrefix)
+                .await
+                .map(|(k, _)| k.derivation_idx)
+                .next()
+                .await
+                .map_or(0, |last_idx| last_idx + 1);
 
-                        let recurringd_client =
-                            RecurringdClient::new(&recurringd_api_inner.clone());
-                        let register_response = recurringd_client
-                            .register_recurring_payment_code(
-                                self.client_ctx
-                                    .get_config()
-                                    .await
-                                    .global
-                                    .calculate_federation_id(),
-                                protocol,
-                                crate::recurring::PaymentCodeRootKey(
-                                    payment_code_root_key.public_key(),
-                                ),
-                                meta,
-                            )
-                            .await?;
+            let payment_code_root_key = self.get_payment_code_root_key(next_idx);
 
-                        debug!(
-                            target: LOG_CLIENT_RECURRING,
-                            ?register_response,
-                            "Registered recurring payment code"
-                        );
+            dbtx.commit_tx().await;
+            (next_idx, payment_code_root_key)
+        };
 
-                        let payment_code_entry = RecurringPaymentCodeEntry {
-                            protocol,
-                            root_keypair: payment_code_root_key,
-                            code: register_response.recurring_payment_code,
-                            recurringd_api: recurringd_api_inner,
-                            last_derivation_index: 0,
-                            creation_time: fedimint_core::time::now(),
-                            meta: meta.to_owned(),
-                        };
-                        dbtx.insert_new_entry(
-                            &crate::db::RecurringPaymentCodeKey {
-                                derivation_idx: next_idx,
-                            },
-                            &payment_code_entry,
-                        )
-                        .await;
-                        dbtx.on_commit(move || new_recurring_payment_code.notify_waiters());
-
-                        Ok(payment_code_entry)
-                    })
-                },
-                None,
+        // Network call outside of transaction
+        let recurringd_client = RecurringdClient::new(&recurringd_api);
+        let register_response = recurringd_client
+            .register_recurring_payment_code(
+                self.client_ctx
+                    .get_config()
+                    .await
+                    .global
+                    .calculate_federation_id(),
+                protocol,
+                crate::recurring::PaymentCodeRootKey(payment_code_root_key.public_key()),
+                meta,
             )
-            .await
-            .map_err(|e| match e {
-                fedimint_core::db::AutocommitError::ClosureError { error, .. } => error,
-                fedimint_core::db::AutocommitError::CommitFailed { last_error, .. } => {
-                    panic!("Commit failed: {last_error}")
-                }
-            })
+            .await?;
+
+        debug!(
+            target: LOG_CLIENT_RECURRING,
+            ?register_response,
+            "Registered recurring payment code"
+        );
+
+        // Second transaction: save the result
+        let payment_code_entry = RecurringPaymentCodeEntry {
+            protocol,
+            root_keypair: payment_code_root_key,
+            code: register_response.recurring_payment_code,
+            recurringd_api,
+            last_derivation_index: 0,
+            creation_time: fedimint_core::time::now(),
+            meta: meta.to_owned(),
+        };
+
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
+        dbtx.insert_new_entry(
+            &crate::db::RecurringPaymentCodeKey {
+                derivation_idx: next_idx,
+            },
+            &payment_code_entry,
+        )
+        .await;
+
+        let new_recurring_payment_code = self.new_recurring_payment_code.clone();
+        dbtx.on_commit(move || new_recurring_payment_code.notify_waiters());
+
+        dbtx.commit_tx().await;
+        Ok(payment_code_entry)
     }
 
     pub async fn get_recurring_payment_codes(&self) -> Vec<(u64, RecurringPaymentCodeEntry)> {
@@ -130,7 +126,7 @@ impl LightningClientModule {
         db: &fedimint_core::db::Database,
     ) -> Vec<(u64, RecurringPaymentCodeEntry)> {
         assert!(!db.is_global(), "Needs to run in module context");
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -231,7 +227,7 @@ impl LightningClientModule {
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
         // TODO: validate invoice hash etc.
-        let mut dbtx = client.module_db().begin_transaction().await;
+        let mut dbtx = client.module_db().begin_write_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,
@@ -288,7 +284,7 @@ impl LightningClientModule {
     #[allow(clippy::pedantic)]
     async fn create_recurring_receive_operation(
         client: &ClientContext<Self>,
-        dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
@@ -401,7 +397,7 @@ impl LightningClientModule {
     pub async fn list_recurring_payment_codes(&self) -> BTreeMap<u64, RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -416,7 +412,7 @@ impl LightningClientModule {
     ) -> Option<RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,

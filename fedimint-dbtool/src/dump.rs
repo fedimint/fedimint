@@ -9,13 +9,13 @@ use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersionKey, IReadDatabaseTransactionOps, IReadDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::push_db_pair_items;
-use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
+use fedimint_gateway_server_db::GatewayDbtxReadExt as _;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
@@ -28,7 +28,7 @@ use strum::IntoEnumIterator;
 
 macro_rules! push_db_pair_items_no_serde {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+        let db_items = IReadDatabaseTransactionOpsTyped::find_by_prefix($dbtx, &$prefix_type)
             .await
             .map(|(key, val)| {
                 (
@@ -95,7 +95,7 @@ impl DatabaseDump {
             // Check if this database is a client database by reading the `ClientConfig`
             // from the database.
 
-            let mut dbtx = read_only_db.begin_transaction_nc().await;
+            let mut dbtx = read_only_db.begin_read_transaction().await;
             let client_cfg_or = dbtx.get_value(&ClientConfigKey).await;
 
             match client_cfg_or {
@@ -142,7 +142,7 @@ impl DatabaseDump {
         if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
             return Ok(());
         }
-        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+        let mut dbtx = self.read_only_db.begin_read_transaction().await;
         let db_version = dbtx.get_value(&DatabaseVersionKey(*module_id)).await;
         let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id).0;
 
@@ -178,7 +178,7 @@ impl DatabaseDump {
             }
             Some(init) => {
                 let mut module_serialized = init
-                    .dump_database(&mut isolated_dbtx.to_ref_nc(), self.prefixes.clone())
+                    .dump_database(&mut isolated_dbtx.to_ref(), self.prefixes.clone())
                     .await
                     .collect::<BTreeMap<String, _>>();
 
@@ -198,7 +198,7 @@ impl DatabaseDump {
     }
 
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
-        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+        let mut dbtx = self.read_only_db.begin_read_transaction().await;
         let gateway_serialized = dbtx.dump_database(self.prefixes.clone()).await;
         self.serialized
             .insert("gateway".to_string(), Box::new(gateway_serialized));
@@ -239,7 +239,7 @@ impl DatabaseDump {
             }
 
             {
-                let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+                let mut dbtx = self.read_only_db.begin_read_transaction().await;
                 Self::write_serialized_client_operation_log(&mut self.serialized, &mut dbtx).await;
             }
 
@@ -259,7 +259,7 @@ impl DatabaseDump {
         let filtered_prefixes = server_db::DbKeyPrefix::iter().filter(|prefix| {
             self.prefixes.is_empty() || self.prefixes.contains(&prefix.to_string().to_lowercase())
         });
-        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+        let mut dbtx = self.read_only_db.begin_read_transaction().await;
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
 
         for table in filtered_prefixes {
@@ -272,7 +272,7 @@ impl DatabaseDump {
 
     async fn write_serialized_consensus_range(
         table: server_db::DbKeyPrefix,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
         match table {
@@ -335,7 +335,7 @@ impl DatabaseDump {
     }
     async fn write_serialized_client_operation_log(
         serialized: &mut BTreeMap<String, Box<dyn Serialize>>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) {
         push_db_pair_items!(
             dbtx,

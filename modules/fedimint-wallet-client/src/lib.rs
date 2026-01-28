@@ -48,7 +48,8 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -195,7 +196,7 @@ impl WalletClientInit {
             });
         }
 
-        let mut dbtx = args.db().begin_transaction().await;
+        let mut dbtx = args.db().begin_write_transaction().await;
 
         for tweak_idx in 0..state.new_start_idx().0 {
             let operation_id = data.derive_peg_in_script(TweakIdx(tweak_idx)).3;
@@ -233,7 +234,7 @@ impl ModuleInit for WalletClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -351,7 +352,7 @@ impl ClientModuleInit for WalletClientInit {
         // recovery)
         if args
             .db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecoveryStateKey)
             .await
@@ -544,7 +545,7 @@ impl ClientModule for WalletClientModule {
         // fetch consensus height first
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         let next_pegin_tweak_idx = dbtx
             .get_value(&NextPegInTweakIndexKey)
             .await
@@ -732,7 +733,7 @@ impl WalletClientModule {
 
     async fn allocate_deposit_address_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> (OperationId, Address, TweakIdx) {
         dbtx.ensure_isolated().expect("Must be isolated db");
 
@@ -892,27 +893,34 @@ impl WalletClientModule {
     /// verified the version, it must be online to fetch the latest wallet
     /// module consensus version.
     pub async fn supports_safe_deposit(&self) -> bool {
-        let mut dbtx = self.db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = self
+            .db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        let already_verified_supports_safe_deposit =
-            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
-
-        already_verified_supports_safe_deposit || {
-            match self.module_api.module_consensus_version().await {
-                Ok(module_consensus_version) => {
-                    let supported_version =
-                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
-
-                    if supported_version {
-                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                        dbtx.commit_tx().await;
-                    }
-
-                    supported_version
-                }
-                Err(_) => false,
-            }
+        if already_verified {
+            return true;
         }
+
+        // API phase: fetch module consensus version (no transaction held)
+        let Ok(module_consensus_version) = self.module_api.module_consensus_version().await else {
+            return false;
+        };
+
+        let supported_version = SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+        // Write phase: persist the result if supported
+        if supported_version {
+            let mut dbtx = self.db.begin_write_transaction().await;
+            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+            dbtx.commit_tx().await;
+        }
+
+        supported_version
     }
 
     /// Allocates a deposit address controlled by the federation, guaranteeing
@@ -963,54 +971,43 @@ impl WalletClientModule {
     {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
+
+        let mut dbtx = self.db.begin_write_transaction().await;
+
         let (operation_id, address, tweak_idx) = self
-            .db
-            .autocommit(
-                move |dbtx, _| {
-                    let extra_meta_value_inner = extra_meta_value.clone();
-                    Box::pin(async move {
-                        let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner(dbtx)
-                            .await;
+            .allocate_deposit_address_inner(&mut dbtx.to_ref_nc())
+            .await;
 
-                        self.client_ctx.manual_operation_start_dbtx(
-                            dbtx,
-                            operation_id,
-                            WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta {
-                                variant: WalletOperationMetaVariant::Deposit {
-                                    address: address.clone().into_unchecked(),
-                                    tweak_idx: Some(tweak_idx),
-                                    expires_at: None,
-                                },
-                                extra_meta: extra_meta_value_inner,
-                            },
-                            vec![]
-                        ).await?;
-
-                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
-
-                        // Begin watching the script address
-                        self.rpc.watch_script_history(&address.script_pubkey()).await?;
-
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
-
-                        Ok((operation_id, address, tweak_idx))
-                    })
+        self.client_ctx
+            .manual_operation_start_dbtx(
+                &mut dbtx.to_ref_nc(),
+                operation_id,
+                WalletCommonInit::KIND.as_str(),
+                WalletOperationMeta {
+                    variant: WalletOperationMetaVariant::Deposit {
+                        address: address.clone().into_unchecked(),
+                        tweak_idx: Some(tweak_idx),
+                        expires_at: None,
+                    },
+                    extra_meta: extra_meta_value,
                 },
-                Some(100),
+                vec![],
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+            .await?;
+
+        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
+
+        // Begin watching the script address
+        self.rpc
+            .watch_script_history(&address.script_pubkey())
+            .await?;
+
+        let sender = self.pegin_monitor_wakeup_sender.clone();
+        dbtx.on_commit(move || {
+            sender.send_replace(());
+        });
+
+        dbtx.commit_tx().await;
 
         Ok((operation_id, address, tweak_idx))
     }
@@ -1136,7 +1133,7 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1152,7 +1149,7 @@ impl WalletClientModule {
         let data = self.data.clone();
         let Some((tweak_idx, _)) = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1176,7 +1173,7 @@ impl WalletClientModule {
             .client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1195,16 +1192,16 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PegInTweakIndexKey(tweak_idx))
             .await
             .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
     }
 
-    pub async fn get_claimed_pegins(
+    pub async fn get_claimed_pegins<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         tweak_idx: TweakIdx,
     ) -> Vec<(
         bitcoin::OutPoint,
@@ -1258,37 +1255,29 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        let db_key = PegInTweakIndexKey(tweak_idx);
-                        let db_val = dbtx
-                            .get_value(&db_key)
-                            .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                        dbtx.insert_entry(
-                            &db_key,
-                            &PegInTweakIndexData {
-                                next_check_time: Some(fedimint_core::time::now()),
-                                ..db_val
-                            },
-                        )
-                        .await;
+        let db_key = PegInTweakIndexKey(tweak_idx);
+        let db_val = dbtx
+            .get_value(&db_key)
+            .await
+            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
 
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
+        dbtx.insert_entry(
+            &db_key,
+            &PegInTweakIndexData {
+                next_check_time: Some(fedimint_core::time::now()),
+                ..db_val
+            },
+        )
+        .await;
 
-                        Ok::<_, anyhow::Error>(())
-                    })
-                },
-                Some(100),
-            )
-            .await?;
+        let sender = self.pegin_monitor_wakeup_sender.clone();
+        dbtx.on_commit(move || {
+            sender.send_replace(());
+        });
 
+        dbtx.commit_tx().await;
         Ok(())
     }
 
@@ -1325,7 +1314,7 @@ impl WalletClientModule {
         loop {
             let pegins = self
                 .get_claimed_pegins(
-                    &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                    &mut self.client_ctx.module_db().begin_read_transaction().await,
                     tweak_idx,
                 )
                 .await;
@@ -1405,11 +1394,11 @@ impl WalletClientModule {
                 )
                 .await?;
 
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
             self.client_ctx
                 .log_event(
-                    &mut dbtx,
+                    &mut dbtx.to_ref_nc(),
                     SendPaymentEvent {
                         operation_id,
                         amount: amount + fee.amount(),
@@ -1545,23 +1534,30 @@ impl WalletClientModule {
 /// supports safe deposits, saving the result in the db once it does.
 async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        if already_verified {
             break;
         }
 
+        // API phase: fetch module consensus version (no transaction held)
         module_api.wait_for_initialized_connections().await;
 
         if let Ok(module_consensus_version) = module_api.module_consensus_version().await
             && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
         {
+            // Write phase: persist the result
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
             dbtx.commit_tx().await;
             break;
         }
-
-        drop(dbtx);
 
         if is_running_in_test_env() {
             // Even in tests we don't want to spam the federation with requests about it
@@ -1573,7 +1569,7 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.
-async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> TweakIdx {
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut WriteDatabaseTransaction<'_>) -> TweakIdx {
     let index = dbtx
         .get_value(&NextPegInTweakIndexKey)
         .await

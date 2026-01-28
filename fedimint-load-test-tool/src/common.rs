@@ -347,7 +347,7 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
         .get_note_counts_by_denomination(
             &mut client
                 .db()
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .to_ref_with_prefix_module_id(mint_client.id)
                 .0,
@@ -378,24 +378,32 @@ pub async fn try_remint_denomination(
     quantity: u16,
 ) -> anyhow::Result<()> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
-    let mut dbtx = client.db().begin_transaction().await;
-    let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).0;
-    let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();
-    for _ in 0..quantity {
-        let outputs = mint_client
-            .create_output(
-                &mut module_transaction.to_ref_nc(),
-                operation_id,
-                1,
-                denomination,
-            )
-            .await
-            .into_dyn(mint_client.id);
 
-        tx = tx.with_outputs(outputs);
-    }
-    drop(module_transaction);
+    // Build transaction outputs in a separate scope to release the write lock
+    // before calling finalize_and_submit_transaction
+    let tx = {
+        let mut dbtx = client.db().begin_write_transaction().await;
+        let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).0;
+        let mut tx = TransactionBuilder::new();
+        for _ in 0..quantity {
+            let outputs = mint_client
+                .create_output(
+                    &mut module_transaction.to_ref_nc(),
+                    operation_id,
+                    1,
+                    denomination,
+                )
+                .await
+                .into_dyn(mint_client.id);
+
+            tx = tx.with_outputs(outputs);
+        }
+        drop(module_transaction);
+        dbtx.commit_tx().await;
+        tx
+    };
+
     let operation_meta_gen = |_| ();
     let txid = client
         .finalize_and_submit_transaction(
@@ -411,7 +419,6 @@ pub async fn try_remint_denomination(
         .await_tx_accepted(txid)
         .await
         .map_err(|e| anyhow!("{e}"))?;
-    dbtx.commit_tx().await;
     for i in 0..quantity {
         let out_point = OutPoint {
             txid,
