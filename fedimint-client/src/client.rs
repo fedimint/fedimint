@@ -33,6 +33,7 @@ use fedimint_client_module::{
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -81,9 +82,9 @@ use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
-    ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
-    EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
+    ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
+    ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
     get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
@@ -350,6 +351,35 @@ impl Client {
             .await
             .map(|cached: CachedApiVersionSet| cached.0.core)
             .unwrap_or(ApiVersion { major: 0, minor: 0 })
+    }
+
+    /// Returns the chain ID (bitcoin block hash at height 1) from the
+    /// federation
+    ///
+    /// This is cached in the database after the first successful fetch.
+    /// The chain ID uniquely identifies which bitcoin network the federation
+    /// operates on (mainnet, testnet, signet, regtest).
+    pub async fn chain_id(&self) -> anyhow::Result<BlockHash> {
+        // Check cache first
+        if let Some(chain_id) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ChainIdKey)
+            .await
+        {
+            return Ok(chain_id);
+        }
+
+        // Fetch from federation with consensus
+        let chain_id = self.api.chain_id().await?;
+
+        // Cache the result
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_entry(&ChainIdKey, &chain_id).await;
+        dbtx.commit_tx().await;
+
+        Ok(chain_id)
     }
 
     pub fn decoders(&self) -> &ModuleDecoderRegistry {

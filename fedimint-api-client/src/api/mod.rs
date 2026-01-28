@@ -18,6 +18,7 @@ use fedimint_connectors::{
 };
 use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
+use fedimint_core::bitcoin::BlockHash;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, ModuleKind, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -565,6 +566,10 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Change the password used to encrypt the configs and for guardian
     /// authentication
     async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
+
+    /// Returns the chain ID (bitcoin block hash at height 1) from the
+    /// federation
+    async fn chain_id(&self) -> FederationResult<BlockHash>;
 }
 
 pub fn deserialize_outcome<R>(
