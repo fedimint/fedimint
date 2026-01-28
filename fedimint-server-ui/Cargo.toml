@@ -21,6 +21,7 @@ chrono = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-meta-server = { workspace = true }
+fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-ui-common = { workspace = true }
 fedimint-wallet-server = { workspace = true }

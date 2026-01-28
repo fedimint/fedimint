@@ -12,7 +12,7 @@ use fedimint_lnv2_common::gateway_api::PaymentFee;
 use super::envs;
 use crate::envs::{
     FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_ESPLORA_URL_ENV,
-    FM_GATEWAY_SKIP_SETUP_ENV,
+    FM_GATEWAY_METRICS_LISTEN_ADDR_ENV, FM_GATEWAY_SKIP_SETUP_ENV,
 };
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -114,6 +114,11 @@ pub struct GatewayOpts {
     #[arg(long = "iroh-listen", env = envs::FM_GATEWAY_IROH_LISTEN_ADDR_ENV)]
     iroh_listen: Option<SocketAddr>,
 
+    /// Gateway metrics listen address. If not set, defaults to localhost on the
+    /// UI port + 1.
+    #[arg(long = "metrics-listen", env = FM_GATEWAY_METRICS_LISTEN_ADDR_ENV)]
+    metrics_listen: Option<SocketAddr>,
+
     /// Optional URL of the Iroh DNS server
     #[arg(long, env = FM_IROH_DNS_ENV)]
     iroh_dns: Option<SafeUrl>,
@@ -137,6 +142,14 @@ impl GatewayOpts {
         });
         let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
 
+        // Default metrics listen to localhost on UI port + 1
+        let metrics_listen = self.metrics_listen.unwrap_or_else(|| {
+            SocketAddr::new(
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                self.listen.port() + 1,
+            )
+        });
+
         Ok(GatewayParameters {
             listen: self.listen,
             versioned_api,
@@ -149,6 +162,7 @@ impl GatewayOpts {
             iroh_dns: self.iroh_dns.clone(),
             iroh_relays: self.iroh_relays.clone(),
             skip_setup: self.skip_setup,
+            metrics_listen,
         })
     }
 }
@@ -172,4 +186,5 @@ pub struct GatewayParameters {
     pub iroh_dns: Option<SafeUrl>,
     pub iroh_relays: Vec<SafeUrl>,
     pub skip_setup: bool,
+    pub metrics_listen: SocketAddr,
 }
