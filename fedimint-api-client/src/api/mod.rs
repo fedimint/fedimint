@@ -34,7 +34,8 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
-    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
+    ChainId, NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
+    util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use fedimint_metrics::HistogramExt as _;
@@ -565,6 +566,10 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Change the password used to encrypt the configs and for guardian
     /// authentication
     async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
+
+    /// Returns the chain ID (bitcoin block hash at height 1) from the
+    /// federation
+    async fn chain_id(&self) -> FederationResult<ChainId>;
 }
 
 pub fn deserialize_outcome<R>(

@@ -15,6 +15,7 @@ use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, FinalClientIface,
@@ -59,7 +60,7 @@ use fedimint_core::util::{
     BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
 use fedimint_core::{
-    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
+    Amount, ChainId, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
     maybe_add_send_sync, runtime,
 };
 use fedimint_derive_secret::DerivableSecret;
@@ -81,9 +82,9 @@ use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
-    ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
-    EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
+    ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
+    ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
     get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
@@ -162,6 +163,18 @@ pub struct Client {
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
+    /// User-provided Bitcoin RPC client for modules to use
+    ///
+    /// Stored here for potential future access; currently passed to modules
+    /// during initialization.
+    #[allow(dead_code)]
+    user_bitcoind_rpc: Option<DynBitcoindRpc>,
+    /// User-provided Bitcoin RPC factory for when ChainId is not available
+    ///
+    /// This is used as a fallback when the federation doesn't support ChainId.
+    /// Modules can call this with a URL from their config to get an RPC client.
+    pub(crate) user_bitcoind_rpc_no_chain_id:
+        Option<fedimint_client_module::module::init::BitcoindRpcNoChainIdFactory>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -350,6 +363,35 @@ impl Client {
             .await
             .map(|cached: CachedApiVersionSet| cached.0.core)
             .unwrap_or(ApiVersion { major: 0, minor: 0 })
+    }
+
+    /// Returns the chain ID (bitcoin block hash at height 1) from the
+    /// federation
+    ///
+    /// This is cached in the database after the first successful fetch.
+    /// The chain ID uniquely identifies which bitcoin network the federation
+    /// operates on (mainnet, testnet, signet, regtest).
+    pub async fn chain_id(&self) -> anyhow::Result<ChainId> {
+        // Check cache first
+        if let Some(chain_id) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ChainIdKey)
+            .await
+        {
+            return Ok(chain_id);
+        }
+
+        // Fetch from federation with consensus
+        let chain_id = self.api.chain_id().await?;
+
+        // Cache the result
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_entry(&ChainIdKey, &chain_id).await;
+        dbtx.commit_tx().await;
+
+        Ok(chain_id)
     }
 
     pub fn decoders(&self) -> &ModuleDecoderRegistry {
