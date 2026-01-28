@@ -2713,11 +2713,20 @@ pub struct SpendableNote {
 
 impl fmt::Debug for SpendableNote {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SpendableNote")
-            .field("nonce", &self.nonce())
-            .field("signature", &self.signature)
-            .field("spend_key", &self.spend_key)
-            .finish()
+        if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
+            f.debug_struct("SpendableNote")
+                .field("nonce", &self.nonce())
+                .field("signature", &self.signature)
+                .field("spend_key", &self.spend_key)
+                .finish()
+        } else {
+            // Redact the spend_key, only show the public key (nonce)
+            f.debug_struct("SpendableNote")
+                .field("nonce", &self.nonce())
+                .field("signature", &self.signature)
+                .field("spend_key", &"<redacted>")
+                .finish()
+        }
     }
 }
 impl fmt::Display for SpendableNote {
