@@ -33,7 +33,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::module::{Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
@@ -209,6 +209,7 @@ pub struct GatewayClientModule {
     connector_registry: ConnectorRegistry,
 }
 
+#[async_trait::async_trait]
 impl ClientModule for GatewayClientModule {
     type Init = LightningClientInit;
     type Common = LightningModuleTypes;
@@ -236,6 +237,10 @@ impl ClientModule for GatewayClientModule {
         Some(Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(input.maybe_v0_ref()?.amount))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
@@ -249,6 +254,17 @@ impl ClientModule for GatewayClientModule {
                 Some(Amounts::ZERO)
             }
         }
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let amount_btc = match output.maybe_v0_ref()? {
+            LightningOutputV0::Contract(contract_output) => contract_output.amount,
+            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => Amount::ZERO,
+        };
+        Some(Amounts::new_bitcoin(amount_btc))
     }
 }
 

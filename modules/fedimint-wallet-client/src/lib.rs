@@ -60,8 +60,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
-    BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items,
-    runtime, secp256k1,
+    Amount, BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send,
+    push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -576,12 +576,30 @@ impl ClientModule for WalletClientModule {
         Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_in_abs))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let btc_amount = match input {
+            WalletInput::V0(wallet_input_v0) => wallet_input_v0.0.tx_output().value,
+            WalletInput::V1(wallet_input_v1) => wallet_input_v1.tx_out.value,
+            WalletInput::Default { .. } => return None,
+        };
+
+        Some(Amounts::new_bitcoin(Amount::from_sats(btc_amount.to_sat())))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
         Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let btc_amount = output.maybe_v0_ref()?.amount();
+        Some(Amounts::new_bitcoin(Amount::from_sats(btc_amount.to_sat())))
     }
 
     async fn handle_rpc(

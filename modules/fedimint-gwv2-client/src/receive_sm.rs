@@ -8,11 +8,12 @@ use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId};
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::contracts::{IncomingContract, LightningContract};
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use fedimint_logging::LOG_CLIENT_MODULE_GW;
@@ -21,6 +22,7 @@ use tracing::warn;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
 use crate::GatewayClientContextV2;
+use crate::db::OutpointContractKey;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {
@@ -249,6 +251,14 @@ impl ReceiveStateMachine {
 
             return old_state.update(ReceiveSMState::Success(preimage));
         }
+
+        // Store the contract for later amount lookup
+        dbtx.module_tx()
+            .insert_entry(
+                &OutpointContractKey(old_state.common.outpoint),
+                &LightningContract::Incoming(old_state.common.contract.clone()),
+            )
+            .await;
 
         let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Incoming(

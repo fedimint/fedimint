@@ -115,6 +115,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     info!("### REISSUE");
     let op = client2_mint.reissue_external_notes(notes, ()).await?;
+
     let sub2 = client2_mint.subscribe_reissue_external_notes(op).await?;
     let mut sub2 = sub2.into_stream();
     info!("### SUB2: WAIT CREATED");
@@ -126,6 +127,29 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     info!("### SUB1: WAIT SUCCESS");
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
+
+    let fees_from_balance = sats(750)
+        .checked_sub(
+            client2
+                .get_balance_for_btc()
+                .await
+                .expect("Can fetch balance"),
+        )
+        .expect("Balance higher than received amount");
+    let fees_from_operation = client2
+        .get_operation_fees(op)
+        .await
+        .expect("Fee calculation should succeed");
+
+    assert!(
+        fees_from_operation.is_final,
+        "We waited for operation completion, should be final"
+    );
+    assert_eq!(
+        fees_from_balance,
+        fees_from_operation.amount.get_bitcoin(),
+        "Operation fees differ from actual fees"
+    );
 
     assert!(client1.get_balance_for_btc().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
     assert!(client2.get_balance_for_btc().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));

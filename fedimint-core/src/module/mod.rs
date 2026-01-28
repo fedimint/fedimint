@@ -179,6 +179,18 @@ impl Amounts {
         Some(self)
     }
 
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        let mut result = self.clone();
+
+        for (unit, amount) in &other.0 {
+            let prev = result.0.entry(*unit).or_default();
+
+            *prev = prev.checked_sub(*amount)?;
+        }
+
+        Some(result)
+    }
+
     pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
         self.0.remove(unit)
     }

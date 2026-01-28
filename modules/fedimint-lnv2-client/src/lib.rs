@@ -45,14 +45,16 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::{
+    IncomingContract, LightningContract, OutgoingContract, PaymentImage,
+};
 use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
-    lnurl, tweak,
+    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInputV0,
+    LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    MINIMUM_INCOMING_CONTRACT_AMOUNT, lnurl, tweak,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -65,6 +67,7 @@ use tpe::{AggregateDecryptionKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
+use crate::db::OutpointContractKey;
 use crate::events::SendPaymentEvent;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
@@ -346,6 +349,39 @@ impl ClientModule for LightningClientModule {
         ))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let input_v0 = input.maybe_v0_ref()?;
+
+        let outpoint = match input_v0 {
+            LightningInputV0::Outgoing(out_point, ..)
+            | LightningInputV0::Incoming(out_point, ..) => *out_point,
+        };
+
+        let contract = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&OutpointContractKey(outpoint))
+            .await?;
+
+        assert!(
+            matches!(
+                (input_v0, &contract),
+                (
+                    LightningInputV0::Outgoing(_, _),
+                    LightningContract::Outgoing(_)
+                ) | (
+                    LightningInputV0::Incoming(_, _),
+                    LightningContract::Incoming(_)
+                )
+            ),
+            "Mismatched contract types"
+        );
+
+        Some(Amounts::new_bitcoin(contract.amount()))
+    }
+
     fn output_fee(
         &self,
         amounts: &Amounts,
@@ -354,6 +390,17 @@ impl ClientModule for LightningClientModule {
         Some(Amounts::new_bitcoin(
             self.cfg.fee_consensus.fee(amounts.expect_only_bitcoin()),
         ))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let amount_btc = match output.maybe_v0_ref()? {
+            LightningOutputV0::Outgoing(outgoing_contract) => outgoing_contract.amount,
+            LightningOutputV0::Incoming(incoming_contract) => incoming_contract.commitment.amount,
+        };
+        Some(Amounts::new_bitcoin(amount_btc))
     }
 
     #[cfg(feature = "cli")]
