@@ -11,6 +11,8 @@ use fedimint_core::{
 };
 use serde::{Deserialize, Serialize};
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 pub trait IModuleBackup: Debug + DynEncodable {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
     fn module_kind(&self) -> Option<ModuleKind>;
@@ -18,6 +20,8 @@ pub trait IModuleBackup: Debug + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynModuleBackup) -> bool;
 }
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 pub trait ModuleBackup:
     std::fmt::Debug
     + IntoDynInstance<DynType = DynModuleBackup>
@@ -32,6 +36,8 @@ pub trait ModuleBackup:
     const KIND: Option<ModuleKind>;
 }
 
+// TODO: Remove in 0.13.0
+#[allow(deprecated)]
 impl IModuleBackup for ::fedimint_core::core::DynUnknown {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
@@ -55,6 +61,8 @@ impl IModuleBackup for ::fedimint_core::core::DynUnknown {
     }
 }
 
+// TODO: Remove in 0.13.0
+#[allow(deprecated)]
 impl<T> IModuleBackup for T
 where
     T: ModuleBackup,
@@ -81,19 +89,26 @@ where
     }
 }
 
+// TODO: Remove in 0.13.0
 module_plugin_dyn_newtype_define! {
     pub DynModuleBackup(Box<IModuleBackup>)
 }
 
+// TODO: Remove in 0.13.0
 module_plugin_dyn_newtype_encode_decode!(DynModuleBackup);
 
+// TODO: Remove in 0.13.0
 module_plugin_dyn_newtype_clone_passthrough!(DynModuleBackup);
 
+// TODO: Remove in 0.13.0
 module_plugin_dyn_newtype_eq_passthrough!(DynModuleBackup);
 
 /// A backup type for modules without a backup implementation. The default
 /// variant allows implementing a backup strategy for the module later on by
 /// copying this enum into the module and adding a second variant to it.
+///
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub enum NoModuleBackup {
     NoModuleBackup,
@@ -104,10 +119,14 @@ pub enum NoModuleBackup {
     },
 }
 
+// TODO: Remove in 0.13.0
+#[allow(deprecated)]
 impl ModuleBackup for NoModuleBackup {
     const KIND: Option<ModuleKind> = None;
 }
 
+// TODO: Remove in 0.13.0
+#[allow(deprecated)]
 impl IntoDynInstance for NoModuleBackup {
     type DynType = DynModuleBackup;
 

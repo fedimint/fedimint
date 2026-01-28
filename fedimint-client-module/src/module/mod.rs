@@ -748,6 +748,9 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Data stored in regular backups so that restoring doesn't have to start
     /// from epoch 0
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     type Backup: ModuleBackup;
 
     /// Data and API clients available to state machine transitions of this
@@ -825,10 +828,14 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts>;
 
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     fn supports_backup(&self) -> bool {
         false
     }
 
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     async fn backup(&self) -> anyhow::Result<Self::Backup> {
         anyhow::bail!("Backup not supported");
     }

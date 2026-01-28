@@ -29,6 +29,8 @@ pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
 pub const ADDRESS_RECHECK_ENDPOINT: &str = "/address_recheck";
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
@@ -70,6 +72,8 @@ pub struct LeaveFedPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupPayload {
     pub federation_id: FederationId,
@@ -156,6 +160,8 @@ pub struct FederationInfo {
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub config: FederationConfig,
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub last_backup_time: Option<SystemTime>,
 }
 

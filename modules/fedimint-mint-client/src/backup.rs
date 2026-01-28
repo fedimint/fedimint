@@ -1,3 +1,5 @@
+// TODO: Remove entire backup module in 0.13.0
+#[allow(deprecated)]
 use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::DatabaseTransaction;
@@ -12,6 +14,8 @@ use crate::{MintClientStateMachines, NoteIndex, SpendableNote};
 
 pub mod recovery;
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub enum EcashBackup {
     V0(EcashBackupV0),
@@ -42,6 +46,9 @@ impl EcashBackup {
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
+///
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct EcashBackupV0 {
     spendable_notes: TieredMulti<SpendableNote>,
@@ -75,6 +82,8 @@ impl IntoDynInstance for EcashBackup {
 }
 
 impl MintClientModule {
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn prepare_plaintext_ecash_backup(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,

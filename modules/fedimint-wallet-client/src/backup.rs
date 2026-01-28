@@ -1,3 +1,5 @@
+// TODO: Remove backup types in 0.13.0
+#[allow(deprecated)]
 mod recovery_history_tracker;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,6 +29,8 @@ use crate::client_db::{
 };
 use crate::{WalletClientInit, WalletClientModule, WalletClientModuleData};
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub enum WalletModuleBackup {
     V0(WalletModuleBackupV0),
@@ -51,6 +55,8 @@ impl ModuleBackup for WalletModuleBackup {
 }
 
 impl WalletModuleBackup {
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub fn new_v1(
         session_count: u64,
         next_tweak_idx: TweakIdx,
@@ -64,12 +70,16 @@ impl WalletModuleBackup {
     }
 }
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct WalletModuleBackupV0 {
     pub session_count: u64,
     pub next_tweak_idx: TweakIdx,
 }
 
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct WalletModuleBackupV1 {
     pub session_count: u64,

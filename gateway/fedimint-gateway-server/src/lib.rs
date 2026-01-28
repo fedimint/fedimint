@@ -650,6 +650,10 @@ impl Gateway {
 
     /// Spawns a background task that checks every `BACKUP_UPDATE_INTERVAL` to
     /// see if any federations need to be backed up.
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
+    #[allow(deprecated)]
     fn spawn_backup_task(&self) {
         let self_copy = self.clone();
         self.task_group
@@ -671,6 +675,10 @@ impl Gateway {
     /// Loops through all federations and checks their last save backup time. If
     /// the last saved backup time is past the threshold time, backup the
     /// federation.
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
+    #[allow(deprecated)]
     pub async fn backup_all_federations(&self, dbtx: &mut DatabaseTransaction<'_, Committable>) {
         /// How long the federation manager should wait to backup the ecash for
         /// each federation
@@ -1155,6 +1163,10 @@ impl Gateway {
 
     /// Handles a request for the gateway to backup a connected federation's
     /// ecash.
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
+    #[allow(deprecated)]
     pub async fn handle_backup_msg(
         &self,
         BackupPayload { federation_id }: BackupPayload,

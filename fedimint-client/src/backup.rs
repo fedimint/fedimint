@@ -29,6 +29,9 @@ use crate::secret::DeriveableSecretClientExt;
 ///
 /// A backup can have a blob of extra data encoded in it. We provide methods to
 /// use json encoding, but clients are free to use their own encoding.
+///
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable, Clone)]
 pub struct Metadata(Vec<u8>);
 
@@ -68,6 +71,9 @@ impl Metadata {
 }
 
 /// Client state backup
+///
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ClientBackup {
     /// Session count taken right before taking the backup
@@ -217,6 +223,9 @@ impl ClientBackup {
 }
 
 /// Encrypted version of [`ClientBackup`].
+///
+/// TODO: Remove in 0.13.0
+#[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
 #[derive(Clone)]
 pub struct EncryptedClientBackup(Vec<u8>);
 
@@ -269,8 +278,13 @@ impl Event for EventBackupDone {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
+/// TODO: Remove in 0.13.0
+#[allow(deprecated)]
 impl Client {
     /// Create a backup, include provided `metadata`
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
         let session_count = self.api.session_count().await?;
         let mut modules = BTreeMap::new();
@@ -305,6 +319,9 @@ impl Client {
     }
 
     /// Prepare an encrypted backup and send it to federation for storing
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn backup_to_federation(&self, metadata: Metadata) -> Result<()> {
         ensure!(
             !self.has_pending_recoveries(),
@@ -330,6 +347,9 @@ impl Client {
     }
 
     /// Validate backup before sending it to federation
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub fn validate_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
         if BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES < backup.len() {
             bail!("Backup payload too large");
@@ -338,6 +358,9 @@ impl Client {
     }
 
     /// Upload `backup` to federation
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn upload_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
         self.validate_backup(backup)?;
         let size = backup.len();
@@ -356,6 +379,8 @@ impl Client {
         Ok(())
     }
 
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
         Self::download_backup_from_federation_static(
             &self.api,
@@ -366,6 +391,9 @@ impl Client {
     }
 
     /// Download most recent valid backup found from the Federation
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub async fn download_backup_from_federation_static(
         api: &DynGlobalApi,
         root_secret: &DerivableSecret,
@@ -406,10 +434,15 @@ impl Client {
 
     /// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
+    ///
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub fn get_backup_id(&self) -> PublicKey {
         self.get_derived_backup_signing_key().public_key()
     }
 
+    /// TODO: Remove in 0.13.0
+    #[deprecated(since = "0.11.0", note = "Will be removed in 0.13.0")]
     pub fn get_backup_id_static(root_secret: &DerivableSecret) -> PublicKey {
         Self::get_derived_backup_signing_key_static(root_secret).public_key()
     }

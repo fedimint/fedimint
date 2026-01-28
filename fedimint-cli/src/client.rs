@@ -165,6 +165,9 @@ pub enum ClientCmd {
         address: bitcoin::Address<NetworkUnchecked>,
     },
     /// Upload the (encrypted) snapshot of mint notes to federation
+    ///
+    /// DEPRECATED: Backups are no longer used. TODO: Remove in 0.13.0
+    #[clap(hide = true)]
     Backup {
         #[clap(long = "metadata")]
         /// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
