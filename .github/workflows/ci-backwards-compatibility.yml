@@ -49,10 +49,10 @@ jobs:
           # run a slimmed down back-compat test for PR push or each major version for merge queue
           if [[ "${{ github.event_name }}" == "merge_group" ]]; then
             PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
-            VERSIONS_TO_TEST="v0.8.2 v0.9.1 v0.10.0"
+            VERSIONS_TO_TEST=(0.8.2 0.9.1 0.10.0)
           else
             PERFIT_METRIC="aPuCAjrFT7uE5Oax_T4sMw"
-            VERSIONS_TO_TEST="v0.10.0"
+            VERSIONS_TO_TEST=(0.10.0)
           fi
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
@@ -70,7 +70,7 @@ jobs:
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             env -u RUSTC_WRAPPER \
-            scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
+            scripts/tests/run-with-nix-workspace-ci.sh just test-compatibility "${VERSIONS_TO_TEST[@]}"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'

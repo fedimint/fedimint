@@ -75,45 +75,6 @@ function make_fm_test_marker() {
   fi
 }
 
-function run_test_for_versions() {
-  fn_name=$1
-  fed_version=$3
-  client_version=$5
-  gateway_version=$7
-  export FM_ENABLE_MODULE_LNV2=$9
-
-  use_fed_binaries_for_version "$fed_version"
-  use_client_binaries_for_version "$client_version"
-  use_gateway_binaries_for_version "$gateway_version"
-
-  # this is a back-compat test if any version is not current
-  if \
-    [ "$fed_version" != "current" ] ||
-    [ "$client_version" != "current" ] ||
-    [ "$gateway_version" != "current" ] ; then
-    # signal to downstream test scripts
-    export FM_BACKWARDS_COMPATIBILITY_TEST=1
-    # run back-compat tests with 4/4 setup
-    export FM_OFFLINE_NODES=0
-    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version LNv2: $FM_ENABLE_MODULE_LNV2"
-  else
-    # default to run current tests in 3/4 setup
-    export FM_OFFLINE_NODES=1
-    export FM_DISCOVER_API_VERSION_TIMEOUT=5
-    export FM_RUN_TEST_VERSIONS="LNv2: $FM_ENABLE_MODULE_LNV2"
-  fi
-
-  if [[ ("$client_version"  == "v0.2.1" || "$client_version"  == "v0.2.2" ) && "$fed_version" == "current" ]]; then
-    # support(v0.2.1):
-    # support(v0.2.2):
-    # in the v0.2.1 and v0.2.2 there was a bug crashing client in the presence of unknown modules
-    export FM_DISABLE_META_MODULE=1
-   fi
-
-  $fn_name
-}
-export -f run_test_for_versions
-
 # count number of times the first argument appears in rest of the arguments
 function filter_count() {
   item="$1"
@@ -151,72 +112,6 @@ function nix_binary_version_var_name() {
 }
 export -f nix_binary_version_var_name
 
-function use_fed_binaries_for_version() {
-  version=$1
-  if [[ "$version" == "current" ]]; then
-    unset FM_FEDIMINTD_BASE_EXECUTABLE
-  else
-    var_name=$(nix_binary_version_var_name fedimintd "$version")
-    FM_FEDIMINTD_BASE_EXECUTABLE="${!var_name}"
-    export FM_FEDIMINTD_BASE_EXECUTABLE
-  fi
-}
-export -f use_fed_binaries_for_version
-
-function use_client_binaries_for_version() {
-  version=$1
-  if [[ "$version" == "current" ]]; then
-    unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
-  else
-    var_name=$(nix_binary_version_var_name fedimint-cli "$version")
-    FM_FEDIMINT_CLI_BASE_EXECUTABLE="${!var_name}"
-    export FM_FEDIMINT_CLI_BASE_EXECUTABLE
-  fi
-}
-export -f use_client_binaries_for_version
-
-function use_gateway_binaries_for_version() {
-  version=$1
-  if [[ "$version" == "current" ]]; then
-    unset FM_GATEWAYD_BASE_EXECUTABLE
-    unset FM_GATEWAY_CLI_BASE_EXECUTABLE
-    unset FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE
-  else
-    var_name=$(nix_binary_version_var_name gatewayd "$version")
-    FM_GATEWAYD_BASE_EXECUTABLE="${!var_name}"
-    export FM_GATEWAYD_BASE_EXECUTABLE
-
-    var_name=$(nix_binary_version_var_name gateway-cli "$version")
-    FM_GATEWAY_CLI_BASE_EXECUTABLE="${!var_name}"
-    export FM_GATEWAY_CLI_BASE_EXECUTABLE
-  fi
-}
-export -f use_gateway_binaries_for_version
-
-# Generates a matrix of fed, client, and gateway versions using a provided filter
-# function and list of versions.
-# Parameters:
-#   $1 - filter_fn: Function that will filter versions to include in the matrix
-#   $2+ - versions: Variadic versions to include (e.g. v0.2.1 v0.2.2)
-# Returns: Array of strings where each element is a matrix row of version combinations
-function generate_matrix() {
-  filter_fn="$1"
-  shift
-
-  versions=("$@")
-  for fed_version in "${versions[@]}"; do
-    for client_version in "${versions[@]}"; do
-      for gateway_version in "${versions[@]}"; do
-        if "$filter_fn" "$fed_version" "$client_version" "$gateway_version"; then
-          # bash doesn't allow returning arrays, however we can mimic the
-          # behavior of returning an array by echoing each element
-          echo "FM: $fed_version CLI: $client_version GW: $gateway_version"
-        fi
-      done
-    done
-  done
-}
-
 export LNV2_STABLE_VERSION="v0.7.0"
 function version_lt() {
   if [ "$1" = "current" ]; then
@@ -246,89 +141,6 @@ function supports_lnv2() {
   return 0
 }
 
-# Returns true if fed, client, or gateway have a different version.
-function is_any_version_different() {
-  fed_version="$1"
-  client_version="$2"
-  gateway_version="$3"
-  [ "$fed_version" != "$client_version" ] \
-    || [ "$fed_version" != "$gateway_version" ] \
-    || [ "$client_version" != "$gateway_version" ]
-}
-
-# Returns true if fed, client, and gateway only have one non-"current" version.
-function is_only_one_version_not_current() {
-  fed_version="$1"
-  client_version="$2"
-  gateway_version="$3"
-  current_count="$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")"
-  [ "$current_count" == 2 ]
-}
-
-# Returns true if fed, client, and gateway are all "current" versions.
-function are_all_versions_current() {
-  fed_version="$1"
-  client_version="$2"
-  gateway_version="$3"
-  current_count="$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")"
-  [ "$current_count" == 3 ]
-}
-
-# Generates a matrix of every version combination except for all binaries on
-# the same version. Testing all binaries with the same version is redundant
-# since this was covered for that version's "current" release.
-# Parameters:
-#   $@ - versions: Variadic versions to include (e.g. v0.2.1 v0.2.2)
-# Returns: Array of strings where each element is a matrix row of version combinations
-#   The return type must be consumed using `mapfile` to correctly read as an array
-#   Example call: `mapfile -t version_matrix < <(generate_full_matrix "${versions[@]}")`
-function generate_full_matrix() {
-  generate_matrix is_any_version_different "$@"
-}
-
-# Generates a matrix of every version combination where only one binary is not "current".
-#
-# This is the default matrix generated in CI since testing only one binary on a previous
-# version will cover most of the backwards-incompatible changes and materially increase
-# the speed of CI.
-#
-# For additional context, see: https://github.com/fedimint/fedimint/pull/4389
-#
-# The following example shows the difference between a full and partial matrix using v0.2.1.
-#
-# Full:
-# v0.2.1  v0.2.1  current
-# v0.2.1  current v0.2.1
-# v0.2.1  current current
-# current v0.2.1  v0.2.1
-# current v0.2.1  current
-# current current v0.2.1
-#
-# Partial:
-# v0.2.1  current current
-# current v0.2.1  current
-# current current v0.2.1
-#
-# Parameters:
-#   $@ - versions: Variadic versions to include (e.g. v0.2.1 v0.2.2)
-# Returns: Array of strings where each element is a matrix row of version combinations
-#   The return type must be consumed using `mapfile` to correctly read as an array
-#   Example call: `mapfile -t version_matrix < <(generate_partial_matrix "${versions[@]}")`
-function generate_partial_matrix() {
-  generate_matrix is_only_one_version_not_current "$@"
-}
-
-# Generates a matrix where all versions are "current". This is used for running the
-# test suite without backwards-compatibility tests.
-# Parameters:
-#   $@ - versions: Variadic versions to include (e.g. v0.2.1 v0.2.2)
-# Returns: Array of strings where each element is a matrix row of version combinations
-#   The return type must be consumed using `mapfile` to correctly read as an array
-#   Example call: `mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")`
-function generate_current_only_matrix() {
-  generate_matrix are_all_versions_current "$@"
-}
-
 # Returns true if the search string is contained in the array
 function contains() {
   local search_str="$1"
@@ -342,4 +154,3 @@ function contains() {
   done
   return 1
 }
-
