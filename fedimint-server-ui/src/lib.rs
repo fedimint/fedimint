@@ -16,6 +16,8 @@ pub const EXPLORER_ROUTE: &str = "/explorer/{session_idx}";
 pub const DOWNLOAD_BACKUP_ROUTE: &str = "/download-backup";
 pub const CHANGE_PASSWORD_ROUTE: &str = "/change-password";
 pub const METRICS_ROUTE: &str = "/metrics";
+pub const SET_DECOMMISSION_ROUTE: &str = "/set-decommission";
+pub const CLEAR_DECOMMISSION_ROUTE: &str = "/clear-decommission";
 
 #[derive(Debug, Deserialize)]
 pub struct PasswordChangeInput {

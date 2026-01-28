@@ -59,6 +59,7 @@ pub enum DbKeyPrefix {
     UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
     EventLogTrimable = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG_TRIMABLE,
     ClientModuleRecovery = 0x40,
+    DecommissionAnnouncement = 0x42,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -456,6 +457,15 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct DecommissionAnnouncementKey;
+
+impl_db_record!(
+    key = DecommissionAnnouncementKey,
+    value = fedimint_core::admin_client::DecommissionAnnouncement,
+    db_prefix = DbKeyPrefix::DecommissionAnnouncement,
+);
 
 pub fn get_core_client_database_migrations()
 -> BTreeMap<DatabaseVersion, fedimint_core::db::ClientCoreDbMigrationFn> {

@@ -16,7 +16,9 @@ pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
     ConnectionPool, ConnectorRegistry, DynGuaridianConnection, IGuardianConnection,
 };
-use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{
+    DecommissionAnnouncement, GuardianConfigBackup, ServerStatusLegacy, SetupStatus,
+};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, ModuleKind, OutputOutcome};
@@ -565,6 +567,15 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Change the password used to encrypt the configs and for guardian
     /// authentication
     async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
+
+    /// Fetch the federation's decommission announcement with threshold
+    /// consensus verification.
+    ///
+    /// Returns `Some(announcement)` if the federation has announced
+    /// decommission and a threshold of guardians agree. Returns `None` if
+    /// no decommission has been announced.
+    async fn decommission_announcement(&self)
+    -> FederationResult<Option<DecommissionAnnouncement>>;
 }
 
 pub fn deserialize_outcome<R>(
