@@ -285,7 +285,6 @@ fn default_finality_delay(network: Network) -> u32 {
     match network {
         Network::Bitcoin | Network::Regtest => 10,
         Network::Testnet | Network::Signet | Network::Testnet4 => 2,
-        _ => panic!("Unsupported network"),
     }
 }
 
@@ -300,7 +299,6 @@ fn default_client_bitcoin_rpc(network: Network) -> BitcoinRpcConfig {
             "http://127.0.0.1:{}/",
             std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or_else(|_| String::from("50002"))
         ),
-        _ => panic!("Unsupported network"),
     };
 
     BitcoinRpcConfig {
