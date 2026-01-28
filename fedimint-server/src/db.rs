@@ -19,6 +19,7 @@ pub enum DbKeyPrefix {
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
     ServerInfo = 0x07,
+    GuardianMetadata = 0x08,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,

@@ -210,6 +210,11 @@ function devimint_cli_test_single() {
 }
 export -f devimint_cli_test_single
 
+function guardian_metadata_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/guardian-metadata-test.sh
+}
+export -f guardian_metadata_test
+
 function load_test_tool_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
 }
@@ -378,6 +383,7 @@ tests_to_run_in_parallel+=(
   "lnv1_lnv2_swap"
   "devimint_cli_test"
   "devimint_cli_test_single"
+  "guardian_metadata_test"
   "load_test_tool_test"
   "recoverytool_tests"
   "guardian_backup"
