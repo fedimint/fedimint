@@ -16,12 +16,27 @@ jobs:
           nix flake update advisory-db || nix flake lock --update-input advisory-db
           nix build -L .#ci.cargoAudit
 
+  fuzz:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Quick fuzzing
+        run: |
+          env \
+            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
+              run \
+                --metric EOKLCdk0SRWnjmA0sLRFKQ \
+                --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
+              nix build -L .#ci.quickFuzz
+
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: [self-hosted, linux, x64]
-    needs: [ audit ]
+    needs: [ audit, fuzz ]
 
     steps:
     - name: Discord notifications on failure
