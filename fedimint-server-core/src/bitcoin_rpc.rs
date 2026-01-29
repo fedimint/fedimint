@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
 use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_core::{ChainId, Feerate};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
 use tracing::debug;

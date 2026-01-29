@@ -1316,7 +1316,8 @@ mod tests {
         }
 
         async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
-            Err(anyhow::anyhow!("Mock chain id error"))
+            // Just mock something up
+            Ok(ChainId(BlockHash::from_byte_array([1; 32])))
         }
     }
 
