@@ -3659,6 +3659,7 @@ dependencies = [
  "itertools 0.14.0",
  "lightning-invoice",
  "lnurl-rs",
+ "once_cell",
  "rand 0.8.5",
  "reqwest 0.12.22",
  "serde",

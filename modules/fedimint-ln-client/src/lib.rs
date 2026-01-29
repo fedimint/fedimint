@@ -87,6 +87,7 @@ use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
+use std::sync::LazyLock;
 use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
@@ -119,6 +120,8 @@ const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 // 24 hours. Many wallets default to 1 hour, but it's a bad user experience if
 // invoices expire too quickly
 const DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24);
+static LNURL_ASYNC_CLIENT: LazyLock<lnurl::AsyncClient> =
+    LazyLock::new(|| lnurl::AsyncClient::from_client(reqwest::Client::new()));
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
@@ -526,6 +529,13 @@ impl ClientModule for LightningClientModule {
                         "invoice": invoice,
                     });
                 }
+                "get_invoice" => {
+                    let req: GetInvoiceRequest = serde_json::from_value(payload)?;
+                    let invoice = get_invoice(&req.info, req.amount, req.lnurl_comment).await?;
+                    yield serde_json::json!({
+                        "invoice": invoice,
+                    });
+                }
                 "pay_bolt11_invoice" => {
                     let req: PayBolt11InvoiceRequest = serde_json::from_value(payload)?;
                     let outgoing_payment = self
@@ -620,6 +630,13 @@ struct CreateBolt11InvoiceRequest {
     expiry_time: Option<u64>,
     extra_meta: serde_json::Value,
     gateway: Option<LightningGateway>,
+}
+
+#[derive(Deserialize)]
+struct GetInvoiceRequest {
+    info: String,
+    amount: Option<Amount>,
+    lnurl_comment: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2292,11 +2309,28 @@ pub async fn get_invoice(
             };
             debug!("Parsed parameter as lnurl: {lnurl:?}");
             let amount = amount.context("When using a lnurl, an amount must be specified")?;
-            let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
-            let response = async_client.make_request(&lnurl.url).await?;
+            let response = LNURL_ASYNC_CLIENT.make_request(&lnurl.url).await?;
             match response {
                 lnurl::LnUrlResponse::LnUrlPayResponse(response) => {
-                    let invoice = async_client
+                    ensure!(
+                        amount.msats >= response.min_sendable
+                            && amount.msats <= response.max_sendable,
+                        "Amount outside of allowed range ({:?} - {:?})",
+                        Amount::from_msats(response.min_sendable),
+                        Amount::from_msats(response.max_sendable)
+                    );
+
+                    if let Some(comment) = lnurl_comment.as_ref() {
+                        let Some(comment_allowed) = response.comment_allowed else {
+                            bail!("Lightning address does not allow comments");
+                        };
+                        ensure!(
+                            comment.chars().count() <= comment_allowed as usize,
+                            "Comment longer than allowed (max {comment_allowed} characters)",
+                        );
+                    }
+
+                    let invoice = LNURL_ASYNC_CLIENT
                         .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
                         .await?;
                     let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
