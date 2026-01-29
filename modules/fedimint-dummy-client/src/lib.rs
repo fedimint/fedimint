@@ -8,8 +8,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow, format_err};
-use common::broken_fed_key_pair;
+use anyhow::{Context as _, format_err};
 use db::{
     DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyV1, DummyClientFundsKeyV2PrefixAll,
     DummyClientNameKey, migrate_to_v1,
@@ -34,10 +33,9 @@ use fedimint_core::db::{
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
-    MultiApiVersion,
+    AmountUnit, Amounts, ApiRequestErased, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::{Keypair, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
@@ -310,63 +308,6 @@ impl DummyClientModule {
             .await
     }
 
-    /// Use a broken printer to print a liability instead of money
-    /// If the federation is honest, should always fail
-    pub async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_money_units(amount, AmountUnit::BITCOIN, broken_fed_key_pair())
-            .await
-    }
-
-    /// Send money to another user
-    pub async fn send_money(
-        &self,
-        account: PublicKey,
-        amount: Amount,
-        unit: AmountUnit,
-    ) -> anyhow::Result<OutPoint> {
-        self.db.ensure_isolated().expect("must be isolated");
-
-        let op_id = OperationId(rand::random());
-
-        // Create output using another account
-        let output = ClientOutput::<DummyOutput> {
-            output: DummyOutputV1 {
-                amount,
-                unit,
-                account,
-            }
-            .into(),
-            amounts: Amounts::new_custom(unit, amount),
-        };
-
-        // Build and send tx to the fed
-        let tx = TransactionBuilder::new().with_outputs(
-            self.client_ctx
-                .make_client_outputs(ClientOutputBundle::new_no_sm(vec![output])),
-        );
-
-        let meta_gen = |change_range: OutPointRange| OutPoint {
-            txid: change_range.txid(),
-            out_idx: 0,
-        };
-        let change_range = self
-            .client_ctx
-            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), meta_gen, tx)
-            .await?;
-
-        let tx_subscription = self.client_ctx.transaction_updates(op_id).await;
-
-        tx_subscription
-            .await_tx_accepted(change_range.txid())
-            .await
-            .map_err(|e| anyhow!(e))?;
-
-        Ok(OutPoint {
-            txid: change_range.txid(),
-            out_idx: 0,
-        })
-    }
-
     /// Wait to receive money at an outpoint
     pub async fn receive_money_hack(&self, outpoint: OutPoint) -> anyhow::Result<()> {
         let mut dbtx = self.db.begin_transaction().await;
@@ -398,17 +339,6 @@ impl DummyClientModule {
         dbtx.commit_tx().await;
 
         Ok(())
-    }
-
-    /// Return our account
-    pub fn account(&self) -> PublicKey {
-        self.key.public_key()
-    }
-
-    /// Get balance for a specific amount unit
-    pub async fn get_balance(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
-        Ok(get_funds(&mut dbtx, unit).await)
     }
 }
 
