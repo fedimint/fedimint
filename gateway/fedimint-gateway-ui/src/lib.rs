@@ -82,7 +82,6 @@ pub(crate) const PAYMENT_LOG_ROUTE: &str = "/ui/payment-log";
 pub(crate) const CREATE_WALLET_ROUTE: &str = "/ui/wallet/create";
 pub(crate) const RECOVER_WALLET_ROUTE: &str = "/ui/wallet/recover";
 pub(crate) const MNEMONIC_IFRAME_ROUTE: &str = "/ui/mnemonic/iframe";
-pub(crate) const MNEMONIC_REVEAL_ROUTE: &str = "/ui/mnemonic/reveal";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -420,8 +419,10 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
             RECOVER_WALLET_ROUTE,
             get(recover_wallet_form).post(recover_wallet_handler),
         )
-        .route(MNEMONIC_IFRAME_ROUTE, get(mnemonic_iframe_handler))
-        .route(MNEMONIC_REVEAL_ROUTE, post(mnemonic_reveal_handler))
+        .route(
+            MNEMONIC_IFRAME_ROUTE,
+            get(mnemonic_iframe_handler).post(mnemonic_reveal_handler),
+        )
         .with_static_routes();
 
     app.with_state(UiState::new(api))
