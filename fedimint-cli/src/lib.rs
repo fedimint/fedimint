@@ -10,13 +10,14 @@
 #![allow(clippy::large_futures)]
 
 mod client;
+mod db;
 pub mod envs;
 mod utils;
 
 use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
@@ -33,6 +34,7 @@ use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FI
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
+use fedimint_client::db::ApiSecretKey;
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
@@ -42,7 +44,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::{Database, DatabaseValue};
+use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -69,6 +71,7 @@ use tracing::{debug, info, warn};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
+use crate::db::{StoredAdminCreds, load_admin_creds, store_admin_creds};
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
 
 /// Type of output the cli produces
@@ -405,6 +408,28 @@ enum Command {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Subcommand)]
 enum AdminCmd {
+    /// Store admin credentials (peer_id and password) in the client database.
+    ///
+    /// This allows subsequent admin commands to be run without specifying
+    /// `--our-id` and `--password` each time.
+    ///
+    /// The command will verify the credentials by making an authenticated
+    /// API call before storing them.
+    Auth {
+        /// Guardian's peer ID
+        #[arg(long, env = FM_OUR_ID_ENV)]
+        peer_id: u16,
+        /// Guardian password for authentication
+        #[arg(long, env = FM_PASSWORD_ENV)]
+        password: String,
+        /// Skip interactive endpoint verification
+        #[arg(long)]
+        no_verify: bool,
+        /// Force overwrite existing stored credentials
+        #[arg(long)]
+        force: bool,
+    },
+
     /// Show the status according to the `status` endpoint
     Status,
 
@@ -765,10 +790,17 @@ impl FedimintCli {
     async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandleArc> {
         let (mut client_builder, db) = self.make_client_builder(cli).await?;
 
+        // Use CLI args if provided, otherwise try to load stored credentials
         if let Some(our_id) = cli.our_id {
             client_builder.set_admin_creds(AdminCreds {
                 peer_id: our_id,
                 auth: cli.auth()?,
+            });
+        } else if let Some(stored_creds) = load_admin_creds(&db).await {
+            debug!(target: LOG_CLIENT, "Using stored admin credentials");
+            client_builder.set_admin_creds(AdminCreds {
+                peer_id: stored_creds.peer_id,
+                auth: ApiAuth(stored_creds.auth),
             });
         }
 
@@ -898,6 +930,108 @@ impl FedimintCli {
                         .await
                         .map_err_cli()?,
                 ))
+            }
+            Command::Admin(AdminCmd::Auth {
+                peer_id,
+                password,
+                no_verify,
+                force,
+            }) => {
+                let db = cli.load_database().await?;
+                let peer_id = PeerId::from(peer_id);
+                let auth = ApiAuth(password);
+
+                // Check if credentials already exist
+                if !force {
+                    let existing = load_admin_creds(&db).await;
+                    if existing.is_some() {
+                        return Err(CliError {
+                            error: "Admin credentials already stored. Use --force to overwrite."
+                                .to_string(),
+                        });
+                    }
+                }
+
+                // Load client config to get peer endpoints
+                let config = Client::get_config_from_db(&db)
+                    .await
+                    .ok_or_cli_msg("Client not initialized. Please join a federation first.")?;
+
+                // Get the endpoint for the specified peer
+                let peer_url =
+                    config
+                        .global
+                        .api_endpoints
+                        .get(&peer_id)
+                        .ok_or_else(|| CliError {
+                            error: format!(
+                                "Peer ID {} not found in federation. Valid peer IDs are: {:?}",
+                                peer_id,
+                                config.global.api_endpoints.keys().collect::<Vec<_>>()
+                            ),
+                        })?;
+
+                // Interactive verification unless --no-verify is set
+                if !no_verify {
+                    // Check if stdin is a terminal for interactive prompts
+                    if !std::io::stdin().is_terminal() {
+                        return Err(CliError {
+                            error: "Interactive verification requires a terminal. Use --no-verify to skip.".to_string(),
+                        });
+                    }
+
+                    eprintln!("Guardian endpoint for peer {}: {}", peer_id, peer_url.url);
+                    eprint!("Does this look correct? (y/N): ");
+                    std::io::stderr().flush().map_err_cli()?;
+
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input).map_err_cli()?;
+                    let input = input.trim().to_lowercase();
+
+                    if input != "y" && input != "yes" {
+                        return Err(CliError {
+                            error: "Endpoint verification cancelled by user.".to_string(),
+                        });
+                    }
+                }
+
+                // Verify credentials by making an authenticated API call
+                eprintln!("Verifying credentials...");
+                let admin_api = DynGlobalApi::new_admin(
+                    cli.make_endpoints().await.map_err_cli()?,
+                    peer_id,
+                    peer_url.url.clone(),
+                    db.begin_transaction_nc()
+                        .await
+                        .get_value(&ApiSecretKey)
+                        .await
+                        .as_deref(),
+                )
+                .map_err_cli()?;
+
+                // Use the `auth` endpoint to verify credentials
+                admin_api.auth(auth.clone()).await.map_err(|e| CliError {
+                    error: format!(
+                        "Failed to verify credentials: {e}. Please check your peer ID and password."
+                    ),
+                })?;
+
+                // Store the credentials in the database
+                store_admin_creds(
+                    &db,
+                    &StoredAdminCreds {
+                        peer_id,
+                        auth: auth.0.clone(),
+                    },
+                )
+                .await;
+
+                eprintln!("Admin credentials verified and saved successfully.");
+                Ok(CliOutput::Raw(json!({
+                    "peer_id": peer_id,
+                    "endpoint": peer_url.url.to_string(),
+                    "status": "saved"
+                })))
             }
             Command::Admin(AdminCmd::Audit) => {
                 let client = self.client_open(&cli).await?;

@@ -37,7 +37,9 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::version_constants::{
+    VERSION_0_8_2, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA,
+};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -2279,6 +2281,102 @@ async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result
     Ok(())
 }
 
+/// Tests the `admin auth` command that stores admin credentials in the client
+/// database, allowing subsequent admin commands to run without --our-id and
+/// --password.
+pub async fn admin_auth_tests(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
+
+    let DevFed { fed, .. } = dev_fed;
+
+    let client = fed.new_joined_client("admin-auth-test-client").await?;
+
+    let peer_id = 0;
+
+    info!(target: LOG_DEVIMINT, "Testing admin auth command stores credentials");
+
+    // First, store the admin credentials using the auth command
+    // Use --no-verify to skip interactive verification in tests
+    let auth_result = cmd!(
+        client,
+        "--our-id",
+        &peer_id.to_string(),
+        "--password",
+        "pass",
+        "admin",
+        "auth",
+        "--peer-id",
+        &peer_id.to_string(),
+        "--password",
+        "pass",
+        "--no-verify",
+        "--force"
+    )
+    .out_json()
+    .await?;
+
+    info!(target: LOG_DEVIMINT, ?auth_result, "Admin auth command completed");
+
+    // Verify the response contains expected fields
+    assert_eq!(
+        auth_result
+            .get("peer_id")
+            .and_then(serde_json::Value::as_u64),
+        Some(peer_id as u64),
+        "peer_id in response should match"
+    );
+    assert_eq!(
+        auth_result
+            .get("status")
+            .and_then(serde_json::Value::as_str),
+        Some("saved"),
+        "status should be 'saved'"
+    );
+
+    info!(target: LOG_DEVIMINT, "Testing that stored credentials are used automatically");
+
+    // Now run an admin command WITHOUT --our-id and --password
+    // It should use the stored credentials automatically
+    let status_result = cmd!(client, "admin", "status").out_json().await;
+
+    // The command should succeed using stored credentials
+    assert!(
+        status_result.is_ok(),
+        "Admin status command should succeed with stored credentials"
+    );
+
+    info!(target: LOG_DEVIMINT, "Testing that --force overwrites existing credentials");
+
+    // Test that --force allows overwriting
+    let auth_result_force = cmd!(
+        client,
+        "--our-id",
+        &peer_id.to_string(),
+        "--password",
+        "pass",
+        "admin",
+        "auth",
+        "--peer-id",
+        &peer_id.to_string(),
+        "--password",
+        "pass",
+        "--no-verify",
+        "--force"
+    )
+    .out_json()
+    .await?;
+
+    assert_eq!(
+        auth_result_force.get("status").and_then(|v| v.as_str()),
+        Some("saved"),
+        "Force overwrite should succeed"
+    );
+
+    info!(target: LOG_DEVIMINT, "admin_auth_tests completed successfully");
+
+    Ok(())
+}
+
 pub async fn test_guardian_password_change(
     dev_fed: DevFed,
     process_mgr: &ProcessManager,
@@ -2440,6 +2538,8 @@ pub enum TestCmd {
     /// Tests that guardian password change works and the guardian can restart
     /// afterwards
     TestGuardianPasswordChange,
+    /// `devfed` then tests admin auth credential storage
+    TestAdminAuth,
     /// Test upgrade paths for a given binary
     UpgradeTests {
         #[clap(subcommand)]
@@ -2557,6 +2657,22 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             test_guardian_password_change(dev_fed, &process_mgr).await?;
+        }
+        TestCmd::TestAdminAuth => {
+            // Check versions early before starting infrastructure
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+            if fedimint_cli_version < *VERSION_0_11_0_ALPHA
+                || fedimintd_version < *VERSION_0_11_0_ALPHA
+            {
+                info!(target: LOG_DEVIMINT, "Skipping admin_auth_tests - requires v0.11.0-alpha or later");
+                return Ok(());
+            }
+
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            admin_auth_tests(dev_fed).await?;
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.

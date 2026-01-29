@@ -185,6 +185,14 @@ function test_guardian_password_change() {
 }
 export -f test_guardian_password_change
 
+function test_admin_auth() {
+  # test requires v0.11.0-alpha features, skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/test-admin-auth.sh
+  fi
+}
+export -f test_admin_auth
+
 function circular_deposit() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/circular-deposit-test.sh
 }
@@ -388,6 +396,7 @@ tests_to_run_in_parallel+=(
   "test_offline_client_initialization"
   "test_client_config_change_detection"
   "test_guardian_password_change"
+  "test_admin_auth"
   "circular_deposit"
   "wallet_recovery"
   "wallet_recovery_2"
