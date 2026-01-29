@@ -7,7 +7,7 @@ use fedimint_ui_common::auth::UserAuth;
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
 
-use crate::{DynGatewayApi, MNEMONIC_IFRAME_ROUTE, MNEMONIC_REVEAL_ROUTE};
+use crate::{DynGatewayApi, MNEMONIC_IFRAME_ROUTE};
 
 /// Form data for revealing the mnemonic
 #[derive(Deserialize)]
@@ -31,7 +31,7 @@ pub fn render() -> Markup {
                 form
                     id="mnemonic-reveal-form"
                     method="post"
-                    action=(MNEMONIC_REVEAL_ROUTE)
+                    action=(MNEMONIC_IFRAME_ROUTE)
                     target="mnemonic-iframe"
                     class="mb-3"
                 {
