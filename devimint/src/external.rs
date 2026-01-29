@@ -95,6 +95,10 @@ impl Bitcoind {
 
         bitcoind.poll_ready().await?;
 
+        // To have a ChainId we always need at least one block.
+        let addr = bitcoind.get_new_address().await?;
+        bitcoind.generate_to_address(1, addr).await?;
+
         Ok(bitcoind)
     }
 

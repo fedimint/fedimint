@@ -19,7 +19,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, Feerate};
+use fedimint_core::{Amount, ChainId, Feerate};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use rand::rngs::OsRng;
 use tracing::debug;
@@ -64,9 +64,14 @@ impl FakeBitcoinTest {
             scripts: BTreeMap::new(),
             txid_to_block_height: BTreeMap::new(),
         };
-        FakeBitcoinTest {
+        let res = FakeBitcoinTest {
             inner: std::sync::RwLock::new(inner).into(),
-        }
+        };
+
+        // We always need one custom block for the ChainId
+        res.mine_blocks_no_async(1);
+
+        res
     }
 
     fn pending_merkle_tree(pending: &[Transaction]) -> PartialMerkleTree {
@@ -132,17 +137,8 @@ impl FakeBitcoinTest {
         blocks.push(block.clone());
         block.block_hash()
     }
-}
 
-#[async_trait]
-impl BitcoinTest for FakeBitcoinTest {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
-        // With  FakeBitcoinTest, every test spawns their own instance,
-        // so not need to lock anything
-        Box::new(self.clone())
-    }
-
-    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
+    fn mine_blocks_no_async(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let mut inner = self.inner.write().unwrap();
 
         let FakeBitcoinTestInner {
@@ -156,6 +152,19 @@ impl BitcoinTest for FakeBitcoinTest {
         (1..=block_num)
             .map(|_| FakeBitcoinTest::mine_block(addresses, blocks, pending, txid_to_block_height))
             .collect()
+    }
+}
+
+#[async_trait]
+impl BitcoinTest for FakeBitcoinTest {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
+        // With  FakeBitcoinTest, every test spawns their own instance,
+        // so not need to lock anything
+        Box::new(self.clone())
+    }
+
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
+        self.mine_blocks_no_async(block_num)
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -345,10 +354,6 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         "http://mock".parse().unwrap()
     }
 
-    async fn get_network(&self) -> Result<bitcoin::Network> {
-        Ok(bitcoin::Network::Regtest)
-    }
-
     async fn get_block_count(&self) -> Result<u64> {
         Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
@@ -402,5 +407,9 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
         Ok(None)
+    }
+
+    async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+        self.get_block_hash(1).await.map(ChainId::new)
     }
 }
