@@ -9,6 +9,8 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [features]
+default = ["jemalloc"]
+jemalloc = ["fedimint-rocksdb/jemalloc", "dep:tikv-jemallocator"]
 tor = [
     "fedimint-client/tor",
     "fedimint-api-client/tor",
@@ -83,6 +85,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
+tikv-jemallocator = { workspace = true, optional = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true, features = ["transport", "tls-ring"] }
