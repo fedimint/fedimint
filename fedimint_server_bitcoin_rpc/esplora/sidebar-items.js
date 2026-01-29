@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAINNET","REGTEST","SIGNET","TESTNET"],"struct":["EsploraClient"]};
+window.SIDEBAR_ITEMS = {"struct":["EsploraClient"]};

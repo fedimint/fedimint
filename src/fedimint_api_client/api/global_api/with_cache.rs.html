@@ -13,13 +13,13 @@
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::endpoint_constants::{
 <a href=#14 id=14 data-nosnippet>14</a>    ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
 <a href=#15 id=15 data-nosnippet>15</a>    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-<a href=#16 id=16 data-nosnippet>16</a>    BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-<a href=#17 id=17 data-nosnippet>17</a>    GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-<a href=#18 id=18 data-nosnippet>18</a>    RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
-<a href=#19 id=19 data-nosnippet>19</a>    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-<a href=#20 id=20 data-nosnippet>20</a>    SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-<a href=#21 id=21 data-nosnippet>21</a>    SIGN_API_ANNOUNCEMENT_ENDPOINT, START_DKG_ENDPOINT, STATUS_ENDPOINT,
-<a href=#22 id=22 data-nosnippet>22</a>    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+<a href=#16 id=16 data-nosnippet>16</a>    BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT, CHANGE_PASSWORD_ENDPOINT,
+<a href=#17 id=17 data-nosnippet>17</a>    FEDIMINTD_VERSION_ENDPOINT, GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+<a href=#18 id=18 data-nosnippet>18</a>    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
+<a href=#19 id=19 data-nosnippet>19</a>    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+<a href=#20 id=20 data-nosnippet>20</a>    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+<a href=#21 id=21 data-nosnippet>21</a>    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, START_DKG_ENDPOINT,
+<a href=#22 id=22 data-nosnippet>22</a>    STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
 <a href=#23 id=23 data-nosnippet>23</a>};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
@@ -36,7 +36,7 @@
 <a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::{NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::{ChainId, NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>futures::future::join_all;
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>futures::stream::BoxStream;
@@ -573,4 +573,9 @@
 <a href=#573 id=573 data-nosnippet>573</a>        )
 <a href=#574 id=574 data-nosnippet>574</a>        .<span class="kw">await
 <a href=#575 id=575 data-nosnippet>575</a>    </span>}
-<a href=#576 id=576 data-nosnippet>576</a>}</code></pre></div></section></main></body></html>
+<a href=#576 id=576 data-nosnippet>576</a>
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">async fn </span>chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ChainId&gt; {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="self">self</span>.request_current_consensus(CHAIN_ID_ENDPOINT.to_owned(), ApiRequestErased::default())
+<a href=#579 id=579 data-nosnippet>579</a>            .<span class="kw">await
+<a href=#580 id=580 data-nosnippet>580</a>    </span>}
+<a href=#581 id=581 data-nosnippet>581</a>}</code></pre></div></section></main></body></html>

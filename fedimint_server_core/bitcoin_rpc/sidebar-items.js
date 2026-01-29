@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ServerBitcoinRpcMonitor"],"trait":["IServerBitcoinRpc"],"type":["DynServerBitcoinRpc"]};
+window.SIDEBAR_ITEMS = {"constant":["MAINNET_CHAIN_ID_STR","MUTINYNET_CHAIN_ID_STR","SIGNET_4_CHAIN_ID_STR","TESTNET_CHAIN_ID_STR"],"fn":["network_from_chain_id"],"struct":["ServerBitcoinRpcMonitor"],"trait":["IServerBitcoinRpc"],"type":["DynServerBitcoinRpc"]};
