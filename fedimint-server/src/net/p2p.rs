@@ -13,7 +13,7 @@ use fedimint_core::PeerId;
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompactAnyhow;
-use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
+use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
 use futures::FutureExt;
@@ -172,6 +172,8 @@ impl<M: Send + 'static> P2PConnection<M> {
             format!("io-state-machine-{peer_id}"),
             async move {
                 info!(target: LOG_NET_PEER, "Starting peer connection state machine");
+                let p2p_reconnect_backoff =
+                    custom_backoff(Duration::from_millis(25), Duration::from_secs(5), None);
 
                 let mut state_machine = P2PConnectionStateMachine {
                     common: P2PConnectionSMCommon {
@@ -185,7 +187,7 @@ impl<M: Send + 'static> P2PConnection<M> {
                         incoming_connections,
                         status_sender,
                     },
-                    state: P2PConnectionSMState::Disconnected(api_networking_backoff()),
+                    state: P2PConnectionSMState::Disconnected(p2p_reconnect_backoff),
                 };
 
                 while let Some(sm) = state_machine.state_transition().await {
