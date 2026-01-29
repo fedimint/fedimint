@@ -1,0 +1,26 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "test-runner"
+version.workspace = true
+
+[[bin]]
+name = "test-runner"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+devimint.workspace = true
+fedimint-core.workspace = true
+fedimint-logging.workspace = true
+itertools.workspace = true
+nix = { workspace = true, features = ["resource"] }
+rand.workspace = true
+semver.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing.workspace = true
+
+[lints]
+workspace = true

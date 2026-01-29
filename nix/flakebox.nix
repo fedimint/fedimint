@@ -724,7 +724,7 @@ in
           patchShebangs ./scripts
           export CARGO_DENY_COMPILATION=1
           export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
-          export FM_TEST_CI_ALL_DISABLE_ETA=1
+          export FM_TEST_CI_ALL_DISABLE_ETA=true
 
           if [ "$CARGO_PROFILE" = "ci" ]; then
             export CI=true
@@ -733,11 +733,11 @@ in
             >&2 echo "Iroh enabled"
             export FM_ENABLE_IROH=true
           fi
-          ./scripts/tests/test-ci-all.sh || exit 1
+          ./scripts/dev/test-runner.sh run || exit 1
           cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
           sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
           echo "Verifying failure detection..."
-          ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
+          ./scripts/dev/test-runner.sh run 1>/dev/null 2>/dev/null && exit 1
           cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
         '';
       }).overrideAttrs

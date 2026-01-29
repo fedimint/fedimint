@@ -85,6 +85,7 @@ members = [
     "modules/fedimint-wallet-common",
     "modules/fedimint-wallet-server",
     "modules/fedimint-wallet-tests",
+    "test-runner",
     "utils/portalloc",
 ]
 resolver = "2"

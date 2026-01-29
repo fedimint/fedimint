@@ -1040,6 +1040,15 @@ pub fn is_backwards_compatibility_test() -> bool {
     is_env_var_set(FM_BACKWARDS_COMPATIBILITY_TEST_ENV)
 }
 
+/// Env var naming format used to pass down specific version binaries
+pub fn nix_binary_version_env_var_name(binary: &str, version: &Version) -> String {
+    format!(
+        "fm_bin_{binary}_v{version}",
+        binary = binary.replace('-', "_"),
+        version = version.to_string().replace(['-', '.'], "_"),
+    )
+}
+
 /// Sets the fedimint-cli binary to match the fedimintd's version, which is
 /// needed for running DKG. Returns the original fedimint-cli path and mint
 /// client alias so the caller can reset the fedimint-cli version after DKG
@@ -1055,11 +1064,10 @@ pub async fn use_matching_fedimint_cli_for_dkg() -> Result<(String, String)> {
         // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV) };
     } else {
-        let parsed_fedimintd_version = fedimintd_version.to_string().replace(['-', '.'], "_");
-
-        // matches format defined by nix_binary_version_var_name in scripts/_common.sh
-        let fedimint_cli_path_var = format!("fm_bin_fedimint_cli_v{parsed_fedimintd_version}");
-        let fedimint_cli_path = std::env::var(fedimint_cli_path_var)?;
+        let fedimint_cli_path = std::env::var(nix_binary_version_env_var_name(
+            "fedimint-cli",
+            &fedimintd_version,
+        ))?;
         // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, fedimint_cli_path) };
     }

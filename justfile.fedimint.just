@@ -16,17 +16,17 @@ test-real: check-ulimit
 
 # run all tests in parallel like CI would
 test-ci-all:
-  ./scripts/tests/test-ci-all.sh
+  ./scripts/dev/test-runner.sh run
 
 # show number of tests per package
 test-count:
   ./scripts/tests/test-cov.sh
 
-test-compatibility *VERSIONS="v0.8.2 v0.9.1 v0.10.0":
-  ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
+test-compatibility *VERSIONS="0.8.2 0.9.1 0.10.0":
+  ./scripts/dev/test-runner.sh run {{VERSIONS}}
 
-test-full-compatibility *VERSIONS="v0.4.4":
-  env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
+test-full-compatibility *VERSIONS="0.4.4":
+  ./scripts/dev/test-runner.sh run --full-matrix {{VERSIONS}}
 
 test-upgrades *VERSIONS="v0.8.2 current, v0.9.1 current, v0.10.0 current":
   ./scripts/tests/upgrade-test.sh {{VERSIONS}}
@@ -51,7 +51,7 @@ final-check-ci: lint
   just cargo-sort-check
   cargo test --doc --workspace
   just check-wasm
-  ./scripts/tests/test-ci-all.sh
+  just test-ci-all
   just test-compatibility
   just udeps
 
