@@ -610,7 +610,6 @@ pub fn default_esplora_server(network: Network, port: Option<String>) -> Bitcoin
                 "http://127.0.0.1:{}/",
                 port.unwrap_or_else(|| String::from("50002"))
             )),
-            _ => panic!("Failed to parse default esplora server"),
         }
         .expect("Failed to parse default esplora server"),
     }
