@@ -230,6 +230,7 @@ impl GatewayLndClient {
                 index_offset: 0,
                 num_max_invoices: u64::MAX,
                 reversed: false,
+                ..Default::default()
             })
             .await
             .map_err(|status| {
@@ -450,6 +451,7 @@ impl GatewayLndClient {
             preimage: vec![],
             failure_message: vec![],
             failure_code: FailureCode::TemporaryChannelFailure.into(),
+            ..Default::default()
         };
         Self::send_lnd_response(lnd_sender, response).await
     }
@@ -691,6 +693,7 @@ impl ILnRpcClient for GatewayLndClient {
                 public_only: false,
                 private_only: false,
                 peer: vec![],
+                peer_alias_lookup: false,
             })
             .await
             .map_err(|status| LightningRpcError::FailedToGetRouteHints {
@@ -709,6 +712,7 @@ impl ILnRpcClient for GatewayLndClient {
                 .lightning()
                 .get_chan_info(ChanInfoRequest {
                     chan_id: chan.chan_id,
+                    ..Default::default()
                 })
                 .await
                 .map_err(|status| LightningRpcError::FailedToGetRouteHints {
@@ -1008,6 +1012,7 @@ impl ILnRpcClient for GatewayLndClient {
                 preimage: preimage.0.to_vec(),
                 failure_message: vec![],
                 failure_code: FailureCode::TemporaryChannelFailure.into(),
+                ..Default::default()
             };
 
             Self::send_lnd_response(lnd_sender, response).await?;
@@ -1133,6 +1138,7 @@ impl ILnRpcClient for GatewayLndClient {
                 label: String::new(),
                 min_confs: 0,
                 spend_unconfirmed: true,
+                ..Default::default()
             },
             BitcoinAmountOrAll::Amount(amount) => SendCoinsRequest {
                 addr: address.assume_checked().to_string(),
@@ -1144,6 +1150,7 @@ impl ILnRpcClient for GatewayLndClient {
                 label: String::new(),
                 min_confs: 0,
                 spend_unconfirmed: true,
+                ..Default::default()
             },
         };
 
@@ -1244,6 +1251,7 @@ impl ILnRpcClient for GatewayLndClient {
                 public_only: false,
                 private_only: false,
                 peer: pubkey.serialize().to_vec(),
+                peer_alias_lookup: false,
             })
             .await
             .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
@@ -1320,6 +1328,7 @@ impl ILnRpcClient for GatewayLndClient {
                 public_only: false,
                 private_only: false,
                 peer: vec![],
+                peer_alias_lookup: true,
             })
             .await
         {
@@ -1376,7 +1385,9 @@ impl ILnRpcClient for GatewayLndClient {
 
         let wallet_balance_response = client
             .lightning()
-            .wallet_balance(WalletBalanceRequest {})
+            .wallet_balance(WalletBalanceRequest {
+                ..Default::default()
+            })
             .await
             .map_err(|e| LightningRpcError::FailedToGetBalances {
                 failure_reason: format!("Failed to get on-chain balance {e:?}"),
