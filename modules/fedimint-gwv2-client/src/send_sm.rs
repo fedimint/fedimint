@@ -5,16 +5,18 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{Amount, OutPoint};
-use fedimint_lnv2_common::contracts::OutgoingContract;
+use fedimint_lnv2_common::contracts::{LightningContract, OutgoingContract};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
 use super::FinalReceiveState;
 use super::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
+use crate::db::OutpointContractKey;
 use crate::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -260,6 +262,15 @@ impl SendStateMachine {
                         },
                     )
                     .await;
+
+                // Store the contract for later amount lookup
+                dbtx.module_tx()
+                    .insert_entry(
+                        &OutpointContractKey(old_state.common.outpoint),
+                        &LightningContract::Outgoing(old_state.common.contract.clone()),
+                    )
+                    .await;
+
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.outpoint,

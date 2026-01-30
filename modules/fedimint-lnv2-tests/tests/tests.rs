@@ -179,6 +179,14 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendOperationState::Refunding);
     assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
+    // While we mostly care about things not crashing, we can also test that fees
+    // were paid, which is always the case for LNv2
+    let operation_fees = client
+        .get_operation_fees(operation_id)
+        .await
+        .expect("Fee calculation should succeed for new operations");
+    assert_eq!(operation_fees.amount.get_bitcoin().msats, 2000);
+
     Ok(())
 }
 

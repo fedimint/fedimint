@@ -743,6 +743,126 @@ impl Client {
         active_state_exists || inactive_state_exists
     }
 
+    /// Calculates the federation fees paid in the course of the operation.
+    ///
+    /// Federation fees are fees paid to the federation (e.g. for ecash) and do
+    /// not include fees paid to service providers like the Lightning gateway.
+    /// These still have to be separately reported by the module.
+    ///
+    /// Fees are calculated by subtracting the total output amount from the
+    /// total input amount, any difference is either due to direct fees or
+    /// overpayment to avoid generating uneconomic outputs.
+    ///
+    /// Returns `None` if any input/output amount cannot be determined (e.g.,
+    /// for old LNv2 payments where the contract metadata wasn't stored).
+    ///
+    /// # Panics
+    /// Panics if the operation does not exist.
+    pub async fn get_operation_fees(&self, operation_id: OperationId) -> Option<OperationFees> {
+        assert!(
+            self.operation_exists(operation_id).await,
+            "Operation does not exist"
+        );
+
+        let (active_states, inactive_states) =
+            self.executor().get_operation_states(operation_id).await;
+        let is_final = active_states.is_empty();
+
+        let states = active_states
+            .into_iter()
+            .map(|(state, _)| state)
+            .chain(inactive_states.into_iter().map(|(state, _)| state));
+
+        let transaction_states = states
+            .filter_map(|state| {
+                if state.module_instance_id() != TRANSACTION_SUBMISSION_MODULE_INSTANCE {
+                    return None;
+                }
+
+                let tx_state = state
+                    .as_any()
+                    .downcast_ref::<TxSubmissionStatesSM>()
+                    .cloned()
+                    .expect("Invalid dyn state");
+
+                Some(tx_state)
+            })
+            .collect::<Vec<_>>();
+
+        let accepted_transactions = transaction_states
+            .iter()
+            .filter_map(|tx_state| match &tx_state.state {
+                TxSubmissionStates::Accepted(transaction_id) => Some(*transaction_id),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+
+        let operation_transactions = transaction_states
+            .into_iter()
+            .filter_map(|tx_state| match tx_state.state {
+                TxSubmissionStates::Created(transaction)
+                    if accepted_transactions.contains(&transaction.tx_hash()) =>
+                {
+                    Some(transaction)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let mut total_fees = Amounts::ZERO;
+        for transaction in &operation_transactions {
+            let mut inputs_amount = Amounts::ZERO;
+            for input in &transaction.inputs {
+                let module = self.get_module(input.module_instance_id());
+                let Some(amount) = module.input_amount(input).await else {
+                    warn!(
+                        target: LOG_CLIENT,
+                        module_instance_id = input.module_instance_id(),
+                        module_kind = ?input.module_kind(),
+                        tx_id = %transaction.tx_hash(),
+                        "Could not determine input amount, fee calculation unavailable"
+                    );
+                    return None;
+                };
+
+                inputs_amount = inputs_amount
+                    .checked_add(&amount)
+                    .expect("Our own transactions never overflow");
+            }
+
+            let mut outputs_amount = Amounts::ZERO;
+            for output in &transaction.outputs {
+                let module = self.get_module(output.module_instance_id());
+                let Some(amount) = module.output_amount(output).await else {
+                    warn!(
+                        target: LOG_CLIENT,
+                        module_instance_id = output.module_instance_id(),
+                        module_kind = ?output.module_kind(),
+                        tx_id = %transaction.tx_hash(),
+                        "Could not determine output amount, fee calculation unavailable"
+                    );
+                    return None;
+                };
+
+                outputs_amount = outputs_amount
+                    .checked_add(&amount)
+                    .expect("Our own transactions never overflow");
+            }
+
+            let transaction_fees = inputs_amount
+                .checked_sub(&outputs_amount)
+                .expect("Own transaction doesn't overflow");
+            total_fees = total_fees
+                .checked_add(&transaction_fees)
+                .expect("Won' overflow for any real-world case")
+        }
+
+        Some(OperationFees {
+            amount: total_fees,
+            is_final,
+        })
+    }
+
     pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
         self.db
             .begin_transaction_nc()
@@ -2230,4 +2350,14 @@ pub fn client_decoders<'a>(
         );
     }
     ModuleDecoderRegistry::from(modules)
+}
+
+/// Fees paid for transactions within an operation.
+#[derive(Debug, Clone)]
+pub struct OperationFees {
+    /// The amount of fees paid in transactions belonging to this operation.
+    pub amount: Amounts,
+    /// True if the fee amount will not change anymore. False for ongoing
+    /// operations.
+    pub is_final: bool,
 }

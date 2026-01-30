@@ -963,6 +963,10 @@ impl ClientModule for MintClientModule {
         ))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(input.maybe_v0_ref()?.amount))
+    }
+
     fn output_fee(
         &self,
         amount: &Amounts,
@@ -971,6 +975,13 @@ impl ClientModule for MintClientModule {
         Some(Amounts::new_bitcoin(
             self.cfg.fee_consensus.fee(amount.get_bitcoin()),
         ))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(output.maybe_v0_ref()?.amount))
     }
 
     #[cfg(feature = "cli")]

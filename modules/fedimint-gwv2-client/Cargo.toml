@@ -38,6 +38,7 @@ futures = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
 serde_millis = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }

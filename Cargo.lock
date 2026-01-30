@@ -3559,6 +3559,7 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "serde_millis",
+ "strum 0.27.1",
  "thiserror 2.0.12",
  "tracing",
 ]
