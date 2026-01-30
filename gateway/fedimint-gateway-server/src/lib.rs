@@ -1179,6 +1179,7 @@ impl Gateway {
             )))?
             .value();
         let metadata: BTreeMap<String, String> = BTreeMap::new();
+        #[allow(deprecated)]
         client
             .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
                 metadata,

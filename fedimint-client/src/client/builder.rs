@@ -1287,6 +1287,8 @@ impl ClientPreview {
     }
 
     /// Download most recent valid backup found from the Federation
+    #[deprecated(note = "Backup functionality is removed in v0.13.0")]
+    #[allow(deprecated)]
     pub async fn download_backup_from_federation(
         &self,
         pre_root_secret: RootSecret,

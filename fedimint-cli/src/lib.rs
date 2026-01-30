@@ -828,6 +828,7 @@ impl FedimintCli {
             .await
             .map_err_cli()?;
 
+        #[allow(deprecated)]
         let backup = preview
             .download_backup_from_federation(root_secret.clone())
             .await

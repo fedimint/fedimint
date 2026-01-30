@@ -1767,6 +1767,7 @@ impl Client {
                         });
                     }
                 }
+                #[allow(deprecated)]
                 "backup_to_federation" => {
                     let metadata = if params.is_null() {
                         Metadata::from_json_serialized(serde_json::json!({}))
