@@ -92,7 +92,6 @@ check-wasm *EXTRA_ARGS:
 # ex: `just snapshot-server-db-migrations fedimint-mint-tests`
 # ex: `just snapshot-server-db-migrations fedimint-ln-tests`
 # ex: `just snapshot-server-db-migrations fedimint-wallet-tests`
-# ex: `just snapshot-server-db-migrations fedimint-dummy-tests`
 # ex: `just snapshot-server-db-migrations fedimint-gateway-server`
 snapshot-server-db-migrations PACKAGE *EXTRA_ARGS:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' snapshot_server_db_migrations {{EXTRA_ARGS}}
@@ -103,7 +102,6 @@ test-server-db-migrations PACKAGE *EXTRA_ARGS:
 
 
 # regenerate client db migration snapshots
-# ex: `just snapshot-client-db-migrations fedimint-dummy-tests`
 # ex: `just snapshot-client-db-migrations fedimint-mint-tests`
 # ex: `just snapshot-client-db-migrations fedimint-ln-tests`
 # ex: `just snapshot-client-db-migrations fedimint-wallet-tests`
@@ -115,11 +113,9 @@ test-client-db-migrations PACKAGE *EXTRA_ARGS:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' test_client_db_migrations {{EXTRA_ARGS}}
 
 test-db-migrations:
-  just test-client-db-migrations fedimint-dummy-tests
   just test-client-db-migrations fedimint-mint-tests
   just test-client-db-migrations fedimint-ln-tests
   just test-client-db-migrations fedimint-wallet-tests
-  just test-server-db-migrations fedimint-dummy-tests
   just test-server-db-migrations fedimint-mint-tests
   just test-server-db-migrations fedimint-ln-tests
   just test-server-db-migrations fedimint-wallet-tests
@@ -127,11 +123,9 @@ test-db-migrations:
   just test-server-db-migrations fedimint-gateway-server
 
 snapshot-db-migrations:
-  just snapshot-client-db-migrations fedimint-dummy-tests
   just snapshot-client-db-migrations fedimint-mint-tests
   just snapshot-client-db-migrations fedimint-ln-tests
   just snapshot-client-db-migrations fedimint-wallet-tests
-  just snapshot-server-db-migrations fedimint-dummy-tests
   just snapshot-server-db-migrations fedimint-mint-tests
   just snapshot-server-db-migrations fedimint-ln-tests
   just snapshot-server-db-migrations fedimint-wallet-tests

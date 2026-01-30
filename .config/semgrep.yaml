@@ -174,7 +174,6 @@ rules:
       - fedimint-testing/
       - fedimint-wasm-testing/
       - fedimint-wasm-tests/
-      - modules/fedimint-dummy-tests/
       - modules/fedimint-wallet-tests/
       - modules/fedimint-ln-tests/
       - modules/fedimint-mint-tests/

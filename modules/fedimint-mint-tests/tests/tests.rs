@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bls12_381::G1Affine;
+use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
@@ -35,6 +36,32 @@ fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(MintClientInit, MintInit);
 
     fixtures.with_module(DummyClientInit, DummyInit)
+}
+
+/// Create real e-cash by submitting a DummyInput transaction.
+/// The dummy server accepts any public key, so this creates "free money"
+/// that gets converted to e-cash as change by the mint module.
+async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result<()> {
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
+
+    let dummy_input = dummy_module.create_input(amount);
+
+    let operation_id = OperationId::new_random();
+
+    let outpoint_range = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            "Issue e-cash via dummy module",
+            |_| (),
+            TransactionBuilder::new().with_inputs(dummy_input),
+        )
+        .await?;
+
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, outpoint_range.into_iter().collect())
+        .await?;
+
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]
@@ -94,14 +121,10 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client1 initial balance
     let fed = fixtures().new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
+    issue_ecash(&client1, sats(1000)).await?;
 
     // Spend from client1 to client2
     let client1_mint = client1.get_first_module::<MintClientModule>()?;
@@ -134,14 +157,10 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn blind_nonce_index() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client initial balance
     let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
-    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
+    issue_ecash(&client, sats(1000)).await?;
 
     // Issue e-cash and check if the blind nonce is added to the index
     let client_mint = client.get_first_module::<MintClientModule>()?;
@@ -186,14 +205,13 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4508
 async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client1 initial balance
     let fed = fixtures().new_fed_degraded().await;
     let client1 = fed.new_client_rocksdb().await;
     let client2 = fed.new_client_rocksdb().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1
-        .await_primary_bitcoin_module_output(op, outpoint)
+    client1_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
     // We currently have a limit on DB retries, if this number is increased too much
@@ -289,13 +307,12 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
-    // Print notes for client
+    // Give client initial balance
     let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
+    client_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
     let metadata = Metadata::from_json_serialized(BackupTestMetadata {
@@ -317,13 +334,12 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
-    // Print notes for client
+    // Give client initial balance
     let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
+    client_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
     let metadata = Metadata::from_json_serialized(BackupTestMetadata {
@@ -342,14 +358,10 @@ async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client initial balance
     let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
+    issue_ecash(&client, sats(1000)).await?;
 
     // Spend from client1 to client2
     let mint_module = client.get_first_module::<MintClientModule>()?;
@@ -383,12 +395,8 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
     let (client, client2) = fed.two_clients().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>()?;
     info!("### PRINT NOTES");
-    let (print_op, outpoint) = dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(print_op, outpoint)
-        .await?;
+    issue_ecash(&client, sats(1000)).await?;
 
     let client2_mint = client2.get_first_module::<MintClientModule>()?;
 
@@ -460,13 +468,12 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client1 initial balance
     let fed = fixtures().new_fed_degraded().await;
     let (client1, _client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1
-        .await_primary_bitcoin_module_output(op, outpoint)
+    client1_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
     // Spend from client1 to client2
@@ -489,13 +496,12 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client1 initial balance
     let fed = fixtures().new_fed_degraded().await;
     let (client1, _client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1
-        .await_primary_bitcoin_module_output(op, outpoint)
+    client1_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
     // Spend from client1 to client2
@@ -515,18 +521,14 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn repair_wallet() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Give client initial balance
     let fed = fixtures()
         .new_fed_builder(1)
         .disable_mint_fees()
         .build()
         .await;
     let client = fed.new_client().await;
-    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
-    client
-        .await_primary_bitcoin_module_output(op, outpoint)
-        .await?;
+    issue_ecash(&client, sats(1000)).await?;
 
     let client_mint = client.get_first_module::<MintClientModule>()?;
 
