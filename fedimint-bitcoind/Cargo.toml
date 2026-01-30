@@ -27,6 +27,7 @@ bitcoincore-rpc = { workspace = true, optional = true }
 esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-metrics = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

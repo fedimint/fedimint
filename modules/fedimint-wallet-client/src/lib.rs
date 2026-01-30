@@ -34,7 +34,7 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -245,6 +245,7 @@ impl ClientModuleInit for WalletClientInit {
         let btc_rpc = self.0.clone().unwrap_or(create_esplora_rpc(
             &WalletClientModule::get_rpc_config(args.cfg()).url,
         )?);
+        let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-client").into_dyn();
 
         let module_api = args.module_api().clone();
 

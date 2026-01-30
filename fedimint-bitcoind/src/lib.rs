@@ -6,6 +6,8 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::similar_names)]
 
+pub mod metrics;
+
 use std::env;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -17,6 +19,9 @@ use fedimint_core::envs::FM_FORCE_BITCOIN_RPC_URL_ENV;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_metrics::HistogramExt as _;
+
+use crate::metrics::{BITCOIND_RPC_DURATION_SECONDS, BITCOIND_RPC_REQUESTS_TOTAL};
 
 #[cfg(feature = "bitcoincore")]
 pub mod bitcoincore;
@@ -65,6 +70,95 @@ pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
         Self: Sized,
     {
         Arc::new(self)
+    }
+}
+
+/// A wrapper around `DynBitcoindRpc` that tracks metrics for each RPC call.
+///
+/// This wrapper records the duration and success/error status of each
+/// Bitcoin RPC call to Prometheus metrics, allowing monitoring of
+/// Bitcoin node connectivity and performance.
+pub struct BitcoindTracked {
+    inner: DynBitcoindRpc,
+    name: &'static str,
+}
+
+impl std::fmt::Debug for BitcoindTracked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BitcoindTracked")
+            .field("name", &self.name)
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+impl BitcoindTracked {
+    /// Wraps a `DynBitcoindRpc` with metrics tracking.
+    ///
+    /// The `name` parameter is used to distinguish different uses of the
+    /// Bitcoin RPC client in metrics (e.g., "wallet-client", "recovery").
+    pub fn new(inner: DynBitcoindRpc, name: &'static str) -> Self {
+        Self { inner, name }
+    }
+
+    fn record_call<T>(&self, method: &str, result: &Result<T>) {
+        let result_label = if result.is_ok() { "success" } else { "error" };
+        BITCOIND_RPC_REQUESTS_TOTAL
+            .with_label_values(&[method, self.name, result_label])
+            .inc();
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IBitcoindRpc for BitcoindTracked {
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_tx_block_height", self.name])
+            .start_timer_ext();
+        let result = self.inner.get_tx_block_height(txid).await;
+        timer.observe_duration();
+        self.record_call("get_tx_block_height", &result);
+        result
+    }
+
+    async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()> {
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["watch_script_history", self.name])
+            .start_timer_ext();
+        let result = self.inner.watch_script_history(script).await;
+        timer.observe_duration();
+        self.record_call("watch_script_history", &result);
+        result
+    }
+
+    async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>> {
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_script_history", self.name])
+            .start_timer_ext();
+        let result = self.inner.get_script_history(script).await;
+        timer.observe_duration();
+        self.record_call("get_script_history", &result);
+        result
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof> {
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_txout_proof", self.name])
+            .start_timer_ext();
+        let result = self.inner.get_txout_proof(txid).await;
+        timer.observe_duration();
+        self.record_call("get_txout_proof", &result);
+        result
+    }
+
+    async fn get_info(&self) -> Result<BlockchainInfo> {
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_info", self.name])
+            .start_timer_ext();
+        let result = self.inner.get_info().await;
+        timer.observe_duration();
+        self.record_call("get_info", &result);
+        result
     }
 }
 

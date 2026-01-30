@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::Client;
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
@@ -302,7 +302,7 @@ impl Fixtures {
     }
 
     pub fn client_esplora_rpc(&self) -> DynBitcoindRpc {
-        if Fixtures::is_real_test() {
+        let rpc = if Fixtures::is_real_test() {
             create_esplora_rpc(
                 &SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
@@ -313,7 +313,8 @@ impl Fixtures {
             .unwrap()
         } else {
             self.fake_bitcoin_rpc.clone().unwrap()
-        }
+        };
+        BitcoindTracked::new(rpc, "test-fixture").into_dyn()
     }
 
     /// Get a test bitcoin fixture

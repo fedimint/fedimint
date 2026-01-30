@@ -3,7 +3,7 @@ mod recovery_history_tracker;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
@@ -140,6 +140,7 @@ impl RecoveryFromHistory for WalletRecovery {
         let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
             &WalletClientModule::get_rpc_config(args.cfg()).url,
         )?);
+        let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-recovery").into_dyn();
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -218,6 +219,7 @@ impl RecoveryFromHistory for WalletRecovery {
         let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
             &WalletClientModule::get_rpc_config(args.cfg()).url,
         )?);
+        let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-recovery").into_dyn();
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
