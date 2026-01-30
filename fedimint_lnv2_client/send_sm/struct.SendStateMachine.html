@@ -11,8 +11,8 @@
     gateway_api: <a class="struct" href="../../fedimint_core/util/struct.SafeUrl.html" title="struct fedimint_core::util::SafeUrl">SafeUrl</a>,
     federation_id: <a class="struct" href="../../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>,
     outpoint: <a class="struct" href="../../fedimint_core/struct.OutPoint.html" title="struct fedimint_core::OutPoint">OutPoint</a>,
-    contract: OutgoingContract,
-    invoice: LightningInvoice,
+    contract: <a class="struct" href="../../fedimint_lnv2_common/contracts/struct.OutgoingContract.html" title="struct fedimint_lnv2_common::contracts::OutgoingContract">OutgoingContract</a>,
+    invoice: <a class="enum" href="../../fedimint_lnv2_common/enum.LightningInvoice.html" title="enum fedimint_lnv2_common::LightningInvoice">LightningInvoice</a>,
     refund_keypair: Keypair,
     context: <a class="struct" href="../struct.LightningClientContext.html" title="struct fedimint_lnv2_client::LightningClientContext">LightningClientContext</a>,
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">32</a>], Signature&gt;</h4></section><section id="method.transition_gateway_send_payment" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/send_sm.rs.html#219-268">Source</a><h4 class="code-header">async fn <a href="#method.transition_gateway_send_payment" class="fn">transition_gateway_send_payment</a>(
@@ -23,7 +23,7 @@
     old_state: <a class="struct" href="struct.SendStateMachine.html" title="struct fedimint_lnv2_client::send_sm::SendStateMachine">SendStateMachine</a>,
 ) -&gt; <a class="struct" href="struct.SendStateMachine.html" title="struct fedimint_lnv2_client::send_sm::SendStateMachine">SendStateMachine</a></h4></section><section id="method.await_preimage" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/send_sm.rs.html#271-288">Source</a><h4 class="code-header">async fn <a href="#method.await_preimage" class="fn">await_preimage</a>(
     outpoint: <a class="struct" href="../../fedimint_core/struct.OutPoint.html" title="struct fedimint_core::OutPoint">OutPoint</a>,
-    contract: OutgoingContract,
+    contract: <a class="struct" href="../../fedimint_lnv2_common/contracts/struct.OutgoingContract.html" title="struct fedimint_lnv2_common::contracts::OutgoingContract">OutgoingContract</a>,
     global_context: <a class="struct" href="../../fedimint_client_module/struct.DynGlobalClientContext.html" title="struct fedimint_client_module::DynGlobalClientContext">DynGlobalClientContext</a>,
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">32</a>]&gt;</h4></section><section id="method.transition_preimage" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/send_sm.rs.html#290-332">Source</a><h4 class="code-header">async fn <a href="#method.transition_preimage" class="fn">transition_preimage</a>(
     context: <a class="struct" href="../struct.LightningClientContext.html" title="struct fedimint_lnv2_client::LightningClientContext">LightningClientContext</a>,
