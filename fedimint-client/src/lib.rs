@@ -78,6 +78,9 @@
 /// Federation Api announcement handling
 mod api_announcements;
 
+/// Guardian metadata handling
+mod guardian_metadata;
+
 /// Core [`Client`]
 mod client;
 

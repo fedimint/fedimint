@@ -29,11 +29,12 @@ use fedimint_core::endpoint_constants::{
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
     CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
+    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -555,6 +556,96 @@ impl ConsensusApi {
             .expect("Will not terminate on error")
     }
 
+    async fn guardian_metadata_list(
+        &self,
+    ) -> BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata> {
+        use crate::net::api::guardian_metadata::{GuardianMetadataKey, GuardianMetadataPrefix};
+
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&GuardianMetadataPrefix)
+            .await
+            .map(|(key, metadata): (GuardianMetadataKey, _)| (key.0, metadata))
+            .collect()
+            .await
+    }
+
+    async fn submit_guardian_metadata(
+        &self,
+        peer_id: PeerId,
+        metadata: fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+    ) -> Result<(), ApiError> {
+        use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+        let Some(peer_key) = self.cfg.consensus.broadcast_public_keys.get(&peer_id) else {
+            return Err(ApiError::bad_request("Peer not in federation".into()));
+        };
+
+        let now = fedimint_core::time::duration_since_epoch();
+        if let Err(e) = metadata.verify(SECP256K1, peer_key, now) {
+            return Err(ApiError::bad_request(format!(
+                "Invalid signature or timestamp: {e}"
+            )));
+        }
+
+        let mut dbtx = self.db.begin_transaction().await;
+
+        if let Some(existing_metadata) = dbtx.get_value(&GuardianMetadataKey(peer_id)).await {
+            // If the current metadata is semantically identical to the new one (except
+            // for potentially having a different, valid signature) we return ok to allow
+            // the caller to stop submitting the value if they are in a retry loop.
+            if existing_metadata.bytes == metadata.bytes {
+                return Ok(());
+            }
+
+            // Only update if the new metadata has a newer timestamp
+            if metadata.guardian_metadata().timestamp_secs
+                <= existing_metadata.guardian_metadata().timestamp_secs
+            {
+                return Err(ApiError::bad_request(
+                    "New metadata timestamp is not newer than existing".into(),
+                ));
+            }
+        }
+
+        dbtx.insert_entry(&GuardianMetadataKey(peer_id), &metadata)
+            .await;
+        dbtx.commit_tx().await;
+
+        Ok(())
+    }
+
+    async fn sign_guardian_metadata(
+        &self,
+        new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+    ) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
+        use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+        let ctx = secp256k1::Secp256k1::new();
+        let signed_metadata =
+            new_metadata.sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+
+        self.db
+            .autocommit(
+                |dbtx, _| {
+                    let signed_metadata_inner = signed_metadata.clone();
+                    Box::pin(async move {
+                        dbtx.insert_entry(
+                            &GuardianMetadataKey(self.cfg.local.identity),
+                            &signed_metadata_inner,
+                        )
+                        .await;
+
+                        Result::<_, ()>::Ok(signed_metadata_inner)
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Will not terminate on error")
+    }
+
     /// Changes the guardian password by re-encrypting the private config and
     /// changing the on-disk password file if present. `fedimintd` is shut down
     /// afterward, the user's service manager (e.g. `systemd` is expected to
@@ -952,6 +1043,28 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, new_url: SafeUrl| -> SignedApiAnnouncement {
                 check_auth(context)?;
                 Ok(fedimint.sign_api_announcement(new_url).await)
+            }
+        },
+        api_endpoint! {
+            GUARDIAN_METADATA_ENDPOINT,
+            ApiVersion::new(0, 9),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata> {
+                Ok(fedimint.guardian_metadata_list().await)
+            }
+        },
+        api_endpoint! {
+            SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+            ApiVersion::new(0, 9),
+            async |fedimint: &ConsensusApi, _context, submission: fedimint_core::net::guardian_metadata::SignedGuardianMetadataSubmission| -> () {
+                fedimint.submit_guardian_metadata(submission.peer_id, submission.signed_guardian_metadata).await
+            }
+        },
+        api_endpoint! {
+            SIGN_GUARDIAN_METADATA_ENDPOINT,
+            ApiVersion::new(0, 9),
+            async |fedimint: &ConsensusApi, context, metadata: fedimint_core::net::guardian_metadata::GuardianMetadata| -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
+                check_auth(context)?;
+                Ok(fedimint.sign_guardian_metadata(metadata).await)
             }
         },
         api_endpoint! {

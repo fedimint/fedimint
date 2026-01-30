@@ -21,6 +21,19 @@ use fedimint_core::endpoint_constants::{
     SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, START_DKG_ENDPOINT,
     STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
 };
+use fedimint_core::endpoint_constants::{
+    ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
+    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, START_DKG_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -528,6 +541,75 @@ where
         self.request_admin(
             SIGN_API_ANNOUNCEMENT_ENDPOINT,
             ApiRequestErased::new(api_url),
+            auth,
+        )
+        .await
+    }
+
+    async fn submit_guardian_metadata(
+        &self,
+        announcement_peer_id: PeerId,
+        metadata: fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+    ) -> FederationResult<()> {
+        use fedimint_core::net::guardian_metadata::SignedGuardianMetadataSubmission;
+        let peer_errors = join_all(self.all_peers().iter().map(|&peer_id| {
+            let metadata_inner = metadata.clone();
+            async move {
+                (
+                    peer_id,
+                    self.request_single_peer::<()>(
+                        SUBMIT_GUARDIAN_METADATA_ENDPOINT.into(),
+                        ApiRequestErased::new(SignedGuardianMetadataSubmission {
+                            signed_guardian_metadata: metadata_inner,
+                            peer_id: announcement_peer_id,
+                        }),
+                        peer_id,
+                    )
+                    .await,
+                )
+            }
+        }))
+        .await
+        .into_iter()
+        .filter_map(|(peer_id, result)| match result {
+            Ok(()) => None,
+            Err(e) => Some((peer_id, e)),
+        })
+        .collect::<BTreeMap<_, _>>();
+
+        if peer_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(FederationError {
+                method: SUBMIT_GUARDIAN_METADATA_ENDPOINT.to_string(),
+                params: serde_json::to_value(&metadata).expect("can be serialized"),
+                general: None,
+                peer_errors,
+            })
+        }
+    }
+
+    async fn guardian_metadata(
+        &self,
+        guardian: PeerId,
+    ) -> ServerResult<BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata>>
+    {
+        self.request_single_peer(
+            GUARDIAN_METADATA_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            guardian,
+        )
+        .await
+    }
+
+    async fn sign_guardian_metadata(
+        &self,
+        metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+        auth: ApiAuth,
+    ) -> FederationResult<fedimint_core::net::guardian_metadata::SignedGuardianMetadata> {
+        self.request_admin(
+            SIGN_GUARDIAN_METADATA_ENDPOINT,
+            ApiRequestErased::new(metadata),
             auth,
         )
         .await

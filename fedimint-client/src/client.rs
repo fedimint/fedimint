@@ -1620,6 +1620,20 @@ impl Client {
             .await
     }
 
+    /// Returns guardian metadata stored in the client database
+    pub async fn get_guardian_metadata(
+        &self,
+    ) -> BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata> {
+        self.db()
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&crate::guardian_metadata::GuardianMetadataPrefix)
+            .await
+            .map(|(key, metadata)| (key.0, metadata))
+            .collect()
+            .await
+    }
+
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
         get_api_urls(&self.db, &self.config().await).await
