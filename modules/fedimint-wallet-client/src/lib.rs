@@ -34,7 +34,7 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -313,9 +313,30 @@ impl ClientModuleInit for WalletClientInit {
 
         let db = args.db().clone();
 
-        let btc_rpc = self.0.clone().unwrap_or(create_esplora_rpc(
-            &WalletClientModule::get_rpc_config(args.cfg()).url,
-        )?);
+        let rpc_config = WalletClientModule::get_rpc_config(args.cfg());
+
+        // Priority:
+        // 1. user-provided bitcoind RPC from ClientBuilder::with_bitcoind_rpc
+        // 2. user-provided no-chain-id factory from
+        //    ClientBuilder::with_bitcoind_rpc_no_chain_id
+        // 3. WalletClientInit constructor
+        // 4. create from config (esplora)
+        let btc_rpc = if let Some(user_rpc) = args.user_bitcoind_rpc() {
+            user_rpc.clone()
+        } else if let Some(factory) = args.user_bitcoind_rpc_no_chain_id() {
+            if let Some(rpc) = factory(rpc_config.url.clone()).await {
+                rpc
+            } else {
+                self.0
+                    .clone()
+                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+            }
+        } else {
+            self.0
+                .clone()
+                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+        };
+        let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-client").into_dyn();
 
         let module_api = args.module_api().clone();
 

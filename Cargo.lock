@@ -2808,6 +2808,7 @@ dependencies = [
  "esplora-client 0.12.0",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-metrics",
  "tracing",
 ]
 
@@ -2869,6 +2870,7 @@ dependencies = [
  "bitcoin",
  "fedimint-aead",
  "fedimint-api-client",
+ "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-client-module",
  "fedimint-connectors",
@@ -2899,6 +2901,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "fedimint-api-client",
+ "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-connectors",
  "fedimint-core",

@@ -12,9 +12,12 @@ use fedimint_api_client::api::global_api::with_request_hook::{
 };
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
 use fedimint_api_client::download_from_invite_code;
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
-use fedimint_client_module::module::init::ClientModuleInit;
+use fedimint_client_module::module::init::{
+    BitcoindRpcFactory, BitcoindRpcNoChainIdFactory, ClientModuleInit,
+};
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientModuleRegistry, FinalClientIface, PrimaryModulePriority, PrimaryModuleSupport,
@@ -37,7 +40,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
@@ -122,6 +125,8 @@ pub struct ClientBuilder {
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
+    bitcoind_rpc_factory: Option<BitcoindRpcFactory>,
+    bitcoind_rpc_no_chain_id_factory: Option<BitcoindRpcNoChainIdFactory>,
 }
 
 impl ClientBuilder {
@@ -144,6 +149,8 @@ impl ClientBuilder {
             request_hook: Arc::new(|api| api),
             iroh_enable_dht: true,
             iroh_enable_next: true,
+            bitcoind_rpc_factory: None,
+            bitcoind_rpc_no_chain_id_factory: None,
         }
     }
 
@@ -158,6 +165,11 @@ impl ClientBuilder {
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
             iroh_enable_next: client.iroh_enable_next,
+            // Note: bitcoind_rpc_factory is not cloned from existing client
+            // since it's a one-time factory that's consumed during build
+            bitcoind_rpc_factory: None,
+            // Clone the no-chain-id factory from the existing client
+            bitcoind_rpc_no_chain_id_factory: client.user_bitcoind_rpc_no_chain_id.clone(),
         }
     }
 
@@ -202,6 +214,67 @@ impl ClientBuilder {
     /// using Iroh to connect to the federation
     pub fn with_iroh_enable_next(mut self, iroh_enable_next: bool) -> Self {
         self.iroh_enable_next = iroh_enable_next;
+        self
+    }
+
+    /// Set a factory function for creating a Bitcoin RPC client
+    ///
+    /// This allows applications to provide their own Bitcoin RPC client
+    /// implementation. The factory is called during client initialization
+    /// if the chain ID is available, and the resulting client is passed to
+    /// modules (particularly the wallet module).
+    ///
+    /// The factory receives the [`ChainId`] (block hash at height 1) so
+    /// applications can configure the Bitcoin RPC client for the correct
+    /// network.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = Client::builder()
+    ///     .with_bitcoind_rpc(|chain_id| async move {
+    ///         Some(my_custom_bitcoind_rpc(chain_id))
+    ///     })
+    ///     .join(db, root_secret)
+    ///     .await?;
+    /// ```
+    pub fn with_bitcoind_rpc<F, Fut>(mut self, factory: F) -> Self
+    where
+        F: FnOnce(ChainId) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<DynBitcoindRpc>> + Send + 'static,
+    {
+        self.bitcoind_rpc_factory = Some(Box::new(move |chain_id| Box::pin(factory(chain_id))));
+        self
+    }
+
+    /// Set a factory function for creating a Bitcoin RPC client from a URL
+    ///
+    /// This is used as a fallback when the federation does not have ChainId
+    /// support yet. Unlike [`Self::with_bitcoind_rpc`], this factory receives
+    /// a [`SafeUrl`] (typically from the module config) and can be called
+    /// multiple times by different modules.
+    ///
+    /// The factory is only used if:
+    /// 1. No RPC was returned by [`Self::with_bitcoind_rpc`] (e.g., ChainId not
+    ///    available)
+    /// 2. The module doesn't have its own RPC configured
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = Client::builder()
+    ///     .with_bitcoind_rpc_no_chain_id(|url| async move {
+    ///         Some(my_custom_bitcoind_rpc_from_url(url))
+    ///     })
+    ///     .join(db, root_secret)
+    ///     .await?;
+    /// ```
+    pub fn with_bitcoind_rpc_no_chain_id<F, Fut>(mut self, factory: F) -> Self
+    where
+        F: Fn(SafeUrl) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Option<DynBitcoindRpc>> + Send + 'static,
+    {
+        self.bitcoind_rpc_no_chain_id_factory = Some(Arc::new(move |url| Box::pin(factory(url))));
         self
     }
 
@@ -524,7 +597,7 @@ impl ClientBuilder {
     /// Build a [`Client`] but do not start the executor
     #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
-        self,
+        mut self,
         connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
@@ -645,6 +718,22 @@ impl ClientBuilder {
             }
         }
 
+        // Create user-provided bitcoin RPC client if factory was provided
+        let user_bitcoind_rpc = if let Some(factory) = self.bitcoind_rpc_factory.take() {
+            // Try to get the chain_id from the database
+            let chain_id = db.begin_transaction_nc().await.get_value(&ChainIdKey).await;
+
+            if let Some(chain_id) = chain_id {
+                debug!(target: LOG_CLIENT, %chain_id, "Creating user-provided bitcoind RPC client");
+                factory(chain_id).await
+            } else {
+                debug!(target: LOG_CLIENT, "Chain ID not available, skipping user-provided bitcoind RPC creation");
+                None
+            }
+        } else {
+            None
+        };
+
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
@@ -698,6 +787,9 @@ impl ClientBuilder {
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
                         let task_group = task_group.clone();
                         let module_init = module_init.clone();
+                        let user_bitcoind_rpc = user_bitcoind_rpc.clone();
+                        let user_bitcoind_rpc_no_chain_id =
+                            self.bitcoind_rpc_no_chain_id_factory.clone();
                         (
                             Box::pin(async move {
                                 module_init
@@ -717,6 +809,8 @@ impl ClientBuilder {
                                         snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
+                                        user_bitcoind_rpc,
+                                        user_bitcoind_rpc_no_chain_id,
                                     )
                                     .await
                                     .inspect_err(|err| {
@@ -815,6 +909,8 @@ impl ClientBuilder {
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
                                 connectors.clone(),
+                                user_bitcoind_rpc.clone(),
+                                self.bitcoind_rpc_no_chain_id_factory.clone(),
                             )
                             .await?;
 
@@ -913,6 +1009,8 @@ impl ClientBuilder {
             meta_service: self.meta_service,
             iroh_enable_dht: self.iroh_enable_dht,
             iroh_enable_next: self.iroh_enable_next,
+            user_bitcoind_rpc,
+            user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
         client_inner
             .task_group
