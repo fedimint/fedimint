@@ -26,6 +26,7 @@ bitcoin = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-metrics = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = { workspace = true }

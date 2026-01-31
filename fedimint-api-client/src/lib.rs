@@ -19,6 +19,7 @@ use query::FilterMap;
 use tracing::debug;
 
 pub mod api;
+pub mod metrics;
 /// Client query system
 pub mod query;
 

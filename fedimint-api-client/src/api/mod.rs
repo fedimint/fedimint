@@ -37,6 +37,7 @@ use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
+use fedimint_metrics::HistogramExt as _;
 use futures::stream::{BoxStream, FuturesUnordered};
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
@@ -47,6 +48,7 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, instrument, trace, warn};
 
+use crate::metrics::{CLIENT_API_REQUEST_DURATION_SECONDS, CLIENT_API_REQUESTS_TOTAL};
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
@@ -660,7 +662,21 @@ impl FederationApi {
             .await
             .context("Failed to connect to peer")
             .map_err(ServerError::Connection)?;
+
+        let method_str = method.to_string();
+        let peer_str = peer.to_string();
+        let timer = CLIENT_API_REQUEST_DURATION_SECONDS
+            .with_label_values(&[&method_str, &peer_str])
+            .start_timer_ext();
+
         let res = conn.request(method.clone(), request).await;
+
+        timer.observe_duration();
+
+        let result_label = if res.is_ok() { "success" } else { "error" }.to_string();
+        CLIENT_API_REQUESTS_TOTAL
+            .with_label_values(&[&method_str, &peer_str, &result_label])
+            .inc();
 
         trace!(target: LOG_CLIENT_NET_API, ?method, res_ok = res.is_ok(), "Api response");
 
