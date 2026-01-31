@@ -18,7 +18,6 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 axum-auth = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
-chacha20poly1305 = { workspace = true }
 clap = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
@@ -26,7 +25,6 @@ fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-rocksdb = { workspace = true }
@@ -34,12 +32,10 @@ futures = { workspace = true }
 lightning-invoice = { workspace = true }
 lnurl-rs = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }
-tpe = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

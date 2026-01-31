@@ -1442,19 +1442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chacha20poly1305"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
-dependencies = [
- "aead",
- "chacha20",
- "cipher",
- "poly1305",
- "zeroize",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4139,7 +4126,6 @@ dependencies = [
  "axum 0.8.7",
  "axum-auth",
  "bitcoin",
- "chacha20poly1305",
  "clap",
  "fedimint-api-client",
  "fedimint-client",
@@ -4147,16 +4133,13 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln-client",
- "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",
- "fedimint-tpe",
  "futures",
  "lightning-invoice",
  "lnurl-rs",
  "rand 0.8.5",
- "reqwest 0.12.22",
  "serde",
  "serde_json",
  "tokio",

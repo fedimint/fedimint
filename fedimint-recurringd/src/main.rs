@@ -29,8 +29,6 @@ use tokio::net::TcpListener;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
-mod encrypt;
-mod v2;
 
 #[derive(Debug, Parser)]
 struct CliOpts {
@@ -46,9 +44,6 @@ struct CliOpts {
     bearer_token: String,
     #[clap(long, env = "FM_RECURRING_DATA_DIR")]
     data_dir: PathBuf,
-    /// Legacy encryption key for backwards compatibility with old LNURLs.
-    #[clap(long, env = "FM_RECURRING_ENCRYPTION_KEY")]
-    encryption_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -95,14 +90,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .layer(cors);
 
-    let mut app = axum::Router::new()
+    let app = axum::Router::new()
         .nest("/lnv1", api_v1)
         .with_state(AppState {
             auth_token: cli_opts.bearer_token,
             recurring_invoice_server,
         });
-
-    app = app.merge(v2::router(cli_opts.api_address, cli_opts.encryption_key).await?);
 
     info!(api_address = %cli_opts.bind_address, "recurringd started");
     let listener = TcpListener::bind(&cli_opts.bind_address).await?;
