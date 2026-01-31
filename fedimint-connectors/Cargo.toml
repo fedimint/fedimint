@@ -61,7 +61,7 @@ iroh-next = { workspace = true, default-features = false, features = [
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
 rustls-pki-types = { workspace = true }
 strum = { workspace = true, optional = true }
-tokio-rustls = { version = "0.26.0", default-features = false, features = [
+tokio-rustls = { version = "0.26.4", default-features = false, features = [
     "logging",
     "tls12",
     "ring",
