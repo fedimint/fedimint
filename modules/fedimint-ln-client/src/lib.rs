@@ -1923,11 +1923,6 @@ impl LightningClientModule {
                 yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
                 match self_ref.await_receive_success(operation_id).await {
-                    Ok(is_external) if is_external => {
-                        // If the payment was external, we can consider it claimed
-                        yield LnReceiveState::Claimed;
-                        return;
-                    }
                     Ok(_) => {
 
                         yield LnReceiveState::Funded;
