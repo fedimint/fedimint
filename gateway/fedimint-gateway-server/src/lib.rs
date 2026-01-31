@@ -49,7 +49,7 @@ use fedimint_bitcoind::bitcoincore::BitcoindClient;
 use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandleArc, ClientModuleInstance};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Committable, Database, DatabaseTransaction, apply_migrations};
@@ -113,7 +113,7 @@ use fedimint_lnv2_common::gateway_api::{
 use fedimint_lnv2_common::lnurl::VerifyResponse;
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+    MintClientInit, MintClientModule, OOBNotes, SelectNotesWithAtleastAmount,
 };
 use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, WithdrawState};
 use futures::stream::StreamExt;
@@ -1230,19 +1230,7 @@ impl Gateway {
                 failure_reason: e.to_string(),
             })?;
         if payload.wait {
-            let mut updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .await
-                .unwrap()
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    return Err(PublicGatewayError::ReceiveEcashError {
-                        failure_reason: e.to_string(),
-                    });
-                }
-            }
+            Self::await_ecash_reissue(&mint, operation_id).await?;
         }
 
         Ok(ReceiveEcashResponse { amount })
@@ -1582,6 +1570,58 @@ impl Gateway {
                 .expect("Could not create LDK Node")
             }
         }
+    }
+
+    /// Tries to spend the exact amount of ecash specified in
+    /// `SpendEcashPayload` If the exact amount of ecash is not available,
+    /// this will reissue the notes to ourself and mint notes that can match
+    /// the requested amount exactly.
+    async fn spend_until_exact_amount(
+        mint_module: &ClientModuleInstance<'_, MintClientModule>,
+        payload: SpendEcashPayload,
+    ) -> Result<(OperationId, OOBNotes)> {
+        let timeout = Duration::from_secs(payload.timeout);
+        loop {
+            let (operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?;
+
+            if notes.total_amount() == payload.amount {
+                return Ok((operation_id, notes));
+            }
+
+            info!(target: LOG_GATEWAY, "Reissuing notes to ourself to get exact change...");
+            let reissue_op_id = mint_module.reissue_external_notes(notes, ()).await?;
+            Self::await_ecash_reissue(mint_module, reissue_op_id).await?;
+        }
+    }
+
+    /// Waits until the ecash reissue operation succeeds or fails
+    async fn await_ecash_reissue(
+        mint_module: &ClientModuleInstance<'_, MintClientModule>,
+        operation_id: OperationId,
+    ) -> Result<()> {
+        let mut updates = mint_module
+            .subscribe_reissue_external_notes(operation_id)
+            .await
+            .unwrap()
+            .into_stream();
+
+        while let Some(update) = updates.next().await {
+            if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                return Err(PublicGatewayError::ReceiveEcashError {
+                    failure_reason: e.to_string(),
+                });
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -2181,15 +2221,9 @@ impl IAdminGateway for Gateway {
 
             (operation_id, notes)
         } else {
-            mint_module
-                .spend_notes_with_selector(
-                    &SelectNotesWithExactAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .await?
+            Self::spend_until_exact_amount(&mint_module, payload)
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(anyhow!(e.to_string())))?
         };
 
         debug!(target: LOG_GATEWAY, ?operation_id, ?notes, "Spend ecash notes");

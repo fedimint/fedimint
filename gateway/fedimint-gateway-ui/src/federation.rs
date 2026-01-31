@@ -383,7 +383,7 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                             name="allow_overpay"
                                             value="true";
                                         label class="form-check-label" for={(format!("spend-overpay-{}", fed.federation_id))} {
-                                            "Allow overpay (if exact amount unavailable)"
+                                            "Allow overpay (don't get change from mint)"
                                         }
                                     }
 
