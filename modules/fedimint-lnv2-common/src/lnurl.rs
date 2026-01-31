@@ -40,9 +40,9 @@ pub fn generate_lnurl(
     LnUrl::from_url(format!("{recurringd}pay/{payload}")).encode()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerifyResponse {
     pub status: String,
     pub settled: bool,
-    pub preimage: Option<[u8; 32]>,
+    pub preimage: Option<String>,
 }

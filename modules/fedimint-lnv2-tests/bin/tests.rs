@@ -6,7 +6,9 @@ use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::util::almost_equal;
-use devimint::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use devimint::version_constants::{
+    VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA,
+};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
@@ -71,15 +73,13 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Some(Commands::LnurlPay) => {
                     pegin_gateways(&dev_fed).await?;
-                    test_lnurl_pay(&dev_fed, false).await?;
-                    test_lnurl_pay(&dev_fed, true).await?;
+                    test_lnurl_pay(&dev_fed).await?;
                 }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
                     test_payments(&dev_fed).await?;
-                    test_lnurl_pay(&dev_fed, false).await?;
-                    test_lnurl_pay(&dev_fed, true).await?;
+                    test_lnurl_pay(&dev_fed).await?;
                 }
             }
 
@@ -469,22 +469,16 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyho
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
-async fn test_lnurl_pay(dev_fed: &DevJitFed, use_v2: bool) -> anyhow::Result<()> {
-    let min_version = if use_v2 {
-        &*VERSION_0_10_0_ALPHA
-    } else {
-        &*VERSION_0_9_0_ALPHA
-    };
-
-    if util::FedimintCli::version_or_default().await < *min_version {
+async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_11_0_ALPHA {
         return Ok(());
     }
 
-    if util::FedimintdCmd::version_or_default().await < *min_version {
+    if util::FedimintdCmd::version_or_default().await < *VERSION_0_11_0_ALPHA {
         return Ok(());
     }
 
-    if util::Gatewayd::version_or_default().await < *min_version {
+    if util::Gatewayd::version_or_default().await < *VERSION_0_11_0_ALPHA {
         return Ok(());
     }
 
@@ -495,11 +489,7 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed, use_v2: bool) -> anyhow::Result<()>
 
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
-    let recurringd = if use_v2 {
-        dev_fed.recurringdv2().await?.api_url().to_string()
-    } else {
-        dev_fed.recurringd().await?.api_url().to_string()
-    };
+    let recurringd = dev_fed.recurringdv2().await?.api_url().to_string();
 
     let client_a = federation
         .new_joined_client("lnv2-lnurl-test-client-a")
@@ -543,22 +533,11 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed, use_v2: bool) -> anyhow::Result<()>
         assert!(response_a.settled);
         assert!(response_b.settled);
 
-        let payment_hash = response_a
-            .preimage
-            .expect("Payment A should be settled")
-            .consensus_hash::<sha256::Hash>();
+        verify_preimage(&response_a, &invoice_a);
+        verify_preimage(&response_b, &invoice_b);
 
-        assert_eq!(payment_hash, *invoice_a.payment_hash());
-
-        let payment_hash = response_b
-            .preimage
-            .expect("Payment B should be settled")
-            .consensus_hash::<sha256::Hash>();
-
-        assert_eq!(payment_hash, *invoice_b.payment_hash());
-
-        assert_eq!(verify_task_a.await??.preimage, response_a.preimage);
-        assert_eq!(verify_task_b.await??.preimage, response_b.preimage);
+        assert_eq!(verify_task_a.await??, response_a);
+        assert_eq!(verify_task_b.await??, response_b);
     }
 
     while client_a.balance().await? < 950 * 1000 {
@@ -598,6 +577,19 @@ async fn generate_lnurl(
     .out_json()
     .await
     .map(|s| s.as_str().unwrap().to_owned())
+}
+
+fn verify_preimage(response: &VerifyResponse, invoice: &Bolt11Invoice) {
+    let preimage = response
+        .preimage
+        .as_ref()
+        .expect("Payment should be settled");
+
+    let payment_hash = hex_conservative::decode_to_array::<32>(preimage)
+        .expect("Valid hex")
+        .consensus_hash::<sha256::Hash>();
+
+    assert_eq!(payment_hash, *invoice.payment_hash());
 }
 
 async fn verify_payment(verify_url: &str) -> anyhow::Result<VerifyResponse> {

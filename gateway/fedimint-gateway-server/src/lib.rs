@@ -2746,7 +2746,7 @@ impl Gateway {
         Ok(VerifyResponse {
             status: "OK".to_string(),
             settled: true,
-            preimage: Some(preimage),
+            preimage: Some(hex::encode(preimage)),
         })
     }
 

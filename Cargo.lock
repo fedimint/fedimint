@@ -3048,7 +3048,7 @@ dependencies = [
  "gloo-timers 0.3.0",
  "group",
  "hex",
- "hex-conservative 0.3.0",
+ "hex-conservative 1.0.1",
  "imbl",
  "iroh 0.35.0",
  "iroh-base 0.35.0",
@@ -3846,6 +3846,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-logging",
  "fedimint-testing",
+ "hex-conservative 1.0.1",
  "itertools 0.14.0",
  "lightning-invoice",
  "lnurl-rs",
@@ -5345,12 +5346,9 @@ dependencies = [
 
 [[package]]
 name = "hex-conservative"
-version = "0.3.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4afe881d0527571892c4034822e59bb10c6c991cce6abe8199b6f5cf10766f55"
-dependencies = [
- "arrayvec",
-]
+checksum = "366fa3443ac84474447710ec17bb00b05dfbd096137817981e86f992f21a2793"
 
 [[package]]
 name = "hex_fmt"
