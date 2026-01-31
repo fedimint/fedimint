@@ -138,6 +138,13 @@ pub enum WithdrawState {
     // RefundFailed(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub enum ReceiveDepositState {
+    Claiming,
+    Claimed,
+    Failed(String),
+}
+
 async fn next_withdraw_state<S>(stream: &mut S) -> Option<WithdrawStates>
 where
     S: Stream<Item = WalletClientStates> + Unpin,
@@ -404,6 +411,16 @@ pub enum WalletOperationMetaVariant {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         expires_at: Option<SystemTime>,
     },
+    ReceiveDeposit {
+        /// The operation ID that created the address (parent operation)
+        address_operation_id: OperationId,
+        tweak_idx: TweakIdx,
+        btc_out_point: bitcoin::OutPoint,
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        amount: bitcoin::Amount,
+        claim_txid: TransactionId,
+        change: Vec<OutPoint>,
+    },
     Withdraw {
         address: Address<NetworkUnchecked>,
         #[serde(with = "bitcoin::amount::serde::as_sat")]
@@ -627,6 +644,12 @@ impl ClientModule for WalletClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 },
+                "subscribe_receive_deposit" => {
+                    let req: SubscribeReceiveDepositRequest = serde_json::from_value(request)?;
+                    for await state in self.subscribe_receive_deposit(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                },
                 "subscribe_withdraw" => {
                     let req: SubscribeWithdrawRequest = serde_json::from_value(request)?;
                     for await state in self.subscribe_withdraw_updates(req.operation_id).await?.into_stream(){
@@ -668,6 +691,11 @@ pub struct PegInRequest {
 
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeReceiveDepositRequest {
     operation_id: OperationId,
 }
 
@@ -1130,6 +1158,47 @@ impl WalletClientModule {
                 }
             }
         }}))
+    }
+
+    pub async fn subscribe_receive_deposit(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveDepositState>> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
+
+        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            bail!("Operation is not a wallet operation");
+        }
+
+        let operation_meta = operation.meta::<WalletOperationMeta>();
+
+        let WalletOperationMetaVariant::ReceiveDeposit {
+            change,
+            address_operation_id: _,
+            ..
+        } = operation_meta.variant
+        else {
+            bail!("Operation is not a receive deposit operation");
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                stream! {
+                    yield ReceiveDepositState::Claiming;
+
+                    match client_ctx.await_primary_module_outputs(operation_id, change.clone()).await {
+                        Ok(()) => yield ReceiveDepositState::Claimed,
+                        Err(e) => yield ReceiveDepositState::Failed(e.to_string())
+                    }
+                }
+            }))
     }
 
     pub async fn list_peg_in_tweak_idxes(&self) -> BTreeMap<TweakIdx, PegInTweakIndexData> {

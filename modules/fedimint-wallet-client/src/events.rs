@@ -76,7 +76,10 @@ impl Event for SendPaymentStatusEvent {
 // Emitted when a deposit is confirmed
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ReceivePaymentEvent {
+    /// The operation ID that created the address (for reconciliation with old system)
     pub operation_id: OperationId,
+    /// The operation ID for this specific receive/claim operation
+    pub receive_operation_id: OperationId,
     pub amount: Amount,
     pub txid: Txid,
 }

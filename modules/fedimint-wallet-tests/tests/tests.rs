@@ -1664,6 +1664,184 @@ mod fedimint_migration_tests {
     }
 }
 
+/// Tests that multiple deposits to the same address create separate operation log entries
+#[tokio::test(flavor = "multi_thread")]
+async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    info!("Starting test multiple_deposits_create_separate_operations");
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    
+    // Allocate a single deposit address
+    let (address_op_id, address, _) = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
+    info!(?address, "Deposit address allocated");
+
+    // Verify the initial address allocation operation exists
+    let initial_ops = client.operation_log().paginate_operations_rev(100, None).await;
+    let address_creation_op = initial_ops
+        .iter()
+        .find(|(_, entry)| entry.operation_id() == address_op_id);
+    assert!(address_creation_op.is_some(), "Address creation operation should exist");
+
+    // Send first deposit to the address
+    let first_deposit_amount = bsats(PEG_IN_AMOUNT_SATS)
+        + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000);
+    let (_proof, tx1) = bitcoin
+        .send_and_mine_block(&address, first_deposit_amount)
+        .await;
+    info!(?tx1, "First deposit transaction mined");
+
+    // Wait for finality and claim
+    bitcoin.mine_blocks(finality_delay).await;
+    wallet_module.await_num_deposits_by_operation_id(address_op_id, 1).await?;
+    info!("First deposit claimed");
+
+    // Send second deposit to the same address
+    let second_deposit_amount = bsats(PEG_IN_AMOUNT_SATS + 5000)
+        + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000);
+    let (_proof, tx2) = bitcoin
+        .send_and_mine_block(&address, second_deposit_amount)
+        .await;
+    info!(?tx2, "Second deposit transaction mined");
+
+    // Wait for finality and claim
+    bitcoin.mine_blocks(finality_delay).await;
+    wallet_module.await_num_deposits_by_operation_id(address_op_id, 2).await?;
+    info!("Second deposit claimed");
+
+    // Verify the operation log structure
+    let all_ops = client.operation_log().paginate_operations_rev(100, None).await;
+    info!("Total operations in log: {}", all_ops.len());
+
+    // Find all wallet operations
+    let wallet_ops: Vec<_> = all_ops
+        .iter()
+        .filter(|(_, entry)| entry.operation_module_kind() == WalletCommonInit::KIND.as_str())
+        .collect();
+
+    // Should have: 1 address allocation + 2 deposit claims = 3 operations
+    assert!(
+        wallet_ops.len() >= 3,
+        "Expected at least 3 wallet operations (1 address + 2 deposits), found {}",
+        wallet_ops.len()
+    );
+
+    // Verify address allocation operation
+    let address_ops: Vec<_> = wallet_ops
+        .iter()
+        .filter(|(_, entry)| {
+            let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
+                .expect("Failed to parse wallet operation meta");
+            matches!(meta.variant, WalletOperationMetaVariant::Deposit { .. })
+        })
+        .collect();
+    assert_eq!(
+        address_ops.len(),
+        1,
+        "Expected exactly 1 address allocation operation, found {}",
+        address_ops.len()
+    );
+
+    // Verify deposit claim operations
+    let deposit_claim_ops: Vec<_> = wallet_ops
+        .iter()
+        .filter(|(_, entry)| {
+            let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
+                .expect("Failed to parse wallet operation meta");
+            matches!(meta.variant, WalletOperationMetaVariant::ReceiveDeposit { .. })
+        })
+        .collect();
+
+    assert_eq!(
+        deposit_claim_ops.len(),
+        2,
+        "Expected exactly 2 ReceiveDeposit operations for the two deposits, found {}",
+        deposit_claim_ops.len()
+    );
+
+    // Validate each deposit operation contains correct data
+    let mut found_tx1 = false;
+    let mut found_tx2 = false;
+
+    for (_, entry) in deposit_claim_ops {
+        let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
+            .expect("Failed to parse wallet operation meta");
+        
+        if let WalletOperationMetaVariant::ReceiveDeposit {
+            address_operation_id,
+            btc_out_point,
+            amount,
+            claim_txid,
+            tweak_idx,
+            change,
+        } = meta.variant
+        {
+            // Verify address_operation_id matches the parent address allocation operation
+            assert_eq!(
+                address_operation_id, address_op_id,
+                "Deposit operation should reference the address allocation operation as parent"
+            );
+
+            // Verify each deposit has a unique outpoint
+            if btc_out_point.txid == tx1.compute_txid() {
+                found_tx1 = true;
+                info!(
+                    ?btc_out_point,
+                    ?amount,
+                    ?claim_txid,
+                    ?tweak_idx,
+                    change_len = change.len(),
+                    ?address_operation_id,
+                    "First deposit operation validated"
+                );
+            } else if btc_out_point.txid == tx2.compute_txid() {
+                found_tx2 = true;
+                info!(
+                    ?btc_out_point,
+                    ?amount,
+                    ?claim_txid,
+                    ?tweak_idx,
+                    change_len = change.len(),
+                    ?address_operation_id,
+                    "Second deposit operation validated"
+                );
+            }
+
+            // Verify operation has valid claim transaction ID
+            assert_ne!(
+                claim_txid,
+                TransactionId::from_byte_array([0; 32]),
+                "Claim transaction ID should be valid"
+            );
+        }
+    }
+
+    assert!(found_tx1, "Should find operation for first deposit transaction");
+    assert!(found_tx2, "Should find operation for second deposit transaction");
+
+    // Verify final balance reflects both deposits
+    let expected_balance = sats(PEG_IN_AMOUNT_SATS + PEG_IN_AMOUNT_SATS + 5000);
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        expected_balance,
+        "Final balance should reflect both deposits"
+    );
+
+    info!("Operation log validation complete - all checks passed");
+    Ok(())
+}
+
 // Verify the correct Bitcoin RPC is used
 
 #[test]
