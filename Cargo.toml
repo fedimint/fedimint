@@ -118,7 +118,7 @@ name = "fedimint"
 
 [workspace.dependencies]
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
-anyhow = "1.0.98"
+anyhow = "1.0.100"
 aquamarine = "0.5.0"
 argon2 = "0.5.3"
 arti-client = { version = "0.33.0", default-features = false }
@@ -127,18 +127,18 @@ async-channel = "2.5.0"
 async-lock = "3.4"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
-async-trait = "0.1.88"
-axum = "0.8.4"
+async-trait = "0.1.89"
+axum = "0.8.8"
 axum-auth = "0.8.1"
-axum-extra = "0.12.0"
+axum-extra = "0.12.5"
 backon = { version = "1.5.1", default-features = false }
-backtrace = "0.3.75"
+backtrace = "0.3.76"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bcrypt = "0.16.0"
-bech32 = "0.11.0"
+bech32 = "0.11.1"
 bincode = "1.3.3"
-bip39 = "2.2.0"
+bip39 = "2.2.2"
 bitcoin = { version = "0.32.6", features = ["serde"] }
 bitcoin-io = "0.1.2"
 bitcoin-units = "0.1.2"
@@ -149,9 +149,9 @@ bls12_381 = "0.8.0"
 bon = "3.6.5"
 bytes = "1.10.1"
 chacha20poly1305 = "0.10.1"
-chrono = "0.4.41"
-clap = { version = "4.5.41", features = ["derive", "env"] }
-clap_complete = "4.5.55"
+chrono = "0.4.43"
+clap = { version = "4.5.56", features = ["derive", "env"] }
+clap_complete = "4.5.65"
 console-subscriber = "0.4.1"
 criterion = "0.5.1"
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
@@ -160,7 +160,7 @@ curve25519-dalek = ">=4.1.3"
 devimint = { path = "./devimint", version = "=0.11.0-alpha" }
 dirs = "6.0.0"
 erased-serde = "0.4"
-esplora-client = { version = "0.12.0", default-features = false, features = [
+esplora-client = { version = "0.12.2", default-features = false, features = [
     "async-https-rustls",
     "async",
     "tokio",
@@ -229,7 +229,7 @@ fs-lock = "=0.1.10"
 fs2 = "0.4.3"
 futures = "0.3.31"
 futures-util = "0.3.30"
-getrandom = "0.3.3"
+getrandom = "0.3.4"
 gloo-net = "0.6.0"
 gloo-timers = "0.3.0"
 group = "0.13.0"
@@ -294,10 +294,10 @@ rocksdb = { version = "0.22.0" }
 rustls-pki-types = { version = "1.12.0" }
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
-semver = "1.0.26"
+semver = "1.0.27"
 serde = { version = "1.0.219", features = ["derive"] }
 serde-big-array = "0.5.1"
-serde_json = "1.0.141"
+serde_json = "1.0.149"
 serde_millis = "0.1.1"
 serdect = "0.2.0"
 sha3 = "0.10.8"
@@ -311,33 +311,33 @@ tar = "0.4.44"
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.11.0-alpha" }
 tempfile = "3.20.0"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
-thiserror = "2.0.12"
+thiserror = "2.0.18"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tikv-jemallocator = "0.5"
-time = "0.3.41"
+time = "0.3.46"
 tokio = "1.48.0"
-tokio-rustls = { version = "0.26.0", features = ["aws_lc_rs"] }
-tokio-stream = "0.1.17"
-tokio-test = "0.4.4"
-tokio-util = "0.7.15"
-tonic = "0.14.2"
+tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
+tokio-stream = "0.1.18"
+tokio-test = "0.4.5"
+tokio-util = "0.7.18"
+tonic = "0.14.3"
 tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }
 tower = { version = "0.4.13", default-features = false }
-tower-http = { version = "0.6.6", features = ["cors"] }
+tower-http = { version = "0.6.8", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.11.0-alpha" }
-tracing = "0.1.41"
+tracing = "0.1.44"
 tracing-opentelemetry = "0.29.0"
-tracing-subscriber = "0.3.20"
+tracing-subscriber = "0.3.22"
 tracing-test = "0.2.5"
 url = "2.5.4"
 wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.43"
 web-sys = "0.3.77"
-webpki-roots = "1.0.2"
+webpki-roots = "1.0.5"
 z32 = "1"
 
 [workspace.lints.clippy]
