@@ -102,7 +102,7 @@ impl ServerConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
     /// Secret API auth string
     pub api_auth: ApiAuth,
@@ -118,6 +118,36 @@ pub struct ServerConfigPrivate {
     pub broadcast_secret_key: SecretKey,
     /// Secret material from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+}
+
+impl std::fmt::Debug for ServerConfigPrivate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
+            f.debug_struct("ServerConfigPrivate")
+                .field("api_auth", &self.api_auth)
+                .field("tls_key", &self.tls_key)
+                .field("iroh_api_sk", &self.iroh_api_sk)
+                .field("iroh_p2p_sk", &self.iroh_p2p_sk)
+                .field("broadcast_secret_key", &self.broadcast_secret_key)
+                .field("modules", &self.modules)
+                .finish()
+        } else {
+            f.debug_struct("ServerConfigPrivate")
+                .field("api_auth", &self.api_auth) // ApiAuth already redacts itself
+                .field("tls_key", &self.tls_key.as_ref().map(|_| "<redacted>"))
+                .field(
+                    "iroh_api_sk",
+                    &self.iroh_api_sk.as_ref().map(|_| "<redacted>"),
+                )
+                .field(
+                    "iroh_p2p_sk",
+                    &self.iroh_p2p_sk.as_ref().map(|_| "<redacted>"),
+                )
+                .field("broadcast_secret_key", &"<redacted>")
+                .field("modules", &"<redacted>")
+                .finish()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]

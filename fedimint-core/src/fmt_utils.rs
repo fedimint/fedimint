@@ -1,6 +1,26 @@
+use std::sync::LazyLock;
 use std::{cmp, fmt, ops, thread_local};
 
 use serde_json::Value;
+
+use crate::envs::{FM_DEBUG_SHOW_SECRETS_ENV, is_env_var_set};
+
+/// Global flag defining if secrets should be shown in debug output or not,
+/// controlled by `FM_DEBUG_SHOW_SECRETS` environment variable.
+///
+/// Since logging may happen frequently the value is cached here instead of
+/// being evaluated every time.
+static SHOW_SECRETS: LazyLock<bool> = LazyLock::new(|| is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV));
+
+/// Checks if secrets should be shown in debug/display output.
+///
+/// Returns `true` if:
+/// - `FM_DEBUG_SHOW_SECRETS` environment variable is set to a truthy value
+///
+/// This is useful for debugging but should NEVER be enabled in production.
+pub fn show_secrets() -> bool {
+    *SHOW_SECRETS
+}
 
 pub fn rust_log_full_enabled() -> bool {
     // this will be called only once per-thread for best performance
