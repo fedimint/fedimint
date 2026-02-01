@@ -472,6 +472,14 @@ in
       buildPhaseCargoCommand = "runLowPrio cargo doc --profile $CARGO_PROFILE --locked ; runLowPrio cargo check --profile $CARGO_PROFILE --all-targets --locked ; runLowPrio cargo build --profile $CARGO_PROFILE --locked --all-targets";
     };
 
+    workspaceAllBins = craneLib.buildPackage {
+      cargoArtifacts = workspaceBuild;
+      buildPhaseCargoCommand = ''
+        cargoBuildLog=$(mktemp cargoBuildLogXXXX.json)
+        runLowPrio cargo build --profile $CARGO_PROFILE --locked --all-targets --message-format json-render-diagnostics >"$cargoBuildLog"
+      '';
+    };
+
     workspaceDepsWasmTest = craneLib.buildWorkspaceDepsOnly {
       pname = "${commonArgs.pname}-wasm-test";
       buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked --tests -p fedimint-wasm-tests";
@@ -1015,5 +1023,14 @@ in
       cmd = "cargo check --all-features";
       pnameSuffix = "all-feats";
     };
+
+    vmTestFedimintd = lib.optionalAttrs pkgs.stdenv.isLinux (
+      import ./tests/fedimintd.nix {
+        inherit pkgs;
+        fedimintdModule = import ./modules/fedimintd.nix;
+        # this is so that we can reuse binaries from buildWorkspace step, which we typically do in the CI
+        fedimintdPackage = workspaceAllBins;
+      }
+    );
   }
 )
