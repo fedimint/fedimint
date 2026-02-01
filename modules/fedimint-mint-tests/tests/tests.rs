@@ -287,6 +287,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(deprecated)]
 #[tokio::test(flavor = "multi_thread")]
 async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     // Print notes for client
@@ -315,6 +316,7 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(deprecated)]
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
     // Print notes for client

@@ -315,6 +315,7 @@ impl FederationManager {
     ) {
         if let Some(client) = self.client(federation_id) {
             let metadata: BTreeMap<String, String> = BTreeMap::new();
+            #[allow(deprecated)]
             if client
                 .value()
                 .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(

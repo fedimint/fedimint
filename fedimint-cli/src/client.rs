@@ -474,6 +474,7 @@ pub async fn handle_command(
         ClientCmd::Backup { metadata } => {
             let metadata = metadata_from_clap_cli(metadata)?;
 
+            #[allow(deprecated)]
             client
                 .backup_to_federation(Metadata::from_json_serialized(metadata))
                 .await?;

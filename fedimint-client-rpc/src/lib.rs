@@ -235,6 +235,7 @@ impl RpcGlobalState {
         };
 
         // Check if backup exists
+        #[allow(deprecated)]
         let backup = preview
             .download_backup_from_federation(RootSecret::StandardDoubleDerive(
                 federation_secret.clone(),
