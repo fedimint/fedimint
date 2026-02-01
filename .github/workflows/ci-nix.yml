@@ -214,6 +214,10 @@ jobs:
                 -- \
           nix build -L .#wasm32-unknown.ci.wasmTest
 
+      - name: NixOS VM Tests
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
+        run: nix build -L .#ci.vmTestFedimintd
+
   check-packages-features:
     name: "Check package features"
     runs-on: [self-hosted, linux, x64]

@@ -1015,5 +1015,13 @@ in
       cmd = "cargo check --all-features";
       pnameSuffix = "all-feats";
     };
+
+    vmTestFedimintd = lib.optionalAttrs pkgs.stdenv.isLinux (
+      import ./tests/fedimintd.nix {
+        inherit pkgs;
+        fedimintdModule = import ./modules/fedimintd.nix;
+        fedimintdPackage = fedimintd;
+      }
+    );
   }
 )
