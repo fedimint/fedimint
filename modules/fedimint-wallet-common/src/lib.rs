@@ -220,6 +220,18 @@ impl WalletSummary {
     }
 }
 
+/// Recovery data for slice-based client recovery
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum RecoveryItem {
+    /// A peg-in input was claimed
+    Input {
+        /// The Bitcoin outpoint that was claimed
+        outpoint: bitcoin::OutPoint,
+        /// The `script_pubkey` of the peg-in address (tweaked descriptor)
+        script: bitcoin::ScriptBuf,
+    },
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOutFees {
     pub fee_rate: Feerate,
@@ -341,7 +353,7 @@ impl WalletInput {
     pub fn new_v1(peg_in_proof: &PegInProof) -> WalletInput {
         WalletInput::V1(WalletInputV1 {
             outpoint: peg_in_proof.outpoint(),
-            tweak_contract_key: *peg_in_proof.tweak_contract_key(),
+            tweak_key: peg_in_proof.tweak_key(),
             tx_out: peg_in_proof.tx_output(),
         })
     }
@@ -354,7 +366,7 @@ pub struct WalletInputV0(pub Box<PegInProof>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletInputV1 {
     pub outpoint: bitcoin::OutPoint,
-    pub tweak_contract_key: secp256k1::PublicKey,
+    pub tweak_key: secp256k1::PublicKey,
     pub tx_out: TxOut,
 }
 

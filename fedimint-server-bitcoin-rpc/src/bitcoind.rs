@@ -1,16 +1,16 @@
 use anyhow::anyhow;
-use bitcoin::{BlockHash, Network, Transaction};
+use bitcoin::{BlockHash, Transaction};
 use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::jsonrpc::Error::Rpc;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
-use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
-use tracing::{debug, info};
+use tracing::info;
 
 #[derive(Debug)]
 pub struct BitcoindClient {
@@ -49,18 +49,6 @@ impl IServerBitcoinRpc for BitcoindClient {
 
     fn get_url(&self) -> SafeUrl {
         self.url.clone()
-    }
-
-    async fn get_network(&self) -> anyhow::Result<Network> {
-        block_in_place(|| self.client.get_blockchain_info())
-            .map(|network| network.chain)
-            .map_err(anyhow::Error::from)
-            .inspect_err(|err| {
-                debug!(
-                target: LOG_BITCOIND_CORE,
-                err = %err.fmt_compact_anyhow(),
-                "Error getting network from bitcoind");
-            })
     }
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
@@ -109,5 +97,9 @@ impl IServerBitcoinRpc for BitcoindClient {
         Ok(Some(
             block_in_place(|| self.client.get_blockchain_info())?.verification_progress,
         ))
+    }
+
+    async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+        self.get_block_hash(1).await.map(ChainId::new)
     }
 }

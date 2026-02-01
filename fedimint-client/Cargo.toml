@@ -36,6 +36,7 @@ fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-metrics = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

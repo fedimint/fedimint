@@ -321,7 +321,7 @@ tokio-stream = "0.1.17"
 tokio-test = "0.4.4"
 tokio-util = "0.7.15"
 tonic = "0.14.2"
-tonic_lnd = { version = "0.3.0", package = "fedimint-tonic-lnd", features = [
+tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }

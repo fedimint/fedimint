@@ -59,7 +59,7 @@ use fedimint_core::util::{
     BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
 use fedimint_core::{
-    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
+    Amount, ChainId, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
     maybe_add_send_sync, runtime,
 };
 use fedimint_derive_secret::DerivableSecret;
@@ -81,9 +81,9 @@ use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
-    ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
-    EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
+    ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
+    ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
     get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
@@ -205,6 +205,14 @@ impl Client {
     /// Get the [`TaskGroup`] that is tied to Client's lifetime.
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
+    }
+
+    /// Returns all registered Prometheus metrics encoded in text format.
+    ///
+    /// This can be used by downstream clients to expose metrics via their own
+    /// HTTP server or print them for debugging purposes.
+    pub fn get_metrics() -> anyhow::Result<String> {
+        fedimint_metrics::get_metrics()
     }
 
     /// Useful for our CLI tooling, not meant for external use
@@ -342,6 +350,35 @@ impl Client {
             .await
             .map(|cached: CachedApiVersionSet| cached.0.core)
             .unwrap_or(ApiVersion { major: 0, minor: 0 })
+    }
+
+    /// Returns the chain ID (bitcoin block hash at height 1) from the
+    /// federation
+    ///
+    /// This is cached in the database after the first successful fetch.
+    /// The chain ID uniquely identifies which bitcoin network the federation
+    /// operates on (mainnet, testnet, signet, regtest).
+    pub async fn chain_id(&self) -> anyhow::Result<ChainId> {
+        // Check cache first
+        if let Some(chain_id) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ChainIdKey)
+            .await
+        {
+            return Ok(chain_id);
+        }
+
+        // Fetch from federation with consensus
+        let chain_id = self.api.chain_id().await?;
+
+        // Cache the result
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_entry(&ChainIdKey, &chain_id).await;
+        dbtx.commit_tx().await;
+
+        Ok(chain_id)
     }
 
     pub fn decoders(&self) -> &ModuleDecoderRegistry {

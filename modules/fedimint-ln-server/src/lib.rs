@@ -1257,7 +1257,7 @@ mod tests {
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Amount, ChainId, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{LightningClientConfig, LightningConfig, Network};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1291,10 +1291,6 @@ mod tests {
             "http://mock".parse().unwrap()
         }
 
-        async fn get_network(&self) -> anyhow::Result<Network> {
-            Err(anyhow::anyhow!("Mock network error"))
-        }
-
         async fn get_block_count(&self) -> anyhow::Result<u64> {
             Err(anyhow::anyhow!("Mock block count error"))
         }
@@ -1317,6 +1313,11 @@ mod tests {
 
         async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
             Err(anyhow::anyhow!("Mock sync percentage error"))
+        }
+
+        async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+            // Just mock something up
+            Ok(ChainId(BlockHash::from_byte_array([1; 32])))
         }
     }
 

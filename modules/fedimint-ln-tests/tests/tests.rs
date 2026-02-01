@@ -508,8 +508,8 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
                 .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
-            // goes from preimage to immediate claim because it is for another user
-            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+            // goes from preimage to `Funded` because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
         }
         _ => panic!("Expected internal payment!"),
     }
@@ -567,8 +567,8 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
                 .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
-            // goes from preimage to immediate claim because it is for another user
-            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+            // goes from preimage to `Funded` because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
         }
         _ => panic!("Expected internal payment!"),
     }
@@ -642,8 +642,8 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
                 .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
-            // goes from preimage to immediate claim because it is for another user
-            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+            // goes from preimage to `Funded` because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
         }
         _ => panic!("Expected internal payment!"),
     }

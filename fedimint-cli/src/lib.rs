@@ -44,7 +44,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -675,6 +675,9 @@ Examples:
         /// Hex-encoded fedimint transaction
         transaction: String,
     },
+    /// Show the chain ID (bitcoin block hash at height 1) cached in the client
+    /// database
+    ChainId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1556,6 +1559,20 @@ impl FedimintCli {
                 unreachable!(
                     "handle_events exits only if client shuts down, which we don't do here"
                 )
+            }
+            Command::Dev(DevCmd::ChainId) => {
+                let client = self.client_open(&cli).await?;
+                let chain_id = client
+                    .db()
+                    .begin_transaction_nc()
+                    .await
+                    .get_value(&fedimint_client::db::ChainIdKey)
+                    .await
+                    .ok_or_cli_msg("Chain ID not cached in client database")?;
+
+                Ok(CliOutput::Raw(serde_json::json!({
+                    "chain_id": chain_id.to_string()
+                })))
             }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(

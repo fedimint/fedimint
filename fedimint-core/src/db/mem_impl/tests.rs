@@ -57,11 +57,6 @@ async fn test_dbtx_prevent_nonrepeatable_reads() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_dbtx_rollback_to_savepoint() {
-    fedimint_core::db::verify_rollback_to_savepoint(database()).await;
-}
-
-#[test_log::test(tokio::test)]
 async fn test_dbtx_phantom_entry() {
     fedimint_core::db::verify_phantom_entry(database()).await;
 }

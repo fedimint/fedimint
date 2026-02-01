@@ -36,7 +36,10 @@ use common::{
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
     WalletOutput, WalletOutputOutcome, WalletSummary, proprietary_tweak_key,
 };
-use db::{BlockHashByHeightKey, BlockHashByHeightKeyPrefix, BlockHashByHeightValue};
+use db::{
+    BlockHashByHeightKey, BlockHashByHeightKeyPrefix, BlockHashByHeightValue, RecoveryItemKey,
+    RecoveryItemKeyPrefix,
+};
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_core::config::{
@@ -77,14 +80,14 @@ use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig, WalletCon
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
-    WALLET_SUMMARY_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT,
+    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    MODULE_CONSENSUS_VERSION, Rbf, UnknownWalletInputVariantError, WalletInputError,
+    MODULE_CONSENSUS_VERSION, Rbf, RecoveryItem, UnknownWalletInputVariantError, WalletInputError,
     WalletOutputError, WalletOutputV0,
 };
 use futures::future::join_all;
@@ -110,7 +113,7 @@ use crate::db::{
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix, migrate_to_v1,
+    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -258,6 +261,16 @@ impl ModuleInit for WalletInit {
                         (),
                         wallet,
                         "Consensus Version Voting Activation Key"
+                    );
+                }
+                DbKeyPrefix::RecoveryItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecoveryItemKeyPrefix,
+                        RecoveryItemKey,
+                        RecoveryItem,
+                        wallet,
+                        "Recovery Items"
                     );
                 }
             }
@@ -451,6 +464,10 @@ impl ServerModuleInit for WalletInit {
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_to_v1(ctx).boxed()),
+        );
+        migrations.insert(
+            DatabaseVersion(1),
+            Box::new(|ctx| migrate_to_v2(ctx).boxed()),
         );
         migrations
     }
@@ -697,7 +714,7 @@ impl ServerModule for Wallet {
         input: &'b WalletInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, WalletInputError> {
-        let (outpoint, value, pub_key) = match input {
+        let (outpoint, tx_out, pub_key) = match input {
             WalletInput::V0(input) => {
                 if !self.block_is_known(dbtx, input.proof_block()).await {
                     return Err(WalletInputError::UnknownPegInProofBlock(
@@ -709,11 +726,7 @@ impl ServerModule for Wallet {
 
                 debug!(target: LOG_MODULE_WALLET, outpoint = %input.outpoint(), "Claiming peg-in");
 
-                (
-                    input.0.outpoint(),
-                    input.tx_output().value,
-                    *input.tweak_contract_key(),
-                )
+                (input.0.outpoint(), input.tx_output(), input.tweak_key())
             }
             WalletInput::V1(input) => {
                 let input_tx_out = dbtx
@@ -726,7 +739,7 @@ impl ServerModule for Wallet {
                         .cfg
                         .consensus
                         .peg_in_descriptor
-                        .tweak(&input.tweak_contract_key, secp256k1::SECP256K1)
+                        .tweak(&input.tweak_key, secp256k1::SECP256K1)
                         .script_pubkey()
                 {
                     return Err(WalletInputError::WrongOutputScript);
@@ -738,7 +751,7 @@ impl ServerModule for Wallet {
                     return Err(WalletInputError::WrongTxOut);
                 }
 
-                (input.outpoint, input_tx_out.value, input.tweak_contract_key)
+                (input.outpoint, input_tx_out, input.tweak_key)
             }
             WalletInput::Default { variant, .. } => {
                 return Err(WalletInputError::UnknownInputVariant(
@@ -759,12 +772,22 @@ impl ServerModule for Wallet {
             &UTXOKey(outpoint),
             &SpendableUTXO {
                 tweak: pub_key.serialize(),
-                amount: value,
+                amount: tx_out.value,
             },
         )
         .await;
 
-        let amount = value.into();
+        let next_index = get_recovery_count(dbtx).await;
+        dbtx.insert_new_entry(
+            &RecoveryItemKey(next_index),
+            &RecoveryItem::Input {
+                outpoint,
+                script: tx_out.script_pubkey,
+            },
+        )
+        .await;
+
+        let amount = tx_out.value.into();
 
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
 
@@ -1040,8 +1063,45 @@ impl ServerModule for Wallet {
                     Ok(module.is_utxo_confirmed(&mut dbtx, outpoint).await)
                 }
             },
+            api_endpoint! {
+                RECOVERY_COUNT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Wallet, context, _params: ()| -> u64 {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(get_recovery_count(&mut dbtx).await)
+                }
+            },
+            api_endpoint! {
+                RECOVERY_SLICE_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Wallet, context, range: (u64, u64)| -> Vec<RecoveryItem> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(get_recovery_slice(&mut dbtx, range).await)
+                }
+            },
         ]
     }
+}
+
+async fn get_recovery_count(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    dbtx.find_by_prefix_sorted_descending(&RecoveryItemKeyPrefix)
+        .await
+        .next()
+        .await
+        .map_or(0, |entry| entry.0.0 + 1)
+}
+
+async fn get_recovery_slice(
+    dbtx: &mut DatabaseTransaction<'_>,
+    range: (u64, u64),
+) -> Vec<RecoveryItem> {
+    dbtx.find_by_range(RecoveryItemKey(range.0)..RecoveryItemKey(range.1))
+        .await
+        .map(|entry| entry.1)
+        .collect()
+        .await
 }
 
 fn calculate_pegin_metrics(

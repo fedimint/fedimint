@@ -24,6 +24,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
+fedimint-gwv2-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }

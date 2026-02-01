@@ -26,7 +26,7 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT,
+    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
     CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
@@ -54,7 +54,7 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
-use fedimint_core::{OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
+use fedimint_core::{ChainId, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::dashboard_ui::{
@@ -984,6 +984,17 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     task_group.shutdown();
                 });
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            CHAIN_ID_ENDPOINT,
+            ApiVersion::new(0, 9),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> ChainId {
+                fedimint
+                    .bitcoin_rpc_connection
+                    .get_chain_id()
+                    .await
+                    .map_err(|e| ApiError::server_error(e.to_string()))
             }
         },
     ]

@@ -34,20 +34,11 @@ struct GatewayTestOpts {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::enum_variant_names)]
 enum GatewayTest {
     ConfigTest {
         #[arg(long = "gw-type")]
         gateway_type: LightningNodeType,
-    },
-    GatewaydMnemonic {
-        #[arg(long)]
-        old_gatewayd_path: PathBuf,
-        #[arg(long)]
-        new_gatewayd_path: PathBuf,
-        #[arg(long)]
-        old_gateway_cli_path: PathBuf,
-        #[arg(long)]
-        new_gateway_cli_path: PathBuf,
     },
     BackupRestoreTest,
     LiquidityTest,
@@ -59,20 +50,6 @@ async fn main() -> anyhow::Result<()> {
     let opts = GatewayTestOpts::parse();
     match opts.test {
         GatewayTest::ConfigTest { gateway_type } => Box::pin(config_test(gateway_type)).await,
-        GatewayTest::GatewaydMnemonic {
-            old_gatewayd_path,
-            new_gatewayd_path,
-            old_gateway_cli_path,
-            new_gateway_cli_path,
-        } => {
-            mnemonic_upgrade_test(
-                old_gatewayd_path,
-                new_gatewayd_path,
-                old_gateway_cli_path,
-                new_gateway_cli_path,
-            )
-            .await
-        }
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
         GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
         GatewayTest::EsploraTest => esplora_test().await,
@@ -190,100 +167,6 @@ async fn stop_and_recover_gateway(
     info!(target: LOG_TEST, "Verified balances after recovery");
 
     Ok(new_gw)
-}
-
-/// TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
-/// -> v0.5.0 over and over again. Once we have verified this test passes for
-/// v0.5.0, it can safely be removed.
-async fn mnemonic_upgrade_test(
-    old_gatewayd_path: PathBuf,
-    new_gatewayd_path: PathBuf,
-    old_gateway_cli_path: PathBuf,
-    new_gateway_cli_path: PathBuf,
-) -> anyhow::Result<()> {
-    // TODO: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path) };
-    // TODO: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path) };
-    // TODO: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("FM_ENABLE_MODULE_LNV2", "0") };
-
-    devimint::run_devfed_test()
-        .call(|dev_fed, process_mgr| async move {
-            let gatewayd_version = util::Gatewayd::version_or_default().await;
-            let gateway_cli_version = util::GatewayCli::version_or_default().await;
-            info!(
-                target: LOG_TEST,
-                gatewayd_version = %gatewayd_version,
-                gateway_cli_version = %gateway_cli_version,
-                "Running gatewayd mnemonic test"
-            );
-
-            let mut gw_lnd = dev_fed.gw_lnd_registered().await?.to_owned();
-            let fed = dev_fed.fed().await?;
-            let federation_id = FederationId::from_str(fed.calculate_federation_id().as_str())?;
-
-            gw_lnd
-                .restart_with_bin(&process_mgr, &new_gatewayd_path, &new_gateway_cli_path)
-                .await?;
-
-            // Verify that we have a legacy federation
-            let mnemonic_response = gw_lnd.get_mnemonic().await?;
-            assert!(
-                mnemonic_response
-                    .legacy_federations
-                    .contains(&federation_id)
-            );
-
-            info!(target: LOG_TEST, "Verified a legacy federation exists");
-
-            // Leave federation
-            gw_lnd.leave_federation(federation_id).await?;
-
-            // Rejoin federation
-            gw_lnd.connect_fed(fed).await?;
-
-            // Verify that the legacy federation is recognized
-            let mnemonic_response = gw_lnd.get_mnemonic().await?;
-            assert!(
-                mnemonic_response
-                    .legacy_federations
-                    .contains(&federation_id)
-            );
-            assert_eq!(mnemonic_response.legacy_federations.len(), 1);
-
-            info!(target: LOG_TEST, "Verified leaving and re-joining preservers legacy federation");
-
-            // Leave federation and delete database to force migration to mnemonic
-            gw_lnd.leave_federation(federation_id).await?;
-
-            let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
-                .expect("Data dir is not set")
-                .parse()
-                .expect("Could not parse data dir");
-            let gw_fed_db = data_dir
-                .join(gw_lnd.gw_name.clone())
-                .join(format!("{federation_id}.db"));
-            remove_dir_all(gw_fed_db)?;
-
-            gw_lnd.connect_fed(fed).await?;
-
-            // Verify that the re-connected federation is not a legacy federation
-            let mnemonic_response = gw_lnd.get_mnemonic().await?;
-            assert!(
-                !mnemonic_response
-                    .legacy_federations
-                    .contains(&federation_id)
-            );
-            assert_eq!(mnemonic_response.legacy_federations.len(), 0);
-
-            info!(target: LOG_TEST, "Verified deleting database will migrate the federation to use mnemonic");
-
-            info!(target: LOG_TEST, "Successfully completed mnemonic upgrade test");
-
-            Ok(())
-        })
-        .await
 }
 
 /// Test that sets and verifies configurations within the gateway
@@ -636,6 +519,7 @@ async fn esplora_test() -> anyhow::Result<()> {
                     name: "gateway-ldk-esplora".to_string(),
                     gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                     ldk_port: process_mgr.globals.FM_PORT_LDK,
+                    metrics_port: process_mgr.globals.FM_PORT_GW_LDK_METRICS,
                 },
                 0,
             )

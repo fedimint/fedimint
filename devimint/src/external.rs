@@ -26,6 +26,7 @@ use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::Client as LndClient;
 use tonic_lnd::lnrpc::GetInfoRequest;
+use tonic_lnd::routerrpc::SendPaymentRequest;
 use tracing::{debug, info, trace, warn};
 
 use crate::util::{ProcessHandle, ProcessManager, poll};
@@ -94,6 +95,10 @@ impl Bitcoind {
         };
 
         bitcoind.poll_ready().await?;
+
+        // To have a ChainId we always need at least one block.
+        let addr = bitcoind.get_new_address().await?;
+        bitcoind.generate_to_address(1, addr).await?;
 
         Ok(bitcoind)
     }
@@ -523,6 +528,13 @@ impl Lnd {
         Ok(MutexGuard::map(guard, |client| client.invoices()))
     }
 
+    pub async fn router_client_lock(
+        &self,
+    ) -> Result<MappedMutexGuard<'_, tonic_lnd::RouterClient>> {
+        let guard = self.client.lock().await;
+        Ok(MutexGuard::map(guard, |client| client.router()))
+    }
+
     pub async fn pub_key(&self) -> Result<String> {
         Ok(self
             .lightning_client_lock()
@@ -553,32 +565,25 @@ impl Lnd {
     }
 
     pub async fn pay_bolt11_invoice(&self, invoice: String) -> anyhow::Result<()> {
-        let payment = self
-            .lightning_client_lock()
+        let mut payment = self
+            .router_client_lock()
             .await?
-            .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+            .send_payment_v2(SendPaymentRequest {
                 payment_request: invoice.clone(),
                 ..Default::default()
             })
             .await?
             .into_inner();
-        let payment_status = self
-            .lightning_client_lock()
-            .await?
-            .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                include_incomplete: true,
-                ..Default::default()
-            })
-            .await?
-            .into_inner()
-            .payments
-            .into_iter()
-            .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
-            .context("payment not in list")?
-            .status();
-        anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
 
-        Ok(())
+        while let Some(update) = payment.message().await? {
+            match update.status() {
+                tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded => return Ok(()),
+                tonic_lnd::lnrpc::payment::PaymentStatus::InFlight => {}
+                _ => return Err(anyhow!("LND lightning payment failed")),
+            }
+        }
+
+        Err(anyhow!("LND lightning payment unknown status"))
     }
 
     pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> anyhow::Result<()> {
@@ -785,6 +790,7 @@ pub enum LightningNode {
         name: String,
         gw_port: u16,
         ldk_port: u16,
+        metrics_port: u16,
     },
 }
 
@@ -796,6 +802,7 @@ impl LightningNode {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                metrics_port: _,
             } => LightningNodeType::Ldk,
         }
     }

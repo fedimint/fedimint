@@ -248,6 +248,23 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
     }
 }
 
+impl Encodable for bitcoin::hashes::hash160::Hash {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.to_byte_array().consensus_encode(writer)
+    }
+}
+
+impl Decodable for bitcoin::hashes::hash160::Hash {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self::from_byte_array(Decodable::consensus_decode_partial(
+            d, modules,
+        )?))
+    }
+}
+
 impl Encodable for lightning_invoice::Bolt11Invoice {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_string().consensus_encode(writer)

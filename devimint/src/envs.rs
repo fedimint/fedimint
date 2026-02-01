@@ -151,3 +151,6 @@ pub const FM_RECURRINGD_BASE_EXECUTABLE_ENV: &str = "FM_RECURRINGD_BASE_EXECUTAB
 
 // Env variable to override the iroh listen addr for the gateway
 pub const FM_GATEWAY_IROH_LISTEN_ADDR_ENV: &str = "FM_GATEWAY_IROH_LISTEN_ADDR";
+
+// Env variable to set the metrics listen addr for the gateway
+pub const FM_GATEWAY_METRICS_LISTEN_ADDR_ENV: &str = "FM_GATEWAY_METRICS_LISTEN_ADDR";

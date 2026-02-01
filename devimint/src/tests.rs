@@ -1352,6 +1352,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let gw_ldk_name = gw_ldk.gw_name.clone();
     let gw_ldk_port = gw_ldk.gw_port;
     let gw_lightning_port = gw_ldk.ldk_port;
+    let gw_ldk_metrics_port = gw_ldk.metrics_port;
     drop(gw_lnd);
     drop(gw_ldk);
 
@@ -1376,6 +1377,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
                 name: gw_ldk_name,
                 gw_port: gw_ldk_port,
                 ldk_port: gw_lightning_port,
+                metrics_port: gw_ldk_metrics_port,
             },
             1,
         )

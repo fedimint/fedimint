@@ -871,18 +871,9 @@ where
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
-where
-    Inner: IDatabaseTransactionOps,
+impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner> where
+    Inner: IDatabaseTransactionOps
 {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.inner.rollback_tx_to_savepoint().await
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.set_tx_savepoint().await
-    }
 }
 
 /// Core raw a operations database transactions supports
@@ -1013,48 +1004,11 @@ where
 ///
 /// In certain contexts exposing these operations would be a problem, so they
 /// are moved to a separate trait.
-#[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
-    /// Create a savepoint during the transaction that can be rolled back to
-    /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
-    /// atomically remove the writes that were applied since the savepoint
-    /// was created.
-    ///
-    /// Warning: Avoid using this in fedimint client code as not all database
-    /// transaction implementations will support setting a savepoint during
-    /// a transaction.
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()>;
+pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {}
 
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()>;
-}
+impl<T> IDatabaseTransactionOps for Box<T> where T: IDatabaseTransactionOps + ?Sized {}
 
-#[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOps for Box<T>
-where
-    T: IDatabaseTransactionOps + ?Sized,
-{
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).set_tx_savepoint().await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).rollback_tx_to_savepoint().await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOps for &mut T
-where
-    T: IDatabaseTransactionOps + ?Sized,
-{
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).set_tx_savepoint().await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        (**self).rollback_tx_to_savepoint().await
-    }
-}
+impl<T> IDatabaseTransactionOps for &mut T where T: IDatabaseTransactionOps + ?Sized {}
 
 /// Like [`IDatabaseTransactionOpsCore`], but typed
 ///
@@ -1471,26 +1425,7 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .rollback_tx_to_savepoint()
-            .await?;
-        Ok(())
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .set_tx_savepoint()
-            .await?;
-        Ok(())
-    }
-}
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {}
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
@@ -1977,16 +1912,7 @@ where
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
-#[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.tx.set_tx_savepoint().await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.tx.rollback_tx_to_savepoint().await
-    }
-}
+impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {}
 
 impl<T> DatabaseKeyPrefix for T
 where
@@ -2932,47 +2858,6 @@ mod test_utils {
         assert_eq!(dbtx2.get_value(&TestKey(1)).await, Some(TestVal(2)));
     }
 
-    pub async fn verify_rollback_to_savepoint(db: Database) {
-        let mut dbtx_rollback = db.begin_transaction().await;
-
-        dbtx_rollback
-            .insert_entry(&TestKey(20), &TestVal(2000))
-            .await;
-
-        dbtx_rollback
-            .set_tx_savepoint()
-            .await
-            .expect("Error setting transaction savepoint");
-
-        dbtx_rollback
-            .insert_entry(&TestKey(21), &TestVal(2001))
-            .await;
-
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await,
-            Some(TestVal(2000))
-        );
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(21)).await,
-            Some(TestVal(2001))
-        );
-
-        dbtx_rollback
-            .rollback_tx_to_savepoint()
-            .await
-            .expect("Error setting transaction savepoint");
-
-        assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await,
-            Some(TestVal(2000))
-        );
-
-        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
-
-        // Commit to suppress the warning message
-        dbtx_rollback.commit_tx().await;
-    }
-
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
         let mut dbtx = db.begin_transaction().await;
         assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
@@ -3523,16 +3408,7 @@ mod test_utils {
             }
         }
 
-        #[async_trait]
-        impl IDatabaseTransactionOps for FakeTransaction<'_> {
-            async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-                unimplemented!()
-            }
-
-            async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-                unimplemented!()
-            }
-        }
+        impl IDatabaseTransactionOps for FakeTransaction<'_> {}
 
         #[async_trait]
         impl IRawDatabaseTransaction for FakeTransaction<'_> {

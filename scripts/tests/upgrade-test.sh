@@ -23,7 +23,7 @@ PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-800}
 export FM_RUN_TEST_TIMEOUT=$((FM_TEST_UPGRADE_TIMEOUT - 30))
 
-default_test_kinds=("fedimintd" "fedimint-cli" "gateway" "mnemonic")
+default_test_kinds=("fedimintd" "fedimint-cli" "gateway")
 
 # runs a subset of tests if the user provides `TEST_KINDS`
 # ex: TEST_KINDS=fedimint-cli,gateway
@@ -133,17 +133,6 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     done
   fi
 
-  if contains "mnemonic" "${test_kinds[@]}"; then
-    old_gatewayd=$(nix_build_binary_for_version 'gatewayd' "v0.4.0")
-    new_gatewayd="gatewayd"
-    old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
-    new_gateway_cli="gateway-cli"
-
-    # LNv2 is always set to off for the mnemonic test because the gateway has always had mnemonics since LNv2 stabilization
-    upgrade_tests+=(
-      "fm-run-test mnemonic-${versions_str} gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
-    )
-  fi
 done
 
 parsed_test_commands=$(printf "%s\n" "${upgrade_tests[@]}")

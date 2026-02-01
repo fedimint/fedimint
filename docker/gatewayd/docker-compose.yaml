@@ -1,0 +1,45 @@
+services:
+  gatewayd:
+    image: fedimint/gatewayd:v0.10.0
+    command: gatewayd ldk
+    restart: unless-stopped
+    ports:
+      - 8176:8176/tcp # ui
+      - 8177:8177/udp # iroh
+      - 10010:10010/tcp # lightning
+    volumes:
+      - gatewayd_data:/data
+    environment:
+      # Gateway Config
+      FM_GATEWAY_DATA_DIR: /data
+      FM_GATEWAY_LISTEN_ADDR: 0.0.0.0:8176
+      FM_GATEWAY_NETWORK: bitcoin
+      FM_GATEWAY_IROH_LISTEN_ADDR: 0.0.0.0:8177
+
+      # REQUIRED: Set the password hash to your own password
+      # Run:
+      #
+      # docker run fedimint/gatewayd:v0.10.0 gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
+      #
+      # Then paste the result here.
+      FM_GATEWAY_BCRYPT_PASSWORD_HASH: ""
+
+      # Esplora Config (comment out to disable esplora)
+      FM_ESPLORA_URL: https://mempool.space/api/
+
+      # LDK Config
+      FM_PORT_LDK: 10010
+      FM_LDK_ALIAS: "Fedimint LDK Gateway"
+
+      # Bitcoind config (uncomment to use your own bitcoin node, comment out the esplora config)
+      #FM_BITCOIND_URL: http://<replace-me>
+      #FM_BITCOIND_USERNAME: <replace-me>
+      #FM_BITCOIND_PASSWORD: '<replace-me>'
+
+      # LND Config (uncomment to use your own LND node, comment out the LDK config)
+      #FM_LND_RPC_ADDR: "http://<replace-me>:<replace-me>"
+      #FM_LND_TLS_CERT: "<replace-me>"
+      #FM_LND_MACAROON: "<replace-me>"
+
+volumes:
+  gatewayd_data:

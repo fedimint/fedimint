@@ -1,6 +1,6 @@
 mod recovery_history_tracker;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
@@ -107,6 +107,74 @@ pub enum WalletRecoveryState {
         variant: u64,
         bytes: Vec<u8>,
     },
+}
+
+/// Recovery state for slice-based recovery (V2)
+#[derive(Clone, Debug)]
+pub struct RecoveryStateV2 {
+    /// Scripts we're looking for → `TweakIdx`
+    pub pending_pubkey_scripts: BTreeMap<bitcoin::ScriptBuf, TweakIdx>,
+    /// Next `TweakIdx` to generate
+    pub next_pending_tweak_idx: TweakIdx,
+    /// `TweakIdx`es that were found in history
+    pub used_tweak_idxes: BTreeSet<TweakIdx>,
+    /// Claimed outpoints per `TweakIdx`
+    pub claimed_outpoints: BTreeMap<TweakIdx, Vec<bitcoin::OutPoint>>,
+}
+
+impl RecoveryStateV2 {
+    pub fn new() -> Self {
+        Self {
+            pending_pubkey_scripts: BTreeMap::new(),
+            next_pending_tweak_idx: TweakIdx(0),
+            used_tweak_idxes: BTreeSet::new(),
+            claimed_outpoints: BTreeMap::new(),
+        }
+    }
+
+    pub fn generate_next_pending_script(&mut self, data: &WalletClientModuleData) {
+        let script = data.derive_peg_in_script(self.next_pending_tweak_idx).0;
+
+        self.pending_pubkey_scripts
+            .insert(script, self.next_pending_tweak_idx);
+
+        self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
+    }
+
+    pub fn refill_pending_pool_up_to(
+        &mut self,
+        data: &WalletClientModuleData,
+        tweak_idx: TweakIdx,
+    ) {
+        while self.next_pending_tweak_idx < tweak_idx {
+            self.generate_next_pending_script(data);
+        }
+    }
+
+    pub fn handle_item(
+        &mut self,
+        outpoint: bitcoin::OutPoint,
+        script: &bitcoin::ScriptBuf,
+        data: &WalletClientModuleData,
+    ) {
+        if let Some(tweak_idx) = self.pending_pubkey_scripts.get(script).copied() {
+            self.used_tweak_idxes.insert(tweak_idx);
+            self.claimed_outpoints
+                .entry(tweak_idx)
+                .or_default()
+                .push(outpoint);
+
+            self.refill_pending_pool_up_to(data, tweak_idx.advance(FEDERATION_RECOVER_MAX_GAP));
+        }
+    }
+
+    pub fn new_start_idx(&self) -> TweakIdx {
+        self.used_tweak_idxes
+            .last()
+            .copied()
+            .unwrap_or(TweakIdx(0))
+            .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED)
+    }
 }
 
 /// Wallet client module recovery implementation

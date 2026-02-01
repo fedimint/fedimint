@@ -38,6 +38,7 @@ use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
+use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -77,10 +78,11 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use crate::api::WalletFederationApi;
-use crate::backup::WalletRecovery;
+use crate::backup::{FEDERATION_RECOVER_MAX_GAP, RecoveryStateV2, WalletRecovery};
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, SupportsSafeDepositPrefix,
+    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, RecoveryStateKey,
+    SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -152,9 +154,77 @@ where
 // TODO: should probably move to DB
 pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
+const SLICE_SIZE: u64 = 1000;
+
 impl WalletClientInit {
     pub fn new(rpc: DynBitcoindRpc) -> Self {
         Self(Some(rpc))
+    }
+
+    async fn recover_from_slices(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+    ) -> anyhow::Result<()> {
+        let data = WalletClientModuleData {
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+        };
+
+        let total_items = args.module_api().fetch_recovery_count().await?;
+
+        let mut state = RecoveryStateV2::new();
+
+        state.refill_pending_pool_up_to(&data, TweakIdx(FEDERATION_RECOVER_MAX_GAP));
+
+        for start in (0..total_items).step_by(SLICE_SIZE as usize) {
+            let end = std::cmp::min(start + SLICE_SIZE, total_items);
+
+            let items = args.module_api().fetch_recovery_slice(start, end).await?;
+
+            for item in &items {
+                match item {
+                    RecoveryItem::Input { outpoint, script } => {
+                        state.handle_item(*outpoint, script, &data);
+                    }
+                }
+            }
+
+            args.update_recovery_progress(RecoveryProgress {
+                complete: end.try_into().unwrap_or(u32::MAX),
+                total: total_items.try_into().unwrap_or(u32::MAX),
+            });
+        }
+
+        let mut dbtx = args.db().begin_transaction().await;
+
+        for tweak_idx in 0..state.new_start_idx().0 {
+            let operation_id = data.derive_peg_in_script(TweakIdx(tweak_idx)).3;
+
+            let claimed = state
+                .claimed_outpoints
+                .get(&TweakIdx(tweak_idx))
+                .cloned()
+                .unwrap_or_default();
+
+            dbtx.insert_new_entry(
+                &PegInTweakIndexKey(TweakIdx(tweak_idx)),
+                &PegInTweakIndexData {
+                    operation_id,
+                    creation_time: fedimint_core::time::now(),
+                    last_check_time: None,
+                    next_check_time: Some(fedimint_core::time::now()),
+                    claimed,
+                },
+            )
+            .await;
+        }
+
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &state.new_start_idx())
+            .await;
+
+        dbtx.commit_tx().await;
+
+        Ok(())
     }
 }
 
@@ -270,18 +340,35 @@ impl ClientModuleInit for WalletClientInit {
 
     /// Wallet recovery
     ///
-    /// Query bitcoin rpc for history of addresses from last known used
-    /// addresses (or index 0) until `MAX_GAP` unused ones.
-    ///
-    /// Notably does not persist the progress of addresses being queried,
-    /// because it is not expected that it would take long enough to bother.
+    /// Uses slice-based recovery if supported by the federation, otherwise
+    /// falls back to session-based history recovery.
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        args.recover_from_history::<WalletRecovery>(self, snapshot)
+        // Check if V1 (session-based) recovery state exists (resuming interrupted
+        // recovery)
+        if args
+            .db()
+            .begin_transaction_nc()
             .await
+            .get_value(&RecoveryStateKey)
+            .await
+            .is_some()
+        {
+            return args
+                .recover_from_history::<WalletRecovery>(self, snapshot)
+                .await;
+        }
+
+        // Determine which method to use based on endpoint availability
+        if args.module_api().fetch_recovery_count().await.is_ok() {
+            self.recover_from_slices(args).await
+        } else {
+            args.recover_from_history::<WalletRecovery>(self, snapshot)
+                .await
+        }
     }
 
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
