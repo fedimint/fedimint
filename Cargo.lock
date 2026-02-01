@@ -1442,19 +1442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chacha20poly1305"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
-dependencies = [
- "aead",
- "chacha20",
- "cipher",
- "poly1305",
- "zeroize",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3048,7 +3035,7 @@ dependencies = [
  "gloo-timers 0.3.0",
  "group",
  "hex",
- "hex-conservative 0.3.0",
+ "hex-conservative 1.0.1",
  "imbl",
  "iroh 0.35.0",
  "iroh-base 0.35.0",
@@ -3847,6 +3834,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-logging",
  "fedimint-testing",
+ "hex-conservative 1.0.1",
  "itertools 0.14.0",
  "lightning-invoice",
  "lnurl-rs",
@@ -4139,7 +4127,6 @@ dependencies = [
  "axum 0.8.7",
  "axum-auth",
  "bitcoin",
- "chacha20poly1305",
  "clap",
  "fedimint-api-client",
  "fedimint-client",
@@ -4147,16 +4134,13 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln-client",
- "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",
- "fedimint-tpe",
  "futures",
  "lightning-invoice",
  "lnurl-rs",
  "rand 0.8.5",
- "reqwest 0.12.22",
  "serde",
  "serde_json",
  "tokio",
@@ -5346,12 +5330,9 @@ dependencies = [
 
 [[package]]
 name = "hex-conservative"
-version = "0.3.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4afe881d0527571892c4034822e59bb10c6c991cce6abe8199b6f5cf10766f55"
-dependencies = [
- "arrayvec",
-]
+checksum = "366fa3443ac84474447710ec17bb00b05dfbd096137817981e86f992f21a2793"
 
 [[package]]
 name = "hex_fmt"

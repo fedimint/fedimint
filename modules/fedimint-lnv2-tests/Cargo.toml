@@ -39,6 +39,7 @@ fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
+hex-conservative = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 lnurl-rs = { workspace = true }

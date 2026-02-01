@@ -53,10 +53,7 @@ impl Recurringd {
         let process = process_mgr
             .spawn_daemon(
                 "recurringd",
-                cmd!("fedimint-recurringd")
-                    .arg(&"--encryption-key")
-                    .arg(&"01234567890123456789012345678901")
-                    .envs(recurring_env),
+                cmd!("fedimint-recurringd").envs(recurring_env),
             )
             .await?;
 

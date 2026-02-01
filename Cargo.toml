@@ -234,7 +234,7 @@ gloo-net = "0.6.0"
 gloo-timers = "0.3.0"
 group = "0.13.0"
 hex = "0.4.3"
-hex-conservative = "0.3.0"
+hex-conservative = "1.0.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.11.0-alpha" }
 honggfuzz = { version = "=0.5.55", default-features = false } # needs to be pinned to the same version `cargo-fuzz` binary uses
 hyper = "1.6"
