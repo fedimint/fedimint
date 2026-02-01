@@ -43,9 +43,9 @@ After the module is imported one or more fedimintd instances can be configured w
 ```
   services.fedimintd."mainnet" = {
     enable = true;
-    api.address = "wss://api.myfedimint.com";
+    api_ws.url = "wss://api.myfedimint.com";
     api.openFirewall = true;
-    p2p.address = "fedimint://p2p.myfedimint.com";
+    p2p.url = "fedimint://p2p.myfedimint.com";
     p2p.openFirewall = true;
   };
 ```
