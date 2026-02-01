@@ -1,0 +1,28 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "fedimint walletv2 is an on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet. (common types)"
+edition = "2021"
+license = "MIT"
+name = "fedimint-walletv2-common"
+readme = "../../README.md"
+repository = "https://github.com/fedimint/fedimint"
+version = { workspace = true }
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[lib]
+name = "fedimint_walletv2_common"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bitcoin = { workspace = true }
+fedimint-core = { workspace = true }
+miniscript = { workspace = true, features = ["serde"] }
+reqwest = { workspace = true }
+secp256k1 = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

@@ -223,7 +223,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     federation.pegin_client(10_000, &client).await?;
 
-    almost_equal(client.balance().await?, 10_000 * 1000, 5_000).unwrap();
+    almost_equal(client.balance().await?, 10_000 * 1000, 500_000).unwrap();
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;

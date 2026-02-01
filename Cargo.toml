@@ -85,6 +85,10 @@ members = [
     "modules/fedimint-wallet-common",
     "modules/fedimint-wallet-server",
     "modules/fedimint-wallet-tests",
+    "modules/fedimint-walletv2-client",
+    "modules/fedimint-walletv2-common",
+    "modules/fedimint-walletv2-server",
+    "modules/fedimint-walletv2-tests",
     "utils/portalloc",
 ]
 resolver = "2"
@@ -222,6 +226,9 @@ fedimint-util-error = { path = "./fedimint-util-error", version = "=0.11.0-alpha
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.11.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.11.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.11.0-alpha" }
+fedimint-walletv2-client = { path = "./modules/fedimint-walletv2-client", version = "=0.11.0-alpha" }
+fedimint-walletv2-common = { path = "./modules/fedimint-walletv2-common", version = "=0.11.0-alpha" }
+fedimint-walletv2-server = { path = "./modules/fedimint-walletv2-server", version = "=0.11.0-alpha" }
 fedimintd = { path = "./fedimintd", version = "=0.11.0-alpha" }
 fedimintd-envs = { path = "./fedimintd-envs", version = "=0.11.0-alpha" }
 ff = "0.13.1"

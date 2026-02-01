@@ -627,7 +627,18 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     let mint_module_id = client
         .get_first_instance(&fedimint_mint_client::KIND)
         .context("Mint module not found")?;
-    let wallet_client = client.get_first_module::<WalletClientModule>()?;
+
+    // Try wallet v1 first, then walletv2
+    let network = if let Ok(wallet_client) = client.get_first_module::<WalletClientModule>() {
+        wallet_client.get_network()
+    } else if let Ok(wallet_client) =
+        client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+    {
+        wallet_client.get_network()
+    } else {
+        anyhow::bail!("No wallet module found");
+    };
+
     let summary = mint_client
         .get_note_counts_by_denomination(
             &mut client
@@ -640,7 +651,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
         .await;
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
-        network: wallet_client.get_network(),
+        network,
         meta: client.config().await.global.meta.clone(),
         total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),

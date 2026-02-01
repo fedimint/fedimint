@@ -1,0 +1,40 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "fedimint walletv2 tests contains all tests for the walletv2 module"
+edition = "2021"
+license = "MIT"
+name = "fedimint-walletv2-tests"
+publish = false
+version = { workspace = true }
+
+[[bin]]
+name = "fedimint-walletv2-devimint-tests"
+path = "bin/tests.rs"
+
+[[test]]
+name = "fedimint_walletv2_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
+devimint = { workspace = true }
+fedimint-bitcoind = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-testing = { workspace = true }
+fedimint-walletv2-client = { workspace = true }
+fedimint-walletv2-common = { workspace = true }
+fedimint-walletv2-server = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

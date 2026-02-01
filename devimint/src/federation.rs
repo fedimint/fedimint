@@ -218,12 +218,39 @@ impl Client {
             .unwrap())
     }
 
+    /// Waits for the client balance to reach at least `min_balance_msat`.
+    pub async fn await_balance(&self, min_balance_msat: u64) -> Result<()> {
+        loop {
+            cmd!(self, "dev", "wait", "3").out_json().await?;
+
+            let balance = self.balance().await?;
+            if balance >= min_balance_msat {
+                return Ok(());
+            }
+
+            info!(
+                target: LOG_DEVIMINT,
+                balance,
+                min_balance_msat,
+                "Waiting for client balance to reach minimum"
+            );
+        }
+    }
+
     pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
-        let deposit = cmd!(self, "deposit-address").out_json().await?;
-        Ok((
-            deposit["address"].as_str().unwrap().to_string(),
-            deposit["operation_id"].as_str().unwrap().to_string(),
-        ))
+        if crate::util::supports_wallet_v2() {
+            let address = cmd!(self, "module", "walletv2", "receive")
+                .out_json()
+                .await?;
+            // Walletv2 auto-claims deposits, no operation_id needed
+            Ok((address.as_str().unwrap().to_string(), String::new()))
+        } else {
+            let deposit = cmd!(self, "deposit-address").out_json().await?;
+            Ok((
+                deposit["address"].as_str().unwrap().to_string(),
+                deposit["operation_id"].as_str().unwrap().to_string(),
+            ))
+        }
     }
 
     pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
@@ -466,11 +493,19 @@ impl Federation {
     }
 
     pub fn deposit_fees(&self) -> Result<Amount> {
-        Ok(self
-            .module_client_config::<WalletClientModule>()?
-            .context("No wallet module found")?
-            .fee_consensus
-            .peg_in_abs)
+        if crate::util::supports_wallet_v2() {
+            Ok(self
+                .module_client_config::<fedimint_walletv2_client::WalletClientModule>()?
+                .context("No walletv2 module found")?
+                .fee_consensus
+                .base)
+        } else {
+            Ok(self
+                .module_client_config::<WalletClientModule>()?
+                .context("No wallet module found")?
+                .fee_consensus
+                .peg_in_abs)
+        }
     }
 
     /// Read the invite code from the client data dir
@@ -650,6 +685,14 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn send_to_address(&self, address: String, amount: u64) -> Result<()> {
+        self.bitcoind.send_to(address, amount).await?;
+
+        self.bitcoind.mine_blocks(21).await?;
+
+        Ok(())
+    }
+
     pub async fn pegin_client_no_wait(&self, amount: u64, client: &Client) -> Result<String> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
@@ -671,9 +714,24 @@ impl Federation {
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
+        // For walletv2, we need to capture the initial balance and wait for it to
+        // increase since there is no state machine - deposits are auto-claimed
+        let initial_balance = if crate::util::supports_wallet_v2() {
+            Some(client.balance().await?)
+        } else {
+            None
+        };
+
         let operation_id = self.pegin_client_no_wait(amount, client).await?;
 
-        client.await_deposit(&operation_id).await?;
+        if let Some(initial) = initial_balance {
+            // Walletv2: wait for balance to increase. We expect slightly less than
+            // `amount` due to mint module fees when creating ecash notes.
+            let expected_balance = initial + (amount * 1000 * 9 / 10);
+            client.await_balance(expected_balance).await?;
+        } else {
+            client.await_deposit(&operation_id).await?;
+        }
         Ok(())
     }
 
@@ -802,10 +860,19 @@ impl Federation {
                 .1
                 .fees;
             let total_fee = fees.amount().to_sat() * 1000;
+            // Walletv2 charges a module fee on top of the on-chain fee:
+            // 100 sats base + 1% of amount (amount is in msats)
+            let tolerance = if crate::util::supports_wallet_v2() {
+                let amount_sats = amount / 1000;
+                let module_fee_sats = 100 + amount_sats / 100;
+                module_fee_sats * 1000 + 2000
+            } else {
+                2000
+            };
             crate::util::almost_equal(
                 after_fed_ecash_balance.msats,
                 prev_balance - amount - total_fee,
-                2000,
+                tolerance,
             )
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -830,18 +897,44 @@ impl Federation {
         let finality_delay = self.get_finality_delay()?;
         let block_count = self.bitcoind.get_block_count().await?;
         let expected = block_count.saturating_sub(finality_delay.into());
-        cmd!(
-            self.internal_client().await?,
-            "dev",
-            "wait-block-count",
-            expected
-        )
-        .run()
-        .await?;
+
+        if crate::util::supports_wallet_v2() {
+            // Walletv2 doesn't have `dev wait-block-count`, poll using CLI instead
+            let client = self.internal_client().await?;
+            loop {
+                let value = cmd!(client, "module", "walletv2", "info", "block-count")
+                    .out_json()
+                    .await?;
+                let current: u64 = serde_json::from_value(value)?;
+                if current >= expected {
+                    break;
+                }
+                fedimint_core::task::sleep_in_test(
+                    format!("Waiting for consensus block count to reach {expected}"),
+                    std::time::Duration::from_secs(1),
+                )
+                .await;
+            }
+        } else {
+            cmd!(
+                self.internal_client().await?,
+                "dev",
+                "wait-block-count",
+                expected
+            )
+            .run()
+            .await?;
+        }
+
         Ok(expected)
     }
 
     fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
+        // Walletv2 uses a constant finality delay
+        if crate::util::supports_wallet_v2() {
+            return Ok(fedimint_walletv2_server::FINALITY_DELAY as u32);
+        }
+
         let wallet_instance_id = self.module_instance_id_by_kind(&fedimint_wallet_client::KIND)?;
         let client_config = &self.client_config()?;
         let wallet_cfg = client_config
@@ -898,6 +991,11 @@ impl Federation {
     }
 
     pub async fn await_all_peers(&self) -> Result<()> {
+        let (module_name, endpoint) = if crate::util::supports_wallet_v2() {
+            ("walletv2", "consensus_block_count")
+        } else {
+            ("wallet", "block_count")
+        };
         poll("Waiting for all peers to be online", || async {
             cmd!(
                 self.internal_client()
@@ -906,8 +1004,8 @@ impl Federation {
                 "dev",
                 "api",
                 "--module",
-                "wallet",
-                "block_count"
+                module_name,
+                endpoint
             )
             .run()
             .await

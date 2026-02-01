@@ -708,6 +708,7 @@ impl FedimintCli {
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)
             .with_module(fedimint_lnv2_client::LightningClientInit::default())
+            .with_module(fedimint_walletv2_client::WalletClientInit)
     }
 
     pub async fn run(&mut self) {
