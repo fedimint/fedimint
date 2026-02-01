@@ -441,6 +441,20 @@ impl OutPointRange {
         self.idx_range.count()
     }
 
+    pub fn start_out_point(self) -> OutPoint {
+        OutPoint {
+            txid: self.txid,
+            out_idx: self.idx_range.start(),
+        }
+    }
+
+    pub fn end_out_point(self) -> OutPoint {
+        OutPoint {
+            txid: self.txid,
+            out_idx: self.idx_range.end,
+        }
+    }
+
     pub fn txid(&self) -> TransactionId {
         self.txid
     }

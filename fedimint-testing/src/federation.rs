@@ -134,6 +134,72 @@ impl FederationTest {
             .expect("Failed to build client")
     }
 
+    /// Join a federation with an existing database and root secret
+    pub async fn join_client_with_db(
+        &self,
+        db: Database,
+        root_secret: RootSecret,
+    ) -> ClientHandleArc {
+        let client_config = self.configs[&PeerId::from(0)]
+            .consensus
+            .to_client_config(&self.server_init)
+            .unwrap();
+
+        info!(target: LOG_TEST, "Joining client with existing db");
+        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        client_builder.with_module_inits(self.client_init.clone());
+        client_builder
+            .preview_with_existing_config(self.connectors.clone(), client_config, None)
+            .await
+            .expect("Preview failed")
+            .join(db, root_secret)
+            .await
+            .map(Arc::new)
+            .expect("Failed to join client")
+    }
+
+    /// Create a recovering client with an existing database and root secret.
+    /// Returns both the client and the database so a new client can be created
+    /// with the same DB after recovery completes.
+    pub async fn recover_client_with_db(
+        &self,
+        db: Database,
+        root_secret: RootSecret,
+    ) -> ClientHandleArc {
+        let client_config = self.configs[&PeerId::from(0)]
+            .consensus
+            .to_client_config(&self.server_init)
+            .unwrap();
+
+        info!(target: LOG_TEST, "Recovering client with existing db");
+        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        client_builder.with_module_inits(self.client_init.clone());
+        client_builder
+            .preview_with_existing_config(self.connectors.clone(), client_config, None)
+            .await
+            .expect("Preview failed")
+            .recover(db, root_secret, None)
+            .await
+            .map(Arc::new)
+            .expect("Failed to recover client")
+    }
+
+    /// Open an existing client database (e.g., after recovery)
+    pub async fn open_client_with_db(
+        &self,
+        db: Database,
+        root_secret: RootSecret,
+    ) -> ClientHandleArc {
+        info!(target: LOG_TEST, "Opening client with existing db");
+        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        client_builder.with_module_inits(self.client_init.clone());
+        client_builder
+            .open(self.connectors.clone(), db, root_secret)
+            .await
+            .map(Arc::new)
+            .expect("Failed to open client")
+    }
+
     /// Return first invite code for gateways
     pub fn invite_code(&self) -> InviteCode {
         self.configs[&PeerId::from(0)].get_invite_code(None)

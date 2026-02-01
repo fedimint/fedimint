@@ -1,0 +1,39 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "fedimint-mint-tests contains integration tests for the mint module"
+edition = "2021"
+license = "MIT"
+name = "fedimint-mintv2-tests"
+publish = false
+version = { workspace = true }
+
+[[test]]
+name = "fedimint_mintv2_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin_hashes = { workspace = true }
+bls12_381 = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mintv2-client = { workspace = true }
+fedimint-mintv2-common = { workspace = true }
+fedimint-mintv2-server = { workspace = true }
+fedimint-testing = { workspace = true }
+ff = "0.13.0"
+futures = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tbs = { workspace = true }
+threshold_crypto = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
