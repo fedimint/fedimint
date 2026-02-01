@@ -5,7 +5,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_10_0_ALPHA;
+use devimint::version_constants::VERSION_0_11_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::task::sleep_in_test;
 use fedimint_walletv2_common::TransactionInfo;
@@ -174,12 +174,12 @@ async fn main() -> anyhow::Result<()> {
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
             let fedimintd_version = util::FedimintdCmd::version_or_default().await;
 
-            if fedimint_cli_version < *VERSION_0_10_0_ALPHA {
+            if fedimint_cli_version < *VERSION_0_11_0_ALPHA {
                 info!(%fedimint_cli_version, "Version did not support walletv2 module, skipping");
                 return Ok(());
             }
 
-            if fedimintd_version < *VERSION_0_10_0_ALPHA {
+            if fedimintd_version < *VERSION_0_11_0_ALPHA {
                 info!(%fedimintd_version, "Version did not support walletv2 module, skipping");
                 return Ok(());
             }
