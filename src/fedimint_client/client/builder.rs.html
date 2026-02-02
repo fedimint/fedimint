@@ -1352,28 +1352,32 @@
 <a href=#1352 id=1352 data-nosnippet>1352</a>    }
 <a href=#1353 id=1353 data-nosnippet>1353</a>
 <a href=#1354 id=1354 data-nosnippet>1354</a>    <span class="doccomment">/// Download most recent valid backup found from the Federation
-<a href=#1355 id=1355 data-nosnippet>1355</a>    </span><span class="kw">pub async fn </span>download_backup_from_federation(
-<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1357 id=1357 data-nosnippet>1357</a>        pre_root_secret: RootSecret,
-<a href=#1358 id=1358 data-nosnippet>1358</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
-<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="kw">let </span>pre_root_secret = pre_root_secret.to_inner(<span class="self">self</span>.config.calculate_federation_id());
-<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="kw">let </span>api = DynGlobalApi::new(
-<a href=#1361 id=1361 data-nosnippet>1361</a>            <span class="self">self</span>.connectors.clone(),
-<a href=#1362 id=1362 data-nosnippet>1362</a>            <span class="comment">// TODO: change join logic to use FederationId v2
-<a href=#1363 id=1363 data-nosnippet>1363</a>            </span><span class="self">self</span>.config
-<a href=#1364 id=1364 data-nosnippet>1364</a>                .global
-<a href=#1365 id=1365 data-nosnippet>1365</a>                .api_endpoints
-<a href=#1366 id=1366 data-nosnippet>1366</a>                .iter()
-<a href=#1367 id=1367 data-nosnippet>1367</a>                .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone()))
-<a href=#1368 id=1368 data-nosnippet>1368</a>                .collect(),
-<a href=#1369 id=1369 data-nosnippet>1369</a>            <span class="self">self</span>.api_secret.as_deref(),
-<a href=#1370 id=1370 data-nosnippet>1370</a>        )<span class="question-mark">?</span>;
-<a href=#1371 id=1371 data-nosnippet>1371</a>
-<a href=#1372 id=1372 data-nosnippet>1372</a>        Client::download_backup_from_federation_static(
-<a href=#1373 id=1373 data-nosnippet>1373</a>            <span class="kw-2">&amp;</span>api,
-<a href=#1374 id=1374 data-nosnippet>1374</a>            <span class="kw-2">&amp;</span>ClientBuilder::federation_root_secret(<span class="kw-2">&amp;</span>pre_root_secret, <span class="kw-2">&amp;</span><span class="self">self</span>.config),
-<a href=#1375 id=1375 data-nosnippet>1375</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.inner.decoders(<span class="kw-2">&amp;</span><span class="self">self</span>.config),
-<a href=#1376 id=1376 data-nosnippet>1376</a>        )
-<a href=#1377 id=1377 data-nosnippet>1377</a>        .<span class="kw">await
-<a href=#1378 id=1378 data-nosnippet>1378</a>    </span>}
-<a href=#1379 id=1379 data-nosnippet>1379</a>}</code></pre></div></section></main></body></html>
+<a href=#1355 id=1355 data-nosnippet>1355</a>    </span><span class="attr">#[deprecated(
+<a href=#1356 id=1356 data-nosnippet>1356</a>        note = <span class="string">"Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
+<a href=#1357 id=1357 data-nosnippet>1357</a>    </span>)]
+<a href=#1358 id=1358 data-nosnippet>1358</a>    #[allow(deprecated)]
+<a href=#1359 id=1359 data-nosnippet>1359</a>    </span><span class="kw">pub async fn </span>download_backup_from_federation(
+<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1361 id=1361 data-nosnippet>1361</a>        pre_root_secret: RootSecret,
+<a href=#1362 id=1362 data-nosnippet>1362</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+<a href=#1363 id=1363 data-nosnippet>1363</a>        <span class="kw">let </span>pre_root_secret = pre_root_secret.to_inner(<span class="self">self</span>.config.calculate_federation_id());
+<a href=#1364 id=1364 data-nosnippet>1364</a>        <span class="kw">let </span>api = DynGlobalApi::new(
+<a href=#1365 id=1365 data-nosnippet>1365</a>            <span class="self">self</span>.connectors.clone(),
+<a href=#1366 id=1366 data-nosnippet>1366</a>            <span class="comment">// TODO: change join logic to use FederationId v2
+<a href=#1367 id=1367 data-nosnippet>1367</a>            </span><span class="self">self</span>.config
+<a href=#1368 id=1368 data-nosnippet>1368</a>                .global
+<a href=#1369 id=1369 data-nosnippet>1369</a>                .api_endpoints
+<a href=#1370 id=1370 data-nosnippet>1370</a>                .iter()
+<a href=#1371 id=1371 data-nosnippet>1371</a>                .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone()))
+<a href=#1372 id=1372 data-nosnippet>1372</a>                .collect(),
+<a href=#1373 id=1373 data-nosnippet>1373</a>            <span class="self">self</span>.api_secret.as_deref(),
+<a href=#1374 id=1374 data-nosnippet>1374</a>        )<span class="question-mark">?</span>;
+<a href=#1375 id=1375 data-nosnippet>1375</a>
+<a href=#1376 id=1376 data-nosnippet>1376</a>        Client::download_backup_from_federation_static(
+<a href=#1377 id=1377 data-nosnippet>1377</a>            <span class="kw-2">&amp;</span>api,
+<a href=#1378 id=1378 data-nosnippet>1378</a>            <span class="kw-2">&amp;</span>ClientBuilder::federation_root_secret(<span class="kw-2">&amp;</span>pre_root_secret, <span class="kw-2">&amp;</span><span class="self">self</span>.config),
+<a href=#1379 id=1379 data-nosnippet>1379</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.inner.decoders(<span class="kw-2">&amp;</span><span class="self">self</span>.config),
+<a href=#1380 id=1380 data-nosnippet>1380</a>        )
+<a href=#1381 id=1381 data-nosnippet>1381</a>        .<span class="kw">await
+<a href=#1382 id=1382 data-nosnippet>1382</a>    </span>}
+<a href=#1383 id=1383 data-nosnippet>1383</a>}</code></pre></div></section></main></body></html>
