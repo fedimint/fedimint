@@ -12,7 +12,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
-use fedimint_core::module::{AmountUnit, serde_json};
+use fedimint_core::module::{AmountUnit, CommonModuleInit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
@@ -1697,7 +1697,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
         .await;
     let address_creation_op = initial_ops
         .iter()
-        .find(|(_, entry)| entry.operation_id() == address_op_id);
+        .find(|(op_id, _)| *op_id == address_op_id);
     assert!(
         address_creation_op.is_some(),
         "Address creation operation should exist"
