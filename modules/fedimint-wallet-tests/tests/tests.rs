@@ -1683,7 +1683,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
-    
+
     // Allocate a single deposit address
     let (address_op_id, address, _) = wallet_module
         .allocate_deposit_address_expert_only(())
@@ -1691,11 +1691,17 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     info!(?address, "Deposit address allocated");
 
     // Verify the initial address allocation operation exists
-    let initial_ops = client.operation_log().paginate_operations_rev(100, None).await;
+    let initial_ops = client
+        .operation_log()
+        .paginate_operations_rev(100, None)
+        .await;
     let address_creation_op = initial_ops
         .iter()
         .find(|(_, entry)| entry.operation_id() == address_op_id);
-    assert!(address_creation_op.is_some(), "Address creation operation should exist");
+    assert!(
+        address_creation_op.is_some(),
+        "Address creation operation should exist"
+    );
 
     // Send first deposit to the address
     let first_deposit_amount = bsats(PEG_IN_AMOUNT_SATS)
@@ -1707,7 +1713,9 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
 
     // Wait for finality and claim
     bitcoin.mine_blocks(finality_delay).await;
-    wallet_module.await_num_deposits_by_operation_id(address_op_id, 1).await?;
+    wallet_module
+        .await_num_deposits_by_operation_id(address_op_id, 1)
+        .await?;
     info!("First deposit claimed");
 
     // Send second deposit to the same address
@@ -1720,11 +1728,16 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
 
     // Wait for finality and claim
     bitcoin.mine_blocks(finality_delay).await;
-    wallet_module.await_num_deposits_by_operation_id(address_op_id, 2).await?;
+    wallet_module
+        .await_num_deposits_by_operation_id(address_op_id, 2)
+        .await?;
     info!("Second deposit claimed");
 
     // Verify the operation log structure
-    let all_ops = client.operation_log().paginate_operations_rev(100, None).await;
+    let all_ops = client
+        .operation_log()
+        .paginate_operations_rev(100, None)
+        .await;
     info!("Total operations in log: {}", all_ops.len());
 
     // Find all wallet operations
@@ -1762,7 +1775,10 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
         .filter(|(_, entry)| {
             let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
                 .expect("Failed to parse wallet operation meta");
-            matches!(meta.variant, WalletOperationMetaVariant::ReceiveDeposit { .. })
+            matches!(
+                meta.variant,
+                WalletOperationMetaVariant::ReceiveDeposit { .. }
+            )
         })
         .collect();
 
@@ -1780,7 +1796,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     for (_, entry) in deposit_claim_ops {
         let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
             .expect("Failed to parse wallet operation meta");
-        
+
         if let WalletOperationMetaVariant::ReceiveDeposit {
             address_operation_id,
             btc_out_point,
@@ -1830,8 +1846,14 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
         }
     }
 
-    assert!(found_tx1, "Should find operation for first deposit transaction");
-    assert!(found_tx2, "Should find operation for second deposit transaction");
+    assert!(
+        found_tx1,
+        "Should find operation for first deposit transaction"
+    );
+    assert!(
+        found_tx2,
+        "Should find operation for second deposit transaction"
+    );
 
     // Verify final balance reflects both deposits
     let expected_balance = sats(PEG_IN_AMOUNT_SATS + PEG_IN_AMOUNT_SATS + 5000);

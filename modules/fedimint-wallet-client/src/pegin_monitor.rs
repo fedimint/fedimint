@@ -12,7 +12,7 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::module::{serde_json, Amounts};
+use fedimint_core::module::{Amounts, serde_json};
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
@@ -515,40 +515,38 @@ async fn claim_peg_in(
                     )
                     .await;
 
-                    let claimed_pegin_data = if let Some((change_range, btc_amount)) = maybe_claim_result {
-                        let claim_txid = change_range.txid();
-                        let change: Vec<_> = change_range.into_iter().collect();
+                    let claimed_pegin_data =
+                        if let Some((change_range, btc_amount)) = maybe_claim_result {
+                            let claim_txid = change_range.txid();
+                            let change: Vec<_> = change_range.into_iter().collect();
 
-                        client_ctx
-                            .manual_operation_start_dbtx(
-                                dbtx,
-                                receive_operation_id,
-                                WalletCommonInit::KIND.as_str(),
-                                WalletOperationMeta {
-                                    variant: WalletOperationMetaVariant::ReceiveDeposit {
-                                        address_operation_id,
-                                        tweak_idx,
-                                        btc_out_point: out_point,
-                                        amount: btc_amount,
-                                        claim_txid,
-                                        change: change.clone(),
+                            client_ctx
+                                .manual_operation_start_dbtx(
+                                    dbtx,
+                                    receive_operation_id,
+                                    WalletCommonInit::KIND.as_str(),
+                                    WalletOperationMeta {
+                                        variant: WalletOperationMetaVariant::ReceiveDeposit {
+                                            address_operation_id,
+                                            tweak_idx,
+                                            btc_out_point: out_point,
+                                            amount: btc_amount,
+                                            claim_txid,
+                                            change: change.clone(),
+                                        },
+                                        extra_meta: serde_json::Value::Null,
                                     },
-                                    extra_meta: serde_json::Value::Null,
-                                },
-                                vec![],
-                            )
-                            .await?;
+                                    vec![],
+                                )
+                                .await?;
 
-                        ClaimedPegInData {
-                            claim_txid,
-                            change,
-                        }
-                    } else {
-                        ClaimedPegInData {
-                            claim_txid: TransactionId::from_byte_array([0; 32]),
-                            change: vec![],
-                        }
-                    };
+                            ClaimedPegInData { claim_txid, change }
+                        } else {
+                            ClaimedPegInData {
+                                claim_txid: TransactionId::from_byte_array([0; 32]),
+                                change: vec![],
+                            }
+                        };
 
                     dbtx.insert_entry(
                         &ClaimedPegInKey {
