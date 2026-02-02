@@ -12,7 +12,7 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::module::{Amounts, serde_json};
+use fedimint_core::module::{Amounts, CommonModuleInit, serde_json};
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
