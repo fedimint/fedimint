@@ -6,80 +6,80 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>devimint::devfed::DevJitFed;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>devimint::federation::Client;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>devimint::util::almost_equal;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>devimint::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>devimint::{Gatewayd, cmd, util};
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::core::OperationId;
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::encoding::Encodable;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_lnv2_client::FinalSendOperationState;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_lnv2_common::lnurl::VerifyResponse;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>lnurl::lnurl::LnUrl;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>serde::Deserialize;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>substring::Substring;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>tokio::try_join;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>tracing::info;
-<a href=#23 id=23 data-nosnippet>23</a>
-<a href=#24 id=24 data-nosnippet>24</a><span class="attr">#[path = <span class="string">"common.rs"</span>]
-<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">mod </span>common;
-<a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a><span class="attr">#[derive(Parser)]
-<a href=#28 id=28 data-nosnippet>28</a>#[command(name = <span class="string">"lnv2-module-tests"</span>)]
-<a href=#29 id=29 data-nosnippet>29</a>#[command(about = <span class="string">"LNv2 module integration tests"</span>, long_about = <span class="prelude-val">None</span>)]
-<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">struct </span>Cli {
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="attr">#[command(subcommand)]
-<a href=#32 id=32 data-nosnippet>32</a>    </span>command: <span class="prelude-ty">Option</span>&lt;Commands&gt;,
-<a href=#33 id=33 data-nosnippet>33</a>}
-<a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="attr">#[derive(Subcommand)]
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">enum </span>Commands {
-<a href=#37 id=37 data-nosnippet>37</a>    <span class="doccomment">/// Run gateway registration tests
-<a href=#38 id=38 data-nosnippet>38</a>    </span>GatewayRegistration,
-<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Run payment tests
-<a href=#40 id=40 data-nosnippet>40</a>    </span>Payments,
-<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Run LNURL pay tests
-<a href=#42 id=42 data-nosnippet>42</a>    </span>LnurlPay,
-<a href=#43 id=43 data-nosnippet>43</a>}
-<a href=#44 id=44 data-nosnippet>44</a>
-<a href=#45 id=45 data-nosnippet>45</a><span class="attr">#[tokio::main]
-<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
-<a href=#47 id=47 data-nosnippet>47</a>    <span class="kw">let </span>cli = Cli::parse();
-<a href=#48 id=48 data-nosnippet>48</a>
-<a href=#49 id=49 data-nosnippet>49</a>    devimint::run_devfed_test()
-<a href=#50 id=50 data-nosnippet>50</a>        .call(|dev_fed, _process_mgr| <span class="kw">async move </span>{
-<a href=#51 id=51 data-nosnippet>51</a>            <span class="kw">if </span>!devimint::util::supports_lnv2() {
-<a href=#52 id=52 data-nosnippet>52</a>                <span class="macro">info!</span>(<span class="string">"lnv2 is disabled, skipping"</span>);
-<a href=#53 id=53 data-nosnippet>53</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#54 id=54 data-nosnippet>54</a>            }
-<a href=#55 id=55 data-nosnippet>55</a>
-<a href=#56 id=56 data-nosnippet>56</a>            <span class="kw">if </span>!devimint::util::is_backwards_compatibility_test() {
-<a href=#57 id=57 data-nosnippet>57</a>                <span class="macro">info!</span>(<span class="string">"Verifying that LNv1 module is disabled..."</span>);
-<a href=#58 id=58 data-nosnippet>58</a>
-<a href=#59 id=59 data-nosnippet>59</a>                <span class="macro">ensure!</span>(
-<a href=#60 id=60 data-nosnippet>60</a>                    !devimint::util::supports_lnv1(),
-<a href=#61 id=61 data-nosnippet>61</a>                    <span class="string">"LNv1 module should be disabled when not in backwards compatibility test"
-<a href=#62 id=62 data-nosnippet>62</a>                </span>);
-<a href=#63 id=63 data-nosnippet>63</a>            }
-<a href=#64 id=64 data-nosnippet>64</a>
-<a href=#65 id=65 data-nosnippet>65</a>            <span class="kw">match </span><span class="kw-2">&amp;</span>cli.command {
-<a href=#66 id=66 data-nosnippet>66</a>                <span class="prelude-val">Some</span>(Commands::GatewayRegistration) =&gt; {
-<a href=#67 id=67 data-nosnippet>67</a>                    test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#68 id=68 data-nosnippet>68</a>                }
-<a href=#69 id=69 data-nosnippet>69</a>                <span class="prelude-val">Some</span>(Commands::Payments) =&gt; {
-<a href=#70 id=70 data-nosnippet>70</a>                    test_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#71 id=71 data-nosnippet>71</a>                }
-<a href=#72 id=72 data-nosnippet>72</a>                <span class="prelude-val">Some</span>(Commands::LnurlPay) =&gt; {
-<a href=#73 id=73 data-nosnippet>73</a>                    pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#74 id=74 data-nosnippet>74</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#75 id=75 data-nosnippet>75</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#76 id=76 data-nosnippet>76</a>                }
-<a href=#77 id=77 data-nosnippet>77</a>                <span class="prelude-val">None </span>=&gt; {
-<a href=#78 id=78 data-nosnippet>78</a>                    <span class="comment">// Run all tests if no subcommand is specified
-<a href=#79 id=79 data-nosnippet>79</a>                    </span>test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#80 id=80 data-nosnippet>80</a>                    test_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#81 id=81 data-nosnippet>81</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#82 id=82 data-nosnippet>82</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>devimint::version_constants::{
+<a href=#10 id=10 data-nosnippet>10</a>    VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA,
+<a href=#11 id=11 data-nosnippet>11</a>};
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>devimint::{Gatewayd, cmd, util};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::core::OperationId;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::encoding::Encodable;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_lnv2_client::FinalSendOperationState;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_lnv2_common::lnurl::VerifyResponse;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>lnurl::lnurl::LnUrl;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>serde::Deserialize;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>substring::Substring;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>tokio::try_join;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>tracing::info;
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="attr">#[path = <span class="string">"common.rs"</span>]
+<a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">mod </span>common;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="attr">#[derive(Parser)]
+<a href=#30 id=30 data-nosnippet>30</a>#[command(name = <span class="string">"lnv2-module-tests"</span>)]
+<a href=#31 id=31 data-nosnippet>31</a>#[command(about = <span class="string">"LNv2 module integration tests"</span>, long_about = <span class="prelude-val">None</span>)]
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="kw">struct </span>Cli {
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="attr">#[command(subcommand)]
+<a href=#34 id=34 data-nosnippet>34</a>    </span>command: <span class="prelude-ty">Option</span>&lt;Commands&gt;,
+<a href=#35 id=35 data-nosnippet>35</a>}
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="attr">#[derive(Subcommand)]
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">enum </span>Commands {
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Run gateway registration tests
+<a href=#40 id=40 data-nosnippet>40</a>    </span>GatewayRegistration,
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="doccomment">/// Run payment tests
+<a href=#42 id=42 data-nosnippet>42</a>    </span>Payments,
+<a href=#43 id=43 data-nosnippet>43</a>    <span class="doccomment">/// Run LNURL pay tests
+<a href=#44 id=44 data-nosnippet>44</a>    </span>LnurlPay,
+<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="attr">#[tokio::main]
+<a href=#48 id=48 data-nosnippet>48</a></span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="kw">let </span>cli = Cli::parse();
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>    devimint::run_devfed_test()
+<a href=#52 id=52 data-nosnippet>52</a>        .call(|dev_fed, _process_mgr| <span class="kw">async move </span>{
+<a href=#53 id=53 data-nosnippet>53</a>            <span class="kw">if </span>!devimint::util::supports_lnv2() {
+<a href=#54 id=54 data-nosnippet>54</a>                <span class="macro">info!</span>(<span class="string">"lnv2 is disabled, skipping"</span>);
+<a href=#55 id=55 data-nosnippet>55</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#56 id=56 data-nosnippet>56</a>            }
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a>            <span class="kw">if </span>!devimint::util::is_backwards_compatibility_test() {
+<a href=#59 id=59 data-nosnippet>59</a>                <span class="macro">info!</span>(<span class="string">"Verifying that LNv1 module is disabled..."</span>);
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a>                <span class="macro">ensure!</span>(
+<a href=#62 id=62 data-nosnippet>62</a>                    !devimint::util::supports_lnv1(),
+<a href=#63 id=63 data-nosnippet>63</a>                    <span class="string">"LNv1 module should be disabled when not in backwards compatibility test"
+<a href=#64 id=64 data-nosnippet>64</a>                </span>);
+<a href=#65 id=65 data-nosnippet>65</a>            }
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>            <span class="kw">match </span><span class="kw-2">&amp;</span>cli.command {
+<a href=#68 id=68 data-nosnippet>68</a>                <span class="prelude-val">Some</span>(Commands::GatewayRegistration) =&gt; {
+<a href=#69 id=69 data-nosnippet>69</a>                    test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#70 id=70 data-nosnippet>70</a>                }
+<a href=#71 id=71 data-nosnippet>71</a>                <span class="prelude-val">Some</span>(Commands::Payments) =&gt; {
+<a href=#72 id=72 data-nosnippet>72</a>                    test_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#73 id=73 data-nosnippet>73</a>                }
+<a href=#74 id=74 data-nosnippet>74</a>                <span class="prelude-val">Some</span>(Commands::LnurlPay) =&gt; {
+<a href=#75 id=75 data-nosnippet>75</a>                    pegin_gateways(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#76 id=76 data-nosnippet>76</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#77 id=77 data-nosnippet>77</a>                }
+<a href=#78 id=78 data-nosnippet>78</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#79 id=79 data-nosnippet>79</a>                    <span class="comment">// Run all tests if no subcommand is specified
+<a href=#80 id=80 data-nosnippet>80</a>                    </span>test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#81 id=81 data-nosnippet>81</a>                    test_payments(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#82 id=82 data-nosnippet>82</a>                    test_lnurl_pay(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#83 id=83 data-nosnippet>83</a>                }
 <a href=#84 id=84 data-nosnippet>84</a>            }
 <a href=#85 id=85 data-nosnippet>85</a>
@@ -469,254 +469,246 @@
 <a href=#469 id=469 data-nosnippet>469</a>    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"JSON Value is not a boolean"</span>))
 <a href=#470 id=470 data-nosnippet>470</a>}
 <a href=#471 id=471 data-nosnippet>471</a>
-<a href=#472 id=472 data-nosnippet>472</a><span class="kw">async fn </span>test_lnurl_pay(dev_fed: <span class="kw-2">&amp;</span>DevJitFed, use_v2: bool) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#473 id=473 data-nosnippet>473</a>    <span class="kw">let </span>min_version = <span class="kw">if </span>use_v2 {
-<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw-2">&amp;*</span>VERSION_0_10_0_ALPHA
-<a href=#475 id=475 data-nosnippet>475</a>    } <span class="kw">else </span>{
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw-2">&amp;*</span>VERSION_0_9_0_ALPHA
-<a href=#477 id=477 data-nosnippet>477</a>    };
-<a href=#478 id=478 data-nosnippet>478</a>
-<a href=#479 id=479 data-nosnippet>479</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>min_version {
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#481 id=481 data-nosnippet>481</a>    }
-<a href=#482 id=482 data-nosnippet>482</a>
-<a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">if </span>util::FedimintdCmd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>min_version {
-<a href=#484 id=484 data-nosnippet>484</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#472 id=472 data-nosnippet>472</a><span class="kw">async fn </span>test_lnurl_pay(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#473 id=473 data-nosnippet>473</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#475 id=475 data-nosnippet>475</a>    }
+<a href=#476 id=476 data-nosnippet>476</a>
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">if </span>util::FedimintdCmd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#479 id=479 data-nosnippet>479</a>    }
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a>    <span class="kw">if </span>util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#483 id=483 data-nosnippet>483</a>    }
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a>    <span class="kw">if </span>util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>min_version {
-<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#489 id=489 data-nosnippet>489</a>    }
-<a href=#490 id=490 data-nosnippet>490</a>
-<a href=#491 id=491 data-nosnippet>491</a>    <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#492 id=492 data-nosnippet>492</a>
-<a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#494 id=494 data-nosnippet>494</a>    <span class="kw">let </span>gw_ldk = dev_fed.gw_ldk().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">let </span>gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="kw">let </span>gw_ldk = dev_fed.gw_ldk().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">let </span>gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
+<a href=#491 id=491 data-nosnippet>491</a>
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">let </span>recurringd = dev_fed.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>.api_url().to_string();
+<a href=#493 id=493 data-nosnippet>493</a>
+<a href=#494 id=494 data-nosnippet>494</a>    <span class="kw">let </span>client_a = federation
+<a href=#495 id=495 data-nosnippet>495</a>        .new_joined_client(<span class="string">"lnv2-lnurl-test-client-a"</span>)
+<a href=#496 id=496 data-nosnippet>496</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">let </span>recurringd = <span class="kw">if </span>use_v2 {
-<a href=#499 id=499 data-nosnippet>499</a>        dev_fed.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>.api_url().to_string()
-<a href=#500 id=500 data-nosnippet>500</a>    } <span class="kw">else </span>{
-<a href=#501 id=501 data-nosnippet>501</a>        dev_fed.recurringd().<span class="kw">await</span><span class="question-mark">?</span>.api_url().to_string()
-<a href=#502 id=502 data-nosnippet>502</a>    };
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>    <span class="kw">let </span>client_a = federation
-<a href=#505 id=505 data-nosnippet>505</a>        .new_joined_client(<span class="string">"lnv2-lnurl-test-client-a"</span>)
-<a href=#506 id=506 data-nosnippet>506</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#507 id=507 data-nosnippet>507</a>
-<a href=#508 id=508 data-nosnippet>508</a>    <span class="kw">let </span>client_b = federation
-<a href=#509 id=509 data-nosnippet>509</a>        .new_joined_client(<span class="string">"lnv2-lnurl-test-client-b"</span>)
-<a href=#510 id=510 data-nosnippet>510</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">let </span>client_b = federation
+<a href=#499 id=499 data-nosnippet>499</a>        .new_joined_client(<span class="string">"lnv2-lnurl-test-client-b"</span>)
+<a href=#500 id=500 data-nosnippet>500</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_pairs {
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="macro">info!</span>(
+<a href=#504 id=504 data-nosnippet>504</a>            <span class="string">"Testing lnurl payments: {} -&gt; {} -&gt; client"</span>,
+<a href=#505 id=505 data-nosnippet>505</a>            gw_send.ln.ln_type(),
+<a href=#506 id=506 data-nosnippet>506</a>            gw_receive.ln.ln_type()
+<a href=#507 id=507 data-nosnippet>507</a>        );
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span>lnurl_a = generate_lnurl(<span class="kw-2">&amp;</span>client_a, <span class="kw-2">&amp;</span>recurringd, <span class="kw-2">&amp;</span>gw_receive.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">let </span>lnurl_b = generate_lnurl(<span class="kw-2">&amp;</span>client_b, <span class="kw-2">&amp;</span>recurringd, <span class="kw-2">&amp;</span>gw_receive.addr).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#511 id=511 data-nosnippet>511</a>
-<a href=#512 id=512 data-nosnippet>512</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_pairs {
-<a href=#513 id=513 data-nosnippet>513</a>        <span class="macro">info!</span>(
-<a href=#514 id=514 data-nosnippet>514</a>            <span class="string">"Testing lnurl payments: {} -&gt; {} -&gt; client"</span>,
-<a href=#515 id=515 data-nosnippet>515</a>            gw_send.ln.ln_type(),
-<a href=#516 id=516 data-nosnippet>516</a>            gw_receive.ln.ln_type()
-<a href=#517 id=517 data-nosnippet>517</a>        );
-<a href=#518 id=518 data-nosnippet>518</a>
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>lnurl_a = generate_lnurl(<span class="kw-2">&amp;</span>client_a, <span class="kw-2">&amp;</span>recurringd, <span class="kw-2">&amp;</span>gw_receive.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>lnurl_b = generate_lnurl(<span class="kw-2">&amp;</span>client_b, <span class="kw-2">&amp;</span>recurringd, <span class="kw-2">&amp;</span>gw_receive.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#521 id=521 data-nosnippet>521</a>
-<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span>(invoice_a, verify_url_a) = fetch_invoice(lnurl_a.clone(), <span class="number">500_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">let </span>(invoice_b, verify_url_b) = fetch_invoice(lnurl_b.clone(), <span class="number">500_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#524 id=524 data-nosnippet>524</a>
-<a href=#525 id=525 data-nosnippet>525</a>        <span class="kw">let </span>verify_task_a = task::spawn(<span class="string">"verify_task_a"</span>, verify_payment_wait(verify_url_a.clone()));
-<a href=#526 id=526 data-nosnippet>526</a>        <span class="kw">let </span>verify_task_b = task::spawn(<span class="string">"verify_task_b"</span>, verify_payment_wait(verify_url_b.clone()));
-<a href=#527 id=527 data-nosnippet>527</a>
-<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">let </span>response_a = verify_payment(<span class="kw-2">&amp;</span>verify_url_a).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#529 id=529 data-nosnippet>529</a>        <span class="kw">let </span>response_b = verify_payment(<span class="kw-2">&amp;</span>verify_url_b).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#530 id=530 data-nosnippet>530</a>
-<a href=#531 id=531 data-nosnippet>531</a>        <span class="macro">assert!</span>(!response_a.settled);
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="macro">assert!</span>(!response_b.settled);
-<a href=#533 id=533 data-nosnippet>533</a>
-<a href=#534 id=534 data-nosnippet>534</a>        <span class="macro">assert!</span>(response_a.preimage.is_none());
-<a href=#535 id=535 data-nosnippet>535</a>        <span class="macro">assert!</span>(response_b.preimage.is_none());
-<a href=#536 id=536 data-nosnippet>536</a>
-<a href=#537 id=537 data-nosnippet>537</a>        gw_send.pay_invoice(invoice_a.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#538 id=538 data-nosnippet>538</a>        gw_send.pay_invoice(invoice_b.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#539 id=539 data-nosnippet>539</a>
-<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>response_a = verify_payment(<span class="kw-2">&amp;</span>verify_url_a).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span>response_b = verify_payment(<span class="kw-2">&amp;</span>verify_url_b).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">let </span>(invoice_a, verify_url_a) = fetch_invoice(lnurl_a.clone(), <span class="number">500_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">let </span>(invoice_b, verify_url_b) = fetch_invoice(lnurl_b.clone(), <span class="number">500_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a>        <span class="kw">let </span>verify_task_a = task::spawn(<span class="string">"verify_task_a"</span>, verify_payment_wait(verify_url_a.clone()));
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">let </span>verify_task_b = task::spawn(<span class="string">"verify_task_b"</span>, verify_payment_wait(verify_url_b.clone()));
+<a href=#517 id=517 data-nosnippet>517</a>
+<a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span>response_a = verify_payment(<span class="kw-2">&amp;</span>verify_url_a).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>response_b = verify_payment(<span class="kw-2">&amp;</span>verify_url_b).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#520 id=520 data-nosnippet>520</a>
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="macro">assert!</span>(!response_a.settled);
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="macro">assert!</span>(!response_b.settled);
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="macro">assert!</span>(response_a.preimage.is_none());
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="macro">assert!</span>(response_b.preimage.is_none());
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>        gw_send.pay_invoice(invoice_a.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#528 id=528 data-nosnippet>528</a>        gw_send.pay_invoice(invoice_b.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#529 id=529 data-nosnippet>529</a>
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw">let </span>response_a = verify_payment(<span class="kw-2">&amp;</span>verify_url_a).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">let </span>response_b = verify_payment(<span class="kw-2">&amp;</span>verify_url_b).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#532 id=532 data-nosnippet>532</a>
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="macro">assert!</span>(response_a.settled);
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="macro">assert!</span>(response_b.settled);
+<a href=#535 id=535 data-nosnippet>535</a>
+<a href=#536 id=536 data-nosnippet>536</a>        verify_preimage(<span class="kw-2">&amp;</span>response_a, <span class="kw-2">&amp;</span>invoice_a);
+<a href=#537 id=537 data-nosnippet>537</a>        verify_preimage(<span class="kw-2">&amp;</span>response_b, <span class="kw-2">&amp;</span>invoice_b);
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>        <span class="macro">assert_eq!</span>(verify_task_a.<span class="kw">await</span><span class="question-mark">??</span>, response_a);
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="macro">assert_eq!</span>(verify_task_b.<span class="kw">await</span><span class="question-mark">??</span>, response_b);
+<a href=#541 id=541 data-nosnippet>541</a>    }
 <a href=#542 id=542 data-nosnippet>542</a>
-<a href=#543 id=543 data-nosnippet>543</a>        <span class="macro">assert!</span>(response_a.settled);
-<a href=#544 id=544 data-nosnippet>544</a>        <span class="macro">assert!</span>(response_b.settled);
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">while </span>client_a.balance().<span class="kw">await</span><span class="question-mark">? </span>&lt; <span class="number">950 </span>* <span class="number">1000 </span>{
+<a href=#544 id=544 data-nosnippet>544</a>        <span class="macro">info!</span>(<span class="string">"Waiting for client A to receive funds via LNURL..."</span>);
 <a href=#545 id=545 data-nosnippet>545</a>
-<a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">let </span>payment_hash = response_a
-<a href=#547 id=547 data-nosnippet>547</a>            .preimage
-<a href=#548 id=548 data-nosnippet>548</a>            .expect(<span class="string">"Payment A should be settled"</span>)
-<a href=#549 id=549 data-nosnippet>549</a>            .consensus_hash::&lt;sha256::Hash&gt;();
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="macro">cmd!</span>(client_a, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#547 id=547 data-nosnippet>547</a>    }
+<a href=#548 id=548 data-nosnippet>548</a>
+<a href=#549 id=549 data-nosnippet>549</a>    <span class="macro">info!</span>(<span class="string">"Client A successfully received funds via LNURL!"</span>);
 <a href=#550 id=550 data-nosnippet>550</a>
-<a href=#551 id=551 data-nosnippet>551</a>        <span class="macro">assert_eq!</span>(payment_hash, <span class="kw-2">*</span>invoice_a.payment_hash());
-<a href=#552 id=552 data-nosnippet>552</a>
-<a href=#553 id=553 data-nosnippet>553</a>        <span class="kw">let </span>payment_hash = response_b
-<a href=#554 id=554 data-nosnippet>554</a>            .preimage
-<a href=#555 id=555 data-nosnippet>555</a>            .expect(<span class="string">"Payment B should be settled"</span>)
-<a href=#556 id=556 data-nosnippet>556</a>            .consensus_hash::&lt;sha256::Hash&gt;();
-<a href=#557 id=557 data-nosnippet>557</a>
-<a href=#558 id=558 data-nosnippet>558</a>        <span class="macro">assert_eq!</span>(payment_hash, <span class="kw-2">*</span>invoice_b.payment_hash());
-<a href=#559 id=559 data-nosnippet>559</a>
-<a href=#560 id=560 data-nosnippet>560</a>        <span class="macro">assert_eq!</span>(verify_task_a.<span class="kw">await</span><span class="question-mark">??</span>.preimage, response_a.preimage);
-<a href=#561 id=561 data-nosnippet>561</a>        <span class="macro">assert_eq!</span>(verify_task_b.<span class="kw">await</span><span class="question-mark">??</span>.preimage, response_b.preimage);
-<a href=#562 id=562 data-nosnippet>562</a>    }
-<a href=#563 id=563 data-nosnippet>563</a>
-<a href=#564 id=564 data-nosnippet>564</a>    <span class="kw">while </span>client_a.balance().<span class="kw">await</span><span class="question-mark">? </span>&lt; <span class="number">950 </span>* <span class="number">1000 </span>{
-<a href=#565 id=565 data-nosnippet>565</a>        <span class="macro">info!</span>(<span class="string">"Waiting for client A to receive funds via LNURL..."</span>);
-<a href=#566 id=566 data-nosnippet>566</a>
-<a href=#567 id=567 data-nosnippet>567</a>        <span class="macro">cmd!</span>(client_a, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#568 id=568 data-nosnippet>568</a>    }
-<a href=#569 id=569 data-nosnippet>569</a>
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="macro">info!</span>(<span class="string">"Client A successfully received funds via LNURL!"</span>);
-<a href=#571 id=571 data-nosnippet>571</a>
-<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">while </span>client_b.balance().<span class="kw">await</span><span class="question-mark">? </span>&lt; <span class="number">950 </span>* <span class="number">1000 </span>{
-<a href=#573 id=573 data-nosnippet>573</a>        <span class="macro">info!</span>(<span class="string">"Waiting for client B to receive funds via LNURL..."</span>);
-<a href=#574 id=574 data-nosnippet>574</a>
-<a href=#575 id=575 data-nosnippet>575</a>        <span class="macro">cmd!</span>(client_b, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#576 id=576 data-nosnippet>576</a>    }
-<a href=#577 id=577 data-nosnippet>577</a>
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="macro">info!</span>(<span class="string">"Client B successfully received funds via LNURL!"</span>);
-<a href=#579 id=579 data-nosnippet>579</a>
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="prelude-val">Ok</span>(())
-<a href=#581 id=581 data-nosnippet>581</a>}
-<a href=#582 id=582 data-nosnippet>582</a>
-<a href=#583 id=583 data-nosnippet>583</a><span class="kw">async fn </span>generate_lnurl(
-<a href=#584 id=584 data-nosnippet>584</a>    client: <span class="kw-2">&amp;</span>Client,
-<a href=#585 id=585 data-nosnippet>585</a>    recurringd_base_url: <span class="kw-2">&amp;</span>str,
-<a href=#586 id=586 data-nosnippet>586</a>    gw_ldk_addr: <span class="kw-2">&amp;</span>str,
-<a href=#587 id=587 data-nosnippet>587</a>) -&gt; anyhow::Result&lt;String&gt; {
-<a href=#588 id=588 data-nosnippet>588</a>    <span class="macro">cmd!</span>(
-<a href=#589 id=589 data-nosnippet>589</a>        client,
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="string">"module"</span>,
-<a href=#591 id=591 data-nosnippet>591</a>        <span class="string">"lnv2"</span>,
-<a href=#592 id=592 data-nosnippet>592</a>        <span class="string">"lnurl"</span>,
-<a href=#593 id=593 data-nosnippet>593</a>        <span class="string">"generate"</span>,
-<a href=#594 id=594 data-nosnippet>594</a>        recurringd_base_url,
-<a href=#595 id=595 data-nosnippet>595</a>        <span class="string">"--gateway"</span>,
-<a href=#596 id=596 data-nosnippet>596</a>        gw_ldk_addr,
-<a href=#597 id=597 data-nosnippet>597</a>    )
-<a href=#598 id=598 data-nosnippet>598</a>    .out_json()
-<a href=#599 id=599 data-nosnippet>599</a>    .<span class="kw">await
-<a href=#600 id=600 data-nosnippet>600</a>    </span>.map(|s| s.as_str().unwrap().to_owned())
-<a href=#601 id=601 data-nosnippet>601</a>}
-<a href=#602 id=602 data-nosnippet>602</a>
-<a href=#603 id=603 data-nosnippet>603</a><span class="kw">async fn </span>verify_payment(verify_url: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;VerifyResponse&gt; {
-<a href=#604 id=604 data-nosnippet>604</a>    <span class="kw">let </span>response = reqwest::get(verify_url)
-<a href=#605 id=605 data-nosnippet>605</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#606 id=606 data-nosnippet>606</a>        </span>.json::&lt;VerifyResponse&gt;()
-<a href=#607 id=607 data-nosnippet>607</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#608 id=608 data-nosnippet>608</a>
-<a href=#609 id=609 data-nosnippet>609</a>    <span class="prelude-val">Ok</span>(response)
-<a href=#610 id=610 data-nosnippet>610</a>}
-<a href=#611 id=611 data-nosnippet>611</a>
-<a href=#612 id=612 data-nosnippet>612</a><span class="kw">async fn </span>verify_payment_wait(verify_url: String) -&gt; anyhow::Result&lt;VerifyResponse&gt; {
-<a href=#613 id=613 data-nosnippet>613</a>    <span class="kw">let </span>response = reqwest::get(<span class="macro">format!</span>(<span class="string">"{verify_url}?wait"</span>))
-<a href=#614 id=614 data-nosnippet>614</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#615 id=615 data-nosnippet>615</a>        </span>.json::&lt;VerifyResponse&gt;()
-<a href=#616 id=616 data-nosnippet>616</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="kw">while </span>client_b.balance().<span class="kw">await</span><span class="question-mark">? </span>&lt; <span class="number">950 </span>* <span class="number">1000 </span>{
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="macro">info!</span>(<span class="string">"Waiting for client B to receive funds via LNURL..."</span>);
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="macro">cmd!</span>(client_b, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#555 id=555 data-nosnippet>555</a>    }
+<a href=#556 id=556 data-nosnippet>556</a>
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="macro">info!</span>(<span class="string">"Client B successfully received funds via LNURL!"</span>);
+<a href=#558 id=558 data-nosnippet>558</a>
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="prelude-val">Ok</span>(())
+<a href=#560 id=560 data-nosnippet>560</a>}
+<a href=#561 id=561 data-nosnippet>561</a>
+<a href=#562 id=562 data-nosnippet>562</a><span class="kw">async fn </span>generate_lnurl(
+<a href=#563 id=563 data-nosnippet>563</a>    client: <span class="kw-2">&amp;</span>Client,
+<a href=#564 id=564 data-nosnippet>564</a>    recurringd_base_url: <span class="kw-2">&amp;</span>str,
+<a href=#565 id=565 data-nosnippet>565</a>    gw_ldk_addr: <span class="kw-2">&amp;</span>str,
+<a href=#566 id=566 data-nosnippet>566</a>) -&gt; anyhow::Result&lt;String&gt; {
+<a href=#567 id=567 data-nosnippet>567</a>    <span class="macro">cmd!</span>(
+<a href=#568 id=568 data-nosnippet>568</a>        client,
+<a href=#569 id=569 data-nosnippet>569</a>        <span class="string">"module"</span>,
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="string">"lnv2"</span>,
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="string">"lnurl"</span>,
+<a href=#572 id=572 data-nosnippet>572</a>        <span class="string">"generate"</span>,
+<a href=#573 id=573 data-nosnippet>573</a>        recurringd_base_url,
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="string">"--gateway"</span>,
+<a href=#575 id=575 data-nosnippet>575</a>        gw_ldk_addr,
+<a href=#576 id=576 data-nosnippet>576</a>    )
+<a href=#577 id=577 data-nosnippet>577</a>    .out_json()
+<a href=#578 id=578 data-nosnippet>578</a>    .<span class="kw">await
+<a href=#579 id=579 data-nosnippet>579</a>    </span>.map(|s| s.as_str().unwrap().to_owned())
+<a href=#580 id=580 data-nosnippet>580</a>}
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a><span class="kw">fn </span>verify_preimage(response: <span class="kw-2">&amp;</span>VerifyResponse, invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) {
+<a href=#583 id=583 data-nosnippet>583</a>    <span class="kw">let </span>preimage = response
+<a href=#584 id=584 data-nosnippet>584</a>        .preimage
+<a href=#585 id=585 data-nosnippet>585</a>        .as_ref()
+<a href=#586 id=586 data-nosnippet>586</a>        .expect(<span class="string">"Payment should be settled"</span>);
+<a href=#587 id=587 data-nosnippet>587</a>
+<a href=#588 id=588 data-nosnippet>588</a>    <span class="kw">let </span>payment_hash = hex_conservative::decode_to_array::&lt;<span class="number">32</span>&gt;(preimage)
+<a href=#589 id=589 data-nosnippet>589</a>        .expect(<span class="string">"Valid hex"</span>)
+<a href=#590 id=590 data-nosnippet>590</a>        .consensus_hash::&lt;sha256::Hash&gt;();
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="macro">assert_eq!</span>(payment_hash, <span class="kw-2">*</span>invoice.payment_hash());
+<a href=#593 id=593 data-nosnippet>593</a>}
+<a href=#594 id=594 data-nosnippet>594</a>
+<a href=#595 id=595 data-nosnippet>595</a><span class="kw">async fn </span>verify_payment(verify_url: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;VerifyResponse&gt; {
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">let </span>response = reqwest::get(verify_url)
+<a href=#597 id=597 data-nosnippet>597</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#598 id=598 data-nosnippet>598</a>        </span>.json::&lt;VerifyResponse&gt;()
+<a href=#599 id=599 data-nosnippet>599</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#600 id=600 data-nosnippet>600</a>
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="prelude-val">Ok</span>(response)
+<a href=#602 id=602 data-nosnippet>602</a>}
+<a href=#603 id=603 data-nosnippet>603</a>
+<a href=#604 id=604 data-nosnippet>604</a><span class="kw">async fn </span>verify_payment_wait(verify_url: String) -&gt; anyhow::Result&lt;VerifyResponse&gt; {
+<a href=#605 id=605 data-nosnippet>605</a>    <span class="kw">let </span>response = reqwest::get(<span class="macro">format!</span>(<span class="string">"{verify_url}?wait"</span>))
+<a href=#606 id=606 data-nosnippet>606</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#607 id=607 data-nosnippet>607</a>        </span>.json::&lt;VerifyResponse&gt;()
+<a href=#608 id=608 data-nosnippet>608</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a>    <span class="prelude-val">Ok</span>(response)
+<a href=#611 id=611 data-nosnippet>611</a>}
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a><span class="attr">#[derive(Deserialize, Clone)]
+<a href=#614 id=614 data-nosnippet>614</a></span><span class="kw">struct </span>LnUrlPayResponse {
+<a href=#615 id=615 data-nosnippet>615</a>    callback: String,
+<a href=#616 id=616 data-nosnippet>616</a>}
 <a href=#617 id=617 data-nosnippet>617</a>
-<a href=#618 id=618 data-nosnippet>618</a>    <span class="prelude-val">Ok</span>(response)
-<a href=#619 id=619 data-nosnippet>619</a>}
-<a href=#620 id=620 data-nosnippet>620</a>
-<a href=#621 id=621 data-nosnippet>621</a><span class="attr">#[derive(Deserialize, Clone)]
-<a href=#622 id=622 data-nosnippet>622</a></span><span class="kw">struct </span>LnUrlPayResponse {
-<a href=#623 id=623 data-nosnippet>623</a>    callback: String,
-<a href=#624 id=624 data-nosnippet>624</a>}
-<a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a><span class="attr">#[derive(Deserialize, Clone)]
-<a href=#627 id=627 data-nosnippet>627</a></span><span class="kw">struct </span>LnUrlPayInvoiceResponse {
-<a href=#628 id=628 data-nosnippet>628</a>    pr: Bolt11Invoice,
-<a href=#629 id=629 data-nosnippet>629</a>    verify: String,
-<a href=#630 id=630 data-nosnippet>630</a>}
+<a href=#618 id=618 data-nosnippet>618</a><span class="attr">#[derive(Deserialize, Clone)]
+<a href=#619 id=619 data-nosnippet>619</a></span><span class="kw">struct </span>LnUrlPayInvoiceResponse {
+<a href=#620 id=620 data-nosnippet>620</a>    pr: Bolt11Invoice,
+<a href=#621 id=621 data-nosnippet>621</a>    verify: String,
+<a href=#622 id=622 data-nosnippet>622</a>}
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a><span class="kw">async fn </span>fetch_invoice(lnurl: String, amount_msat: u64) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
+<a href=#625 id=625 data-nosnippet>625</a>    <span class="kw">let </span>endpoint = LnUrl::from_str(<span class="kw-2">&amp;</span>lnurl)<span class="question-mark">?</span>;
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a>    <span class="kw">let </span>response = reqwest::get(endpoint.url)
+<a href=#628 id=628 data-nosnippet>628</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#629 id=629 data-nosnippet>629</a>        </span>.json::&lt;LnUrlPayResponse&gt;()
+<a href=#630 id=630 data-nosnippet>630</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#631 id=631 data-nosnippet>631</a>
-<a href=#632 id=632 data-nosnippet>632</a><span class="kw">async fn </span>fetch_invoice(lnurl: String, amount_msat: u64) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
-<a href=#633 id=633 data-nosnippet>633</a>    <span class="kw">let </span>endpoint = LnUrl::from_str(<span class="kw-2">&amp;</span>lnurl)<span class="question-mark">?</span>;
-<a href=#634 id=634 data-nosnippet>634</a>
-<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">let </span>response = reqwest::get(endpoint.url)
-<a href=#636 id=636 data-nosnippet>636</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#637 id=637 data-nosnippet>637</a>        </span>.json::&lt;LnUrlPayResponse&gt;()
-<a href=#638 id=638 data-nosnippet>638</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#639 id=639 data-nosnippet>639</a>
-<a href=#640 id=640 data-nosnippet>640</a>    <span class="kw">let </span>callback_url = <span class="macro">format!</span>(<span class="string">"{}?amount={}"</span>, response.callback, amount_msat);
-<a href=#641 id=641 data-nosnippet>641</a>
-<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">let </span>response = reqwest::get(callback_url)
-<a href=#643 id=643 data-nosnippet>643</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#644 id=644 data-nosnippet>644</a>        </span>.json::&lt;LnUrlPayInvoiceResponse&gt;()
-<a href=#645 id=645 data-nosnippet>645</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#632 id=632 data-nosnippet>632</a>    <span class="kw">let </span>callback_url = <span class="macro">format!</span>(<span class="string">"{}?amount={}"</span>, response.callback, amount_msat);
+<a href=#633 id=633 data-nosnippet>633</a>
+<a href=#634 id=634 data-nosnippet>634</a>    <span class="kw">let </span>response = reqwest::get(callback_url)
+<a href=#635 id=635 data-nosnippet>635</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#636 id=636 data-nosnippet>636</a>        </span>.json::&lt;LnUrlPayInvoiceResponse&gt;()
+<a href=#637 id=637 data-nosnippet>637</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a>    <span class="macro">ensure!</span>(
+<a href=#640 id=640 data-nosnippet>640</a>        response.pr.amount_milli_satoshis() == <span class="prelude-val">Some</span>(amount_msat),
+<a href=#641 id=641 data-nosnippet>641</a>        <span class="string">"Invoice amount is not set"
+<a href=#642 id=642 data-nosnippet>642</a>    </span>);
+<a href=#643 id=643 data-nosnippet>643</a>
+<a href=#644 id=644 data-nosnippet>644</a>    <span class="prelude-val">Ok</span>((response.pr, response.verify))
+<a href=#645 id=645 data-nosnippet>645</a>}
 <a href=#646 id=646 data-nosnippet>646</a>
-<a href=#647 id=647 data-nosnippet>647</a>    <span class="macro">ensure!</span>(
-<a href=#648 id=648 data-nosnippet>648</a>        response.pr.amount_milli_satoshis() == <span class="prelude-val">Some</span>(amount_msat),
-<a href=#649 id=649 data-nosnippet>649</a>        <span class="string">"Invoice amount is not set"
-<a href=#650 id=650 data-nosnippet>650</a>    </span>);
-<a href=#651 id=651 data-nosnippet>651</a>
-<a href=#652 id=652 data-nosnippet>652</a>    <span class="prelude-val">Ok</span>((response.pr, response.verify))
-<a href=#653 id=653 data-nosnippet>653</a>}
-<a href=#654 id=654 data-nosnippet>654</a>
-<a href=#655 id=655 data-nosnippet>655</a><span class="kw">async fn </span>test_iroh_payment(
-<a href=#656 id=656 data-nosnippet>656</a>    client: <span class="kw-2">&amp;</span>Client,
-<a href=#657 id=657 data-nosnippet>657</a>    gw_lnd: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#658 id=658 data-nosnippet>658</a>    gw_ldk: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#659 id=659 data-nosnippet>659</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#660 id=660 data-nosnippet>660</a>    <span class="macro">info!</span>(<span class="string">"Testing iroh payment..."</span>);
-<a href=#661 id=661 data-nosnippet>661</a>    add_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#662 id=662 data-nosnippet>662</a>    add_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#663 id=663 data-nosnippet>663</a>    add_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#664 id=664 data-nosnippet>664</a>    add_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#665 id=665 data-nosnippet>665</a>
-<a href=#666 id=666 data-nosnippet>666</a>    <span class="comment">// If the client is below v0.10.0, also add the HTTP address so that the client
-<a href=#667 id=667 data-nosnippet>667</a>    // can fallback to using that, since the iroh gateway will fail.
-<a href=#668 id=668 data-nosnippet>668</a>    </span><span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#669 id=669 data-nosnippet>669</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#670 id=670 data-nosnippet>670</a>    {
-<a href=#671 id=671 data-nosnippet>671</a>        add_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#672 id=672 data-nosnippet>672</a>        add_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#673 id=673 data-nosnippet>673</a>        add_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#674 id=674 data-nosnippet>674</a>        add_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#675 id=675 data-nosnippet>675</a>    }
+<a href=#647 id=647 data-nosnippet>647</a><span class="kw">async fn </span>test_iroh_payment(
+<a href=#648 id=648 data-nosnippet>648</a>    client: <span class="kw-2">&amp;</span>Client,
+<a href=#649 id=649 data-nosnippet>649</a>    gw_lnd: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#650 id=650 data-nosnippet>650</a>    gw_ldk: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#651 id=651 data-nosnippet>651</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#652 id=652 data-nosnippet>652</a>    <span class="macro">info!</span>(<span class="string">"Testing iroh payment..."</span>);
+<a href=#653 id=653 data-nosnippet>653</a>    add_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#654 id=654 data-nosnippet>654</a>    add_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#655 id=655 data-nosnippet>655</a>    add_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#656 id=656 data-nosnippet>656</a>    add_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a>    <span class="comment">// If the client is below v0.10.0, also add the HTTP address so that the client
+<a href=#659 id=659 data-nosnippet>659</a>    // can fallback to using that, since the iroh gateway will fail.
+<a href=#660 id=660 data-nosnippet>660</a>    </span><span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#661 id=661 data-nosnippet>661</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#662 id=662 data-nosnippet>662</a>    {
+<a href=#663 id=663 data-nosnippet>663</a>        add_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#664 id=664 data-nosnippet>664</a>        add_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#665 id=665 data-nosnippet>665</a>        add_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#666 id=666 data-nosnippet>666</a>        add_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#667 id=667 data-nosnippet>667</a>    }
+<a href=#668 id=668 data-nosnippet>668</a>
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">let </span>invoice = gw_ldk.create_invoice(<span class="number">5_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#670 id=670 data-nosnippet>670</a>
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"send"</span>, invoice,)
+<a href=#673 id=673 data-nosnippet>673</a>            .out_json()
+<a href=#674 id=674 data-nosnippet>674</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#675 id=675 data-nosnippet>675</a>    )<span class="question-mark">?</span>;
 <a href=#676 id=676 data-nosnippet>676</a>
-<a href=#677 id=677 data-nosnippet>677</a>    <span class="kw">let </span>invoice = gw_ldk.create_invoice(<span class="number">5_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#678 id=678 data-nosnippet>678</a>
-<a href=#679 id=679 data-nosnippet>679</a>    <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
-<a href=#680 id=680 data-nosnippet>680</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"send"</span>, invoice,)
-<a href=#681 id=681 data-nosnippet>681</a>            .out_json()
-<a href=#682 id=682 data-nosnippet>682</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#683 id=683 data-nosnippet>683</a>    )<span class="question-mark">?</span>;
-<a href=#684 id=684 data-nosnippet>684</a>
-<a href=#685 id=685 data-nosnippet>685</a>    <span class="macro">assert_eq!</span>(
-<a href=#686 id=686 data-nosnippet>686</a>        <span class="macro">cmd!</span>(
-<a href=#687 id=687 data-nosnippet>687</a>            client,
-<a href=#688 id=688 data-nosnippet>688</a>            <span class="string">"module"</span>,
-<a href=#689 id=689 data-nosnippet>689</a>            <span class="string">"lnv2"</span>,
-<a href=#690 id=690 data-nosnippet>690</a>            <span class="string">"await-send"</span>,
-<a href=#691 id=691 data-nosnippet>691</a>            serde_json::to_string(<span class="kw-2">&amp;</span>send_op)<span class="question-mark">?</span>.substring(<span class="number">1</span>, <span class="number">65</span>)
-<a href=#692 id=692 data-nosnippet>692</a>        )
-<a href=#693 id=693 data-nosnippet>693</a>        .out_json()
-<a href=#694 id=694 data-nosnippet>694</a>        .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#695 id=695 data-nosnippet>695</a>        serde_json::to_value(FinalSendOperationState::Success).expect(<span class="string">"JSON serialization failed"</span>),
-<a href=#696 id=696 data-nosnippet>696</a>    );
-<a href=#697 id=697 data-nosnippet>697</a>
-<a href=#698 id=698 data-nosnippet>698</a>    <span class="kw">let </span>(invoice, receive_op) = serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
-<a href=#699 id=699 data-nosnippet>699</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"receive"</span>, <span class="string">"5000000"</span>,)
-<a href=#700 id=700 data-nosnippet>700</a>            .out_json()
-<a href=#701 id=701 data-nosnippet>701</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#702 id=702 data-nosnippet>702</a>    )<span class="question-mark">?</span>;
-<a href=#703 id=703 data-nosnippet>703</a>
-<a href=#704 id=704 data-nosnippet>704</a>    gw_ldk.pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#705 id=705 data-nosnippet>705</a>    common::await_receive_claimed(client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#706 id=706 data-nosnippet>706</a>
-<a href=#707 id=707 data-nosnippet>707</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#708 id=708 data-nosnippet>708</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#709 id=709 data-nosnippet>709</a>    {
-<a href=#710 id=710 data-nosnippet>710</a>        remove_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#711 id=711 data-nosnippet>711</a>        remove_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#712 id=712 data-nosnippet>712</a>        remove_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#713 id=713 data-nosnippet>713</a>        remove_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#714 id=714 data-nosnippet>714</a>    }
-<a href=#715 id=715 data-nosnippet>715</a>
-<a href=#716 id=716 data-nosnippet>716</a>    remove_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#717 id=717 data-nosnippet>717</a>    remove_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#718 id=718 data-nosnippet>718</a>    remove_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#719 id=719 data-nosnippet>719</a>    remove_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#720 id=720 data-nosnippet>720</a>
-<a href=#721 id=721 data-nosnippet>721</a>    <span class="prelude-val">Ok</span>(())
-<a href=#722 id=722 data-nosnippet>722</a>}</code></pre></div></section></main></body></html>
+<a href=#677 id=677 data-nosnippet>677</a>    <span class="macro">assert_eq!</span>(
+<a href=#678 id=678 data-nosnippet>678</a>        <span class="macro">cmd!</span>(
+<a href=#679 id=679 data-nosnippet>679</a>            client,
+<a href=#680 id=680 data-nosnippet>680</a>            <span class="string">"module"</span>,
+<a href=#681 id=681 data-nosnippet>681</a>            <span class="string">"lnv2"</span>,
+<a href=#682 id=682 data-nosnippet>682</a>            <span class="string">"await-send"</span>,
+<a href=#683 id=683 data-nosnippet>683</a>            serde_json::to_string(<span class="kw-2">&amp;</span>send_op)<span class="question-mark">?</span>.substring(<span class="number">1</span>, <span class="number">65</span>)
+<a href=#684 id=684 data-nosnippet>684</a>        )
+<a href=#685 id=685 data-nosnippet>685</a>        .out_json()
+<a href=#686 id=686 data-nosnippet>686</a>        .<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#687 id=687 data-nosnippet>687</a>        serde_json::to_value(FinalSendOperationState::Success).expect(<span class="string">"JSON serialization failed"</span>),
+<a href=#688 id=688 data-nosnippet>688</a>    );
+<a href=#689 id=689 data-nosnippet>689</a>
+<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">let </span>(invoice, receive_op) = serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
+<a href=#691 id=691 data-nosnippet>691</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"receive"</span>, <span class="string">"5000000"</span>,)
+<a href=#692 id=692 data-nosnippet>692</a>            .out_json()
+<a href=#693 id=693 data-nosnippet>693</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#694 id=694 data-nosnippet>694</a>    )<span class="question-mark">?</span>;
+<a href=#695 id=695 data-nosnippet>695</a>
+<a href=#696 id=696 data-nosnippet>696</a>    gw_ldk.pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#697 id=697 data-nosnippet>697</a>    common::await_receive_claimed(client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#698 id=698 data-nosnippet>698</a>
+<a href=#699 id=699 data-nosnippet>699</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#700 id=700 data-nosnippet>700</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#701 id=701 data-nosnippet>701</a>    {
+<a href=#702 id=702 data-nosnippet>702</a>        remove_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#703 id=703 data-nosnippet>703</a>        remove_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#704 id=704 data-nosnippet>704</a>        remove_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#705 id=705 data-nosnippet>705</a>        remove_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#706 id=706 data-nosnippet>706</a>    }
+<a href=#707 id=707 data-nosnippet>707</a>
+<a href=#708 id=708 data-nosnippet>708</a>    remove_gateway(client, <span class="number">0</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#709 id=709 data-nosnippet>709</a>    remove_gateway(client, <span class="number">1</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#710 id=710 data-nosnippet>710</a>    remove_gateway(client, <span class="number">2</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#711 id=711 data-nosnippet>711</a>    remove_gateway(client, <span class="number">3</span>, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#712 id=712 data-nosnippet>712</a>
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="prelude-val">Ok</span>(())
+<a href=#714 id=714 data-nosnippet>714</a>}</code></pre></div></section></main></body></html>
