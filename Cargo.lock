@@ -4272,6 +4272,7 @@ dependencies = [
  "esplora-client 0.12.2",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-metrics",
  "fedimint-server-core",
  "tracing",
 ]

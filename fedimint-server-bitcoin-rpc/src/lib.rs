@@ -1,5 +1,6 @@
 pub mod bitcoind;
 pub mod esplora;
+pub mod metrics;
 
 use anyhow::Result;
 use bitcoin::{BlockHash, Transaction};
@@ -7,11 +8,13 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
-use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
+use fedimint_metrics::HistogramExt as _;
+use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use tracing::warn;
 
 use crate::bitcoind::BitcoindClient;
 use crate::esplora::EsploraClient;
+use crate::metrics::{SERVER_BITCOIND_RPC_DURATION_SECONDS, SERVER_BITCOIND_RPC_REQUESTS_TOTAL};
 
 #[derive(Debug)]
 pub struct BitcoindClientWithFallback {
@@ -136,5 +139,120 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
                 self.esplora_client.get_chain_id().await
             }
         }
+    }
+}
+
+/// A wrapper around `DynServerBitcoinRpc` that tracks metrics for each RPC
+/// call.
+///
+/// This wrapper records the duration and success/error status of each
+/// Bitcoin RPC call to Prometheus metrics, allowing monitoring of
+/// Bitcoin node connectivity and performance on the server side.
+pub struct ServerBitcoindTracked {
+    inner: DynServerBitcoinRpc,
+}
+
+impl std::fmt::Debug for ServerBitcoindTracked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerBitcoindTracked")
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+impl ServerBitcoindTracked {
+    /// Wraps a `DynServerBitcoinRpc` with metrics tracking.
+    pub fn new(inner: DynServerBitcoinRpc) -> Self {
+        Self { inner }
+    }
+
+    fn record_call<T>(&self, method: &str, result: &Result<T>) {
+        let result_label = if result.is_ok() { "success" } else { "error" };
+        SERVER_BITCOIND_RPC_REQUESTS_TOTAL
+            .with_label_values(&[method, result_label])
+            .inc();
+    }
+}
+
+#[async_trait::async_trait]
+impl IServerBitcoinRpc for ServerBitcoindTracked {
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        self.inner.get_bitcoin_rpc_config()
+    }
+
+    fn get_url(&self) -> SafeUrl {
+        self.inner.get_url()
+    }
+
+    async fn get_block_count(&self) -> Result<u64> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_block_count"])
+            .start_timer_ext();
+        let result = self.inner.get_block_count().await;
+        timer.observe_duration();
+        self.record_call("get_block_count", &result);
+        result
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_block_hash"])
+            .start_timer_ext();
+        let result = self.inner.get_block_hash(height).await;
+        timer.observe_duration();
+        self.record_call("get_block_hash", &result);
+        result
+    }
+
+    async fn get_block(&self, block_hash: &BlockHash) -> Result<bitcoin::Block> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_block"])
+            .start_timer_ext();
+        let result = self.inner.get_block(block_hash).await;
+        timer.observe_duration();
+        self.record_call("get_block", &result);
+        result
+    }
+
+    async fn get_feerate(&self) -> Result<Option<Feerate>> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_feerate"])
+            .start_timer_ext();
+        let result = self.inner.get_feerate().await;
+        timer.observe_duration();
+        self.record_call("get_feerate", &result);
+        result
+    }
+
+    async fn submit_transaction(&self, transaction: Transaction) {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["submit_transaction"])
+            .start_timer_ext();
+        self.inner.submit_transaction(transaction).await;
+        timer.observe_duration();
+        // submit_transaction doesn't return a Result, so we always record success
+        SERVER_BITCOIND_RPC_REQUESTS_TOTAL
+            .with_label_values(&["submit_transaction", "success"])
+            .inc();
+    }
+
+    async fn get_sync_progress(&self) -> Result<Option<f64>> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_sync_progress"])
+            .start_timer_ext();
+        let result = self.inner.get_sync_progress().await;
+        timer.observe_duration();
+        self.record_call("get_sync_progress", &result);
+        result
+    }
+
+    async fn get_chain_id(&self) -> Result<ChainId> {
+        let timer = SERVER_BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&["get_chain_id"])
+            .start_timer_ext();
+        let result = self.inner.get_chain_id().await;
+        timer.observe_duration();
+        self.record_call("get_chain_id", &result);
+        result
     }
 }
