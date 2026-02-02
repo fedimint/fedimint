@@ -1178,7 +1178,7 @@ impl WalletClientModule {
 
         let WalletOperationMetaVariant::ReceiveDeposit {
             change,
-            address_operation_id: _,
+            address_operation_id,
             ..
         } = operation_meta.variant
         else {
@@ -1193,7 +1193,10 @@ impl WalletClientModule {
                 stream! {
                     yield ReceiveDepositState::Claiming;
 
-                    match client_ctx.await_primary_module_outputs(operation_id, change.clone()).await {
+                    // Use address_operation_id for awaiting outputs since the
+                    // claim transaction is submitted under the address operation
+                    // ID for backward compatibility with await_num_deposits.
+                    match client_ctx.await_primary_module_outputs(address_operation_id, change.clone()).await {
                         Ok(()) => yield ReceiveDepositState::Claimed,
                         Err(e) => yield ReceiveDepositState::Failed(e.to_string())
                     }

@@ -1667,7 +1667,8 @@ mod fedimint_migration_tests {
     }
 }
 
-/// Tests that multiple deposits to the same address create separate operation log entries
+/// Tests that multiple deposits to the same address create separate operation
+/// log entries
 #[tokio::test(flavor = "multi_thread")]
 async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -1697,7 +1698,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
         .await;
     let address_creation_op = initial_ops
         .iter()
-        .find(|(op_id, _)| *op_id == address_op_id);
+        .find(|(key, _)| key.operation_id == address_op_id);
     assert!(
         address_creation_op.is_some(),
         "Address creation operation should exist"
@@ -1757,8 +1758,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     let address_ops: Vec<_> = wallet_ops
         .iter()
         .filter(|(_, entry)| {
-            let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
-                .expect("Failed to parse wallet operation meta");
+            let meta: WalletOperationMeta = entry.meta();
             matches!(meta.variant, WalletOperationMetaVariant::Deposit { .. })
         })
         .collect();
@@ -1773,8 +1773,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     let deposit_claim_ops: Vec<_> = wallet_ops
         .iter()
         .filter(|(_, entry)| {
-            let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
-                .expect("Failed to parse wallet operation meta");
+            let meta: WalletOperationMeta = entry.meta();
             matches!(
                 meta.variant,
                 WalletOperationMetaVariant::ReceiveDeposit { .. }
@@ -1794,8 +1793,7 @@ async fn multiple_deposits_create_separate_operations() -> anyhow::Result<()> {
     let mut found_tx2 = false;
 
     for (_, entry) in deposit_claim_ops {
-        let meta: WalletOperationMeta = serde_json::from_value(entry.meta().clone())
-            .expect("Failed to parse wallet operation meta");
+        let meta: WalletOperationMeta = entry.meta();
 
         if let WalletOperationMetaVariant::ReceiveDeposit {
             address_operation_id,

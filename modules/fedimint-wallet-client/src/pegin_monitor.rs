@@ -482,7 +482,7 @@ async fn claim_peg_in(
                 .claim_inputs(
                     dbtx,
                     ClientInputBundle::new_no_sm(vec![client_input]),
-                    receive_operation_id,
+                    address_operation_id,
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
