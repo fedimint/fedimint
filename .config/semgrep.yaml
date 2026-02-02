@@ -21,6 +21,8 @@ rules:
       - fedimint-load-test-tool/
       # doesn't run in wasm
       - devimint/
+      # doesn't run in wasm
+      - test-runner/
   severity: ERROR
 
 - id: ban-instant-now
@@ -39,6 +41,8 @@ rules:
       - devimint/
       # server only
       - fedimint-server/
+      # doesn't run in wasm
+      - test-runner/
 
 - id: ban-fs-write
   languages:
@@ -213,4 +217,3 @@ rules:
 #   pattern: "error!(...)"
 #   message: "Don't use error logging level, use `crit!` wrapper to avoid conflating any `error` with `error logging level`"
 #   severity: WARNING
-
