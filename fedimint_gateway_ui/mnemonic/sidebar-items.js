@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["render"]};
+window.SIDEBAR_ITEMS = {"fn":["iframe_security_headers","iframe_styles","mnemonic_iframe_handler","mnemonic_reveal_handler","render","render_iframe_error","render_iframe_initial","render_iframe_revealed"],"struct":["RevealMnemonicForm"]};
