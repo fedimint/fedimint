@@ -54,6 +54,7 @@ use crate::lightning::{
     payments_fragment_handler, send_onchain_handler, transactions_fragment_handler,
     wallet_fragment_handler,
 };
+use crate::mnemonic::{mnemonic_iframe_handler, mnemonic_reveal_handler};
 use crate::payment_summary::payment_log_fragment_handler;
 use crate::setup::{create_wallet_handler, recover_wallet_form, recover_wallet_handler};
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
@@ -80,6 +81,7 @@ pub(crate) const SPEND_ECASH_ROUTE: &str = "/ui/federations/spend";
 pub(crate) const PAYMENT_LOG_ROUTE: &str = "/ui/payment-log";
 pub(crate) const CREATE_WALLET_ROUTE: &str = "/ui/wallet/create";
 pub(crate) const RECOVER_WALLET_ROUTE: &str = "/ui/wallet/recover";
+pub(crate) const MNEMONIC_IFRAME_ROUTE: &str = "/ui/mnemonic/iframe";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -335,7 +337,7 @@ where
                 (bitcoin::render(&state.api).await)
             }
             div class="col-md-6" {
-                (mnemonic::render(&state.api).await)
+                (mnemonic::render())
             }
         }
 
@@ -416,6 +418,10 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(
             RECOVER_WALLET_ROUTE,
             get(recover_wallet_form).post(recover_wallet_handler),
+        )
+        .route(
+            MNEMONIC_IFRAME_ROUTE,
+            get(mnemonic_iframe_handler).post(mnemonic_reveal_handler),
         )
         .with_static_routes();
 
