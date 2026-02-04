@@ -7,10 +7,10 @@ use fedimint_core::Feerate;
 use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::dashboard_ui::ServerBitcoinRpcStatus;
 
@@ -43,7 +43,12 @@ impl ServerBitcoinRpcMonitor {
                     Ok(new_status) => {
                         status_sender.send_replace(Some(new_status));
                     }
-                    Err(..) => {
+                    Err(err) => {
+                        warn!(
+                            target: LOG_SERVER,
+                            err = %err.fmt_compact_anyhow(),
+                            "Bitcoin status update failed"
+                        );
                         status_sender.send_replace(None);
                     }
                 }
