@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DummyError","DummyStateMachine","DummyStateMachineV1"],"fn":["add_funds","await_tx_accepted"]};
