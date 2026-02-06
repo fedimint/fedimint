@@ -729,8 +729,20 @@ impl Gateway {
                     }
 
                     if let GatewayState::NotConfigured{ .. } = self_copy.get_state().await {
-                        info!(target: LOG_GATEWAY, "Waiting for the mnemonic to be set before starting lightning receive loop.");
+                        info!(
+                            target: LOG_GATEWAY,
+                            "Waiting for the mnemonic to be set before starting lightning receive loop."
+                        );
+                        info!(
+                            target: LOG_GATEWAY,
+                            "You might need to provide it from the UI or refer to documentation w.r.t how to initialize it."
+                        );
+
                         let _ = mnemonic_receiver.recv().await;
+                        info!(
+                            target: LOG_GATEWAY,
+                            "Received mnemonic, attempting to start lightning receive loop"
+                        );
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
