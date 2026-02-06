@@ -97,8 +97,8 @@ use fedimint_gwv2_client::{
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
-    InvoiceDescription, LightningContext, LightningRpcError, PayInvoiceResponse, PaymentAction,
-    RouteHtlcStream, ldk,
+    InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, PayInvoiceResponse,
+    PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::LightningCommonInit;
@@ -824,7 +824,7 @@ impl Gateway {
         }
 
         let lightning_context = LightningContext {
-            lnrpc: ln_client,
+            lnrpc: LnRpcTracked::new(ln_client, "gateway"),
             lightning_public_key,
             lightning_alias,
             lightning_network,
