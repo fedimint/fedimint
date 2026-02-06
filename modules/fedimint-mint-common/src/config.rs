@@ -102,6 +102,24 @@ impl FeeConsensus {
         Amount::from_msats(self.fee_msats(amount.msats))
     }
 
+    /// Returns the smallest denomination where the note's value is at least
+    /// 4x the base fee, rounded up to the next power of two msats. Notes
+    /// below this denomination are not economical since fees consume a
+    /// significant fraction of their value.
+    pub fn min_economical_denomination(&self) -> Amount {
+        Amount::from_msats(self.base.msats.saturating_mul(4).next_power_of_two())
+    }
+
+    /// Rounds an amount up to the nearest multiple of the smallest economical
+    /// denomination.
+    pub fn round_up(&self, amount: Amount) -> Amount {
+        let msats = amount
+            .msats
+            .next_multiple_of(self.base.msats.saturating_mul(4).next_power_of_two());
+
+        Amount::from_msats(msats)
+    }
+
     fn fee_msats(&self, msats: u64) -> u64 {
         msats
             .saturating_mul(self.parts_per_million)

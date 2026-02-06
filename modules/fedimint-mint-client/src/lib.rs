@@ -1799,15 +1799,15 @@ impl MintClientModule {
     /// dropped, before the reissue transaction is confirmed, any reissued notes
     /// will be returned to the wallet and we do not emit a `SendPaymentEvent`.
     ///
-    /// Before selection of the ecash notes the amount is rounded up to the
-    /// nearest multiple of 512 msat.
+    /// If the federation charges fees, the amount is rounded up to the nearest
+    /// multiple of the smallest economical denomination before selection of the
+    /// ecash notes.
     pub async fn send_oob_notes<M: Serialize + Send>(
         &self,
         amount: Amount,
         extra_meta: M,
     ) -> anyhow::Result<OOBNotes> {
-        // Round up to the nearest multiple of 512 msat
-        let amount = Amount::from_msats(amount.msats.div_ceil(512) * 512);
+        let amount = self.cfg.fee_consensus.round_up(amount);
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::send_oob_notes extra_meta is serializable");
@@ -1849,15 +1849,24 @@ impl MintClientModule {
 
         let operation_id = OperationId::new_random();
 
-        // Create outputs for reissuance using the existing create_output function
+        // Create outputs for reissuance, committing the note index counter
+        // updates so that create_final_inputs_and_outputs won't reuse the same
+        // indices for change outputs.
         let output_bundle = self
-            .create_output(
-                &mut self.client_ctx.module_db().begin_transaction_nc().await,
-                operation_id,
-                1, // notes_per_denomination
-                amount,
+            .client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async {
+                        Ok::<_, anyhow::Error>(
+                            self.create_output(dbtx, operation_id, 1, amount).await,
+                        )
+                    })
+                },
+                Some(100),
             )
-            .await;
+            .await
+            .expect("Failed to commit output creation after 100 retries");
 
         // Combine the output bundle state machines with the send state machine
         let combined_bundle = ClientOutputBundle::new(
