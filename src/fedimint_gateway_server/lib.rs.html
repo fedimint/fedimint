@@ -97,8 +97,8 @@
 <a href=#97 id=97 data-nosnippet>97</a><span class="kw">use </span>fedimint_lightning::lnd::GatewayLndClient;
 <a href=#98 id=98 data-nosnippet>98</a><span class="kw">use </span>fedimint_lightning::{
 <a href=#99 id=99 data-nosnippet>99</a>    CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
-<a href=#100 id=100 data-nosnippet>100</a>    InvoiceDescription, LightningContext, LightningRpcError, PayInvoiceResponse, PaymentAction,
-<a href=#101 id=101 data-nosnippet>101</a>    RouteHtlcStream, ldk,
+<a href=#100 id=100 data-nosnippet>100</a>    InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, PayInvoiceResponse,
+<a href=#101 id=101 data-nosnippet>101</a>    PaymentAction, RouteHtlcStream, ldk,
 <a href=#102 id=102 data-nosnippet>102</a>};
 <a href=#103 id=103 data-nosnippet>103</a><span class="kw">use </span>fedimint_ln_client::pay::PaymentData;
 <a href=#104 id=104 data-nosnippet>104</a><span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
@@ -824,7 +824,7 @@
 <a href=#824 id=824 data-nosnippet>824</a>        }
 <a href=#825 id=825 data-nosnippet>825</a>
 <a href=#826 id=826 data-nosnippet>826</a>        <span class="kw">let </span>lightning_context = LightningContext {
-<a href=#827 id=827 data-nosnippet>827</a>            lnrpc: ln_client,
+<a href=#827 id=827 data-nosnippet>827</a>            lnrpc: LnRpcTracked::new(ln_client, <span class="string">"gateway"</span>),
 <a href=#828 id=828 data-nosnippet>828</a>            lightning_public_key,
 <a href=#829 id=829 data-nosnippet>829</a>            lightning_alias,
 <a href=#830 id=830 data-nosnippet>830</a>            lightning_network,
