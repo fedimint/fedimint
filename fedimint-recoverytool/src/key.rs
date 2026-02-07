@@ -69,17 +69,9 @@ impl Display for Key {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Key::Public(pk) => Display::fmt(pk, f),
-            Key::Private(sk) => {
-                if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
-                    Display::fmt(sk, f)
-                } else {
-                    // Show only the public key derived from the private key
-                    let pk = CompressedPublicKey::new(
-                        bitcoin::secp256k1::PublicKey::from_secret_key_global(&sk.inner),
-                    );
-                    write!(f, "<private key for {pk}>")
-                }
-            }
+            // The recoverytool is specifically meant for dealing with secrets,
+            // so displaying the private key in plain-text is intentional here.
+            Key::Private(sk) => Display::fmt(sk, f),
         }
     }
 }
