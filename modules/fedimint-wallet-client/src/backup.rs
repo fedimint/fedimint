@@ -11,7 +11,10 @@ use fedimint_client_module::module::init::recovery::{
 };
 use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    IReadDatabaseTransactionOpsTyped as _, IWriteDatabaseTransactionOpsTyped as _,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
@@ -301,7 +304,7 @@ impl RecoveryFromHistory for WalletRecovery {
 
     async fn load_dbtx(
         init: &WalletClientInit,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
@@ -359,7 +362,7 @@ impl RecoveryFromHistory for WalletRecovery {
 
     async fn store_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         common: &RecoveryFromHistoryCommon,
     ) {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Storing recovery state");
@@ -370,15 +373,15 @@ impl RecoveryFromHistory for WalletRecovery {
         .await;
     }
 
-    async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn delete_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>) {
         dbtx.remove_entry(&RecoveryStateKey).await;
     }
 
-    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool> {
+    async fn load_finalized(dbtx: &mut ReadDatabaseTransaction<'_>) -> Option<bool> {
         dbtx.get_value(&RecoveryFinalizedKey).await
     }
 
-    async fn store_finalized(dbtx: &mut DatabaseTransaction<'_>, state: bool) {
+    async fn store_finalized(dbtx: &mut WriteDatabaseTransaction<'_>, state: bool) {
         dbtx.insert_entry(&RecoveryFinalizedKey, &state).await;
     }
 
@@ -470,7 +473,7 @@ impl RecoveryFromHistory for WalletRecovery {
         Ok(())
     }
 
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn finalize_dbtx(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()> {
         let now = fedimint_core::time::now();
 
         let mut tweak_idx = TweakIdx(0);

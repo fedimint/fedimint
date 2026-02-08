@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped};
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, TieredCounts};
@@ -46,7 +46,7 @@ impl MintClientModule {
         let mut summary = RepairSummary::default();
 
         let module_api = self.client_ctx.module_api();
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
         // First check if any of our notes are already spent and remove them
         let spent_notes: Vec<NoteKey> = dbtx

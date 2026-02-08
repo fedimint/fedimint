@@ -11,7 +11,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
+use fedimint_core::db::{DatabaseVersion, ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -49,7 +49,7 @@ impl ModuleInit for EmptyInit {
     /// Dumps all database items for debugging
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         // TODO: Boilerplate-code
@@ -175,14 +175,14 @@ impl ServerModule for Empty {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<EmptyConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _consensus_item: EmptyConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -196,7 +196,7 @@ impl ServerModule for Empty {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'c>,
+        _dbtx: &mut WriteDatabaseTransaction<'c>,
         _input: &'b EmptyInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, EmptyInputError> {
@@ -205,7 +205,7 @@ impl ServerModule for Empty {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _output: &'a EmptyOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EmptyOutputError> {
@@ -214,7 +214,7 @@ impl ServerModule for Empty {
 
     async fn output_status(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<EmptyOutputOutcome> {
         None
@@ -222,7 +222,7 @@ impl ServerModule for Empty {
 
     async fn audit(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut WriteDatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
     ) {

@@ -1145,7 +1145,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     let lnv2_module_id = client1
         .get_first_instance(&fedimint_lnv2_common::KIND)
         .expect("lnv2 module not found");
-    let mut dbtx = client1.db().begin_transaction().await;
+    let mut dbtx = client1.db().begin_write_transaction().await;
     for _ in 0..10 {
         let mut fed1_module_dbtx = dbtx
             .to_ref_with_prefix_module_id(lnv2_module_id)
@@ -1169,13 +1169,13 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
         };
         fed1_lnv2
             .client_ctx
-            .log_event(&mut fed1_module_dbtx, outgoing_payment_event)
+            .log_event(&mut fed1_module_dbtx.to_ref_nc(), outgoing_payment_event)
             .await;
 
         fed1_lnv2
             .client_ctx
             .log_event(
-                &mut fed1_module_dbtx,
+                &mut fed1_module_dbtx.to_ref_nc(),
                 OutgoingPaymentSucceeded {
                     payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
                     target_federation: Some(fed2.id()),
@@ -1190,7 +1190,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     let lnv2_module_id2 = client2
         .get_first_instance(&fedimint_lnv2_common::KIND)
         .expect("lnv2 module not found");
-    let mut dbtx = client2.db().begin_transaction().await;
+    let mut dbtx = client2.db().begin_write_transaction().await;
     {
         let fed2_lnv2 = client2.get_first_module::<GatewayClientModuleV2>()?;
         let mut fed2_module_dbtx = dbtx
@@ -1217,13 +1217,13 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
         };
         fed2_lnv2
             .client_ctx
-            .log_event(&mut fed2_module_dbtx, incoming_payment_event)
+            .log_event(&mut fed2_module_dbtx.to_ref_nc(), incoming_payment_event)
             .await;
 
         fed2_lnv2
             .client_ctx
             .log_event(
-                &mut fed2_module_dbtx,
+                &mut fed2_module_dbtx.to_ref_nc(),
                 IncomingPaymentSucceeded {
                     payment_image: PaymentImage::Hash([0_u8; 32].consensus_hash()),
                 },
@@ -1235,7 +1235,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
         };
         fed2_lnv2
             .client_ctx
-            .log_event(&mut fed2_module_dbtx, complete_payment_event)
+            .log_event(&mut fed2_module_dbtx.to_ref_nc(), complete_payment_event)
             .await;
     }
 

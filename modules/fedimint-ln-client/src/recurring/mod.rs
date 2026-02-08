@@ -18,7 +18,9 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
@@ -130,7 +132,7 @@ impl LightningClientModule {
         db: &fedimint_core::db::Database,
     ) -> Vec<(u64, RecurringPaymentCodeEntry)> {
         assert!(!db.is_global(), "Needs to run in module context");
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -231,7 +233,7 @@ impl LightningClientModule {
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
         // TODO: validate invoice hash etc.
-        let mut dbtx = client.module_db().begin_transaction().await;
+        let mut dbtx = client.module_db().begin_write_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,
@@ -288,7 +290,7 @@ impl LightningClientModule {
     #[allow(clippy::pedantic)]
     async fn create_recurring_receive_operation(
         client: &ClientContext<Self>,
-        dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
@@ -401,7 +403,7 @@ impl LightningClientModule {
     pub async fn list_recurring_payment_codes(&self) -> BTreeMap<u64, RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
             .await
@@ -416,7 +418,7 @@ impl LightningClientModule {
     ) -> Option<RecurringPaymentCodeEntry> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecurringPaymentCodeKey {
                 derivation_idx: payment_code_idx,

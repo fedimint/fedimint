@@ -12,7 +12,7 @@ use bitcoin::network::Network;
 use bitcoin::secp256k1::{PublicKey, SECP256K1, SecretKey};
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::module::CommonModuleInit;
@@ -196,7 +196,7 @@ async fn process_and_print_tweak_source(
             };
 
             let utxos: Vec<ImportableWallet> = db
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
@@ -224,7 +224,7 @@ async fn process_and_print_tweak_source(
             .with_fallback();
 
             let db = get_db(db, decoders).await;
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             let mut change_tweak_idx: u64 = 0;
 

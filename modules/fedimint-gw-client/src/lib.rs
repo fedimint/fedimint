@@ -31,7 +31,7 @@ use fedimint_client_module::{
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, ReadDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
@@ -132,7 +132,7 @@ impl ModuleInit for GatewayClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(vec![].into_iter())
@@ -494,10 +494,10 @@ impl GatewayClientModule {
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
         debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 IncomingPaymentStarted {
                     contract_id,
                     payment_hash: htlc.payment_hash,

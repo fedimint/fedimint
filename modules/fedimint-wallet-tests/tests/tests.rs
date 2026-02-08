@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
+use fedimint_core::db::{IRawDatabaseExt, WriteDatabaseTransaction};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
@@ -723,7 +723,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     )
     .await?;
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
 
     // Generate a minimum number of blocks before sending transactions
     bitcoin.mine_blocks(finality_delay.into()).await;
@@ -734,7 +734,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
-            .into_nc(),
+            .to_ref_nc(),
         &mut wallet,
         consensus_block_count,
     )
@@ -768,7 +768,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             &mut dbtx
                 .to_ref_with_prefix_module_id(module_instance_id)
                 .0
-                .into_nc(),
+                .to_ref_nc(),
             &input,
             InPoint {
                 txid: TransactionId::all_zeros(),
@@ -793,7 +793,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
-            .into_nc(),
+            .to_ref_nc(),
         &mut wallet,
         consensus_block_count,
     )
@@ -805,7 +805,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
                 &mut dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
                     .0
-                    .into_nc(),
+                    .to_ref_nc(),
                 &input,
                 InPoint {
                     txid: TransactionId::all_zeros(),
@@ -1110,7 +1110,7 @@ async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
 }
 
 async fn sync_wallet_to_block(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
     block_count: u32,
 ) -> anyhow::Result<()> {
@@ -1118,7 +1118,7 @@ async fn sync_wallet_to_block(
         let consensus_item = fedimint_wallet_common::WalletConsensusItem::BlockCount(block_count);
         let peer_id = PeerId::from(peer as u16);
         wallet
-            .process_consensus_item(dbtx, consensus_item, peer_id)
+            .process_consensus_item(&mut dbtx.to_ref_nc(), consensus_item, peer_id)
             .await?;
     }
     Ok(())
@@ -1165,7 +1165,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::ModuleInstanceId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
-        IDatabaseTransactionOpsCoreTyped,
+        IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::module::ModuleConsensusVersion;
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
@@ -1212,7 +1212,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -1379,7 +1379,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -1392,7 +1392,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_server_db_with_v1_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         dbtx.insert_new_entry(
             &DatabaseVersionKey(LEGACY_WALLET_MODULE_INSTANCE_ID),
@@ -1429,7 +1429,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(WalletInit);
         validate_migrations_server(module, "wallet-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -1635,7 +1635,7 @@ mod fedimint_migration_tests {
             module,
             "wallet-client",
             |db, _, _| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 for prefix in client_db::DbKeyPrefix::iter() {
                     match prefix {
                         client_db::DbKeyPrefix::NextPegInTweakIndex => {

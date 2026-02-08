@@ -42,7 +42,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{Database, DatabaseValue, IReadDatabaseTransactionOpsTyped as _};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -1431,7 +1431,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
                 let chain_id = client
                     .db()
-                    .begin_transaction_nc()
+                    .begin_read_transaction()
                     .await
                     .get_value(&fedimint_client::db::ChainIdKey)
                     .await

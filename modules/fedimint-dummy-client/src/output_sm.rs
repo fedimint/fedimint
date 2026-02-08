@@ -1,7 +1,7 @@
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::{Amount, OutPoint};

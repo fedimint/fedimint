@@ -11,7 +11,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::core::backup::{
     BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, BackupRequest, SignedBackupRequest,
 };
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::serde_json;
@@ -297,12 +297,12 @@ impl Client {
     }
 
     async fn load_previous_backup(&self) -> Option<ClientBackup> {
-        let mut dbtx = self.db().begin_transaction_nc().await;
+        let mut dbtx = self.db().begin_read_transaction().await;
         dbtx.get_value(&LastBackupKey).await
     }
 
     async fn store_last_backup(&self, backup: &ClientBackup) {
-        let mut dbtx = self.db().begin_transaction().await;
+        let mut dbtx = self.db().begin_write_transaction().await;
         dbtx.insert_entry(&LastBackupKey, backup).await;
         dbtx.commit_tx().await;
     }

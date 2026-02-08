@@ -11,7 +11,10 @@ use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
@@ -330,7 +333,7 @@ impl ConsensusEngine {
 
     async fn is_recovery(&self) -> bool {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&AlephUnitsPrefix)
             .await
@@ -735,7 +738,7 @@ impl ConsensusEngine {
 
     pub async fn pending_accepted_items(&self) -> Vec<AcceptedItem> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&AcceptedItemPrefix)
             .await
@@ -749,7 +752,7 @@ impl ConsensusEngine {
         session_index: u64,
         signed_session_outcome: SignedSessionOutcome,
     ) {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
 
@@ -893,7 +896,7 @@ impl ConsensusEngine {
             ])
             .set(session_index as i64);
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         dbtx.ignore_uncommitted();
 
@@ -964,7 +967,7 @@ impl ConsensusEngine {
                     &mut dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
-                        .into_nc(),
+                        .to_ref_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -997,7 +1000,7 @@ impl ConsensusEngine {
 
     async fn process_consensus_item_with_db_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -1009,11 +1012,11 @@ impl ConsensusEngine {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
 
-                let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id).0;
+                let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(instance_id).0;
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                    .process_consensus_item(&mut module_dbtx, &module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -1102,11 +1105,11 @@ impl ConsensusEngine {
     /// Returns the number of sessions already saved in the database. This count
     /// **does not** include the currently running session.
     async fn get_finished_session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+        get_finished_session_count_static(&mut self.db.begin_read_transaction().await).await
     }
 }
 
-pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+pub async fn get_finished_session_count_static(dbtx: &mut ReadDatabaseTransaction<'_>) -> u64 {
     dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
         .next()

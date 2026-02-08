@@ -22,7 +22,8 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -159,7 +160,7 @@ impl ClientModule for DummyClientModule {
 
     async fn create_final_inputs_and_outputs(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         unit: AmountUnit,
         input_amount: Amount,
@@ -297,11 +298,15 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
-        get_funds(dbtc, unit).await
+    async fn get_balance(
+        &self,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
+        unit: AmountUnit,
+    ) -> Amount {
+        get_funds(dbtx, unit).await
     }
 
-    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         get_funds_all(dbtx).await
     }
 
@@ -334,7 +339,7 @@ impl DummyClientModule {
 
     /// Add funds to the local balance (for testing)
     pub async fn mock_receive(&self, amount: Amount, unit: AmountUnit) -> anyhow::Result<()> {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         let current = dbtx
             .get_value(&DummyClientFundsKey(unit))
@@ -343,20 +348,22 @@ impl DummyClientModule {
 
         dbtx.insert_entry(&DummyClientFundsKey(unit), &(current + amount))
             .await;
-
         dbtx.commit_tx().await;
 
         Ok(())
     }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+async fn get_funds(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
+    unit: AmountUnit,
+) -> Amount {
     dbtx.get_value(&DummyClientFundsKey(unit))
         .await
         .unwrap_or(Amount::ZERO)
 }
 
-async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+async fn get_funds_all(dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send)) -> Amounts {
     dbtx.find_by_prefix(&DummyClientFundsKeyPrefixAll)
         .await
         .fold(Amounts::ZERO, |acc, (key, amount)| async move {
@@ -373,7 +380,7 @@ impl ModuleInit for DummyClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

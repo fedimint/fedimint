@@ -68,8 +68,8 @@ use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseVersion, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -80,6 +80,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
 use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
@@ -567,7 +568,7 @@ impl MintClientInit {
         // Try to load existing state or create new one if we can fetch recovery count
         let mut state = if let Some(state) = args
             .db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecoveryStateV2Key)
             .await
@@ -632,7 +633,7 @@ impl MintClientInit {
 
             state.next_index += items.len() as u64;
 
-            let mut dbtx = args.db().begin_transaction().await;
+            let mut dbtx = args.db().begin_write_transaction().await;
 
             dbtx.insert_entry(&RecoveryStateV2Key, &state).await;
 
@@ -712,7 +713,7 @@ impl ModuleInit for MintClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -797,7 +798,7 @@ impl ClientModuleInit for MintClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        let mut dbtx = args.db().begin_transaction_nc().await;
+        let mut dbtx = args.db().begin_read_transaction().await;
 
         // Check if V2 (slice-based) recovery state exists
         if dbtx.get_value(&RecoveryStateV2Key).await.is_some() {
@@ -1009,7 +1010,7 @@ impl ClientModule for MintClientModule {
 
     async fn create_final_inputs_and_outputs(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         unit: AmountUnit,
         mut input_amount: Amount,
@@ -1074,7 +1075,11 @@ impl ClientModule for MintClientModule {
         self.await_output_finalized(operation_id, out_point).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
+        unit: AmountUnit,
+    ) -> Amount {
         if unit != AmountUnit::BITCOIN {
             return Amount::ZERO;
         }
@@ -1083,9 +1088,11 @@ impl ClientModule for MintClientModule {
             .total_amount()
     }
 
-    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    async fn get_balances(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> Amounts {
         Amounts::new_bitcoin(
-            <Self as ClientModule>::get_balance(self, dbtx, AmountUnit::BITCOIN).await,
+            self.get_note_counts_by_denomination(dbtx)
+                .await
+                .total_amount(),
         )
     }
 
@@ -1095,7 +1102,7 @@ impl ClientModule for MintClientModule {
         ))
     }
 
-    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn leave(&self, dbtx: &mut WriteDatabaseTransaction<'_>) -> anyhow::Result<()> {
         let balance = ClientModule::get_balances(self, dbtx).await;
 
         for (unit, amount) in balance {
@@ -1174,7 +1181,7 @@ impl ClientModule for MintClientModule {
                     yield serde_json::to_value(value)?;
                 }
                 "note_counts_by_denomination" => {
-                    let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+                    let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
                     let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
                     yield serde_json::to_value(note_counts)?;
                 }
@@ -1247,7 +1254,7 @@ pub enum ReissueExternalNotesError {
 impl MintClientModule {
     async fn create_sufficient_input(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
         if min_amount == Amount::ZERO {
@@ -1282,16 +1289,19 @@ impl MintClientModule {
         since = "0.5.0",
         note = "Use `get_note_counts_by_denomination` instead"
     )]
-    pub async fn get_notes_tier_counts(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+    pub async fn get_notes_tier_counts<'a>(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
+    ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
 
     /// Pick [`SpendableNote`]s by given counts, when available
     ///
     /// Return the notes picked, and counts of notes that were not available.
-    pub async fn get_available_notes_by_tier_counts(
+    pub async fn get_available_notes_by_tier_counts<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         counts: TieredCounts,
     ) -> (TieredMulti<SpendableNoteUndecoded>, TieredCounts) {
         dbtx.find_by_prefix(&NoteKeyPrefix)
@@ -1315,9 +1325,9 @@ impl MintClientModule {
     /// Creates a mint output close to the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
-    pub async fn create_output(
+    pub async fn create_output<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
@@ -1381,9 +1391,9 @@ impl MintClientModule {
     }
 
     /// Returns the number of held e-cash notes per denomination
-    pub async fn get_note_counts_by_denomination(
+    pub async fn get_note_counts_by_denomination<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredCounts {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
@@ -1402,7 +1412,10 @@ impl MintClientModule {
         since = "0.5.0",
         note = "Use `get_note_counts_by_denomination` instead"
     )]
-    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+    pub async fn get_wallet_summary<'a>(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
+    ) -> TieredCounts {
         self.get_note_counts_by_denomination(dbtx).await
     }
 
@@ -1412,7 +1425,7 @@ impl MintClientModule {
     /// notes will be spent. Notes that are uneconomical to spend (fee >= value)
     /// are excluded from the calculation since the wallet won't spend them.
     pub async fn estimate_spend_all_fees(&self) -> Amount {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let mut dbtx = self.client_ctx.module_db().begin_read_transaction().await;
         let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
 
         note_counts
@@ -1480,7 +1493,7 @@ impl MintClientModule {
     /// Return notes and the sume of their amount.
     pub async fn consolidate_notes(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
@@ -1582,7 +1595,7 @@ impl MintClientModule {
 
     async fn spend_notes_oob(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector,
         amount: Amount,
         try_cancel_after: Duration,
@@ -1652,8 +1665,8 @@ impl MintClientModule {
     }
 
     /// Select notes with `requested_amount` using `notes_selector`.
-    async fn select_notes(
-        dbtx: &mut DatabaseTransaction<'_>,
+    async fn select_notes<Cap: Send>(
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
@@ -1671,8 +1684,8 @@ impl MintClientModule {
             .collect::<anyhow::Result<TieredMulti<_>>>()
     }
 
-    async fn get_all_spendable_notes(
-        dbtx: &mut DatabaseTransaction<'_>,
+    async fn get_all_spendable_notes<'a>(
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     ) -> TieredMulti<SpendableNoteUndecoded> {
         (dbtx
             .find_by_prefix(&NoteKeyPrefix)
@@ -1684,9 +1697,9 @@ impl MintClientModule {
             .collect()
     }
 
-    async fn get_next_note_index(
+    async fn get_next_note_index<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(
@@ -1727,10 +1740,10 @@ impl MintClientModule {
     /// We always keep track of an incrementing index in the database and use
     /// it as part of the derivation path for the note secret. This ensures that
     /// we never reuse the same note secret twice.
-    async fn new_note_secret(
+    async fn new_note_secret<Cap: Send>(
         &self,
         amount: Amount,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
     ) -> DerivableSecret {
         let new_idx = self.get_next_note_index(dbtx, amount).await;
         dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
@@ -1738,10 +1751,10 @@ impl MintClientModule {
         Self::new_note_secret_static(&self.secret, amount, new_idx)
     }
 
-    pub async fn new_ecash_note(
+    pub async fn new_ecash_note<Cap: Send>(
         &self,
         amount: Amount,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, &secret)
@@ -1807,15 +1820,15 @@ impl MintClientModule {
             .await
             .context(ReissueExternalNotesError::AlreadyReissued)?;
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
         self.client_ctx
-            .log_event(&mut dbtx, OOBNotesReissued { amount })
+            .log_event(&mut dbtx.to_ref_nc(), OOBNotesReissued { amount })
             .await;
 
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                &mut dbtx.to_ref_nc(),
                 ReceivePaymentEvent {
                     operation_id,
                     amount,
@@ -2024,10 +2037,11 @@ impl MintClientModule {
             )
             .await
             .map_err(|e| match e {
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } => anyhow::anyhow!("Commit failed after {attempts} attempts: {last_error}"),
                 AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
-                }
             })
     }
 
@@ -2107,7 +2121,7 @@ impl MintClientModule {
         // Create outputs for reissuance using the existing create_output function
         let output_bundle = self
             .create_output(
-                &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                &mut self.client_ctx.module_db().begin_write_transaction().await,
                 operation_id,
                 1, // notes_per_denomination
                 amount,
@@ -2159,9 +2173,9 @@ impl MintClientModule {
 
     /// Try to spend exact notes from the current balance.
     /// Returns `Some(OOBNotes)` if exact notes are available, `None` otherwise.
-    async fn try_spend_exact_notes_dbtx(
+    async fn try_spend_exact_notes_dbtx<Cap: Send>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         amount: Amount,
         federation_id: FederationId,
         extra_meta: serde_json::Value,
@@ -2191,7 +2205,7 @@ impl MintClientModule {
         // Log the send operation with notes immediately available
         self.client_ctx
             .add_operation_log_entry_dbtx(
-                dbtx,
+                &mut dbtx.to_ref_nc(),
                 operation_id,
                 MintCommonInit::KIND.as_str(),
                 MintOperationMeta {
@@ -2207,7 +2221,7 @@ impl MintClientModule {
 
         self.client_ctx
             .log_event(
-                dbtx,
+                &mut dbtx.to_ref_nc(),
                 SendPaymentEvent {
                     operation_id,
                     amount: oob_notes.total_amount(),
@@ -2279,7 +2293,7 @@ impl MintClientModule {
     /// have already been spent this operation will fail which can be
     /// observed using [`MintClientModule::subscribe_spend_notes`].
     pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
         dbtx.insert_entry(&CancelledOOBSpendKey(operation_id), &())
             .await;
         if let Err(e) = dbtx.commit_tx_result().await {
@@ -2372,15 +2386,15 @@ impl MintClientModule {
         Ok(operation)
     }
 
-    async fn delete_spendable_note(
+    async fn delete_spendable_note<Cap: Send>(
         client_ctx: &ClientContext<MintClientModule>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         amount: Amount,
         note: &SpendableNote,
     ) {
         client_ctx
             .log_event(
-                dbtx,
+                &mut dbtx.to_ref_nc(),
                 NoteSpent {
                     nonce: note.nonce(),
                 },
@@ -2416,7 +2430,7 @@ impl MintClientModule {
     pub async fn reused_note_secrets(&self) -> Vec<(Amount, NoteIssuanceRequest, BlindNonce)> {
         self.client_ctx
             .module_db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ReusedNoteIndices)
             .await

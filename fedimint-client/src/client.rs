@@ -39,8 +39,9 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
-    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
+    AutocommitError, Database, DatabaseRecord, IReadDatabaseTransactionOps as _,
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped as _, NonCommittable,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
@@ -65,8 +66,9 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
-    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
+    DBTransactionEventLogExt as _, DBTransactionEventLogReadExt, DynEventLogTrimableTracker, Event,
+    EventKind, EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker,
+    EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -235,17 +237,17 @@ impl Client {
     }
 
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.get_value(&ClientConfigKey).await
     }
 
     pub async fn get_pending_config_from_db(db: &Database) -> Option<ClientConfig> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.get_value(&PendingClientConfigKey).await
     }
 
     pub async fn get_api_secret_from_db(db: &Database) -> Option<String> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.get_value(&ApiSecretKey).await
     }
 
@@ -253,7 +255,7 @@ impl Client {
         db: &Database,
         secret: T,
     ) -> anyhow::Result<()> {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Don't overwrite an existing secret
         if dbtx.get_value(&EncodedClientSecretKey).await.is_some() {
@@ -277,7 +279,7 @@ impl Client {
     pub async fn load_decodable_client_secret_opt<T: Decodable>(
         db: &Database,
     ) -> anyhow::Result<Option<T>> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
 
         let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
 
@@ -305,7 +307,7 @@ impl Client {
     }
 
     pub async fn is_initialized(db: &Database) -> bool {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         dbtx.raw_get_bytes(&[ClientConfigKey::DB_PREFIX])
             .await
             .expect("Unrecoverable error occurred while reading and entry from the database")
@@ -357,7 +359,7 @@ impl Client {
         // Try to get from cache. If not available, return a conservative
         // default. The cache should always be populated after successful client init.
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&CachedApiVersionSetKey)
             .await
@@ -375,7 +377,7 @@ impl Client {
         // Check cache first
         if let Some(chain_id) = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ChainIdKey)
             .await
@@ -387,7 +389,7 @@ impl Client {
         let chain_id = self.api.chain_id().await?;
 
         // Cache the result
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
         dbtx.insert_entry(&ChainIdKey, &chain_id).await;
         dbtx.commit_tx().await;
 
@@ -467,7 +469,7 @@ impl Client {
 
     pub async fn add_state_machines(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.executor.add_state_machines_dbtx(dbtx, states).await
@@ -477,7 +479,7 @@ impl Client {
     pub async fn get_active_operations(&self) -> HashSet<OperationId> {
         let active_states = self.executor.get_active_states().await;
         let mut active_operations = HashSet::with_capacity(active_states.len());
-        let mut dbtx = self.db().begin_transaction_nc().await;
+        let mut dbtx = self.db().begin_read_transaction().await;
         for (state, _) in active_states {
             let operation_id = state.operation_id();
             if dbtx
@@ -513,7 +515,7 @@ impl Client {
     /// Adds funding to a transaction or removes over-funding via change.
     async fn finalize_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
@@ -644,7 +646,7 @@ impl Client {
                         Ok(out_point_range)
                     })
                 },
-                Some(100), // TODO: handle what happens after 100 retries
+                Some(100),
             )
             .await;
 
@@ -662,7 +664,7 @@ impl Client {
 
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
@@ -730,13 +732,13 @@ impl Client {
     }
 
     pub async fn operation_exists(&self, operation_id: OperationId) -> bool {
-        let mut dbtx = self.db().begin_transaction_nc().await;
+        let mut dbtx = self.db().begin_read_transaction().await;
 
         Client::operation_exists_dbtx(&mut dbtx, operation_id).await
     }
 
-    pub async fn operation_exists_dbtx(
-        dbtx: &mut DatabaseTransaction<'_>,
+    pub async fn operation_exists_dbtx<'a>(
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         operation_id: OperationId,
     ) -> bool {
         let active_state_exists = dbtx
@@ -758,7 +760,7 @@ impl Client {
 
     pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
@@ -880,7 +882,7 @@ impl Client {
             .primary_module_for_unit(unit)
             .ok_or_else(|| anyhow!("Primary module not available"))?;
         Ok(module
-            .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
+            .get_balance(id, &mut self.db().begin_read_transaction().await, unit)
             .await)
     }
 
@@ -917,7 +919,7 @@ impl Client {
             yield initial_balance;
             let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 let balance = primary_module
                      .get_balance(primary_module_id, &mut dbtx, unit)
                     .await;
@@ -992,7 +994,7 @@ impl Client {
             let retry = match response {
                 Err(err) => {
                     let has_previous_response = db
-                        .begin_transaction_nc()
+                        .begin_read_transaction()
                         .await
                         .get_value(&PeerLastApiVersionsSummaryKey(peer_id))
                         .await
@@ -1010,7 +1012,7 @@ impl Client {
                 Ok(o) => {
                     // Save the response to the database right away, just to
                     // not lose it
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     dbtx.insert_entry(
                         &PeerLastApiVersionsSummaryKey(peer_id),
                         &PeerLastApiVersionsSummary(o),
@@ -1110,7 +1112,7 @@ impl Client {
     /// Used when we have a pre-calculated API version set that should be stored
     /// for later use.
     pub async fn write_api_version_cache(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         api_version_set: ApiVersionSet,
     ) {
         debug!(
@@ -1142,7 +1144,7 @@ impl Client {
             peer_api_versions.len()
         );
 
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         // Calculate common API version set from individual responses
         let client_supported_versions =
             Self::supported_api_versions_summary_static(config, client_module_init);
@@ -1230,7 +1232,7 @@ impl Client {
         task_group: &TaskGroup,
     ) -> anyhow::Result<ApiVersionSet> {
         if let Some(v) = db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&CachedApiVersionSetKey)
             .await
@@ -1349,7 +1351,7 @@ impl Client {
             value = ?common_api_versions,
             "Updating the cached common api versions"
         );
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let _ = dbtx
             .insert_entry(
                 &CachedApiVersionSetKey,
@@ -1365,7 +1367,7 @@ impl Client {
     /// Get the client [`Metadata`]
     pub async fn get_metadata(&self) -> Metadata {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ClientMetadataKey)
             .await
@@ -1392,6 +1394,11 @@ impl Client {
             )
             .await
             .expect("Failed to autocommit metadata");
+    }
+
+    /// Set the client [`Metadata`]
+    pub async fn set_metadata_dbtx(dbtx: &mut WriteDatabaseTransaction<'_>, metadata: &Metadata) {
+        dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
     }
 
     pub fn has_pending_recoveries(&self) -> bool {
@@ -1465,11 +1472,6 @@ impl Client {
         Ok(())
     }
 
-    /// Set the client [`Metadata`]
-    pub async fn set_metadata_dbtx(dbtx: &mut DatabaseTransaction<'_>, metadata: &Metadata) {
-        dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
-    }
-
     fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
@@ -1484,6 +1486,7 @@ impl Client {
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
+        let task_group = self.task_group.clone();
         self.task_group
             .spawn("module recoveries", |_task_handle| async {
                 Self::run_module_recoveries_task(
@@ -1492,6 +1495,7 @@ impl Client {
                     recovery_sender,
                     module_recoveries,
                     module_recovery_progress_receivers,
+                    task_group,
                 )
                 .await;
             });
@@ -1509,30 +1513,47 @@ impl Client {
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
+        task_group: TaskGroup,
     ) {
-        debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
-        let mut completed_stream = Vec::new();
-        let progress_stream = futures::stream::FuturesUnordered::new();
+        debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Starting module recoveries");
 
+        // Channel for recovery completion notifications.
+        // By spawning recoveries as separate tasks and communicating completion
+        // via this channel, we avoid a deadlock: previously, recovery futures
+        // ran inside the select and could hold a write transaction while yielding,
+        // causing the progress handling code to block when trying to acquire
+        // its own write transaction.
+        let (completion_tx, completion_rx) =
+            tokio::sync::mpsc::unbounded_channel::<ModuleInstanceId>();
+
+        // Spawn each recovery as a separate task
         for (module_instance_id, f) in module_recoveries {
-            completed_stream.push(futures::stream::once(Box::pin(async move {
-                match f.await {
-                    Ok(()) => (module_instance_id, None),
-                    Err(err) => {
-                        warn!(
-                            target: LOG_CLIENT,
-                            err = %err.fmt_compact_anyhow(), module_instance_id, "Module recovery failed"
-                        );
-                        // a module recovery that failed reports and error and
-                        // just never finishes, so we don't need a separate state
-                        // for it
-                        futures::future::pending::<()>().await;
-                        unreachable!()
+            let tx = completion_tx.clone();
+            task_group.spawn(
+                format!("module {module_instance_id} recovery"),
+                move |_| async move {
+                    match f.await {
+                        Ok(()) => {
+                            let _ = tx.send(module_instance_id);
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_CLIENT,
+                                err = %err.fmt_compact_anyhow(),
+                                module_instance_id,
+                                "Module recovery failed"
+                            );
+                            // Don't send completion - recovery is considered
+                            // permanently stuck
+                        }
                     }
-                }
-            })));
+                },
+            );
         }
+        drop(completion_tx);
 
+        // Build progress stream - yields (module_id, Some(progress))
+        let progress_stream = futures::stream::FuturesUnordered::new();
         for (module_instance_id, rx) in module_recovery_progress_receivers {
             progress_stream.push(
                 tokio_stream::wrappers::WatchStream::new(rx)
@@ -1541,13 +1562,17 @@ impl Client {
             );
         }
 
+        // Build completion stream - yields (module_id, None) when recovery completes
+        let completion_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(completion_rx)
+            .map(|module_instance_id| (module_instance_id, None));
+
         let mut futures = futures::stream::select(
             futures::stream::select_all(progress_stream),
-            futures::stream::select_all(completed_stream),
+            completion_stream,
         );
 
         while let Some((module_instance_id, progress)) = futures.next().await {
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_write_transaction().await;
 
             let prev_progress = *recovery_sender
                 .borrow()
@@ -1607,7 +1632,7 @@ impl Client {
     ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
         let mut peer_api_version_sets = BTreeMap::new();
 
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
         for peer_id in num_peers.peer_ids() {
             if let Some(v) = dbtx
                 .get_value(&PeerLastApiVersionsSummaryKey(peer_id))
@@ -1624,7 +1649,7 @@ impl Client {
     /// only the announcements and doesn't use the config as fallback.
     pub async fn get_peer_url_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
         self.db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ApiAnnouncementPrefix)
             .await
@@ -1682,7 +1707,7 @@ impl Client {
 
     async fn get_or_backfill_broadcast_public_keys(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         config: ClientConfig,
     ) -> BTreeMap<PeerId, PublicKey> {
         match config.global.broadcast_public_keys {
@@ -1831,34 +1856,32 @@ impl Client {
     where
         E: Event + Send,
     {
-        let mut dbtx = self.db.begin_transaction().await;
-        self.log_event_dbtx(&mut dbtx, module_id, event).await;
+        let mut dbtx = self.db.begin_write_transaction().await;
+        self.log_event_dbtx(&mut dbtx.to_ref_nc(), module_id, event)
+            .await;
         dbtx.commit_tx().await;
     }
 
-    pub async fn log_event_dbtx<E, Cap>(
+    pub async fn log_event_dbtx<E>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         module_id: Option<ModuleInstanceId>,
         event: E,
     ) where
         E: Event + Send,
-        Cap: Send,
     {
         dbtx.log_event(self.log_ordering_wakeup_tx.clone(), module_id, event)
             .await;
     }
 
-    pub async fn log_event_raw_dbtx<Cap>(
+    pub async fn log_event_raw_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
         persist: EventPersistence,
-    ) where
-        Cap: Send,
-    {
+    ) {
         let module_id = module.as_ref().map(|m| m.1);
         let module_kind = module.map(|m| m.0);
         dbtx.log_event_raw(
@@ -1891,7 +1914,7 @@ impl Client {
             // Store position in the event log
             async fn store(
                 &mut self,
-                dbtx: &mut DatabaseTransaction<NonCommittable>,
+                dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
                 pos: EventLogTrimableId,
             ) -> anyhow::Result<()> {
                 dbtx.insert_entry(&DefaultApplicationEventLogKey, &pos)
@@ -1902,7 +1925,7 @@ impl Client {
             /// Load the last previous stored position (or None if never stored)
             async fn load(
                 &mut self,
-                dbtx: &mut DatabaseTransaction<NonCommittable>,
+                dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
             ) -> anyhow::Result<Option<EventLogTrimableId>> {
                 Ok(dbtx.get_value(&DefaultApplicationEventLogKey).await)
             }
@@ -1923,7 +1946,7 @@ impl Client {
         handler_fn: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_events(
@@ -1959,7 +1982,7 @@ impl Client {
         handler_fn: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        F: Fn(&mut WriteDatabaseTransaction<'_, NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_trimable_events(
@@ -1976,7 +1999,7 @@ impl Client {
         pos: Option<EventLogId>,
         limit: u64,
     ) -> Vec<PersistedLogEntry> {
-        self.get_event_log_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
+        self.get_event_log_dbtx(&mut self.db.begin_read_transaction().await, pos, limit)
             .await
     }
 
@@ -1985,31 +2008,25 @@ impl Client {
         pos: Option<EventLogTrimableId>,
         limit: u64,
     ) -> Vec<PersistedLogEntry> {
-        self.get_event_log_trimable_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
+        self.get_event_log_trimable_dbtx(&mut self.db.begin_read_transaction().await, pos, limit)
             .await
     }
 
-    pub async fn get_event_log_dbtx<Cap>(
+    pub async fn get_event_log_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut (impl DBTransactionEventLogReadExt + MaybeSend),
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>
-    where
-        Cap: Send,
-    {
+    ) -> Vec<PersistedLogEntry> {
         dbtx.get_event_log(pos, limit).await
     }
 
-    pub async fn get_event_log_trimable_dbtx<Cap>(
+    pub async fn get_event_log_trimable_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        dbtx: &mut (impl DBTransactionEventLogReadExt + MaybeSend),
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>
-    where
-        Cap: Send,
-    {
+    ) -> Vec<PersistedLogEntry> {
         dbtx.get_event_log_trimable(pos, limit).await
     }
 
@@ -2030,7 +2047,7 @@ impl Client {
     pub(crate) async fn run_core_migrations(
         db_no_decoders: &Database,
     ) -> Result<(), anyhow::Error> {
-        let mut dbtx = db_no_decoders.begin_transaction().await;
+        let mut dbtx = db_no_decoders.begin_write_transaction().await;
         apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
             .await?;
         if is_running_in_test_env() {
@@ -2110,7 +2127,7 @@ impl ClientContextIface for Client {
 
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
@@ -2164,7 +2181,7 @@ impl ClientContextIface for Client {
 
     async fn log_event_json(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         module_kind: Option<ModuleKind>,
         module_id: ModuleInstanceId,
         kind: EventKind,
@@ -2187,7 +2204,7 @@ impl ClientContextIface for Client {
         &self,
         operation_id: OperationId,
         module_id: ModuleInstanceId,
-        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+        dbtx: &'dbtx mut ReadDatabaseTransaction<'_>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (ActiveStateKey, ActiveStateMeta)> + 'dbtx)>>
     {
         Box::pin(
@@ -2203,7 +2220,7 @@ impl ClientContextIface for Client {
         &self,
         operation_id: OperationId,
         module_id: ModuleInstanceId,
-        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+        dbtx: &'dbtx mut ReadDatabaseTransaction<'_>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (InactiveStateKey, InactiveStateMeta)> + 'dbtx)>>
     {
         Box::pin(

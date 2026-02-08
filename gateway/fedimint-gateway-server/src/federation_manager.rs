@@ -1,15 +1,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
-use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
+use fedimint_core::db::{NonCommittable, ReadDatabaseTransaction, WriteDatabaseTransaction};
 use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
 use fedimint_gateway_common::FederationInfo;
-use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
+use fedimint_gateway_server_db::GatewayDbtxReadExt as _;
 use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
 use fedimint_logging::LOG_GATEWAY;
@@ -56,14 +55,13 @@ impl FederationManager {
         self.index_to_federation.insert(index, federation_id);
     }
 
+    /// Leaves the federation by unannouncing from all registrations and
+    /// shutting down the client. Does not modify the database.
     pub async fn leave_federation(
         &mut self,
         federation_id: FederationId,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
         registrations: Vec<&Registration>,
-    ) -> AdminResult<FederationInfo> {
-        let federation_info = self.federation_info(federation_id, dbtx).await?;
-
+    ) -> AdminResult<()> {
         for registration in registrations {
             self.unannounce_from_federation(federation_id, registration.keypair)
                 .await;
@@ -71,7 +69,7 @@ impl FederationManager {
 
         self.remove_client(federation_id).await?;
 
-        Ok(federation_info)
+        Ok(())
     }
 
     async fn remove_client(&mut self, federation_id: FederationId) -> AdminResult<()> {
@@ -202,7 +200,7 @@ impl FederationManager {
     pub async fn federation_info(
         &self,
         federation_id: FederationId,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
     ) -> std::result::Result<FederationInfo, FederationNotConnected> {
         self.clients
             .get(&federation_id)
@@ -239,7 +237,7 @@ impl FederationManager {
 
     pub async fn federation_info_all_federations(
         &self,
-        mut dbtx: DatabaseTransaction<'_, NonCommittable>,
+        mut dbtx: ReadDatabaseTransaction<'_>,
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
@@ -307,12 +305,9 @@ impl FederationManager {
         federations
     }
 
-    pub async fn backup_federation(
-        &self,
-        federation_id: &FederationId,
-        dbtx: &mut DatabaseTransaction<'_, Committable>,
-        now: SystemTime,
-    ) {
+    /// Backs up the federation to the remote server. Returns true if
+    /// successful. Does not modify any database state.
+    pub async fn backup_federation_to_remote(&self, federation_id: &FederationId) -> bool {
         if let Some(client) = self.client(federation_id) {
             let metadata: BTreeMap<String, String> = BTreeMap::new();
             #[allow(deprecated)]
@@ -324,11 +319,11 @@ impl FederationManager {
                 .await
                 .is_ok()
             {
-                dbtx.save_federation_backup_record(*federation_id, Some(now))
-                    .await;
                 info!(federation_id = %federation_id, "Successfully backed up federation");
+                return true;
             }
         }
+        false
     }
 
     // TODO(tvolk131): Set this value in the constructor.

@@ -48,7 +48,8 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -195,7 +196,7 @@ impl WalletClientInit {
             });
         }
 
-        let mut dbtx = args.db().begin_transaction().await;
+        let mut dbtx = args.db().begin_write_transaction().await;
 
         for tweak_idx in 0..state.new_start_idx().0 {
             let operation_id = data.derive_peg_in_script(TweakIdx(tweak_idx)).3;
@@ -233,7 +234,7 @@ impl ModuleInit for WalletClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -372,7 +373,7 @@ impl ClientModuleInit for WalletClientInit {
         // recovery)
         if args
             .db()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&RecoveryStateKey)
             .await
@@ -565,7 +566,7 @@ impl ClientModule for WalletClientModule {
         // fetch consensus height first
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
         let next_pegin_tweak_idx = dbtx
             .get_value(&NextPegInTweakIndexKey)
             .await
@@ -753,7 +754,7 @@ impl WalletClientModule {
 
     async fn allocate_deposit_address_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> (OperationId, Address, TweakIdx) {
         dbtx.ensure_isolated().expect("Must be isolated db");
 
@@ -913,27 +914,34 @@ impl WalletClientModule {
     /// verified the version, it must be online to fetch the latest wallet
     /// module consensus version.
     pub async fn supports_safe_deposit(&self) -> bool {
-        let mut dbtx = self.db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = self
+            .db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        let already_verified_supports_safe_deposit =
-            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
-
-        already_verified_supports_safe_deposit || {
-            match self.module_api.module_consensus_version().await {
-                Ok(module_consensus_version) => {
-                    let supported_version =
-                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
-
-                    if supported_version {
-                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                        dbtx.commit_tx().await;
-                    }
-
-                    supported_version
-                }
-                Err(_) => false,
-            }
+        if already_verified {
+            return true;
         }
+
+        // API phase: fetch module consensus version (no transaction held)
+        let Ok(module_consensus_version) = self.module_api.module_consensus_version().await else {
+            return false;
+        };
+
+        let supported_version = SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+        // Write phase: persist the result if supported
+        if supported_version {
+            let mut dbtx = self.db.begin_write_transaction().await;
+            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+            dbtx.commit_tx().await;
+        }
+
+        supported_version
     }
 
     /// Allocates a deposit address controlled by the federation, guaranteeing
@@ -1157,7 +1165,7 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1173,7 +1181,7 @@ impl WalletClientModule {
         let data = self.data.clone();
         let Some((tweak_idx, _)) = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1197,7 +1205,7 @@ impl WalletClientModule {
             .client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -1216,16 +1224,16 @@ impl WalletClientModule {
         self.client_ctx
             .module_db()
             .clone()
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PegInTweakIndexKey(tweak_idx))
             .await
             .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
     }
 
-    pub async fn get_claimed_pegins(
+    pub async fn get_claimed_pegins<'a>(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
         tweak_idx: TweakIdx,
     ) -> Vec<(
         bitcoin::OutPoint,
@@ -1346,7 +1354,7 @@ impl WalletClientModule {
         loop {
             let pegins = self
                 .get_claimed_pegins(
-                    &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                    &mut self.client_ctx.module_db().begin_read_transaction().await,
                     tweak_idx,
                 )
                 .await;
@@ -1426,11 +1434,11 @@ impl WalletClientModule {
                 )
                 .await?;
 
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            let mut dbtx = self.client_ctx.module_db().begin_write_transaction().await;
 
             self.client_ctx
                 .log_event(
-                    &mut dbtx,
+                    &mut dbtx.to_ref_nc(),
                     SendPaymentEvent {
                         operation_id,
                         amount: amount + fee.amount(),
@@ -1566,23 +1574,30 @@ impl WalletClientModule {
 /// supports safe deposits, saving the result in the db once it does.
 async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
     loop {
-        let mut dbtx = db.begin_transaction().await;
+        // Read phase: check if already verified
+        let already_verified = db
+            .begin_read_transaction()
+            .await
+            .get_value(&SupportsSafeDepositKey)
+            .await
+            .is_some();
 
-        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        if already_verified {
             break;
         }
 
+        // API phase: fetch module consensus version (no transaction held)
         module_api.wait_for_initialized_connections().await;
 
         if let Ok(module_consensus_version) = module_api.module_consensus_version().await
             && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
         {
+            // Write phase: persist the result
+            let mut dbtx = db.begin_write_transaction().await;
             dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
             dbtx.commit_tx().await;
             break;
         }
-
-        drop(dbtx);
 
         if is_running_in_test_env() {
             // Even in tests we don't want to spam the federation with requests about it
@@ -1594,7 +1609,7 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.
-async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> TweakIdx {
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut WriteDatabaseTransaction<'_>) -> TweakIdx {
     let index = dbtx
         .get_value(&NextPegInTweakIndexKey)
         .await

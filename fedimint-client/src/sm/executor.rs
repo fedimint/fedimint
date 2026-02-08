@@ -15,8 +15,8 @@ use fedimint_client_module::sm::{
 };
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseKeyWithNotify, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
@@ -216,7 +216,7 @@ impl Executor {
     // TODO: remove warning once finality is an inherent state attribute
     pub async fn add_state_machines_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         for state in states {
@@ -359,7 +359,7 @@ impl Executor {
         Vec<(DynState, ActiveStateMeta)>,
         Vec<(DynState, InactiveStateMeta)>,
     ) {
-        let mut dbtx = self.inner.db.begin_transaction_nc().await;
+        let mut dbtx = self.inner.db.begin_read_transaction().await;
         let active_states: Vec<_> = dbtx
             .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
@@ -828,7 +828,7 @@ impl ExecutorInner {
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ActiveStateKeyPrefix)
             .await
@@ -853,7 +853,7 @@ impl ExecutorInner {
             return None;
         }
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&ActiveStateKeyDb(ActiveStateKey::from_state(state.clone())))
             .await
@@ -861,7 +861,7 @@ impl ExecutorInner {
 
     async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&InactiveStateKeyPrefix)
             .await
@@ -877,10 +877,9 @@ impl ExecutorInner {
             .await
     }
 
-    pub async fn log_event_dbtx<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
+    pub async fn log_event_dbtx<E>(&self, dbtx: &mut WriteDatabaseTransaction<'_>, event: E)
     where
         E: Event + Send,
-        Cap: Send,
     {
         dbtx.log_event(self.log_ordering_wakeup_tx.clone(), None, event)
             .await;
@@ -1212,7 +1211,7 @@ impl IExecutor for Executor {
 
     async fn add_state_machines_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         Self::add_state_machines_dbtx(self, dbtx, states).await

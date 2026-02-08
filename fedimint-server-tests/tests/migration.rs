@@ -7,7 +7,8 @@ use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::db::{
-    Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseVersion, DatabaseVersionKeyV0, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -45,7 +46,7 @@ use tracing::info;
 /// database keys/values change - instead a new function should be added
 /// that creates a new database backup that can be tested.
 async fn create_server_db_with_v0_data(db: Database) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
 
     // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
     dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -149,7 +150,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
 
     validate_migrations_global(
         |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {

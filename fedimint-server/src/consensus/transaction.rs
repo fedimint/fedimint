@@ -1,4 +1,4 @@
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::WriteDatabaseTransaction;
 use fedimint_core::module::{Amounts, CoreConsensusVersion, TransactionItemAmounts};
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{InPoint, OutPoint};
@@ -13,9 +13,9 @@ pub enum TxProcessingMode {
     Consensus,
 }
 
-pub async fn process_transaction_with_dbtx(
+pub async fn process_transaction_with_dbtx<Cap>(
     modules: ServerModuleRegistry,
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
     transaction: &Transaction,
     version: CoreConsensusVersion,
     mode: TxProcessingMode,
@@ -57,7 +57,8 @@ pub async fn process_transaction_with_dbtx(
                 .verify_input_submission(
                     &mut dbtx
                         .to_ref_with_prefix_module_id(input.module_instance_id())
-                        .0,
+                        .0
+                        .to_ref_nc(),
                     input,
                 )
                 .await
@@ -68,7 +69,8 @@ pub async fn process_transaction_with_dbtx(
             .process_input(
                 &mut dbtx
                     .to_ref_with_prefix_module_id(input.module_instance_id())
-                    .0,
+                    .0
+                    .to_ref_nc(),
                 input,
                 InPoint { txid, in_idx },
             )
@@ -90,7 +92,8 @@ pub async fn process_transaction_with_dbtx(
                 .verify_output_submission(
                     &mut dbtx
                         .to_ref_with_prefix_module_id(output.module_instance_id())
-                        .0,
+                        .0
+                        .to_ref_nc(),
                     output,
                     OutPoint { txid, out_idx },
                 )
@@ -103,7 +106,8 @@ pub async fn process_transaction_with_dbtx(
             .process_output(
                 &mut dbtx
                     .to_ref_with_prefix_module_id(output.module_instance_id())
-                    .0,
+                    .0
+                    .to_ref_nc(),
                 output,
                 OutPoint { txid, out_idx },
             )

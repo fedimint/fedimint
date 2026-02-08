@@ -1,7 +1,6 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
-use anyhow::anyhow;
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -9,7 +8,8 @@ use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    AutocommitError, Database, IReadDatabaseTransactionOpsTyped as _,
+    IWriteDatabaseTransactionOpsTyped as _, WriteDatabaseTransaction,
 };
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::Amounts;
@@ -58,7 +58,7 @@ impl NextActions {
 impl NextActions {
     /// Calculate next actions from the database
     async fn from_db_state(db: &Database) -> Self {
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&PegInTweakIndexPrefix)
             .await
@@ -186,6 +186,7 @@ async fn check_and_claim_idx_pegins(
         Ok(outcomes) => {
             let next_check_time = CheckOutcome::retry_delay_vec(&outcomes, due_val.creation_time)
                 .map(|duration| now + duration);
+
             db
                 .autocommit(
                     |dbtx, _| {
@@ -347,7 +348,7 @@ async fn check_idx_pegins(
         };
 
         if db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&claimed_peg_in_key)
             .await
@@ -412,9 +413,9 @@ async fn claim_peg_in(
 ) -> anyhow::Result<()> {
     /// Returns the claim transactions output range if a claim happened or
     /// `None` otherwise if the deposit was smaller than the deposit fee.
-    async fn claim_peg_in_inner(
+    async fn claim_peg_in_inner<Cap: Send>(
         client_ctx: &ClientContext<WalletClientModule>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Cap>,
         btc_transaction: &bitcoin::Transaction,
         out_idx: u32,
         tweak_key: Keypair,
@@ -452,7 +453,7 @@ async fn claim_peg_in(
 
         client_ctx
             .log_event(
-                dbtx,
+                &mut dbtx.to_ref_nc(),
                 DepositConfirmed {
                     txid,
                     out_idx,
@@ -463,7 +464,7 @@ async fn claim_peg_in(
 
         client_ctx
             .log_event(
-                dbtx,
+                &mut dbtx.to_ref_nc(),
                 ReceivePaymentEvent {
                     operation_id,
                     amount,
@@ -475,7 +476,7 @@ async fn claim_peg_in(
         Some(
             client_ctx
                 .claim_inputs(
-                    dbtx,
+                    &mut dbtx.to_ref_nc(),
                     ClientInputBundle::new_no_sm(vec![client_input]),
                     operation_id,
                 )
@@ -483,8 +484,6 @@ async fn claim_peg_in(
                 .expect("Cannot claim input, additional funding needed"),
         )
     }
-
-    let tx_out_proof = &tx_out_proof;
 
     debug!(target: LOG_CLIENT_MODULE_WALLET, %out_point, "Claiming a peg-in");
 
@@ -536,7 +535,7 @@ async fn claim_peg_in(
             AutocommitError::CommitFailed {
                 last_error,
                 attempts,
-            } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
+            } => anyhow::anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
             AutocommitError::ClosureError { error, .. } => error,
         })?;
 

@@ -8,8 +8,8 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitResultExt, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IRawDatabase,
+    AutocommitResultExt, Database, IRawDatabase, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -185,7 +185,7 @@ impl RecurringInvoiceServer {
             },
         };
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
         if let Some(existing_code) = dbtx
             .insert_entry(
                 &PaymentCodeKey {
@@ -367,7 +367,7 @@ impl RecurringInvoiceServer {
 
     async fn save_bolt11_invoice(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         operation_id: OperationId,
         payment_code_id: PaymentCodeId,
         invoice_index: u64,
@@ -438,7 +438,7 @@ impl RecurringInvoiceServer {
 
         let mut notified = self.invoice_generated.notified();
         loop {
-            let mut dbtx = self.db.begin_transaction_nc().await;
+            let mut dbtx = self.db.begin_read_transaction().await;
             if let Some(invoice_entry) = dbtx
                 .get_value(&PaymentCodeInvoiceKey {
                     payment_code_id,
@@ -456,7 +456,7 @@ impl RecurringInvoiceServer {
 
     async fn get_next_invoice_index(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         payment_code_id: PaymentCodeId,
     ) -> u64 {
         let next_index = dbtx
@@ -482,7 +482,7 @@ impl RecurringInvoiceServer {
         payment_code_id: PaymentCodeId,
     ) -> Result<PaymentCodeEntry, RecurringPaymentError> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&PaymentCodeKey { payment_code_id })
             .await
@@ -574,7 +574,7 @@ impl RecurringInvoiceServer {
         let migrations = Self::migrations();
         let schema_version: u64 = self
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .get_value(&SchemaVersionKey)
             .await
@@ -584,7 +584,7 @@ impl RecurringInvoiceServer {
             .into_iter()
             .skip_while(|(target_schema, _)| *target_schema <= schema_version)
         {
-            let mut dbtx = self.db.begin_transaction().await;
+            let mut dbtx = self.db.begin_write_transaction().await;
             dbtx.insert_entry(&SchemaVersionKey, &target_schema).await;
 
             migration_fn(self, dbtx.to_ref_nc()).await;

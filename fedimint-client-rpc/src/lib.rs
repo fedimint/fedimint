@@ -11,7 +11,9 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -558,7 +560,7 @@ impl RpcGlobalState {
         let mnemonic =
             Mnemonic::parse_in_normalized(fedimint_bip39::Language::English, &all_words)?;
 
-        let mut dbtx = self.unified_database.begin_transaction().await;
+        let mut dbtx = self.unified_database.begin_write_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
             anyhow::bail!(
@@ -580,7 +582,7 @@ impl RpcGlobalState {
         let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
         let words: Vec<String> = mnemonic.words().map(|w| w.to_string()).collect();
 
-        let mut dbtx = self.unified_database.begin_transaction().await;
+        let mut dbtx = self.unified_database.begin_write_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
             anyhow::bail!(
@@ -611,7 +613,7 @@ impl RpcGlobalState {
 
     /// Fetch mnemonic from database
     async fn get_mnemonic_from_db(&self) -> anyhow::Result<Option<Mnemonic>> {
-        let mut dbtx = self.unified_database.begin_transaction_nc().await;
+        let mut dbtx = self.unified_database.begin_read_transaction().await;
 
         if let Some(mnemonic_entropy) = dbtx.get_value(&MnemonicKey).await {
             let mnemonic = Mnemonic::from_entropy(&mnemonic_entropy)?;

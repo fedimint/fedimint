@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use fedimint_core::backup::ClientBackupKeyPrefix;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IReadDatabaseTransactionOpsTyped};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_metrics::prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, register_histogram_vec_with_registry,
@@ -218,7 +218,7 @@ pub(crate) static PEER_MESSAGES_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|
 /// e.g. because they are triggered infrequently.
 pub(crate) async fn initialize_gauge_metrics(tg: &TaskGroup, db: &Database) {
     STORED_BACKUPS_COUNT.set(
-        db.begin_transaction_nc()
+        db.begin_read_transaction()
             .await
             .find_by_prefix(&ClientBackupKeyPrefix)
             .await
@@ -232,7 +232,8 @@ pub(crate) async fn initialize_gauge_metrics(tg: &TaskGroup, db: &Database) {
             tg.spawn_cancellable("prometheus_backup_stats", async move {
                 loop {
                     let backup_counts =
-                        backup_statistics_static(&mut db_inner.begin_transaction_nc().await).await;
+                        backup_statistics_static(&mut db_inner.begin_read_transaction().await)
+                            .await;
 
                     BACKUP_COUNTS.with_label_values(&["1d"]).set(
                         backup_counts

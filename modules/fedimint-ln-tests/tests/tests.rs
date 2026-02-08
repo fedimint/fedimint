@@ -791,7 +791,8 @@ mod fedimint_migration_tests {
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKeyV0, IReadDatabaseTransactionOpsTyped,
+        IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::util::SafeUrl;
@@ -853,7 +854,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -977,7 +978,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -1288,7 +1289,7 @@ mod fedimint_migration_tests {
             module,
             "lightning-server",
             |db| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
@@ -1437,7 +1438,7 @@ mod fedimint_migration_tests {
             module,
             "lightning-client",
             |db, active_states, inactive_states| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
                     match prefix {

@@ -14,7 +14,8 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, DbMigrationFn, IDatabaseTransactionOpsCoreTyped, apply_migrations,
+    Database, DatabaseVersion, DbMigrationFn, IReadDatabaseTransactionOpsTyped,
+    IWriteDatabaseTransactionOpsTyped, apply_migrations,
 };
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -196,7 +197,7 @@ where
             data_prepare(isolated_db).await;
 
             let (active_states, inactive_states) = state_machine_prepare();
-            let mut global_dbtx = db.begin_transaction().await;
+            let mut global_dbtx = db.begin_write_transaction().await;
 
             for state in active_states {
                 global_dbtx
@@ -361,7 +362,7 @@ where
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
     let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default()).await?;
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), db_prefix.to_string())
         .await
         .context("Error applying core client migrations to temp database")?;
@@ -404,7 +405,7 @@ where
     .await
     .context("Error applying migrations to temp database")?;
 
-    let mut global_dbtx = db.begin_transaction_nc().await;
+    let mut global_dbtx = db.begin_read_transaction().await;
     let active_states = global_dbtx
         .find_by_prefix(&ActiveStateKeyPrefix)
         .await
@@ -482,7 +483,9 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use fedimint_client::db::{ClientConfigKey, ClientConfigKeyV0};
     use fedimint_core::config::{ClientConfigV0, FederationId, GlobalClientConfigV0};
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    };
     use fedimint_core::module::CoreConsensusVersion;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_logging::TracingSetup;
@@ -495,7 +498,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         let federation_id = FederationId::dummy();
 
@@ -535,7 +538,7 @@ mod fedimint_migration_tests {
         let _ = TracingSetup::default().init();
 
         validate_migrations_core_client("fedimint-client", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
             // Checks that client config migrated to ClientConfig with broadcast_public_keys
             ensure!(
                 dbtx.get_value(&ClientConfigKey).await.is_some(),

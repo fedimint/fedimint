@@ -108,9 +108,9 @@ async fn test_detect_double_spends() {
     let input = MintInput::new_v0(highest_denomination, note);
 
     // Double spend in same session is detected
-    let mut dbtx = db.begin_transaction_nc().await;
+    let mut dbtx = db.begin_write_transaction().await;
     mint.process_input(
-        &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+        &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
         &input,
         InPoint {
             txid: TransactionId::all_zeros(),
@@ -121,7 +121,7 @@ async fn test_detect_double_spends() {
     .expect("Spend of valid e-cash works");
     assert_matches!(
         mint.process_input(
-            &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+            &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
             &input,
             InPoint {
                 txid: TransactionId::all_zeros(),

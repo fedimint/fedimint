@@ -7,7 +7,7 @@ use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped};
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
@@ -165,7 +165,7 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
     // Issue e-cash and check if the blind nonce is added to the index
     let client_mint = client.get_first_module::<MintClientModule>()?;
 
-    let mut dbtx = client_mint.db.begin_transaction().await;
+    let mut dbtx = client_mint.db.begin_write_transaction().await;
     let operation_id = OperationId::new_random();
     let issuance_req = client_mint
         .create_output(&mut dbtx.to_ref_nc(), operation_id, 1, Amount::from_sats(1))
@@ -538,7 +538,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
     {
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -558,7 +558,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -578,7 +578,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             first_note_undecoded,
         ): (_, SpendableNoteUndecoded) = client_mint
             .db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&fedimint_mint_client::client_db::NoteKeyPrefix)
             .await
@@ -610,7 +610,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -632,7 +632,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -647,7 +647,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
     // Check that already used blind nonces are detected and repaired
     {
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
             NextECashNoteIndexKey(Amount::from_msats(1));
         let old_nonce_index = dbtx
@@ -661,7 +661,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -683,7 +683,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -696,7 +696,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
     // Check that already used blind nonces with gaps in between are detected and
     // repaired
     {
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
             NextECashNoteIndexKey(Amount::from_msats(1));
         let old_nonce_index = dbtx
@@ -727,7 +727,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             Some(ReissueExternalNotesState::Done)
         );
 
-        let mut dbtx = client_mint.db.begin_transaction().await;
+        let mut dbtx = client_mint.db.begin_write_transaction().await;
         dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))
             .await
             .expect("Failed to insert test note index");
@@ -735,7 +735,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let initial_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -757,7 +757,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
 
         let new_balance = client_mint
             .get_balance(
-                &mut client_mint.db.begin_transaction_nc().await,
+                &mut client_mint.db.begin_read_transaction().await,
                 AmountUnit::BITCOIN,
             )
             .await;
@@ -782,7 +782,8 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKeyV0, IReadDatabaseTransactionOpsTyped,
+        IWriteDatabaseTransactionOpsTyped,
     };
     use fedimint_core::{
         Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId, secp256k1,
@@ -831,7 +832,7 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -875,7 +876,7 @@ mod fedimint_migration_tests {
     }
 
     async fn create_client_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
@@ -984,7 +985,7 @@ mod fedimint_migration_tests {
 
         let module = DynServerModuleInit::from(MintInit);
         validate_migrations_server(module, "mint-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -1066,7 +1067,7 @@ mod fedimint_migration_tests {
             module,
             "mint-client",
             |db, _, _| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
 
                 for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
                     match prefix {

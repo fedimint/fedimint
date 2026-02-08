@@ -15,7 +15,10 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseValue, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
@@ -89,7 +92,7 @@ impl ModuleInit for LightningInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -342,7 +345,7 @@ impl ServerModule for Lightning {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -363,7 +366,7 @@ impl ServerModule for Lightning {
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -520,7 +523,7 @@ impl ServerModule for Lightning {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b LightningInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, LightningInputError> {
@@ -605,7 +608,7 @@ impl ServerModule for Lightning {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, LightningOutputError> {
@@ -804,7 +807,7 @@ impl ServerModule for Lightning {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&ContractUpdateKey(out_point))
@@ -814,7 +817,7 @@ impl ServerModule for Lightning {
 
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -837,7 +840,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(Some(module.consensus_block_count(&mut dbtx).await))
                 }
             },
@@ -846,7 +849,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module
                         .get_contract_account(&mut dbtx, contract_id)
                         .await)
@@ -866,7 +869,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     module.wait_block_height(block_height, &mut dbtx).await;
                     Ok(())
                 }
@@ -897,7 +900,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module
                         .get_offer(&mut dbtx, payment_hash)
                         .await)
@@ -917,7 +920,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.list_gateways(&mut dbtx).await)
                 }
             },
@@ -926,7 +929,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await;
                     dbtx.commit_tx_result().await?;
                     Ok(())
@@ -937,7 +940,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.get_gateway_remove_challenge(gateway_id, &mut dbtx).await)
                 }
             },
@@ -946,7 +949,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
+                    let mut dbtx = db.begin_write_transaction().await;
                     let result = module.remove_gateway(remove_gateway_request.clone(), &mut dbtx.to_ref_nc()).await;
                     match result {
                         Ok(()) => {
@@ -972,7 +975,10 @@ impl Lightning {
             .context("Block count not available yet")
     }
 
-    async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    async fn consensus_block_count(
+        &self,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
+    ) -> u64 {
         let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
 
         let mut counts = dbtx
@@ -993,7 +999,11 @@ impl Lightning {
         counts[peer_count / 2]
     }
 
-    async fn wait_block_height(&self, block_height: u64, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn wait_block_height(
+        &self,
+        block_height: u64,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
+    ) {
         while block_height >= self.consensus_block_count(dbtx).await {
             sleep(Duration::from_secs(5)).await;
         }
@@ -1014,7 +1024,7 @@ impl Lightning {
 
     async fn get_offer(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> Option<IncomingContractOffer> {
         dbtx.get_value(&OfferKey(payment_hash)).await
@@ -1031,7 +1041,7 @@ impl Lightning {
 
     async fn get_contract_account(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
         dbtx.get_value(&ContractKey(contract_id)).await
@@ -1128,7 +1138,7 @@ impl Lightning {
 
     async fn list_gateways(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
     ) -> Vec<LightningGatewayAnnouncement> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
@@ -1142,7 +1152,7 @@ impl Lightning {
 
     async fn register_gateway(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         gateway: LightningGatewayAnnouncement,
     ) {
         // Garbage collect expired gateways (since we're already writing to the DB)
@@ -1159,7 +1169,7 @@ impl Lightning {
         .await;
     }
 
-    async fn delete_expired_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn delete_expired_gateways(&self, dbtx: &mut WriteDatabaseTransaction<'_>) {
         let expired_gateway_keys = dbtx
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
@@ -1181,7 +1191,7 @@ impl Lightning {
     async fn get_gateway_remove_challenge(
         &self,
         gateway_id: PublicKey,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'_> + Send),
     ) -> Option<sha256::Hash> {
         match dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
             Some(gateway) => {
@@ -1200,7 +1210,7 @@ impl Lightning {
     async fn remove_gateway(
         &self,
         remove_gateway_request: RemoveGatewayRequest,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> anyhow::Result<()> {
         let fed_public_key = self.cfg.consensus.threshold_pub_keys.public_key();
         let gateway_id = remove_gateway_request.gateway_id;
@@ -1249,7 +1259,9 @@ mod tests {
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOpsTyped,
+    };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
@@ -1385,11 +1397,11 @@ mod tests {
         };
 
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         server
             .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
                 &output,
                 out_point,
             )
@@ -1412,7 +1424,7 @@ mod tests {
         assert_matches!(
             server
                 .process_output(
-                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
                     &output2,
                     out_point2
                 )
@@ -1426,7 +1438,7 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
         let server = Lightning {
@@ -1503,7 +1515,7 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, _) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
         let server = Lightning {

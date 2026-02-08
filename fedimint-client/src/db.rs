@@ -11,13 +11,15 @@ use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    Database, DatabaseVersion, DatabaseVersionKey, IReadDatabaseTransactionOps,
+    IReadDatabaseTransactionOpsTyped, IWriteDatabaseTransactionOps as _,
+    IWriteDatabaseTransactionOpsTyped, MODULE_GLOBAL_PREFIX, WriteDatabaseTransaction,
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::task::MaybeSend;
 use fedimint_core::{ChainId, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_eventlog::{
     DB_KEY_PREFIX_EVENT_LOG, DB_KEY_PREFIX_UNORDERED_EVENT_LOG, EventLogId, UnordedEventLogId,
@@ -97,7 +99,9 @@ pub(crate) enum DbKeyPrefixInternalReserved {
     DefaultApplicationEventLogPos = 0xd0,
 }
 
-pub(crate) async fn verify_client_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
+pub(crate) async fn verify_client_db_integrity_dbtx<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + IReadDatabaseTransactionOps),
+) {
     let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
 
     let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");
@@ -702,11 +706,11 @@ pub fn get_core_client_database_migrations()
 ///
 /// TODO: This should be private.
 pub async fn apply_migrations_core_client_dbtx(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     kind: String,
 ) -> Result<(), anyhow::Error> {
     apply_migrations_dbtx(
-        dbtx,
+        &mut dbtx.to_ref_nc(),
         (),
         kind,
         get_core_client_database_migrations(),
@@ -731,7 +735,7 @@ pub async fn apply_migrations_client_module(
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     apply_migrations_client_module_dbtx(
         &mut dbtx.to_ref_nc(),
         kind,
@@ -745,7 +749,7 @@ pub async fn apply_migrations_client_module(
 }
 
 pub async fn apply_migrations_client_module_dbtx(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
@@ -763,7 +767,7 @@ pub async fn apply_migrations_client_module_dbtx(
 
     // First write the database version to disk if it does not exist.
     create_database_version_dbtx(
-        dbtx,
+        &mut dbtx.to_ref_nc(),
         target_version,
         Some(module_instance_id),
         kind.clone(),
@@ -877,8 +881,8 @@ pub async fn apply_migrations_client_module_dbtx(
 /// id so we are forced to return all active states. Once we do a db migration
 /// to add `module_instance_id` to `ActiveStateKey`, this can be improved to
 /// only read the module's relevant states.
-pub async fn get_active_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+pub async fn get_active_states<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&ActiveStateKeyPrefixBytes)
@@ -899,8 +903,8 @@ pub async fn get_active_states(
 /// id so we are forced to return all inactive states. Once we do a db migration
 /// to add `module_instance_id` to `InactiveStateKey`, this can be improved to
 /// only read the module's relevant states.
-pub async fn get_inactive_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+pub async fn get_inactive_states<'a>(
+    dbtx: &mut (impl IReadDatabaseTransactionOpsTyped<'a> + MaybeSend),
     module_instance_id: ModuleInstanceId,
 ) -> Vec<(Vec<u8>, OperationId)> {
     dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes)
@@ -920,7 +924,7 @@ pub async fn get_inactive_states(
 /// re-writing with the new set of active states. `new_active_states` is
 /// expected to contain all active states, not just the newly created states.
 pub async fn remove_old_and_persist_new_active_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     new_active_states: Vec<(Vec<u8>, OperationId)>,
     states_to_remove: Vec<(Vec<u8>, OperationId)>,
     module_instance_id: ModuleInstanceId,
@@ -954,7 +958,7 @@ pub async fn remove_old_and_persist_new_active_states(
 /// and re-writing with the new set of inactive states. `new_inactive_states` is
 /// expected to contain all inactive states, not just the newly created states.
 pub async fn remove_old_and_persist_new_inactive_states(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     new_inactive_states: Vec<(Vec<u8>, OperationId)>,
     states_to_remove: Vec<(Vec<u8>, OperationId)>,
     module_instance_id: ModuleInstanceId,
@@ -991,7 +995,7 @@ pub async fn remove_old_and_persist_new_inactive_states(
 /// If an encoded client secret is not present in the database, or if
 /// decoding fails, an error is returned.
 pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
-    let mut tx = db.begin_transaction_nc().await;
+    let mut tx = db.begin_read_transaction().await;
     let client_secret = tx.get_value(&EncodedClientSecretKey).await;
 
     match client_secret {
