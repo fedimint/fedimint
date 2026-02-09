@@ -78,29 +78,32 @@
 <a href=#78 id=78 data-nosnippet>78</a>/// Federation Api announcement handling
 <a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">mod </span>api_announcements;
 <a href=#80 id=80 data-nosnippet>80</a>
-<a href=#81 id=81 data-nosnippet>81</a><span class="doccomment">/// Core [`Client`]
-<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">mod </span>client;
+<a href=#81 id=81 data-nosnippet>81</a><span class="doccomment">/// Guardian metadata handling
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">mod </span>guardian_metadata;
 <a href=#83 id=83 data-nosnippet>83</a>
-<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Client backup
-<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">pub mod </span>backup;
+<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Core [`Client`]
+<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">mod </span>client;
 <a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a><span class="doccomment">/// Database keys used by the client
-<a href=#88 id=88 data-nosnippet>88</a></span><span class="kw">pub mod </span>db;
+<a href=#87 id=87 data-nosnippet>87</a><span class="doccomment">/// Client backup
+<a href=#88 id=88 data-nosnippet>88</a></span><span class="kw">pub mod </span>backup;
 <a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// Management of meta fields
-<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub mod </span>meta;
+<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// Database keys used by the client
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub mod </span>db;
 <a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub mod </span>oplog;
-<a href=#94 id=94 data-nosnippet>94</a>
-<a href=#95 id=95 data-nosnippet>95</a><span class="kw">pub mod </span>module_init;
-<a href=#96 id=96 data-nosnippet>96</a>
-<a href=#97 id=97 data-nosnippet>97</a><span class="kw">pub mod </span>sm;
-<a href=#98 id=98 data-nosnippet>98</a><span class="kw">pub use </span>client::Client;
-<a href=#99 id=99 data-nosnippet>99</a><span class="kw">pub use </span>client::builder::{ClientBuilder, ClientPreview, RootSecret};
-<a href=#100 id=100 data-nosnippet>100</a><span class="kw">pub use </span>client::handle::{ClientHandle, ClientHandleArc};
-<a href=#101 id=101 data-nosnippet>101</a><span class="kw">pub use </span>fedimint_client_module <span class="kw">as </span>module;
-<a href=#102 id=102 data-nosnippet>102</a><span class="doccomment">/// Re-exporting of everything from `fedimint_client_module`
-<a href=#103 id=103 data-nosnippet>103</a>///
-<a href=#104 id=104 data-nosnippet>104</a>/// This should be removed when the splitting of [`fedimint_client_module`] is
-<a href=#105 id=105 data-nosnippet>105</a>/// complete.
-<a href=#106 id=106 data-nosnippet>106</a></span><span class="kw">pub use </span>fedimint_client_module::<span class="kw-2">*</span>;</code></pre></div></section></main></body></html>
+<a href=#93 id=93 data-nosnippet>93</a><span class="doccomment">/// Management of meta fields
+<a href=#94 id=94 data-nosnippet>94</a></span><span class="kw">pub mod </span>meta;
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="kw">pub mod </span>oplog;
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a><span class="kw">pub mod </span>module_init;
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a><span class="kw">pub mod </span>sm;
+<a href=#101 id=101 data-nosnippet>101</a><span class="kw">pub use </span>client::Client;
+<a href=#102 id=102 data-nosnippet>102</a><span class="kw">pub use </span>client::builder::{ClientBuilder, ClientPreview, RootSecret};
+<a href=#103 id=103 data-nosnippet>103</a><span class="kw">pub use </span>client::handle::{ClientHandle, ClientHandleArc};
+<a href=#104 id=104 data-nosnippet>104</a><span class="kw">pub use </span>fedimint_client_module <span class="kw">as </span>module;
+<a href=#105 id=105 data-nosnippet>105</a><span class="doccomment">/// Re-exporting of everything from `fedimint_client_module`
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// This should be removed when the splitting of [`fedimint_client_module`] is
+<a href=#108 id=108 data-nosnippet>108</a>/// complete.
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="kw">pub use </span>fedimint_client_module::<span class="kw-2">*</span>;</code></pre></div></section></main></body></html>

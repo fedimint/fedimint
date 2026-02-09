@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fetch_guardian_metadata_from_at_least_num_of_peers","run_guardian_metadata_refresh_task","store_guardian_metadata_updates","store_guardian_metadata_updates_from_peers"],"struct":["GuardianMetadataKey","GuardianMetadataPrefix"],"type":["PeersSignedGuardianMetadata"]};

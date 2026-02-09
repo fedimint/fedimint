@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GUARDIAN_METADATA_MESSAGE_TAG","MAX_FUTURE_TIMESTAMP_SECS"],"enum":["VerificationError"],"fn":["compute_tagged_hash"],"struct":["GuardianMetadata","SignedGuardianMetadata","SignedGuardianMetadataSubmission"]};
