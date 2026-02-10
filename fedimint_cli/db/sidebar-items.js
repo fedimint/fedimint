@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CLI_USER_DATA_SUB_PREFIX"],"enum":["CliDbKeyPrefix"],"fn":["cli_database","load_admin_creds","store_admin_creds"],"struct":["AdminCredsKey","StoredAdminCreds"]};
