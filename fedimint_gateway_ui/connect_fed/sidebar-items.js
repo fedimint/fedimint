@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["connect_federation_handler","render"]};
+window.SIDEBAR_ITEMS = {"fn":["connect_federation_handler","render"],"struct":["ConnectFedResponse"]};
