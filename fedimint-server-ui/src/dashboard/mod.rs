@@ -22,7 +22,7 @@ use fedimint_ui_common::{LOGIN_ROUTE, ROOT_ROUTE, UiState, dashboard_layout, log
 use maud::html;
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
-use crate::dashboard::modules::{lnv2, meta, wallet};
+use crate::dashboard::modules::{expiration, lnv2, meta, wallet};
 use crate::{
     CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput,
     METRICS_ROUTE, login_submit_response,
@@ -238,7 +238,10 @@ async fn dashboard_view(
         // Conditionally add Meta UI if the module is available
         @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
             div class="row gy-4 mt-2" {
-                div class="col-12" {
+                div class="col-lg-6" {
+                    (expiration::render(meta_module, &guardian_names).await)
+                }
+                div class="col-lg-6" {
                     (meta::render(meta_module).await)
                 }
             }
@@ -355,7 +358,15 @@ pub fn router(api: DynDashboardApi) -> Router {
             .route(meta::META_SUBMIT_ROUTE, post(meta::post_submit))
             .route(meta::META_SET_ROUTE, post(meta::post_set))
             .route(meta::META_RESET_ROUTE, post(meta::post_reset))
-            .route(meta::META_DELETE_ROUTE, post(meta::post_delete));
+            .route(meta::META_DELETE_ROUTE, post(meta::post_delete))
+            .route(
+                expiration::EXPIRATION_SUBMIT_ROUTE,
+                post(expiration::post_submit_expiration),
+            )
+            .route(
+                expiration::EXPIRATION_APPROVE_ROUTE,
+                post(expiration::post_approve_proposal),
+            );
     }
 
     // Finalize the router with state

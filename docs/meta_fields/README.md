@@ -8,6 +8,7 @@ The following meta fields have been defined as part of the core Fedimint protoco
 
 * [`federation_expiry_timestamp`](federation_expiry_timestamp.md): A timestamp after which the federation will shut down
 * [`federation_name`](federation_name.md): The human-readable name of the federation
+* [`federation_successor`](federation_successor.md): An invite code to a successor federation for user migration
 * [`meta_override_url`](meta_override_url.md): A URL to a file containing overrides for meta fields (will be deprecated in the future)
 * [`welcome_message`](welcome_message.md): A welcome message for new users joining the federation
 * [`vetted_gateways`](vetted_gateways.md): A list of gateway identifiers vetted by the federation
