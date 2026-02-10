@@ -241,7 +241,9 @@ async fn dashboard_view(
                 div class="col-lg-6" {
                     (expiration::render(meta_module, &guardian_names).await)
                 }
-                div class="col-lg-6" {
+            }
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
                     (meta::render(meta_module).await)
                 }
             }
