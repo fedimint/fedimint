@@ -21,6 +21,7 @@ mod error;
 mod events;
 mod federation_manager;
 mod iroh_server;
+mod metrics;
 pub mod rpc_server;
 mod types;
 
@@ -867,7 +868,17 @@ impl Gateway {
 
                     let state_guard = self.state.read().await;
                     if let GatewayState::Running { ref lightning_context } = *state_guard {
-                        self.handle_lightning_payment(payment_request, lightning_context).await;
+                        let start = fedimint_core::time::now();
+                        let outcome =
+                            self.handle_lightning_payment(payment_request, lightning_context).await;
+                        metrics::HTLC_HANDLING_DURATION_SECONDS
+                            .with_label_values(&[outcome])
+                            .observe(
+                                fedimint_core::time::now()
+                                    .duration_since(start)
+                                    .unwrap_or_default()
+                                    .as_secs_f64(),
+                            );
                     } else {
                         warn!(
                             target: LOG_GATEWAY,
@@ -905,11 +916,13 @@ impl Gateway {
     /// incoming payment to a federation, spawns a state machine and hands the
     /// payment off to it. Otherwise, forwards the payment to the next hop like
     /// a normal lightning node.
+    ///
+    /// Returns the outcome label for metrics tracking.
     async fn handle_lightning_payment(
         &self,
         payment_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
-    ) {
+    ) -> &'static str {
         info!(
             target: LOG_GATEWAY,
             lightning_payment = %PrettyInterceptPaymentRequest(&payment_request),
@@ -921,7 +934,7 @@ impl Gateway {
             .await
             .is_ok()
         {
-            return;
+            return "lnv2";
         }
 
         if self
@@ -929,10 +942,11 @@ impl Gateway {
             .await
             .is_ok()
         {
-            return;
+            return "lnv1";
         }
 
         Self::forward_lightning_payment(payment_request, lightning_context).await;
+        "forward"
     }
 
     /// Tries to handle a lightning payment using the LNv2 protocol.
