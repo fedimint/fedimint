@@ -21,6 +21,7 @@ mod error;
 mod events;
 mod federation_manager;
 mod iroh_server;
+mod metrics;
 pub mod rpc_server;
 mod types;
 
@@ -867,7 +868,17 @@ impl Gateway {
 
                     let state_guard = self.state.read().await;
                     if let GatewayState::Running { ref lightning_context } = *state_guard {
-                        self.handle_lightning_payment(payment_request, lightning_context).await;
+                        let start = fedimint_core::time::now();
+                        let outcome =
+                            self.handle_lightning_payment(payment_request, lightning_context).await;
+                        metrics::HTLC_HANDLING_DURATION_SECONDS
+                            .with_label_values(&[outcome])
+                            .observe(
+                                fedimint_core::time::now()
+                                    .duration_since(start)
+                                    .unwrap_or_default()
+                                    .as_secs_f64(),
+                            );
                     } else {
                         warn!(
                             target: LOG_GATEWAY,
@@ -905,34 +916,63 @@ impl Gateway {
     /// incoming payment to a federation, spawns a state machine and hands the
     /// payment off to it. Otherwise, forwards the payment to the next hop like
     /// a normal lightning node.
+    ///
+    /// Returns the outcome label for metrics tracking.
     async fn handle_lightning_payment(
         &self,
         payment_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
-    ) {
+    ) -> &'static str {
         info!(
             target: LOG_GATEWAY,
             lightning_payment = %PrettyInterceptPaymentRequest(&payment_request),
             "Intercepting lightning payment",
         );
 
-        if self
+        let lnv2_start = fedimint_core::time::now();
+        let lnv2_result = self
             .try_handle_lightning_payment_lnv2(&payment_request, lightning_context)
-            .await
-            .is_ok()
-        {
-            return;
+            .await;
+        let lnv2_outcome = if lnv2_result.is_ok() {
+            "success"
+        } else {
+            "error"
+        };
+        metrics::HTLC_LNV2_ATTEMPT_DURATION_SECONDS
+            .with_label_values(&[lnv2_outcome])
+            .observe(
+                fedimint_core::time::now()
+                    .duration_since(lnv2_start)
+                    .unwrap_or_default()
+                    .as_secs_f64(),
+            );
+        if lnv2_result.is_ok() {
+            return "lnv2";
         }
 
-        if self
+        let lnv1_start = fedimint_core::time::now();
+        let lnv1_result = self
             .try_handle_lightning_payment_ln_legacy(&payment_request)
-            .await
-            .is_ok()
-        {
-            return;
+            .await;
+        let lnv1_outcome = if lnv1_result.is_ok() {
+            "success"
+        } else {
+            "error"
+        };
+        metrics::HTLC_LNV1_ATTEMPT_DURATION_SECONDS
+            .with_label_values(&[lnv1_outcome])
+            .observe(
+                fedimint_core::time::now()
+                    .duration_since(lnv1_start)
+                    .unwrap_or_default()
+                    .as_secs_f64(),
+            );
+        if lnv1_result.is_ok() {
+            return "lnv1";
         }
 
         Self::forward_lightning_payment(payment_request, lightning_context).await;
+        "forward"
     }
 
     /// Tries to handle a lightning payment using the LNv2 protocol.
