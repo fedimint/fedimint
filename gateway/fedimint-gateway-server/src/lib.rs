@@ -929,19 +929,45 @@ impl Gateway {
             "Intercepting lightning payment",
         );
 
-        if self
+        let lnv2_start = fedimint_core::time::now();
+        let lnv2_result = self
             .try_handle_lightning_payment_lnv2(&payment_request, lightning_context)
-            .await
-            .is_ok()
-        {
+            .await;
+        let lnv2_outcome = if lnv2_result.is_ok() {
+            "success"
+        } else {
+            "error"
+        };
+        metrics::HTLC_LNV2_ATTEMPT_DURATION_SECONDS
+            .with_label_values(&[lnv2_outcome])
+            .observe(
+                fedimint_core::time::now()
+                    .duration_since(lnv2_start)
+                    .unwrap_or_default()
+                    .as_secs_f64(),
+            );
+        if lnv2_result.is_ok() {
             return "lnv2";
         }
 
-        if self
+        let lnv1_start = fedimint_core::time::now();
+        let lnv1_result = self
             .try_handle_lightning_payment_ln_legacy(&payment_request)
-            .await
-            .is_ok()
-        {
+            .await;
+        let lnv1_outcome = if lnv1_result.is_ok() {
+            "success"
+        } else {
+            "error"
+        };
+        metrics::HTLC_LNV1_ATTEMPT_DURATION_SECONDS
+            .with_label_values(&[lnv1_outcome])
+            .observe(
+                fedimint_core::time::now()
+                    .duration_since(lnv1_start)
+                    .unwrap_or_default()
+                    .as_secs_f64(),
+            );
+        if lnv1_result.is_ok() {
             return "lnv1";
         }
 
