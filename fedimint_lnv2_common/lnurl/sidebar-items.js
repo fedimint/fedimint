@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["generate_lnurl"],"struct":["LnurlRequest","LnurlResponse","VerifyResponse"]};
+window.SIDEBAR_ITEMS = {"struct":["LnurlRequest"]};
