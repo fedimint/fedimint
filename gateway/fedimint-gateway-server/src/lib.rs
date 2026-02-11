@@ -846,6 +846,7 @@ impl Gateway {
 
         // Runs until the connection to the lightning node breaks or we receive the
         // shutdown signal.
+        let htlc_task_group = self.task_group.make_subgroup();
         if handle
             .cancel_on_shutdown(async move {
                 loop {
@@ -868,17 +869,26 @@ impl Gateway {
 
                     let state_guard = self.state.read().await;
                     if let GatewayState::Running { ref lightning_context } = *state_guard {
-                        let start = fedimint_core::time::now();
-                        let outcome =
-                            self.handle_lightning_payment(payment_request, lightning_context).await;
-                        metrics::HTLC_HANDLING_DURATION_SECONDS
-                            .with_label_values(&[outcome])
-                            .observe(
-                                fedimint_core::time::now()
-                                    .duration_since(start)
-                                    .unwrap_or_default()
-                                    .as_secs_f64(),
-                            );
+                        // Spawn a subtask to handle each payment in parallel
+                        let gateway = self.clone();
+                        let lightning_context = lightning_context.clone();
+                        htlc_task_group.spawn_cancellable_silent(
+                            "handle_lightning_payment",
+                            async move {
+                                let start = fedimint_core::time::now();
+                                let outcome = gateway
+                                    .handle_lightning_payment(payment_request, &lightning_context)
+                                    .await;
+                                metrics::HTLC_HANDLING_DURATION_SECONDS
+                                    .with_label_values(&[outcome])
+                                    .observe(
+                                        fedimint_core::time::now()
+                                            .duration_since(start)
+                                            .unwrap_or_default()
+                                            .as_secs_f64(),
+                                    );
+                            },
+                        );
                     } else {
                         warn!(
                             target: LOG_GATEWAY,
