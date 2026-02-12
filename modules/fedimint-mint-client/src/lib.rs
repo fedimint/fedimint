@@ -1495,6 +1495,15 @@ impl MintClientModule {
         let notes = oob_notes.notes().clone();
         let federation_id_prefix = oob_notes.federation_id_prefix();
 
+        debug!(
+            target: LOG_CLIENT_MODULE_MINT,
+            notes = ?notes
+                .iter_items()
+                .map(|(amount, note)| (amount, note.nonce()))
+                .collect::<Vec<_>>(),
+            "Reissuing external notes"
+        );
+
         ensure!(
             notes.total_amount() > Amount::ZERO,
             "Reissuing zero-amount e-cash isn't supported"
