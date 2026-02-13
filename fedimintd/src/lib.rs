@@ -8,7 +8,6 @@
 
 mod metrics;
 
-use std::convert::Infallible;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -251,7 +250,7 @@ pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
     code_version_hash: &str,
     code_version_vendor_suffix: Option<&str>,
-) -> anyhow::Result<Infallible> {
+) -> ! {
     assert_eq!(
         env!("FEDIMINT_BUILD_CODE_VERSION").len(),
         code_version_hash.len(),
@@ -293,7 +292,9 @@ pub async fn run(
             url = %format!("http://{}/metrics", bind_metrics),
             "Initializing metrics server",
         );
-        fedimint_metrics::spawn_api_server(*bind_metrics, root_task_group.clone()).await?;
+        fedimint_metrics::spawn_api_server(*bind_metrics, root_task_group.clone())
+            .await
+            .expect("Failed to spawn metrics server");
     }
 
     let settings = ConfigGenSettings {
@@ -404,6 +405,7 @@ pub async fn run(
 
     drop(timing_total_runtime);
 
+    // Should we ever shut down without an error code?
     std::process::exit(-1);
 }
 
