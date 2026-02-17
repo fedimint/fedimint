@@ -720,6 +720,10 @@ Examples:
     /// Show the chain ID (bitcoin block hash at height 1) cached in the client
     /// database
     ChainId,
+    /// Force refresh API versions from the federation, bypassing cached values.
+    /// Queries all peers for their supported API versions and updates the
+    /// cache.
+    RefreshApiVersions,
 }
 
 pub struct FedimintCli {
@@ -1647,6 +1651,11 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(serde_json::json!({
                     "chain_id": chain_id.to_string()
                 })))
+            }
+            Command::Dev(DevCmd::RefreshApiVersions) => {
+                let client = self.client_open(&cli).await?;
+                let versions = client.refresh_api_versions().await.map_err_cli()?;
+                Ok(CliOutput::Raw(json!({ "versions": versions })))
             }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(
