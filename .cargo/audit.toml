@@ -30,3 +30,7 @@ ignore = [
   # atomic-polyfill is unmaintained, waiting for the update chain to reach iroh
   "RUSTSEC-2023-0089",
 ]
+
+[output]
+quiet = true
+show_tree = false
