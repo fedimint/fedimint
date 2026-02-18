@@ -266,6 +266,13 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     assert_eq!(update.operation_id, operation_id);
     assert_eq!(update.status, SendPaymentStatus::Refunded);
 
+    // Verify that fees were paid, which is always the case for LNv2
+    let operation_fees = client
+        .get_transaction_fees(operation_id)
+        .await
+        .expect("Fee calculation should succeed for new operations");
+    assert_eq!(operation_fees.get_bitcoin().msats, 2000);
+
     Ok(())
 }
 
