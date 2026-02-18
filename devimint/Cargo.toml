@@ -33,7 +33,6 @@ fedimint-ln-server = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-mint-common = { workspace = true }
 fedimint-portalloc = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }

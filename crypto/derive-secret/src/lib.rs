@@ -74,6 +74,18 @@ impl DerivableSecret {
         }
     }
 
+    /// Derive a tweaked child key from self using arbitrary bytes.
+    ///
+    /// Similar to [`child_key`](Self::child_key) but accepts arbitrary bytes
+    /// as the tweak input instead of a [`ChildId`]. This increments the
+    /// derivation level since it produces a new derived key.
+    pub fn tweak(&self, tweak: &[u8]) -> DerivableSecret {
+        DerivableSecret {
+            level: self.level + 1,
+            kdf: Hkdf::from_prk(self.kdf.derive_hmac(tweak)),
+        }
+    }
+
     /// Derive a federation-ID-based child key from self.
     ///
     /// This is useful to ensure that the same root secret is not reused

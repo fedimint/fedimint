@@ -37,7 +37,6 @@ fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-mint-client = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

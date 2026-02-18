@@ -17,7 +17,6 @@ use fedimint_core::util::{SafeUrl, get_average, get_median};
 use fedimint_core::{Amount, BitcoinAmountOrAll, secp256k1};
 use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry, StructuredPaymentEvents};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
-use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -209,12 +208,14 @@ pub struct SpendEcashPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendEcashResponse {
-    pub notes: OOBNotes,
+    /// OOBNotes.to_string() for v1, base32::encode_prefixed() for v2
+    pub notes: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReceiveEcashPayload {
-    pub notes: OOBNotes,
+    /// Can be OOBNotes (v1) or ECash (v2)
+    pub notes: String,
     #[serde(default)]
     pub wait: bool,
 }

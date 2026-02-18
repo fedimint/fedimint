@@ -8,6 +8,7 @@ use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse};
 use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
+use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{Amount, BitcoinAmountOrAll, PeerId, TieredCounts};
@@ -981,8 +982,26 @@ pub async fn spend_ecash_handler<E: Display>(
 
     let markup = match state.api.handle_spend_ecash_msg(payload).await {
         Ok(response) => {
-            let notes_string = response.notes.to_string();
-            let actual_amount = response.notes.total_amount();
+            let notes_string = response.notes.clone();
+
+            // Compute actual amount from notes string - try ECash first, then OOBNotes
+            let actual_amount = if let Ok(ecash) = base32::decode_prefixed::<
+                fedimint_mintv2_client::ECash,
+            >(FEDIMINT_PREFIX, &notes_string)
+            {
+                ecash.amount()
+            } else if let Ok(notes) = notes_string.parse::<OOBNotes>() {
+                notes.total_amount()
+            } else {
+                return Html(
+                    html! {
+                        div class="alert alert-danger" {
+                            "Failed to parse returned ecash notes"
+                        }
+                    }
+                    .into_string(),
+                );
+            };
             let overspent = actual_amount > requested_amount;
 
             // Fetch updated balance for the out-of-band swap
@@ -1062,29 +1081,43 @@ pub async fn receive_ecash_handler<E: Display>(
     _auth: UserAuth,
     Form(form): Form<ReceiveEcashForm>,
 ) -> impl IntoResponse {
-    // Parse the notes string manually to provide better error messages
-    let notes = match form.notes.trim().parse::<OOBNotes>() {
-        Ok(n) => n,
-        Err(e) => {
-            return Html(
-                html! {
-                    div class="alert alert-danger" {
-                        "Invalid ecash format: " (e)
+    let notes_str = form.notes.trim().to_string();
+
+    // Try to extract federation_id_prefix - try ECash first, then OOBNotes
+    let federation_id_prefix = if let Ok(ecash) =
+        base32::decode_prefixed::<fedimint_mintv2_client::ECash>(FEDIMINT_PREFIX, &notes_str)
+    {
+        match ecash.mint() {
+            Some(fed_id) => fed_id.to_prefix(),
+            None => {
+                return Html(
+                    html! {
+                        div class="alert alert-danger" {
+                            "Invalid ecash format: missing federation ID"
+                        }
                     }
-                }
-                .into_string(),
-            );
+                    .into_string(),
+                );
+            }
         }
+    } else if let Ok(notes) = notes_str.parse::<OOBNotes>() {
+        notes.federation_id_prefix()
+    } else {
+        return Html(
+            html! {
+                div class="alert alert-danger" {
+                    "Invalid ecash format: could not parse as ECash or OOBNotes"
+                }
+            }
+            .into_string(),
+        );
     };
 
-    // Construct payload from parsed notes
+    // Construct payload with string notes
     let payload = ReceiveEcashPayload {
-        notes,
+        notes: notes_str,
         wait: form.wait,
     };
-
-    // Extract federation_id_prefix from notes before consuming payload
-    let federation_id_prefix = payload.notes.federation_id_prefix();
 
     let markup = match state.api.handle_receive_ecash_msg(payload).await {
         Ok(response) => {

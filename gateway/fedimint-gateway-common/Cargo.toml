@@ -23,7 +23,6 @@ fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
-fedimint-mint-client = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }

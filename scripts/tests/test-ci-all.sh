@@ -99,6 +99,14 @@ function gw_liquidity_test_walletv2() {
 }
 export -f gw_liquidity_test_walletv2
 
+function gw_liquidity_test_mintv2() {
+  # mintv2 is not supported by older versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_ENABLE_MODULE_MINTV2=true FM_ENABLE_MODULE_MINT=false ./scripts/tests/gateway-module-test.sh liquidity-test
+  fi
+}
+export -f gw_liquidity_test_mintv2
+
 function gw_esplora_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh esplora-test
 }
@@ -144,6 +152,14 @@ function lnv2_module_payments() {
 }
 export -f lnv2_module_payments
 
+function lnv2_mintv2_walletv2_lightning_payments() {
+  # v2 modules are not supported by older versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 FM_ENABLE_MODULE_MINTV2=true FM_ENABLE_MODULE_MINT=false FM_ENABLE_MODULE_WALLETV2=true FM_ENABLE_MODULE_WALLET=false ./scripts/tests/lnv2-module-test.sh payments
+  fi
+}
+export -f lnv2_mintv2_walletv2_lightning_payments
+
 function lnv2_module_lnurl_pay() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh lnurl-pay
 }
@@ -158,6 +174,14 @@ function walletv2_module() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh
 }
 export -f walletv2_module
+
+function mintv2_module_test() {
+  # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mintv2-module-test.sh
+  fi
+}
+export -f mintv2_module_test
 
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
@@ -399,11 +423,14 @@ tests_to_run_in_parallel+=(
   "gw_restore_test"
   "gw_liquidity_test"
   "gw_liquidity_test_walletv2"
+  "gw_liquidity_test_mintv2"
   "lnv2_module_gateway_registration"
   "lnv2_module_payments"
+  "lnv2_mintv2_walletv2_lightning_payments"
   "lnv2_module_lnurl_pay"
   "lnv1_lnv2_swap"
   "walletv2_module"
+  "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "guardian_metadata_test"

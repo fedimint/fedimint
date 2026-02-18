@@ -711,79 +711,84 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # Client tests
     info!("Testing Client");
 
-    // ## reissue e-cash
-    info!("Testing reissuing e-cash");
-    const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
-    const CLIENT_SPEND_AMOUNT: u64 = 1_100_000;
+    // E-cash tests are v1-specific - skip when MintV2 is enabled
+    if crate::util::supports_mint_v2() {
+        info!("Skipping ecash tests - MintV2 enabled, these tests are v1-specific");
+    } else {
+        // ## reissue e-cash
+        info!("Testing reissuing e-cash");
+        const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
+        const CLIENT_SPEND_AMOUNT: u64 = 1_100_000;
 
-    let initial_client_balance = client.balance().await?;
-    assert_eq!(initial_client_balance, 0);
+        let initial_client_balance = client.balance().await?;
+        assert_eq!(initial_client_balance, 0);
 
-    fed.pegin_client(CLIENT_START_AMOUNT / 1000, &client)
-        .await?;
+        fed.pegin_client(CLIENT_START_AMOUNT / 1000, &client)
+            .await?;
 
-    // # Spend from client
-    info!("Testing spending from client");
-    let notes = cmd!(client, "spend", CLIENT_SPEND_AMOUNT)
-        .out_json()
-        .await?
-        .get("notes")
-        .expect("Output didn't contain e-cash notes")
-        .as_str()
-        .unwrap()
-        .to_owned();
+        // # Spend from client
+        info!("Testing spending from client");
+        let notes = cmd!(client, "spend", CLIENT_SPEND_AMOUNT)
+            .out_json()
+            .await?
+            .get("notes")
+            .expect("Output didn't contain e-cash notes")
+            .as_str()
+            .unwrap()
+            .to_owned();
 
-    let client_post_spend_balance = client.balance().await?;
-    almost_equal(
-        client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
-        10_000,
-    )
-    .unwrap();
-
-    // Test we can reissue our own notes
-    cmd!(client, "reissue", notes).out_json().await?;
-
-    let client_post_spend_balance = client.balance().await?;
-    almost_equal(client_post_spend_balance, CLIENT_START_AMOUNT, 10_000).unwrap();
-
-    let reissue_amount: u64 = 409_600;
-
-    // Ensure that client can reissue after spending
-    info!("Testing reissuing e-cash after spending");
-    let _notes = cmd!(client, "spend", CLIENT_SPEND_AMOUNT)
-        .out_json()
-        .await?
-        .as_object()
-        .unwrap()
-        .get("notes")
-        .expect("Output didn't contain e-cash notes")
-        .as_str()
+        let client_post_spend_balance = client.balance().await?;
+        almost_equal(
+            client_post_spend_balance,
+            CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+            10_000,
+        )
         .unwrap();
 
-    let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
-        .as_str()
-        .map(ToOwned::to_owned)
-        .unwrap();
-    let client_reissue_amt = cmd!(client, "reissue", reissue_notes)
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
-    assert_eq!(client_reissue_amt, reissue_amount);
+        // Test we can reissue our own notes
+        cmd!(client, "reissue", notes).out_json().await?;
 
-    // Ensure that client can reissue via module commands
-    info!("Testing reissuing e-cash via module commands");
-    let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
-        .as_str()
-        .map(ToOwned::to_owned)
-        .unwrap();
-    let client_reissue_amt = cmd!(client, "module", "mint", "reissue", reissue_notes)
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
-    assert_eq!(client_reissue_amt, reissue_amount);
+        let client_post_spend_balance = client.balance().await?;
+        almost_equal(client_post_spend_balance, CLIENT_START_AMOUNT, 10_000).unwrap();
+
+        let reissue_amount: u64 = 409_600;
+
+        // Ensure that client can reissue after spending
+        info!("Testing reissuing e-cash after spending");
+        let _notes = cmd!(client, "spend", CLIENT_SPEND_AMOUNT)
+            .out_json()
+            .await?
+            .as_object()
+            .unwrap()
+            .get("notes")
+            .expect("Output didn't contain e-cash notes")
+            .as_str()
+            .unwrap();
+
+        let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .unwrap();
+        let client_reissue_amt = cmd!(client, "reissue", reissue_notes)
+            .out_json()
+            .await?
+            .as_u64()
+            .unwrap();
+        assert_eq!(client_reissue_amt, reissue_amount);
+
+        // Ensure that client can reissue via module commands
+        info!("Testing reissuing e-cash via module commands");
+        let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
+            .as_str()
+            .map(ToOwned::to_owned)
+            .unwrap();
+        let client_reissue_amt = cmd!(client, "module", "mint", "reissue", reissue_notes)
+            .out_json()
+            .await?
+            .as_u64()
+            .unwrap();
+        assert_eq!(client_reissue_amt, reissue_amount);
+    }
 
     // LND gateway tests
     info!("Testing LND gateway");

@@ -24,10 +24,11 @@ use fedimint_ui_common::{
 };
 use maud::html;
 use {
-    fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server, fedimint_walletv2_server,
+    fedimint_lnv2_server, fedimint_meta_server, fedimint_mintv2_server, fedimint_wallet_server,
+    fedimint_walletv2_server,
 };
 
-use crate::dashboard::modules::{lnv2, meta, wallet, walletv2};
+use crate::dashboard::modules::{lnv2, meta, mintv2, wallet, walletv2};
 use crate::{
     CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput,
     METRICS_ROUTE, login_submit_response,
@@ -227,6 +228,15 @@ async fn dashboard_view(
             div class="row gy-4 mt-2" {
                 div class="col-12" {
                     (lnv2::render(lightning).await)
+                }
+            }
+        }
+
+        // Conditionally add Mint V2 UI if the module is available
+        @if let Some(mint_module) = state.api.get_module::<fedimint_mintv2_server::Mint>() {
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (mintv2::render(mint_module).await)
                 }
             }
         }

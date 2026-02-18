@@ -412,6 +412,7 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     let mut server_gens = ServerModuleInitRegistry::new();
 
     server_gens.attach(MintInit);
+    server_gens.attach(fedimint_mintv2_server::MintInit);
 
     server_gens.attach(WalletInit);
     server_gens.attach(fedimint_walletv2_server::WalletInit);

@@ -23,6 +23,25 @@ use tracing::info;
 #[path = "common.rs"]
 mod common;
 
+async fn module_is_present(client: &Client, kind: &str) -> anyhow::Result<bool> {
+    let modules = cmd!(client, "module").out_json().await?;
+
+    let modules = modules["list"].as_array().expect("module list is an array");
+
+    Ok(modules.iter().any(|m| m["kind"].as_str() == Some(kind)))
+}
+
+async fn assert_module_sanity(client: &Client) -> anyhow::Result<()> {
+    if !devimint::util::is_backwards_compatibility_test() {
+        ensure!(
+            !module_is_present(client, "ln").await?,
+            "ln module should not be present"
+        );
+    }
+
+    Ok(())
+}
+
 #[derive(Parser)]
 #[command(name = "lnv2-module-tests")]
 #[command(about = "LNv2 module integration tests", long_about = None)]
@@ -50,15 +69,6 @@ async fn main() -> anyhow::Result<()> {
             if !devimint::util::supports_lnv2() {
                 info!("lnv2 is disabled, skipping");
                 return Ok(());
-            }
-
-            if !devimint::util::is_backwards_compatibility_test() {
-                info!("Verifying that LNv1 module is disabled...");
-
-                ensure!(
-                    !devimint::util::supports_lnv1(),
-                    "LNv1 module should be disabled when not in backwards compatibility test"
-                );
             }
 
             match &cli.command {
@@ -108,6 +118,8 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .await?
         .new_joined_client("lnv2-test-gateway-registration-client")
         .await?;
+
+    assert_module_sanity(&client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk_connected().await?;
@@ -217,6 +229,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let client = federation
         .new_joined_client("lnv2-test-payments-client")
         .await?;
+
+    assert_module_sanity(&client).await?;
 
     federation.pegin_client(10_000, &client).await?;
 
@@ -492,9 +506,13 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .new_joined_client("lnv2-lnurl-test-client-a")
         .await?;
 
+    assert_module_sanity(&client_a).await?;
+
     let client_b = federation
         .new_joined_client("lnv2-lnurl-test-client-b")
         .await?;
+
+    assert_module_sanity(&client_b).await?;
 
     for (gw_send, gw_receive) in gateway_pairs {
         info!(

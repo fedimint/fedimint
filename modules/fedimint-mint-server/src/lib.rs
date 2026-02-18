@@ -21,6 +21,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
+use fedimint_core::envs::{FM_ENABLE_MODULE_MINT_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
@@ -186,6 +187,10 @@ impl ServerModuleInit for MintInit {
             ),
             &[(0, 1)],
         )
+    }
+
+    fn is_enabled_by_default(&self) -> bool {
+        is_env_var_set_opt(FM_ENABLE_MODULE_MINT_ENV).unwrap_or(true)
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
