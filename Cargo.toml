@@ -290,7 +290,7 @@ reqwest = { version = "0.12.22", features = [
 ], default-features = false }
 rexie = "0.6.2"
 ring = "0.17.14"
-rocksdb = { version = "0.22.0" }
+rocksdb = { version = "0.24.0" }
 rustls-pki-types = { version = "1.12.0" }
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
@@ -314,7 +314,7 @@ tempfile = "3.20.0"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 thiserror = "2.0.12"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
-tikv-jemallocator = "0.5"
+tikv-jemallocator = "0.6"
 time = "0.3.41"
 tokio = "1.48.0"
 tokio-rustls = { version = "0.26.0", features = ["aws_lc_rs"] }

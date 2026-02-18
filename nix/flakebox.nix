@@ -153,6 +153,10 @@ let
         pkgs.rocksdb_8_11.override { enableLiburing = false; }
       }/lib/";
 
+      # librocksdb-sys 0.17+ no longer links stdc++ when using a pre-built
+      # RocksDB library (regression from 0.16). Inject it via target RUSTFLAGS.
+      "CARGO_TARGET_${lib.toUpper build_arch_underscores}_RUSTFLAGS" = "-C link-arg=-lstdc++";
+
       # does not produce static lib in most versions
       "SNAPPY_${build_arch_underscores}_STATIC" = "true";
       "SNAPPY_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
