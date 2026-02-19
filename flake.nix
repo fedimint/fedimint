@@ -350,6 +350,9 @@
                     >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
                   fi
 
+                  # librocksdb-sys 0.17+ no longer links stdc++ when using a prebuilt library via ROCKSDB_LIB_DIR
+                  export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="$CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS -C link-arg=-lstdc++"
+
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
 
