@@ -355,9 +355,11 @@
 <a href=#355 id=355 data-nosnippet>355</a>            .route(meta::META_SUBMIT_ROUTE, post(meta::post_submit))
 <a href=#356 id=356 data-nosnippet>356</a>            .route(meta::META_SET_ROUTE, post(meta::post_set))
 <a href=#357 id=357 data-nosnippet>357</a>            .route(meta::META_RESET_ROUTE, post(meta::post_reset))
-<a href=#358 id=358 data-nosnippet>358</a>            .route(meta::META_DELETE_ROUTE, post(meta::post_delete));
-<a href=#359 id=359 data-nosnippet>359</a>    }
-<a href=#360 id=360 data-nosnippet>360</a>
-<a href=#361 id=361 data-nosnippet>361</a>    <span class="comment">// Finalize the router with state
-<a href=#362 id=362 data-nosnippet>362</a>    </span>app.with_state(UiState::new(api))
-<a href=#363 id=363 data-nosnippet>363</a>}</code></pre></div></section></main></body></html>
+<a href=#358 id=358 data-nosnippet>358</a>            .route(meta::META_DELETE_ROUTE, post(meta::post_delete))
+<a href=#359 id=359 data-nosnippet>359</a>            .route(meta::META_MERGE_ROUTE, post(meta::post_merge))
+<a href=#360 id=360 data-nosnippet>360</a>            .route(meta::META_VALUE_INPUT_ROUTE, get(meta::get_value_input));
+<a href=#361 id=361 data-nosnippet>361</a>    }
+<a href=#362 id=362 data-nosnippet>362</a>
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="comment">// Finalize the router with state
+<a href=#364 id=364 data-nosnippet>364</a>    </span>app.with_state(UiState::new(api))
+<a href=#365 id=365 data-nosnippet>365</a>}</code></pre></div></section></main></body></html>
