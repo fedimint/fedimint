@@ -19,8 +19,7 @@ use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV,
-    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set, is_env_var_set_opt,
+    FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::rustls::install_crypto_provider;
@@ -39,6 +38,7 @@ use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
+use fedimint_server_core::ServerModuleInitRegistryExt;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
@@ -307,6 +307,7 @@ pub async fn run(
         iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
         available_modules: module_init_registry.kinds(),
+        default_modules: module_init_registry.default_modules(),
     };
 
     let db = Database::new(
@@ -411,15 +412,12 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     let mut server_gens = ServerModuleInitRegistry::new();
 
     server_gens.attach(MintInit);
+
     server_gens.attach(WalletInit);
+    server_gens.attach(fedimint_walletv2_server::WalletInit);
 
-    if is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(true) {
-        server_gens.attach(LightningInit);
-    }
-
-    if is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(true) {
-        server_gens.attach(fedimint_lnv2_server::LightningInit);
-    }
+    server_gens.attach(LightningInit);
+    server_gens.attach(fedimint_lnv2_server::LightningInit);
 
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);

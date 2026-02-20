@@ -38,6 +38,8 @@ fedimint-portalloc = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
+fedimint-walletv2-client = { workspace = true }
+fedimint-walletv2-server = { workspace = true }
 fedimintd-envs = { workspace = true }
 fs-lock = { workspace = true }
 futures = { workspace = true }

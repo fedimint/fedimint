@@ -220,6 +220,8 @@ pub struct ConfigGenSettings {
     pub network: bitcoin::Network,
     /// Available modules that can be enabled during setup
     pub available_modules: BTreeSet<ModuleKind>,
+    /// Modules that should be enabled by default in the setup UI
+    pub default_modules: BTreeSet<ModuleKind>,
 }
 
 #[derive(Debug, Clone)]

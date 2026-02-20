@@ -900,9 +900,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_chain"
-version = "0.23.0"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e7e7c062f2229a767fe85062b8932352a7b8c1df586f91fae1017fd3dd281ef"
+checksum = "5b5d691fd092aacec7e05046b7d04897d58d6d65ed3152cb6cf65dababcfabed"
 dependencies = [
  "bdk_core",
  "bitcoin",
@@ -912,9 +912,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_core"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17698c25d2728afd6950d82069dce172147006f73960b9dc793a7e8dd7089016"
+checksum = "0dbbe4aad0c898bfeb5253c222be3ea3dccfb380a07e72c87e3e4ed6664a6753"
 dependencies = [
  "bitcoin",
  "hashbrown 0.14.5",
@@ -933,21 +933,21 @@ dependencies = [
 
 [[package]]
 name = "bdk_esplora"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b9bf0bcfc01d6d67f2515b1fd4eab77b220726ed2ade09f9b6c90c286e0b767"
+checksum = "0c9f5961444b5f51b9c3937e729a212363d0e4cde6390ded6e01e16292078df4"
 dependencies = [
  "async-trait",
  "bdk_core",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "futures",
 ]
 
 [[package]]
 name = "bdk_wallet"
-version = "2.0.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f278518ee6f2a17711fd4662dc34ce6153792a7a21575f05a9c8e2cb9ba36245"
+checksum = "b03f1e31ccc562f600981f747d2262b84428cbff52c9c9cdf14d15fb15bd2286"
 dependencies = [
  "bdk_chain",
  "bip39",
@@ -1055,9 +1055,9 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bitcoin"
-version = "0.32.6"
+version = "0.32.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad8929a18b8e33ea6b3c09297b687baaa71fb1b97353243a3f1029fad5c59c5b"
+checksum = "1e499f9fc0407f50fe98af744ab44fa67d409f76b6772e1689ec8485eb0c0f66"
 dependencies = [
  "base58ck",
  "base64 0.21.7",
@@ -1066,7 +1066,7 @@ dependencies = [
  "bitcoin-io",
  "bitcoin-units",
  "bitcoin_hashes 0.14.0",
- "hex-conservative 0.2.1",
+ "hex-conservative 0.2.2",
  "hex_lit",
  "secp256k1",
  "serde",
@@ -1120,7 +1120,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
 dependencies = [
  "bitcoin-io",
- "hex-conservative 0.2.1",
+ "hex-conservative 0.2.2",
  "serde",
 ]
 
@@ -2294,7 +2294,7 @@ dependencies = [
  "bon",
  "chrono",
  "clap",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
@@ -2314,6 +2314,8 @@ dependencies = [
  "fedimint-testing-core",
  "fedimint-tonic-lnd",
  "fedimint-wallet-client",
+ "fedimint-walletv2-client",
+ "fedimint-walletv2-server",
  "fedimintd-envs",
  "fs-lock",
  "futures",
@@ -2656,7 +2658,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0da3c186d286e046253ccdc4bb71aa87ef872e4eff2045947c0c4fe3d2b2efc"
 dependencies = [
  "bitcoin",
- "hex-conservative 0.2.1",
+ "hex-conservative 0.2.2",
  "log",
  "reqwest 0.11.27",
  "serde",
@@ -2665,15 +2667,16 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.12.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209cf00e44b979682b22be38672317d8bb48dd5ea2726e61b762d6b14b5842f2"
+checksum = "4aac1895e7d91053ecc4c4955832b6f904f4321ec59d07b120736103bf06f7a5"
 dependencies = [
  "bitcoin",
- "hex-conservative 0.2.1",
+ "hex-conservative 0.2.2",
  "log",
  "reqwest 0.12.22",
  "serde",
+ "serde_json",
  "tokio",
 ]
 
@@ -2793,7 +2796,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
@@ -2832,6 +2835,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
+ "fedimint-walletv2-client",
  "fs-lock",
  "futures",
  "hex",
@@ -3130,6 +3134,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-client",
  "fedimint-wallet-server",
+ "fedimint-walletv2-client",
  "futures",
  "hex",
  "serde",
@@ -3357,7 +3362,7 @@ dependencies = [
  "bitcoin",
  "clap",
  "erased-serde",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-bitcoind",
@@ -3395,6 +3400,7 @@ dependencies = [
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-client",
+ "fedimint-walletv2-client",
  "futures",
  "futures-util",
  "hex",
@@ -3561,7 +3567,7 @@ dependencies = [
  "chrono",
  "electrum-client 0.23.1",
  "esplora-client 0.11.0",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "libc",
  "lightning",
  "lightning-background-processor",
@@ -4263,7 +4269,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.2",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-server-core",
@@ -4324,6 +4330,7 @@ dependencies = [
  "fedimint-server-core",
  "fedimint-ui-common",
  "fedimint-wallet-server",
+ "fedimint-walletv2-server",
  "maud",
  "qrcode",
  "serde",
@@ -4613,6 +4620,96 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-walletv2-client"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "clap",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-eventlog",
+ "fedimint-logging",
+ "fedimint-walletv2-common",
+ "futures",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-common"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "fedimint-core",
+ "miniscript",
+ "secp256k1",
+ "serde",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "fedimint-walletv2-server"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-server-core",
+ "fedimint-walletv2-common",
+ "futures",
+ "miniscript",
+ "rand 0.8.5",
+ "secp256k1",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-walletv2-tests"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "devimint",
+ "fedimint-bitcoind",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-testing",
+ "fedimint-walletv2-client",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
+ "futures",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-wasm-tests"
 version = "0.11.0-alpha"
 dependencies = [
@@ -4659,6 +4756,8 @@ dependencies = [
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-server",
+ "fedimint-walletv2-common",
+ "fedimint-walletv2-server",
  "fedimintd-envs",
  "futures",
  "serde_json",
@@ -5323,9 +5422,9 @@ checksum = "212ab92002354b4819390025006c897e8140934349e8635c9b077f47b4dcbd20"
 
 [[package]]
 name = "hex-conservative"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5313b072ce3c597065a808dbf612c4c8e8590bdbf8b579508bf7a762c5eae6cd"
+checksum = "fda06d18ac606267c40c04e41b9947729bf8b9efe74bd4e82b61a5f26a510b9f"
 dependencies = [
  "arrayvec",
 ]

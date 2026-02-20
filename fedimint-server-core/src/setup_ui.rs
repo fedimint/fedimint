@@ -26,6 +26,9 @@ pub trait ISetupApi {
     /// Get the available modules that can be enabled during setup
     fn available_modules(&self) -> BTreeSet<ModuleKind>;
 
+    /// Get the modules that should be enabled by default in the setup UI
+    fn default_modules(&self) -> BTreeSet<ModuleKind>;
+
     /// Reset the set of other guardians
     async fn reset_setup_codes(&self);
 

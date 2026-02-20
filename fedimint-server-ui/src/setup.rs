@@ -85,6 +85,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
     }
 
     let available_modules = state.api.available_modules();
+    let default_modules = state.api.default_modules();
 
     let content = html! {
         form method="post" action=(ROOT_ROUTE) {
@@ -193,7 +194,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                                                     id=(format!("module_{}", kind.as_str()))
                                                     name="enabled_modules"
                                                     value=(kind.as_str())
-                                                    checked;
+                                                    checked[default_modules.contains(kind)];
 
                                                 label class="form-check-label" for=(format!("module_{}", kind.as_str())) {
                                                     (kind.as_str())

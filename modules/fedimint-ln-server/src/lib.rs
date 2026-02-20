@@ -18,6 +18,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
+use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION,
@@ -213,6 +214,10 @@ impl ServerModuleInit for LightningInit {
             ),
             &[(0, 1)],
         )
+    }
+
+    fn is_enabled_by_default(&self) -> bool {
+        is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(true)
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {

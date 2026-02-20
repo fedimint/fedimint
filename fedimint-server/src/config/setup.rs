@@ -160,6 +160,10 @@ impl ISetupApi for SetupApi {
         self.settings.available_modules.clone()
     }
 
+    fn default_modules(&self) -> BTreeSet<ModuleKind> {
+        self.settings.default_modules.clone()
+    }
+
     async fn reset_setup_codes(&self) {
         self.state.lock().await.setup_codes.clear();
     }
@@ -409,7 +413,7 @@ impl ISetupApi for SetupApi {
             .setup_codes
             .iter()
             .find_map(|info| info.enabled_modules.clone())
-            .unwrap_or_else(|| self.settings.available_modules.clone());
+            .unwrap_or_else(|| self.settings.default_modules.clone());
 
         let our_id = state
             .setup_codes
