@@ -216,10 +216,10 @@
 <a href=#216 id=216 data-nosnippet>216</a>    }
 <a href=#217 id=217 data-nosnippet>217</a>
 <a href=#218 id=218 data-nosnippet>218</a>    <span class="kw">fn </span>create_lnurl(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_code_id: PaymentCodeId) -&gt; String {
-<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"{}lnv1/paycodes/{}"</span>, <span class="self">self</span>.base_url, payment_code_id)
-<a href=#220 id=220 data-nosnippet>220</a>            .parse()
-<a href=#221 id=221 data-nosnippet>221</a>            .expect(<span class="string">"valid URL"</span>);
-<a href=#222 id=222 data-nosnippet>222</a>        encode_lnurl(<span class="kw-2">&amp;</span>url)
+<a href=#219 id=219 data-nosnippet>219</a>        encode_lnurl(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#220 id=220 data-nosnippet>220</a>            <span class="string">"{}lnv1/paycodes/{}"</span>,
+<a href=#221 id=221 data-nosnippet>221</a>            <span class="self">self</span>.base_url, payment_code_id
+<a href=#222 id=222 data-nosnippet>222</a>        ))
 <a href=#223 id=223 data-nosnippet>223</a>    }
 <a href=#224 id=224 data-nosnippet>224</a>
 <a href=#225 id=225 data-nosnippet>225</a>    <span class="kw">pub async fn </span>lnurl_pay(
