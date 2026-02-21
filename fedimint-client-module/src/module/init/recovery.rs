@@ -9,9 +9,9 @@ use fedimint_api_client::api::{
 };
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiVersion, ModuleCommon};
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;

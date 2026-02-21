@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
