@@ -33,7 +33,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context as _, anyhow, bail, ensure};
@@ -118,7 +118,7 @@ const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
 #[derive(Clone)]
 struct PeerSelector {
-    latency: Arc<RwLock<BTreeMap<PeerId, Duration>>>,
+    latency: Arc<Mutex<BTreeMap<PeerId, Duration>>>,
 }
 
 impl PeerSelector {
@@ -129,12 +129,12 @@ impl PeerSelector {
             .collect();
 
         Self {
-            latency: Arc::new(RwLock::new(latency)),
+            latency: Arc::new(Mutex::new(latency)),
         }
     }
 
     fn choose_peer(&self) -> PeerId {
-        let latency = self.latency.read().expect("poisoned");
+        let latency = self.latency.lock().expect("poisoned");
 
         let peer_a = latency.iter().choose(&mut thread_rng()).expect("no peers");
         let peer_b = latency.iter().choose(&mut thread_rng()).expect("no peers");
@@ -148,7 +148,7 @@ impl PeerSelector {
 
     fn report(&self, peer: PeerId, duration: Duration) {
         self.latency
-            .write()
+            .lock()
             .expect("poisoned")
             .entry(peer)
             .and_modify(|latency| *latency = *latency * 9 / 10 + duration / 10)
@@ -156,7 +156,7 @@ impl PeerSelector {
     }
 
     fn remove(&self, peer: PeerId) {
-        self.latency.write().expect("poisoned").remove(&peer);
+        self.latency.lock().expect("poisoned").remove(&peer);
     }
 }
 
