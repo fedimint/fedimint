@@ -6,16 +6,9 @@ A single gateway can serve multiple Federations.
 
 ---
 
-## Lightning Backends
+## Lightning Backend
 
-The gateway currently supports three different lightning backends:
-
-* Internal Node (powered by [Lightning Development Kit](https://github.com/lightningdevkit/ldk-node))
-* [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd)
-
-The first option is great if you want to run a gateway without having to manage a separate lightning node or manage liquidity. We plan on automating liquidity management for this backend using the [Lightning Service Provider (LSP) spec](https://github.com/BitcoinAndLightningLayerSpecs/lsp) and channel splicing to allow for gateway operators to choose an LSP, insert funds, and let the gateway handle the rest. However, since the channel and liquidity management are automated, this backend is not well-suited as a routing node.
-
-The second option is great if you are already running a lightning node, since you can use your existing liquidity for routing Fedimint payments. It is also preferable if you intend to run a lightning routing node in addition to routing Fedimint payments.
+The gateway uses an internal lightning node powered by the [Lightning Development Kit (LDK)](https://github.com/lightningdevkit/ldk-node). This means you can run a gateway without having to manage a separate lightning node. We plan on automating liquidity management using the [Lightning Service Provider (LSP) spec](https://github.com/BitcoinAndLightningLayerSpecs/lsp) and channel splicing to allow gateway operators to choose an LSP, insert funds, and let the gateway handle the rest.
 
 ## Components
 
