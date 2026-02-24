@@ -122,6 +122,9 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         module_id: ModuleInstanceId,
         dbtx: &'dbtx mut DatabaseTransaction<'_>,
     ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (InactiveStateKey, InactiveStateMeta)> + 'dbtx)>>;
+
+    /// Returns the balance held by the primary module for Bitcoin
+    async fn get_balance_for_btc(&self) -> anyhow::Result<Amount>;
 }
 
 /// A final, fully initialized client
@@ -432,6 +435,11 @@ where
 
     pub async fn operation_exists(&self, op_id: OperationId) -> bool {
         self.client.get().operation_exists(op_id).await
+    }
+
+    /// Returns the balance held by the primary module for Bitcoin
+    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+        self.client.get().get_balance_for_btc().await
     }
 
     pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {

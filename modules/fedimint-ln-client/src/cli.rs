@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use std::{ffi, iter};
 
@@ -8,6 +9,7 @@ use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
+use fedimint_ln_common::config::FeeToAmount;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
@@ -18,6 +20,27 @@ use crate::recurring::{PaymentCodeRootKey, RecurringPaymentProtocol};
 use crate::{
     LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, OutgoingLightningPayment,
 };
+
+/// Amount or "all" to send the entire balance
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AmountOrAll {
+    All,
+    #[serde(untagged)]
+    Amount(Amount),
+}
+
+impl FromStr for AmountOrAll {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.to_lowercase() == "all" {
+            Ok(AmountOrAll::All)
+        } else {
+            Ok(AmountOrAll::Amount(Amount::from_str(s)?))
+        }
+    }
+}
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -37,9 +60,9 @@ enum Opts {
     Pay {
         /// Lightning invoice or lnurl
         payment_info: String,
-        /// Amount to pay, used for lnurl
+        /// Amount to pay, used for lnurl. Use "all" to send entire balance.
         #[clap(long)]
-        amount: Option<Amount>,
+        amount: Option<AmountOrAll>,
         /// Invoice comment/description, used on lnurl
         #[clap(long)]
         lnurl_comment: Option<String>,
@@ -125,9 +148,32 @@ pub(crate) async fn handle_cli_command(
             gateway_id,
             force_internal,
         } => {
-            let bolt11 = crate::get_invoice(&payment_info, amount, lnurl_comment).await?;
-            info!("Paying invoice: {bolt11}");
             let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
+
+            // Resolve the amount - if "all" is specified, calculate max sendable
+            let resolved_amount = match amount {
+                Some(AmountOrAll::All) => {
+                    let gateway = ln_gateway
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Gateway required for send all"))?;
+
+                    let balance = module.client_ctx.get_balance_for_btc().await?;
+                    let max_sendable = calculate_max_sendable_amount(balance, gateway.fees)?;
+
+                    info!(
+                        balance = %balance,
+                        max_sendable = %max_sendable,
+                        "Calculated max sendable amount for send-all"
+                    );
+
+                    Some(max_sendable)
+                }
+                Some(AmountOrAll::Amount(amt)) => Some(amt),
+                None => None,
+            };
+
+            let bolt11 = crate::get_invoice(&payment_info, resolved_amount, lnurl_comment).await?;
+            info!("Paying invoice: {bolt11}");
 
             let OutgoingLightningPayment {
                 payment_type,
@@ -257,4 +303,51 @@ pub(crate) async fn handle_cli_command(
             unreachable!("Stream should not end without an outcome");
         }
     })
+}
+
+/// Calculate the maximum amount that can be sent given a balance and gateway
+/// fees.
+///
+/// The gateway fee formula is: `fee = base_msat + (amount * ppm / 1_000_000)`
+/// So the total cost is: `amount + base_msat + (amount * ppm / 1_000_000)`
+///
+/// To find the max sendable amount given a balance:
+/// `balance >= amount + base_msat + (amount * ppm / 1_000_000)`
+/// `balance - base_msat >= amount * (1 + ppm / 1_000_000)`
+/// `amount <= (balance - base_msat) * 1_000_000 / (1_000_000 + ppm)`
+fn calculate_max_sendable_amount(
+    balance: Amount,
+    fees: lightning_invoice::RoutingFees,
+) -> anyhow::Result<Amount> {
+    let base_fee_msat = u64::from(fees.base_msat);
+    let ppm = u64::from(fees.proportional_millionths);
+
+    if balance.msats <= base_fee_msat {
+        bail!(
+            "Balance ({}) is not enough to cover the base gateway fee ({})",
+            balance,
+            Amount::from_msats(base_fee_msat)
+        );
+    }
+
+    let balance_after_base = balance.msats - base_fee_msat;
+    let max_amount_msats = balance_after_base * 1_000_000 / (1_000_000 + ppm);
+
+    // Verify the calculation is correct by computing the fee for this amount
+    let max_amount = Amount::from_msats(max_amount_msats);
+    let computed_fee = fees.to_amount(&max_amount);
+    let total_cost = max_amount_msats + computed_fee.msats;
+
+    // Due to rounding, we might be slightly over; adjust if needed
+    let max_amount_msats = if total_cost > balance.msats {
+        max_amount_msats.saturating_sub(1)
+    } else {
+        max_amount_msats
+    };
+
+    if max_amount_msats == 0 {
+        bail!("Balance is not enough to send any amount after fees");
+    }
+
+    Ok(Amount::from_msats(max_amount_msats))
 }
