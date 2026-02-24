@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-server/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.0-nightly (5eda692e7 2025-09-11)" data-channel="nightly" data-search-js="search-d846cb6c.js" data-stringdex-js="stringdex-5af928a3.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_server/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-server/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (5fb2ff861 2026-02-21)" data-channel="nightly" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_server/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::cast_possible_truncation)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::cast_possible_wrap)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::default_trait_access)]
@@ -309,7 +309,7 @@
 <a href=#309 id=309 data-nosnippet>309</a>    }
 <a href=#310 id=310 data-nosnippet>310</a>}
 <a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#312 id=312 data-nosnippet>312</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#313 id=313 data-nosnippet>313</a></span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>WalletInit {
 <a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">type </span>Module = Wallet;
 <a href=#315 id=315 data-nosnippet>315</a>
@@ -477,7 +477,7 @@
 <a href=#477 id=477 data-nosnippet>477</a>    }
 <a href=#478 id=478 data-nosnippet>478</a>}
 <a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#480 id=480 data-nosnippet>480</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#481 id=481 data-nosnippet>481</a></span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Wallet {
 <a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">type </span>Common = WalletModuleTypes;
 <a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">type </span>Init = WalletInit;
@@ -1811,7 +1811,7 @@
 <a href=#1811 id=1811 data-nosnippet>1811</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
 <a href=#1812 id=1812 data-nosnippet>1812</a>            </span>.task_group
 <a href=#1813 id=1813 data-nosnippet>1813</a>            .clone()
-<a href=#1814 id=1814 data-nosnippet>1814</a>            .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">60</span>)))
+<a href=#1814 id=1814 data-nosnippet>1814</a>            .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_mins(<span class="number">1</span>)))
 <a href=#1815 id=1815 data-nosnippet>1815</a>            .<span class="kw">await
 <a href=#1816 id=1816 data-nosnippet>1816</a>        </span>{
 <a href=#1817 id=1817 data-nosnippet>1817</a>            <span class="macro">panic!</span>(<span class="string">"Error while shutting down fedimintd task group: {e}"</span>);
@@ -1942,7 +1942,7 @@
 <a href=#1942 id=1942 data-nosnippet>1942</a>                    <span class="comment">// Even in tests we don't want to spam the federation with requests about it
 <a href=#1943 id=1943 data-nosnippet>1943</a>                    </span>sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
 <a href=#1944 id=1944 data-nosnippet>1944</a>                } <span class="kw">else </span>{
-<a href=#1945 id=1945 data-nosnippet>1945</a>                    sleep(Duration::from_secs(<span class="number">600</span>)).<span class="kw">await</span>;
+<a href=#1945 id=1945 data-nosnippet>1945</a>                    sleep(Duration::from_mins(<span class="number">10</span>)).<span class="kw">await</span>;
 <a href=#1946 id=1946 data-nosnippet>1946</a>                }
 <a href=#1947 id=1947 data-nosnippet>1947</a>            }
 <a href=#1948 id=1948 data-nosnippet>1948</a>        });
@@ -1958,7 +1958,7 @@
 <a href=#1958 id=1958 data-nosnippet>1958</a>) {
 <a href=#1959 id=1959 data-nosnippet>1959</a>    <span class="kw">loop </span>{
 <a href=#1960 id=1960 data-nosnippet>1960</a>        <span class="comment">// Unless something new happened, we broadcast once a minute
-<a href=#1961 id=1961 data-nosnippet>1961</a>        </span><span class="kw">let _ </span>= tokio::time::timeout(Duration::from_secs(<span class="number">60</span>), broadcast.notified()).<span class="kw">await</span>;
+<a href=#1961 id=1961 data-nosnippet>1961</a>        </span><span class="kw">let _ </span>= tokio::time::timeout(Duration::from_mins(<span class="number">1</span>), broadcast.notified()).<span class="kw">await</span>;
 <a href=#1962 id=1962 data-nosnippet>1962</a>        broadcast_pending_tx(db.begin_transaction_nc().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
 <a href=#1963 id=1963 data-nosnippet>1963</a>    }
 <a href=#1964 id=1964 data-nosnippet>1964</a>}
@@ -2418,7 +2418,7 @@
 <a href=#2418 id=2418 data-nosnippet>2418</a>    <span class="kw">use </span>miniscript::descriptor::Wsh;
 <a href=#2419 id=2419 data-nosnippet>2419</a>
 <a href=#2420 id=2420 data-nosnippet>2420</a>    <span class="kw">use </span><span class="kw">crate</span>::common::PegInDescriptor;
-<a href=#2421 id=2421 data-nosnippet>2421</a>    <span class="kw">use crate</span>::{
+<a href=#2421 id=2421 data-nosnippet>2421</a>    <span class="kw">use </span>crate::{
 <a href=#2422 id=2422 data-nosnippet>2422</a>        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
 <a href=#2423 id=2423 data-nosnippet>2423</a>    };
 <a href=#2424 id=2424 data-nosnippet>2424</a>
@@ -2533,4 +2533,5 @@
 <a href=#2533 id=2533 data-nosnippet>2533</a>            txid: Txid::all_zeros(),
 <a href=#2534 id=2534 data-nosnippet>2534</a>        })
 <a href=#2535 id=2535 data-nosnippet>2535</a>    }
-<a href=#2536 id=2536 data-nosnippet>2536</a>}</code></pre></div></section></main></body></html>
+<a href=#2536 id=2536 data-nosnippet>2536</a>}
+</code></pre></div></section></main></body></html>

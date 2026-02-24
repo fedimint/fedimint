@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.0-nightly (5eda692e7 2025-09-11)" data-channel="nightly" data-search-js="search-d846cb6c.js" data-stringdex-js="stringdex-5af928a3.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_mint_client/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (5fb2ff861 2026-02-21)" data-channel="nightly" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_mint_client/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::cast_possible_truncation)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::missing_errors_doc)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::missing_panics_doc)]
@@ -771,7 +771,7 @@
 <a href=#771 id=771 data-nosnippet>771</a>    }
 <a href=#772 id=772 data-nosnippet>772</a>}
 <a href=#773 id=773 data-nosnippet>773</a>
-<a href=#774 id=774 data-nosnippet>774</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#774 id=774 data-nosnippet>774</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#775 id=775 data-nosnippet>775</a></span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>MintClientInit {
 <a href=#776 id=776 data-nosnippet>776</a>    <span class="kw">type </span>Module = MintClientModule;
 <a href=#777 id=777 data-nosnippet>777</a>
@@ -932,7 +932,7 @@
 <a href=#932 id=932 data-nosnippet>932</a>    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(KIND);
 <a href=#933 id=933 data-nosnippet>933</a>}
 <a href=#934 id=934 data-nosnippet>934</a>
-<a href=#935 id=935 data-nosnippet>935</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#935 id=935 data-nosnippet>935</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#936 id=936 data-nosnippet>936</a></span><span class="kw">impl </span>ClientModule <span class="kw">for </span>MintClientModule {
 <a href=#937 id=937 data-nosnippet>937</a>    <span class="kw">type </span>Init = MintClientInit;
 <a href=#938 id=938 data-nosnippet>938</a>    <span class="kw">type </span>Common = MintModuleTypes;
@@ -2091,7 +2091,7 @@
 <a href=#2091 id=2091 data-nosnippet>2091</a>                            extra_meta,
 <a href=#2092 id=2092 data-nosnippet>2092</a>                        )
 <a href=#2093 id=2093 data-nosnippet>2093</a>                        .<span class="kw">await
-<a href=#2094 id=2094 data-nosnippet>2094</a>                        </span>.map(<span class="prelude-val">Ok</span>::&lt;OOBNotes, anyhow::Error&gt;)
+<a href=#2094 id=2094 data-nosnippet>2094</a>                        </span>.map(Ok::&lt;OOBNotes, anyhow::Error&gt;)
 <a href=#2095 id=2095 data-nosnippet>2095</a>                        .transpose()
 <a href=#2096 id=2096 data-nosnippet>2096</a>                    })
 <a href=#2097 id=2097 data-nosnippet>2097</a>                },
@@ -2122,7 +2122,7 @@
 <a href=#2122 id=2122 data-nosnippet>2122</a>            .autocommit(
 <a href=#2123 id=2123 data-nosnippet>2123</a>                |dbtx, <span class="kw">_</span>| {
 <a href=#2124 id=2124 data-nosnippet>2124</a>                    Box::pin(<span class="kw">async </span>{
-<a href=#2125 id=2125 data-nosnippet>2125</a>                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(
+<a href=#2125 id=2125 data-nosnippet>2125</a>                        Ok::&lt;<span class="kw">_</span>, anyhow::Error&gt;(
 <a href=#2126 id=2126 data-nosnippet>2126</a>                            <span class="self">self</span>.create_output(dbtx, operation_id, <span class="number">1</span>, amount).<span class="kw">await</span>,
 <a href=#2127 id=2127 data-nosnippet>2127</a>                        )
 <a href=#2128 id=2128 data-nosnippet>2128</a>                    })
@@ -2419,7 +2419,7 @@
 <a href=#2419 id=2419 data-nosnippet>2419</a>            .autocommit(
 <a href=#2420 id=2420 data-nosnippet>2420</a>                |dbtx, <span class="kw">_</span>| {
 <a href=#2421 id=2421 data-nosnippet>2421</a>                    Box::pin(<span class="kw">async </span>{
-<a href=#2422 id=2422 data-nosnippet>2422</a>                        <span class="prelude-val">Ok</span>::&lt;DerivableSecret, anyhow::Error&gt;(
+<a href=#2422 id=2422 data-nosnippet>2422</a>                        Ok::&lt;DerivableSecret, anyhow::Error&gt;(
 <a href=#2423 id=2423 data-nosnippet>2423</a>                            <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>,
 <a href=#2424 id=2424 data-nosnippet>2424</a>                        )
 <a href=#2425 id=2425 data-nosnippet>2425</a>                    })
@@ -2468,7 +2468,7 @@
 <a href=#2468 id=2468 data-nosnippet>2468</a>
 <a href=#2469 id=2469 data-nosnippet>2469</a><span class="doccomment">/// Defines a strategy for selecting e-cash notes given a specific target amount
 <a href=#2470 id=2470 data-nosnippet>2470</a>/// and fee per note transaction input.
-<a href=#2471 id=2471 data-nosnippet>2471</a></span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#2471 id=2471 data-nosnippet>2471</a></span><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#2472 id=2472 data-nosnippet>2472</a></span><span class="kw">pub trait </span>NotesSelector&lt;Note = SpendableNoteUndecoded&gt;: Send + Sync {
 <a href=#2473 id=2473 data-nosnippet>2473</a>    <span class="doccomment">/// Select notes from stream for `requested_amount`.
 <a href=#2474 id=2474 data-nosnippet>2474</a>    /// The stream must produce items in non- decreasing order of amount.
@@ -2489,7 +2489,7 @@
 <a href=#2489 id=2489 data-nosnippet>2489</a>/// The caller can request change from the federation.
 <a href=#2490 id=2490 data-nosnippet>2490</a></span><span class="kw">pub struct </span>SelectNotesWithAtleastAmount;
 <a href=#2491 id=2491 data-nosnippet>2491</a>
-<a href=#2492 id=2492 data-nosnippet>2492</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#2492 id=2492 data-nosnippet>2492</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#2493 id=2493 data-nosnippet>2493</a></span><span class="kw">impl</span>&lt;Note: Send&gt; NotesSelector&lt;Note&gt; <span class="kw">for </span>SelectNotesWithAtleastAmount {
 <a href=#2494 id=2494 data-nosnippet>2494</a>    <span class="kw">async fn </span>select_notes(
 <a href=#2495 id=2495 data-nosnippet>2495</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2507,7 +2507,7 @@
 <a href=#2507 id=2507 data-nosnippet>2507</a>/// this **does not** mean that the balance is too low.
 <a href=#2508 id=2508 data-nosnippet>2508</a></span><span class="kw">pub struct </span>SelectNotesWithExactAmount;
 <a href=#2509 id=2509 data-nosnippet>2509</a>
-<a href=#2510 id=2510 data-nosnippet>2510</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#2510 id=2510 data-nosnippet>2510</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#2511 id=2511 data-nosnippet>2511</a></span><span class="kw">impl</span>&lt;Note: Send&gt; NotesSelector&lt;Note&gt; <span class="kw">for </span>SelectNotesWithExactAmount {
 <a href=#2512 id=2512 data-nosnippet>2512</a>    <span class="kw">async fn </span>select_notes(
 <a href=#2513 id=2513 data-nosnippet>2513</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2992,7 +2992,7 @@
 <a href=#2992 id=2992 data-nosnippet>2992</a>    <span class="kw">use </span>itertools::Itertools;
 <a href=#2993 id=2993 data-nosnippet>2993</a>    <span class="kw">use </span>serde_json::json;
 <a href=#2994 id=2994 data-nosnippet>2994</a>
-<a href=#2995 id=2995 data-nosnippet>2995</a>    <span class="kw">use crate</span>::{
+<a href=#2995 id=2995 data-nosnippet>2995</a>    <span class="kw">use </span>crate::{
 <a href=#2996 id=2996 data-nosnippet>2996</a>        MintOperationMetaVariant, OOBNotes, OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
 <a href=#2997 id=2997 data-nosnippet>2997</a>        represent_amount, select_notes_from_stream,
 <a href=#2998 id=2998 data-nosnippet>2998</a>    };
@@ -3308,4 +3308,5 @@
 <a href=#3308 id=3308 data-nosnippet>3308</a>            })
 <a href=#3309 id=3309 data-nosnippet>3309</a>        );
 <a href=#3310 id=3310 data-nosnippet>3310</a>    }
-<a href=#3311 id=3311 data-nosnippet>3311</a>}</code></pre></div></section></main></body></html>
+<a href=#3311 id=3311 data-nosnippet>3311</a>}
+</code></pre></div></section></main></body></html>

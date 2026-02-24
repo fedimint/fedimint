@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.0-nightly (5eda692e7 2025-09-11)" data-channel="nightly" data-search-js="search-d846cb6c.js" data-stringdex-js="stringdex-5af928a3.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_client/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (5fb2ff861 2026-02-21)" data-channel="nightly" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_client/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::cast_possible_truncation)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::missing_errors_doc)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::missing_panics_doc)]
@@ -296,7 +296,7 @@
 <a href=#296 id=296 data-nosnippet>296</a>    }
 <a href=#297 id=297 data-nosnippet>297</a>}
 <a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#299 id=299 data-nosnippet>299</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#300 id=300 data-nosnippet>300</a></span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>WalletClientInit {
 <a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">type </span>Module = WalletClientModule;
 <a href=#302 id=302 data-nosnippet>302</a>
@@ -510,7 +510,7 @@
 <a href=#510 id=510 data-nosnippet>510</a>    admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
 <a href=#511 id=511 data-nosnippet>511</a>}
 <a href=#512 id=512 data-nosnippet>512</a>
-<a href=#513 id=513 data-nosnippet>513</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#513 id=513 data-nosnippet>513</a><span class="attr">#[apply(async_trait_maybe_send!)]
 <a href=#514 id=514 data-nosnippet>514</a></span><span class="kw">impl </span>ClientModule <span class="kw">for </span>WalletClientModule {
 <a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">type </span>Init = WalletClientInit;
 <a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">type </span>Common = WalletModuleTypes;
@@ -1303,7 +1303,7 @@
 <a href=#1303 id=1303 data-nosnippet>1303</a>                            sender.send_replace(());
 <a href=#1304 id=1304 data-nosnippet>1304</a>                        });
 <a href=#1305 id=1305 data-nosnippet>1305</a>
-<a href=#1306 id=1306 data-nosnippet>1306</a>                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
+<a href=#1306 id=1306 data-nosnippet>1306</a>                        Ok::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
 <a href=#1307 id=1307 data-nosnippet>1307</a>                    })
 <a href=#1308 id=1308 data-nosnippet>1308</a>                },
 <a href=#1309 id=1309 data-nosnippet>1309</a>                <span class="prelude-val">Some</span>(<span class="number">100</span>),
@@ -1588,7 +1588,7 @@
 <a href=#1588 id=1588 data-nosnippet>1588</a>            <span class="comment">// Even in tests we don't want to spam the federation with requests about it
 <a href=#1589 id=1589 data-nosnippet>1589</a>            </span>sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
 <a href=#1590 id=1590 data-nosnippet>1590</a>        } <span class="kw">else </span>{
-<a href=#1591 id=1591 data-nosnippet>1591</a>            sleep(Duration::from_secs(<span class="number">3600</span>)).<span class="kw">await</span>;
+<a href=#1591 id=1591 data-nosnippet>1591</a>            sleep(Duration::from_hours(<span class="number">1</span>)).<span class="kw">await</span>;
 <a href=#1592 id=1592 data-nosnippet>1592</a>        }
 <a href=#1593 id=1593 data-nosnippet>1593</a>    }
 <a href=#1594 id=1594 data-nosnippet>1594</a>}
@@ -1655,7 +1655,7 @@
 <a href=#1655 id=1655 data-nosnippet>1655</a>    <span class="kw">use </span>std::collections::BTreeSet;
 <a href=#1656 id=1656 data-nosnippet>1656</a>    <span class="kw">use </span>std::sync::atomic::{AtomicBool, Ordering};
 <a href=#1657 id=1657 data-nosnippet>1657</a>
-<a href=#1658 id=1658 data-nosnippet>1658</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1658 id=1658 data-nosnippet>1658</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
 <a href=#1659 id=1659 data-nosnippet>1659</a>    <span class="kw">use </span><span class="kw">crate</span>::backup::{
 <a href=#1660 id=1660 data-nosnippet>1660</a>        RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
 <a href=#1661 id=1661 data-nosnippet>1661</a>    };
@@ -1811,4 +1811,5 @@
 <a href=#1811 id=1811 data-nosnippet>1811</a>            }
 <a href=#1812 id=1812 data-nosnippet>1812</a>        );
 <a href=#1813 id=1813 data-nosnippet>1813</a>    }
-<a href=#1814 id=1814 data-nosnippet>1814</a>}</code></pre></div></section></main></body></html>
+<a href=#1814 id=1814 data-nosnippet>1814</a>}
+</code></pre></div></section></main></body></html>
