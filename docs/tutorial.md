@@ -186,7 +186,7 @@ Commands:
   print-secret     Print the secret key of the client
   admin
   dev
-  join-federation  Join a federation using it's InviteCode
+  join             Join a federation using its InviteCode
   completion
   help             Print this message or the help of the given subcommand(s)
 
