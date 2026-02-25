@@ -17,7 +17,7 @@ use crate::core::{DynInputError, DynOutputError};
 /// of the inputs, to prevent creating funds out of thin air. In some cases, the
 /// value of the inputs and outputs can both be 0 e.g. when creating an offer to
 /// a Lightning Gateway.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Transaction {
     /// [`DynInput`]s consumed by the transaction
     pub inputs: Vec<DynInput>,
@@ -32,6 +32,18 @@ pub struct Transaction {
     pub nonce: [u8; 8],
     /// signatures for all the public keys of the inputs
     pub signatures: TransactionSignature,
+}
+
+impl fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Transaction")
+            .field("txid", &self.tx_hash())
+            .field("inputs", &self.inputs)
+            .field("outputs", &self.outputs)
+            .field("nonce", &self.nonce)
+            .field("signatures", &self.signatures)
+            .finish()
+    }
 }
 
 pub type SerdeTransaction = SerdeModuleEncoding<Transaction>;
