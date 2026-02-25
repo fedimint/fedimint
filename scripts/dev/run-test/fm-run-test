@@ -72,7 +72,14 @@ on_exit() {
 trap on_error ERR
 trap on_exit EXIT
 
-FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-310}
+if [ -n "${CI:-}" ]; then
+    # In CI we expect things might be slowish on heavily loaded machines
+    FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-150}
+else
+    # but on a dev machine, if anything hangs, we want don't want to wait
+    # forever for it, and 2 minutes should be enough for any test
+    FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-120}
+fi
 
 set +e
 
