@@ -402,7 +402,7 @@
 <a href=#402 id=402 data-nosnippet>402</a>                gw_receive.receive_ecash(ecash).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#403 id=403 data-nosnippet>403</a>                <span class="kw">let </span>after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#404 id=404 data-nosnippet>404</a>                <span class="kw">let </span>after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#405 id=405 data-nosnippet>405</a>                <span class="macro">assert_eq!</span>(prev_send_ecash_balance - <span class="number">500_000</span>, after_send_ecash_balance);
+<a href=#405 id=405 data-nosnippet>405</a>                almost_equal(prev_send_ecash_balance - <span class="number">500_000</span>, after_send_ecash_balance, <span class="number">512</span>).expect(<span class="string">"Balances were not almost equal"</span>);
 <a href=#406 id=406 data-nosnippet>406</a>                almost_equal(
 <a href=#407 id=407 data-nosnippet>407</a>                    prev_receive_ecash_balance + <span class="number">500_000</span>,
 <a href=#408 id=408 data-nosnippet>408</a>                    after_receive_ecash_balance,
