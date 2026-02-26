@@ -2308,6 +2308,10 @@ impl ClientContextIface for Client {
             .map(move |(k, v)| (k.0, v)),
         )
     }
+
+    async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+        Client::get_balance_for_btc(self).await
+    }
 }
 
 // TODO: impl `Debug` for `Client` and derive here
