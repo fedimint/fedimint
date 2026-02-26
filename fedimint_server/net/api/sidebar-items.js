@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["API_ENDPOINT_TIMEOUT"],"fn":["attach_endpoints","spawn"],"mod":["announcement","guardian_metadata","http_auth"],"struct":["ApiSecrets"],"trait":["HasApiContext"]};
+window.SIDEBAR_ITEMS = {"constant":["API_ENDPOINT_TIMEOUT"],"fn":["attach_endpoints","spawn"],"mod":["announcement","guardian_metadata","http_auth","pkarr_publish"],"struct":["ApiSecrets"],"trait":["HasApiContext"]};

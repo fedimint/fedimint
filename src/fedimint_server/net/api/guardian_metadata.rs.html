@@ -160,18 +160,17 @@
 <a href=#160 id=160 data-nosnippet>160</a>            .get(<span class="kw-2">&amp;</span>cfg.local.identity)
 <a href=#161 id=161 data-nosnippet>161</a>            .map(|endpoint| <span class="macro">vec!</span>[endpoint.url.clone()])
 <a href=#162 id=162 data-nosnippet>162</a>            .unwrap_or_default(),
-<a href=#163 id=163 data-nosnippet>163</a>        <span class="comment">// TODO: Get the actual pkarr_id_z32 from config or generate it
-<a href=#164 id=164 data-nosnippet>164</a>        </span>String::new(),
-<a href=#165 id=165 data-nosnippet>165</a>        timestamp_secs,
-<a href=#166 id=166 data-nosnippet>166</a>    );
-<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">let </span>signed_metadata =
-<a href=#169 id=169 data-nosnippet>169</a>        guardian_metadata.sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
-<a href=#170 id=170 data-nosnippet>170</a>
-<a href=#171 id=171 data-nosnippet>171</a>    dbtx.insert_entry(<span class="kw-2">&amp;</span>GuardianMetadataKey(cfg.local.identity), <span class="kw-2">&amp;</span>signed_metadata)
-<a href=#172 id=172 data-nosnippet>172</a>        .<span class="kw">await</span>;
-<a href=#173 id=173 data-nosnippet>173</a>    dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#174 id=174 data-nosnippet>174</a>
-<a href=#175 id=175 data-nosnippet>175</a>    <span class="bool-val">true
-<a href=#176 id=176 data-nosnippet>176</a></span>}
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">super</span>::pkarr_publish::pkarr_id_z32(<span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key),
+<a href=#164 id=164 data-nosnippet>164</a>        timestamp_secs,
+<a href=#165 id=165 data-nosnippet>165</a>    );
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span>signed_metadata =
+<a href=#168 id=168 data-nosnippet>168</a>        guardian_metadata.sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>    dbtx.insert_entry(<span class="kw-2">&amp;</span>GuardianMetadataKey(cfg.local.identity), <span class="kw-2">&amp;</span>signed_metadata)
+<a href=#171 id=171 data-nosnippet>171</a>        .<span class="kw">await</span>;
+<a href=#172 id=172 data-nosnippet>172</a>    dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="bool-val">true
+<a href=#175 id=175 data-nosnippet>175</a></span>}
 </code></pre></div></section></main></body></html>
