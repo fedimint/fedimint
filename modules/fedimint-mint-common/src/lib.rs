@@ -69,10 +69,18 @@ pub struct MintOutputBlindSignature(pub tbs::BlindedSignature);
 ///
 /// In this form it can only be validated, not spent since for that the
 /// corresponding secret spend key is required.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Note {
     pub nonce: Nonce,
     pub signature: tbs::Signature,
+}
+
+impl fmt::Debug for Note {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Note")
+            .field("nonce", &self.nonce)
+            .finish_non_exhaustive()
+    }
 }
 
 impl fmt::Display for Note {
