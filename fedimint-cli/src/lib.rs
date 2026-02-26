@@ -97,7 +97,7 @@ enum CliOutput {
         federation_id: FederationId,
     },
 
-    JoinFederation {
+    Join {
         joined: String,
     },
 
@@ -393,7 +393,8 @@ enum Command {
     },
 
     /// Join a federation using its InviteCode
-    JoinFederation {
+    #[clap(alias = "join-federation")]
+    Join {
         invite_code: String,
     },
 
@@ -857,7 +858,7 @@ impl FedimintCli {
 
                 Ok(CliOutput::InviteCode { invite_code })
             }
-            Command::JoinFederation { invite_code } => {
+            Command::Join { invite_code } => {
                 {
                     let invite_code: InviteCode = InviteCode::from_str(&invite_code)
                         .map_err_cli_msg("invalid invite code")?;
@@ -866,7 +867,7 @@ impl FedimintCli {
                     let _client = self.client_join(&cli, invite_code).await?;
                 }
 
-                Ok(CliOutput::JoinFederation {
+                Ok(CliOutput::Join {
                     joined: invite_code,
                 })
             }
