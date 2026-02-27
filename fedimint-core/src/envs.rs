@@ -156,13 +156,16 @@ pub const FM_IROH_PKARR_PUBLISHER_ENABLE_ENV: &str = "FM_IROH_PKARR_PUBLISHER_EN
 /// Env var to disable Iroh's use of relays
 pub const FM_IROH_RELAYS_ENABLE_ENV: &str = "FM_IROH_RELAYS_ENABLE";
 
-/// Env var to disable all pkarr publishing (enabled by default)
+/// Env var to disable all pkarr publishing and client-side resolution (enabled
+/// by default)
 pub const FM_PKARR_ENABLE_ENV: &str = "FM_PKARR_ENABLE";
 
-/// Env var to enable pkarr DHT publishing (disabled by default)
+/// Env var to enable pkarr DHT publishing and client-side resolution (disabled
+/// by default)
 pub const FM_PKARR_DHT_ENABLE_ENV: &str = "FM_PKARR_DHT_ENABLE";
 
-/// Env var to disable pkarr relay publishing (enabled by default)
+/// Env var to disable pkarr relay publishing and client-side resolution
+/// (enabled by default)
 pub const FM_PKARR_RELAYS_ENABLE_ENV: &str = "FM_PKARR_RELAYS_ENABLE";
 
 /// Env var to override tcp api connectivity
