@@ -158,7 +158,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                         input type="number" class="form-control" id="federation_size"
                             name="federation_size" min="1";
                         small class="form-text text-muted" {
-                            "Federation size must be 1 or at least 4."
+                            "At least 4, or 1. Recommended: 4, 7, 10, 13."
                         }
                     }
 
@@ -465,7 +465,10 @@ async fn federation_setup(
                     }
 
                     div class="col-6" {
-                        button type="submit" class="btn btn-primary w-100" { "Add Guardian" }
+                        button type="submit" class="btn btn-primary w-100"
+                            disabled[can_start_dkg] {
+                            @if can_start_dkg { "List complete" } @else { "Add Guardian" }
+                        }
                     }
                 }
             }
@@ -490,11 +493,11 @@ async fn federation_setup(
                 @if !can_start_dkg {
                     @if let Some(expected) = federation_size {
                         p class="text-muted mt-2" style="font-size: 0.875rem;" {
-                            (format!("Need to collect all {expected} setup codes."))
+                            (format!("Need to collect {} more setup code(s).", expected as usize - total_guardians))
                         }
                     } @else {
                         p class="text-muted mt-2" style="font-size: 0.875rem;" {
-                            "Need to collect the setup code from the leader and other guardians."
+                            "Need to collect the setup codes from all other guardians."
                         }
                     }
                 }
