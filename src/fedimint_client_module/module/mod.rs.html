@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client-module/src/module/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client_module" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (5fb2ff861 2026-02-21)" data-channel="nightly" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_client_module/module/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>core::fmt;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client-module/src/module/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client_module" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (18d13b533 2026-02-09)" data-channel="nightly" data-search-js="search-fb33671b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-f9617a14.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_client_module/module/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>core::fmt;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::any::Any;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::collections::BTreeSet;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>std::fmt::Debug;
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>///
 <a href=#53 id=53 data-nosnippet>53</a>/// This allows lose coupling, less recompilation and better control and
 <a href=#54 id=54 data-nosnippet>54</a>/// understanding of what functionality of the Client the modules get access to.
-<a href=#55 id=55 data-nosnippet>55</a></span><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">pub trait </span>ClientContextIface: MaybeSend + MaybeSync {
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule);
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi;
@@ -679,7 +679,7 @@
 <a href=#679 id=679 data-nosnippet>679</a>        </span>E: Event + Send,
 <a href=#680 id=680 data-nosnippet>680</a>        Cap: Send,
 <a href=#681 id=681 data-nosnippet>681</a>    {
-<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">if </span>&lt;E <span class="kw">as </span>Event&gt;::MODULE != <span class="prelude-val">Some</span>(&lt;M <span class="kw">as </span>ClientModule&gt;::kind()) {
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">if </span>&lt;E <span class="kw">as </span>Event&gt;<span class="macro">::MODULE !</span>= <span class="prelude-val">Some</span>(&lt;M <span class="kw">as </span>ClientModule&gt;::kind()) {
 <a href=#683 id=683 data-nosnippet>683</a>            <span class="macro">warn!</span>(
 <a href=#684 id=684 data-nosnippet>684</a>                target: LOG_CLIENT,
 <a href=#685 id=685 data-nosnippet>685</a>                module_kind = %&lt;M <span class="kw">as </span>ClientModule&gt;::kind(),
@@ -739,7 +739,7 @@
 <a href=#739 id=739 data-nosnippet>739</a>}
 <a href=#740 id=740 data-nosnippet>740</a>
 <a href=#741 id=741 data-nosnippet>741</a><span class="doccomment">/// Fedimint module client
-<a href=#742 id=742 data-nosnippet>742</a></span><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#742 id=742 data-nosnippet>742</a></span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#743 id=743 data-nosnippet>743</a></span><span class="kw">pub trait </span>ClientModule: Debug + MaybeSend + MaybeSync + <span class="lifetime">'static </span>{
 <a href=#744 id=744 data-nosnippet>744</a>    <span class="kw">type </span>Init: ClientModuleInit;
 <a href=#745 id=745 data-nosnippet>745</a>
@@ -967,7 +967,7 @@
 <a href=#967 id=967 data-nosnippet>967</a>}
 <a href=#968 id=968 data-nosnippet>968</a>
 <a href=#969 id=969 data-nosnippet>969</a><span class="doccomment">/// Type-erased version of [`ClientModule`]
-<a href=#970 id=970 data-nosnippet>970</a></span><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#970 id=970 data-nosnippet>970</a></span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#971 id=971 data-nosnippet>971</a></span><span class="kw">pub trait </span>IClientModule: Debug {
 <a href=#972 id=972 data-nosnippet>972</a>    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>std::any::Any));
 <a href=#973 id=973 data-nosnippet>973</a>
@@ -1023,7 +1023,7 @@
 <a href=#1023 id=1023 data-nosnippet>1023</a>    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, ()&gt;;
 <a href=#1024 id=1024 data-nosnippet>1024</a>}
 <a href=#1025 id=1025 data-nosnippet>1025</a>
-<a href=#1026 id=1026 data-nosnippet>1026</a><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#1026 id=1026 data-nosnippet>1026</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#1027 id=1027 data-nosnippet>1027</a></span><span class="kw">impl</span>&lt;T&gt; IClientModule <span class="kw">for </span>T
 <a href=#1028 id=1028 data-nosnippet>1028</a><span class="kw">where
 <a href=#1029 id=1029 data-nosnippet>1029</a>    </span>T: ClientModule,

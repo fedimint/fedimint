@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-server/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (5fb2ff861 2026-02-21)" data-channel="nightly" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_server/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-server/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (18d13b533 2026-02-09)" data-channel="nightly" data-search-js="search-fb33671b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-f9617a14.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_wallet_server/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::cast_possible_truncation)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::cast_possible_wrap)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::default_trait_access)]
@@ -309,7 +309,7 @@
 <a href=#309 id=309 data-nosnippet>309</a>    }
 <a href=#310 id=310 data-nosnippet>310</a>}
 <a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#312 id=312 data-nosnippet>312</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#313 id=313 data-nosnippet>313</a></span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>WalletInit {
 <a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">type </span>Module = Wallet;
 <a href=#315 id=315 data-nosnippet>315</a>
@@ -477,7 +477,7 @@
 <a href=#477 id=477 data-nosnippet>477</a>    }
 <a href=#478 id=478 data-nosnippet>478</a>}
 <a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a><span class="attr">#[apply(async_trait_maybe_send!)]
+<a href=#480 id=480 data-nosnippet>480</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#481 id=481 data-nosnippet>481</a></span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Wallet {
 <a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">type </span>Common = WalletModuleTypes;
 <a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">type </span>Init = WalletInit;
@@ -514,7 +514,7 @@
 <a href=#514 id=514 data-nosnippet>514</a>
 <a href=#515 id=515 data-nosnippet>515</a>                <span class="comment">// This will prevent that more then five blocks are synced in a single database
 <a href=#516 id=516 data-nosnippet>516</a>                // transaction if the federation was offline for a prolonged period of time.
-<a href=#517 id=517 data-nosnippet>517</a>                </span><span class="kw">if </span>current_consensus_block_count != <span class="number">0 </span>{
+<a href=#517 id=517 data-nosnippet>517</a>                </span><span class="kw">if </span><span class="macro">current_consensus_block_count !</span>= <span class="number">0 </span>{
 <a href=#518 id=518 data-nosnippet>518</a>                    block_count_vote = min(
 <a href=#519 id=519 data-nosnippet>519</a>                        block_count_vote,
 <a href=#520 id=520 data-nosnippet>520</a>                        current_consensus_block_count
@@ -623,9 +623,9 @@
 <a href=#623 id=623 data-nosnippet>623</a>
 <a href=#624 id=624 data-nosnippet>624</a>                <span class="macro">assert!</span>(old_consensus_block_count &lt;= new_consensus_block_count);
 <a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a>                <span class="kw">if </span>new_consensus_block_count != old_consensus_block_count {
+<a href=#626 id=626 data-nosnippet>626</a>                <span class="kw">if </span><span class="macro">new_consensus_block_count !</span>= old_consensus_block_count {
 <a href=#627 id=627 data-nosnippet>627</a>                    <span class="comment">// We do not sync blocks that predate the federation itself
-<a href=#628 id=628 data-nosnippet>628</a>                    </span><span class="kw">if </span>old_consensus_block_count != <span class="number">0 </span>{
+<a href=#628 id=628 data-nosnippet>628</a>                    </span><span class="kw">if </span><span class="macro">old_consensus_block_count !</span>= <span class="number">0 </span>{
 <a href=#629 id=629 data-nosnippet>629</a>                        <span class="self">self</span>.sync_up_to_consensus_count(
 <a href=#630 id=630 data-nosnippet>630</a>                            dbtx,
 <a href=#631 id=631 data-nosnippet>631</a>                            old_consensus_block_count,
@@ -734,8 +734,8 @@
 <a href=#734 id=734 data-nosnippet>734</a>                    .<span class="kw">await
 <a href=#735 id=735 data-nosnippet>735</a>                    </span>.ok_or(WalletInputError::UnknownUTXO)<span class="question-mark">?</span>;
 <a href=#736 id=736 data-nosnippet>736</a>
-<a href=#737 id=737 data-nosnippet>737</a>                <span class="kw">if </span>input_tx_out.script_pubkey
-<a href=#738 id=738 data-nosnippet>738</a>                    != <span class="self">self
+<a href=#737 id=737 data-nosnippet>737</a>                <span class="kw">if </span>input_tx_out.<span class="macro">script_pubkey
+<a href=#738 id=738 data-nosnippet>738</a>                    !</span>= <span class="self">self
 <a href=#739 id=739 data-nosnippet>739</a>                        </span>.cfg
 <a href=#740 id=740 data-nosnippet>740</a>                        .consensus
 <a href=#741 id=741 data-nosnippet>741</a>                        .peg_in_descriptor
@@ -747,7 +747,7 @@
 <a href=#747 id=747 data-nosnippet>747</a>
 <a href=#748 id=748 data-nosnippet>748</a>                <span class="comment">// Verifying this is not strictly necessary for the server as the tx_out is only
 <a href=#749 id=749 data-nosnippet>749</a>                // used in backup and recovery.
-<a href=#750 id=750 data-nosnippet>750</a>                </span><span class="kw">if </span>input.tx_out != input_tx_out {
+<a href=#750 id=750 data-nosnippet>750</a>                </span><span class="kw">if </span>input.<span class="macro">tx_out !</span>= input_tx_out {
 <a href=#751 id=751 data-nosnippet>751</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::WrongTxOut);
 <a href=#752 id=752 data-nosnippet>752</a>                }
 <a href=#753 id=753 data-nosnippet>753</a>
@@ -2049,7 +2049,7 @@
 <a href=#2049 id=2049 data-nosnippet>2049</a>        }
 <a href=#2050 id=2050 data-nosnippet>2050</a>
 <a href=#2051 id=2051 data-nosnippet>2051</a>        <span class="comment">// Validate fees weight matches the actual weight
-<a href=#2052 id=2052 data-nosnippet>2052</a>        </span><span class="kw">if </span>fees.total_weight != tx.fees.total_weight {
+<a href=#2052 id=2052 data-nosnippet>2052</a>        </span><span class="kw">if </span>fees.<span class="macro">total_weight !</span>= tx.fees.total_weight {
 <a href=#2053 id=2053 data-nosnippet>2053</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::TxWeightIncorrect(
 <a href=#2054 id=2054 data-nosnippet>2054</a>                fees.total_weight,
 <a href=#2055 id=2055 data-nosnippet>2055</a>                tx.fees.total_weight,
