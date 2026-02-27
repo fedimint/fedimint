@@ -2868,6 +2868,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-metrics",
  "futures",
+ "pkarr",
  "reqwest 0.12.22",
  "serde",
  "serde_json",
