@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use fedimint_core::db::Database;
-use fedimint_core::envs::{FM_PKARR_DHT_ENABLE_ENV, FM_PKARR_RELAYS_ENABLE_ENV, is_env_var_set};
+use fedimint_core::envs::{FM_PKARR_DHT_ENABLE_ENV, FM_PKARR_ENABLE_ENV, is_env_var_set};
 use fedimint_core::secp256k1::SecretKey;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
@@ -47,15 +47,15 @@ pub async fn start_pkarr_publish_service(
 ) -> anyhow::Result<()> {
     let keypair = derive_pkarr_keypair(&cfg.private.broadcast_secret_key);
 
+    let pkarr_enabled =
+        fedimint_core::envs::is_env_var_set_opt(FM_PKARR_ENABLE_ENV).unwrap_or(true);
     let dht_enabled = is_env_var_set(FM_PKARR_DHT_ENABLE_ENV);
-    let relays_enabled =
-        fedimint_core::envs::is_env_var_set_opt(FM_PKARR_RELAYS_ENABLE_ENV).unwrap_or(true);
 
-    if !dht_enabled && !relays_enabled {
+    if !pkarr_enabled {
         info!(
             target: LOG_NET_API,
             pkarr_id = %keypair.to_z32(),
-            "Pkarr publishing disabled (both DHT and relays disabled)"
+            "Pkarr publishing disabled"
         );
         return Ok(());
     }
@@ -63,9 +63,6 @@ pub async fn start_pkarr_publish_service(
     let mut builder = pkarr::Client::builder();
     if !dht_enabled {
         builder.no_dht();
-    }
-    if !relays_enabled {
-        builder.no_relays();
     }
     let client = builder.build()?;
 
@@ -77,7 +74,6 @@ pub async fn start_pkarr_publish_service(
         target: LOG_NET_API,
         pkarr_id = %keypair.to_z32(),
         dht_enabled,
-        relays_enabled,
         "Starting pkarr publish service"
     );
 
@@ -151,7 +147,9 @@ fn build_signed_packet(
 ) -> Result<SignedPacket, pkarr::errors::SignedPacketBuildError> {
     SignedPacket::builder()
         .txt(
-            pkarr::dns::Name::new_unchecked("fedimint_api"),
+            pkarr::dns::Name::new_unchecked(
+                fedimint_core::net::guardian_metadata::PKARR_API_RECORD_NAME,
+            ),
             url.try_into().expect("API URL should be valid TXT data"),
             TXT_RECORD_TTL,
         )

@@ -17,6 +17,8 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
+pkarr = ["dep:pkarr"]
+pkarr-dht = ["pkarr", "pkarr/dht"]
 tor = ["fedimint-client-module/tor"]
 
 [lib]
@@ -39,6 +41,7 @@ fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 futures = { workspace = true }
+pkarr = { workspace = true, features = ["relays"], optional = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

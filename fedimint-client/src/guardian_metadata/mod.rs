@@ -37,6 +37,19 @@ impl_db_lookup!(
     query_prefix = GuardianMetadataPrefix
 );
 
+#[cfg(feature = "pkarr")]
+mod pkarr;
+
+/// Extra time to wait for additional peer responses after the minimum
+/// required have been collected.
+fn extra_response_wait() -> Duration {
+    if is_running_in_test_env() {
+        Duration::from_millis(1)
+    } else {
+        Duration::from_secs(30)
+    }
+}
+
 /// Fetches guardian metadata from guardians, validates them and updates the
 /// DB if any new more up to date ones are found.
 pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>) {
@@ -49,13 +62,17 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
                 1,
                 api,
                 &guardian_pub_keys,
-                if is_running_in_test_env() {
-                    Duration::from_millis(1)
-                } else {
-                    Duration::from_secs(30)
-                },
+                extra_response_wait(),
             )
             .await;
+
+            #[cfg(feature = "pkarr")]
+            let results = if results.is_empty() {
+                pkarr::try_pkarr_fallback(&client_inner, &guardian_pub_keys).await
+            } else {
+                results
+            };
+
             store_guardian_metadata_updates_from_peers(
                 client_inner.db(),
                 &guardian_pub_keys,
