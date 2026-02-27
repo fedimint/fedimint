@@ -20,24 +20,27 @@
 <a href=#20 id=20 data-nosnippet>20</a>    <span class="doccomment">/// Modules enabled by the leader (if None, all available modules are
 <a href=#21 id=21 data-nosnippet>21</a>    /// enabled)
 <a href=#22 id=22 data-nosnippet>22</a>    </span><span class="kw">pub </span>enabled_modules: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;ModuleKind&gt;&gt;,
-<a href=#23 id=23 data-nosnippet>23</a>}
-<a href=#24 id=24 data-nosnippet>24</a>
-<a href=#25 id=25 data-nosnippet>25</a><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
-<a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub enum </span>PeerEndpoints {
-<a href=#27 id=27 data-nosnippet>27</a>    Tcp {
-<a href=#28 id=28 data-nosnippet>28</a>        <span class="doccomment">/// Url for our websocket api endpoint
-<a href=#29 id=29 data-nosnippet>29</a>        </span>api_url: SafeUrl,
-<a href=#30 id=30 data-nosnippet>30</a>        <span class="doccomment">/// Url for our websocket p2p endpoint
-<a href=#31 id=31 data-nosnippet>31</a>        </span>p2p_url: SafeUrl,
-<a href=#32 id=32 data-nosnippet>32</a>        <span class="doccomment">/// TLS certificate for our websocket p2p endpoint#
-<a href=#33 id=33 data-nosnippet>33</a>        </span><span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
-<a href=#34 id=34 data-nosnippet>34</a>        </span>cert: Vec&lt;u8&gt;,
-<a href=#35 id=35 data-nosnippet>35</a>    },
-<a href=#36 id=36 data-nosnippet>36</a>    Iroh {
-<a href=#37 id=37 data-nosnippet>37</a>        <span class="doccomment">/// Public key for our iroh api endpoint
-<a href=#38 id=38 data-nosnippet>38</a>        </span>api_pk: iroh_base::PublicKey,
-<a href=#39 id=39 data-nosnippet>39</a>        <span class="doccomment">/// Public key for our iroh p2p endpoint
-<a href=#40 id=40 data-nosnippet>40</a>        </span>p2p_pk: iroh_base::PublicKey,
-<a href=#41 id=41 data-nosnippet>41</a>    },
-<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="doccomment">/// Total number of guardians (including the one who sets this), set by the
+<a href=#24 id=24 data-nosnippet>24</a>    /// leader
+<a href=#25 id=25 data-nosnippet>25</a>    </span><span class="kw">pub </span>federation_size: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#26 id=26 data-nosnippet>26</a>}
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub enum </span>PeerEndpoints {
+<a href=#30 id=30 data-nosnippet>30</a>    Tcp {
+<a href=#31 id=31 data-nosnippet>31</a>        <span class="doccomment">/// Url for our websocket api endpoint
+<a href=#32 id=32 data-nosnippet>32</a>        </span>api_url: SafeUrl,
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="doccomment">/// Url for our websocket p2p endpoint
+<a href=#34 id=34 data-nosnippet>34</a>        </span>p2p_url: SafeUrl,
+<a href=#35 id=35 data-nosnippet>35</a>        <span class="doccomment">/// TLS certificate for our websocket p2p endpoint#
+<a href=#36 id=36 data-nosnippet>36</a>        </span><span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
+<a href=#37 id=37 data-nosnippet>37</a>        </span>cert: Vec&lt;u8&gt;,
+<a href=#38 id=38 data-nosnippet>38</a>    },
+<a href=#39 id=39 data-nosnippet>39</a>    Iroh {
+<a href=#40 id=40 data-nosnippet>40</a>        <span class="doccomment">/// Public key for our iroh api endpoint
+<a href=#41 id=41 data-nosnippet>41</a>        </span>api_pk: iroh_base::PublicKey,
+<a href=#42 id=42 data-nosnippet>42</a>        <span class="doccomment">/// Public key for our iroh p2p endpoint
+<a href=#43 id=43 data-nosnippet>43</a>        </span>p2p_pk: iroh_base::PublicKey,
+<a href=#44 id=44 data-nosnippet>44</a>    },
+<a href=#45 id=45 data-nosnippet>45</a>}
 </code></pre></div></section></main></body></html>

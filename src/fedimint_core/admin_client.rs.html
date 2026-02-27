@@ -52,13 +52,16 @@
 <a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// Modules enabled by the leader (if None, all available modules are
 <a href=#53 id=53 data-nosnippet>53</a>    /// enabled)
 <a href=#54 id=54 data-nosnippet>54</a>    </span><span class="kw">pub </span>enabled_modules: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;ModuleKind&gt;&gt;,
-<a href=#55 id=55 data-nosnippet>55</a>}
-<a href=#56 id=56 data-nosnippet>56</a>
-<a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// Archive of all the guardian config files that can be used to recover a lost
-<a href=#58 id=58 data-nosnippet>58</a>/// guardian node.
-<a href=#59 id=59 data-nosnippet>59</a></span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-<a href=#60 id=60 data-nosnippet>60</a></span><span class="kw">pub struct </span>GuardianConfigBackup {
-<a href=#61 id=61 data-nosnippet>61</a>    <span class="attr">#[serde(with = <span class="string">"crate::hex::serde"</span>)]
-<a href=#62 id=62 data-nosnippet>62</a>    </span><span class="kw">pub </span>tar_archive_bytes: Vec&lt;u8&gt;,
-<a href=#63 id=63 data-nosnippet>63</a>}
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// Total number of guardians (including the one who sets this), set by the
+<a href=#56 id=56 data-nosnippet>56</a>    /// leader
+<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">pub </span>federation_size: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#58 id=58 data-nosnippet>58</a>}
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a><span class="doccomment">/// Archive of all the guardian config files that can be used to recover a lost
+<a href=#61 id=61 data-nosnippet>61</a>/// guardian node.
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub struct </span>GuardianConfigBackup {
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="attr">#[serde(with = <span class="string">"crate::hex::serde"</span>)]
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">pub </span>tar_archive_bytes: Vec&lt;u8&gt;,
+<a href=#66 id=66 data-nosnippet>66</a>}
 </code></pre></div></section></main></body></html>

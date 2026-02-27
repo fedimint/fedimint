@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">super</span>::vars::utf8;
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span><span class="kw">crate</span>::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_10_0_ALPHA;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>crate::{poll_almost_equal, poll_eq, vars};
 <a href=#43 id=43 data-nosnippet>43</a>
 <a href=#44 id=44 data-nosnippet>44</a><span class="comment">// TODO: Are we still using the 3rd port for anything?
@@ -1032,60 +1032,67 @@
 <a href=#1032 id=1032 data-nosnippet>1032</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting local parameters..."</span>);
 <a href=#1033 id=1033 data-nosnippet>1033</a>
 <a href=#1034 id=1034 data-nosnippet>1034</a>    <span class="comment">// Parallelize setting local parameters
-<a href=#1035 id=1035 data-nosnippet>1035</a>    </span><span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
-<a href=#1036 id=1036 data-nosnippet>1036</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
-<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="kw">async move </span>{
-<a href=#1039 id=1039 data-nosnippet>1039</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
-<a href=#1040 id=1040 data-nosnippet>1040</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1041 id=1041 data-nosnippet>1041</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1042 id=1042 data-nosnippet>1042</a>                    .<span class="kw">await
-<a href=#1043 id=1043 data-nosnippet>1043</a>            </span>} <span class="kw">else </span>{
-<a href=#1044 id=1044 data-nosnippet>1044</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1045 id=1045 data-nosnippet>1045</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1046 id=1046 data-nosnippet>1046</a>                    .<span class="kw">await
-<a href=#1047 id=1047 data-nosnippet>1047</a>            </span>};
-<a href=#1048 id=1048 data-nosnippet>1048</a>            info.map(|i| (peer, i))
-<a href=#1049 id=1049 data-nosnippet>1049</a>        }
-<a href=#1050 id=1050 data-nosnippet>1050</a>    });
-<a href=#1051 id=1051 data-nosnippet>1051</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
-<a href=#1052 id=1052 data-nosnippet>1052</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#1053 id=1053 data-nosnippet>1053</a>        </span>.into_iter()
-<a href=#1054 id=1054 data-nosnippet>1054</a>        .collect();
-<a href=#1055 id=1055 data-nosnippet>1055</a>
-<a href=#1056 id=1056 data-nosnippet>1056</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
-<a href=#1057 id=1057 data-nosnippet>1057</a>
-<a href=#1058 id=1058 data-nosnippet>1058</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
-<a href=#1059 id=1059 data-nosnippet>1059</a>    // operation
-<a href=#1060 id=1060 data-nosnippet>1060</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
-<a href=#1061 id=1061 data-nosnippet>1061</a>        endpoints
-<a href=#1062 id=1062 data-nosnippet>1062</a>            .iter()
-<a href=#1063 id=1063 data-nosnippet>1063</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span>p != peer)
-<a href=#1064 id=1064 data-nosnippet>1064</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
-<a href=#1065 id=1065 data-nosnippet>1065</a>                <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1066 id=1066 data-nosnippet>1066</a>                <span class="kw">let </span>info = info.clone();
-<a href=#1067 id=1067 data-nosnippet>1067</a>                <span class="kw">async move </span>{
-<a href=#1068 id=1068 data-nosnippet>1068</a>                    <span class="kw">crate</span>::util::FedimintCli
-<a href=#1069 id=1069 data-nosnippet>1069</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1070 id=1070 data-nosnippet>1070</a>                        .<span class="kw">await
-<a href=#1071 id=1071 data-nosnippet>1071</a>                </span>}
-<a href=#1072 id=1072 data-nosnippet>1072</a>            })
-<a href=#1073 id=1073 data-nosnippet>1073</a>    });
-<a href=#1074 id=1074 data-nosnippet>1074</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1075 id=1075 data-nosnippet>1075</a>
-<a href=#1076 id=1076 data-nosnippet>1076</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
-<a href=#1077 id=1077 data-nosnippet>1077</a>
-<a href=#1078 id=1078 data-nosnippet>1078</a>    <span class="comment">// Parallelize DKG start
-<a href=#1079 id=1079 data-nosnippet>1079</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
-<a href=#1080 id=1080 data-nosnippet>1080</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1081 id=1081 data-nosnippet>1081</a>        <span class="kw">async move </span>{
-<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="kw">crate</span>::util::FedimintCli
-<a href=#1083 id=1083 data-nosnippet>1083</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1084 id=1084 data-nosnippet>1084</a>                .<span class="kw">await
-<a href=#1085 id=1085 data-nosnippet>1085</a>        </span>}
-<a href=#1086 id=1086 data-nosnippet>1086</a>    });
-<a href=#1087 id=1087 data-nosnippet>1087</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1088 id=1088 data-nosnippet>1088</a>
-<a href=#1089 id=1089 data-nosnippet>1089</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1090 id=1090 data-nosnippet>1090</a>}
+<a href=#1035 id=1035 data-nosnippet>1035</a>    // --federation-size is only supported by fedimint-cli &gt;= 0.11.0-alpha
+<a href=#1036 id=1036 data-nosnippet>1036</a>    </span><span class="kw">let </span>federation_size =
+<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw">if </span><span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await </span>&gt;= <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#1038 id=1038 data-nosnippet>1038</a>            <span class="prelude-val">Some</span>(endpoints.len())
+<a href=#1039 id=1039 data-nosnippet>1039</a>        } <span class="kw">else </span>{
+<a href=#1040 id=1040 data-nosnippet>1040</a>            <span class="prelude-val">None
+<a href=#1041 id=1041 data-nosnippet>1041</a>        </span>};
+<a href=#1042 id=1042 data-nosnippet>1042</a>    <span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
+<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1045 id=1045 data-nosnippet>1045</a>        <span class="kw">async move </span>{
+<a href=#1046 id=1046 data-nosnippet>1046</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
+<a href=#1047 id=1047 data-nosnippet>1047</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1048 id=1048 data-nosnippet>1048</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint, federation_size)
+<a href=#1049 id=1049 data-nosnippet>1049</a>                    .<span class="kw">await
+<a href=#1050 id=1050 data-nosnippet>1050</a>            </span>} <span class="kw">else </span>{
+<a href=#1051 id=1051 data-nosnippet>1051</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1052 id=1052 data-nosnippet>1052</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1053 id=1053 data-nosnippet>1053</a>                    .<span class="kw">await
+<a href=#1054 id=1054 data-nosnippet>1054</a>            </span>};
+<a href=#1055 id=1055 data-nosnippet>1055</a>            info.map(|i| (peer, i))
+<a href=#1056 id=1056 data-nosnippet>1056</a>        }
+<a href=#1057 id=1057 data-nosnippet>1057</a>    });
+<a href=#1058 id=1058 data-nosnippet>1058</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
+<a href=#1059 id=1059 data-nosnippet>1059</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#1060 id=1060 data-nosnippet>1060</a>        </span>.into_iter()
+<a href=#1061 id=1061 data-nosnippet>1061</a>        .collect();
+<a href=#1062 id=1062 data-nosnippet>1062</a>
+<a href=#1063 id=1063 data-nosnippet>1063</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
+<a href=#1064 id=1064 data-nosnippet>1064</a>
+<a href=#1065 id=1065 data-nosnippet>1065</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
+<a href=#1066 id=1066 data-nosnippet>1066</a>    // operation
+<a href=#1067 id=1067 data-nosnippet>1067</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
+<a href=#1068 id=1068 data-nosnippet>1068</a>        endpoints
+<a href=#1069 id=1069 data-nosnippet>1069</a>            .iter()
+<a href=#1070 id=1070 data-nosnippet>1070</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span>p != peer)
+<a href=#1071 id=1071 data-nosnippet>1071</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
+<a href=#1072 id=1072 data-nosnippet>1072</a>                <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1073 id=1073 data-nosnippet>1073</a>                <span class="kw">let </span>info = info.clone();
+<a href=#1074 id=1074 data-nosnippet>1074</a>                <span class="kw">async move </span>{
+<a href=#1075 id=1075 data-nosnippet>1075</a>                    <span class="kw">crate</span>::util::FedimintCli
+<a href=#1076 id=1076 data-nosnippet>1076</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1077 id=1077 data-nosnippet>1077</a>                        .<span class="kw">await
+<a href=#1078 id=1078 data-nosnippet>1078</a>                </span>}
+<a href=#1079 id=1079 data-nosnippet>1079</a>            })
+<a href=#1080 id=1080 data-nosnippet>1080</a>    });
+<a href=#1081 id=1081 data-nosnippet>1081</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1082 id=1082 data-nosnippet>1082</a>
+<a href=#1083 id=1083 data-nosnippet>1083</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
+<a href=#1084 id=1084 data-nosnippet>1084</a>
+<a href=#1085 id=1085 data-nosnippet>1085</a>    <span class="comment">// Parallelize DKG start
+<a href=#1086 id=1086 data-nosnippet>1086</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
+<a href=#1087 id=1087 data-nosnippet>1087</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1088 id=1088 data-nosnippet>1088</a>        <span class="kw">async move </span>{
+<a href=#1089 id=1089 data-nosnippet>1089</a>            <span class="kw">crate</span>::util::FedimintCli
+<a href=#1090 id=1090 data-nosnippet>1090</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1091 id=1091 data-nosnippet>1091</a>                .<span class="kw">await
+<a href=#1092 id=1092 data-nosnippet>1092</a>        </span>}
+<a href=#1093 id=1093 data-nosnippet>1093</a>    });
+<a href=#1094 id=1094 data-nosnippet>1094</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1095 id=1095 data-nosnippet>1095</a>
+<a href=#1096 id=1096 data-nosnippet>1096</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1097 id=1097 data-nosnippet>1097</a>}
 </code></pre></div></section></main></body></html>
