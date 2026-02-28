@@ -87,7 +87,8 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
     let available_modules = state.api.available_modules();
 
     let content = html! {
-        form method="post" action=(ROOT_ROUTE) {
+        form method="post" action=(ROOT_ROUTE)
+            hx-post=(ROOT_ROUTE) hx-target="#setup-error" hx-swap="innerHTML" {
             style {
                 r#"
                 .toggle-content {
@@ -158,7 +159,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                         input type="number" class="form-control" id="federation_size"
                             name="federation_size" min="1";
                         small class="form-text text-muted" {
-                            "Federation size must be 1 or at least 4."
+                            "At least 4, or 1. Recommended: 4, 7, 10, 13."
                         }
                     }
 
@@ -212,6 +213,8 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 }
             }
 
+            div id="setup-error" {}
+
             div class="button-container" {
                 button type="submit" class="btn btn-primary setup-btn" { "Confirm" }
             }
@@ -259,14 +262,13 @@ async fn setup_submit(
             match s.parse::<u32>() {
                 Ok(size) => Some(size),
                 Err(_) => {
-                    let content = html! {
-                        div class="alert alert-danger" { "Invalid federation size" }
-                        div class="button-container" {
-                            a href=(ROOT_ROUTE) class="btn btn-primary setup-btn" { "Return to Setup" }
+                    return Html(
+                        html! {
+                            div class="alert alert-danger" { "Invalid federation size" }
                         }
-                    };
-                    return Html(setup_layout("Setup Error", content).into_string())
-                        .into_response();
+                        .into_string(),
+                    )
+                    .into_response();
                 }
             }
         }
@@ -286,17 +288,14 @@ async fn setup_submit(
         )
         .await
     {
-        Ok(_) => Redirect::to(LOGIN_ROUTE).into_response(),
-        Err(e) => {
-            let content = html! {
+        Ok(_) => ([("HX-Redirect", LOGIN_ROUTE)], Html(String::new())).into_response(),
+        Err(e) => Html(
+            html! {
                 div class="alert alert-danger" { (e.to_string()) }
-                div class="button-container" {
-                    a href=(ROOT_ROUTE) class="btn btn-primary setup-btn" { "Return to Setup" }
-                }
-            };
-
-            Html(setup_layout("Setup Error", content).into_string()).into_response()
-        }
+            }
+            .into_string(),
+        )
+        .into_response(),
     }
 }
 
@@ -465,7 +464,10 @@ async fn federation_setup(
                     }
 
                     div class="col-6" {
-                        button type="submit" class="btn btn-primary w-100" { "Add Guardian" }
+                        button type="submit" class="btn btn-primary w-100"
+                            disabled[can_start_dkg] {
+                            @if can_start_dkg { "List complete" } @else { "Add Guardian" }
+                        }
                     }
                 }
             }
@@ -490,11 +492,11 @@ async fn federation_setup(
                 @if !can_start_dkg {
                     @if let Some(expected) = federation_size {
                         p class="text-muted mt-2" style="font-size: 0.875rem;" {
-                            (format!("Need to collect all {expected} setup codes."))
+                            (format!("Need to collect {} more setup code(s).", expected as usize - total_guardians))
                         }
                     } @else {
                         p class="text-muted mt-2" style="font-size: 0.875rem;" {
-                            "Need to collect the setup code from the leader and other guardians."
+                            "Need to collect the setup codes from all other guardians."
                         }
                     }
                 }
