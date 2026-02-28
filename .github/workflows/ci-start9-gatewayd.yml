@@ -80,7 +80,7 @@ jobs:
           ref: v0.3.5.1
           submodules: recursive
       - name: Cache start-sdk
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         with:
           path: |
