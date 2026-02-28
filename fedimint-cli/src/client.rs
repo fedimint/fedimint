@@ -126,6 +126,7 @@ pub enum ClientCmd {
         force_internal: bool,
     },
     /// Wait for incoming invoice to be paid
+    #[clap(hide = true)]
     AwaitInvoice { operation_id: OperationId },
     /// Pay a lightning invoice or lnurl via a gateway
     #[clap(hide = true)]

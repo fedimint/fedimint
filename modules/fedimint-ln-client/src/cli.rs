@@ -48,6 +48,11 @@ enum Opts {
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },
+    /// Wait for incoming invoice to be paid
+    AwaitInvoice {
+        /// The operation ID of the invoice operation to await
+        operation_id: OperationId,
+    },
     /// Register and manage LNURLs
     #[clap(subcommand)]
     Lnurl(LnurlCommands),
@@ -141,6 +146,27 @@ pub(crate) async fn handle_cli_command(
             );
             let outcome = module.await_outgoing_payment(operation_id).await?;
             serde_json::to_value(outcome).expect("cant fail")
+        }
+        Opts::AwaitInvoice { operation_id } => {
+            let mut updates = module
+                .subscribe_ln_receive(operation_id)
+                .await?
+                .into_stream();
+            while let Some(update) = updates.next().await {
+                debug!(?update, "Await invoice state update");
+                match update {
+                    LnReceiveState::Claimed => {
+                        return Ok(json!({
+                            "status": "paid"
+                        }));
+                    }
+                    LnReceiveState::Canceled { reason } => {
+                        return Err(reason.into());
+                    }
+                    _ => {}
+                }
+            }
+            unreachable!("Stream should not end without an outcome");
         }
         Opts::Lnurl(LnurlCommands::Register {
             server_url,
