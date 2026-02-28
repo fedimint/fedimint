@@ -96,7 +96,7 @@ jobs:
           mv fedimintd.s9pk "fedimintd-v${VERSION}.s9pk"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
       - name: Upload s9pk
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: fedimintd-v${{ steps.build.outputs.version }}.s9pk
           path: fedimint-startos/fedimintd-v*.s9pk
