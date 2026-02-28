@@ -207,6 +207,7 @@ pub enum ClientCmd {
         args: Vec<ffi::OsString>,
     },
     /// Returns the client config
+    #[clap(hide = true)]
     Config,
     /// Gets the current fedimint AlephBFT session count
     #[clap(hide = true)]
