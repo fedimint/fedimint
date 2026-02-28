@@ -209,6 +209,7 @@ pub enum ClientCmd {
     /// Returns the client config
     Config,
     /// Gets the current fedimint AlephBFT session count
+    #[clap(hide = true)]
     SessionCount,
 }
 
