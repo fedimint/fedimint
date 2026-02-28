@@ -56,6 +56,97 @@ enum Opts {
     },
 }
 
+async fn spend(
+    mint: &MintClientModule,
+    amount: Amount,
+    allow_overpay: bool,
+    timeout: u64,
+    include_invite: bool,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        "The client will try to double-spend these notes after the timeout to reclaim \
+        any unclaimed e-cash."
+    );
+
+    let timeout = Duration::from_secs(timeout);
+    let (operation, notes) = if allow_overpay {
+        let (operation, notes) = mint
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                amount,
+                timeout,
+                include_invite,
+                (),
+            )
+            .await?;
+
+        let overspend_amount = notes.total_amount().saturating_sub(amount);
+        if overspend_amount != Amount::ZERO {
+            warn!("Selected notes {overspend_amount} worth more than requested");
+        }
+
+        (operation, notes)
+    } else {
+        mint.spend_notes_with_selector(
+            &SelectNotesWithExactAmount,
+            amount,
+            timeout,
+            include_invite,
+            (),
+        )
+        .await?
+    };
+    info!("Spend e-cash operation: {}", operation.fmt_short());
+
+    Ok(json!({ "notes": notes }))
+}
+
+fn split(oob_notes: &OOBNotes) -> serde_json::Value {
+    let federation = oob_notes.federation_id_prefix();
+    let notes = oob_notes
+        .notes()
+        .iter()
+        .map(|(amount, notes)| {
+            let notes = notes
+                .iter()
+                .map(|note| {
+                    OOBNotes::new(
+                        federation,
+                        TieredMulti::new(vec![(amount, vec![*note])].into_iter().collect()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            (amount, notes)
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    json!({ "notes": notes })
+}
+
+fn combine(oob_notes: &[OOBNotes]) -> anyhow::Result<serde_json::Value> {
+    let federation_id_prefix = {
+        let mut prefixes = oob_notes.iter().map(OOBNotes::federation_id_prefix);
+        let first = prefixes
+            .next()
+            .expect("At least one e-cash notes string expected");
+        for prefix in prefixes {
+            if prefix != first {
+                bail!("Trying to combine e-cash from different federations: {first} and {prefix}");
+            }
+        }
+        first
+    };
+
+    let combined_notes = oob_notes
+        .iter()
+        .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, *note)))
+        .collect();
+
+    let combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
+
+    Ok(json!({ "notes": combined_oob_notes }))
+}
+
 pub(crate) async fn handle_cli_command(
     mint: &MintClientModule,
     args: &[ffi::OsString],
@@ -87,99 +178,9 @@ pub(crate) async fn handle_cli_command(
             allow_overpay,
             timeout,
             include_invite,
-        } => {
-            warn!(
-                "The client will try to double-spend these notes after the timeout to reclaim \
-                any unclaimed e-cash."
-            );
-
-            let timeout = Duration::from_secs(timeout);
-            let (operation, notes) = if allow_overpay {
-                let (operation, notes) = mint
-                    .spend_notes_with_selector(
-                        &SelectNotesWithAtleastAmount,
-                        amount,
-                        timeout,
-                        include_invite,
-                        (),
-                    )
-                    .await?;
-
-                let overspend_amount = notes.total_amount().saturating_sub(amount);
-                if overspend_amount != Amount::ZERO {
-                    warn!(
-                        "Selected notes {} worth more than requested",
-                        overspend_amount
-                    );
-                }
-
-                (operation, notes)
-            } else {
-                mint.spend_notes_with_selector(
-                    &SelectNotesWithExactAmount,
-                    amount,
-                    timeout,
-                    include_invite,
-                    (),
-                )
-                .await?
-            };
-            info!("Spend e-cash operation: {}", operation.fmt_short());
-
-            Ok(json!({
-                "notes": notes,
-            }))
-        }
-        Opts::Split { oob_notes } => {
-            let federation = oob_notes.federation_id_prefix();
-            let notes = oob_notes
-                .notes()
-                .iter()
-                .map(|(amount, notes)| {
-                    let notes = notes
-                        .iter()
-                        .map(|note| {
-                            OOBNotes::new(
-                                federation,
-                                TieredMulti::new(vec![(amount, vec![*note])].into_iter().collect()),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    (amount, notes)
-                })
-                .collect::<BTreeMap<_, _>>();
-
-            Ok(json!({
-                "notes": notes,
-            }))
-        }
-        Opts::Combine { oob_notes } => {
-            let federation_id_prefix = {
-                let mut prefixes = oob_notes.iter().map(OOBNotes::federation_id_prefix);
-                let first = prefixes
-                    .next()
-                    .expect("At least one e-cash notes string expected");
-                for prefix in prefixes {
-                    if prefix != first {
-                        bail!(
-                            "Trying to combine e-cash from different federations: {first} and {prefix}"
-                        );
-                    }
-                }
-                first
-            };
-
-            let combined_notes = oob_notes
-                .iter()
-                .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, *note)))
-                .collect();
-
-            let combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
-
-            Ok(json!({
-                "notes": combined_oob_notes,
-            }))
-        }
+        } => spend(mint, amount, allow_overpay, timeout, include_invite).await,
+        Opts::Split { oob_notes } => Ok(split(&oob_notes)),
+        Opts::Combine { oob_notes } => combine(&oob_notes),
         Opts::Validate { oob_notes, online } => {
             let amount = mint.validate_notes(&oob_notes)?;
 
@@ -190,9 +191,7 @@ pub(crate) async fn handle_cli_command(
                     "amount_msat": amount,
                 }))
             } else {
-                Ok(json!({
-                    "amount_msat": amount,
-                }))
+                Ok(json!({ "amount_msat": amount }))
             }
         }
     }

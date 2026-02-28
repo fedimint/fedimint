@@ -55,6 +55,93 @@ enum Opts {
     },
 }
 
+async fn await_deposit(
+    module: &WalletClientModule,
+    addr: Option<String>,
+    operation_id: Option<OperationId>,
+    tweak_idx: Option<TweakIdx>,
+    num: usize,
+) -> anyhow::Result<()> {
+    if u32::from(addr.is_some())
+        + u32::from(operation_id.is_some())
+        + u32::from(tweak_idx.is_some())
+        != 1
+    {
+        bail!("One and only one of the selector arguments must be set")
+    }
+    if let Some(tweak_idx) = tweak_idx {
+        module.await_num_deposits(tweak_idx, num).await?;
+    } else if let Some(operation_id) = operation_id {
+        module
+            .await_num_deposits_by_operation_id(operation_id, num)
+            .await?;
+    } else if let Some(addr) = addr {
+        if addr.len() == 64 {
+            eprintln!(
+                "Interpreting addr as an operation_id for backward compatibility. \
+                Use `--operation-id` from now on."
+            );
+            let operation_id = OperationId::from_str(&addr)?;
+            module
+                .await_num_deposits_by_operation_id(operation_id, num)
+                .await?;
+        } else {
+            let addr = bitcoin::Address::from_str(&addr)?;
+            module.await_num_deposits_by_address(addr, num).await?;
+        }
+    } else {
+        unreachable!()
+    }
+    Ok(())
+}
+
+async fn withdraw(
+    module: &WalletClientModule,
+    amount: BitcoinAmountOrAll,
+    address: bitcoin::Address<NetworkUnchecked>,
+) -> anyhow::Result<serde_json::Value> {
+    let address = address.require_network(module.get_network())?;
+    let amount = match amount {
+        BitcoinAmountOrAll::All => {
+            bail!(
+                "The 'all' option is not supported in the module CLI. \
+                Use `fedimint-cli withdraw --amount all` instead."
+            );
+        }
+        BitcoinAmountOrAll::Amount(amount) => amount,
+    };
+    let fees = module.get_withdraw_fees(&address, amount).await?;
+    let absolute_fees = fees.amount();
+
+    info!("Attempting withdraw with fees: {fees:?}");
+
+    let operation_id = module.withdraw(&address, amount, fees, ()).await?;
+
+    let mut updates = module
+        .subscribe_withdraw_updates(operation_id)
+        .await?
+        .into_stream();
+
+    while let Some(update) = updates.next().await {
+        debug!(?update, "Withdraw state update");
+
+        match update {
+            WithdrawState::Succeeded(txid) => {
+                return Ok(serde_json::json!({
+                    "txid": txid.consensus_encode_to_hex(),
+                    "fees_sat": absolute_fees.to_sat(),
+                }));
+            }
+            WithdrawState::Failed(e) => {
+                bail!("Withdraw failed: {e}");
+            }
+            WithdrawState::Created => {}
+        }
+    }
+
+    unreachable!("Update stream ended without outcome");
+}
+
 pub(crate) async fn handle_cli_command(
     module: &WalletClientModule,
     args: &[ffi::OsString],
@@ -68,35 +155,7 @@ pub(crate) async fn handle_cli_command(
             addr,
             tweak_idx,
         } => {
-            if u32::from(addr.is_some())
-                + u32::from(operation_id.is_some())
-                + u32::from(tweak_idx.is_some())
-                != 1
-            {
-                bail!("One and only one of the selector arguments must be set")
-            }
-            if let Some(tweak_idx) = tweak_idx {
-                module.await_num_deposits(tweak_idx, num).await?;
-            } else if let Some(operation_id) = operation_id {
-                module
-                    .await_num_deposits_by_operation_id(operation_id, num)
-                    .await?;
-            } else if let Some(addr) = addr {
-                if addr.len() == 64 {
-                    eprintln!(
-                        "Interpreting addr as an operation_id for backward compatibility. Use `--operation-id` from now on."
-                    );
-                    let operation_id = OperationId::from_str(&addr)?;
-                    module
-                        .await_num_deposits_by_operation_id(operation_id, num)
-                        .await?;
-                } else {
-                    let addr = bitcoin::Address::from_str(&addr)?;
-                    module.await_num_deposits_by_address(addr, num).await?;
-                }
-            } else {
-                unreachable!()
-            }
+            await_deposit(module, addr, operation_id, tweak_idx, num).await?;
             serde_json::Value::Bool(true)
         }
         Opts::GetBitcoinRpcKind { peer_id } => {
@@ -104,7 +163,6 @@ pub(crate) async fn handle_cli_command(
                 .module_api
                 .fetch_bitcoin_rpc_kind(peer_id.into())
                 .await?;
-
             serde_json::to_value(kind).expect("JSON serialization failed")
         }
         Opts::GetBitcoinRpcConfig => {
@@ -112,7 +170,6 @@ pub(crate) async fn handle_cli_command(
                 .admin_auth
                 .clone()
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
-
             serde_json::to_value(module.module_api.fetch_bitcoin_rpc_config(auth).await?)
                 .expect("JSON serialization failed")
         }
@@ -154,48 +211,7 @@ pub(crate) async fn handle_cli_command(
                 }
             }
         }
-        Opts::Withdraw { amount, address } => {
-            let address = address.require_network(module.get_network())?;
-            let amount = match amount {
-                BitcoinAmountOrAll::All => {
-                    bail!(
-                        "The 'all' option is not supported in the module CLI. \
-                        Use `fedimint-cli withdraw --amount all` instead."
-                    );
-                }
-                BitcoinAmountOrAll::Amount(amount) => amount,
-            };
-            let fees = module.get_withdraw_fees(&address, amount).await?;
-            let absolute_fees = fees.amount();
-
-            info!("Attempting withdraw with fees: {fees:?}");
-
-            let operation_id = module.withdraw(&address, amount, fees, ()).await?;
-
-            let mut updates = module
-                .subscribe_withdraw_updates(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                debug!(?update, "Withdraw state update");
-
-                match update {
-                    WithdrawState::Succeeded(txid) => {
-                        return Ok(serde_json::json!({
-                            "txid": txid.consensus_encode_to_hex(),
-                            "fees_sat": absolute_fees.to_sat(),
-                        }));
-                    }
-                    WithdrawState::Failed(e) => {
-                        bail!("Withdraw failed: {e}");
-                    }
-                    WithdrawState::Created => {}
-                }
-            }
-
-            unreachable!("Update stream ended without outcome");
-        }
+        Opts::Withdraw { amount, address } => return withdraw(module, amount, address).await,
     };
 
     Ok(res)
