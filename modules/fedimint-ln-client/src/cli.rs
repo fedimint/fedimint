@@ -58,6 +58,12 @@ enum Opts {
         /// The operation ID of the payment operation to await
         operation_id: OperationId,
     },
+    /// List registered gateways
+    ListGateways {
+        /// Don't fetch the registered gateways from the federation
+        #[clap(long, default_value = "false")]
+        no_update: bool,
+    },
     /// Register and manage LNURLs
     #[clap(subcommand)]
     Lnurl(LnurlCommands),
@@ -176,6 +182,18 @@ pub(crate) async fn handle_cli_command(
         Opts::AwaitPay { operation_id } => {
             let outcome = module.await_outgoing_payment(operation_id).await?;
             serde_json::to_value(outcome).expect("serialization can't fail")
+        }
+        Opts::ListGateways { no_update } => {
+            if !no_update {
+                module.update_gateway_cache().await?;
+            }
+            let gateways = module.list_gateways().await;
+            if gateways.is_empty() {
+                return Ok(
+                    serde_json::to_value(Vec::<String>::new()).expect("serialization can't fail")
+                );
+            }
+            json!(&gateways)
         }
         Opts::Lnurl(LnurlCommands::Register {
             server_url,

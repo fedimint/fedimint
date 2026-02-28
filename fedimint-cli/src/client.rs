@@ -148,6 +148,7 @@ pub enum ClientCmd {
     #[clap(hide = true)]
     AwaitLnPay { operation_id: OperationId },
     /// List registered gateways
+    #[clap(hide = true)]
     ListGateways {
         /// Don't fetch the registered gateways from the federation
         #[clap(long, default_value = "false")]
