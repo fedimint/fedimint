@@ -4,10 +4,15 @@ use std::{ffi, iter};
 use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
 use clap::Parser;
+use fedimint_core::BitcoinAmountOrAll;
 use fedimint_core::core::OperationId;
+use fedimint_core::encoding::Encodable;
+use futures::StreamExt;
 use serde::Serialize;
+use tracing::{debug, info};
 
 use super::WalletClientModule;
+use crate::WithdrawState;
 use crate::api::WalletFederationApi;
 use crate::client_db::TweakIdx;
 
@@ -33,6 +38,13 @@ enum Opts {
     GetBitcoinRpcConfig,
 
     NewDepositAddress,
+    /// Withdraw funds from the federation
+    Withdraw {
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
+        #[clap(long)]
+        address: bitcoin::Address<NetworkUnchecked>,
+    },
     /// Trigger wallet address check (in the background)
     RecheckDepositAddress {
         addr: Option<bitcoin::Address<NetworkUnchecked>>,
@@ -141,6 +153,48 @@ pub(crate) async fn handle_cli_command(
                     "tweak_idx": tweak_idx.0
                 }
             }
+        }
+        Opts::Withdraw { amount, address } => {
+            let address = address.require_network(module.get_network())?;
+            let amount = match amount {
+                BitcoinAmountOrAll::All => {
+                    bail!(
+                        "The 'all' option is not supported in the module CLI. \
+                        Use `fedimint-cli withdraw --amount all` instead."
+                    );
+                }
+                BitcoinAmountOrAll::Amount(amount) => amount,
+            };
+            let fees = module.get_withdraw_fees(&address, amount).await?;
+            let absolute_fees = fees.amount();
+
+            info!("Attempting withdraw with fees: {fees:?}");
+
+            let operation_id = module.withdraw(&address, amount, fees, ()).await?;
+
+            let mut updates = module
+                .subscribe_withdraw_updates(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(update) = updates.next().await {
+                debug!(?update, "Withdraw state update");
+
+                match update {
+                    WithdrawState::Succeeded(txid) => {
+                        return Ok(serde_json::json!({
+                            "txid": txid.consensus_encode_to_hex(),
+                            "fees_sat": absolute_fees.to_sat(),
+                        }));
+                    }
+                    WithdrawState::Failed(e) => {
+                        bail!("Withdraw failed: {e}");
+                    }
+                    WithdrawState::Created => {}
+                }
+            }
+
+            unreachable!("Update stream ended without outcome");
         }
     };
 

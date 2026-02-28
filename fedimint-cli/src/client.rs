@@ -161,6 +161,7 @@ pub enum ClientCmd {
     #[clap(hide = true)]
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
+    #[clap(hide = true)]
     Withdraw {
         #[clap(long)]
         amount: BitcoinAmountOrAll,
