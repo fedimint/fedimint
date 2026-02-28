@@ -81,6 +81,7 @@ pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
     Info,
     /// Reissue notes received from a third party to avoid double spends
+    #[clap(hide = true)]
     Reissue {
         oob_notes: OOBNotes,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
