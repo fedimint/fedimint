@@ -141,6 +141,9 @@ pub const FM_IROH_PKARR_PUBLISHER_ENABLE_ENV: &str = "FM_IROH_PKARR_PUBLISHER_EN
 /// Env var to disable Iroh's use of relays
 pub const FM_IROH_RELAYS_ENABLE_ENV: &str = "FM_IROH_RELAYS_ENABLE";
 
+/// Env var to disable all pkarr publishing (enabled by default)
+pub const FM_PKARR_ENABLE_ENV: &str = "FM_PKARR_ENABLE";
+
 /// Env var to enable pkarr DHT publishing (disabled by default)
 pub const FM_PKARR_DHT_ENABLE_ENV: &str = "FM_PKARR_DHT_ENABLE";
 

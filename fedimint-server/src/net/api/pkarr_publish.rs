@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use fedimint_core::db::Database;
-use fedimint_core::envs::{FM_PKARR_DHT_ENABLE_ENV, FM_PKARR_RELAYS_ENABLE_ENV, is_env_var_set};
+use fedimint_core::envs::{
+    FM_PKARR_DHT_ENABLE_ENV, FM_PKARR_ENABLE_ENV, FM_PKARR_RELAYS_ENABLE_ENV, is_env_var_set,
+};
 use fedimint_core::secp256k1::SecretKey;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
@@ -46,6 +48,18 @@ pub async fn start_pkarr_publish_service(
     cfg: &ServerConfig,
 ) -> anyhow::Result<()> {
     let keypair = derive_pkarr_keypair(&cfg.private.broadcast_secret_key);
+
+    let pkarr_enabled =
+        fedimint_core::envs::is_env_var_set_opt(FM_PKARR_ENABLE_ENV).unwrap_or(true);
+
+    if !pkarr_enabled {
+        info!(
+            target: LOG_NET_API,
+            pkarr_id = %keypair.to_z32(),
+            "Pkarr publishing disabled via {FM_PKARR_ENABLE_ENV}"
+        );
+        return Ok(());
+    }
 
     let dht_enabled = is_env_var_set(FM_PKARR_DHT_ENABLE_ENV);
     let relays_enabled =
