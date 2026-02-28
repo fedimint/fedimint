@@ -74,7 +74,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Checkout start-os SDK
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: Start9Labs/start-os
           ref: v0.3.5.1
@@ -102,7 +102,7 @@ jobs:
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
       - name: Checkout fedimint
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Build s9pk
         id: build
         working-directory: gatewayd-startos
