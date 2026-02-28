@@ -88,6 +88,7 @@ pub enum ClientCmd {
         wait: bool,
     },
     /// Prepare notes to send to a third party as a payment
+    #[clap(hide = true)]
     Spend {
         /// The amount of e-cash to spend
         amount: Amount,
@@ -106,8 +107,10 @@ pub enum ClientCmd {
     },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
+    #[clap(hide = true)]
     Split { oob_notes: OOBNotes },
     /// Combines two or more serialized e-cash notes strings
+    #[clap(hide = true)]
     Combine {
         #[clap(required = true)]
         oob_notes: Vec<OOBNotes>,
