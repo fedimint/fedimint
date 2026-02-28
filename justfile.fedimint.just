@@ -31,6 +31,10 @@ test-full-compatibility *VERSIONS="v0.4.4":
 test-upgrades *VERSIONS="v0.8.2 current, v0.9.1 current, v0.10.0 current":
   ./scripts/tests/upgrade-test.sh {{VERSIONS}}
 
+# debug a CI failure using Claude Code (uses Max subscription locally)
+debug-ci-failure *RUN_ID="":
+  ./scripts/debug-ci-failure.sh {{RUN_ID}}
+
 # `cargo udeps` check
 udeps:
   nix build -L .#nightly.test.workspaceCargoUdeps
