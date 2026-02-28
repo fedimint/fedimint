@@ -145,6 +145,7 @@ pub enum ClientCmd {
         force_internal: bool,
     },
     /// Wait for a lightning payment to complete
+    #[clap(hide = true)]
     AwaitLnPay { operation_id: OperationId },
     /// List registered gateways
     ListGateways {

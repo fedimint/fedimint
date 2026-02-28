@@ -53,6 +53,11 @@ enum Opts {
         /// The operation ID of the invoice operation to await
         operation_id: OperationId,
     },
+    /// Wait for a lightning payment to complete
+    AwaitPay {
+        /// The operation ID of the payment operation to await
+        operation_id: OperationId,
+    },
     /// Register and manage LNURLs
     #[clap(subcommand)]
     Lnurl(LnurlCommands),
@@ -167,6 +172,10 @@ pub(crate) async fn handle_cli_command(
                 }
             }
             unreachable!("Stream should not end without an outcome");
+        }
+        Opts::AwaitPay { operation_id } => {
+            let outcome = module.await_outgoing_payment(operation_id).await?;
+            serde_json::to_value(outcome).expect("serialization can't fail")
         }
         Opts::Lnurl(LnurlCommands::Register {
             server_url,
