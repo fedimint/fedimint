@@ -334,11 +334,19 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         )?;
 
                         dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
-                        dev_fed
-                            .internal_client()
-                            .await?
-                            .await_deposit(&operation_id)
-                            .await?;
+                        if crate::util::supports_wallet_v2() {
+                            dev_fed
+                                .internal_client()
+                                .await?
+                                .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
+                                .await?;
+                        } else {
+                            dev_fed
+                                .internal_client()
+                                .await?
+                                .await_deposit(&operation_id)
+                                .await?;
+                        }
 
                         info!(
                             target: LOG_DEVIMINT,

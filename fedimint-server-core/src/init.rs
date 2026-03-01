@@ -96,6 +96,9 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
 
     /// See [`ServerModuleInit::used_db_prefixes`]
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
+
+    /// Whether this module should be enabled by default in the setup UI
+    fn is_enabled_by_default(&self) -> bool;
 }
 
 /// A type that can be used as module-shared value inside
@@ -226,6 +229,12 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
         None
     }
+
+    /// Whether this module should be enabled by default in the setup UI.
+    /// Modules return `true` by default.
+    fn is_enabled_by_default(&self) -> bool {
+        true
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -320,6 +329,10 @@ where
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
         <Self as ServerModuleInit>::used_db_prefixes(self)
     }
+
+    fn is_enabled_by_default(&self) -> bool {
+        <Self as ServerModuleInit>::is_enabled_by_default(self)
+    }
 }
 
 dyn_newtype_define!(
@@ -337,10 +350,18 @@ pub type ServerModuleInitRegistry = ModuleInitRegistry<DynServerModuleInit>;
 
 pub trait ServerModuleInitRegistryExt {
     fn to_common(&self) -> CommonModuleInitRegistry;
+    fn default_modules(&self) -> BTreeSet<ModuleKind>;
 }
 
 impl ServerModuleInitRegistryExt for ServerModuleInitRegistry {
     fn to_common(&self) -> CommonModuleInitRegistry {
         self.iter().map(|(_k, v)| v.to_dyn_common()).collect()
+    }
+
+    fn default_modules(&self) -> BTreeSet<ModuleKind> {
+        self.iter()
+            .filter(|(_kind, init)| init.is_enabled_by_default())
+            .map(|(kind, _init)| kind.clone())
+            .collect()
     }
 }

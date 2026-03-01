@@ -245,6 +245,13 @@ impl PegOutFees {
         }
     }
 
+    /// Creates a `PegOutFees` from a flat fee amount. Uses weight=4000
+    /// so that `amount()` returns the exact flat fee:
+    /// `(4000 / 4) * sats / 1000 = sats`
+    pub fn from_amount(amount: bitcoin::Amount) -> Self {
+        PegOutFees::new(amount.to_sat(), 4000)
+    }
+
     pub fn amount(&self) -> Amount {
         self.fee_rate.calculate_fee(self.total_weight)
     }

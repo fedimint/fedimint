@@ -842,6 +842,7 @@ impl Esplora {
             "--http-addr=127.0.0.1:{esplora_port}",
             "--monitoring-addr=127.0.0.1:{esplora_monitoring_port}",
             "--jsonrpc-import", // Workaround for incompatible on-disk format
+            "--cors=*",         // Allow CORS for WASM recovery tool
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
 

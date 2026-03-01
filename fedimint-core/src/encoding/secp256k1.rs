@@ -37,6 +37,22 @@ impl Decodable for secp256k1::PublicKey {
     }
 }
 
+impl Encodable for secp256k1::XOnlyPublicKey {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.serialize().consensus_encode(writer)
+    }
+}
+
+impl Decodable for secp256k1::XOnlyPublicKey {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Self::from_slice(&<[u8; 32]>::consensus_decode_partial(d, modules)?)
+            .map_err(DecodeError::from_err)
+    }
+}
+
 impl Encodable for secp256k1::SecretKey {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.secret_bytes().consensus_encode(writer)

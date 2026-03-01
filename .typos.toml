@@ -18,6 +18,9 @@ bck = "bck"
 # some crypt term :D
 tpe = "tpe"
 
+# appears in bitcoin test addresses
+nd = "nd"
+
 [files]
 extend-exclude = [
   "db/**",
@@ -25,4 +28,5 @@ extend-exclude = [
   "hfuzz_workspace/**",
   "releases/**",
   "fedimint-ui-common/assets/**",
+
 ]
