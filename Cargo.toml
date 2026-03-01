@@ -332,7 +332,7 @@ tikv-jemallocator = "0.6"
 time = "0.3.41"
 tokio = "1.48.0"
 tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
-tokio-stream = "0.1.17"
+tokio-stream = "0.1.18"
 tokio-test = "0.4.4"
 tokio-util = "0.7.15"
 tonic = "0.14.2"
