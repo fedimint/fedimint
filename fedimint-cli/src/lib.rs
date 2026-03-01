@@ -643,6 +643,9 @@ Examples:
     /// Gets the current fedimint AlephBFT block count
     SessionCount,
 
+    /// Returns the client config
+    Config,
+
     ConfigDecrypt {
         /// Encrypted config file
         #[arg(long = "in-file")]
@@ -1421,6 +1424,13 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
                 let count = client.api().session_count().await?;
                 Ok(CliOutput::EpochCount { count })
+            }
+            Command::Dev(DevCmd::Config) => {
+                let client = self.client_open(&cli).await?;
+                let config = client.get_config_json().await;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(config).expect("Client config is serializable"),
+                ))
             }
             Command::Dev(DevCmd::ConfigDecrypt {
                 in_file,

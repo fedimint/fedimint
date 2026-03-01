@@ -81,12 +81,14 @@ pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
     Info,
     /// Reissue notes received from a third party to avoid double spends
+    #[clap(hide = true)]
     Reissue {
         oob_notes: OOBNotes,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
     },
     /// Prepare notes to send to a third party as a payment
+    #[clap(hide = true)]
     Spend {
         /// The amount of e-cash to spend
         amount: Amount,
@@ -105,8 +107,10 @@ pub enum ClientCmd {
     },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
+    #[clap(hide = true)]
     Split { oob_notes: OOBNotes },
     /// Combines two or more serialized e-cash notes strings
+    #[clap(hide = true)]
     Combine {
         #[clap(required = true)]
         oob_notes: Vec<OOBNotes>,
@@ -126,6 +130,7 @@ pub enum ClientCmd {
         force_internal: bool,
     },
     /// Wait for incoming invoice to be paid
+    #[clap(hide = true)]
     AwaitInvoice { operation_id: OperationId },
     /// Pay a lightning invoice or lnurl via a gateway
     #[clap(hide = true)]
@@ -144,8 +149,10 @@ pub enum ClientCmd {
         force_internal: bool,
     },
     /// Wait for a lightning payment to complete
+    #[clap(hide = true)]
     AwaitLnPay { operation_id: OperationId },
     /// List registered gateways
+    #[clap(hide = true)]
     ListGateways {
         /// Don't fetch the registered gateways from the federation
         #[clap(long, default_value = "false")]
@@ -158,6 +165,7 @@ pub enum ClientCmd {
     #[clap(hide = true)]
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
+    #[clap(hide = true)]
     Withdraw {
         #[clap(long)]
         amount: BitcoinAmountOrAll,
@@ -199,8 +207,10 @@ pub enum ClientCmd {
         args: Vec<ffi::OsString>,
     },
     /// Returns the client config
+    #[clap(hide = true)]
     Config,
     /// Gets the current fedimint AlephBFT session count
+    #[clap(hide = true)]
     SessionCount,
 }
 
