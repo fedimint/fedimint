@@ -142,7 +142,7 @@ base64-url = "3.0.0"
 bcrypt = "0.16.0"
 bdk_esplora = { version = "0.22.1", default-features = false }
 bdk_wallet = "2.3.0"
-bech32 = "0.11.0"
+bech32 = "0.11.1"
 bincode = "1.3.3"
 bip39 = "2.2.0"
 bitcoin = { version = "0.32.6", features = ["serde"] }
