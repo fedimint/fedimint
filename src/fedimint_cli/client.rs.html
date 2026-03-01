@@ -638,53 +638,64 @@
 <a href=#638 id=638 data-nosnippet>638</a>    <span class="kw">let </span>mint_module_id = client
 <a href=#639 id=639 data-nosnippet>639</a>        .get_first_instance(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND)
 <a href=#640 id=640 data-nosnippet>640</a>        .context(<span class="string">"Mint module not found"</span>)<span class="question-mark">?</span>;
-<a href=#641 id=641 data-nosnippet>641</a>    <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
-<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">let </span>summary = mint_client
-<a href=#643 id=643 data-nosnippet>643</a>        .get_note_counts_by_denomination(
-<a href=#644 id=644 data-nosnippet>644</a>            <span class="kw-2">&amp;mut </span>client
-<a href=#645 id=645 data-nosnippet>645</a>                .db()
-<a href=#646 id=646 data-nosnippet>646</a>                .begin_transaction_nc()
-<a href=#647 id=647 data-nosnippet>647</a>                .<span class="kw">await
-<a href=#648 id=648 data-nosnippet>648</a>                </span>.to_ref_with_prefix_module_id(mint_module_id)
-<a href=#649 id=649 data-nosnippet>649</a>                .<span class="number">0</span>,
-<a href=#650 id=650 data-nosnippet>650</a>        )
-<a href=#651 id=651 data-nosnippet>651</a>        .<span class="kw">await</span>;
-<a href=#652 id=652 data-nosnippet>652</a>    <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
-<a href=#653 id=653 data-nosnippet>653</a>        federation_id: client.federation_id(),
-<a href=#654 id=654 data-nosnippet>654</a>        network: wallet_client.get_network(),
-<a href=#655 id=655 data-nosnippet>655</a>        meta: client.config().<span class="kw">await</span>.global.meta.clone(),
-<a href=#656 id=656 data-nosnippet>656</a>        total_amount_msat: summary.total_amount(),
-<a href=#657 id=657 data-nosnippet>657</a>        total_num_notes: summary.count_items(),
-<a href=#658 id=658 data-nosnippet>658</a>        denominations_msat: summary,
-<a href=#659 id=659 data-nosnippet>659</a>    })
-<a href=#660 id=660 data-nosnippet>660</a>    .unwrap())
-<a href=#661 id=661 data-nosnippet>661</a>}
-<a href=#662 id=662 data-nosnippet>662</a>
-<a href=#663 id=663 data-nosnippet>663</a><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-<a href=#664 id=664 data-nosnippet>664</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
-<a href=#665 id=665 data-nosnippet>665</a></span><span class="kw">pub struct </span>InfoResponse {
-<a href=#666 id=666 data-nosnippet>666</a>    federation_id: FederationId,
-<a href=#667 id=667 data-nosnippet>667</a>    network: Network,
-<a href=#668 id=668 data-nosnippet>668</a>    meta: BTreeMap&lt;String, String&gt;,
-<a href=#669 id=669 data-nosnippet>669</a>    total_amount_msat: Amount,
-<a href=#670 id=670 data-nosnippet>670</a>    total_num_notes: usize,
-<a href=#671 id=671 data-nosnippet>671</a>    denominations_msat: TieredCounts,
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="comment">// Try wallet v1 first, then walletv2
+<a href=#643 id=643 data-nosnippet>643</a>    </span><span class="kw">let </span>network = <span class="kw">if let </span><span class="prelude-val">Ok</span>(wallet_client) = client.get_first_module::&lt;WalletClientModule&gt;() {
+<a href=#644 id=644 data-nosnippet>644</a>        wallet_client.get_network()
+<a href=#645 id=645 data-nosnippet>645</a>    } <span class="kw">else if let </span><span class="prelude-val">Ok</span>(wallet_client) =
+<a href=#646 id=646 data-nosnippet>646</a>        client.get_first_module::&lt;fedimint_walletv2_client::WalletClientModule&gt;()
+<a href=#647 id=647 data-nosnippet>647</a>    {
+<a href=#648 id=648 data-nosnippet>648</a>        wallet_client.get_network()
+<a href=#649 id=649 data-nosnippet>649</a>    } <span class="kw">else </span>{
+<a href=#650 id=650 data-nosnippet>650</a>        <span class="macro">anyhow::bail!</span>(<span class="string">"No wallet module found"</span>);
+<a href=#651 id=651 data-nosnippet>651</a>    };
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="kw">let </span>summary = mint_client
+<a href=#654 id=654 data-nosnippet>654</a>        .get_note_counts_by_denomination(
+<a href=#655 id=655 data-nosnippet>655</a>            <span class="kw-2">&amp;mut </span>client
+<a href=#656 id=656 data-nosnippet>656</a>                .db()
+<a href=#657 id=657 data-nosnippet>657</a>                .begin_transaction_nc()
+<a href=#658 id=658 data-nosnippet>658</a>                .<span class="kw">await
+<a href=#659 id=659 data-nosnippet>659</a>                </span>.to_ref_with_prefix_module_id(mint_module_id)
+<a href=#660 id=660 data-nosnippet>660</a>                .<span class="number">0</span>,
+<a href=#661 id=661 data-nosnippet>661</a>        )
+<a href=#662 id=662 data-nosnippet>662</a>        .<span class="kw">await</span>;
+<a href=#663 id=663 data-nosnippet>663</a>    <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
+<a href=#664 id=664 data-nosnippet>664</a>        federation_id: client.federation_id(),
+<a href=#665 id=665 data-nosnippet>665</a>        network,
+<a href=#666 id=666 data-nosnippet>666</a>        meta: client.config().<span class="kw">await</span>.global.meta.clone(),
+<a href=#667 id=667 data-nosnippet>667</a>        total_amount_msat: summary.total_amount(),
+<a href=#668 id=668 data-nosnippet>668</a>        total_num_notes: summary.count_items(),
+<a href=#669 id=669 data-nosnippet>669</a>        denominations_msat: summary,
+<a href=#670 id=670 data-nosnippet>670</a>    })
+<a href=#671 id=671 data-nosnippet>671</a>    .unwrap())
 <a href=#672 id=672 data-nosnippet>672</a>}
 <a href=#673 id=673 data-nosnippet>673</a>
-<a href=#674 id=674 data-nosnippet>674</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>time_to_iso8601(time: <span class="kw-2">&amp;</span>SystemTime) -&gt; String {
-<a href=#675 id=675 data-nosnippet>675</a>    <span class="kw">const </span>ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
-<a href=#676 id=676 data-nosnippet>676</a>        .set_formatted_components(iso8601::FormattedComponents::DateTime)
-<a href=#677 id=677 data-nosnippet>677</a>        .encode();
-<a href=#678 id=678 data-nosnippet>678</a>
-<a href=#679 id=679 data-nosnippet>679</a>    OffsetDateTime::from_unix_timestamp_nanos(
-<a href=#680 id=680 data-nosnippet>680</a>        time.duration_since(UNIX_EPOCH)
-<a href=#681 id=681 data-nosnippet>681</a>            .expect(<span class="string">"Couldn't convert time from SystemTime to timestamp"</span>)
-<a href=#682 id=682 data-nosnippet>682</a>            .as_nanos()
-<a href=#683 id=683 data-nosnippet>683</a>            .try_into()
-<a href=#684 id=684 data-nosnippet>684</a>            .expect(<span class="string">"Time overflowed"</span>),
-<a href=#685 id=685 data-nosnippet>685</a>    )
-<a href=#686 id=686 data-nosnippet>686</a>    .expect(<span class="string">"Couldn't convert time from SystemTime to OffsetDateTime"</span>)
-<a href=#687 id=687 data-nosnippet>687</a>    .format(<span class="kw-2">&amp;</span>iso8601::Iso8601::&lt;ISO8601_CONFIG&gt;)
-<a href=#688 id=688 data-nosnippet>688</a>    .expect(<span class="string">"Couldn't format OffsetDateTime as ISO8601"</span>)
-<a href=#689 id=689 data-nosnippet>689</a>}
+<a href=#674 id=674 data-nosnippet>674</a><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<a href=#675 id=675 data-nosnippet>675</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
+<a href=#676 id=676 data-nosnippet>676</a></span><span class="kw">pub struct </span>InfoResponse {
+<a href=#677 id=677 data-nosnippet>677</a>    federation_id: FederationId,
+<a href=#678 id=678 data-nosnippet>678</a>    network: Network,
+<a href=#679 id=679 data-nosnippet>679</a>    meta: BTreeMap&lt;String, String&gt;,
+<a href=#680 id=680 data-nosnippet>680</a>    total_amount_msat: Amount,
+<a href=#681 id=681 data-nosnippet>681</a>    total_num_notes: usize,
+<a href=#682 id=682 data-nosnippet>682</a>    denominations_msat: TieredCounts,
+<a href=#683 id=683 data-nosnippet>683</a>}
+<a href=#684 id=684 data-nosnippet>684</a>
+<a href=#685 id=685 data-nosnippet>685</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>time_to_iso8601(time: <span class="kw-2">&amp;</span>SystemTime) -&gt; String {
+<a href=#686 id=686 data-nosnippet>686</a>    <span class="kw">const </span>ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+<a href=#687 id=687 data-nosnippet>687</a>        .set_formatted_components(iso8601::FormattedComponents::DateTime)
+<a href=#688 id=688 data-nosnippet>688</a>        .encode();
+<a href=#689 id=689 data-nosnippet>689</a>
+<a href=#690 id=690 data-nosnippet>690</a>    OffsetDateTime::from_unix_timestamp_nanos(
+<a href=#691 id=691 data-nosnippet>691</a>        time.duration_since(UNIX_EPOCH)
+<a href=#692 id=692 data-nosnippet>692</a>            .expect(<span class="string">"Couldn't convert time from SystemTime to timestamp"</span>)
+<a href=#693 id=693 data-nosnippet>693</a>            .as_nanos()
+<a href=#694 id=694 data-nosnippet>694</a>            .try_into()
+<a href=#695 id=695 data-nosnippet>695</a>            .expect(<span class="string">"Time overflowed"</span>),
+<a href=#696 id=696 data-nosnippet>696</a>    )
+<a href=#697 id=697 data-nosnippet>697</a>    .expect(<span class="string">"Couldn't convert time from SystemTime to OffsetDateTime"</span>)
+<a href=#698 id=698 data-nosnippet>698</a>    .format(<span class="kw-2">&amp;</span>iso8601::Iso8601::&lt;ISO8601_CONFIG&gt;)
+<a href=#699 id=699 data-nosnippet>699</a>    .expect(<span class="string">"Couldn't format OffsetDateTime as ISO8601"</span>)
+<a href=#700 id=700 data-nosnippet>700</a>}
 </code></pre></div></section></main></body></html>

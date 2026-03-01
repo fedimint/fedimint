@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CONFIRMATION_FINALITY_DELAY","MAX_BLOCK_COUNT_INCREMENT"],"fn":["pending_txs_unordered"],"mod":["db"],"struct":["FederationTx","SpentTxOut","Wallet","WalletInit"]};
