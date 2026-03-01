@@ -331,7 +331,7 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tikv-jemallocator = "0.6"
 time = "0.3.41"
 tokio = "1.48.0"
-tokio-rustls = { version = "0.26.0", features = ["aws_lc_rs"] }
+tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.17"
 tokio-test = "0.4.4"
 tokio-util = "0.7.15"
