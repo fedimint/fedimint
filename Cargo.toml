@@ -333,7 +333,7 @@ time = "0.3.41"
 tokio = "1.48.0"
 tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.18"
-tokio-test = "0.4.4"
+tokio-test = "0.4.5"
 tokio-util = "0.7.15"
 tonic = "0.14.2"
 tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
