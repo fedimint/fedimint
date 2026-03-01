@@ -136,7 +136,7 @@ axum = "0.8.8"
 axum-auth = "0.8.1"
 axum-extra = "0.12.5"
 backon = { version = "1.5.1", default-features = false }
-backtrace = "0.3.75"
+backtrace = "0.3.76"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bcrypt = "0.16.0"
