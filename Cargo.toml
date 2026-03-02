@@ -346,7 +346,7 @@ tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.11.0-alph
 tracing = "0.1.44"
 tracing-opentelemetry = "0.29.0"
 tracing-subscriber = "0.3.22"
-tracing-test = "0.2.5"
+tracing-test = "0.2.6"
 url = "2.5.4"
 wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.42"
