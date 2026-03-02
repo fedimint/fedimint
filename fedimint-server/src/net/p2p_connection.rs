@@ -69,6 +69,7 @@ where
             return Ok(message);
         }
 
+        // TODO: remove this fallback in 0.12.0
         Ok(bincode::deserialize_from(Cursor::new(&**self))?)
     }
 }
@@ -79,11 +80,7 @@ where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
-
-        SinkExt::send(self, Bytes::from_owner(bytes)).await?;
+        SinkExt::send(self, Bytes::from_owner(message.consensus_encode_to_vec())).await?;
 
         Ok(())
     }
@@ -117,6 +114,7 @@ where
             return Ok(message);
         }
 
+        // TODO: remove this fallback in 0.12.0
         Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
     }
 }
@@ -127,13 +125,9 @@ where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
-
         let mut sink = self.open_uni().await?;
 
-        sink.write_all(&bytes).await?;
+        sink.write_all(&message.consensus_encode_to_vec()).await?;
 
         sink.finish()?;
 

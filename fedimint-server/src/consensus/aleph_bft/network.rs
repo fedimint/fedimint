@@ -5,7 +5,7 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::SerdeModuleEncoding;
-use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::SignedSessionOutcome;
@@ -41,6 +41,7 @@ pub struct Network {
     signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
     signatures_sender: Sender<(PeerId, schnorr::Signature)>,
     db: Database,
+    decoders: ModuleDecoderRegistry,
 }
 
 impl Network {
@@ -49,12 +50,14 @@ impl Network {
         signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
         signatures_sender: Sender<(PeerId, schnorr::Signature)>,
         db: Database,
+        decoders: ModuleDecoderRegistry,
     ) -> Self {
         Self {
             connections,
             signed_outcomes_sender,
             signatures_sender,
             db,
+            decoders,
         }
     }
 }
@@ -122,7 +125,7 @@ impl aleph_bft::Network<NetworkData> for Network {
                     }
                 }
                 P2PMessage::SignedSessionOutcome(encoded_outcome) => {
-                    match encoded_outcome.try_into_inner(&ModuleRegistry::default()) {
+                    match encoded_outcome.try_into_inner(&self.decoders) {
                         Ok(outcome) => {
                             self.signed_outcomes_sender
                                 .try_send((peer_id, outcome))

@@ -48,7 +48,6 @@ use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
-use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
 use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
@@ -284,17 +283,8 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
 
-    let api_urls = get_api_urls(&db, &cfg.consensus).await;
-
-    // FIXME: (@leonardo) How should this be handled ?
-    // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::new(
-            connectors,
-            api_urls,
-            force_api_secrets.get_active().as_deref(),
-        )?,
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,
