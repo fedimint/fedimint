@@ -75,7 +75,7 @@ pub struct Executor {
 
 struct ExecutorInner {
     db: Database,
-    state: std::sync::RwLock<ExecutorState>,
+    state: std::sync::Mutex<ExecutorState>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier,
@@ -253,7 +253,7 @@ impl Executor {
                 match self
                     .inner
                     .state
-                    .read()
+                    .lock()
                     .expect("locking failed")
                     .gen_context(&state)
                 {
@@ -386,7 +386,7 @@ impl Executor {
         let Some((shutdown_receiver, sm_update_rx)) = self
             .inner
             .state
-            .write()
+            .lock()
             .expect("locking can't fail")
             .start(context_gen.clone())
         else {
@@ -890,7 +890,7 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let mut state = self.state.write().expect("Locking can't fail");
+        let mut state = self.state.lock().expect("Locking can't fail");
 
         state.stop()
     }
@@ -948,7 +948,7 @@ impl ExecutorBuilder {
         let inner = Arc::new(ExecutorInner {
             db,
             log_ordering_wakeup_tx,
-            state: std::sync::RwLock::new(ExecutorState::Unstarted { sm_update_rx }),
+            state: std::sync::Mutex::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: self.module_contexts,
             valid_module_ids: self.valid_module_ids,
             notifier,

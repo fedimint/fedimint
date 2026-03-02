@@ -119,7 +119,7 @@ use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, W
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, info_span, warn};
 
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
@@ -229,7 +229,7 @@ pub struct Gateway {
     lightning_mode: LightningMode,
 
     /// The current state of the Gateway.
-    state: Arc<RwLock<GatewayState>>,
+    state: Arc<Mutex<GatewayState>>,
 
     /// Builder struct that allows the gateway to build a Fedimint client, which
     /// handles the communication with a federation.
@@ -663,7 +663,7 @@ impl Gateway {
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             lightning_mode,
-            state: Arc::new(RwLock::new(gateway_state)),
+            state: Arc::new(Mutex::new(gateway_state)),
             client_builder,
             gateway_db: gateway_db.clone(),
             listen: gateway_parameters.listen,
@@ -709,7 +709,7 @@ impl Gateway {
     }
 
     async fn get_state(&self) -> GatewayState {
-        self.state.read().await.clone()
+        self.state.lock().await.clone()
     }
 
     /// Reads and serializes structures from the Gateway's database for the
@@ -950,7 +950,7 @@ impl Gateway {
                         break;
                     };
 
-                    let state_guard = self.state.read().await;
+                    let state_guard = self.state.lock().await;
                     if let GatewayState::Running { ref lightning_context } = *state_guard {
                         // Spawn a subtask to handle each payment in parallel
                         let gateway = self.clone();
@@ -1188,7 +1188,7 @@ impl Gateway {
 
     /// Helper function for atomically changing the Gateway's internal state.
     async fn set_gateway_state(&self, state: GatewayState) {
-        let mut lock = self.state.write().await;
+        let mut lock = self.state.lock().await;
         *lock = state;
     }
 
@@ -1727,7 +1727,7 @@ impl IAdminGateway for Gateway {
                 federations: vec![],
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                gateway_state: self.state.read().await.to_string(),
+                gateway_state: self.state.lock().await.to_string(),
                 lightning_info: LightningInfo::NotConnected,
                 lightning_mode: self.lightning_mode.clone(),
                 registrations: self
@@ -1762,7 +1762,7 @@ impl IAdminGateway for Gateway {
             federations,
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            gateway_state: self.state.read().await.to_string(),
+            gateway_state: self.state.lock().await.to_string(),
             lightning_info,
             lightning_mode: self.lightning_mode.clone(),
             registrations: self
@@ -2296,8 +2296,8 @@ impl IAdminGateway for Gateway {
     /// Instructs the gateway to shutdown, but only after all incoming payments
     /// have been handled.
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        // Take the write lock on the state so that no additional payments are processed
-        let mut state_guard = self.state.write().await;
+        // Take the lock on the state so that no additional payments are processed
+        let mut state_guard = self.state.lock().await;
         if let GatewayState::Running { lightning_context } = state_guard.clone() {
             *state_guard = GatewayState::ShuttingDown { lightning_context };
 

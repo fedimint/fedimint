@@ -131,7 +131,7 @@ pub(crate) struct PrimaryModuleCandidates {
 /// and resource freeing of the [`Client`].
 pub struct Client {
     final_client: FinalClientIface,
-    config: tokio::sync::RwLock<ClientConfig>,
+    config: tokio::sync::Mutex<ClientConfig>,
     api_secret: Option<String>,
     decoders: ModuleDecoderRegistry,
     connectors: ConnectorRegistry,
@@ -419,7 +419,7 @@ impl Client {
     }
 
     pub async fn config(&self) -> ClientConfig {
-        self.config.read().await.clone()
+        self.config.lock().await.clone()
     }
 
     // TODO: change to `-> Option<&str>`
@@ -1784,7 +1784,7 @@ impl Client {
                 let (guardian_pub_keys, new_config) = self.fetch_and_update_config(config).await;
 
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
-                *(self.config.write().await) = new_config;
+                *(self.config.lock().await) = new_config;
                 guardian_pub_keys
             }
         }

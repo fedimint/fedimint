@@ -986,7 +986,7 @@ impl ClientBuilder {
 
         let client_inner = Arc::new(Client {
             final_client: final_client.clone(),
-            config: tokio::sync::RwLock::new(config.clone()),
+            config: tokio::sync::Mutex::new(config.clone()),
             api_secret,
             decoders,
             db: db.clone(),
