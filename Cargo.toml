@@ -335,7 +335,7 @@ tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.18"
 tokio-test = "0.4.5"
 tokio-util = "0.7.18"
-tonic = "0.14.2"
+tonic = "0.14.5"
 tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
