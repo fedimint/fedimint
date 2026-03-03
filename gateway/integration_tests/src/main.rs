@@ -43,6 +43,7 @@ enum GatewayTest {
     BackupRestoreTest,
     LiquidityTest,
     EsploraTest,
+    UserAuthTest,
 }
 
 #[tokio::main]
@@ -53,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
         GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
         GatewayTest::EsploraTest => esplora_test().await,
+        GatewayTest::UserAuthTest => Box::pin(user_auth_test()).await,
     }
 }
 
@@ -548,6 +550,253 @@ async fn esplora_test() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+/// Test user management and authorization enforcement
+#[allow(clippy::too_many_lines)]
+async fn user_auth_test() -> anyhow::Result<()> {
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            let federation = dev_fed.fed().await?;
+
+            if !devimint::util::supports_lnv2() {
+                info!(target: LOG_TEST, "LNv2 is not supported, which is necessary for LDK GW and user auth test");
+                return Ok(());
+            }
+
+            let gw = dev_fed.gw_ldk_connected().await?;
+            let gw_second = dev_fed.gw_ldk_second_connected().await?;
+
+            // Peg in some sats for testing spend operations
+            info!(target: LOG_TEST, "Pegging-in gateways for user auth test...");
+            federation.pegin_gateways(10_000_000, vec![gw]).await?;
+
+            let fed_id_str = federation.calculate_federation_id();
+            let fed_id = FederationId::from_str(&fed_id_str)?;
+
+            // ==================== Test User CRUD (as admin) ====================
+            info!(target: LOG_TEST, "Testing user CRUD operations...");
+
+            // Create users with different permissions
+            let user1_password = "user1_secret_password";
+            let user2_password = "user2_secret_password";
+            let user3_password = "user3_secret_password";
+
+            // User 1: Has SendLimit of 1,000,000 msats (1,000 sats)
+            info!(target: LOG_TEST, "Creating user with SendLimit...");
+            gw.create_user("test_user_1", user1_password, Some(1_000_000), false)
+                .await?;
+
+            // User 2: Has UserManagement permission (can manage other users)
+            info!(target: LOG_TEST, "Creating user with UserManagement permission...");
+            gw.create_user("test_user_2", user2_password, None, true)
+                .await?;
+
+            // User 3: Has no permissions (just authenticated, for deletion test)
+            info!(target: LOG_TEST, "Creating user with no permissions...");
+            gw.create_user("test_user_3", user3_password, None, false)
+                .await?;
+
+            // List users and verify all 3 exist
+            info!(target: LOG_TEST, "Listing users...");
+            let users = gw.list_users().await?;
+            assert_eq!(users.users.len(), 3, "Expected 3 users");
+            info!(target: LOG_TEST, "Verified 3 users exist");
+
+            // Get specific user and verify details
+            info!(target: LOG_TEST, "Getting specific user...");
+            let user1 = gw
+                .get_user("test_user_1")
+                .await?
+                .expect("User should exist");
+            assert_eq!(user1.username, "test_user_1");
+            assert!(!user1.authorizations.is_empty(), "User should have authorizations");
+            info!(target: LOG_TEST, "Verified user details");
+
+            // Delete user 3
+            info!(target: LOG_TEST, "Deleting user...");
+            gw.delete_user("test_user_3").await?;
+
+            // List users and verify only 2 remain
+            let users = gw.list_users().await?;
+            assert_eq!(users.users.len(), 2, "Expected 2 users after deletion");
+            info!(target: LOG_TEST, "Verified user deletion");
+
+            // ==================== Test Spend Limit Enforcement ====================
+            info!(target: LOG_TEST, "Testing spend limit enforcement...");
+
+            // Test 1: spend_ecash within limit should succeed
+            info!(target: LOG_TEST, "Testing spend_ecash within limit...");
+            let result = gw
+                .spend_ecash_as_user("test_user_1", user1_password, fed_id.clone(), 500_000)
+                .await;
+            if let Err(ref e) = result {
+                info!(target: LOG_TEST, "spend_ecash_as_user error: {:?}", e);
+            }
+            assert!(result.is_ok(), "spend_ecash within limit should succeed");
+            info!(target: LOG_TEST, "spend_ecash within limit succeeded");
+
+            // Test 2: spend_ecash exceeding limit should fail
+            info!(target: LOG_TEST, "Testing spend_ecash exceeding limit...");
+            let result = gw
+                .spend_ecash_as_user("test_user_1", user1_password, fed_id.clone(), 2_000_000)
+                .await;
+            assert!(result.is_err(), "spend_ecash exceeding limit should fail");
+            info!(target: LOG_TEST, "spend_ecash exceeding limit correctly rejected");
+
+            // Test 3: withdraw exceeding limit should fail
+            // (User has 1M msat limit, trying to withdraw more)
+            info!(target: LOG_TEST, "Testing withdraw exceeding limit...");
+            let bitcoind = dev_fed.bitcoind().await?;
+            let address = bitcoind.get_new_address().await?;
+            let result = gw
+                .withdraw_as_user(
+                    "test_user_1",
+                    user1_password,
+                    fed_id.clone(),
+                    BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(2000)), // 2000 sats = 2M msats > 1M limit
+                    &address.to_string(),
+                )
+                .await;
+            assert!(result.is_err(), "withdraw exceeding limit should fail");
+            info!(target: LOG_TEST, "withdraw exceeding limit correctly rejected");
+
+            // Test 4: pay_invoice exceeding limit should fail
+            info!(target: LOG_TEST, "Testing pay_invoice exceeding limit...");
+            // Create an invoice for 2M msats (exceeds 1M limit)
+            let large_invoice = gw_second.create_invoice(2_000_000).await?;
+            let result = gw
+                .pay_invoice_as_user("test_user_1", user1_password, large_invoice)
+                .await;
+            assert!(result.is_err(), "pay_invoice exceeding limit should fail");
+            info!(target: LOG_TEST, "pay_invoice exceeding limit correctly rejected");
+
+            // Test 5: send_onchain exceeding limit should fail
+            info!(target: LOG_TEST, "Testing send_onchain exceeding limit...");
+            let result = gw
+                .send_onchain_as_user(
+                    "test_user_1",
+                    user1_password,
+                    BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(2000)), // 2000 sats = 2M msats > 1M limit
+                    &address.to_string(),
+                    10,
+                )
+                .await;
+            assert!(result.is_err(), "send_onchain exceeding limit should fail");
+            info!(target: LOG_TEST, "send_onchain exceeding limit correctly rejected");
+
+            // Test 6: open_channel with push_amount exceeding limit should fail
+            info!(target: LOG_TEST, "Testing open_channel with push_amount exceeding limit...");
+            let other_pubkey = gw_second.lightning_pubkey().await?;
+            let result = gw
+                .open_channel_as_user(
+                    "test_user_1",
+                    user1_password,
+                    &other_pubkey.to_string(),
+                    "127.0.0.1:9736",
+                    100_000,       // channel size (not checked against limit)
+                    2000,          // push_amount 2000 sats = 2M msats > 1M limit
+                )
+                .await;
+            assert!(result.is_err(), "open_channel with push_amount exceeding limit should fail");
+            info!(target: LOG_TEST, "open_channel with push_amount exceeding limit correctly rejected");
+
+            // Test 7: pay_offer exceeding limit should fail
+            info!(target: LOG_TEST, "Testing pay_offer exceeding limit...");
+            let offer = gw_second.create_offer(None).await?;
+            let result = gw
+                .pay_offer_as_user(
+                    "test_user_1",
+                    user1_password,
+                    &offer,
+                    Some(Amount::from_msats(2_000_000)), // 2M msats > 1M limit
+                )
+                .await;
+            assert!(result.is_err(), "pay_offer exceeding limit should fail");
+            info!(target: LOG_TEST, "pay_offer exceeding limit correctly rejected");
+
+            // ==================== Test User Without Spend Permission ====================
+            info!(target: LOG_TEST, "Testing user without spend permission...");
+
+            // User 2 has UserManagement but NOT SendLimit - should be rejected from spend endpoints
+            let result = gw
+                .spend_ecash_as_user("test_user_2", user2_password, fed_id.clone(), 100_000)
+                .await;
+            assert!(
+                result.is_err(),
+                "User without SendLimit should be rejected from spend_ecash"
+            );
+            info!(target: LOG_TEST, "User without SendLimit correctly rejected from spend endpoints");
+
+            // ==================== Test User Management Permission ====================
+            info!(target: LOG_TEST, "Testing user management permission enforcement...");
+
+            // User 2 (has UserManagement) should be able to create users
+            info!(target: LOG_TEST, "Testing create_user with UserManagement permission...");
+            let result = gw
+                .create_user_as_user(
+                    "test_user_2",
+                    user2_password,
+                    "test_user_4",
+                    "user4_password",
+                    None,
+                    false,
+                )
+                .await;
+            assert!(
+                result.is_ok(),
+                "User with UserManagement should be able to create users"
+            );
+            info!(target: LOG_TEST, "create_user with UserManagement succeeded");
+
+            // Verify user was created
+            let users = gw.list_users().await?;
+            assert_eq!(users.users.len(), 3, "Expected 3 users after creation by user_2");
+
+            // User 2 should be able to delete users
+            info!(target: LOG_TEST, "Testing delete_user with UserManagement permission...");
+            let result = gw
+                .delete_user_as_user("test_user_2", user2_password, "test_user_4")
+                .await;
+            assert!(
+                result.is_ok(),
+                "User with UserManagement should be able to delete users"
+            );
+            info!(target: LOG_TEST, "delete_user with UserManagement succeeded");
+
+            // User 1 (has SendLimit but NOT UserManagement) should NOT be able to create users
+            info!(target: LOG_TEST, "Testing create_user without UserManagement permission...");
+            let result = gw
+                .create_user_as_user(
+                    "test_user_1",
+                    user1_password,
+                    "test_user_5",
+                    "user5_password",
+                    None,
+                    false,
+                )
+                .await;
+            assert!(
+                result.is_err(),
+                "User without UserManagement should NOT be able to create users"
+            );
+            info!(target: LOG_TEST, "create_user without UserManagement correctly rejected");
+
+            // User 1 should NOT be able to delete users
+            info!(target: LOG_TEST, "Testing delete_user without UserManagement permission...");
+            let result = gw
+                .delete_user_as_user("test_user_1", user1_password, "test_user_2")
+                .await;
+            assert!(
+                result.is_err(),
+                "User without UserManagement should NOT be able to delete users"
+            );
+            info!(target: LOG_TEST, "delete_user without UserManagement correctly rejected");
+
+            info!(target: LOG_TEST, "user_auth_test successful");
+            Ok(())
+        })
+        .await
 }
 
 async fn get_transaction(

@@ -15,8 +15,8 @@ use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
 use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
-    ListTransactionsResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
-    PaymentSummaryResponse, V1_API_ENDPOINT,
+    ListTransactionsResponse, ListUsersResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
+    PaymentSummaryResponse, UserResponse, V1_API_ENDPOINT,
 };
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -809,5 +809,260 @@ impl Gatewayd {
         }
 
         Ok(())
+    }
+
+    // ==================== User Management Methods ====================
+
+    /// Creates a command using Basic Auth for a specific user (instead of admin
+    /// Bearer auth)
+    pub fn cmd_as_user(&self, username: &str, password: &str) -> Command {
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcuser",
+            username,
+            "--rpcpassword",
+            password,
+            "-a",
+            &self.addr
+        )
+    }
+
+    /// Create a new user (as admin)
+    pub async fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+        send_limit_msats: Option<u64>,
+        user_management: bool,
+    ) -> Result<serde_json::Value> {
+        let mut command = cmd!(self, "user", "create", "--password", password, username,);
+
+        if let Some(limit) = send_limit_msats {
+            command = command.arg(&"--send-limit-msats").arg(&limit);
+        }
+
+        if user_management {
+            command = command.arg(&"--user-management");
+        }
+
+        command.out_json().await
+    }
+
+    /// Delete a user (as admin)
+    pub async fn delete_user(&self, username: &str) -> Result<()> {
+        cmd!(self, "user", "delete", username).run().await
+    }
+
+    /// List all users (as admin)
+    pub async fn list_users(&self) -> Result<ListUsersResponse> {
+        let response = cmd!(self, "user", "list").out_json().await?;
+        serde_json::from_value(response).context("Failed to parse list users response")
+    }
+
+    /// Get a specific user (as admin)
+    pub async fn get_user(&self, username: &str) -> Result<Option<UserResponse>> {
+        let response = cmd!(self, "user", "get", username).out_json().await?;
+        // The response is either null or the user object
+        if response.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                serde_json::from_value(response).context("Failed to parse user response")?,
+            ))
+        }
+    }
+
+    /// Create a user as another user (for testing permissions)
+    pub async fn create_user_as_user(
+        &self,
+        auth_username: &str,
+        auth_password: &str,
+        new_username: &str,
+        new_password: &str,
+        send_limit_msats: Option<u64>,
+        user_management: bool,
+    ) -> Result<serde_json::Value> {
+        let mut command = self
+            .cmd_as_user(auth_username, auth_password)
+            .arg(&"user")
+            .arg(&"create")
+            .arg(&"--password")
+            .arg(&new_password)
+            .arg(&new_username);
+
+        if let Some(limit) = send_limit_msats {
+            command = command.arg(&"--send-limit-msats").arg(&limit);
+        }
+
+        if user_management {
+            command = command.arg(&"--user-management");
+        }
+
+        command.out_json().await
+    }
+
+    /// Delete a user as another user (for testing permissions)
+    pub async fn delete_user_as_user(
+        &self,
+        auth_username: &str,
+        auth_password: &str,
+        target_username: &str,
+    ) -> Result<()> {
+        self.cmd_as_user(auth_username, auth_password)
+            .arg(&"user")
+            .arg(&"delete")
+            .arg(&target_username)
+            .run()
+            .await
+    }
+
+    // ==================== Spend Operations as User ====================
+
+    /// Spend ecash as a specific user (for testing spend limits)
+    pub async fn spend_ecash_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+        amount_msats: u64,
+    ) -> Result<serde_json::Value> {
+        self.cmd_as_user(username, password)
+            .arg(&"ecash")
+            .arg(&"send")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&amount_msats)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Withdraw ecash as a specific user (for testing spend limits)
+    pub async fn withdraw_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+        amount: BitcoinAmountOrAll,
+        address: &str,
+    ) -> Result<serde_json::Value> {
+        let amount_str = match amount {
+            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
+            BitcoinAmountOrAll::All => "all".to_string(),
+        };
+        self.cmd_as_user(username, password)
+            .arg(&"ecash")
+            .arg(&"pegout")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&"--amount")
+            .arg(&amount_str)
+            .arg(&"--address")
+            .arg(&address)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Pay invoice as a specific user (for testing spend limits)
+    pub async fn pay_invoice_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        invoice: Bolt11Invoice,
+    ) -> Result<serde_json::Value> {
+        self.cmd_as_user(username, password)
+            .arg(&"lightning")
+            .arg(&"pay-invoice")
+            .arg(&invoice)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Send onchain as a specific user (for testing spend limits)
+    pub async fn send_onchain_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        amount: BitcoinAmountOrAll,
+        address: &str,
+        fee_rate: u64,
+    ) -> Result<Txid> {
+        let amount_str = match amount {
+            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
+            BitcoinAmountOrAll::All => "all".to_string(),
+        };
+        let value = self
+            .cmd_as_user(username, password)
+            .arg(&"onchain")
+            .arg(&"send")
+            .arg(&"--amount")
+            .arg(&amount_str)
+            .arg(&"--address")
+            .arg(&address)
+            .arg(&"--fee-rate-sats-per-vbyte")
+            .arg(&fee_rate)
+            .out_json()
+            .await?;
+        let txid: Txid =
+            serde_json::from_value(value).context("Could not parse onchain send response")?;
+        Ok(txid)
+    }
+
+    /// Open channel as a specific user (for testing spend limits)
+    pub async fn open_channel_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        pubkey: &str,
+        host: &str,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<serde_json::Value> {
+        self.cmd_as_user(username, password)
+            .arg(&"lightning")
+            .arg(&"open-channel")
+            .arg(&"--pubkey")
+            .arg(&pubkey)
+            .arg(&"--host")
+            .arg(&host)
+            .arg(&"--channel-size-sats")
+            .arg(&channel_size_sats)
+            .arg(&"--push-amount-sats")
+            .arg(&push_amount_sats)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Pay BOLT12 offer as a specific user (for testing spend limits)
+    pub async fn pay_offer_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        offer: &str,
+        amount: Option<Amount>,
+    ) -> Result<()> {
+        let mut command = self
+            .cmd_as_user(username, password)
+            .arg(&"lightning")
+            .arg(&"pay-offer")
+            .arg(&"--offer")
+            .arg(&offer);
+
+        if let Some(amount) = amount {
+            command = command.arg(&"--amount-msat").arg(&amount.msats);
+        }
+
+        command.run().await
     }
 }
