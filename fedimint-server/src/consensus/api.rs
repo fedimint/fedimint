@@ -168,6 +168,7 @@ impl ConsensusApi {
         &self,
         txid: TransactionId,
     ) -> (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>) {
+        debug!(target: LOG_NET_API, %txid, "Awaiting transaction acceptance");
         self.db
             .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
             .await
@@ -177,6 +178,7 @@ impl ConsensusApi {
         &self,
         outpoint: OutPoint,
     ) -> Result<SerdeModuleEncoding<DynOutputOutcome>> {
+        debug!(target: LOG_NET_API, %outpoint, "Awaiting output outcome");
         let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await;
 
         let module_id = module_ids

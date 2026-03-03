@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::io::{Error, Write};
 use std::mem;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use fedimint_client_module::sm::executor::{
@@ -575,7 +576,24 @@ impl ExecutorInner {
 
         let active_states = self.get_active_states().await;
         trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
-        for (state, _meta) in active_states {
+        debug!(
+            target: LOG_CLIENT_REACTOR,
+            total = active_states.len(),
+            "Starting active state machines",
+        );
+        for (state, meta) in active_states {
+            let age = fedimint_core::time::now()
+                .duration_since(meta.created_at)
+                .unwrap_or_default();
+            if age > Duration::from_secs(7 * 24 * 3600) {
+                warn!(
+                    target: LOG_CLIENT_REACTOR,
+                    operation_id = %state.operation_id().fmt_short(),
+                    module_instance = %state.module_instance_id(),
+                    age_days = age.as_secs() / 86400,
+                    "Active state machine has been running for over a week, possibly stuck",
+                );
+            }
             self.sm_update_tx
                 .send(state)
                 .expect("Must be able to send state machine to own opened channel");
