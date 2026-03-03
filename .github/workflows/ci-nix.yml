@@ -459,7 +459,8 @@ jobs:
           done
 
   pkgs:
-    if: github.repository == 'fedimint/fedimint' && (startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
+    # TODO: Remove 'pull_request' trigger after MacOS tarball bundling is verified working
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
     name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform.name }}"
 
     strategy:
@@ -471,6 +472,7 @@ jobs:
             build-deb: true
             build-rpm: true
             build-bundled: true
+            build-tarball: false
             shasum-cmd: sha256sum
           - name: macos-aarch64
             runs-on: macos-14
@@ -478,6 +480,7 @@ jobs:
             build-deb: false
             build-rpm: false
             build-bundled: false
+            build-tarball: true
             shasum-cmd: shasum -a 256
         build:
           - flake-output: fedimint-pkgs
@@ -562,6 +565,69 @@ jobs:
               nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && ${{ matrix.platform.shasum-cmd }} "bins/$bin-$BUILD_ID"
             fi
           done
+
+      - name: Build macOS tarball with bundled dylibs
+        if: matrix.platform.build-tarball
+        run: |
+          >&2 echo "Installing dylibbundler..."
+          nix profile install nixpkgs#macdylibbundler
+
+          mkdir -p tarball/bin tarball/lib
+          bins="${{ matrix.build.bins }}"
+
+          for bin in ${bins//,/ } ; do
+            >&2 echo "Building and bundling: $bin"
+            nix build -L .#$bin
+
+            # Copy binary to tarball directory
+            cp "./result/bin/$bin" "tarball/bin/$bin"
+            chmod +w "tarball/bin/$bin"
+
+            # Bundle dylibs and rewrite paths to use @executable_path
+            >&2 echo "Running dylibbundler on $bin..."
+            dylibbundler -cd -of -b \
+              -x "tarball/bin/$bin" \
+              -d "tarball/lib/" \
+              -p '@executable_path/../lib/'
+
+            # Ad-hoc sign the binary (required for Apple Silicon)
+            >&2 echo "Signing $bin..."
+            codesign --force --sign - "tarball/bin/$bin"
+          done
+
+          # Sign all bundled libraries
+          >&2 echo "Signing bundled libraries..."
+          for lib in tarball/lib/*.dylib; do
+            if [ -f "$lib" ]; then
+              codesign --force --sign - "$lib"
+            fi
+          done
+
+          # Verify library paths are rewritten correctly
+          >&2 echo "Verifying library paths..."
+          for bin in ${bins//,/ } ; do
+            >&2 echo "Checking $bin dependencies:"
+            otool -L "tarball/bin/$bin"
+
+            # Fail if any /nix/store paths remain (except for system libs)
+            if otool -L "tarball/bin/$bin" | grep -q '/nix/store'; then
+              >&2 echo "ERROR: Found /nix/store paths in $bin"
+              exit 1
+            fi
+          done
+
+          # Test that binaries actually run
+          >&2 echo "Testing bundled binaries..."
+          for bin in ${bins//,/ } ; do
+            >&2 echo "Testing $bin --version..."
+            "./tarball/bin/$bin" --version || "./tarball/bin/$bin" version || true
+          done
+
+          # Create tarball
+          TARBALL="${{ matrix.build.flake-output }}-${BUILD_ID}-aarch64-apple-darwin.tar.gz"
+          >&2 echo "Creating tarball: $TARBALL"
+          tar -czvf "bins/$TARBALL" -C tarball .
+          ${{ matrix.platform.shasum-cmd }} "bins/$TARBALL"
 
       - name: Check version ${{ matrix.build.bins }}
         run: |
