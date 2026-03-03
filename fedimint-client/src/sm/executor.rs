@@ -575,13 +575,14 @@ impl ExecutorInner {
         }
 
         let active_states = self.get_active_states().await;
-        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
         debug!(
             target: LOG_CLIENT_REACTOR,
             total = active_states.len(),
             "Starting active state machines",
         );
         for (state, meta) in active_states {
+            trace!(target: LOG_CLIENT_REACTOR, ?state, ?meta, "Starting active state");
+
             let age = fedimint_core::time::now()
                 .duration_since(meta.created_at)
                 .unwrap_or_default();
