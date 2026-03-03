@@ -154,15 +154,15 @@ impl<'a> GatewayClient<'a> {
         }
     }
 
-    // ==================== User Management Operations ====================
+    // ==================== User Management Operations (admin only)
+    // ====================
 
-    /// Create a new user
+    /// Create a new user (admin only)
     pub async fn create_user(
         &self,
         username: &str,
         password: &str,
         send_limit_msats: Option<u64>,
-        user_management: bool,
         federation_management: bool,
         fee_management: bool,
     ) -> Result<serde_json::Value> {
@@ -176,10 +176,6 @@ impl<'a> GatewayClient<'a> {
 
         if let Some(limit) = send_limit_msats {
             command = command.arg(&"--send-limit-msats").arg(&limit);
-        }
-
-        if user_management {
-            command = command.arg(&"--user-management");
         }
 
         if federation_management {

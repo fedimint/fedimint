@@ -84,10 +84,10 @@ pub enum GeneralCommands {
     User(UserCommands),
 }
 
-/// Commands for managing gateway users
+/// Commands for managing gateway users (admin only)
 #[derive(Subcommand)]
 pub enum UserCommands {
-    /// Create a new user
+    /// Create a new user (admin only)
     Create {
         /// Username (alphanumeric and underscores only, 1-64 characters)
         username: String,
@@ -105,10 +105,6 @@ pub enum UserCommands {
         /// If specified, adds a `SendLimit` authorization.
         #[clap(long)]
         send_limit_msats: Option<u64>,
-
-        /// Allow the user to manage other users (create, delete, list)
-        #[clap(long)]
-        user_management: bool,
 
         /// Allow the user to join and leave federations
         #[clap(long)]
@@ -253,7 +249,6 @@ impl UserCommands {
                 password,
                 description,
                 send_limit_msats,
-                user_management,
                 federation_management,
                 fee_management,
             } => {
@@ -267,9 +262,6 @@ impl UserCommands {
                     authorizations.push(UserAuthorization::SendLimit {
                         max_send_amount: Amount::from_msats(max_msats),
                     });
-                }
-                if user_management {
-                    authorizations.push(UserAuthorization::UserManagement);
                 }
                 if federation_management {
                     authorizations.push(UserAuthorization::FederationManagement);

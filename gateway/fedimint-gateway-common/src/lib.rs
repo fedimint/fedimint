@@ -543,8 +543,6 @@ pub enum UserAuthorization {
         /// Maximum amount the user can send in a single payment
         max_send_amount: Amount,
     },
-    /// User can manage other users (create, delete, list)
-    UserManagement,
     /// User can join and leave federations
     FederationManagement,
     /// User can modify fees

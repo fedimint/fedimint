@@ -176,27 +176,6 @@ fn check_amount_within_limit(
     }
 }
 
-/// Checks if the authenticated user has permission to manage users.
-/// Returns `Ok(())` for Admin or users with UserManagement authorization.
-/// Returns `Err(Forbidden)` otherwise.
-pub fn check_user_management_permission(
-    auth_user: &AuthenticatedUser,
-) -> Result<(), AdminGatewayError> {
-    match auth_user {
-        AuthenticatedUser::Admin => Ok(()),
-        AuthenticatedUser::User { authorizations, .. } => {
-            if authorizations
-                .iter()
-                .any(|a| matches!(a, UserAuthorization::UserManagement))
-            {
-                Ok(())
-            } else {
-                Err(AdminGatewayError::Forbidden)
-            }
-        }
-    }
-}
-
 /// Checks if the authenticated user has permission to manage federations
 /// (join/leave). Returns `Ok(())` for Admin or users with FederationManagement
 /// authorization. Returns `Err(Forbidden)` otherwise.
@@ -1062,51 +1041,49 @@ async fn invite_codes(
 
 // ==================== User Management Endpoints ====================
 
-/// List all users
+/// List all users (admin only)
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn list_users(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    check_admin_only(&auth_user)?;
     let users = gateway.handle_list_users().await?;
     Ok(Json(json!(users)))
 }
 
-/// Create a new user
+/// Create a new user (admin only)
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn create_user(
     Extension(gateway): Extension<Arc<Gateway>>,
     Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<CreateUserPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
-    // Check user management permission
-    check_user_management_permission(&auth_user)?;
-
+    check_admin_only(&auth_user)?;
     let user = gateway.handle_create_user(payload).await?;
     Ok(Json(json!(user)))
 }
 
-/// Get a specific user by username
+/// Get a specific user by username (admin only)
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
 async fn get_user(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    check_admin_only(&auth_user)?;
     let user = gateway.handle_get_user(&username).await?;
     Ok(Json(json!(user)))
 }
 
-/// Delete a user by username
+/// Delete a user by username (admin only)
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
 async fn delete_user(
     Extension(gateway): Extension<Arc<Gateway>>,
     Extension(auth_user): Extension<AuthenticatedUser>,
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
-    // Check user management permission
-    check_user_management_permission(&auth_user)?;
-
+    check_admin_only(&auth_user)?;
     let deleted = gateway.handle_delete_user(&username).await?;
     Ok(Json(json!({ "deleted": deleted })))
 }

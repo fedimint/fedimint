@@ -586,27 +586,32 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1: Has SendLimit of 1,000,000 msats (1,000 sats)
             info!(target: LOG_TEST, "Creating user with SendLimit...");
-            gw.client().create_user("test_user_1", user1_password, Some(1_000_000), false, false, false)
+            gw.client()
+                .create_user("test_user_1", user1_password, Some(1_000_000), false, false)
                 .await?;
 
-            // User 2: Has UserManagement permission (can manage other users)
-            info!(target: LOG_TEST, "Creating user with UserManagement permission...");
-            gw.client().create_user("test_user_2", user2_password, None, true, false, false)
-                .await?;
-
-            // User 3: Has no permissions (just authenticated, for deletion test)
+            // User 2: Has no permissions (for testing rejection)
             info!(target: LOG_TEST, "Creating user with no permissions...");
-            gw.client().create_user("test_user_3", user3_password, None, false, false, false)
+            gw.client()
+                .create_user("test_user_2", user2_password, None, false, false)
+                .await?;
+
+            // User 3: Has no permissions (for deletion test)
+            info!(target: LOG_TEST, "Creating user with no permissions...");
+            gw.client()
+                .create_user("test_user_3", user3_password, None, false, false)
                 .await?;
 
             // User 4: Has FederationManagement permission (can join/leave federations)
             info!(target: LOG_TEST, "Creating user with FederationManagement permission...");
-            gw.client().create_user("test_user_4", user4_password, None, false, true, false)
+            gw.client()
+                .create_user("test_user_4", user4_password, None, true, false)
                 .await?;
 
             // User 5: Has FeeManagement permission (can modify fees)
             info!(target: LOG_TEST, "Creating user with FeeManagement permission...");
-            gw.client().create_user("test_user_5", user5_password, None, false, false, true)
+            gw.client()
+                .create_user("test_user_5", user5_password, None, false, true)
                 .await?;
 
             // List users and verify all 5 exist
@@ -720,7 +725,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
             // ==================== Test User Without Spend Permission ====================
             info!(target: LOG_TEST, "Testing user without spend permission...");
 
-            // User 2 has UserManagement but NOT SendLimit - should be rejected from spend endpoints
+            // User 2 has no permissions - should be rejected from spend endpoints
             let user2_client = gw.client().as_user("test_user_2", user2_password);
             let result = user2_client.spend_ecash(fed_id.clone(), 100_000).await;
             assert!(
@@ -729,63 +734,46 @@ async fn user_auth_test() -> anyhow::Result<()> {
             );
             info!(target: LOG_TEST, "User without SendLimit correctly rejected from spend endpoints");
 
-            // ==================== Test User Management Permission ====================
-            info!(target: LOG_TEST, "Testing user management permission enforcement...");
+            // ==================== Test User Management is Admin Only ====================
+            info!(target: LOG_TEST, "Testing user management is admin only...");
 
-            // User 2 (has UserManagement) should be able to create users
-            info!(target: LOG_TEST, "Testing create_user with UserManagement permission...");
-            let result = user2_client
-                .create_user("test_user_temp", "user_temp_password", None, false, false, false)
-                .await;
-            assert!(
-                result.is_ok(),
-                "User with UserManagement should be able to create users"
-            );
-            info!(target: LOG_TEST, "create_user with UserManagement succeeded");
-
-            // Verify user was created
-            let users = gw.client().list_users().await?;
-            assert_eq!(
-                users.users.len(),
-                5,
-                "Expected 5 users after creation by user_2"
-            );
-
-            // User 2 should be able to delete users
-            info!(target: LOG_TEST, "Testing delete_user with UserManagement permission...");
-            let result = user2_client.delete_user("test_user_temp").await;
-            assert!(
-                result.is_ok(),
-                "User with UserManagement should be able to delete users"
-            );
-            info!(target: LOG_TEST, "delete_user with UserManagement succeeded");
-
-            // User 1 (has SendLimit but NOT UserManagement) should NOT be able to create users
-            info!(target: LOG_TEST, "Testing create_user without UserManagement permission...");
+            // Any user should NOT be able to create users (admin only)
+            info!(target: LOG_TEST, "Testing create_user as user (should fail - admin only)...");
             let result = user1_client
-                .create_user(
-                    "test_user_temp2",
-                    "user_temp2_password",
-                    None,
-                    false,
-                    false,
-                    false,
-                )
+                .create_user("test_user_temp", "user_temp_password", None, false, false)
                 .await;
             assert!(
                 result.is_err(),
-                "User without UserManagement should NOT be able to create users"
+                "Users should NOT be able to create users (admin only)"
             );
-            info!(target: LOG_TEST, "create_user without UserManagement correctly rejected");
+            info!(target: LOG_TEST, "create_user as user correctly rejected");
 
-            // User 1 should NOT be able to delete users
-            info!(target: LOG_TEST, "Testing delete_user without UserManagement permission...");
+            // Any user should NOT be able to delete users (admin only)
+            info!(target: LOG_TEST, "Testing delete_user as user (should fail - admin only)...");
             let result = user1_client.delete_user("test_user_2").await;
             assert!(
                 result.is_err(),
-                "User without UserManagement should NOT be able to delete users"
+                "Users should NOT be able to delete users (admin only)"
             );
-            info!(target: LOG_TEST, "delete_user without UserManagement correctly rejected");
+            info!(target: LOG_TEST, "delete_user as user correctly rejected");
+
+            // Any user should NOT be able to list users (admin only)
+            info!(target: LOG_TEST, "Testing list_users as user (should fail - admin only)...");
+            let result = user1_client.list_users().await;
+            assert!(
+                result.is_err(),
+                "Users should NOT be able to list users (admin only)"
+            );
+            info!(target: LOG_TEST, "list_users as user correctly rejected");
+
+            // Any user should NOT be able to get user details (admin only)
+            info!(target: LOG_TEST, "Testing get_user as user (should fail - admin only)...");
+            let result = user1_client.get_user("test_user_2").await;
+            assert!(
+                result.is_err(),
+                "Users should NOT be able to get user details (admin only)"
+            );
+            info!(target: LOG_TEST, "get_user as user correctly rejected");
 
             // ==================== Test Federation Management Permission ====================
             info!(target: LOG_TEST, "Testing federation management permission enforcement...");

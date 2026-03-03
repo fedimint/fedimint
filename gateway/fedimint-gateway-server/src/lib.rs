@@ -3010,13 +3010,6 @@ impl Gateway {
 
     /// Deletes a user by username. Returns true if the user was deleted.
     pub async fn handle_delete_user(&self, username: &str) -> AdminResult<bool> {
-        // Prevent deleting "admin" user
-        if username == "admin" {
-            return Err(AdminGatewayError::Unexpected(anyhow!(
-                "Cannot delete the 'admin' user"
-            )));
-        }
-
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let deleted = dbtx.delete_user(username).await;
         dbtx.commit_tx().await;
