@@ -13,6 +13,7 @@ mod client;
 mod db;
 pub mod envs;
 mod utils;
+mod visualize;
 
 use core::fmt;
 use std::collections::BTreeMap;
@@ -720,6 +721,38 @@ Examples:
     /// Show the chain ID (bitcoin block hash at height 1) cached in the client
     /// database
     ChainId,
+    /// Visualize client internals for debugging
+    Visualize {
+        #[clap(subcommand)]
+        visualize_type: VisualizeCmd,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum VisualizeCmd {
+    /// Show every e-cash note with creation/spending provenance
+    Notes {
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Show transactions with inputs and outputs
+    Transactions {
+        /// Show a specific operation (by full ID)
+        operation_id: Option<OperationId>,
+        /// How many most-recent operations to show (ignored if operation_id is
+        /// given)
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Show operations with their state machines
+    Operations {
+        /// Show a specific operation (by full ID)
+        operation_id: Option<OperationId>,
+        /// How many most-recent operations to show (ignored if operation_id is
+        /// given)
+        #[arg(long)]
+        limit: Option<usize>,
+    },
 }
 
 pub struct FedimintCli {
@@ -1647,6 +1680,28 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(serde_json::json!({
                     "chain_id": chain_id.to_string()
                 })))
+            }
+            Command::Dev(DevCmd::Visualize { visualize_type }) => {
+                let client = self.client_open(&cli).await?;
+
+                match visualize_type {
+                    VisualizeCmd::Notes { limit } => {
+                        visualize::cmd_notes(&client, limit).await?;
+                    }
+                    VisualizeCmd::Transactions {
+                        operation_id,
+                        limit,
+                    } => {
+                        visualize::cmd_transactions(&client, operation_id, limit).await?;
+                    }
+                    VisualizeCmd::Operations {
+                        operation_id,
+                        limit,
+                    } => {
+                        visualize::cmd_operations(&client, operation_id, limit).await?;
+                    }
+                }
+                Ok(CliOutput::Raw(json!({})))
             }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(

@@ -27,6 +27,8 @@ pub mod api;
 
 pub mod repair_wallet;
 
+pub mod visualize;
+
 use std::cmp::{Ordering, min};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -2717,6 +2719,15 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
             MintClientStateMachines::Restore(r) => r.operation_id,
+        }
+    }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        match self {
+            MintClientStateMachines::Output(s) => s.fmt_visualization(f, indent),
+            MintClientStateMachines::Input(s) => s.fmt_visualization(f, indent),
+            MintClientStateMachines::OOB(s) => s.fmt_visualization(f, indent),
+            MintClientStateMachines::Restore(_) => write!(f, "{indent}{self:?}"),
         }
     }
 }

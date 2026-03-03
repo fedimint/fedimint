@@ -137,7 +137,7 @@ pub struct EventLogId(u64);
 impl EventLogId {
     pub const LOG_START: EventLogId = EventLogId(0);
 
-    fn next(self) -> EventLogId {
+    pub fn next(self) -> EventLogId {
         Self(self.0 + 1)
     }
 

@@ -156,6 +156,41 @@ impl State for TxSubmissionStatesSM {
     fn operation_id(&self) -> OperationId {
         self.operation_id
     }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        match &self.state {
+            TxSubmissionStates::Created(tx) => {
+                let txid = tx.tx_hash();
+                write!(
+                    f,
+                    "{indent}TxSubmissionStatesSM\n{indent}  state: Created  txid={}  inputs={}  outputs={}",
+                    txid.fmt_short(),
+                    tx.inputs.len(),
+                    tx.outputs.len(),
+                )
+            }
+            TxSubmissionStates::Accepted(txid) => {
+                write!(
+                    f,
+                    "{indent}TxSubmissionStatesSM\n{indent}  state: Accepted  txid={}",
+                    txid.fmt_short(),
+                )
+            }
+            TxSubmissionStates::Rejected(txid, err) => {
+                write!(
+                    f,
+                    "{indent}TxSubmissionStatesSM\n{indent}  state: Rejected  txid={}  error={err}",
+                    txid.fmt_short(),
+                )
+            }
+            TxSubmissionStates::NonRetryableError(err) => {
+                write!(
+                    f,
+                    "{indent}TxSubmissionStatesSM\n{indent}  state: NonRetryableError  error={err}",
+                )
+            }
+        }
+    }
 }
 
 impl TxSubmissionStates {
