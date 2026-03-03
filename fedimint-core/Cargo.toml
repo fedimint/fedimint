@@ -67,7 +67,7 @@ url = { workspace = true, features = ["serde"] }
 z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-aws-lc-sys = { version = "0.30", features = ["bindgen"] }
+aws-lc-sys = { version = "0.38", features = ["bindgen"] }
 iroh = { workspace = true, default-features = false, features = [
     "discovery-pkarr-dht",
 ] }
