@@ -775,7 +775,13 @@ impl Client {
 
         let txid = transaction.tx_hash();
 
-        debug!(target: LOG_CLIENT_NET_API, %txid, ?transaction,  "Finalized and submitting transaction");
+        debug!(
+            target: LOG_CLIENT_NET_API,
+            %txid,
+            operation_id = %operation_id.fmt_short(),
+            ?transaction,
+            "Finalized and submitting transaction",
+        );
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,

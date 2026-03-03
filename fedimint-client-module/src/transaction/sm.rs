@@ -8,7 +8,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::retry;
+use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::watch;
+use tracing::debug;
 
 use crate::sm::{Context, DynContext, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
@@ -162,6 +164,8 @@ impl TxSubmissionStates {
         context: DynGlobalClientContext,
         tx_submitted: watch::Sender<bool>,
     ) -> String {
+        let txid = transaction.tx_hash();
+        debug!(target: LOG_CLIENT_NET_API, %txid, "Submitting transaction");
         retry(
             "tx-submit-sm",
             custom_backoff(Duration::from_secs(2), Duration::from_mins(10), None),
@@ -174,6 +178,11 @@ impl TxSubmissionStates {
                 {
                     Ok(transaction_error.to_string())
                 } else {
+                    debug!(
+                        target: LOG_CLIENT_NET_API,
+                        %txid,
+                        "Transaction submission accepted by peer, awaiting consensus",
+                    );
                     tx_submitted.send_replace(true);
                     Err(anyhow::anyhow!("Transaction is still valid"))
                 }
@@ -190,6 +199,7 @@ impl TxSubmissionStates {
     ) {
         let _ = tx_submitted.wait_for(|submitted| *submitted).await;
         context.api().await_transaction(txid).await;
+        debug!(target: LOG_CLIENT_NET_API, %txid, "Transaction accepted in consensus");
     }
 }
 

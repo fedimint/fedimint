@@ -183,6 +183,8 @@ impl MintOutputStatesCreated {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+        let txid = common.txid();
+        debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
         if global_context
             .await_tx_accepted(common.txid())
             .await
@@ -210,6 +212,9 @@ impl MintOutputStatesCreated {
         message: BlindedMessage,
         tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> BTreeMap<PeerId, BlindedSignatureShare> {
+        let txid = common.txid();
+        let out_idx = common.out_point_range.start_idx();
+        debug!(target: LOG_CLIENT_MODULE_MINT, %txid, %out_idx, "Awaiting output outcome");
         global_context
             .api()
             .request_with_strategy_retry(
@@ -372,6 +377,8 @@ impl MintOutputStatesCreatedMulti {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+        let txid = common.txid();
+        debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
         if global_context
             .await_tx_accepted(common.txid())
             .await
@@ -412,6 +419,9 @@ impl MintOutputStatesCreatedMulti {
         issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
         tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
+        let txid = common.txid();
+        let out_idx = common.out_point_range.start_idx();
+        debug!(target: LOG_CLIENT_MODULE_MINT, %txid, %out_idx, "Awaiting output outcome");
         let api = global_context.api();
         let core_api_version = global_context.core_api_version().await;
 
