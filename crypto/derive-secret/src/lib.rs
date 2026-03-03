@@ -17,7 +17,8 @@ use std::fmt::Formatter;
 
 use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use hkdf::hashes::Sha512;
 use hkdf::{BitcoinHash, Hkdf};
@@ -158,5 +159,56 @@ impl std::fmt::Debug for DerivableSecret {
                 .derive::<8>(b"just a debug fingerprint derivation salt"),
             f,
         )
+    }
+}
+
+impl Encodable for DerivableSecret {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        (self.level as u64).consensus_encode(writer)?;
+        self.kdf.to_prk_bytes().consensus_encode(writer)
+    }
+}
+
+impl Decodable for DerivableSecret {
+    fn consensus_decode_partial<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let level_u64 = u64::consensus_decode_partial(reader, modules)?;
+        let level = level_u64
+            .try_into()
+            .map_err(|_| DecodeError::from_str("DerivableSecret level out of range"))?;
+        let prk = <[u8; 64]>::consensus_decode_partial(reader, modules)?;
+
+        Ok(Self {
+            level,
+            kdf: Hkdf::from_prk_bytes(prk),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChildId, Decodable, DerivableSecret, Encodable};
+
+    #[test]
+    fn consensus_roundtrip_preserves_derivation() {
+        let original = DerivableSecret::new_root(b"root key", b"salt")
+            .child_key(ChildId(1))
+            .child_key(ChildId(2));
+
+        let encoded = original.consensus_encode_to_vec();
+        let decoded = DerivableSecret::consensus_decode_whole(&encoded, &Default::default())
+            .expect("decode should succeed");
+
+        assert_eq!(original.level(), decoded.level());
+        assert_eq!(
+            original.to_random_bytes::<32>(),
+            decoded.to_random_bytes::<32>()
+        );
+        assert_eq!(
+            original.child_key(ChildId(3)).to_random_bytes::<32>(),
+            decoded.child_key(ChildId(3)).to_random_bytes::<32>()
+        );
     }
 }
