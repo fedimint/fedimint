@@ -14,13 +14,19 @@ use tokio::sync::watch;
 
 #[derive(Clone, Debug)]
 pub struct GatewayApi {
+    username: Option<String>,
     password: Option<String>,
     connection_pool: ConnectionPool<dyn IGatewayConnection>,
 }
 
 impl GatewayApi {
-    pub fn new(password: Option<String>, connectors: ConnectorRegistry) -> Self {
+    pub fn new(
+        username: Option<String>,
+        password: Option<String>,
+        connectors: ConnectorRegistry,
+    ) -> Self {
         Self {
+            username,
             password,
             connection_pool: ConnectionPool::new(connectors),
         }
@@ -52,7 +58,13 @@ impl GatewayApi {
             .map_err(ServerError::Connection)?;
         let payload = payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
         let res = conn
-            .request(self.password.clone(), method, route, payload)
+            .request(
+                self.username.clone(),
+                self.password.clone(),
+                method,
+                route,
+                payload,
+            )
             .await?;
         let response = serde_json::from_value::<T>(res).map_err(|e| {
             ServerError::InvalidResponse(anyhow::anyhow!("Received invalid response: {e}"))

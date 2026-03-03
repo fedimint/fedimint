@@ -2974,8 +2974,8 @@ impl Gateway {
         let user = User {
             password_hash: payload.password_hash,
             created_at: fedimint_core::time::now(),
-            last_login: None,
             description: payload.description,
+            authorization: payload.authorizations.clone(),
         };
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
@@ -2987,8 +2987,8 @@ impl Gateway {
         Ok(fedimint_gateway_common::UserResponse {
             username: payload.username,
             created_at: user.created_at,
-            last_login: user.last_login,
             description: user.description,
+            authorizations: payload.authorizations,
         })
     }
 
@@ -3003,8 +3003,8 @@ impl Gateway {
         Ok(user.map(|u| fedimint_gateway_common::UserResponse {
             username: username.to_string(),
             created_at: u.created_at,
-            last_login: u.last_login,
             description: u.description,
+            authorizations: u.authorization,
         }))
     }
 
@@ -3036,8 +3036,8 @@ impl Gateway {
             .map(|(username, user)| fedimint_gateway_common::UserResponse {
                 username,
                 created_at: user.created_at,
-                last_login: user.last_login,
                 description: user.description,
+                authorizations: user.authorization,
             })
             .collect();
 

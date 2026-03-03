@@ -326,6 +326,10 @@ pub struct IrohGatewayRequest {
     /// Parameters for the request
     pub params: Option<serde_json::Value>,
 
+    /// Username for authenticated requests (used with Basic Auth style)
+    #[serde(default)]
+    pub username: Option<String>,
+
     /// Password for authenticated requests to the gateway
     pub password: Option<String>,
 }

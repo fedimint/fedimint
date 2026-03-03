@@ -520,6 +520,7 @@ pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
 pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
     async fn request(
         &self,
+        username: Option<String>,
         password: Option<String>,
         method: Method,
         route: &str,

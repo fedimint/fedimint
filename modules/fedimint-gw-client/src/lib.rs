@@ -183,7 +183,7 @@ impl Context for GatewayClientContext {
 impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         let gateway_conn = RealGatewayConnection {
-            api: GatewayApi::new(None, ctx.connector_registry.clone()),
+            api: GatewayApi::new(None, None, ctx.connector_registry.clone()),
         };
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),

@@ -9,7 +9,8 @@ use bitcoin::hashes::sha256;
 use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
-use fedimint_gateway_common::STOP_ENDPOINT;
+use fedimint_gateway_common::{AuthenticatedUser, STOP_ENDPOINT};
+use fedimint_gateway_server_db::GatewayDbtxNcExt;
 use fedimint_logging::LOG_GATEWAY;
 use iroh::endpoint::Incoming;
 use reqwest::StatusCode;
@@ -228,7 +229,8 @@ async fn handle_request(
     handlers: Arc<Handlers>,
     task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
-    if handlers.is_authenticated(&request.route) && iroh_verify_password(&gateway, request).is_err()
+    if handlers.is_authenticated(&request.route)
+        && iroh_verify_auth(&gateway, request).await.is_err()
     {
         return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
     }
@@ -285,17 +287,39 @@ async fn handle_request(
     Ok((status, body))
 }
 
-/// Verifies if the supplied password in the Iroh request matches the gateway's
-/// password
-fn iroh_verify_password(
+/// Verifies authentication for Iroh requests. Supports two authentication
+/// methods:
+/// 1. User auth: username + password -> looks up user in database, verifies
+///    bcrypt hash
+/// 2. Admin auth: password only -> verifies against admin password hash
+///
+/// Returns `AuthenticatedUser` on success.
+async fn iroh_verify_auth(
     gateway: &Arc<Gateway>,
     request: &IrohGatewayRequest,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<AuthenticatedUser> {
+    // Try user authentication first (username + password)
+    if let (Some(username), Some(password)) = (request.username.as_ref(), request.password.as_ref())
+    {
+        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+        if let Some(user) = dbtx.get_user(username).await {
+            if bcrypt::verify(password, &user.password_hash).unwrap_or(false) {
+                return Ok(AuthenticatedUser::User {
+                    username: username.clone(),
+                    authorizations: user.authorization,
+                });
+            }
+        }
+        // Invalid user/password
+        return Err(anyhow!("Invalid user/password"));
+    }
+
+    // Try admin authentication (password only)
     if let Some(password) = request.password.as_ref()
         && bcrypt::verify(password, &gateway.bcrypt_password_hash.to_string())?
     {
-        return Ok(());
+        return Ok(AuthenticatedUser::Admin);
     }
 
-    Err(anyhow!("Invalid password"))
+    Err(anyhow!("Invalid user/password"))
 }

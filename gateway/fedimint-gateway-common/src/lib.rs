@@ -536,6 +536,19 @@ pub struct SetMnemonicPayload {
 /// Endpoint constants for user management
 pub const USERS_ENDPOINT: &str = "/users";
 
+/// User authorization permissions
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UserAuthorization {
+    /// User can send payments up to this amount
+    SendLimit {
+        /// Maximum amount the user can send in a single payment
+        max_send_amount: Amount,
+    },
+    /// User can manage other users (create, delete, list)
+    UserManagement,
+}
+
 /// Payload for creating a new user
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateUserPayload {
@@ -545,6 +558,9 @@ pub struct CreateUserPayload {
     pub password_hash: String,
     /// Optional description/notes about the user
     pub description: Option<String>,
+    /// User authorizations/permissions
+    #[serde(default)]
+    pub authorizations: Vec<UserAuthorization>,
 }
 
 /// Response containing user information (password hash is never exposed)
@@ -552,12 +568,30 @@ pub struct CreateUserPayload {
 pub struct UserResponse {
     pub username: String,
     pub created_at: SystemTime,
-    pub last_login: Option<SystemTime>,
     pub description: Option<String>,
+    pub authorizations: Vec<UserAuthorization>,
 }
 
 /// Response containing a list of users
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListUsersResponse {
     pub users: Vec<UserResponse>,
+}
+
+// ==================== Authentication Types ====================
+
+/// Represents the authenticated identity after successful authentication.
+/// This is stored in request extensions for use by route handlers.
+#[derive(Debug, Clone)]
+pub enum AuthenticatedUser {
+    /// The admin user (authenticated via Bearer token with the gateway's admin
+    /// password)
+    Admin,
+    /// A regular user (authenticated via Basic Auth with username:password)
+    User {
+        /// The username of the authenticated user
+        username: String,
+        /// The user's authorizations/permissions
+        authorizations: Vec<UserAuthorization>,
+    },
 }

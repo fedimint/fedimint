@@ -265,7 +265,7 @@ impl ClientModuleInit for LightningClientInit {
         let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
             gateway_conn
         } else {
-            let api = GatewayApi::new(None, args.connector_registry.clone());
+            let api = GatewayApi::new(None, None, args.connector_registry.clone());
             Arc::new(RealGatewayConnection { api })
         };
         Ok(LightningClientModule::new(

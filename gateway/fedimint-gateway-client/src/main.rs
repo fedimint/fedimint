@@ -29,7 +29,14 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 
-    /// Password for authenticated requests to the gateway
+    /// Username for authenticated requests (uses Basic Auth when combined with
+    /// --rpcpassword)
+    #[clap(long)]
+    rpcuser: Option<String>,
+
+    /// Password for authenticated requests to the gateway.
+    /// When used alone: Bearer Auth (admin mode).
+    /// When used with --rpcuser: Basic Auth (user mode).
     #[clap(long)]
     rpcpassword: Option<String>,
 }
@@ -76,7 +83,7 @@ async fn run() -> anyhow::Result<()> {
         .with_env_var_overrides()?
         .bind()
         .await?;
-    let client = GatewayApi::new(cli.rpcpassword, connector_registry);
+    let client = GatewayApi::new(cli.rpcuser, cli.rpcpassword, connector_registry);
 
     match cli.command {
         Commands::General(general_command) => general_command.handle(&client, &cli.address).await?,

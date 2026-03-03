@@ -62,6 +62,7 @@ impl IConnection for HttpConnection {
 impl IGatewayConnection for HttpConnection {
     async fn request(
         &self,
+        username: Option<String>,
         password: Option<String>,
         method: Method,
         route: &str,
@@ -69,9 +70,22 @@ impl IGatewayConnection for HttpConnection {
     ) -> ServerResult<Value> {
         let url = self.base_url.join(route).expect("Invalid base url");
         let mut builder = self.client.request(method, url.clone().to_unsafe());
-        if let Some(password) = password.clone() {
-            builder = builder.bearer_auth(password);
+
+        // If username is provided, use Basic Auth; otherwise use Bearer Auth
+        match (username, password) {
+            (Some(user), Some(pass)) => {
+                // Basic Auth: username:password
+                builder = builder.basic_auth(user, Some(pass));
+            }
+            (None, Some(pass)) => {
+                // Bearer Auth: admin password only
+                builder = builder.bearer_auth(pass);
+            }
+            _ => {
+                // No authentication
+            }
         }
+
         if let Some(payload) = payload {
             builder = builder.json(&payload);
         }

@@ -14,7 +14,9 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
 use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
-use fedimint_gateway_common::{ConnectorType, FederationConfig, RegisteredProtocol};
+use fedimint_gateway_common::{
+    ConnectorType, FederationConfig, RegisteredProtocol, UserAuthorization,
+};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -839,10 +841,10 @@ pub struct User {
     pub password_hash: String,
     /// When the user was created
     pub created_at: SystemTime,
-    /// Last successful login time
-    pub last_login: Option<SystemTime>,
     /// Optional description/notes about the user
     pub description: Option<String>,
+    /// User authorizations/permissions
+    pub authorization: Vec<UserAuthorization>,
 }
 
 impl_db_record!(key = UserKey, value = User, db_prefix = DbKeyPrefix::User,);

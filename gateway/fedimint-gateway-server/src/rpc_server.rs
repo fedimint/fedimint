@@ -8,12 +8,13 @@ use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
+use base64::Engine;
 use bitcoin::hashes::sha256;
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact;
 use fedimint_gateway_common::{
-    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, AuthenticatedUser, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
@@ -29,6 +30,7 @@ use fedimint_gateway_common::{
     SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, USERS_ENDPOINT,
     V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
+use fedimint_gateway_server_db::GatewayDbtxNcExt;
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -99,18 +101,40 @@ pub async fn run_webserver(
 }
 
 /// Extracts the Bearer token from the Authorization header of the request.
-fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
+fn extract_bearer_token(request: &Request) -> Option<String> {
     let headers = request.headers();
-    let auth_header = headers.get(header::AUTHORIZATION);
-    if let Some(header_value) = auth_header {
-        let auth_str = header_value
-            .to_str()
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
-        let token = auth_str.trim_start_matches("Bearer ").to_string();
-        return Ok(token);
+    let auth_header = headers.get(header::AUTHORIZATION)?;
+    let auth_str = auth_header.to_str().ok()?;
+
+    if auth_str.starts_with("Bearer ") {
+        Some(auth_str.trim_start_matches("Bearer ").to_string())
+    } else {
+        None
+    }
+}
+
+/// Extracts Basic Auth credentials (username, password) from the Authorization
+/// header.
+fn extract_basic_auth(request: &Request) -> Option<(String, String)> {
+    let headers = request.headers();
+    let auth_header = headers.get(header::AUTHORIZATION)?;
+    let auth_str = auth_header.to_str().ok()?;
+
+    if !auth_str.starts_with("Basic ") {
+        return None;
     }
 
-    Err(StatusCode::UNAUTHORIZED)
+    let encoded = auth_str.trim_start_matches("Basic ");
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    let credentials = String::from_utf8(decoded).ok()?;
+
+    let mut parts = credentials.splitn(2, ':');
+    let username = parts.next()?.to_string();
+    let password = parts.next()?.to_string();
+
+    Some((username, password))
 }
 
 async fn not_configured_middleware(
@@ -140,19 +164,47 @@ async fn not_configured_middleware(
     Ok(next.run(request).await)
 }
 
-/// Middleware to authenticate an incoming request. Routes that are
-/// authenticated with this middleware always require a Bearer token to be
-/// supplied in the Authorization header.
+/// Middleware to authenticate an incoming request. Supports two authentication
+/// methods:
+/// 1. Basic Auth (username:password) - Looks up user in database, verifies
+///    bcrypt hash
+/// 2. Bearer Auth (password only) - Verifies against admin password hash
+///
+/// On successful authentication, inserts `AuthenticatedUser` into request
+/// extensions.
 async fn auth_middleware(
     Extension(gateway): Extension<Arc<Gateway>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let token = extract_bearer_token(&request)?;
-    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
-        .expect("Bcrypt hash is valid since we just stringified it")
-    {
-        return Ok(next.run(request).await);
+    // Try Basic Auth first (for user authentication)
+    if let Some((username, password)) = extract_basic_auth(&request) {
+        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+        if let Some(user) = dbtx.get_user(&username).await {
+            if bcrypt::verify(&password, &user.password_hash).unwrap_or(false) {
+                // Authentication successful - insert user identity into extensions
+                let auth_user = AuthenticatedUser::User {
+                    username,
+                    authorizations: user.authorization,
+                };
+                request.extensions_mut().insert(auth_user);
+                return Ok(next.run(request).await);
+            }
+        }
+
+        // Invalid user/password - return unauthorized
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // Try Bearer Auth (for admin authentication)
+    if let Some(token) = extract_bearer_token(&request) {
+        if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
+            .expect("Bcrypt hash is valid since we just stringified it")
+        {
+            // Admin authentication successful
+            request.extensions_mut().insert(AuthenticatedUser::Admin);
+            return Ok(next.run(request).await);
+        }
     }
 
     Err(StatusCode::UNAUTHORIZED)

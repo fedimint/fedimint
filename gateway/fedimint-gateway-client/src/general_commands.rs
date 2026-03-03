@@ -2,16 +2,17 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
-use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{Amount, fedimint_build_code_version_env};
 use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_gateway_client::{
     connect_federation, create_user, delete_user, get_balances, get_info, get_invite_codes,
     get_mnemonic, get_user, leave_federation, list_users, payment_log, payment_summary, stop,
 };
 use fedimint_gateway_common::{
-    ConnectFedPayload, CreateUserPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
+    ConnectFedPayload, CreateUserPayload, LeaveFedPayload, PaymentLogPayload,
+    PaymentSummaryPayload, UserAuthorization,
 };
 use fedimint_ln_common::client::GatewayApi;
 
@@ -99,6 +100,15 @@ pub enum UserCommands {
         /// Optional description for the user
         #[clap(long)]
         description: Option<String>,
+
+        /// Maximum amount the user can send in a single payment (in msats).
+        /// If specified, adds a SendLimit authorization.
+        #[clap(long)]
+        send_limit_msats: Option<u64>,
+
+        /// Allow the user to manage other users (create, delete, list)
+        #[clap(long)]
+        user_management: bool,
     },
     /// Delete a user
     Delete {
@@ -234,10 +244,23 @@ impl UserCommands {
                 username,
                 password,
                 description,
+                send_limit_msats,
+                user_management,
             } => {
                 // Hash the password locally using bcrypt before sending to server
                 let password_hash =
                     bcrypt::hash(&password, bcrypt::DEFAULT_COST).expect("Failed to hash password");
+
+                // Build authorizations from flags
+                let mut authorizations = Vec::new();
+                if let Some(max_msats) = send_limit_msats {
+                    authorizations.push(UserAuthorization::SendLimit {
+                        max_send_amount: Amount::from_msats(max_msats),
+                    });
+                }
+                if user_management {
+                    authorizations.push(UserAuthorization::UserManagement);
+                }
 
                 let response = create_user(
                     client,
@@ -246,6 +269,7 @@ impl UserCommands {
                         username,
                         password_hash,
                         description,
+                        authorizations,
                     },
                 )
                 .await?;

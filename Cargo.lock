@@ -3358,6 +3358,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.8.7",
+ "base64 0.22.1",
  "bcrypt",
  "bitcoin",
  "clap",
