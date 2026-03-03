@@ -55,6 +55,378 @@ pub struct Gatewayd {
     pub gateway_index: usize,
 }
 
+// ==================== Gateway Client Builder ====================
+
+/// A builder for creating gateway CLI commands with configurable endpoint (HTTP
+/// or Iroh) and authentication (admin or user).
+///
+/// TODO: All `gateway-cli` functions from `Gatewayd` should be moved over to
+/// this struct so that they can easily be executed by different users or over
+/// iroh.
+///
+/// # Example
+/// ```ignore
+/// // HTTP as admin
+/// gw.client().spend_ecash(fed_id, 500_000).await?;
+///
+/// // HTTP as user
+/// gw.client().as_user("alice", "password").spend_ecash(fed_id, 500_000).await?;
+///
+/// // Iroh as admin
+/// gw.client().iroh().get_mnemonic().await?;
+///
+/// // Iroh as user
+/// gw.client().iroh().as_user("alice", "password").spend_ecash(fed_id, 500_000).await?;
+/// ```
+pub struct GatewayClient<'a> {
+    gw: &'a Gatewayd,
+    use_iroh: bool,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+impl<'a> GatewayClient<'a> {
+    /// Create a new gateway client for the given gateway (defaults to HTTP,
+    /// admin auth)
+    pub fn new(gw: &'a Gatewayd) -> Self {
+        Self {
+            gw,
+            use_iroh: false,
+            username: None,
+            password: None,
+        }
+    }
+
+    /// Use the Iroh endpoint instead of HTTP
+    pub fn iroh(mut self) -> Self {
+        self.use_iroh = true;
+        self
+    }
+
+    /// Authenticate as a specific user instead of admin
+    pub fn as_user(mut self, username: &str, password: &str) -> Self {
+        self.username = Some(username.to_string());
+        self.password = Some(password.to_string());
+        self
+    }
+
+    /// Build the base command with the configured endpoint and authentication
+    fn cmd(&self) -> Command {
+        match (&self.username, &self.password, self.use_iroh) {
+            // User auth over HTTP
+            (Some(u), Some(p), false) => cmd!(
+                crate::util::get_gateway_cli_path(),
+                "--rpcuser",
+                u,
+                "--rpcpassword",
+                p,
+                "-a",
+                &self.gw.addr
+            ),
+            // User auth over Iroh
+            (Some(u), Some(p), true) => cmd!(
+                crate::util::get_gateway_cli_path(),
+                "--rpcuser",
+                u,
+                "--rpcpassword",
+                p,
+                "--address",
+                format!("iroh://{}", self.gw.node_id),
+            ),
+            // Admin auth over HTTP
+            (None, None, false) => cmd!(
+                crate::util::get_gateway_cli_path(),
+                "--rpcpassword=theresnosecondbest",
+                "-a",
+                &self.gw.addr
+            ),
+            // Admin auth over Iroh
+            (None, None, true) => cmd!(
+                crate::util::get_gateway_cli_path(),
+                "--rpcpassword=theresnosecondbest",
+                "--address",
+                format!("iroh://{}", self.gw.node_id),
+            ),
+            // Invalid state - shouldn't happen
+            _ => panic!(
+                "Invalid GatewayClient state: username and password must both be set or both be None"
+            ),
+        }
+    }
+
+    // ==================== User Management Operations ====================
+
+    /// Create a new user
+    pub async fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+        send_limit_msats: Option<u64>,
+        user_management: bool,
+        federation_management: bool,
+        fee_management: bool,
+    ) -> Result<serde_json::Value> {
+        let mut command = self
+            .cmd()
+            .arg(&"user")
+            .arg(&"create")
+            .arg(&"--password")
+            .arg(&password)
+            .arg(&username);
+
+        if let Some(limit) = send_limit_msats {
+            command = command.arg(&"--send-limit-msats").arg(&limit);
+        }
+
+        if user_management {
+            command = command.arg(&"--user-management");
+        }
+
+        if federation_management {
+            command = command.arg(&"--federation-management");
+        }
+
+        if fee_management {
+            command = command.arg(&"--fee-management");
+        }
+
+        command.out_json().await
+    }
+
+    /// Delete a user
+    pub async fn delete_user(&self, username: &str) -> Result<()> {
+        self.cmd()
+            .arg(&"user")
+            .arg(&"delete")
+            .arg(&username)
+            .run()
+            .await
+    }
+
+    /// List all users
+    pub async fn list_users(&self) -> Result<ListUsersResponse> {
+        let response = self.cmd().arg(&"user").arg(&"list").out_json().await?;
+        serde_json::from_value(response).context("Failed to parse list users response")
+    }
+
+    /// Get a specific user
+    pub async fn get_user(&self, username: &str) -> Result<Option<UserResponse>> {
+        let response = self
+            .cmd()
+            .arg(&"user")
+            .arg(&"get")
+            .arg(&username)
+            .out_json()
+            .await?;
+        if response.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                serde_json::from_value(response).context("Failed to parse user response")?,
+            ))
+        }
+    }
+
+    // ==================== Spend Operations ====================
+
+    /// Spend ecash (for testing spend limits)
+    pub async fn spend_ecash(
+        &self,
+        federation_id: FederationId,
+        amount_msats: u64,
+    ) -> Result<serde_json::Value> {
+        self.cmd()
+            .arg(&"ecash")
+            .arg(&"send")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&amount_msats)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Withdraw ecash (for testing spend limits)
+    pub async fn withdraw(
+        &self,
+        federation_id: FederationId,
+        amount: BitcoinAmountOrAll,
+        address: &str,
+    ) -> Result<serde_json::Value> {
+        let amount_str = match amount {
+            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
+            BitcoinAmountOrAll::All => "all".to_string(),
+        };
+        self.cmd()
+            .arg(&"ecash")
+            .arg(&"pegout")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&"--amount")
+            .arg(&amount_str)
+            .arg(&"--address")
+            .arg(&address)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Pay invoice (for testing spend limits)
+    pub async fn pay_invoice(&self, invoice: Bolt11Invoice) -> Result<serde_json::Value> {
+        self.cmd()
+            .arg(&"lightning")
+            .arg(&"pay-invoice")
+            .arg(&invoice)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Send onchain (for testing spend limits)
+    pub async fn send_onchain(
+        &self,
+        amount: BitcoinAmountOrAll,
+        address: &str,
+        fee_rate: u64,
+    ) -> Result<Txid> {
+        let amount_str = match amount {
+            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
+            BitcoinAmountOrAll::All => "all".to_string(),
+        };
+        let value = self
+            .cmd()
+            .arg(&"onchain")
+            .arg(&"send")
+            .arg(&"--amount")
+            .arg(&amount_str)
+            .arg(&"--address")
+            .arg(&address)
+            .arg(&"--fee-rate-sats-per-vbyte")
+            .arg(&fee_rate)
+            .out_json()
+            .await?;
+        let txid: Txid =
+            serde_json::from_value(value).context("Could not parse onchain send response")?;
+        Ok(txid)
+    }
+
+    /// Open channel
+    pub async fn open_channel(
+        &self,
+        pubkey: &str,
+        host: &str,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<Txid> {
+        let output = self
+            .cmd()
+            .arg(&"lightning")
+            .arg(&"open-channel")
+            .arg(&"--pubkey")
+            .arg(&pubkey)
+            .arg(&"--host")
+            .arg(&host)
+            .arg(&"--channel-size-sats")
+            .arg(&channel_size_sats)
+            .arg(&"--push-amount-sats")
+            .arg(&push_amount_sats)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_string()
+            .await?;
+        Ok(Txid::from_str(&output)?)
+    }
+
+    /// Pay BOLT12 offer (for testing spend limits)
+    pub async fn pay_offer(&self, offer: &str, amount: Option<Amount>) -> Result<()> {
+        let mut command = self
+            .cmd()
+            .arg(&"lightning")
+            .arg(&"pay-offer")
+            .arg(&"--offer")
+            .arg(&offer);
+
+        if let Some(amount) = amount {
+            command = command.arg(&"--amount-msat").arg(&amount.msats);
+        }
+
+        command.run().await
+    }
+
+    // ==================== Federation Management Operations ====================
+
+    /// Connect to a federation (for testing federation management permission)
+    pub async fn connect_federation(&self, invite_code: &str) -> Result<serde_json::Value> {
+        self.cmd()
+            .arg(&"connect-fed")
+            .arg(&"--invite-code")
+            .arg(&invite_code)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Leave a federation (for testing federation management permission)
+    pub async fn leave_federation(&self, federation_id: FederationId) -> Result<serde_json::Value> {
+        self.cmd()
+            .arg(&"leave-fed")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    // ==================== Fee Management Operations ====================
+
+    /// Set fees (for testing fee management permission)
+    pub async fn set_fees(
+        &self,
+        federation_id: FederationId,
+        ln_ppm: u64,
+        ln_base_msat: u64,
+    ) -> Result<()> {
+        self.cmd()
+            .arg(&"cfg")
+            .arg(&"set-fees")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&"--ln-ppm")
+            .arg(&ln_ppm)
+            .arg(&"--ln-base")
+            .arg(&format!("{ln_base_msat} msat"))
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .run()
+            .await
+    }
+
+    // ==================== Admin-Only Operations ====================
+
+    /// Get gateway mnemonic (admin only)
+    pub async fn get_mnemonic(&self) -> Result<serde_json::Value> {
+        self.cmd()
+            .arg(&"seed")
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+}
+
 impl Gatewayd {
     pub async fn new(
         process_mgr: &ProcessManager,
@@ -412,24 +784,13 @@ impl Gatewayd {
     }
 
     pub async fn pay_invoice(&self, invoice: Bolt11Invoice) -> Result<()> {
-        cmd!(self, "lightning", "pay-invoice", invoice.to_string())
-            .run()
-            .await?;
-
+        self.client().pay_invoice(invoice).await?;
         Ok(())
     }
 
     pub async fn send_ecash(&self, federation_id: String, amount_msats: u64) -> Result<String> {
-        let value = cmd!(
-            self,
-            "ecash",
-            "send",
-            "--federation-id",
-            federation_id,
-            amount_msats
-        )
-        .out_json()
-        .await?;
+        let fed_id = FederationId::from_str(&federation_id)?;
+        let value = self.client().spend_ecash(fed_id, amount_msats).await?;
         let ecash: String = serde_json::from_value(
             value
                 .get("notes")
@@ -471,22 +832,9 @@ impl Gatewayd {
         fee_rate: u64,
     ) -> Result<bitcoin::Txid> {
         let withdraw_address = bitcoind.get_new_address().await?;
-        let value = cmd!(
-            self,
-            "onchain",
-            "send",
-            "--address",
-            withdraw_address,
-            "--amount",
-            amount,
-            "--fee-rate-sats-per-vbyte",
-            fee_rate
-        )
-        .out_json()
-        .await?;
-
-        let txid: bitcoin::Txid = serde_json::from_value(value)?;
-        Ok(txid)
+        self.client()
+            .send_onchain(amount, &withdraw_address.to_string(), fee_rate)
+            .await
     }
 
     pub async fn close_channel(&self, remote_pubkey: PublicKey, force: bool) -> Result<()> {
@@ -545,22 +893,14 @@ impl Gatewayd {
         push_amount_sats: Option<u64>,
     ) -> Result<Txid> {
         let pubkey = gw.lightning_pubkey().await?;
-
-        let mut command = cmd!(
-            self,
-            "lightning",
-            "open-channel",
-            "--pubkey",
-            pubkey,
-            "--host",
-            gw.lightning_node_addr,
-            "--channel-size-sats",
-            channel_size_sats,
-            "--push-amount-sats",
-            push_amount_sats.unwrap_or(0)
-        );
-
-        Ok(Txid::from_str(&command.out_string().await?)?)
+        self.client()
+            .open_channel(
+                &pubkey.to_string(),
+                &gw.lightning_node_addr,
+                channel_size_sats,
+                push_amount_sats.unwrap_or(0),
+            )
+            .await
     }
 
     pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {
@@ -790,470 +1130,30 @@ impl Gatewayd {
     }
 
     pub async fn pay_offer(&self, offer: String, amount: Option<Amount>) -> Result<()> {
-        if let Some(amount) = amount {
-            cmd!(
-                self,
-                "lightning",
-                "pay-offer",
-                "--offer",
-                offer,
-                "--amount-msat",
-                amount.msats
-            )
-            .run()
-            .await?;
-        } else {
-            cmd!(self, "lightning", "pay-offer", "--offer", offer)
-                .run()
-                .await?;
-        }
-
-        Ok(())
+        self.client().pay_offer(&offer, amount).await
     }
 
     // ==================== User Management Methods ====================
 
-    /// Creates a command using Basic Auth for a specific user (instead of admin
-    /// Bearer auth)
-    pub fn cmd_as_user(&self, username: &str, password: &str) -> Command {
-        cmd!(
-            crate::util::get_gateway_cli_path(),
-            "--rpcuser",
-            username,
-            "--rpcpassword",
-            password,
-            "-a",
-            &self.addr
-        )
-    }
-
-    /// Creates a command using the iroh endpoint with admin auth (bearer token)
-    pub fn cmd_iroh(&self) -> Command {
-        cmd!(
-            crate::util::get_gateway_cli_path(),
-            "--rpcpassword=theresnosecondbest",
-            "--address",
-            format!("iroh://{}", self.node_id),
-        )
-    }
-
-    /// Creates a command using the iroh endpoint with user auth (username +
-    /// password)
-    pub fn cmd_iroh_as_user(&self, username: &str, password: &str) -> Command {
-        cmd!(
-            crate::util::get_gateway_cli_path(),
-            "--rpcuser",
-            username,
-            "--rpcpassword",
-            password,
-            "--address",
-            format!("iroh://{}", self.node_id),
-        )
-    }
-
-    /// Create a new user (as admin)
-    pub async fn create_user(
-        &self,
-        username: &str,
-        password: &str,
-        send_limit_msats: Option<u64>,
-        user_management: bool,
-        federation_management: bool,
-        fee_management: bool,
-    ) -> Result<serde_json::Value> {
-        let mut command = cmd!(self, "user", "create", "--password", password, username,);
-
-        if let Some(limit) = send_limit_msats {
-            command = command.arg(&"--send-limit-msats").arg(&limit);
-        }
-
-        if user_management {
-            command = command.arg(&"--user-management");
-        }
-
-        if federation_management {
-            command = command.arg(&"--federation-management");
-        }
-
-        if fee_management {
-            command = command.arg(&"--fee-management");
-        }
-
-        command.out_json().await
-    }
-
-    /// Delete a user (as admin)
-    pub async fn delete_user(&self, username: &str) -> Result<()> {
-        cmd!(self, "user", "delete", username).run().await
-    }
-
-    /// List all users (as admin)
-    pub async fn list_users(&self) -> Result<ListUsersResponse> {
-        let response = cmd!(self, "user", "list").out_json().await?;
-        serde_json::from_value(response).context("Failed to parse list users response")
-    }
-
-    /// Get a specific user (as admin)
-    pub async fn get_user(&self, username: &str) -> Result<Option<UserResponse>> {
-        let response = cmd!(self, "user", "get", username).out_json().await?;
-        // The response is either null or the user object
-        if response.is_null() {
-            Ok(None)
-        } else {
-            Ok(Some(
-                serde_json::from_value(response).context("Failed to parse user response")?,
-            ))
-        }
-    }
-
-    /// Create a user as another user (for testing permissions)
-    pub async fn create_user_as_user(
-        &self,
-        auth_username: &str,
-        auth_password: &str,
-        new_username: &str,
-        new_password: &str,
-        send_limit_msats: Option<u64>,
-        user_management: bool,
-        federation_management: bool,
-        fee_management: bool,
-    ) -> Result<serde_json::Value> {
-        let mut command = self
-            .cmd_as_user(auth_username, auth_password)
-            .arg(&"user")
-            .arg(&"create")
-            .arg(&"--password")
-            .arg(&new_password)
-            .arg(&new_username);
-
-        if let Some(limit) = send_limit_msats {
-            command = command.arg(&"--send-limit-msats").arg(&limit);
-        }
-
-        if user_management {
-            command = command.arg(&"--user-management");
-        }
-
-        if federation_management {
-            command = command.arg(&"--federation-management");
-        }
-
-        if fee_management {
-            command = command.arg(&"--fee-management");
-        }
-
-        command.out_json().await
-    }
-
-    /// Delete a user as another user (for testing permissions)
-    pub async fn delete_user_as_user(
-        &self,
-        auth_username: &str,
-        auth_password: &str,
-        target_username: &str,
-    ) -> Result<()> {
-        self.cmd_as_user(auth_username, auth_password)
-            .arg(&"user")
-            .arg(&"delete")
-            .arg(&target_username)
-            .run()
-            .await
-    }
-
-    // ==================== Spend Operations as User ====================
-
-    /// Spend ecash as a specific user (for testing spend limits)
-    pub async fn spend_ecash_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-        amount_msats: u64,
-    ) -> Result<serde_json::Value> {
-        self.cmd_as_user(username, password)
-            .arg(&"ecash")
-            .arg(&"send")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .arg(&amount_msats)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Withdraw ecash as a specific user (for testing spend limits)
-    pub async fn withdraw_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-        amount: BitcoinAmountOrAll,
-        address: &str,
-    ) -> Result<serde_json::Value> {
-        let amount_str = match amount {
-            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
-            BitcoinAmountOrAll::All => "all".to_string(),
-        };
-        self.cmd_as_user(username, password)
-            .arg(&"ecash")
-            .arg(&"pegout")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .arg(&"--amount")
-            .arg(&amount_str)
-            .arg(&"--address")
-            .arg(&address)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Pay invoice as a specific user (for testing spend limits)
-    pub async fn pay_invoice_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        invoice: Bolt11Invoice,
-    ) -> Result<serde_json::Value> {
-        self.cmd_as_user(username, password)
-            .arg(&"lightning")
-            .arg(&"pay-invoice")
-            .arg(&invoice)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Send onchain as a specific user (for testing spend limits)
-    pub async fn send_onchain_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        amount: BitcoinAmountOrAll,
-        address: &str,
-        fee_rate: u64,
-    ) -> Result<Txid> {
-        let amount_str = match amount {
-            BitcoinAmountOrAll::Amount(btc) => btc.to_sat().to_string(),
-            BitcoinAmountOrAll::All => "all".to_string(),
-        };
-        let value = self
-            .cmd_as_user(username, password)
-            .arg(&"onchain")
-            .arg(&"send")
-            .arg(&"--amount")
-            .arg(&amount_str)
-            .arg(&"--address")
-            .arg(&address)
-            .arg(&"--fee-rate-sats-per-vbyte")
-            .arg(&fee_rate)
-            .out_json()
-            .await?;
-        let txid: Txid =
-            serde_json::from_value(value).context("Could not parse onchain send response")?;
-        Ok(txid)
-    }
-
-    /// Open channel as a specific user (for testing spend limits)
-    pub async fn open_channel_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        pubkey: &str,
-        host: &str,
-        channel_size_sats: u64,
-        push_amount_sats: u64,
-    ) -> Result<serde_json::Value> {
-        self.cmd_as_user(username, password)
-            .arg(&"lightning")
-            .arg(&"open-channel")
-            .arg(&"--pubkey")
-            .arg(&pubkey)
-            .arg(&"--host")
-            .arg(&host)
-            .arg(&"--channel-size-sats")
-            .arg(&channel_size_sats)
-            .arg(&"--push-amount-sats")
-            .arg(&push_amount_sats)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Pay BOLT12 offer as a specific user (for testing spend limits)
-    pub async fn pay_offer_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        offer: &str,
-        amount: Option<Amount>,
-    ) -> Result<()> {
-        let mut command = self
-            .cmd_as_user(username, password)
-            .arg(&"lightning")
-            .arg(&"pay-offer")
-            .arg(&"--offer")
-            .arg(&offer);
-
-        if let Some(amount) = amount {
-            command = command.arg(&"--amount-msat").arg(&amount.msats);
-        }
-
-        command.run().await
-    }
-
-    // ==================== Federation Management Operations as User
-    // ====================
-
-    /// Connect to a federation as a specific user (for testing federation
-    /// management permission)
-    pub async fn connect_federation_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        invite_code: &str,
-    ) -> Result<serde_json::Value> {
-        self.cmd_as_user(username, password)
-            .arg(&"general")
-            .arg(&"connect-fed")
-            .arg(&"--invite-code")
-            .arg(&invite_code)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Leave a federation as a specific user (for testing federation management
-    /// permission)
-    pub async fn leave_federation_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-    ) -> Result<serde_json::Value> {
-        self.cmd_as_user(username, password)
-            .arg(&"general")
-            .arg(&"leave-fed")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    // ==================== Fee Management Operations as User ====================
-
-    /// Set fees as a specific user (for testing fee management permission)
-    pub async fn set_fees_as_user(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-        ln_ppm: u64,
-        ln_base_msat: u64,
-    ) -> Result<()> {
-        self.cmd_as_user(username, password)
-            .arg(&"cfg")
-            .arg(&"set-fees")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .arg(&"--ln-ppm")
-            .arg(&ln_ppm)
-            .arg(&"--ln-base")
-            .arg(&format!("{ln_base_msat} msat"))
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .run()
-            .await
-    }
-
-    // ==================== Iroh Endpoint Operations ====================
-
-    /// Spend ecash as a specific user via iroh endpoint (for testing
-    /// authorization over iroh)
-    pub async fn spend_ecash_as_user_iroh(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-        amount_msats: u64,
-    ) -> Result<serde_json::Value> {
-        self.cmd_iroh_as_user(username, password)
-            .arg(&"ecash")
-            .arg(&"send")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .arg(&amount_msats)
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Set fees as a specific user via iroh endpoint (for testing authorization
-    /// over iroh)
-    pub async fn set_fees_as_user_iroh(
-        &self,
-        username: &str,
-        password: &str,
-        federation_id: FederationId,
-        ln_ppm: u64,
-        ln_base_msat: u64,
-    ) -> Result<()> {
-        self.cmd_iroh_as_user(username, password)
-            .arg(&"cfg")
-            .arg(&"set-fees")
-            .arg(&"--federation-id")
-            .arg(&federation_id)
-            .arg(&"--ln-ppm")
-            .arg(&ln_ppm)
-            .arg(&"--ln-base")
-            .arg(&format!("{ln_base_msat} msat"))
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .run()
-            .await
-    }
-
-    /// Get gateway mnemonic via iroh endpoint (admin only)
-    pub async fn get_mnemonic_iroh(&self) -> Result<serde_json::Value> {
-        self.cmd_iroh()
-            .arg(&"seed")
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
-    }
-
-    /// Try to get gateway mnemonic as a user via iroh endpoint (should fail -
-    /// admin only)
-    pub async fn get_mnemonic_as_user_iroh(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> Result<serde_json::Value> {
-        self.cmd_iroh_as_user(username, password)
-            .arg(&"seed")
-            .kill_on_drop(true)
-            .env("RUST_BACKTRACE", "1")
-            .env("RUST_LIB_BACKTRACE", "0")
-            .out_json()
-            .await
+    /// Create a `GatewayClient` builder for making authenticated requests.
+    /// Defaults to HTTP endpoint with admin authentication.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // HTTP as admin
+    /// gw.client().spend_ecash(fed_id, 500_000).await?;
+    ///
+    /// // HTTP as user
+    /// gw.client().as_user("alice", "password").spend_ecash(fed_id, 500_000).await?;
+    ///
+    /// // Iroh as admin
+    /// gw.client().iroh().get_mnemonic().await?;
+    ///
+    /// // Iroh as user
+    /// gw.client().iroh().as_user("alice", "password").set_fees(fed_id, 100,
+    /// 1000).await?;
+    /// ```
+    pub fn client(&self) -> GatewayClient<'_> {
+        GatewayClient::new(self)
     }
 }

@@ -586,38 +586,39 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1: Has SendLimit of 1,000,000 msats (1,000 sats)
             info!(target: LOG_TEST, "Creating user with SendLimit...");
-            gw.create_user("test_user_1", user1_password, Some(1_000_000), false, false, false)
+            gw.client().create_user("test_user_1", user1_password, Some(1_000_000), false, false, false)
                 .await?;
 
             // User 2: Has UserManagement permission (can manage other users)
             info!(target: LOG_TEST, "Creating user with UserManagement permission...");
-            gw.create_user("test_user_2", user2_password, None, true, false, false)
+            gw.client().create_user("test_user_2", user2_password, None, true, false, false)
                 .await?;
 
             // User 3: Has no permissions (just authenticated, for deletion test)
             info!(target: LOG_TEST, "Creating user with no permissions...");
-            gw.create_user("test_user_3", user3_password, None, false, false, false)
+            gw.client().create_user("test_user_3", user3_password, None, false, false, false)
                 .await?;
 
             // User 4: Has FederationManagement permission (can join/leave federations)
             info!(target: LOG_TEST, "Creating user with FederationManagement permission...");
-            gw.create_user("test_user_4", user4_password, None, false, true, false)
+            gw.client().create_user("test_user_4", user4_password, None, false, true, false)
                 .await?;
 
             // User 5: Has FeeManagement permission (can modify fees)
             info!(target: LOG_TEST, "Creating user with FeeManagement permission...");
-            gw.create_user("test_user_5", user5_password, None, false, false, true)
+            gw.client().create_user("test_user_5", user5_password, None, false, false, true)
                 .await?;
 
             // List users and verify all 5 exist
             info!(target: LOG_TEST, "Listing users...");
-            let users = gw.list_users().await?;
+            let users = gw.client().list_users().await?;
             assert_eq!(users.users.len(), 5, "Expected 5 users");
             info!(target: LOG_TEST, "Verified 5 users exist");
 
             // Get specific user and verify details
             info!(target: LOG_TEST, "Getting specific user...");
             let user1 = gw
+                .client()
                 .get_user("test_user_1")
                 .await?
                 .expect("User should exist");
@@ -627,32 +628,31 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Delete user 3
             info!(target: LOG_TEST, "Deleting user...");
-            gw.delete_user("test_user_3").await?;
+            gw.client().delete_user("test_user_3").await?;
 
             // List users and verify only 4 remain
-            let users = gw.list_users().await?;
+            let users = gw.client().list_users().await?;
             assert_eq!(users.users.len(), 4, "Expected 4 users after deletion");
             info!(target: LOG_TEST, "Verified user deletion");
 
             // ==================== Test Spend Limit Enforcement ====================
             info!(target: LOG_TEST, "Testing spend limit enforcement...");
 
+            // Create a client for user 1 (has SendLimit of 1M msats)
+            let user1_client = gw.client().as_user("test_user_1", user1_password);
+
             // Test 1: spend_ecash within limit should succeed
             info!(target: LOG_TEST, "Testing spend_ecash within limit...");
-            let result = gw
-                .spend_ecash_as_user("test_user_1", user1_password, fed_id.clone(), 500_000)
-                .await;
+            let result = user1_client.spend_ecash(fed_id.clone(), 500_000).await;
             if let Err(ref e) = result {
-                info!(target: LOG_TEST, "spend_ecash_as_user error: {:?}", e);
+                info!(target: LOG_TEST, "spend_ecash error: {:?}", e);
             }
             assert!(result.is_ok(), "spend_ecash within limit should succeed");
             info!(target: LOG_TEST, "spend_ecash within limit succeeded");
 
             // Test 2: spend_ecash exceeding limit should fail
             info!(target: LOG_TEST, "Testing spend_ecash exceeding limit...");
-            let result = gw
-                .spend_ecash_as_user("test_user_1", user1_password, fed_id.clone(), 2_000_000)
-                .await;
+            let result = user1_client.spend_ecash(fed_id.clone(), 2_000_000).await;
             assert!(result.is_err(), "spend_ecash exceeding limit should fail");
             info!(target: LOG_TEST, "spend_ecash exceeding limit correctly rejected");
 
@@ -661,10 +661,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
             info!(target: LOG_TEST, "Testing withdraw exceeding limit...");
             let bitcoind = dev_fed.bitcoind().await?;
             let address = bitcoind.get_new_address().await?;
-            let result = gw
-                .withdraw_as_user(
-                    "test_user_1",
-                    user1_password,
+            let result = user1_client
+                .withdraw(
                     fed_id.clone(),
                     BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(2000)), // 2000 sats = 2M msats > 1M limit
                     &address.to_string(),
@@ -677,18 +675,14 @@ async fn user_auth_test() -> anyhow::Result<()> {
             info!(target: LOG_TEST, "Testing pay_invoice exceeding limit...");
             // Create an invoice for 2M msats (exceeds 1M limit)
             let large_invoice = gw_second.create_invoice(2_000_000).await?;
-            let result = gw
-                .pay_invoice_as_user("test_user_1", user1_password, large_invoice)
-                .await;
+            let result = user1_client.pay_invoice(large_invoice).await;
             assert!(result.is_err(), "pay_invoice exceeding limit should fail");
             info!(target: LOG_TEST, "pay_invoice exceeding limit correctly rejected");
 
             // Test 5: send_onchain exceeding limit should fail
             info!(target: LOG_TEST, "Testing send_onchain exceeding limit...");
-            let result = gw
-                .send_onchain_as_user(
-                    "test_user_1",
-                    user1_password,
+            let result = user1_client
+                .send_onchain(
                     BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(2000)), // 2000 sats = 2M msats > 1M limit
                     &address.to_string(),
                     10,
@@ -700,29 +694,25 @@ async fn user_auth_test() -> anyhow::Result<()> {
             // Test 6: open_channel with push_amount exceeding limit should fail
             info!(target: LOG_TEST, "Testing open_channel with push_amount exceeding limit...");
             let other_pubkey = gw_second.lightning_pubkey().await?;
-            let result = gw
-                .open_channel_as_user(
-                    "test_user_1",
-                    user1_password,
+            let result = user1_client
+                .open_channel(
                     &other_pubkey.to_string(),
                     "127.0.0.1:9736",
-                    100_000,       // channel size (not checked against limit)
-                    2000,          // push_amount 2000 sats = 2M msats > 1M limit
+                    100_000, // channel size (not checked against limit)
+                    2000,    // push_amount 2000 sats = 2M msats > 1M limit
                 )
                 .await;
-            assert!(result.is_err(), "open_channel with push_amount exceeding limit should fail");
+            assert!(
+                result.is_err(),
+                "open_channel with push_amount exceeding limit should fail"
+            );
             info!(target: LOG_TEST, "open_channel with push_amount exceeding limit correctly rejected");
 
             // Test 7: pay_offer exceeding limit should fail
             info!(target: LOG_TEST, "Testing pay_offer exceeding limit...");
             let offer = gw_second.create_offer(None).await?;
-            let result = gw
-                .pay_offer_as_user(
-                    "test_user_1",
-                    user1_password,
-                    &offer,
-                    Some(Amount::from_msats(2_000_000)), // 2M msats > 1M limit
-                )
+            let result = user1_client
+                .pay_offer(&offer, Some(Amount::from_msats(2_000_000))) // 2M msats > 1M limit
                 .await;
             assert!(result.is_err(), "pay_offer exceeding limit should fail");
             info!(target: LOG_TEST, "pay_offer exceeding limit correctly rejected");
@@ -731,9 +721,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
             info!(target: LOG_TEST, "Testing user without spend permission...");
 
             // User 2 has UserManagement but NOT SendLimit - should be rejected from spend endpoints
-            let result = gw
-                .spend_ecash_as_user("test_user_2", user2_password, fed_id.clone(), 100_000)
-                .await;
+            let user2_client = gw.client().as_user("test_user_2", user2_password);
+            let result = user2_client.spend_ecash(fed_id.clone(), 100_000).await;
             assert!(
                 result.is_err(),
                 "User without SendLimit should be rejected from spend_ecash"
@@ -745,17 +734,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 2 (has UserManagement) should be able to create users
             info!(target: LOG_TEST, "Testing create_user with UserManagement permission...");
-            let result = gw
-                .create_user_as_user(
-                    "test_user_2",
-                    user2_password,
-                    "test_user_temp",
-                    "user_temp_password",
-                    None,
-                    false,
-                    false,
-                    false,
-                )
+            let result = user2_client
+                .create_user("test_user_temp", "user_temp_password", None, false, false, false)
                 .await;
             assert!(
                 result.is_ok(),
@@ -764,14 +744,16 @@ async fn user_auth_test() -> anyhow::Result<()> {
             info!(target: LOG_TEST, "create_user with UserManagement succeeded");
 
             // Verify user was created
-            let users = gw.list_users().await?;
-            assert_eq!(users.users.len(), 5, "Expected 5 users after creation by user_2");
+            let users = gw.client().list_users().await?;
+            assert_eq!(
+                users.users.len(),
+                5,
+                "Expected 5 users after creation by user_2"
+            );
 
             // User 2 should be able to delete users
             info!(target: LOG_TEST, "Testing delete_user with UserManagement permission...");
-            let result = gw
-                .delete_user_as_user("test_user_2", user2_password, "test_user_temp")
-                .await;
+            let result = user2_client.delete_user("test_user_temp").await;
             assert!(
                 result.is_ok(),
                 "User with UserManagement should be able to delete users"
@@ -780,10 +762,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1 (has SendLimit but NOT UserManagement) should NOT be able to create users
             info!(target: LOG_TEST, "Testing create_user without UserManagement permission...");
-            let result = gw
-                .create_user_as_user(
-                    "test_user_1",
-                    user1_password,
+            let result = user1_client
+                .create_user(
                     "test_user_temp2",
                     "user_temp2_password",
                     None,
@@ -800,9 +780,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1 should NOT be able to delete users
             info!(target: LOG_TEST, "Testing delete_user without UserManagement permission...");
-            let result = gw
-                .delete_user_as_user("test_user_1", user1_password, "test_user_2")
-                .await;
+            let result = user1_client.delete_user("test_user_2").await;
             assert!(
                 result.is_err(),
                 "User without UserManagement should NOT be able to delete users"
@@ -818,9 +796,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1 (has SendLimit but NOT FederationManagement) should NOT be able to leave federation
             info!(target: LOG_TEST, "Testing leave_federation without FederationManagement permission...");
-            let result = gw
-                .leave_federation_as_user("test_user_1", user1_password, fed_id.clone())
-                .await;
+            let result = user1_client.leave_federation(fed_id.clone()).await;
             assert!(
                 result.is_err(),
                 "User without FederationManagement should NOT be able to leave federation"
@@ -836,9 +812,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 1 (has SendLimit but NOT FeeManagement) should NOT be able to set fees
             info!(target: LOG_TEST, "Testing set_fees without FeeManagement permission...");
-            let result = gw
-                .set_fees_as_user("test_user_1", user1_password, fed_id.clone(), 100, 1000)
-                .await;
+            let result = user1_client.set_fees(fed_id.clone(), 100, 1000).await;
             assert!(
                 result.is_err(),
                 "User without FeeManagement should NOT be able to set fees"
@@ -847,9 +821,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // User 5 (has FeeManagement) should be able to set fees
             info!(target: LOG_TEST, "Testing set_fees with FeeManagement permission...");
-            let result = gw
-                .set_fees_as_user("test_user_5", user5_password, fed_id.clone(), 100, 1000)
-                .await;
+            let user5_client = gw.client().as_user("test_user_5", user5_password);
+            let result = user5_client.set_fees(fed_id.clone(), 100, 1000).await;
             assert!(
                 result.is_ok(),
                 "User with FeeManagement should be able to set fees"
@@ -861,9 +834,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test spend limit enforcement over iroh - within limit should succeed
             info!(target: LOG_TEST, "Testing spend_ecash within limit via iroh...");
-            let result = gw
-                .spend_ecash_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 100_000)
-                .await;
+            let user1_iroh = gw.client().iroh().as_user("test_user_1", user1_password);
+            let result = user1_iroh.spend_ecash(fed_id.clone(), 100_000).await;
             assert!(
                 result.is_ok(),
                 "spend_ecash within limit via iroh should succeed"
@@ -872,9 +844,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test spend limit enforcement over iroh - exceeding limit should fail
             info!(target: LOG_TEST, "Testing spend_ecash exceeding limit via iroh...");
-            let result = gw
-                .spend_ecash_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 2_000_000)
-                .await;
+            let result = user1_iroh.spend_ecash(fed_id.clone(), 2_000_000).await;
             assert!(
                 result.is_err(),
                 "spend_ecash exceeding limit via iroh should fail"
@@ -883,9 +853,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test fee management permission over iroh - user without permission should fail
             info!(target: LOG_TEST, "Testing set_fees without FeeManagement permission via iroh...");
-            let result = gw
-                .set_fees_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 100, 1000)
-                .await;
+            let result = user1_iroh.set_fees(fed_id.clone(), 100, 1000).await;
             assert!(
                 result.is_err(),
                 "User without FeeManagement should NOT be able to set fees via iroh"
@@ -894,9 +862,8 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test fee management permission over iroh - user with permission should succeed
             info!(target: LOG_TEST, "Testing set_fees with FeeManagement permission via iroh...");
-            let result = gw
-                .set_fees_as_user_iroh("test_user_5", user5_password, fed_id.clone(), 200, 2000)
-                .await;
+            let user5_iroh = gw.client().iroh().as_user("test_user_5", user5_password);
+            let result = user5_iroh.set_fees(fed_id.clone(), 200, 2000).await;
             assert!(
                 result.is_ok(),
                 "User with FeeManagement should be able to set fees via iroh"
@@ -905,7 +872,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test admin-only endpoint (mnemonic) over iroh - admin should succeed
             info!(target: LOG_TEST, "Testing get_mnemonic as admin via iroh...");
-            let result = gw.get_mnemonic_iroh().await;
+            let result = gw.client().iroh().get_mnemonic().await;
             assert!(
                 result.is_ok(),
                 "Admin should be able to get mnemonic via iroh"
@@ -914,9 +881,7 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Test admin-only endpoint (mnemonic) over iroh - user should fail
             info!(target: LOG_TEST, "Testing get_mnemonic as user via iroh (should fail)...");
-            let result = gw
-                .get_mnemonic_as_user_iroh("test_user_5", user5_password)
-                .await;
+            let result = user5_iroh.get_mnemonic().await;
             assert!(
                 result.is_err(),
                 "User should NOT be able to get mnemonic via iroh (admin only)"
