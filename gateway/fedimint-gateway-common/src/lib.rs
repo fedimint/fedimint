@@ -547,6 +547,8 @@ pub enum UserAuthorization {
     FederationManagement,
     /// User can modify fees
     FeeManagement,
+    /// User can open and close lightning channels
+    ChannelManagement,
 }
 
 /// Payload for creating a new user

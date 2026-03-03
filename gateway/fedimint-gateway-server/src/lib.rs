@@ -2981,7 +2981,7 @@ impl Gateway {
         let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.create_user(&payload.username, user.clone())
             .await
-            .map_err(|e| AdminGatewayError::Unexpected(e))?;
+            .map_err(AdminGatewayError::Unexpected)?;
         dbtx.commit_tx().await;
 
         Ok(fedimint_gateway_common::UserResponse {

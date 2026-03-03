@@ -113,6 +113,10 @@ pub enum UserCommands {
         /// Allow the user to modify fees
         #[clap(long)]
         fee_management: bool,
+
+        /// Allow the user to open and close lightning channels
+        #[clap(long)]
+        channel_management: bool,
     },
     /// Delete a user
     Delete {
@@ -251,6 +255,7 @@ impl UserCommands {
                 send_limit_msats,
                 federation_management,
                 fee_management,
+                channel_management,
             } => {
                 // Hash the password locally using bcrypt before sending to server
                 let password_hash =
@@ -268,6 +273,9 @@ impl UserCommands {
                 }
                 if fee_management {
                     authorizations.push(UserAuthorization::FeeManagement);
+                }
+                if channel_management {
+                    authorizations.push(UserAuthorization::ChannelManagement);
                 }
 
                 let response = create_user(

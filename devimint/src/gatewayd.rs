@@ -165,6 +165,7 @@ impl<'a> GatewayClient<'a> {
         send_limit_msats: Option<u64>,
         federation_management: bool,
         fee_management: bool,
+        channel_management: bool,
     ) -> Result<serde_json::Value> {
         let mut command = self
             .cmd()
@@ -184,6 +185,10 @@ impl<'a> GatewayClient<'a> {
 
         if fee_management {
             command = command.arg(&"--fee-management");
+        }
+
+        if channel_management {
+            command = command.arg(&"--channel-management");
         }
 
         command.out_json().await
@@ -356,6 +361,43 @@ impl<'a> GatewayClient<'a> {
         command.run().await
     }
 
+    // ==================== Channel Management Operations ====================
+
+    /// Close channels with peer (for testing channel management permission)
+    pub async fn close_channels_with_peer(&self, pubkey: &str, force: bool) -> Result<()> {
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+
+        // Version compatibility logic:
+        // - >= 0.9.0 with force: use --force flag
+        // - < 0.10.0: no --sats-per-vbyte required
+        // - >= 0.10.0: requires --sats-per-vbyte
+        let mut command =
+            if force && gateway_cli_version >= *crate::version_constants::VERSION_0_9_0_ALPHA {
+                self.cmd()
+                    .arg(&"lightning")
+                    .arg(&"close-channels-with-peer")
+                    .arg(&"--pubkey")
+                    .arg(&pubkey)
+                    .arg(&"--force")
+            } else if gateway_cli_version < *crate::version_constants::VERSION_0_10_0_ALPHA {
+                self.cmd()
+                    .arg(&"lightning")
+                    .arg(&"close-channels-with-peer")
+                    .arg(&"--pubkey")
+                    .arg(&pubkey)
+            } else {
+                self.cmd()
+                    .arg(&"lightning")
+                    .arg(&"close-channels-with-peer")
+                    .arg(&"--pubkey")
+                    .arg(&pubkey)
+                    .arg(&"--sats-per-vbyte")
+                    .arg(&"10")
+            };
+
+        command.run().await
+    }
+
     // ==================== Federation Management Operations ====================
 
     /// Connect to a federation (for testing federation management permission)
@@ -419,6 +461,20 @@ impl<'a> GatewayClient<'a> {
             .env("RUST_BACKTRACE", "1")
             .env("RUST_LIB_BACKTRACE", "0")
             .out_json()
+            .await
+    }
+
+    /// Backup gateway state to federation (admin only)
+    pub async fn backup(&self, federation_id: FederationId) -> Result<()> {
+        self.cmd()
+            .arg(&"ecash")
+            .arg(&"backup")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .run()
             .await
     }
 }
@@ -732,11 +788,8 @@ impl Gatewayd {
     }
 
     pub async fn backup_to_fed(&self, fed: &Federation) -> Result<()> {
-        let federation_id = fed.calculate_federation_id();
-        cmd!(self, "ecash", "backup", "--federation-id", federation_id)
-            .run()
-            .await?;
-        Ok(())
+        let federation_id = FederationId::from_str(&fed.calculate_federation_id())?;
+        self.client().backup(federation_id).await
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
@@ -834,39 +887,9 @@ impl Gatewayd {
     }
 
     pub async fn close_channel(&self, remote_pubkey: PublicKey, force: bool) -> Result<()> {
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let mut close_channel = if force && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
-            cmd!(
-                self,
-                "lightning",
-                "close-channels-with-peer",
-                "--pubkey",
-                remote_pubkey,
-                "--force",
-            )
-        } else if gateway_cli_version < *VERSION_0_10_0_ALPHA {
-            cmd!(
-                self,
-                "lightning",
-                "close-channels-with-peer",
-                "--pubkey",
-                remote_pubkey,
-            )
-        } else {
-            cmd!(
-                self,
-                "lightning",
-                "close-channels-with-peer",
-                "--pubkey",
-                remote_pubkey,
-                "--sats-per-vbyte",
-                "10",
-            )
-        };
-
-        close_channel.run().await?;
-
-        Ok(())
+        self.client()
+            .close_channels_with_peer(&remote_pubkey.to_string(), force)
+            .await
     }
 
     pub async fn close_all_channels(&self, force: bool) -> Result<()> {

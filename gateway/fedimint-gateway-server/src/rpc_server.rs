@@ -218,6 +218,27 @@ pub fn check_fee_management_permission(
     }
 }
 
+/// Checks if the authenticated user has permission to manage channels
+/// (open/close). Returns `Ok(())` for Admin or users with ChannelManagement
+/// authorization. Returns `Err(Forbidden)` otherwise.
+pub fn check_channel_management_permission(
+    auth_user: &AuthenticatedUser,
+) -> Result<(), AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(()),
+        AuthenticatedUser::User { authorizations, .. } => {
+            if authorizations
+                .iter()
+                .any(|a| matches!(a, UserAuthorization::ChannelManagement))
+            {
+                Ok(())
+            } else {
+                Err(AdminGatewayError::Forbidden)
+            }
+        }
+    }
+}
+
 /// Checks if the authenticated user is the admin (authenticated via bearer
 /// token). This is used for sensitive operations like accessing the mnemonic.
 /// Returns `Ok(())` for Admin only.
@@ -272,16 +293,16 @@ async fn auth_middleware(
     // Try Basic Auth first (for user authentication)
     if let Some((username, password)) = extract_basic_auth(&request) {
         let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-        if let Some(user) = dbtx.get_user(&username).await {
-            if bcrypt::verify(&password, &user.password_hash).unwrap_or(false) {
-                // Authentication successful - insert user identity into extensions
-                let auth_user = AuthenticatedUser::User {
-                    username,
-                    authorizations: user.authorization,
-                };
-                request.extensions_mut().insert(auth_user);
-                return Ok(next.run(request).await);
-            }
+        if let Some(user) = dbtx.get_user(&username).await
+            && bcrypt::verify(&password, &user.password_hash).unwrap_or(false)
+        {
+            // Authentication successful - insert user identity into extensions
+            let auth_user = AuthenticatedUser::User {
+                username,
+                authorizations: user.authorization,
+            };
+            request.extensions_mut().insert(auth_user);
+            return Ok(next.run(request).await);
         }
 
         // Invalid user/password - return unauthorized
@@ -289,14 +310,13 @@ async fn auth_middleware(
     }
 
     // Try Bearer Auth (for admin authentication)
-    if let Some(token) = extract_bearer_token(&request) {
-        if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
+    if let Some(token) = extract_bearer_token(&request)
+        && bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
             .expect("Bcrypt hash is valid since we just stringified it")
-        {
-            // Admin authentication successful
-            request.extensions_mut().insert(AuthenticatedUser::Admin);
-            return Ok(next.run(request).await);
-        }
+    {
+        // Admin authentication successful
+        request.extensions_mut().insert(AuthenticatedUser::Admin);
+        return Ok(next.run(request).await);
     }
 
     Err(StatusCode::UNAUTHORIZED)
@@ -734,13 +754,15 @@ async fn leave_fed(
     Ok(Json(json!(fed)))
 }
 
-/// Backup a gateway actor state
+/// Backup a gateway actor state (admin only)
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<BackupPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Backup access is restricted to admin only (bearer token auth)
+    check_admin_only(&auth_user)?;
     gateway.handle_backup_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -771,7 +793,10 @@ async fn open_channel(
     Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<OpenChannelRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
-    // Check spend permission
+    // Check channel management permission
+    check_channel_management_permission(&auth_user)?;
+
+    // Check spend permission for push amount
     let limit = check_spend_permission(&auth_user)?;
 
     // Only check push_amount_sats against limit (not channel_size_sats)
@@ -787,9 +812,12 @@ async fn open_channel(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<CloseChannelsWithPeerRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check channel management permission
+    check_channel_management_permission(&auth_user)?;
+
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
     Ok(Json(json!(response)))
 }

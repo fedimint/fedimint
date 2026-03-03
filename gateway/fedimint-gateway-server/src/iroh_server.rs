@@ -338,13 +338,13 @@ async fn iroh_verify_auth(
     if let (Some(username), Some(password)) = (request.username.as_ref(), request.password.as_ref())
     {
         let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-        if let Some(user) = dbtx.get_user(username).await {
-            if bcrypt::verify(password, &user.password_hash).unwrap_or(false) {
-                return Ok(AuthenticatedUser::User {
-                    username: username.clone(),
-                    authorizations: user.authorization,
-                });
-            }
+        if let Some(user) = dbtx.get_user(username).await
+            && bcrypt::verify(password, &user.password_hash).unwrap_or(false)
+        {
+            return Ok(AuthenticatedUser::User {
+                username: username.clone(),
+                authorizations: user.authorization,
+            });
         }
         // Invalid user/password
         return Err(anyhow!("Invalid user/password"));
