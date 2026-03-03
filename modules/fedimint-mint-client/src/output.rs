@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::hash;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use assert_matches::assert_matches;
@@ -30,7 +31,7 @@ use tbs::{
     AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey,
     PublicKeyShare, aggregate_signature_shares, blind_message, unblind_signature,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::client_db::NoteKey;
 use crate::event::{NoteCreated, ReceivePaymentStatus, ReceivePaymentUpdateEvent};
@@ -185,11 +186,20 @@ impl MintOutputStatesCreated {
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         let txid = common.txid();
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
-        if global_context
-            .await_tx_accepted(common.txid())
-            .await
-            .is_err()
-        {
+        let accept_fut = global_context.await_tx_accepted(common.txid());
+        tokio::pin!(accept_fut);
+        let result = tokio::select! {
+            result = &mut accept_fut => result,
+            () = fedimint_core::runtime::sleep(Duration::from_secs(300)) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_MINT,
+                    %txid,
+                    "Transaction not accepted or rejected after 5 minutes, possibly stuck or never submitted",
+                );
+                accept_fut.await
+            }
+        };
+        if result.is_err() {
             return;
         }
         std::future::pending::<()>().await;
@@ -379,11 +389,20 @@ impl MintOutputStatesCreatedMulti {
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         let txid = common.txid();
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
-        if global_context
-            .await_tx_accepted(common.txid())
-            .await
-            .is_err()
-        {
+        let accept_fut = global_context.await_tx_accepted(common.txid());
+        tokio::pin!(accept_fut);
+        let result = tokio::select! {
+            result = &mut accept_fut => result,
+            () = fedimint_core::runtime::sleep(Duration::from_secs(300)) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_MINT,
+                    %txid,
+                    "Transaction not accepted or rejected after 5 minutes, possibly stuck or never submitted",
+                );
+                accept_fut.await
+            }
+        };
+        if result.is_err() {
             return;
         }
         std::future::pending::<()>().await;
