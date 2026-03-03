@@ -24,10 +24,11 @@ use crate::error::{GatewayError, PublicGatewayError};
 use crate::rpc_server::verify_bolt11_preimage_v2_get;
 
 /// Handler for a GET request, which must contain no parameters and return
-/// `serde_json::Value`
+/// `serde_json::Value`. Receives the authenticated user for authorization.
 type GetHandler = Box<
     dyn Fn(
             Extension<Arc<Gateway>>,
+            Extension<AuthenticatedUser>,
         )
             -> Pin<Box<dyn Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send>>
         + Send
@@ -35,10 +36,12 @@ type GetHandler = Box<
 >;
 
 /// Handler for a POST request, which must contain `serde_json::Value` encoded
-/// parameters and return `serde_json::Value`.
+/// parameters and return `serde_json::Value`. Receives the authenticated user
+/// for authorization.
 type PostHandler = Box<
     dyn Fn(
             Extension<Arc<Gateway>>,
+            Extension<AuthenticatedUser>,
             serde_json::Value,
         )
             -> Pin<Box<dyn Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send>>
@@ -49,32 +52,44 @@ type PostHandler = Box<
 /// Creates a GET handler for the Iroh endpoint by wrapping it in a closure.
 fn make_get_handler<F, Fut>(f: F) -> GetHandler
 where
-    F: Fn(Extension<Arc<Gateway>>) -> Fut + Clone + Send + Sync + 'static,
+    F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>) -> Fut
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
 {
-    Box::new(move |gateway: Extension<Arc<Gateway>>| {
-        let f = f.clone();
-        Box::pin(async move {
-            let res = f(gateway).await?;
-            Ok(res)
-        })
-    })
+    Box::new(
+        move |gateway: Extension<Arc<Gateway>>, auth_user: Extension<AuthenticatedUser>| {
+            let f = f.clone();
+            Box::pin(async move {
+                let res = f(gateway, auth_user).await?;
+                Ok(res)
+            })
+        },
+    )
 }
 
 /// Creates a POST handler for the Iroh endpoint by wrapping it in a closure.
 fn make_post_handler<P, F, Fut>(f: F) -> PostHandler
 where
     P: DeserializeOwned + Send + 'static,
-    F: Fn(Extension<Arc<Gateway>>, Json<P>) -> Fut + Clone + Send + Sync + 'static,
+    F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>, Json<P>) -> Fut
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
 {
     Box::new(
-        move |gateway: Extension<Arc<Gateway>>, value: serde_json::Value| {
+        move |gateway: Extension<Arc<Gateway>>,
+              auth_user: Extension<AuthenticatedUser>,
+              value: serde_json::Value| {
             let f = f.clone();
             Box::pin(async move {
                 let payload: P = serde_json::from_value(value)
                     .map_err(|e| PublicGatewayError::Unexpected(anyhow!(e.to_string())))?;
-                let res = f(gateway, Json(payload)).await?;
+                let res = f(gateway, auth_user, Json(payload)).await?;
                 Ok(res)
             })
         },
@@ -105,7 +120,11 @@ impl Handlers {
 
     pub fn add_handler<F, Fut>(&mut self, route: &str, f: F, is_authenticated: bool)
     where
-        F: Fn(Extension<Arc<Gateway>>) -> Fut + Clone + Send + Sync + 'static,
+        F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>) -> Fut
+            + Clone
+            + Send
+            + Sync
+            + 'static,
         Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
     {
         if is_authenticated {
@@ -122,7 +141,11 @@ impl Handlers {
     pub fn add_handler_with_payload<P, F, Fut>(&mut self, route: &str, f: F, is_authenticated: bool)
     where
         P: DeserializeOwned + Send + 'static,
-        F: Fn(Extension<Arc<Gateway>>, Json<P>) -> Fut + Clone + Send + Sync + 'static,
+        F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>, Json<P>) -> Fut
+            + Clone
+            + Send
+            + Sync
+            + 'static,
         Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
     {
         if is_authenticated {
@@ -229,11 +252,18 @@ async fn handle_request(
     handlers: Arc<Handlers>,
     task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
-    if handlers.is_authenticated(&request.route)
-        && iroh_verify_auth(&gateway, request).await.is_err()
-    {
-        return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
-    }
+    // Check authentication for authenticated routes.
+    // For unauthenticated routes, we use Admin as the default user since these
+    // are public endpoints that don't require authorization checks.
+    let auth_user = if handlers.is_authenticated(&request.route) {
+        match iroh_verify_auth(&gateway, request).await {
+            Ok(user) => user,
+            Err(_) => return Ok((StatusCode::UNAUTHORIZED, Json(json!(())))),
+        }
+    } else {
+        // Public routes don't need auth - use Admin to bypass any permission checks
+        AuthenticatedUser::Admin
+    };
 
     // The STOP endpoint is handled outside of the `Handlers` struct since it has a
     // different function signature (it needs a `TaskGroup`).
@@ -264,12 +294,13 @@ async fn handle_request(
         return Ok((StatusCode::OK, body));
     }
 
+    let auth_ext = Extension(auth_user);
     let (status, body) = match &request.params {
         Some(params) => {
             if let Some(handler) = handlers.get_handler_with_payload(&request.route) {
                 (
                     StatusCode::OK,
-                    handler(Extension(gateway), params.clone()).await?,
+                    handler(Extension(gateway), auth_ext, params.clone()).await?,
                 )
             } else {
                 return Err(anyhow!("Iroh handler received request with unknown route"));
@@ -277,7 +308,7 @@ async fn handle_request(
         }
         None => {
             if let Some(handler) = handlers.get_handler(&request.route) {
-                (StatusCode::OK, handler(Extension(gateway)).await?)
+                (StatusCode::OK, handler(Extension(gateway), auth_ext).await?)
             } else {
                 return Err(anyhow!("Iroh handler received request with unknown route"));
             }

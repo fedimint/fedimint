@@ -120,6 +120,8 @@ pub enum AdminGatewayError {
     RegistrationError { federation_id: FederationId },
     #[error("Error withdrawing funds onchain: {failure_reason}")]
     WithdrawError { failure_reason: String },
+    #[error("Forbidden")]
+    Forbidden,
 }
 
 impl IntoResponse for AdminGatewayError {
@@ -127,8 +129,12 @@ impl IntoResponse for AdminGatewayError {
     // purposes
     fn into_response(self) -> Response {
         crit!(target: LOG_GATEWAY, "{self}");
+        let status_code = match &self {
+            AdminGatewayError::Forbidden => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
         Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .status(status_code)
             .body(self.to_string().into())
             .expect("Failed to create Response")
     }

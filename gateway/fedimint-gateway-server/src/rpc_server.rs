@@ -10,6 +10,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use base64::Engine;
 use bitcoin::hashes::sha256;
+use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact;
@@ -28,7 +29,7 @@ use fedimint_gateway_common::{
     PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
     SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
     SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, USERS_ENDPOINT,
-    V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
+    UserAuthorization, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_gateway_server_db::GatewayDbtxNcExt;
 use fedimint_gateway_ui::IAdminGateway;
@@ -48,7 +49,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{info, instrument, warn};
 
-use crate::error::{GatewayError, LnurlError};
+use crate::error::{AdminGatewayError, GatewayError, LnurlError};
 use crate::iroh_server::{Handlers, start_iroh_endpoint};
 use crate::{Gateway, GatewayState};
 
@@ -137,6 +138,65 @@ fn extract_basic_auth(request: &Request) -> Option<(String, String)> {
     Some((username, password))
 }
 
+// ==================== Authorization Helper Functions ====================
+
+/// Checks if the authenticated user has permission to spend money.
+/// Returns `Ok(Some(max_amount))` for users with a SendLimit authorization.
+/// Returns `Ok(None)` for Admin (no limit).
+/// Returns `Err(Forbidden)` if the user doesn't have spend permission.
+pub fn check_spend_permission(
+    auth_user: &AuthenticatedUser,
+) -> Result<Option<Amount>, AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(None), // No limit for admin
+        AuthenticatedUser::User { authorizations, .. } => {
+            // Find SendLimit authorization
+            for auth in authorizations {
+                if let UserAuthorization::SendLimit { max_send_amount } = auth {
+                    return Ok(Some(*max_send_amount));
+                }
+            }
+            // User doesn't have SendLimit permission
+            Err(AdminGatewayError::Forbidden)
+        }
+    }
+}
+
+/// Checks if the requested amount is within the user's spend limit.
+/// Returns `Ok(())` if the amount is allowed.
+/// Returns `Err(Forbidden)` if the amount exceeds the limit.
+fn check_amount_within_limit(
+    limit: Option<Amount>,
+    amount: Amount,
+) -> Result<(), AdminGatewayError> {
+    match limit {
+        None => Ok(()),                               // Admin, no limit
+        Some(max) if amount <= max => Ok(()),         // Within limit
+        Some(_) => Err(AdminGatewayError::Forbidden), // Exceeds limit
+    }
+}
+
+/// Checks if the authenticated user has permission to manage users.
+/// Returns `Ok(())` for Admin or users with UserManagement authorization.
+/// Returns `Err(Forbidden)` otherwise.
+pub fn check_user_management_permission(
+    auth_user: &AuthenticatedUser,
+) -> Result<(), AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(()),
+        AuthenticatedUser::User { authorizations, .. } => {
+            if authorizations
+                .iter()
+                .any(|a| matches!(a, UserAuthorization::UserManagement))
+            {
+                Ok(())
+            } else {
+                Err(AdminGatewayError::Forbidden)
+            }
+        }
+    }
+}
+
 async fn not_configured_middleware(
     Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
@@ -210,30 +270,36 @@ async fn auth_middleware(
     Err(StatusCode::UNAUTHORIZED)
 }
 
-/// Registers a GET API handler for both the HTTP server and the Iroh
-/// `Endpoint`.
-fn register_get_handler<F, Fut>(
+/// Registers a public GET API handler (no authentication required).
+/// For Iroh, the handler will receive `AuthenticatedUser::Admin` since these
+/// are public endpoints.
+fn register_public_get_handler<F, Fut>(
     handlers: &mut Handlers,
     route: &str,
     func: F,
-    is_authenticated: bool,
     router: Router,
 ) -> Router
 where
     F: Fn(Extension<Arc<Gateway>>) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
 {
-    handlers.add_handler(route, func.clone(), is_authenticated);
+    // For Iroh, wrap the handler to accept AuthenticatedUser (ignored)
+    let func_for_iroh = func.clone();
+    let iroh_wrapper = move |gateway: Extension<Arc<Gateway>>,
+                             _auth_user: Extension<AuthenticatedUser>| {
+        func_for_iroh(gateway)
+    };
+    handlers.add_handler(route, iroh_wrapper, false);
     router.route(route, get(func))
 }
 
-/// Registers a POST API handler for both the HTTP server and the Iroh
-/// `Endpoint`.
-fn register_post_handler<P, F, Fut>(
+/// Registers a public POST API handler (no authentication required).
+/// For Iroh, the handler will receive `AuthenticatedUser::Admin` since these
+/// are public endpoints.
+fn register_public_post_handler<P, F, Fut>(
     handlers: &mut Handlers,
     route: &str,
     func: F,
-    is_authenticated: bool,
     router: Router,
 ) -> Router
 where
@@ -241,45 +307,78 @@ where
     F: Fn(Extension<Arc<Gateway>>, Json<P>) -> Fut + Clone + Send + Sync + 'static,
     Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
 {
-    handlers.add_handler_with_payload(route, func.clone(), is_authenticated);
+    // For Iroh, wrap the handler to accept AuthenticatedUser (ignored)
+    let func_for_iroh = func.clone();
+    let iroh_wrapper = move |gateway: Extension<Arc<Gateway>>,
+                             _auth_user: Extension<AuthenticatedUser>,
+                             json: Json<P>| { func_for_iroh(gateway, json) };
+    handlers.add_handler_with_payload(route, iroh_wrapper, false);
+    router.route(route, post(func))
+}
+
+/// Registers an authenticated GET API handler.
+/// Handler receives `AuthenticatedUser` for authorization checks.
+fn register_authed_get_handler<F, Fut>(
+    handlers: &mut Handlers,
+    route: &str,
+    func: F,
+    router: Router,
+) -> Router
+where
+    F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>) -> Fut
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
+{
+    handlers.add_handler(route, func.clone(), true);
+    router.route(route, get(func))
+}
+
+/// Registers an authenticated POST API handler.
+/// Handler receives `AuthenticatedUser` for authorization checks.
+fn register_authed_post_handler<P, F, Fut>(
+    handlers: &mut Handlers,
+    route: &str,
+    func: F,
+    router: Router,
+) -> Router
+where
+    P: DeserializeOwned + Send + 'static,
+    F: Fn(Extension<Arc<Gateway>>, Extension<AuthenticatedUser>, Json<P>) -> Fut
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
+{
+    handlers.add_handler_with_payload(route, func.clone(), true);
     router.route(route, post(func))
 }
 
 /// Public routes that are used in the LNv1 protocol
 fn lnv1_routes(handlers: &mut Handlers) -> Router {
     let router = Router::new();
-    let router = register_post_handler(handlers, PAY_INVOICE_ENDPOINT, pay_invoice, false, router);
-    register_get_handler(
-        handlers,
-        GET_GATEWAY_ID_ENDPOINT,
-        get_gateway_id,
-        false,
-        router,
-    )
+    let router = register_public_post_handler(handlers, PAY_INVOICE_ENDPOINT, pay_invoice, router);
+    register_public_get_handler(handlers, GET_GATEWAY_ID_ENDPOINT, get_gateway_id, router)
 }
 
 /// Public routes that are used in the LNv2 protocol
 fn lnv2_routes(handlers: &mut Handlers) -> Router {
     let router = Router::new();
-    let router = register_post_handler(
-        handlers,
-        ROUTING_INFO_ENDPOINT,
-        routing_info_v2,
-        false,
-        router,
-    );
-    let router = register_post_handler(
+    let router =
+        register_public_post_handler(handlers, ROUTING_INFO_ENDPOINT, routing_info_v2, router);
+    let router = register_public_post_handler(
         handlers,
         SEND_PAYMENT_ENDPOINT,
         pay_bolt11_invoice_v2,
-        false,
         router,
     );
-    let router = register_post_handler(
+    let router = register_public_post_handler(
         handlers,
         CREATE_BOLT11_INVOICE_ENDPOINT,
         create_bolt11_invoice_v2,
-        false,
         router,
     );
     // Verify endpoint does not have the same signature, it is handled separately
@@ -293,225 +392,163 @@ fn lnv2_routes(handlers: &mut Handlers) -> Router {
 ///   clients.
 fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers) -> Router {
     // Public routes on gateway webserver
-    let mut public_routes = register_post_handler(
+    let mut public_routes = register_public_post_handler(
         handlers,
         RECEIVE_ECASH_ENDPOINT,
         receive_ecash,
-        false,
         Router::new(),
     );
     public_routes = public_routes.merge(lnv1_routes(handlers));
     public_routes = public_routes.merge(lnv2_routes(handlers));
 
     // Authenticated routes used for gateway administration
-    let is_authenticated = true;
+    // Authentication is handled by register_authed_* functions
     let authenticated_routes = Router::new();
-    let authenticated_routes = register_post_handler(
-        handlers,
-        ADDRESS_ENDPOINT,
-        address,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
-        handlers,
-        WITHDRAW_ENDPOINT,
-        withdraw,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes =
+        register_authed_post_handler(handlers, ADDRESS_ENDPOINT, address, authenticated_routes);
+    let authenticated_routes =
+        register_authed_post_handler(handlers, WITHDRAW_ENDPOINT, withdraw, authenticated_routes);
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         CONNECT_FED_ENDPOINT,
         connect_fed,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         LEAVE_FED_ENDPOINT,
         leave_fed,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
-        handlers,
-        BACKUP_ENDPOINT,
-        backup,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes =
+        register_authed_post_handler(handlers, BACKUP_ENDPOINT, backup, authenticated_routes);
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
         create_invoice_for_operator,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
         create_offer_for_operator,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
         pay_invoice_operator,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         PAY_OFFER_FOR_OPERATOR_ENDPOINT,
         pay_offer_operator,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         GET_INVOICE_ENDPOINT,
         get_invoice,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
+    let authenticated_routes = register_authed_get_handler(
         handlers,
         GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
         get_ln_onchain_address,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         OPEN_CHANNEL_ENDPOINT,
         open_channel,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
         close_channels_with_peer,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
+    let authenticated_routes = register_authed_get_handler(
         handlers,
         LIST_CHANNELS_ENDPOINT,
         list_channels,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         LIST_TRANSACTIONS_ENDPOINT,
         list_transactions,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         SEND_ONCHAIN_ENDPOINT,
         send_onchain,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         ADDRESS_RECHECK_ENDPOINT,
         recheck_address,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
+    let authenticated_routes = register_authed_get_handler(
         handlers,
         GET_BALANCES_ENDPOINT,
         get_balances,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         SPEND_ECASH_ENDPOINT,
         spend_ecash,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
-        handlers,
-        MNEMONIC_ENDPOINT,
-        mnemonic,
-        is_authenticated,
-        authenticated_routes,
-    );
+    let authenticated_routes =
+        register_authed_get_handler(handlers, MNEMONIC_ENDPOINT, mnemonic, authenticated_routes);
     // Stop does not have the same function signature, it is handled separately
     let authenticated_routes = authenticated_routes.route(STOP_ENDPOINT, get(stop));
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         PAYMENT_LOG_ENDPOINT,
         payment_log,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         PAYMENT_SUMMARY_ENDPOINT,
         payment_summary,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_post_handler(
-        handlers,
-        SET_FEES_ENDPOINT,
-        set_fees,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes =
+        register_authed_post_handler(handlers, SET_FEES_ENDPOINT, set_fees, authenticated_routes);
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         CONFIGURATION_ENDPOINT,
         configuration,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
-        handlers,
-        GATEWAY_INFO_ENDPOINT,
-        info,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
+    let authenticated_routes =
+        register_authed_get_handler(handlers, GATEWAY_INFO_ENDPOINT, info, authenticated_routes);
+    let authenticated_routes = register_authed_post_handler(
         handlers,
         MNEMONIC_ENDPOINT,
         set_mnemonic,
-        is_authenticated,
         authenticated_routes,
     );
-    let authenticated_routes = register_get_handler(
+    let authenticated_routes = register_authed_get_handler(
         handlers,
         INVITE_CODES_ENDPOINT,
         invite_codes,
-        is_authenticated,
         authenticated_routes,
     );
     // User management routes
-    let authenticated_routes = register_get_handler(
-        handlers,
-        USERS_ENDPOINT,
-        list_users,
-        is_authenticated,
-        authenticated_routes,
-    );
-    let authenticated_routes = register_post_handler(
-        handlers,
-        USERS_ENDPOINT,
-        create_user,
-        is_authenticated,
-        authenticated_routes,
-    );
+    let authenticated_routes =
+        register_authed_get_handler(handlers, USERS_ENDPOINT, list_users, authenticated_routes);
+    let authenticated_routes =
+        register_authed_post_handler(handlers, USERS_ENDPOINT, create_user, authenticated_routes);
     // User routes with path parameter are handled separately (not through
     // register_* helpers)
     let authenticated_routes = authenticated_routes
@@ -535,6 +572,7 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
@@ -544,6 +582,7 @@ async fn info(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<ConfigPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let gateway_fed_config = gateway
@@ -556,6 +595,7 @@ async fn configuration(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn address(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<DepositAddressPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let address = gateway.handle_address_msg(payload).await?;
@@ -566,8 +606,31 @@ async fn address(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn withdraw(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<WithdrawPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // Resolve amount for limit check
+    let amount_to_check = match &payload.amount {
+        fedimint_core::BitcoinAmountOrAll::Amount(btc_amount) => {
+            Amount::from_sats(btc_amount.to_sat())
+        }
+        fedimint_core::BitcoinAmountOrAll::All => {
+            // Get balance from the federation
+            let balances = gateway.handle_get_balances_msg().await?;
+            balances
+                .ecash_balances
+                .iter()
+                .find(|b| b.federation_id == payload.federation_id)
+                .map_or(Amount::ZERO, |b| b.ecash_balance_msats)
+        }
+    };
+
+    // Check if amount is within limit
+    check_amount_within_limit(limit, amount_to_check)?;
+
     let txid = gateway.handle_withdraw_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
@@ -575,6 +638,7 @@ async fn withdraw(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn create_invoice_for_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<CreateInvoiceForOperatorPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let invoice = gateway
@@ -586,8 +650,21 @@ async fn create_invoice_for_operator(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn pay_invoice_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<PayInvoiceForOperatorPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // Get amount from invoice
+    let amount_msat = payload
+        .invoice
+        .amount_milli_satoshis()
+        .ok_or(AdminGatewayError::Forbidden)?; // Reject amountless invoices for limited users
+
+    // Check if amount is within limit
+    check_amount_within_limit(limit, Amount::from_msats(amount_msat))?;
+
     let preimage = gateway.handle_pay_invoice_for_operator_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
@@ -605,6 +682,7 @@ async fn pay_invoice(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn connect_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
@@ -615,6 +693,7 @@ async fn connect_fed(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn leave_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<LeaveFedPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let fed = gateway.handle_leave_federation(payload).await?;
@@ -625,6 +704,7 @@ async fn leave_fed(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<BackupPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_backup_msg(payload).await?;
@@ -634,6 +714,7 @@ async fn backup(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn set_fees(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<SetFeesPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_set_fees_msg(payload).await?;
@@ -643,6 +724,7 @@ async fn set_fees(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))
@@ -651,8 +733,18 @@ async fn get_ln_onchain_address(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<OpenChannelRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // Only check push_amount_sats against limit (not channel_size_sats)
+    if payload.push_amount_sats > 0 {
+        let push_amount = Amount::from_sats(payload.push_amount_sats);
+        check_amount_within_limit(limit, push_amount)?;
+    }
+
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
 }
@@ -660,6 +752,7 @@ async fn open_channel(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn close_channels_with_peer(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<CloseChannelsWithPeerRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
@@ -669,6 +762,7 @@ async fn close_channels_with_peer(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn list_channels(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let channels = gateway.handle_list_channels_msg().await?;
     Ok(Json(json!(channels)))
@@ -677,8 +771,27 @@ async fn list_channels(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn send_onchain(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<SendOnchainRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // Resolve amount for limit check
+    let amount_to_check = match &payload.amount {
+        fedimint_core::BitcoinAmountOrAll::Amount(btc_amount) => {
+            Amount::from_sats(btc_amount.to_sat())
+        }
+        fedimint_core::BitcoinAmountOrAll::All => {
+            // Get LN node on-chain balance
+            let balances = gateway.handle_get_balances_msg().await?;
+            Amount::from_sats(balances.onchain_balance_sats)
+        }
+    };
+
+    // Check if amount is within limit
+    check_amount_within_limit(limit, amount_to_check)?;
+
     let txid = gateway.handle_send_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
@@ -686,6 +799,7 @@ async fn send_onchain(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn recheck_address(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<DepositAddressRecheckPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_recheck_address_msg(payload).await?;
@@ -695,6 +809,7 @@ async fn recheck_address(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_balances(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let balances = gateway.handle_get_balances_msg().await?;
     Ok(Json(json!(balances)))
@@ -750,8 +865,15 @@ pub(crate) async fn verify_bolt11_preimage_v2_get(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<SpendEcashPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // Check if amount is within limit
+    check_amount_within_limit(limit, payload.amount)?;
+
     Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
@@ -768,6 +890,7 @@ async fn receive_ecash(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
@@ -776,6 +899,7 @@ async fn mnemonic(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn set_mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<SetMnemonicPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_set_mnemonic_msg(payload).await?;
@@ -794,6 +918,7 @@ pub(crate) async fn stop(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn payment_log(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<PaymentLogPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let payment_log = gateway.handle_payment_log_msg(payload).await?;
@@ -803,6 +928,7 @@ async fn payment_log(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn payment_summary(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<PaymentSummaryPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let payment_summary = gateway.handle_payment_summary_msg(payload).await?;
@@ -812,6 +938,7 @@ async fn payment_summary(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn get_invoice(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<GetInvoiceRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let invoice = gateway.handle_get_invoice_msg(payload).await?;
@@ -821,6 +948,7 @@ async fn get_invoice(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn list_transactions(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<ListTransactionsPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let transactions = gateway.handle_list_transactions_msg(payload).await?;
@@ -830,6 +958,7 @@ async fn list_transactions(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn create_offer_for_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Json(payload): Json<CreateOfferPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let offer = gateway
@@ -841,8 +970,20 @@ async fn create_offer_for_operator(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn pay_offer_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<PayOfferPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check spend permission
+    let limit = check_spend_permission(&auth_user)?;
+
+    // For users with SendLimit, require explicit amount
+    // (BOLT12 offers may have amount determined by the offer itself,
+    // but for security we require the user to specify it explicitly)
+    if let Some(max_amount) = limit {
+        let amount = payload.amount.ok_or(AdminGatewayError::Forbidden)?;
+        check_amount_within_limit(Some(max_amount), amount)?;
+    }
+
     let response = gateway.handle_pay_offer_for_operator_msg(payload).await?;
     Ok(Json(json!(response)))
 }
@@ -850,6 +991,7 @@ async fn pay_offer_operator(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn invite_codes(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let invite_codes = gateway.handle_export_invite_codes().await;
     Ok(Json(json!(invite_codes)))
@@ -861,6 +1003,7 @@ async fn invite_codes(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn list_users(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let users = gateway.handle_list_users().await?;
     Ok(Json(json!(users)))
@@ -870,8 +1013,12 @@ async fn list_users(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn create_user(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<CreateUserPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check user management permission
+    check_user_management_permission(&auth_user)?;
+
     let user = gateway.handle_create_user(payload).await?;
     Ok(Json(json!(user)))
 }
@@ -880,6 +1027,7 @@ async fn create_user(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
 async fn get_user(
     Extension(gateway): Extension<Arc<Gateway>>,
+    _auth_user: Extension<AuthenticatedUser>,
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let user = gateway.handle_get_user(&username).await?;
@@ -890,8 +1038,12 @@ async fn get_user(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
 async fn delete_user(
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Path(username): Path<String>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Check user management permission
+    check_user_management_permission(&auth_user)?;
+
     let deleted = gateway.handle_delete_user(&username).await?;
     Ok(Json(json!({ "deleted": deleted })))
 }
