@@ -7,11 +7,11 @@ use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
 use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_gateway_client::{
-    connect_federation, get_balances, get_info, get_invite_codes, get_mnemonic, leave_federation,
-    payment_log, payment_summary, stop,
+    connect_federation, create_user, delete_user, get_balances, get_info, get_invite_codes,
+    get_mnemonic, get_user, leave_federation, list_users, payment_log, payment_summary, stop,
 };
 use fedimint_gateway_common::{
-    ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
+    ConnectFedPayload, CreateUserPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 
@@ -78,6 +78,40 @@ pub enum GeneralCommands {
     },
     /// List all invite codes of each federation the gateway has joined
     InviteCodes,
+    /// Manage gateway users
+    #[command(subcommand)]
+    User(UserCommands),
+}
+
+/// Commands for managing gateway users
+#[derive(Subcommand)]
+pub enum UserCommands {
+    /// Create a new user
+    Create {
+        /// Username (alphanumeric and underscores only, 1-64 characters)
+        username: String,
+
+        /// Password for the new user (will be hashed locally before sending to
+        /// server)
+        #[clap(long)]
+        password: String,
+
+        /// Optional description for the user
+        #[clap(long)]
+        description: Option<String>,
+    },
+    /// Delete a user
+    Delete {
+        /// Username to delete
+        username: String,
+    },
+    /// List all users
+    List,
+    /// Get details about a specific user
+    Get {
+        /// Username to look up
+        username: String,
+    },
 }
 
 impl GeneralCommands {
@@ -183,6 +217,58 @@ impl GeneralCommands {
             Self::InviteCodes => {
                 let invite_codes = get_invite_codes(client, base_url).await?;
                 print_response(invite_codes);
+            }
+            Self::User(user_command) => {
+                user_command.handle(client, base_url).await?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl UserCommands {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
+        match self {
+            Self::Create {
+                username,
+                password,
+                description,
+            } => {
+                // Hash the password locally using bcrypt before sending to server
+                let password_hash =
+                    bcrypt::hash(&password, bcrypt::DEFAULT_COST).expect("Failed to hash password");
+
+                let response = create_user(
+                    client,
+                    base_url,
+                    CreateUserPayload {
+                        username,
+                        password_hash,
+                        description,
+                    },
+                )
+                .await?;
+                print_response(response);
+            }
+            Self::Delete { username } => {
+                let response = delete_user(client, base_url, &username).await?;
+                if response.deleted {
+                    println!("User '{}' deleted successfully", username);
+                } else {
+                    println!("User '{}' not found", username);
+                }
+            }
+            Self::List => {
+                let response = list_users(client, base_url).await?;
+                print_response(response);
+            }
+            Self::Get { username } => {
+                let response = get_user(client, base_url, &username).await?;
+                match response {
+                    Some(user) => print_response(user),
+                    None => println!("User '{}' not found", username),
+                }
             }
         }
 

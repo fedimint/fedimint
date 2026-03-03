@@ -530,3 +530,34 @@ pub enum RegisteredProtocol {
 pub struct SetMnemonicPayload {
     pub words: Option<String>,
 }
+
+// ==================== User Management API Types ====================
+
+/// Endpoint constants for user management
+pub const USERS_ENDPOINT: &str = "/users";
+
+/// Payload for creating a new user
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateUserPayload {
+    /// Username (alphanumeric and underscore only, 1-64 chars)
+    pub username: String,
+    /// Bcrypt password hash (must be pre-hashed by the client)
+    pub password_hash: String,
+    /// Optional description/notes about the user
+    pub description: Option<String>,
+}
+
+/// Response containing user information (password hash is never exposed)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UserResponse {
+    pub username: String,
+    pub created_at: SystemTime,
+    pub last_login: Option<SystemTime>,
+    pub description: Option<String>,
+}
+
+/// Response containing a list of users
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ListUsersResponse {
+    pub users: Vec<UserResponse>,
+}

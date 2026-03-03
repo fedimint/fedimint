@@ -13,18 +13,20 @@ use fedimint_gateway_common::{
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConfigPayload,
     ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
+    CreateUserPayload, DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo,
+    GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances, GatewayFedConfig, GatewayInfo,
+    GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload,
+    ListTransactionsResponse, ListUsersResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
     OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
     PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
     PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
     PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
     ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
     SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
-    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    SpendEcashPayload, SpendEcashResponse, USERS_ENDPOINT, UserResponse, WITHDRAW_ENDPOINT,
+    WithdrawPayload, WithdrawResponse,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -364,5 +366,58 @@ pub async fn get_invite_codes(
             INVITE_CODES_ENDPOINT,
             None,
         )
+        .await
+}
+
+// ==================== User Management ====================
+
+/// Response for delete user operation
+#[derive(Debug, serde::Deserialize)]
+pub struct DeleteUserResponse {
+    pub deleted: bool,
+}
+
+/// Create a new user
+pub async fn create_user(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: CreateUserPayload,
+) -> ServerResult<UserResponse> {
+    client
+        .request(base_url, Method::POST, USERS_ENDPOINT, Some(payload))
+        .await
+}
+
+/// Get a user by username
+pub async fn get_user(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    username: &str,
+) -> ServerResult<Option<UserResponse>> {
+    let endpoint = format!("{USERS_ENDPOINT}/{username}");
+    client
+        .request::<(), Option<UserResponse>>(base_url, Method::GET, &endpoint, None)
+        .await
+}
+
+/// Delete a user by username
+pub async fn delete_user(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    username: &str,
+) -> ServerResult<DeleteUserResponse> {
+    let endpoint = format!("{USERS_ENDPOINT}/{username}");
+    client
+        .request::<(), DeleteUserResponse>(base_url, Method::DELETE, &endpoint, None)
+        .await
+}
+
+/// List all users
+pub async fn list_users(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<ListUsersResponse> {
+    client
+        .request::<(), ListUsersResponse>(base_url, Method::GET, USERS_ENDPOINT, None)
         .await
 }

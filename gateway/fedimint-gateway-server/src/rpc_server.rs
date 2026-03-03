@@ -17,7 +17,7 @@ use fedimint_gateway_common::{
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, CreateOfferPayload, DepositAddressPayload,
+    CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateUserPayload, DepositAddressPayload,
     DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT,
     GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest,
     INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
@@ -26,8 +26,8 @@ use fedimint_gateway_common::{
     PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
     PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
     SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, USERS_ENDPOINT,
+    V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -445,6 +445,29 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
         is_authenticated,
         authenticated_routes,
     );
+    // User management routes
+    let authenticated_routes = register_get_handler(
+        handlers,
+        USERS_ENDPOINT,
+        list_users,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
+        USERS_ENDPOINT,
+        create_user,
+        is_authenticated,
+        authenticated_routes,
+    );
+    // User routes with path parameter are handled separately (not through
+    // register_* helpers)
+    let authenticated_routes = authenticated_routes
+        .route(&format!("{USERS_ENDPOINT}/{{username}}"), get(get_user))
+        .route(
+            &format!("{USERS_ENDPOINT}/{{username}}"),
+            axum::routing::delete(delete_user),
+        );
     let authenticated_routes = authenticated_routes.layer(middleware::from_fn(auth_middleware));
 
     Router::new()
@@ -778,4 +801,45 @@ async fn invite_codes(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let invite_codes = gateway.handle_export_invite_codes().await;
     Ok(Json(json!(invite_codes)))
+}
+
+// ==================== User Management Endpoints ====================
+
+/// List all users
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn list_users(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let users = gateway.handle_list_users().await?;
+    Ok(Json(json!(users)))
+}
+
+/// Create a new user
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn create_user(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<CreateUserPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let user = gateway.handle_create_user(payload).await?;
+    Ok(Json(json!(user)))
+}
+
+/// Get a specific user by username
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
+async fn get_user(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Path(username): Path<String>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let user = gateway.handle_get_user(&username).await?;
+    Ok(Json(json!(user)))
+}
+
+/// Delete a user by username
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(%username))]
+async fn delete_user(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Path(username): Path<String>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let deleted = gateway.handle_delete_user(&username).await?;
+    Ok(Json(json!({ "deleted": deleted })))
 }

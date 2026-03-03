@@ -84,7 +84,7 @@ use fedimint_gateway_common::{
     V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
     WithdrawResponse,
 };
-use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
+use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, User, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
@@ -2955,6 +2955,142 @@ impl Gateway {
             .into_value();
 
         Ok((registered_incoming_contract.contract, client))
+    }
+
+    // ==================== User Management ====================
+
+    /// Creates a new user with the given username and bcrypt password hash.
+    /// Returns the created user response on success.
+    pub async fn handle_create_user(
+        &self,
+        payload: fedimint_gateway_common::CreateUserPayload,
+    ) -> AdminResult<fedimint_gateway_common::UserResponse> {
+        // Validate username
+        Self::validate_username(&payload.username)?;
+
+        // Validate that the password_hash looks like a bcrypt hash
+        Self::validate_bcrypt_hash(&payload.password_hash)?;
+
+        let user = User {
+            password_hash: payload.password_hash,
+            created_at: fedimint_core::time::now(),
+            last_login: None,
+            description: payload.description,
+        };
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.create_user(&payload.username, user.clone())
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e))?;
+        dbtx.commit_tx().await;
+
+        Ok(fedimint_gateway_common::UserResponse {
+            username: payload.username,
+            created_at: user.created_at,
+            last_login: user.last_login,
+            description: user.description,
+        })
+    }
+
+    /// Gets a user by username.
+    pub async fn handle_get_user(
+        &self,
+        username: &str,
+    ) -> AdminResult<Option<fedimint_gateway_common::UserResponse>> {
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let user = dbtx.get_user(username).await;
+
+        Ok(user.map(|u| fedimint_gateway_common::UserResponse {
+            username: username.to_string(),
+            created_at: u.created_at,
+            last_login: u.last_login,
+            description: u.description,
+        }))
+    }
+
+    /// Deletes a user by username. Returns true if the user was deleted.
+    pub async fn handle_delete_user(&self, username: &str) -> AdminResult<bool> {
+        // Prevent deleting "admin" user
+        if username == "admin" {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Cannot delete the 'admin' user"
+            )));
+        }
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let deleted = dbtx.delete_user(username).await;
+        dbtx.commit_tx().await;
+
+        Ok(deleted)
+    }
+
+    /// Lists all users.
+    pub async fn handle_list_users(
+        &self,
+    ) -> AdminResult<fedimint_gateway_common::ListUsersResponse> {
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let users = dbtx.list_users().await;
+
+        let user_responses = users
+            .into_iter()
+            .map(|(username, user)| fedimint_gateway_common::UserResponse {
+                username,
+                created_at: user.created_at,
+                last_login: user.last_login,
+                description: user.description,
+            })
+            .collect();
+
+        Ok(fedimint_gateway_common::ListUsersResponse {
+            users: user_responses,
+        })
+    }
+
+    /// Validates that a username meets the requirements:
+    /// - Alphanumeric and underscore only
+    /// - 1-64 characters
+    /// - Not "admin" (reserved)
+    fn validate_username(username: &str) -> AdminResult<()> {
+        if username.is_empty() || username.len() > 64 {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Username must be between 1 and 64 characters"
+            )));
+        }
+
+        if username == "admin" {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Username 'admin' is reserved"
+            )));
+        }
+
+        if !username
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Username must contain only alphanumeric characters and underscores"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Validates that a string looks like a valid bcrypt hash.
+    fn validate_bcrypt_hash(hash: &str) -> AdminResult<()> {
+        // Bcrypt hashes start with $2a$, $2b$, or $2y$ and are 60 characters long
+        if hash.len() != 60 {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Invalid bcrypt hash: must be 60 characters"
+            )));
+        }
+
+        if !hash.starts_with("$2a$") && !hash.starts_with("$2b$") && !hash.starts_with("$2y$") {
+            return Err(AdminGatewayError::Unexpected(anyhow!(
+                "Invalid bcrypt hash: must start with $2a$, $2b$, or $2y$"
+            )));
+        }
+
+        Ok(())
     }
 }
 

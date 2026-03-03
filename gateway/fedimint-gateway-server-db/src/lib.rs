@@ -106,6 +106,21 @@ pub trait GatewayDbtxNcExt {
         federation_id: FederationId,
         backup_time: Option<SystemTime>,
     );
+
+    // ==================== User Management ====================
+
+    /// Creates a new user. Returns an error if the user already exists.
+    async fn create_user(&mut self, username: &str, user: User) -> anyhow::Result<()>;
+
+    /// Gets a user by username
+    async fn get_user(&mut self, username: &str) -> Option<User>;
+
+    /// Deletes a user by username. Returns true if the user was deleted, false
+    /// if they didn't exist.
+    async fn delete_user(&mut self, username: &str) -> bool;
+
+    /// Lists all users
+    async fn list_users(&mut self) -> Vec<(String, User)>;
 }
 
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
@@ -281,6 +296,42 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         self.insert_entry(&FederationBackupKey { federation_id }, &backup_time)
             .await;
     }
+
+    // ==================== User Management ====================
+
+    async fn create_user(&mut self, username: &str, user: User) -> anyhow::Result<()> {
+        let key = UserKey {
+            username: username.to_string(),
+        };
+        if self.get_value(&key).await.is_some() {
+            anyhow::bail!("User '{}' already exists", username);
+        }
+        self.insert_new_entry(&key, &user).await;
+        Ok(())
+    }
+
+    async fn get_user(&mut self, username: &str) -> Option<User> {
+        self.get_value(&UserKey {
+            username: username.to_string(),
+        })
+        .await
+    }
+
+    async fn delete_user(&mut self, username: &str) -> bool {
+        self.remove_entry(&UserKey {
+            username: username.to_string(),
+        })
+        .await
+        .is_some()
+    }
+
+    async fn list_users(&mut self) -> Vec<(String, User)> {
+        self.find_by_prefix(&UserKeyPrefix)
+            .await
+            .map(|(key, user): (UserKey, User)| (key.username, user))
+            .collect::<Vec<_>>()
+            .await
+    }
 }
 
 #[repr(u8)]
@@ -294,6 +345,7 @@ enum DbKeyPrefix {
     ClientDatabase = 0x10,
     Iroh = 0x11,
     FederationBackup = 0x12,
+    User = 0x13,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -767,6 +819,35 @@ impl_db_record!(
     value = RegisteredIncomingContract,
     db_prefix = DbKeyPrefix::RegisteredIncomingContract,
 );
+
+// ==================== User Management ====================
+
+/// Database key for user records
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct UserKey {
+    pub username: String,
+}
+
+/// Prefix for querying all users
+#[derive(Debug, Encodable, Decodable)]
+pub struct UserKeyPrefix;
+
+/// User record stored in the database
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct User {
+    /// Bcrypt password hash
+    pub password_hash: String,
+    /// When the user was created
+    pub created_at: SystemTime,
+    /// Last successful login time
+    pub last_login: Option<SystemTime>,
+    /// Optional description/notes about the user
+    pub description: Option<String>,
+}
+
+impl_db_record!(key = UserKey, value = User, db_prefix = DbKeyPrefix::User,);
+
+impl_db_lookup!(key = UserKey, query_prefix = UserKeyPrefix);
 
 #[cfg(test)]
 mod migration_tests;
