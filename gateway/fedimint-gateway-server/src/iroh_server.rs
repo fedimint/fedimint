@@ -268,7 +268,12 @@ async fn handle_request(
     // The STOP endpoint is handled outside of the `Handlers` struct since it has a
     // different function signature (it needs a `TaskGroup`).
     if request.route == STOP_ENDPOINT {
-        let body = crate::rpc_server::stop(Extension(task_group), Extension(gateway)).await?;
+        let body = crate::rpc_server::stop(
+            Extension(task_group),
+            Extension(gateway),
+            Extension(auth_user),
+        )
+        .await?;
         return Ok((StatusCode::OK, body));
     }
 

@@ -54,6 +54,7 @@ pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
+pub const USERS_ENDPOINT: &str = "/users";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -533,9 +534,6 @@ pub struct SetMnemonicPayload {
 
 // ==================== User Management API Types ====================
 
-/// Endpoint constants for user management
-pub const USERS_ENDPOINT: &str = "/users";
-
 /// User authorization permissions
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -547,6 +545,10 @@ pub enum UserAuthorization {
     },
     /// User can manage other users (create, delete, list)
     UserManagement,
+    /// User can join and leave federations
+    FederationManagement,
+    /// User can modify fees
+    FeeManagement,
 }
 
 /// Payload for creating a new user

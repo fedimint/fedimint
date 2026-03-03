@@ -581,27 +581,39 @@ async fn user_auth_test() -> anyhow::Result<()> {
             let user1_password = "user1_secret_password";
             let user2_password = "user2_secret_password";
             let user3_password = "user3_secret_password";
+            let user4_password = "user4_secret_password";
+            let user5_password = "user5_secret_password";
 
             // User 1: Has SendLimit of 1,000,000 msats (1,000 sats)
             info!(target: LOG_TEST, "Creating user with SendLimit...");
-            gw.create_user("test_user_1", user1_password, Some(1_000_000), false)
+            gw.create_user("test_user_1", user1_password, Some(1_000_000), false, false, false)
                 .await?;
 
             // User 2: Has UserManagement permission (can manage other users)
             info!(target: LOG_TEST, "Creating user with UserManagement permission...");
-            gw.create_user("test_user_2", user2_password, None, true)
+            gw.create_user("test_user_2", user2_password, None, true, false, false)
                 .await?;
 
             // User 3: Has no permissions (just authenticated, for deletion test)
             info!(target: LOG_TEST, "Creating user with no permissions...");
-            gw.create_user("test_user_3", user3_password, None, false)
+            gw.create_user("test_user_3", user3_password, None, false, false, false)
                 .await?;
 
-            // List users and verify all 3 exist
+            // User 4: Has FederationManagement permission (can join/leave federations)
+            info!(target: LOG_TEST, "Creating user with FederationManagement permission...");
+            gw.create_user("test_user_4", user4_password, None, false, true, false)
+                .await?;
+
+            // User 5: Has FeeManagement permission (can modify fees)
+            info!(target: LOG_TEST, "Creating user with FeeManagement permission...");
+            gw.create_user("test_user_5", user5_password, None, false, false, true)
+                .await?;
+
+            // List users and verify all 5 exist
             info!(target: LOG_TEST, "Listing users...");
             let users = gw.list_users().await?;
-            assert_eq!(users.users.len(), 3, "Expected 3 users");
-            info!(target: LOG_TEST, "Verified 3 users exist");
+            assert_eq!(users.users.len(), 5, "Expected 5 users");
+            info!(target: LOG_TEST, "Verified 5 users exist");
 
             // Get specific user and verify details
             info!(target: LOG_TEST, "Getting specific user...");
@@ -617,9 +629,9 @@ async fn user_auth_test() -> anyhow::Result<()> {
             info!(target: LOG_TEST, "Deleting user...");
             gw.delete_user("test_user_3").await?;
 
-            // List users and verify only 2 remain
+            // List users and verify only 4 remain
             let users = gw.list_users().await?;
-            assert_eq!(users.users.len(), 2, "Expected 2 users after deletion");
+            assert_eq!(users.users.len(), 4, "Expected 4 users after deletion");
             info!(target: LOG_TEST, "Verified user deletion");
 
             // ==================== Test Spend Limit Enforcement ====================
@@ -737,9 +749,11 @@ async fn user_auth_test() -> anyhow::Result<()> {
                 .create_user_as_user(
                     "test_user_2",
                     user2_password,
-                    "test_user_4",
-                    "user4_password",
+                    "test_user_temp",
+                    "user_temp_password",
                     None,
+                    false,
+                    false,
                     false,
                 )
                 .await;
@@ -751,12 +765,12 @@ async fn user_auth_test() -> anyhow::Result<()> {
 
             // Verify user was created
             let users = gw.list_users().await?;
-            assert_eq!(users.users.len(), 3, "Expected 3 users after creation by user_2");
+            assert_eq!(users.users.len(), 5, "Expected 5 users after creation by user_2");
 
             // User 2 should be able to delete users
             info!(target: LOG_TEST, "Testing delete_user with UserManagement permission...");
             let result = gw
-                .delete_user_as_user("test_user_2", user2_password, "test_user_4")
+                .delete_user_as_user("test_user_2", user2_password, "test_user_temp")
                 .await;
             assert!(
                 result.is_ok(),
@@ -770,9 +784,11 @@ async fn user_auth_test() -> anyhow::Result<()> {
                 .create_user_as_user(
                     "test_user_1",
                     user1_password,
-                    "test_user_5",
-                    "user5_password",
+                    "test_user_temp2",
+                    "user_temp2_password",
                     None,
+                    false,
+                    false,
                     false,
                 )
                 .await;
@@ -792,6 +808,120 @@ async fn user_auth_test() -> anyhow::Result<()> {
                 "User without UserManagement should NOT be able to delete users"
             );
             info!(target: LOG_TEST, "delete_user without UserManagement correctly rejected");
+
+            // ==================== Test Federation Management Permission ====================
+            info!(target: LOG_TEST, "Testing federation management permission enforcement...");
+
+            // User 4 (has FederationManagement) should be able to set fees
+            // Note: We can't easily test connect/leave federation without affecting the test state,
+            // so we'll test that users WITHOUT the permission are rejected
+
+            // User 1 (has SendLimit but NOT FederationManagement) should NOT be able to leave federation
+            info!(target: LOG_TEST, "Testing leave_federation without FederationManagement permission...");
+            let result = gw
+                .leave_federation_as_user("test_user_1", user1_password, fed_id.clone())
+                .await;
+            assert!(
+                result.is_err(),
+                "User without FederationManagement should NOT be able to leave federation"
+            );
+            info!(target: LOG_TEST, "leave_federation without FederationManagement correctly rejected");
+
+            // User 4 should be able to attempt leave_federation (will succeed in permission check,
+            // but may fail for other reasons like balance - we just verify no permission error)
+            // For safety, we won't actually leave the federation as it would break subsequent tests
+
+            // ==================== Test Fee Management Permission ====================
+            info!(target: LOG_TEST, "Testing fee management permission enforcement...");
+
+            // User 1 (has SendLimit but NOT FeeManagement) should NOT be able to set fees
+            info!(target: LOG_TEST, "Testing set_fees without FeeManagement permission...");
+            let result = gw
+                .set_fees_as_user("test_user_1", user1_password, fed_id.clone(), 100, 1000)
+                .await;
+            assert!(
+                result.is_err(),
+                "User without FeeManagement should NOT be able to set fees"
+            );
+            info!(target: LOG_TEST, "set_fees without FeeManagement correctly rejected");
+
+            // User 5 (has FeeManagement) should be able to set fees
+            info!(target: LOG_TEST, "Testing set_fees with FeeManagement permission...");
+            let result = gw
+                .set_fees_as_user("test_user_5", user5_password, fed_id.clone(), 100, 1000)
+                .await;
+            assert!(
+                result.is_ok(),
+                "User with FeeManagement should be able to set fees"
+            );
+            info!(target: LOG_TEST, "set_fees with FeeManagement succeeded");
+
+            // ==================== Test Authorization over Iroh Endpoint ====================
+            info!(target: LOG_TEST, "Testing authorization enforcement over iroh endpoint...");
+
+            // Test spend limit enforcement over iroh - within limit should succeed
+            info!(target: LOG_TEST, "Testing spend_ecash within limit via iroh...");
+            let result = gw
+                .spend_ecash_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 100_000)
+                .await;
+            assert!(
+                result.is_ok(),
+                "spend_ecash within limit via iroh should succeed"
+            );
+            info!(target: LOG_TEST, "spend_ecash within limit via iroh succeeded");
+
+            // Test spend limit enforcement over iroh - exceeding limit should fail
+            info!(target: LOG_TEST, "Testing spend_ecash exceeding limit via iroh...");
+            let result = gw
+                .spend_ecash_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 2_000_000)
+                .await;
+            assert!(
+                result.is_err(),
+                "spend_ecash exceeding limit via iroh should fail"
+            );
+            info!(target: LOG_TEST, "spend_ecash exceeding limit via iroh correctly rejected");
+
+            // Test fee management permission over iroh - user without permission should fail
+            info!(target: LOG_TEST, "Testing set_fees without FeeManagement permission via iroh...");
+            let result = gw
+                .set_fees_as_user_iroh("test_user_1", user1_password, fed_id.clone(), 100, 1000)
+                .await;
+            assert!(
+                result.is_err(),
+                "User without FeeManagement should NOT be able to set fees via iroh"
+            );
+            info!(target: LOG_TEST, "set_fees without FeeManagement via iroh correctly rejected");
+
+            // Test fee management permission over iroh - user with permission should succeed
+            info!(target: LOG_TEST, "Testing set_fees with FeeManagement permission via iroh...");
+            let result = gw
+                .set_fees_as_user_iroh("test_user_5", user5_password, fed_id.clone(), 200, 2000)
+                .await;
+            assert!(
+                result.is_ok(),
+                "User with FeeManagement should be able to set fees via iroh"
+            );
+            info!(target: LOG_TEST, "set_fees with FeeManagement via iroh succeeded");
+
+            // Test admin-only endpoint (mnemonic) over iroh - admin should succeed
+            info!(target: LOG_TEST, "Testing get_mnemonic as admin via iroh...");
+            let result = gw.get_mnemonic_iroh().await;
+            assert!(
+                result.is_ok(),
+                "Admin should be able to get mnemonic via iroh"
+            );
+            info!(target: LOG_TEST, "get_mnemonic as admin via iroh succeeded");
+
+            // Test admin-only endpoint (mnemonic) over iroh - user should fail
+            info!(target: LOG_TEST, "Testing get_mnemonic as user via iroh (should fail)...");
+            let result = gw
+                .get_mnemonic_as_user_iroh("test_user_5", user5_password)
+                .await;
+            assert!(
+                result.is_err(),
+                "User should NOT be able to get mnemonic via iroh (admin only)"
+            );
+            info!(target: LOG_TEST, "get_mnemonic as user via iroh correctly rejected");
 
             info!(target: LOG_TEST, "user_auth_test successful");
             Ok(())

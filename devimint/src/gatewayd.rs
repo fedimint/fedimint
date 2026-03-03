@@ -827,6 +827,30 @@ impl Gatewayd {
         )
     }
 
+    /// Creates a command using the iroh endpoint with admin auth (bearer token)
+    pub fn cmd_iroh(&self) -> Command {
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcpassword=theresnosecondbest",
+            "--address",
+            format!("iroh://{}", self.node_id),
+        )
+    }
+
+    /// Creates a command using the iroh endpoint with user auth (username +
+    /// password)
+    pub fn cmd_iroh_as_user(&self, username: &str, password: &str) -> Command {
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcuser",
+            username,
+            "--rpcpassword",
+            password,
+            "--address",
+            format!("iroh://{}", self.node_id),
+        )
+    }
+
     /// Create a new user (as admin)
     pub async fn create_user(
         &self,
@@ -834,6 +858,8 @@ impl Gatewayd {
         password: &str,
         send_limit_msats: Option<u64>,
         user_management: bool,
+        federation_management: bool,
+        fee_management: bool,
     ) -> Result<serde_json::Value> {
         let mut command = cmd!(self, "user", "create", "--password", password, username,);
 
@@ -843,6 +869,14 @@ impl Gatewayd {
 
         if user_management {
             command = command.arg(&"--user-management");
+        }
+
+        if federation_management {
+            command = command.arg(&"--federation-management");
+        }
+
+        if fee_management {
+            command = command.arg(&"--fee-management");
         }
 
         command.out_json().await
@@ -881,6 +915,8 @@ impl Gatewayd {
         new_password: &str,
         send_limit_msats: Option<u64>,
         user_management: bool,
+        federation_management: bool,
+        fee_management: bool,
     ) -> Result<serde_json::Value> {
         let mut command = self
             .cmd_as_user(auth_username, auth_password)
@@ -896,6 +932,14 @@ impl Gatewayd {
 
         if user_management {
             command = command.arg(&"--user-management");
+        }
+
+        if federation_management {
+            command = command.arg(&"--federation-management");
+        }
+
+        if fee_management {
+            command = command.arg(&"--fee-management");
         }
 
         command.out_json().await
@@ -1064,5 +1108,152 @@ impl Gatewayd {
         }
 
         command.run().await
+    }
+
+    // ==================== Federation Management Operations as User
+    // ====================
+
+    /// Connect to a federation as a specific user (for testing federation
+    /// management permission)
+    pub async fn connect_federation_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        invite_code: &str,
+    ) -> Result<serde_json::Value> {
+        self.cmd_as_user(username, password)
+            .arg(&"general")
+            .arg(&"connect-fed")
+            .arg(&"--invite-code")
+            .arg(&invite_code)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Leave a federation as a specific user (for testing federation management
+    /// permission)
+    pub async fn leave_federation_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+    ) -> Result<serde_json::Value> {
+        self.cmd_as_user(username, password)
+            .arg(&"general")
+            .arg(&"leave-fed")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    // ==================== Fee Management Operations as User ====================
+
+    /// Set fees as a specific user (for testing fee management permission)
+    pub async fn set_fees_as_user(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+        ln_ppm: u64,
+        ln_base_msat: u64,
+    ) -> Result<()> {
+        self.cmd_as_user(username, password)
+            .arg(&"cfg")
+            .arg(&"set-fees")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&"--ln-ppm")
+            .arg(&ln_ppm)
+            .arg(&"--ln-base")
+            .arg(&format!("{ln_base_msat} msat"))
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .run()
+            .await
+    }
+
+    // ==================== Iroh Endpoint Operations ====================
+
+    /// Spend ecash as a specific user via iroh endpoint (for testing
+    /// authorization over iroh)
+    pub async fn spend_ecash_as_user_iroh(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+        amount_msats: u64,
+    ) -> Result<serde_json::Value> {
+        self.cmd_iroh_as_user(username, password)
+            .arg(&"ecash")
+            .arg(&"send")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&amount_msats)
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Set fees as a specific user via iroh endpoint (for testing authorization
+    /// over iroh)
+    pub async fn set_fees_as_user_iroh(
+        &self,
+        username: &str,
+        password: &str,
+        federation_id: FederationId,
+        ln_ppm: u64,
+        ln_base_msat: u64,
+    ) -> Result<()> {
+        self.cmd_iroh_as_user(username, password)
+            .arg(&"cfg")
+            .arg(&"set-fees")
+            .arg(&"--federation-id")
+            .arg(&federation_id)
+            .arg(&"--ln-ppm")
+            .arg(&ln_ppm)
+            .arg(&"--ln-base")
+            .arg(&format!("{ln_base_msat} msat"))
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .run()
+            .await
+    }
+
+    /// Get gateway mnemonic via iroh endpoint (admin only)
+    pub async fn get_mnemonic_iroh(&self) -> Result<serde_json::Value> {
+        self.cmd_iroh()
+            .arg(&"seed")
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
+    }
+
+    /// Try to get gateway mnemonic as a user via iroh endpoint (should fail -
+    /// admin only)
+    pub async fn get_mnemonic_as_user_iroh(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<serde_json::Value> {
+        self.cmd_iroh_as_user(username, password)
+            .arg(&"seed")
+            .kill_on_drop(true)
+            .env("RUST_BACKTRACE", "1")
+            .env("RUST_LIB_BACKTRACE", "0")
+            .out_json()
+            .await
     }
 }

@@ -102,13 +102,21 @@ pub enum UserCommands {
         description: Option<String>,
 
         /// Maximum amount the user can send in a single payment (in msats).
-        /// If specified, adds a SendLimit authorization.
+        /// If specified, adds a `SendLimit` authorization.
         #[clap(long)]
         send_limit_msats: Option<u64>,
 
         /// Allow the user to manage other users (create, delete, list)
         #[clap(long)]
         user_management: bool,
+
+        /// Allow the user to join and leave federations
+        #[clap(long)]
+        federation_management: bool,
+
+        /// Allow the user to modify fees
+        #[clap(long)]
+        fee_management: bool,
     },
     /// Delete a user
     Delete {
@@ -246,6 +254,8 @@ impl UserCommands {
                 description,
                 send_limit_msats,
                 user_management,
+                federation_management,
+                fee_management,
             } => {
                 // Hash the password locally using bcrypt before sending to server
                 let password_hash =
@@ -260,6 +270,12 @@ impl UserCommands {
                 }
                 if user_management {
                     authorizations.push(UserAuthorization::UserManagement);
+                }
+                if federation_management {
+                    authorizations.push(UserAuthorization::FederationManagement);
+                }
+                if fee_management {
+                    authorizations.push(UserAuthorization::FeeManagement);
                 }
 
                 let response = create_user(
@@ -278,9 +294,9 @@ impl UserCommands {
             Self::Delete { username } => {
                 let response = delete_user(client, base_url, &username).await?;
                 if response.deleted {
-                    println!("User '{}' deleted successfully", username);
+                    println!("User '{username}' deleted successfully");
                 } else {
-                    println!("User '{}' not found", username);
+                    println!("User '{username}' not found");
                 }
             }
             Self::List => {
@@ -291,7 +307,7 @@ impl UserCommands {
                 let response = get_user(client, base_url, &username).await?;
                 match response {
                     Some(user) => print_response(user),
-                    None => println!("User '{}' not found", username),
+                    None => println!("User '{username}' not found"),
                 }
             }
         }

@@ -197,6 +197,59 @@ pub fn check_user_management_permission(
     }
 }
 
+/// Checks if the authenticated user has permission to manage federations
+/// (join/leave). Returns `Ok(())` for Admin or users with FederationManagement
+/// authorization. Returns `Err(Forbidden)` otherwise.
+pub fn check_federation_management_permission(
+    auth_user: &AuthenticatedUser,
+) -> Result<(), AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(()),
+        AuthenticatedUser::User { authorizations, .. } => {
+            if authorizations
+                .iter()
+                .any(|a| matches!(a, UserAuthorization::FederationManagement))
+            {
+                Ok(())
+            } else {
+                Err(AdminGatewayError::Forbidden)
+            }
+        }
+    }
+}
+
+/// Checks if the authenticated user has permission to modify fees.
+/// Returns `Ok(())` for Admin or users with FeeManagement authorization.
+/// Returns `Err(Forbidden)` otherwise.
+pub fn check_fee_management_permission(
+    auth_user: &AuthenticatedUser,
+) -> Result<(), AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(()),
+        AuthenticatedUser::User { authorizations, .. } => {
+            if authorizations
+                .iter()
+                .any(|a| matches!(a, UserAuthorization::FeeManagement))
+            {
+                Ok(())
+            } else {
+                Err(AdminGatewayError::Forbidden)
+            }
+        }
+    }
+}
+
+/// Checks if the authenticated user is the admin (authenticated via bearer
+/// token). This is used for sensitive operations like accessing the mnemonic.
+/// Returns `Ok(())` for Admin only.
+/// Returns `Err(Forbidden)` for any user (even with all permissions).
+pub fn check_admin_only(auth_user: &AuthenticatedUser) -> Result<(), AdminGatewayError> {
+    match auth_user {
+        AuthenticatedUser::Admin => Ok(()),
+        AuthenticatedUser::User { .. } => Err(AdminGatewayError::Forbidden),
+    }
+}
+
 async fn not_configured_middleware(
     Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
@@ -682,9 +735,10 @@ async fn pay_invoice(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn connect_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    check_federation_management_permission(&auth_user)?;
     let fed = gateway.handle_connect_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -693,9 +747,10 @@ async fn connect_fed(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn leave_fed(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<LeaveFedPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    check_federation_management_permission(&auth_user)?;
     let fed = gateway.handle_leave_federation(payload).await?;
     Ok(Json(json!(fed)))
 }
@@ -714,9 +769,10 @@ async fn backup(
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn set_fees(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<SetFeesPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    check_fee_management_permission(&auth_user)?;
     gateway.handle_set_fees_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -890,8 +946,10 @@ async fn receive_ecash(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Mnemonic access is restricted to admin only (bearer token auth)
+    check_admin_only(&auth_user)?;
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
 }
@@ -899,9 +957,11 @@ async fn mnemonic(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn set_mnemonic(
     Extension(gateway): Extension<Arc<Gateway>>,
-    _auth_user: Extension<AuthenticatedUser>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     Json(payload): Json<SetMnemonicPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Mnemonic access is restricted to admin only (bearer token auth)
+    check_admin_only(&auth_user)?;
     gateway.handle_set_mnemonic_msg(payload).await?;
     Ok(Json(json!(())))
 }
@@ -910,7 +970,10 @@ async fn set_mnemonic(
 pub(crate) async fn stop(
     Extension(task_group): Extension<TaskGroup>,
     Extension(gateway): Extension<Arc<Gateway>>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
+    // Stopping the gateway is restricted to admin only (bearer token auth)
+    check_admin_only(&auth_user)?;
     gateway.handle_shutdown_msg(task_group).await?;
     Ok(Json(json!(())))
 }
