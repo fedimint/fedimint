@@ -47,6 +47,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::transaction::Transaction;
@@ -54,6 +55,7 @@ use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, re
 use fedimint_core::{
     Amount, PeerId, TieredMulti, base32, fedimint_build_code_version_env, runtime,
 };
+use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{EventLogId, EventLogTrimableId};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
@@ -72,7 +74,10 @@ use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
 use crate::db::{StoredAdminCreds, load_admin_creds, store_admin_creds};
-use crate::envs::{FM_CLIENT_DIR_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
+use crate::envs::{
+    FM_CLIENT_DIR_ENV, FM_FEDERATION_SECRET_HEX_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV,
+    FM_PASSWORD_ENV,
+};
 
 /// Type of output the cli produces
 #[derive(Serialize)]
@@ -239,6 +244,10 @@ struct Opts {
     /// Guardian password for authentication
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
+
+    /// Federation secret as consensus-encoded hex.
+    #[arg(long, env = FM_FEDERATION_SECRET_HEX_ENV)]
+    federation_secret_hex: Option<String>,
 
     #[cfg(feature = "tor")]
     /// Activate usage of Tor as the Connector when building the Client
@@ -843,21 +852,27 @@ impl FedimintCli {
             });
         }
 
-        let mnemonic = Mnemonic::from_entropy(
-            &Client::load_decodable_client_secret::<Vec<u8>>(&db)
-                .await
-                .map_err_cli()?,
-        )
-        .map_err_cli()?;
+        let root_secret = if let Some(federation_secret_hex) = &cli.federation_secret_hex {
+            let federation_secret = <DerivableSecret as Decodable>::consensus_decode_hex(
+                federation_secret_hex,
+                &ModuleRegistry::default(),
+            )
+            .map_err_cli_msg("invalid federation secret hex")?;
+            RootSecret::Custom(federation_secret)
+        } else {
+            let mnemonic = Mnemonic::from_entropy(
+                &Client::load_decodable_client_secret::<Vec<u8>>(&db)
+                    .await
+                    .map_err_cli()?,
+            )
+            .map_err_cli()?;
+            RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
+                &mnemonic,
+            ))
+        };
 
         let client = client_builder
-            .open(
-                cli.make_endpoints().await.map_err_cli()?,
-                db,
-                RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
-                    &mnemonic,
-                )),
-            )
+            .open(cli.make_endpoints().await.map_err_cli()?, db, root_secret)
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -918,6 +933,17 @@ impl FedimintCli {
     }
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
+        if cli.federation_secret_hex.is_some()
+            && matches!(
+                cli.command,
+                Command::Join { .. } | Command::Client(ClientCmd::Restore { .. })
+            )
+        {
+            return Err(CliError {
+                error: "--federation-secret-hex cannot be used with join or restore".to_owned(),
+            });
+        }
+
         match cli.command.clone() {
             Command::InviteCode { peer } => {
                 let client = self.client_open(&cli).await?;
