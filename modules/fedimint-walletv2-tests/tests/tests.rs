@@ -92,6 +92,7 @@ async fn await_consensus_block_count(
 
 async fn await_federation_total_value(
     client: &ClientHandleArc,
+    bitcoin: &Arc<dyn BitcoinTest>,
     min_value: bitcoin::Amount,
 ) -> anyhow::Result<()> {
     loop {
@@ -103,6 +104,8 @@ async fn await_federation_total_value(
         if current_value >= min_value {
             return Ok(());
         }
+
+        bitcoin.mine_blocks(1).await;
 
         sleep_in_test(
             format!("Waiting for federation total value of {current_value} to reach {min_value}"),
@@ -143,7 +146,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     info!("Wait for deposits to be auto-claimed...");
 
-    await_federation_total_value(&client, bsats(290_000)).await?;
+    await_federation_total_value(&client, &bitcoin, bsats(290_000)).await?;
 
     await_client_balance(&client, bsats(290_000)).await?;
 
@@ -166,7 +169,7 @@ async fn test_send_and_receive() -> anyhow::Result<()> {
 
     info!("Wait for deposits to be auto-claimed...");
 
-    await_federation_total_value(&client, bsats(980_000)).await?;
+    await_federation_total_value(&client, &bitcoin, bsats(980_000)).await?;
 
     await_client_balance(&client, bsats(980_000)).await?;
 
@@ -273,7 +276,7 @@ async fn fee_exceeds_one_bitcoin_within_sixteen_pending_txs() -> anyhow::Result<
 
     info!("Wait for deposit to be auto-claimed...");
 
-    await_federation_total_value(&client, Amount::from_sat(99_000_000)).await?;
+    await_federation_total_value(&client, &bitcoin, Amount::from_sat(99_000_000)).await?;
 
     bitcoin.mine_blocks(6).await;
 
