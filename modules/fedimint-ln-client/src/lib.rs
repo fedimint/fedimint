@@ -1275,6 +1275,13 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
+        if let Some(expires_at) = invoice.expires_at() {
+            ensure!(
+                expires_at.as_secs() > fedimint_core::time::duration_since_epoch().as_secs(),
+                "Invoice has expired"
+            );
+        }
+
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self

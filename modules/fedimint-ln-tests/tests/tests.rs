@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::bail;
@@ -28,7 +27,9 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
 use futures::StreamExt;
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use lightning_invoice::{
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
+};
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
 
@@ -668,15 +669,21 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
     let client1 = fed.new_client().await;
 
-    // Signet invoice should fail on regtest
-    let signet_invoice = Bolt11Invoice::from_str(
-        "lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
-        6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
-        cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
-        yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
-        2we42dvjggjkf44egqheymyw",
-    )
-    .unwrap();
+    // Build a signet invoice with a near-infinite expiry so the network
+    // check fires before the expiry check.
+    let ctx = secp256k1::Secp256k1::new();
+    let kp = Keypair::new(&ctx, &mut OsRng);
+    let payment_hash = sha256::Hash::hash(&[0; 32]);
+    let signet_invoice = InvoiceBuilder::new(Currency::Signet)
+        .description(String::new())
+        .payment_hash(payment_hash)
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(100_000)
+        .expiry_time(std::time::Duration::from_secs(365 * 24 * 60 * 60 * 100))
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
+        .expect("Failed to build signet invoice");
 
     let error = pay_invoice(&client1, signet_invoice, Some(gw.http_gateway_id().await))
         .await
@@ -684,6 +691,51 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     assert_eq!(
         error.to_string(),
         "Invalid invoice currency: expected=Regtest, got=Signet"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_expired_invoice() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
+
+    // Give client2 initial balance
+    client2_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Create an invoice with a 1-second expiry.
+    let desc = Description::new("expired-invoice".to_string())?;
+    let (_op, invoice, _) = client1
+        .get_first_module::<LightningClientModule>()?
+        .create_bolt11_invoice(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(desc),
+            Some(1),
+            (),
+            None,
+        )
+        .await?;
+
+    // Wait for the offer to expire
+    fedimint_core::task::sleep_in_test(
+        "waiting for offer to expire",
+        std::time::Duration::from_secs(2),
+    )
+    .await;
+
+    // client2 attempts to pay the expired invoice — the send-side check in
+    // pay_bolt11_invoice() rejects it before reaching the federation.
+    let error = pay_invoice(&client2, invoice, None)
+        .await
+        .expect_err("Payment of expired invoice should fail");
+    assert!(
+        error.to_string().contains("Invoice has expired"),
+        "Expected 'Invoice has expired' error, got: {error}"
     );
 
     Ok(())
