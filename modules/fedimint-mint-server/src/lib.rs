@@ -569,7 +569,7 @@ impl ServerModule for Mint {
     ) -> Result<InputMeta, MintInputError> {
         let input = input.ensure_v0_ref()?;
 
-        debug!(target: LOG_MODULE_MINT, nonce=%(input.note.nonce), "Marking note as spent");
+        debug!(target: LOG_MODULE_MINT, nonce=%(input.note.nonce.fmt_short()), "Marking note as spent");
 
         if dbtx
             .insert_entry(&NonceKey(input.note.nonce), &())

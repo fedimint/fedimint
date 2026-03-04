@@ -2740,7 +2740,7 @@ impl fmt::Debug for SpendableNote {
 }
 impl fmt::Display for SpendableNote {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.nonce().fmt(f)
+        write!(f, "{}", self.nonce().fmt_short())
     }
 }
 
@@ -2790,7 +2790,7 @@ pub struct SpendableNoteUndecoded {
 
 impl fmt::Display for SpendableNoteUndecoded {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.nonce().fmt(f)
+        write!(f, "{}", self.nonce().fmt_short())
     }
 }
 
