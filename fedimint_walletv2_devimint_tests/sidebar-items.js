@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FinalSendState"],"fn":["await_client_balance","await_consensus_block_count","await_consensus_block_count_advance","await_no_pending_txs","bsats","ensure_federation_total_value","ensure_tx_chain_length","get_deposit_address","last_pending_tx_id","main","module_is_present"]};
+window.SIDEBAR_ITEMS = {"enum":["FinalSendState"],"fn":["await_client_balance","await_consensus_block_count","await_no_pending_txs","ensure_federation_total_value","ensure_tx_chain_length","get_deposit_address","main","module_is_present","spawn_block_miner"]};
