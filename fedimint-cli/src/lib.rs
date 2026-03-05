@@ -392,6 +392,23 @@ impl Opts {
     }
 }
 
+fn decode_federation_secret_hex(federation_secret_hex: &str) -> CliResult<DerivableSecret> {
+    <DerivableSecret as Decodable>::consensus_decode_hex(
+        federation_secret_hex,
+        &ModuleRegistry::default(),
+    )
+    .map_err_cli_msg("invalid federation secret hex")
+}
+
+enum RecoverySecret {
+    Mnemonic(Mnemonic),
+    FederationSecret(DerivableSecret),
+}
+
+fn root_secret_from_mnemonic(mnemonic: &Mnemonic) -> RootSecret {
+    RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic))
+}
+
 async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> {
     Ok(
         if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(db).await {
@@ -819,12 +836,7 @@ impl FedimintCli {
             .preview(cli.make_endpoints().await.map_err_cli()?, &invite_code)
             .await
             .map_err_cli()?
-            .join(
-                db,
-                RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
-                    &mnemonic,
-                )),
-            )
+            .join(db, root_secret_from_mnemonic(&mnemonic))
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -852,23 +864,28 @@ impl FedimintCli {
             });
         }
 
-        let root_secret = if let Some(federation_secret_hex) = &cli.federation_secret_hex {
-            let federation_secret = <DerivableSecret as Decodable>::consensus_decode_hex(
-                federation_secret_hex,
-                &ModuleRegistry::default(),
-            )
-            .map_err_cli_msg("invalid federation secret hex")?;
-            RootSecret::Custom(federation_secret)
-        } else {
-            let mnemonic = Mnemonic::from_entropy(
-                &Client::load_decodable_client_secret::<Vec<u8>>(&db)
-                    .await
-                    .map_err_cli()?,
-            )
+        let existing_mnemonic = Client::load_decodable_client_secret_opt::<Vec<u8>>(&db)
+            .await
             .map_err_cli()?;
-            RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
-                &mnemonic,
-            ))
+
+        let root_secret = match (cli.federation_secret_hex.as_deref(), existing_mnemonic) {
+            (Some(_), Some(_)) => {
+                return Err(CliError {
+                    error: "client secret is already set in DB; --federation-secret-hex open requires a client DB without any stored secret".to_owned(),
+                });
+            }
+            (Some(federation_secret_hex), None) => {
+                RootSecret::Custom(decode_federation_secret_hex(federation_secret_hex)?)
+            }
+            (None, Some(entropy)) => {
+                let mnemonic = Mnemonic::from_entropy(&entropy).map_err_cli()?;
+                root_secret_from_mnemonic(&mnemonic)
+            }
+            (None, None) => {
+                return Err(CliError {
+                    error: "Encoded client secret not present in DB".to_owned(),
+                });
+            }
         };
 
         let client = client_builder
@@ -885,29 +902,37 @@ impl FedimintCli {
     async fn client_recover(
         &mut self,
         cli: &Opts,
-        mnemonic: Mnemonic,
+        recovery_secret: RecoverySecret,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
         let (builder, db) = self.make_client_builder(cli).await?;
-        match Client::load_decodable_client_secret_opt::<Vec<u8>>(&db)
+        let existing_mnemonic = Client::load_decodable_client_secret_opt::<Vec<u8>>(&db)
             .await
-            .map_err_cli()?
-        {
-            Some(existing) => {
+            .map_err_cli()?;
+
+        let root_secret = match (recovery_secret, existing_mnemonic) {
+            (RecoverySecret::Mnemonic(mnemonic), Some(existing)) => {
                 if existing != mnemonic.to_entropy() {
                     Err(anyhow::anyhow!("Previously set mnemonic does not match")).map_err_cli()?;
                 }
+
+                root_secret_from_mnemonic(&mnemonic)
             }
-            None => {
+            (RecoverySecret::Mnemonic(mnemonic), None) => {
                 Client::store_encodable_client_secret(&db, mnemonic.to_entropy())
                     .await
                     .map_err_cli()?;
+                root_secret_from_mnemonic(&mnemonic)
             }
-        }
-
-        let root_secret = RootSecret::StandardDoubleDerive(
-            Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-        );
+            (RecoverySecret::FederationSecret(federation_secret), None) => {
+                RootSecret::Custom(federation_secret)
+            }
+            (RecoverySecret::FederationSecret(_), Some(_)) => {
+                return Err(CliError {
+                    error: "client secret is already set in DB; --federation-secret-hex restore requires a client DB without any stored secret".to_owned(),
+                });
+            }
+        };
 
         let preview = builder
             .preview(cli.make_endpoints().await.map_err_cli()?, &invite_code)
@@ -933,14 +958,9 @@ impl FedimintCli {
     }
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
-        if cli.federation_secret_hex.is_some()
-            && matches!(
-                cli.command,
-                Command::Join { .. } | Command::Client(ClientCmd::Restore { .. })
-            )
-        {
+        if cli.federation_secret_hex.is_some() && matches!(&cli.command, Command::Join { .. }) {
             return Err(CliError {
-                error: "--federation-secret-hex cannot be used with join or restore".to_owned(),
+                error: "--federation-secret-hex cannot be used with join".to_owned(),
             });
         }
 
@@ -977,8 +997,34 @@ impl FedimintCli {
             }) => {
                 let invite_code: InviteCode =
                     InviteCode::from_str(&invite_code).map_err_cli_msg("invalid invite code")?;
-                let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli()?;
-                let client = self.client_recover(&cli, mnemonic, invite_code).await?;
+                let recovery_secret = match (
+                    mnemonic.as_deref(),
+                    cli.federation_secret_hex.as_deref(),
+                ) {
+                    (Some(_), Some(_)) => {
+                        return Err(CliError {
+                            error: "restore accepts either --mnemonic or --federation-secret-hex, not both".to_owned(),
+                        });
+                    }
+                    (Some(mnemonic), None) => {
+                        let mnemonic = Mnemonic::from_str(mnemonic).map_err_cli()?;
+                        RecoverySecret::Mnemonic(mnemonic)
+                    }
+                    (None, Some(federation_secret_hex)) => {
+                        let federation_secret =
+                            decode_federation_secret_hex(federation_secret_hex)?;
+                        RecoverySecret::FederationSecret(federation_secret)
+                    }
+                    (None, None) => {
+                        return Err(CliError {
+                            error: "restore requires either --mnemonic or --federation-secret-hex"
+                                .to_owned(),
+                        });
+                    }
+                };
+                let client = self
+                    .client_recover(&cli, recovery_secret, invite_code)
+                    .await?;
 
                 // TODO: until we implement recovery for other modules we can't really wait
                 // for more than this one
