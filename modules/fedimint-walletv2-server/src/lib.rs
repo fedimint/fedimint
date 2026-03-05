@@ -96,6 +96,10 @@ pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 /// consensus item to limit the work done in one `process_consensus_item` step.
 const MAX_BLOCK_COUNT_INCREMENT: u64 = 5;
 
+/// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
+/// below what Bitcoin Core will relay.
+const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
     pub tx: Transaction,
@@ -426,7 +430,10 @@ impl ServerModule for Wallet {
             ));
 
             items.push(WalletConsensusItem::Feerate(Some(
-                status.fee_rate.sats_per_kvb,
+                status
+                    .fee_rate
+                    .sats_per_kvb
+                    .max(MIN_FEERATE_VOTE_SATS_PER_KVB),
             )));
         } else {
             // Bitcoin backend not connected, retract fee rate vote
@@ -1132,7 +1139,7 @@ impl Wallet {
         let feerate = self
             .consensus_feerate(dbtx)
             .await?
-            .max(self.cfg.consensus.min_feerate << pending_txs.len());
+            .max(self.cfg.consensus.feerate_base << pending_txs.len());
 
         let tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(1000);
 

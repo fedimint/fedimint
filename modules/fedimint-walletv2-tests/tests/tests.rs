@@ -90,7 +90,7 @@ async fn await_federation_total_value(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn fee_exceeds_one_bitcoin_within_seventeen_pending_txs() -> anyhow::Result<()> {
+async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
     let fed = fixtures.new_fed_not_degraded().await;
@@ -120,7 +120,7 @@ async fn fee_exceeds_one_bitcoin_within_seventeen_pending_txs() -> anyhow::Resul
 
     let address = bitcoin.get_new_address().await.as_unchecked().clone();
 
-    for _ in 0..17 {
+    for _ in 0..19 {
         let send_fee = client
             .get_first_module::<WalletClientModule>()?
             .send_fee()
