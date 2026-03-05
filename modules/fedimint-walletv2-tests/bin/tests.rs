@@ -1,21 +1,33 @@
 use std::time::Duration;
 
-use anyhow::{Context, ensure};
+use anyhow::ensure;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_11_0_ALPHA;
 use devimint::{cmd, util};
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
-use fedimint_walletv2_common::TxInfo;
-use fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY;
 use serde::Deserialize;
+use tokio::task::JoinHandle;
 use tokio::try_join;
 use tracing::info;
 
-fn bsats(satoshi: u64) -> u64 {
-    satoshi
+/// Spawns a background task that mines a block every 100ms, simulating
+/// continuous block production. This prevents deadlocks where the federation's
+/// pending bitcoin transactions block further progress because no blocks are
+/// being mined to confirm them.
+fn spawn_block_miner(bitcoind: Bitcoind) -> JoinHandle<()> {
+    fedimint_core::runtime::spawn("background-block-miner", async move {
+        loop {
+            if let Err(e) = bitcoind.mine_blocks(1).await {
+                tracing::warn!("Background block miner failed to mine block: {e}");
+            }
+
+            sleep(Duration::from_millis(100)).await;
+        }
+    })
 }
 
 async fn module_is_present(client: &Client, kind: &str) -> anyhow::Result<bool> {
@@ -79,22 +91,6 @@ async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Resu
     }
 }
 
-async fn await_consensus_block_count_advance(
-    client: &Client,
-    bitcoind: &Bitcoind,
-    advance: u64,
-) -> anyhow::Result<()> {
-    info!("Wait for the consensus block count to advance...");
-
-    let value = cmd!(client, "module", "walletv2", "info", "block-count")
-        .out_json()
-        .await?;
-
-    bitcoind.mine_blocks(advance).await?;
-
-    await_consensus_block_count(client, serde_json::from_value::<u64>(value)? + advance).await
-}
-
 async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
     loop {
         let value = cmd!(client, "module", "walletv2", "info", "pending-tx-chain")
@@ -135,18 +131,6 @@ async fn ensure_tx_chain_length(client: &Client, expected: usize) -> anyhow::Res
     ensure!(chain.len() == expected,);
 
     Ok(())
-}
-
-async fn last_pending_tx_id(client: &Client) -> anyhow::Result<Txid> {
-    let value = cmd!(client, "module", "walletv2", "info", "pending-tx-chain")
-        .out_json()
-        .await?;
-
-    let pending: Vec<TxInfo> = serde_json::from_value(value)?;
-
-    let tx = pending.last().context("No pending transactions")?;
-
-    Ok(tx.txid)
 }
 
 async fn get_deposit_address(client: &Client) -> anyhow::Result<Address> {
@@ -199,14 +183,16 @@ async fn main() -> anyhow::Result<()> {
                 "walletv2 module should be present"
             );
 
+            // Spawn a background task that continuously mines blocks. This simulates
+            // real bitcoin block production and prevents deadlocks where pending
+            // federation bitcoin transactions block deposit claims via congestion
+            // control while no blocks are being mined to confirm them.
+            let block_miner = spawn_block_miner(bitcoind.clone());
+
             // We need the consensus block count to reach a non-zero value before we send
             // in any funds such that the UTXO is tracked by the federation.
 
             info!("Wait for the consensus to reach block count one");
-
-            bitcoind
-                .mine_blocks(CONFIRMATION_FINALITY_DELAY + 1)
-                .await?;
 
             await_consensus_block_count(&client, 1).await?;
 
@@ -215,44 +201,36 @@ async fn main() -> anyhow::Result<()> {
             let federation_address_1 = get_deposit_address(&client).await?;
 
             fed.bitcoind
-                .send_to(federation_address_1.to_string(), bsats(100_000))
+                .send_to(federation_address_1.to_string(), 100_000)
                 .await?;
 
             fed.bitcoind
-                .send_to(federation_address_1.to_string(), bsats(200_000))
-                .await?;
-
-            bitcoind
-                .mine_blocks(CONFIRMATION_FINALITY_DELAY + 1)
+                .send_to(federation_address_1.to_string(), 200_000)
                 .await?;
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, bsats(290_000)).await?;
+            await_client_balance(&client, 290_000).await?;
 
-            ensure_federation_total_value(&client, bsats(290_000)).await?;
+            ensure_federation_total_value(&client, 290_000).await?;
 
             let federation_address_2 = get_deposit_address(&client).await?;
 
             assert_ne!(federation_address_1, federation_address_2);
 
             fed.bitcoind
-                .send_to(federation_address_2.to_string(), bsats(300_000))
+                .send_to(federation_address_2.to_string(), 300_000)
                 .await?;
 
             fed.bitcoind
-                .send_to(federation_address_2.to_string(), bsats(400_000))
-                .await?;
-
-            bitcoind
-                .mine_blocks(CONFIRMATION_FINALITY_DELAY + 1)
+                .send_to(federation_address_2.to_string(), 400_000)
                 .await?;
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, bsats(980_000)).await?;
+            await_client_balance(&client, 980_000).await?;
 
-            ensure_federation_total_value(&client, bsats(980_000)).await?;
+            ensure_federation_total_value(&client, 980_000).await?;
 
             let federation_address_3 = get_deposit_address(&client).await?;
 
@@ -286,12 +264,9 @@ async fn main() -> anyhow::Result<()> {
             )?;
 
             assert!(
-                total_value < bsats(500_000),
+                total_value < 500_000,
                 "Federation total value should be less than 500_000 sats"
             );
-
-            await_consensus_block_count_advance(&client, bitcoind, CONFIRMATION_FINALITY_DELAY + 1)
-                .await?;
 
             await_no_pending_txs(&client).await?;
 
@@ -345,21 +320,13 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_consensus_block_count_advance(&client, bitcoind, CONFIRMATION_FINALITY_DELAY + 1)
-                .await?;
-
-            await_client_balance(&client_two, bsats(99_000)).await?;
-
-            let txid = last_pending_tx_id(&client).await?;
-
-            bitcoind.poll_get_transaction(txid).await?;
-
-            await_consensus_block_count_advance(&client, bitcoind, CONFIRMATION_FINALITY_DELAY + 1)
-                .await?;
+            await_client_balance(&client_two, 99_000).await?;
 
             await_no_pending_txs(&client).await?;
 
             ensure_tx_chain_length(&client, 6).await?;
+
+            block_miner.abort();
 
             info!("Wallet V2 send and receive test successful");
 
