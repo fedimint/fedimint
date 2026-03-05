@@ -1581,6 +1581,7 @@ impl FedimintCli {
                 let events: Vec<_> = client
                     .get_event_log(pos, limit)
                     .await
+                    .entries
                     .into_iter()
                     .map(|v| {
                         let id = v.id();
@@ -1611,6 +1612,7 @@ impl FedimintCli {
                         limit,
                     )
                     .await
+                    .entries
                     .into_iter()
                     .map(|v| {
                         let id = v.id();

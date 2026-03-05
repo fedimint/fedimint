@@ -66,7 +66,7 @@ use fedimint_core::{
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
-    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
+    EventLogId, EventLogPage, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -2074,7 +2074,7 @@ impl Client {
         &self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry> {
+    ) -> EventLogPage<EventLogId> {
         self.get_event_log_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
             .await
     }
@@ -2083,7 +2083,7 @@ impl Client {
         &self,
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry> {
+    ) -> EventLogPage<EventLogTrimableId> {
         self.get_event_log_trimable_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
             .await
     }
@@ -2093,7 +2093,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_, Cap>,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>
+    ) -> EventLogPage<EventLogId>
     where
         Cap: Send,
     {
@@ -2105,7 +2105,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_, Cap>,
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>
+    ) -> EventLogPage<EventLogTrimableId>
     where
         Cap: Send,
     {

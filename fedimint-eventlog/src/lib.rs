@@ -407,6 +407,15 @@ impl ops::Deref for PersistedLogEntry {
     }
 }
 
+/// A page of event log entries with a cursor for fetching the next page.
+///
+/// Use `next_cursor` as the `pos` argument to fetch the next page.
+/// An empty `entries` means there are no more entries at this time.
+pub struct EventLogPage<Cursor = EventLogId> {
+    pub entries: Vec<PersistedLogEntry>,
+    pub next_cursor: Cursor,
+}
+
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
@@ -454,7 +463,7 @@ impl_db_lookup!(key = EventLogId, query_prefix = EventLogIdPrefix);
 pub struct EventLogTrimableId(EventLogId);
 
 impl EventLogTrimableId {
-    fn next(&self) -> Self {
+    pub fn next(&self) -> Self {
         Self(self.0.next())
     }
 
@@ -536,18 +545,22 @@ pub trait DBTransactionEventLogExt {
     /// Next [`EventLogTrimableId`] to use for new ordered trimable events
     async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
 
-    /// Read a part of the event log.
+    /// Read a page of the event log.
+    ///
+    /// Returns entries starting from `pos` (inclusive) up to `limit` entries,
+    /// along with a cursor for fetching the next page.
     async fn get_event_log(
         &mut self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>;
+    ) -> EventLogPage<EventLogId>;
 
+    /// Read a page of the trimable event log.
     async fn get_event_log_trimable(
         &mut self,
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry>;
+    ) -> EventLogPage<EventLogTrimableId>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -624,26 +637,40 @@ where
         &mut self,
         pos: Option<EventLogId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry> {
+    ) -> EventLogPage<EventLogId> {
         let pos = pos.unwrap_or_default();
-        self.find_by_range(pos..pos.saturating_add(limit))
+        let entries: Vec<_> = self
+            .find_by_range(pos..pos.saturating_add(limit))
             .await
             .map(|(k, v)| PersistedLogEntry { id: k, inner: v })
             .collect()
-            .await
+            .await;
+        let next_cursor = entries.last().map_or(pos, |e| e.id().next());
+        EventLogPage {
+            entries,
+            next_cursor,
+        }
     }
 
     async fn get_event_log_trimable(
         &mut self,
         pos: Option<EventLogTrimableId>,
         limit: u64,
-    ) -> Vec<PersistedLogEntry> {
+    ) -> EventLogPage<EventLogTrimableId> {
         let pos = pos.unwrap_or_default();
-        self.find_by_range(pos..pos.saturating_add(limit))
+        let entries: Vec<_> = self
+            .find_by_range(pos..pos.saturating_add(limit))
             .await
             .map(|(k, v)| PersistedLogEntry { id: k.0, inner: v })
             .collect()
-            .await
+            .await;
+        let next_cursor = entries
+            .last()
+            .map_or(pos, |e| EventLogTrimableId(e.id().next()));
+        EventLogPage {
+            entries,
+            next_cursor,
+        }
     }
 }
 

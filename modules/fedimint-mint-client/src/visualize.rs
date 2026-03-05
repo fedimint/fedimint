@@ -174,11 +174,11 @@ async fn scan_event_log(client: &Client, notes: &mut HashMap<Nonce, NoteRecord>)
     const PAGE_SIZE: u64 = 10000;
     let mut cursor = None;
     loop {
-        let events = client.get_event_log(cursor, PAGE_SIZE).await;
-        if events.is_empty() {
+        let page = client.get_event_log(cursor, PAGE_SIZE).await;
+        if page.entries.is_empty() {
             break;
         }
-        for event in &events {
+        for event in &page.entries {
             if event.kind == fedimint_eventlog::EventKind::from_static("note-created") {
                 if let Some(nc) = event.to_event::<NoteCreated>() {
                     let record = notes.entry(nc.nonce).or_default();
@@ -191,7 +191,7 @@ async fn scan_event_log(client: &Client, notes: &mut HashMap<Nonce, NoteRecord>)
                 record.spent_ts = Some(event.ts_usecs);
             }
         }
-        cursor = events.last().map(|e| e.id().next());
+        cursor = Some(page.next_cursor);
     }
 }
 

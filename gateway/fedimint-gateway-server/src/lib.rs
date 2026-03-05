@@ -2540,8 +2540,9 @@ impl IAdminGateway for Gateway {
         let mut payment_log = Vec::new();
 
         while payment_log.len() < pagination_size {
-            let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
-            let mut filtered_batch = batch
+            let page = client.get_event_log(Some(start_position), BATCH_SIZE).await;
+            let mut filtered_batch = page
+                .entries
                 .into_iter()
                 .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
                 .collect::<Vec<_>>();
