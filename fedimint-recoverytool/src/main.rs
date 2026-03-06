@@ -261,7 +261,7 @@ async fn process_and_print_tweak_source(
                             change_tweak_idx += 1;
                         }
 
-                        futures::stream::iter(peg_in_tweaks.into_iter())
+                        futures::stream::iter(peg_in_tweaks)
                     },
                 );
 

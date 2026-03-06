@@ -1564,7 +1564,7 @@ impl FedimintCli {
                             module_instance: active_state.module_instance_id(),
                             creation_time: crate::client::time_to_iso8601(&active_meta.created_at),
                             end_time: None,
-                            state: format!("{active_state:?}",),
+                            state: format!("{active_state:?}"),
                         })
                         .chain(inactive_states.into_iter().map(
                             |(inactive_state, inactive_meta)| ReactorLogState {
@@ -1576,7 +1576,7 @@ impl FedimintCli {
                                 end_time: Some(crate::client::time_to_iso8601(
                                     &inactive_meta.exited_at,
                                 )),
-                                state: format!("{inactive_state:?}",),
+                                state: format!("{inactive_state:?}"),
                             },
                         ))
                         .sorted_by(|a, b| a.creation_time.cmp(&b.creation_time))

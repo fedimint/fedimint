@@ -93,7 +93,7 @@ impl MintClientModule {
         };
 
         // Next check if any of the indices for issuing new notes are already used
-        let used_nonces = stream::iter(next_indices.into_iter())
+        let used_nonces = stream::iter(next_indices)
             .map(|(amount, original_next_index)| {
                 let module_api_inner = module_api.clone();
                 async move {

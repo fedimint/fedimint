@@ -148,7 +148,7 @@ impl ToEnvVar for FederationsNetOverrides {
             self.federations
                 .iter()
                 .flat_map(|f| f.peers.values())
-                .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override(),))
+                .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override()))
                 .collect::<Vec<String>>()
                 .join(","),
         )]
