@@ -186,8 +186,11 @@ pub enum ClientCmd {
     DiscoverVersion,
     /// Join federation and restore modules that support it
     Restore {
+        /// BIP-39 mnemonic used by standard Fedimint CLI clients.
+        ///
+        /// If omitted, use global `--federation-secret-hex` instead.
         #[clap(long)]
-        mnemonic: String,
+        mnemonic: Option<String>,
         #[clap(long)]
         invite_code: String,
     },

@@ -8,6 +8,9 @@ pub const FM_OUR_ID_ENV: &str = "FM_OUR_ID";
 // Env variable to set the guardian password for authentication
 pub const FM_PASSWORD_ENV: &str = "FM_PASSWORD";
 
+// Env variable to set a federation secret as consensus-encoded hex.
+pub const FM_FEDERATION_SECRET_HEX_ENV: &str = "FM_FEDERATION_SECRET_HEX";
+
 // Env variable to use Tor connector, instead of default Tcp/ClearNet.
 pub const FM_USE_TOR_ENV: &str = "FM_USE_TOR";
 

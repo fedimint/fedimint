@@ -2827,6 +2827,7 @@ dependencies = [
  "fedimint-connectors",
  "fedimint-core",
  "fedimint-cursed-redb",
+ "fedimint-derive-secret",
  "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-lnv2-client",

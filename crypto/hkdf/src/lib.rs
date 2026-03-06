@@ -57,6 +57,18 @@ impl<H: BitcoinHash> Hkdf<H> {
         Hkdf { prk }
     }
 
+    /// Construct the HKDF from serialized PRK bytes.
+    pub fn from_prk_bytes(prk: H::Bytes) -> Self {
+        Hkdf {
+            prk: Hmac::from_byte_array(prk),
+        }
+    }
+
+    /// Serialize the PRK bytes backing this HKDF instance.
+    pub fn to_prk_bytes(&self) -> H::Bytes {
+        self.prk.to_byte_array()
+    }
+
     /// Run HKDF-expand to generate new key material
     ///
     /// ## Inputs
