@@ -1206,7 +1206,7 @@ async fn handle_metrics_summary(
                 }
             }
         }
-        let new_metric_output = archive_metrics.join(format!("{timestamp_seconds}.json",));
+        let new_metric_output = archive_metrics.join(format!("{timestamp_seconds}.json"));
         let new_metric_output = BufWriter::new(
             OpenOptions::new()
                 .write(true)
@@ -1218,7 +1218,7 @@ async fn handle_metrics_summary(
         metrics_json_output_files.push(new_metric_output);
         if !previous_metrics.is_empty() {
             let new_comparison_output =
-                archive_comparisons.join(format!("{timestamp_seconds}.json",));
+                archive_comparisons.join(format!("{timestamp_seconds}.json"));
             comparison_output = Some(BufWriter::new(
                 OpenOptions::new()
                     .write(true)

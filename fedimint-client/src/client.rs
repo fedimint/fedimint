@@ -2153,8 +2153,8 @@ impl Client {
         unit: AmountUnit,
     ) -> impl Iterator<Item = (ModuleInstanceId, &DynClientModule)> {
         self.primary_modules
-            .iter()
-            .flat_map(move |(_prio, candidates)| {
+            .values()
+            .flat_map(move |candidates| {
                 candidates
                     .specific
                     .get(&unit)

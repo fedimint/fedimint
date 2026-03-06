@@ -388,13 +388,12 @@ impl Decodable for OOBNotes {
         });
 
         match (maybe_federation_id_prefix, maybe_invite) {
-            (Some(p), Some((ip, _))) => {
-                if p != ip.to_prefix() {
+            (Some(p), Some((ip, _)))
+                if p != ip.to_prefix() => {
                     return Err(DecodeError::from_str(
                         "Inconsistent Federation ID provided in OOBNotes data",
                     ));
                 }
-            }
             (None, None) => {
                 return Err(DecodeError::from_str(
                     "No Federation ID provided in OOBNotes data",

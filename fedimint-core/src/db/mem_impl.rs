@@ -39,7 +39,7 @@ pub struct MemDatabase {
 
 impl fmt::Debug for MemDatabase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("MemDatabase {{}}",))
+        f.write_fmt(format_args!("MemDatabase {{}}"))
     }
 }
 pub struct MemTransaction<'a> {

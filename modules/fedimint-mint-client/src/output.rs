@@ -190,7 +190,7 @@ impl MintOutputStatesCreated {
         tokio::pin!(accept_fut);
         let result = tokio::select! {
             result = &mut accept_fut => result,
-            () = fedimint_core::runtime::sleep(Duration::from_secs(300)) => {
+            () = fedimint_core::runtime::sleep(Duration::from_mins(5)) => {
                 warn!(
                     target: LOG_CLIENT_MODULE_MINT,
                     %txid,
@@ -393,7 +393,7 @@ impl MintOutputStatesCreatedMulti {
         tokio::pin!(accept_fut);
         let result = tokio::select! {
             result = &mut accept_fut => result,
-            () = fedimint_core::runtime::sleep(Duration::from_secs(300)) => {
+            () = fedimint_core::runtime::sleep(Duration::from_mins(5)) => {
                 warn!(
                     target: LOG_CLIENT_MODULE_MINT,
                     %txid,
