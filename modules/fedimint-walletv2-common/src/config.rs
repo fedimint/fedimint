@@ -39,7 +39,7 @@ pub struct WalletConfigConsensus {
     pub receive_tx_vbytes: u64,
     /// The minimum feerate doubles for each pending transaction in the stack,
     /// protecting against catastrophic feerate estimation errors
-    pub min_feerate: u64,
+    pub feerate_base: u64,
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
@@ -117,7 +117,11 @@ impl WalletConfigConsensus {
                     + change_input_weight
                     + change_output_weight,
             ),
-            min_feerate: 1000,
+            // This is intentionally lower than the 1 sat/vB minimum feerate
+            // vote floor. This allows for at least three pending transactions
+            // which only pay the consensus feerate before the exponential
+            // doubling kicks in.
+            feerate_base: 250,
             dust_limit: bitcoin::Amount::from_sat(10_000),
             fee_consensus,
             network,
