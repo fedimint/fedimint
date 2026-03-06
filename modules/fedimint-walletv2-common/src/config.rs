@@ -205,6 +205,13 @@ fn test_fee_consensus() {
 pub struct WalletClientConfig {
     /// The public keys for the bitcoin multisig
     pub bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+    /// Total vbytes of a pegout bitcoin transaction
+    pub send_tx_vbytes: u64,
+    /// Total vbytes of a pegin bitcoin transaction
+    pub receive_tx_vbytes: u64,
+    /// The minimum feerate doubles for each pending transaction in the stack,
+    /// protecting against catastrophic feerate estimation errors
+    pub feerate_base: u64,
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
