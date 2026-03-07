@@ -118,8 +118,9 @@ pub fn utf8(path: &Path) -> &str {
 }
 
 declare_vars! {
-    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gw_base_port: u16) =>
+    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gw_base_port: u16, ui_bind_host: String) =>
     {
+        FM_UI_BIND_HOST: String = ui_bind_host; env: crate::envs::FM_UI_BIND_HOST_ENV;
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
         FM_FORCE_API_SECRETS: ApiSecrets = std::env::var(FM_FORCE_API_SECRETS_ENV).ok().and_then(|s| {
@@ -228,6 +229,7 @@ impl Global {
         fed_size: usize,
         offline_nodes: usize,
         federations_base_port: Option<u16>,
+        ui_bind_host: Option<&str>,
     ) -> anyhow::Result<Self> {
         let federations_base_port = if let Some(federations_base_port) = federations_base_port {
             federations_base_port
@@ -240,6 +242,10 @@ impl Global {
         };
         let num_gateways: usize = 3;
         let gw_base_port = port_alloc(num_gateways as u16).unwrap();
+        let ui_bind_host = ui_bind_host
+            .map(String::from)
+            .or_else(|| std::env::var(crate::envs::FM_UI_BIND_HOST_ENV).ok())
+            .unwrap_or_else(|| "127.0.0.1".to_string());
         let this = Self::init(
             test_dir,
             num_feds,
@@ -248,6 +254,7 @@ impl Global {
             federations_base_port,
             num_gateways,
             gw_base_port,
+            ui_bind_host,
         )
         .await?;
         Ok(this)
@@ -264,7 +271,7 @@ declare_vars! {
         FM_BIND_API: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API";
         FM_P2P_URL: String =  format!("fedimint://127.0.0.1:{}", overrides.p2p.port()); env: "FM_P2P_URL";
         FM_API_URL: String =  format!("ws://127.0.0.1:{}", overrides.api.port()); env: "FM_API_URL";
-        FM_BIND_UI: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: "FM_BIND_UI";
+        FM_BIND_UI: String = format!("{}:{}", globals.FM_UI_BIND_HOST, overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: "FM_BIND_UI";
         FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS_API";
         FM_BIND_METRICS: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS";
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{federation_name}-{peer_id}"))).await?; env: "FM_DATA_DIR";

@@ -43,6 +43,9 @@ pub const FM_OFFLINE_NODES_ENV: &str = "FM_OFFLINE_NODES";
 // Fix base port for federation (fedimintds) port range
 pub const FM_FEDERATIONS_BASE_PORT_ENV: &str = "FM_FEDERATIONS_BASE_PORT";
 
+// Bind address host for guardian UI (e.g. 0.0.0.0 for external access)
+pub const FM_UI_BIND_HOST_ENV: &str = "FM_UI_BIND_HOST";
+
 // Env variable to set a federation's invite code
 pub const FM_INVITE_CODE_ENV: &str = "FM_INVITE_CODE";
 

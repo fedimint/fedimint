@@ -70,6 +70,10 @@ pub struct CommonArgs {
     /// Force a base federations port, e.g. for convenience during dev tasks
     #[clap(long, env = FM_FEDERATIONS_BASE_PORT_ENV)]
     pub federations_base_port: Option<u16>,
+
+    /// Bind guardian UI on all interfaces (0.0.0.0) for external access
+    #[clap(long)]
+    pub host: bool,
 }
 
 impl CommonArgs {
@@ -153,6 +157,7 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         arg.fed_size,
         arg.offline_nodes,
         arg.federations_base_port,
+        arg.host.then_some("0.0.0.0"),
     )
     .await?;
 
