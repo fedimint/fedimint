@@ -41,7 +41,7 @@ curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix 
 Then fork and clone the Fedimint repo.
 
 ```bash
-git clone https://github.com/your-username/fedimint.git
+git clone https://github.com/your-username/fedimint.git && cd fedimint
 ```
 
 Then enter the nix developer environment.
