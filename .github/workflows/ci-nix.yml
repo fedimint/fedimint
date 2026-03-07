@@ -379,7 +379,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
@@ -413,7 +413,7 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
