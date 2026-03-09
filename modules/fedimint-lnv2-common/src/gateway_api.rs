@@ -145,6 +145,12 @@ pub struct RoutingInfo {
     /// gateways invoices the senders client uses it to differentiate between a
     /// direct swap between fedimints and a lightning swap.
     pub lightning_public_key: PublicKey,
+    /// The human-readable alias of the gateway's lightning node, if available.
+    ///
+    /// This field is optional for backwards-compatibility with older gateways
+    /// that do not yet provide an alias in their `routing_info` responses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lightning_alias: Option<String>,
     /// The public key of the gateways client module. This key is used to claim
     /// or cancel outgoing contracts and refund incoming contracts.
     pub module_public_key: PublicKey,

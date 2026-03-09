@@ -2715,6 +2715,7 @@ impl Gateway {
             .await
             .map(|module_public_key| RoutingInfo {
                 lightning_public_key: context.lightning_public_key,
+                lightning_alias: Some(context.lightning_alias.clone()),
                 module_public_key,
                 send_fee_default: lightning_fee + transaction_fee,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
