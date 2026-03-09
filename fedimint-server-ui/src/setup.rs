@@ -158,7 +158,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                             "Total number of guardians (including you)"
                         }
                         input type="number" class="form-control" id="federation_size"
-                            name="federation_size" min="1";
+                            name="federation_size" min="1" max="19";
                         small class="form-text text-muted" {
                             "At least 4, or 1. Recommended: 4, 7, 10, 13."
                         }
