@@ -478,6 +478,10 @@ impl ClientModule for LightningClientModule {
         Some(Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(input.maybe_v0_ref()?.amount))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
@@ -491,6 +495,17 @@ impl ClientModule for LightningClientModule {
                 Some(Amounts::ZERO)
             }
         }
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let amount_btc = match output.maybe_v0_ref()? {
+            LightningOutputV0::Contract(contract_output) => contract_output.amount,
+            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => Amount::ZERO,
+        };
+        Some(Amounts::new_bitcoin(amount_btc))
     }
 
     #[cfg(feature = "cli")]

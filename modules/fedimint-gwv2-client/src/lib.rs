@@ -1,5 +1,6 @@
 mod api;
 mod complete_sm;
+mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
@@ -26,7 +27,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -37,10 +38,11 @@ use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::{IncomingContract, LightningContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningCommonInit, LightningInputV0, LightningInvoice, LightningModuleTypes, LightningOutput,
+    LightningOutputV0,
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -53,6 +55,7 @@ use tracing::{info, warn};
 
 use crate::api::GatewayFederationApi;
 use crate::complete_sm::{CompleteSMCommon, CompleteSMState, CompleteStateMachine};
+use crate::db::OutpointContractKey;
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
 
@@ -128,6 +131,7 @@ impl Context for GatewayClientContextV2 {
     const KIND: Option<ModuleKind> = Some(fedimint_lnv2_common::KIND);
 }
 
+#[async_trait::async_trait]
 impl ClientModule for GatewayClientModuleV2 {
     type Init = GatewayClientInitV2;
     type Common = LightningModuleTypes;
@@ -154,6 +158,39 @@ impl ClientModule for GatewayClientModuleV2 {
         ))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let input_v0 = input.maybe_v0_ref()?;
+
+        let outpoint = match input_v0 {
+            LightningInputV0::Outgoing(out_point, ..)
+            | LightningInputV0::Incoming(out_point, ..) => *out_point,
+        };
+
+        let contract = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&OutpointContractKey(outpoint))
+            .await?;
+
+        assert!(
+            matches!(
+                (input_v0, &contract),
+                (
+                    LightningInputV0::Outgoing(_, _),
+                    LightningContract::Outgoing(_)
+                ) | (
+                    LightningInputV0::Incoming(_, _),
+                    LightningContract::Incoming(_)
+                )
+            ),
+            "Mismatched contract types"
+        );
+
+        Some(Amounts::new_bitcoin(contract.amount()))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
@@ -165,6 +202,17 @@ impl ClientModule for GatewayClientModuleV2 {
         };
 
         Some(Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let amount_btc = match output.maybe_v0_ref()? {
+            LightningOutputV0::Outgoing(outgoing_contract) => outgoing_contract.amount,
+            LightningOutputV0::Incoming(incoming_contract) => incoming_contract.commitment.amount,
+        };
+        Some(Amounts::new_bitcoin(amount_btc))
     }
 }
 

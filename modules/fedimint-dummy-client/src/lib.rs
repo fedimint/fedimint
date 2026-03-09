@@ -143,12 +143,25 @@ impl ClientModule for DummyClientModule {
         Some(Amounts::ZERO)
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let amount_btc = input.maybe_v0_ref()?.amount;
+        Some(Amounts::new_bitcoin(amount_btc))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
         Some(Amounts::ZERO)
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let amount_btc = output.maybe_v0_ref()?.amount;
+        Some(Amounts::new_bitcoin(amount_btc))
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
