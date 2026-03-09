@@ -85,8 +85,8 @@ use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
-    get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
+    apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -595,7 +595,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
+    ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>, Amounts)> {
         let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
 
         let mut added_inputs_bundles = vec![];
@@ -666,9 +666,30 @@ impl Client {
             assert!(input_amount >= output_amount, "Transaction is underfunded");
         }
 
+        // Compute fees as the difference between total input and output amounts.
+        // This captures both explicit federation fees and any overpayment due to
+        // denomination constraints.
+        let fees = {
+            let mut input_total = Amounts::ZERO;
+            for input in partial_transaction.inputs() {
+                input_total
+                    .checked_add_mut(&input.amounts)
+                    .expect("Own transaction amounts don't overflow");
+            }
+            let mut output_total = Amounts::ZERO;
+            for output in partial_transaction.outputs() {
+                output_total
+                    .checked_add_mut(&output.amounts)
+                    .expect("Own transaction amounts don't overflow");
+            }
+            input_total
+                .checked_sub(&output_total)
+                .expect("Inputs >= outputs for own transactions")
+        };
+
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 
-        Ok((tx, states, change_range))
+        Ok((tx, states, change_range, fees))
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -745,7 +766,7 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
-        let (transaction, mut states, change_range) = self
+        let (transaction, mut states, change_range, fees) = self
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
 
@@ -793,6 +814,9 @@ impl Client {
         states.push(tx_submission_sm);
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
+
+        dbtx.insert_new_entry(&TransactionFeesKey(txid), &fees)
+            .await;
 
         self.log_event_dbtx(dbtx, None, TxCreatedEvent { txid, operation_id })
             .await;
@@ -850,6 +874,76 @@ impl Client {
             .next()
             .await
             .is_some()
+    }
+
+    /// Calculates the federation fees paid in the course of the operation.
+    ///
+    /// Federation fees are fees paid to the federation (e.g. for ecash) and do
+    /// not include fees paid to service providers like the Lightning gateway.
+    /// These still have to be separately reported by the module.
+    ///
+    /// Fees are calculated by subtracting the total output amount from the
+    /// total input amount, any difference is either due to direct fees or
+    /// overpayment to avoid generating uneconomic outputs.
+    ///
+    /// Returns `None` if any transaction's fee data is missing (e.g. for
+    /// operations created before this feature was enabled).
+    ///
+    /// # Panics
+    /// Panics if the operation does not exist.
+    pub async fn get_operation_fees(&self, operation_id: OperationId) -> Option<OperationFees> {
+        assert!(
+            self.operation_exists(operation_id).await,
+            "Operation does not exist"
+        );
+
+        let (active_states, inactive_states) =
+            self.executor().get_operation_states(operation_id).await;
+        let is_final = active_states.is_empty();
+
+        let states = active_states
+            .into_iter()
+            .map(|(state, _)| state)
+            .chain(inactive_states.into_iter().map(|(state, _)| state));
+
+        let transaction_states = states
+            .filter_map(|state| {
+                if state.module_instance_id() != TRANSACTION_SUBMISSION_MODULE_INSTANCE {
+                    return None;
+                }
+
+                let tx_state = state
+                    .as_any()
+                    .downcast_ref::<TxSubmissionStatesSM>()
+                    .cloned()
+                    .expect("Invalid dyn state");
+
+                Some(tx_state)
+            })
+            .collect::<Vec<_>>();
+
+        let accepted_transactions = transaction_states
+            .iter()
+            .filter_map(|tx_state| match &tx_state.state {
+                TxSubmissionStates::Accepted(transaction_id) => Some(*transaction_id),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+
+        // For each accepted transaction, look up its stored fees
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut total_fees = Amounts::ZERO;
+        for txid in &accepted_transactions {
+            let fees = dbtx.get_value(&TransactionFeesKey(*txid)).await?;
+            total_fees = total_fees
+                .checked_add(&fees)
+                .expect("Fee amounts don't overflow in practice");
+        }
+
+        Some(OperationFees {
+            amount: total_fees,
+            is_final,
+        })
     }
 
     /// Waits for an output from the primary module to reach its final
@@ -2343,4 +2437,14 @@ pub fn client_decoders<'a>(
         );
     }
     ModuleDecoderRegistry::from(modules)
+}
+
+/// Fees paid for transactions within an operation.
+#[derive(Debug, Clone)]
+pub struct OperationFees {
+    /// The amount of fees paid in transactions belonging to this operation.
+    pub amount: Amounts,
+    /// True if the fee amount will not change anymore. False for ongoing
+    /// operations.
+    pub is_final: bool,
 }

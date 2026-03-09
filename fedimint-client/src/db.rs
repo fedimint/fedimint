@@ -16,9 +16,9 @@ use fedimint_core::db::{
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::{ChainId, PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::module::{Amounts, SupportedApiVersionsSummary};
+use fedimint_core::{ChainId, PeerId, TransactionId, impl_db_lookup, impl_db_record};
 use fedimint_eventlog::{
     DB_KEY_PREFIX_EVENT_LOG, DB_KEY_PREFIX_UNORDERED_EVENT_LOG, EventLogId, UnordedEventLogId,
 };
@@ -61,6 +61,7 @@ pub enum DbKeyPrefix {
     ChainId = 0x3c,
     ClientModuleRecovery = 0x40,
     GuardianMetadata = 0x42,
+    TransactionFees = 0x43,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -287,6 +288,16 @@ impl_db_record!(
     key = ChainIdKey,
     value = ChainId,
     db_prefix = DbKeyPrefix::ChainId
+);
+
+/// Fees paid per transaction, stored at finalization time
+#[derive(Debug, Encodable, Decodable)]
+pub struct TransactionFeesKey(pub TransactionId);
+
+impl_db_record!(
+    key = TransactionFeesKey,
+    value = Amounts,
+    db_prefix = DbKeyPrefix::TransactionFees,
 );
 
 /// Client metadata that will be stored/restored on backup&recovery

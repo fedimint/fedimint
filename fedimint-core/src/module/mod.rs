@@ -107,7 +107,7 @@ pub struct AmountWithUnit {
 ///
 /// Note: implementation must be careful not to add zero-amount
 /// entries, as these could mess up equality comparisons, etc.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Amounts(BTreeMap<AmountUnit, Amount>);
 
 // Note: no `impl ops::DerefMut` as it could easily accidentally break the
@@ -177,6 +177,18 @@ impl Amounts {
         *prev = prev.checked_add(amount)?;
 
         Some(self)
+    }
+
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        let mut result = self.clone();
+
+        for (unit, amount) in &other.0 {
+            let prev = result.0.entry(*unit).or_default();
+
+            *prev = prev.checked_sub(*amount)?;
+        }
+
+        Some(result)
     }
 
     pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
