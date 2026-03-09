@@ -188,7 +188,7 @@ pub(crate) struct LnurlError {
 
 impl Display for LnurlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LNURL Error: {}", self.reason,)
+        write!(f, "LNURL Error: {}", self.reason)
     }
 }
 

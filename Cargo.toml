@@ -1,3 +1,4 @@
+cargo-features = ["codegen-backend"]
 
 [workspace]
 members = [
@@ -360,6 +361,9 @@ dbg_macro = "deny"
 literal_string_with_formatting_args = "deny"
 
 [profile.dev]
+# Note: cranelift backend is enabled via CARGO_PROFILE_DEV_CODEGEN_BACKEND
+# env var in flake.nix shellHook, only on x86_64-linux where it's supported.
+# codegen-backend = "cranelift"
 debug = "line-tables-only"
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
@@ -381,7 +385,6 @@ ff = { opt-level = 3 }
 group = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
 libc = { opt-level = 3 }
-librocksdb-sys = { opt-level = 3 }
 memchr = { opt-level = 3 }
 pairing = { opt-level = 3 }
 parity-scale-codec = { opt-level = 3 }
@@ -389,13 +392,18 @@ ppv-lite86 = { opt-level = 3 }
 rand = { opt-level = 3 }
 rand_chacha = { opt-level = 3 }
 rand_core = { opt-level = 3 }
-regex = { opt-level = 3 }
 ring = { opt-level = 3 }
-rustls = { opt-level = 3 }
+tikv-jemalloc-sys = { opt-level = 3 }
+# due to some miscompilation(?) this seems actually neccessary,
+# otherwise we see segfaults in Nix sandbox
+aws-lc-rs = { codegen-backend = "llvm" }
+aws-lc-sys = { codegen-backend = "llvm" }
+librocksdb-sys = { opt-level = 3 }
+regex = { opt-level = 3 }
+rustls = { opt-level = 3, codegen-backend = "llvm" }
 secp256k1 = { opt-level = 3 }
 secp256k1-sys = { opt-level = 3 }
 subtle = { opt-level = 3 }
-tikv-jemalloc-sys = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
 [profile.dev.package."*"] # external dependencies
