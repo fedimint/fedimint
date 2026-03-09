@@ -48,6 +48,7 @@ pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAY_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/pay_offer_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
+pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
@@ -84,6 +85,13 @@ pub struct ConfigPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
     pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PeginFromOnchainPayload {
+    pub federation_id: FederationId,
+    pub amount: BitcoinAmountOrAll,
+    pub fee_rate_sats_per_vbyte: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -20,12 +20,13 @@ use fedimint_gateway_common::{
     ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
     OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
     PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
-    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
-    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
-    WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
+    PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
+    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
+    PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -59,6 +60,21 @@ pub async fn get_deposit_address(
 ) -> ServerResult<Address<NetworkUnchecked>> {
     client
         .request(base_url, Method::POST, ADDRESS_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn pegin_from_onchain(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: PeginFromOnchainPayload,
+) -> ServerResult<Txid> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            PEGIN_FROM_ONCHAIN_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 

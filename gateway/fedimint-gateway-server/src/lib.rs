@@ -79,10 +79,10 @@ use fedimint_gateway_common::{
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
-    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    RegisteredProtocol, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -1438,6 +1438,26 @@ impl Gateway {
             quoted_fees: None,
         };
         self.handle_withdraw_msg(withdraw).await
+    }
+
+    /// Deposits the specified amount from the gateway's onchain wallet into the
+    /// Federation's ecash wallet
+    pub async fn handle_pegin_from_onchain_msg(
+        &self,
+        payload: PeginFromOnchainPayload,
+    ) -> AdminResult<Txid> {
+        let deposit = DepositAddressPayload {
+            federation_id: payload.federation_id,
+        };
+        let address = self.handle_address_msg(deposit).await?;
+        let send_onchain = SendOnchainRequest {
+            address: address.into_unchecked(),
+            amount: payload.amount,
+            fee_rate_sats_per_vbyte: payload.fee_rate_sats_per_vbyte,
+        };
+        let txid = self.handle_send_onchain_msg(send_onchain).await?;
+
+        Ok(txid)
     }
 
     /// Registers the gateway with each specified federation.

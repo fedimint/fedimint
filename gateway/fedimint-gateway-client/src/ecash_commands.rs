@@ -5,12 +5,12 @@ use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_client::{
-    backup, get_deposit_address, receive_ecash, recheck_address, spend_ecash, withdraw,
-    withdraw_to_onchain,
+    backup, get_deposit_address, pegin_from_onchain, receive_ecash, recheck_address, spend_ecash,
+    withdraw, withdraw_to_onchain,
 };
 use fedimint_gateway_common::{
-    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
-    SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
+    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, PeginFromOnchainPayload,
+    ReceiveEcashPayload, SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_mint_client::OOBNotes;
@@ -36,6 +36,18 @@ pub enum EcashCommands {
         address: bitcoin::Address<NetworkUnchecked>,
         #[clap(long)]
         federation_id: FederationId,
+    },
+    /// Send funds from the gateway's onchain wallet to the federation's ecash
+    /// wallet
+    PeginFromOnchain {
+        #[clap(long)]
+        federation_id: FederationId,
+        /// The amount to pegin
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
+        /// The fee rate to use in satoshis per vbyte.
+        #[clap(long)]
+        fee_rate_sats_per_vbyte: u64,
     },
     /// Claim funds from a gateway federation to an on-chain address.
     Pegout {
@@ -97,6 +109,24 @@ impl EcashCommands {
                     },
                 )
                 .await?;
+                print_response(response);
+            }
+            Self::PeginFromOnchain {
+                federation_id,
+                amount,
+                fee_rate_sats_per_vbyte,
+            } => {
+                let response = pegin_from_onchain(
+                    client,
+                    base_url,
+                    PeginFromOnchainPayload {
+                        federation_id,
+                        amount,
+                        fee_rate_sats_per_vbyte,
+                    },
+                )
+                .await?;
+
                 print_response(response);
             }
             Self::Pegout {
