@@ -12,10 +12,35 @@ services:
       - FM_ENABLE_IROH=true
       - FM_BITCOIN_NETWORK=bitcoin
       - FM_ESPLORA_URL=https://mempool.space/api
+      # To use your own bitcoind, uncomment the following lines. When both
+      # FM_BITCOIND_URL and FM_ESPLORA_URL are set, fedimintd uses bitcoind as
+      # the primary bitcoin backend and automatically falls back to esplora if
+      # bitcoind is unavailable (e.g. while it is still syncing). Transactions
+      # are broadcast to both backends simultaneously. Once bitcoind is fully
+      # synced you can remove FM_ESPLORA_URL to use bitcoind exclusively.
+      # - FM_BITCOIND_URL=http://bitcoind:8332
+      # - FM_BITCOIND_USERNAME=bitcoin
+      # - FM_BITCOIND_PASSWORD=bitcoin
       - FM_BIND_P2P=0.0.0.0:8173
       - FM_BIND_API=0.0.0.0:8174
       - FM_BIND_UI=0.0.0.0:8175
     restart: always
 
+  # Uncomment to run your own bitcoind alongside fedimintd.
+  # bitcoind:
+  #   image: bitcoind/bitcoin:28.1
+  #   volumes:
+  #     - bitcoind_data:/home/bitcoin/.bitcoin
+  #   environment:
+  #     BITCOIN_DATA: /home/bitcoin/.bitcoin
+  #   command:
+  #     - -server=1
+  #     - -rpcuser=bitcoin
+  #     - -rpcpassword=bitcoin
+  #     - -rpcallowip=0.0.0.0/0
+  #     - -rpcbind=0.0.0.0
+  #   restart: always
+
 volumes:
   fedimintd_data:
+  # bitcoind_data:
