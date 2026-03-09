@@ -18,6 +18,8 @@ use fedimint_ln_common::client::GatewayApi;
 
 use crate::{CliOutput, CliOutputResult};
 
+/// General federation management commands including info, connecting, or
+/// leaving a federation.
 #[derive(Subcommand)]
 pub enum GeneralCommands {
     /// Display the version hash of the CLI.

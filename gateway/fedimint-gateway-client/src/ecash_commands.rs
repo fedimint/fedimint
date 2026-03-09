@@ -17,6 +17,8 @@ use fedimint_mint_client::OOBNotes;
 
 use crate::{CliOutput, CliOutputResult};
 
+/// Ecash management commands for pegging funds into a federation, pegging funds
+/// out of a federation, or spending/receiving ecash.
 #[derive(Subcommand)]
 pub enum EcashCommands {
     /// Make a backup of snapshot of all e-cash.

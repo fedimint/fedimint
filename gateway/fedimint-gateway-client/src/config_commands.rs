@@ -8,6 +8,8 @@ use fedimint_ln_common::client::GatewayApi;
 
 use crate::{CliOutput, CliOutputResult};
 
+/// Management commands for changing or displaying configuration, including
+/// setting fees per federation.
 #[derive(Subcommand)]
 pub enum ConfigCommands {
     /// Gets each connected federation's JSON client config

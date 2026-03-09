@@ -8,6 +8,8 @@ use fedimint_ln_common::client::GatewayApi;
 
 use crate::{CliOutput, CliOutputResult};
 
+/// Onchain management commands for sending or receiving funds from the
+/// gateway's onchain wallet.
 #[derive(Subcommand)]
 pub enum OnchainCommands {
     /// Get a Bitcoin address from the gateway's lightning node's onchain
