@@ -54,6 +54,7 @@ pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
+pub const WITHDRAW_TO_ONCHAIN_ENDPOINT: &str = "/withdraw_to_onchain";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -100,6 +101,12 @@ pub struct WithdrawPayload {
     /// When None, fetches current fees from the wallet.
     #[serde(default)]
     pub quoted_fees: Option<PegOutFees>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawToOnchainPayload {
+    pub federation_id: FederationId,
+    pub amount: BitcoinAmountOrAll,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

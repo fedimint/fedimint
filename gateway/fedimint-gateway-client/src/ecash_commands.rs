@@ -6,10 +6,11 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_client::{
     backup, get_deposit_address, receive_ecash, recheck_address, spend_ecash, withdraw,
+    withdraw_to_onchain,
 };
 use fedimint_gateway_common::{
     BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
-    SpendEcashPayload, WithdrawPayload,
+    SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_mint_client::OOBNotes;
@@ -46,6 +47,14 @@ pub enum EcashCommands {
         /// The address to send the funds to
         #[clap(long)]
         address: Address<NetworkUnchecked>,
+    },
+    /// Claim funds from a gateway federation to the gateway's onchain wallet
+    PegoutToOnchain {
+        #[clap(long)]
+        federation_id: FederationId,
+        /// The amount to withdraw
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
     },
     /// Send e-cash out of band
     Send {
@@ -103,6 +112,22 @@ impl EcashCommands {
                         amount,
                         address,
                         quoted_fees: None,
+                    },
+                )
+                .await?;
+
+                print_response(response);
+            }
+            Self::PegoutToOnchain {
+                federation_id,
+                amount,
+            } => {
+                let response = withdraw_to_onchain(
+                    client,
+                    base_url,
+                    WithdrawToOnchainPayload {
+                        federation_id,
+                        amount,
                     },
                 )
                 .await?;

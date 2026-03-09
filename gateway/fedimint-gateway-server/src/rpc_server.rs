@@ -27,7 +27,7 @@ use fedimint_gateway_common::{
     PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
     SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
     SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload,
+    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -270,6 +270,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        WITHDRAW_TO_ONCHAIN_ENDPOINT,
+        withdraw_to_onchain,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         CONNECT_FED_ENDPOINT,
         connect_fed,
         is_authenticated,
@@ -494,6 +501,16 @@ async fn withdraw(
     Json(payload): Json<WithdrawPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
+    Ok(Json(json!(txid)))
+}
+
+/// Withdraw from a gateway federation.
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn withdraw_to_onchain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<WithdrawToOnchainPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let txid = gateway.handle_withdraw_to_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
 

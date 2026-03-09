@@ -82,7 +82,7 @@ use fedimint_gateway_common::{
     PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
     SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
     V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse,
+    WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -1422,6 +1422,22 @@ impl Gateway {
         let lightning_context = self.get_lightning_context().await?;
         let invoice = lightning_context.lnrpc.get_invoice(payload).await?;
         Ok(invoice)
+    }
+
+    /// Withdraws ecash from a federation and pegs-out to the Lightning node's
+    /// onchain wallet
+    pub async fn handle_withdraw_to_onchain_msg(
+        &self,
+        payload: WithdrawToOnchainPayload,
+    ) -> AdminResult<WithdrawResponse> {
+        let address = self.handle_get_ln_onchain_address_msg().await?;
+        let withdraw = WithdrawPayload {
+            address: address.into_unchecked(),
+            federation_id: payload.federation_id,
+            amount: payload.amount,
+            quoted_fees: None,
+        };
+        self.handle_withdraw_msg(withdraw).await
     }
 
     /// Registers the gateway with each specified federation.

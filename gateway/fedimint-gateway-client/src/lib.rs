@@ -24,7 +24,8 @@ use fedimint_gateway_common::{
     PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
     ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
     SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
-    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
+    WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -68,6 +69,21 @@ pub async fn withdraw(
 ) -> ServerResult<WithdrawResponse> {
     client
         .request(base_url, Method::POST, WITHDRAW_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn withdraw_to_onchain(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: WithdrawToOnchainPayload,
+) -> ServerResult<WithdrawResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            WITHDRAW_TO_ONCHAIN_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
