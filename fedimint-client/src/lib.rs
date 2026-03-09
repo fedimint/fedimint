@@ -98,6 +98,7 @@ pub mod oplog;
 pub mod module_init;
 
 pub mod sm;
+pub mod visualize;
 pub use client::Client;
 pub use client::builder::{ClientBuilder, ClientPreview, RootSecret};
 pub use client::handle::{ClientHandle, ClientHandleArc};

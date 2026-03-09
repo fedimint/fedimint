@@ -142,6 +142,35 @@ mod txid {
 }
 pub use txid::TransactionId;
 
+pub struct TransactionIdShortFmt<'a>(&'a TransactionId);
+pub struct TransactionIdFullFmt<'a>(&'a TransactionId);
+
+impl TransactionId {
+    pub fn fmt_short(&self) -> TransactionIdShortFmt<'_> {
+        TransactionIdShortFmt(self)
+    }
+
+    pub fn fmt_full(&self) -> TransactionIdFullFmt<'_> {
+        TransactionIdFullFmt(self)
+    }
+}
+
+impl std::fmt::Display for TransactionIdShortFmt<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bytes = &self.0[..];
+        format_hex(&bytes[..4], f)?;
+        f.write_str("_")?;
+        format_hex(&bytes[28..], f)
+    }
+}
+
+impl std::fmt::Display for TransactionIdFullFmt<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bytes = &self.0[..];
+        format_hex(bytes, f)
+    }
+}
+
 /// Bitcoin chain identifier
 ///
 /// This is a newtype wrapper around [`bitcoin::BlockHash`] representing the
