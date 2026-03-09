@@ -62,9 +62,9 @@ pub async fn get_events_for_duration(
     // Once an event with a timestamp before our start time is found, then we start
     // traversing forward to find events that fall within our time bound.
     while batch_start != EventLogId::LOG_START {
-        let batch = client.get_event_log(Some(batch_start), BATCH_SIZE).await;
+        let page = client.get_event_log(Some(batch_start), BATCH_SIZE).await;
 
-        match batch.first() {
+        match page.entries.first() {
             Some(first_event) => {
                 if first_event.as_raw().ts_usecs < start_micros {
                     // Found the "rough start" where we can read forward
@@ -80,14 +80,15 @@ pub async fn get_events_for_duration(
     }
 
     let mut all_events = Vec::new();
+    let mut cursor = Some(batch_start);
     loop {
-        let batch = client.get_event_log(Some(batch_start), BATCH_SIZE).await;
+        let page = client.get_event_log(cursor, BATCH_SIZE).await;
 
-        if batch.is_empty() {
+        if page.entries.is_empty() {
             return all_events;
         }
 
-        for event in batch {
+        for event in page.entries {
             if event.as_raw().ts_usecs < start_micros {
                 continue;
             }
@@ -99,6 +100,6 @@ pub async fn get_events_for_duration(
             all_events.push(event);
         }
 
-        batch_start = batch_start.saturating_add(BATCH_SIZE);
+        cursor = Some(page.next_cursor);
     }
 }

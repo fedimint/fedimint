@@ -106,6 +106,74 @@ impl State for MintInputStateMachine {
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
     }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        let txid = self.common.out_point_range.txid();
+        let start = self.common.out_point_range.start_idx();
+        let count = self.common.out_point_range.count();
+        match &self.state {
+            #[allow(deprecated)]
+            MintInputStates::Created(c) => {
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: Created  tx={}:[{start},{end})  amount={}",
+                    txid.fmt_short(),
+                    c.amount,
+                    end = start + count as u64,
+                )
+            }
+            MintInputStates::CreatedBundle(c) => {
+                let total: Amount = c.notes.iter().map(|(a, _)| *a).sum();
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: CreatedBundle  tx={}:[{start},{end})  notes={}, total={total}",
+                    txid.fmt_short(),
+                    c.notes.len(),
+                    end = start + count as u64,
+                )
+            }
+            MintInputStates::Success(_) => {
+                write!(f, "{indent}MintInputStateMachine\n{indent}  state: Success",)
+            }
+            MintInputStates::Refund(r) => {
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: Refund  refund_txid={}",
+                    r.refund_txid.fmt_short(),
+                )
+            }
+            MintInputStates::RefundedBundle(r) => {
+                let total: Amount = r.spendable_notes.iter().map(|(a, _)| *a).sum();
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: RefundedBundle  refund_txid={}  notes={}, total={total}",
+                    r.refund_txid.fmt_short(),
+                    r.spendable_notes.len(),
+                )
+            }
+            MintInputStates::RefundedPerNote(r) => {
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: RefundedPerNote  txids={}",
+                    r.refund_txids.len(),
+                )
+            }
+            MintInputStates::RefundSuccess(r) => {
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: RefundSuccess  refund_txid={}",
+                    r.refund_txid.fmt_short(),
+                )
+            }
+            MintInputStates::Error(e) => {
+                write!(
+                    f,
+                    "{indent}MintInputStateMachine\n{indent}  state: Error  error={}",
+                    e.error,
+                )
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

@@ -44,6 +44,14 @@ pub trait State:
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
+
+    /// Human-readable visualization of this state machine for debugging.
+    ///
+    /// Defaults to `Debug` output. Override to show only the relevant
+    /// fields instead of dumping raw crypto bytes.
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        write!(f, "{indent}{self:?}")
+    }
 }
 
 /// Object-safe version of [`State`]
@@ -67,6 +75,10 @@ pub trait IState: Debug + DynEncodable + MaybeSend + MaybeSync {
     fn erased_eq_no_instance_id(&self, other: &DynState) -> bool;
 
     fn erased_hash_no_instance_id(&self, hasher: &mut dyn std::hash::Hasher);
+
+    /// Human-readable visualization for debugging. See
+    /// [`State::fmt_visualization`].
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result;
 }
 
 /// Something that can be a [`DynContext`] for a state machine
@@ -243,6 +255,10 @@ where
     fn erased_hash_no_instance_id(&self, mut hasher: &mut dyn std::hash::Hasher) {
         self.hash(&mut hasher);
     }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        <T as State>::fmt_visualization(self, f, indent)
+    }
 }
 
 /// A type-erased state of a state machine belonging to a module instance, see
@@ -279,6 +295,10 @@ impl IState for DynState {
 
     fn erased_hash_no_instance_id(&self, hasher: &mut dyn std::hash::Hasher) {
         (**self).erased_hash_no_instance_id(hasher);
+    }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        (**self).fmt_visualization(f, indent)
     }
 }
 
@@ -374,6 +394,14 @@ impl Decodable for DynState {
 }
 
 impl DynState {
+    /// Return a human-readable visualization string for debugging.
+    pub fn visualization(&self, indent: &str) -> String {
+        let mut s = String::new();
+        self.fmt_visualization(&mut s, indent)
+            .expect("fmt::Write to String never fails");
+        s
+    }
+
     /// `true` if this state allows no further transitions
     pub fn is_terminal(
         &self,
@@ -436,6 +464,10 @@ where
 
     fn operation_id(&self) -> OperationId {
         self.operation_id
+    }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        self.state.fmt_visualization(f, indent)
     }
 }
 

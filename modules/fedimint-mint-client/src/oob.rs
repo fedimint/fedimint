@@ -129,6 +129,63 @@ impl State for MintOOBStateMachine {
     fn operation_id(&self) -> OperationId {
         self.operation_id
     }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        match &self.state {
+            MintOOBStates::Created(c) => {
+                write!(
+                    f,
+                    "{indent}MintOOBStateMachine\n\
+                     {indent}  state: Created  amount={}  nonce={}",
+                    c.amount,
+                    c.spendable_note.nonce().fmt_short(),
+                )
+            }
+            MintOOBStates::CreatedMulti(c) => {
+                let total: Amount = c.spendable_notes.iter().map(|(a, _)| *a).sum();
+                write!(
+                    f,
+                    "{indent}MintOOBStateMachine\n\
+                     {indent}  state: CreatedMulti  {} notes, total={total}",
+                    c.spendable_notes.len(),
+                )?;
+                for (amount, note) in &c.spendable_notes {
+                    write!(
+                        f,
+                        "\n{indent}  note: amount={amount}  nonce={}",
+                        note.nonce().fmt_short(),
+                    )?;
+                }
+                Ok(())
+            }
+            MintOOBStates::UserRefund(r) => {
+                write!(
+                    f,
+                    "{indent}MintOOBStateMachine\n\
+                     {indent}  state: UserRefund  refund_txid={}",
+                    r.refund_txid.fmt_short(),
+                )
+            }
+            MintOOBStates::UserRefundMulti(r) => {
+                let total: Amount = r.spendable_notes.iter().map(|(a, _)| *a).sum();
+                write!(
+                    f,
+                    "{indent}MintOOBStateMachine\n\
+                     {indent}  state: UserRefundMulti  refund_txid={}  {} notes, total={total}",
+                    r.refund_txid.fmt_short(),
+                    r.spendable_notes.len(),
+                )
+            }
+            MintOOBStates::TimeoutRefund(r) => {
+                write!(
+                    f,
+                    "{indent}MintOOBStateMachine\n\
+                     {indent}  state: TimeoutRefund  refund_txid={}",
+                    r.refund_txid.fmt_short(),
+                )
+            }
+        }
+    }
 }
 
 impl MintOOBStatesCreated {

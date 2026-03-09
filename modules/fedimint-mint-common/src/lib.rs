@@ -84,7 +84,7 @@ impl fmt::Debug for Note {
 
 impl fmt::Display for Note {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.nonce.fmt(f)
+        write!(f, "{}", self.nonce.fmt_short())
     }
 }
 
@@ -96,24 +96,42 @@ impl fmt::Display for Note {
 /// Internally a MuSig pub key so that transactions can be signed when being
 /// spent.
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    Eq,
-    PartialEq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Deserialize,
-    Serialize,
-    Encodable,
-    Decodable,
+    Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Deserialize, Serialize, Encodable, Decodable,
 )]
 pub struct Nonce(pub secp256k1::PublicKey);
 
-impl fmt::Display for Nonce {
+pub struct NonceShortFmt<'a>(&'a Nonce);
+pub struct NonceFullFmt<'a>(&'a Nonce);
+
+impl Nonce {
+    pub fn fmt_short(&self) -> NonceShortFmt<'_> {
+        NonceShortFmt(self)
+    }
+
+    pub fn fmt_full(&self) -> NonceFullFmt<'_> {
+        NonceFullFmt(self)
+    }
+}
+
+impl fmt::Display for NonceShortFmt<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        let bytes = self.0.0.serialize();
+        fedimint_core::format_hex(&bytes[..4], f)?;
+        f.write_str("_")?;
+        fedimint_core::format_hex(&bytes[29..], f)
+    }
+}
+
+impl fmt::Display for NonceFullFmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0.0.serialize();
+        fedimint_core::format_hex(&bytes, f)
+    }
+}
+
+impl fmt::Debug for Nonce {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Nonce({})", self.fmt_short())
     }
 }
 
@@ -128,12 +146,41 @@ impl fmt::Display for Nonce {
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindNonce(pub tbs::BlindedMessage);
 
+pub struct BlindNonceShortFmt<'a>(&'a BlindNonce);
+pub struct BlindNonceFullFmt<'a>(&'a BlindNonce);
+
+impl BlindNonce {
+    pub fn fmt_short(&self) -> BlindNonceShortFmt<'_> {
+        BlindNonceShortFmt(self)
+    }
+
+    pub fn fmt_full(&self) -> BlindNonceFullFmt<'_> {
+        BlindNonceFullFmt(self)
+    }
+}
+
+impl fmt::Display for BlindNonceShortFmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0.0.consensus_hash_sha256().to_byte_array();
+        fedimint_core::format_hex(&bytes[..4], f)?;
+        f.write_str("_")?;
+        fedimint_core::format_hex(&bytes[28..], f)
+    }
+}
+
+impl fmt::Display for BlindNonceFullFmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0.0.consensus_hash_sha256().as_byte_array().as_hex()
+        )
+    }
+}
+
 impl fmt::Debug for BlindNonce {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "BlindNonce({})",
-            self.0.consensus_hash_sha256().as_byte_array()[0..8].as_hex()
-        ))
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BlindNonce({})", self.fmt_short())
     }
 }
 
@@ -167,7 +214,12 @@ pub struct MintInputV0 {
 
 impl std::fmt::Display for MintInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Note {}", self.amount)
+        write!(
+            f,
+            "Mint Note {} nonce={}",
+            self.amount,
+            self.note.nonce.fmt_short()
+        )
     }
 }
 
@@ -190,7 +242,12 @@ pub struct MintOutputV0 {
 
 impl std::fmt::Display for MintOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Note {}", self.amount)
+        write!(
+            f,
+            "Mint Note {} blind_nonce={}",
+            self.amount,
+            self.blind_nonce.fmt_short()
+        )
     }
 }
 

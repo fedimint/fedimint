@@ -106,6 +106,45 @@ pub struct MintOutputStateMachine {
     pub(crate) state: MintOutputStates,
 }
 
+impl MintOutputStateMachine {
+    /// Transaction ID this output belongs to
+    pub fn txid(&self) -> TransactionId {
+        self.common.out_point_range.txid()
+    }
+
+    /// Returns `(out_idx, amount, nonce, blind_nonce)` for each note being
+    /// created.
+    ///
+    /// Only available when the state machine is in a `Created` or
+    /// `CreatedMulti` state (i.e. before the blind signature is finalized).
+    /// Returns an empty vec for terminal states.
+    pub fn created_nonces(&self) -> Vec<(u64, Amount, Nonce, BlindNonce)> {
+        match &self.state {
+            MintOutputStates::Created(c) => {
+                vec![(
+                    self.common.out_point_range.start_idx(),
+                    c.amount,
+                    c.issuance_request.nonce(),
+                    BlindNonce(c.issuance_request.blinded_message()),
+                )]
+            }
+            MintOutputStates::CreatedMulti(c) => c
+                .issuance_requests
+                .iter()
+                .map(|(idx, (amount, req))| {
+                    (
+                        *idx,
+                        *amount,
+                        req.nonce(),
+                        BlindNonce(req.blinded_message()),
+                    )
+                })
+                .collect(),
+            _ => vec![],
+        }
+    }
+}
+
 impl State for MintOutputStateMachine {
     type ModuleContext = MintClientContext;
 
@@ -131,6 +170,72 @@ impl State for MintOutputStateMachine {
 
     fn operation_id(&self) -> OperationId {
         self.common.operation_id
+    }
+
+    fn fmt_visualization(&self, f: &mut dyn std::fmt::Write, indent: &str) -> std::fmt::Result {
+        let txid = self.common.out_point_range.txid();
+        let start = self.common.out_point_range.start_idx();
+        let count = self.common.out_point_range.count();
+        match &self.state {
+            MintOutputStates::Created(c) => {
+                let nonce = c.issuance_request.nonce();
+                let blind_nonce = BlindNonce(c.issuance_request.blinded_message());
+                write!(
+                    f,
+                    "{indent}MintOutputStateMachine\n\
+                     {indent}  state: Created  tx={}:[{start},{end})\n\
+                     {indent}  note: amount={}  nonce={}  blind_nonce={}",
+                    txid.fmt_short(),
+                    c.amount,
+                    nonce.fmt_short(),
+                    blind_nonce.fmt_short(),
+                    end = start + count as u64,
+                )
+            }
+            MintOutputStates::CreatedMulti(c) => {
+                let total: Amount = c.issuance_requests.values().map(|(a, _)| *a).sum();
+                write!(
+                    f,
+                    "{indent}MintOutputStateMachine\n\
+                     {indent}  state: CreatedMulti  tx={}:[{start},{end})  {} notes, total={total}",
+                    txid.fmt_short(),
+                    c.issuance_requests.len(),
+                    end = start + count as u64,
+                )?;
+                for (idx, (amount, req)) in &c.issuance_requests {
+                    let nonce = req.nonce();
+                    let blind_nonce = BlindNonce(req.blinded_message());
+                    write!(
+                        f,
+                        "\n{indent}  [{idx}] amount={amount}  nonce={}  blind_nonce={}",
+                        nonce.fmt_short(),
+                        blind_nonce.fmt_short(),
+                    )?;
+                }
+                Ok(())
+            }
+            MintOutputStates::Succeeded(s) => {
+                write!(
+                    f,
+                    "{indent}MintOutputStateMachine\n{indent}  state: Succeeded  amount={}",
+                    s.amount,
+                )
+            }
+            MintOutputStates::Aborted(_) => {
+                write!(
+                    f,
+                    "{indent}MintOutputStateMachine\n{indent}  state: Aborted  tx={}",
+                    txid.fmt_short(),
+                )
+            }
+            MintOutputStates::Failed(fail) => {
+                write!(
+                    f,
+                    "{indent}MintOutputStateMachine\n{indent}  state: Failed  error={}",
+                    fail.error,
+                )
+            }
+        }
     }
 }
 
