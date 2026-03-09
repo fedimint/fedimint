@@ -14,7 +14,7 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 
-use crate::{SafeUrl, print_response};
+use crate::{CliOutput, CliOutputResult, SafeUrl};
 
 /// This API is intentionally kept very minimal, as its main purpose is to
 /// provide a simple and consistent way to establish liquidity between gateways
@@ -121,7 +121,7 @@ fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 
 impl LightningCommands {
     #![allow(clippy::too_many_lines)]
-    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> CliOutputResult {
         match self {
             Self::CreateInvoice {
                 amount_msats,
@@ -138,12 +138,14 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                println!("{response}");
+                Ok(CliOutput::Invoice {
+                    invoice: response.to_string(),
+                })
             }
             Self::PayInvoice { invoice } => {
-                let response =
+                let preimage =
                     pay_invoice(client, base_url, PayInvoiceForOperatorPayload { invoice }).await?;
-                println!("{response}");
+                Ok(CliOutput::Preimage { preimage })
             }
             Self::OpenChannel {
                 pubkey,
@@ -162,7 +164,7 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                println!("{funding_txid}");
+                Ok(CliOutput::FundingTxid { funding_txid })
             }
             Self::CloseChannelsWithPeer {
                 pubkey,
@@ -179,16 +181,16 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::CloseChannels(response))
             }
             Self::ListChannels => {
                 let response = list_channels(client, base_url).await?;
-                print_response(response);
+                Ok(CliOutput::Channels(response))
             }
             Self::GetInvoice { payment_hash } => {
                 let response =
                     get_invoice(client, base_url, GetInvoiceRequest { payment_hash }).await?;
-                print_response(response);
+                Ok(CliOutput::InvoiceDetails(response))
             }
             Self::ListTransactions {
                 start_time,
@@ -205,7 +207,7 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::Transactions(response))
             }
             Self::CreateOffer {
                 amount_msat,
@@ -224,7 +226,7 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::Offer(response))
             }
             Self::PayOffer {
                 offer,
@@ -243,10 +245,8 @@ impl LightningCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::OfferPayment(response))
             }
         }
-
-        Ok(())
     }
 }

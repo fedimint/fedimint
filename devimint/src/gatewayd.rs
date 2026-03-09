@@ -372,16 +372,21 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
+        let value = cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
             .out_json()
-            .await?
+            .await?;
+        Ok(value["address"]
             .as_str()
             .context("address must be a string")?
             .to_owned())
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
-        cmd!(self, "onchain", "address").out_string().await
+        let value = cmd!(self, "onchain", "address").out_json().await?;
+        Ok(value["address"]
+            .as_str()
+            .context("address must be a string")?
+            .to_owned())
     }
 
     pub async fn get_mnemonic(&self) -> Result<MnemonicResponse> {
@@ -404,11 +409,13 @@ impl Gatewayd {
     }
 
     pub async fn create_invoice(&self, amount_msats: u64) -> Result<Bolt11Invoice> {
-        Ok(Bolt11Invoice::from_str(
-            &cmd!(self, "lightning", "create-invoice", amount_msats)
-                .out_string()
-                .await?,
-        )?)
+        let value = cmd!(self, "lightning", "create-invoice", amount_msats)
+            .out_json()
+            .await?;
+        let invoice_str = value["invoice"]
+            .as_str()
+            .context("invoice must be a string")?;
+        Ok(Bolt11Invoice::from_str(invoice_str)?)
     }
 
     pub async fn pay_invoice(&self, invoice: Bolt11Invoice) -> Result<()> {

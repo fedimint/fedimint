@@ -6,7 +6,7 @@ use fedimint_gateway_client::{get_config, get_info, set_fees, set_mnemonic};
 use fedimint_gateway_common::{ConfigPayload, SetFeesPayload, SetMnemonicPayload};
 use fedimint_ln_common::client::GatewayApi;
 
-use crate::print_response;
+use crate::{CliOutput, CliOutputResult};
 
 #[derive(Subcommand)]
 pub enum ConfigCommands {
@@ -46,13 +46,13 @@ pub enum ConfigCommands {
 }
 
 impl ConfigCommands {
-    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> CliOutputResult {
         match self {
             Self::ClientConfig { federation_id } => {
                 let response =
                     get_config(client, base_url, ConfigPayload { federation_id }).await?;
 
-                print_response(response);
+                Ok(CliOutput::Config(response))
             }
             Self::Display { federation_id } => {
                 let info = get_info(client, base_url).await?;
@@ -65,7 +65,7 @@ impl ConfigCommands {
                         None => Some(f.config),
                     })
                     .collect::<Vec<_>>();
-                print_response(federations);
+                Ok(CliOutput::FederationConfigs(federations))
             }
             Self::SetFees {
                 federation_id,
@@ -86,12 +86,12 @@ impl ConfigCommands {
                     },
                 )
                 .await?;
+                Ok(CliOutput::Empty)
             }
             Self::SetMnemonic { words } => {
                 set_mnemonic(client, base_url, SetMnemonicPayload { words }).await?;
+                Ok(CliOutput::Empty)
             }
         }
-
-        Ok(())
     }
 }
