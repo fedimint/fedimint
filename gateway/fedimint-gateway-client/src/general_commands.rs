@@ -1,6 +1,7 @@
 use std::time::{Duration, UNIX_EPOCH};
 
 use clap::Subcommand;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
@@ -158,19 +159,21 @@ impl GeneralCommands {
             }
             Self::PaymentSummary { start, end } => {
                 let now = now();
-                let now_millis = now
+                let now_millis: u64 = now
                     .duration_since(UNIX_EPOCH)
                     .expect("Before unix epoch")
                     .as_millis()
-                    .try_into()?;
+                    .try_into()
+                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
                 let one_day_ago = now
                     .checked_sub(Duration::from_hours(24))
                     .expect("Before unix epoch");
-                let one_day_ago_millis = one_day_ago
+                let one_day_ago_millis: u64 = one_day_ago
                     .duration_since(UNIX_EPOCH)
                     .expect("Before unix epoch")
                     .as_millis()
-                    .try_into()?;
+                    .try_into()
+                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
                 let end_millis = end.unwrap_or(now_millis);
                 let start_millis = start.unwrap_or(one_day_ago_millis);
                 let payment_summary = payment_summary(

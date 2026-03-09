@@ -1,6 +1,7 @@
 use bitcoin::hashes::sha256;
 use chrono::{DateTime, Utc};
 use clap::Subcommand;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::Amount;
 use fedimint_gateway_client::{
     close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
@@ -16,9 +17,8 @@ use lightning_invoice::Bolt11Invoice;
 
 use crate::{CliOutput, CliOutputResult, SafeUrl};
 
-/// This API is intentionally kept very minimal, as its main purpose is to
-/// provide a simple and consistent way to establish liquidity between gateways
-/// in a test environment.
+/// Lightning node management commands for opening/closing channels,
+/// paying/creating invoices, paying/creating offers, or listing transactions.
 #[derive(Subcommand)]
 pub enum LightningCommands {
     /// Create an invoice to receive lightning funds to the gateway.
@@ -196,8 +196,14 @@ impl LightningCommands {
                 start_time,
                 end_time,
             } => {
-                let start_secs = start_time.timestamp().try_into()?;
-                let end_secs = end_time.timestamp().try_into()?;
+                let start_secs = start_time
+                    .timestamp()
+                    .try_into()
+                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
+                let end_secs = end_time
+                    .timestamp()
+                    .try_into()
+                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
                 let response = list_transactions(
                     client,
                     base_url,

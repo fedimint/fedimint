@@ -14,6 +14,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
@@ -95,8 +96,125 @@ pub enum CliOutput {
     Empty,
 }
 
-/// Type alias for CLI command results
-pub type CliOutputResult = anyhow::Result<CliOutput>;
+/// Type alias for CLI command results using `ServerError` for precise error
+/// classification
+pub type CliOutputResult = Result<CliOutput, ServerError>;
+
+/// Machine-readable error codes for programmatic error handling.
+///
+/// These codes allow agents and scripts to handle errors programmatically
+/// without parsing error message strings.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCode {
+    /// Authentication failed (wrong password, missing auth)
+    AuthFailed,
+    /// Could not connect to gateway server
+    ConnectionFailed,
+    /// Invalid command arguments or request format
+    InvalidInput,
+    /// Requested resource not found (federation, invoice, etc.)
+    NotFound,
+    /// Gateway is not in correct state for operation
+    InvalidState,
+    /// Operation timed out
+    Timeout,
+    /// Internal gateway or client error
+    Internal,
+    /// Unknown/unclassified error
+    Unknown,
+}
+
+/// Exit codes for the CLI process.
+///
+/// These provide semantic meaning to the exit status, allowing scripts
+/// to handle different error categories appropriately.
+#[derive(Debug, Clone, Copy)]
+#[repr(i32)]
+pub enum ExitCode {
+    Success = 0,
+    GeneralError = 1,
+    ConnectionError = 2,
+    AuthError = 3,
+    InvalidInput = 4,
+    NotFound = 5,
+    Timeout = 6,
+}
+
+impl From<ErrorCode> for ExitCode {
+    fn from(code: ErrorCode) -> Self {
+        match code {
+            ErrorCode::AuthFailed => Self::AuthError,
+            ErrorCode::ConnectionFailed => Self::ConnectionError,
+            ErrorCode::InvalidInput => Self::InvalidInput,
+            ErrorCode::NotFound => Self::NotFound,
+            ErrorCode::Timeout => Self::Timeout,
+            ErrorCode::InvalidState | ErrorCode::Internal | ErrorCode::Unknown => {
+                Self::GeneralError
+            }
+        }
+    }
+}
+
+/// Structured error type for CLI output.
+///
+/// This provides machine-readable error information in JSON format,
+/// making it easier for agents and scripts to handle errors programmatically.
+#[derive(Debug, Serialize)]
+pub struct CliError {
+    /// Human-readable error message
+    pub error: String,
+
+    /// Machine-readable error code for programmatic handling
+    pub code: ErrorCode,
+
+    /// The immediate cause of the error, if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cause: Option<String>,
+}
+
+impl CliError {
+    /// Create a new `CliError` from a `ServerError`.
+    ///
+    /// This extracts the error message, classifies the error code,
+    /// and captures the immediate cause.
+    fn from_server_error(err: &ServerError) -> Self {
+        let error = err.to_string();
+        let code = Self::classify_server_error(err);
+        let cause = std::error::Error::source(err).map(ToString::to_string);
+
+        Self { error, code, cause }
+    }
+
+    /// Classify a `ServerError` into an appropriate `ErrorCode`.
+    const fn classify_server_error(err: &ServerError) -> ErrorCode {
+        match err {
+            // Authentication/authorization errors
+            ServerError::InvalidRequest(_) => ErrorCode::AuthFailed,
+
+            // Connection and transport errors
+            ServerError::Connection(_) | ServerError::Transport(_) => ErrorCode::ConnectionFailed,
+
+            // Invalid input errors
+            ServerError::InvalidPeerId { .. }
+            | ServerError::InvalidPeerUrl { .. }
+            | ServerError::InvalidEndpoint(_)
+            | ServerError::InvalidRpcId(_) => ErrorCode::InvalidInput,
+
+            // Internal errors (response parsing, server errors, client errors)
+            ServerError::ResponseDeserialization(_)
+            | ServerError::InvalidResponse(_)
+            | ServerError::ServerError(_)
+            | ServerError::InternalClientError(_) => ErrorCode::Internal,
+
+            // Condition failures (often "not found" scenarios)
+            ServerError::ConditionFailed(_) => ErrorCode::NotFound,
+
+            // Catch-all for future ServerError variants (enum is non_exhaustive)
+            _ => ErrorCode::Unknown,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(version)]
@@ -134,28 +252,31 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     if let Err(err) = TracingSetup::default().init() {
-        eprintln!("Failed to initialize logging: {err}");
-        std::process::exit(1);
+        let cli_err = CliError {
+            error: format!("Failed to initialize logging: {err}"),
+            code: ErrorCode::Internal,
+            cause: None,
+        };
+        print_response(&cli_err);
+        std::process::exit(ExitCode::GeneralError as i32);
     }
 
     if let Err(err) = run().await {
-        eprintln!("Error: {err}");
-        let mut source = err.source();
-        eprintln!("Caused by");
-        while let Some(err) = source {
-            eprintln!("    {err}");
-            source = err.source();
-        }
-        std::process::exit(1);
+        let cli_err = CliError::from_server_error(&err);
+        let exit_code = ExitCode::from(cli_err.code);
+        print_response(&cli_err);
+        std::process::exit(exit_code as i32);
     }
 }
 
-async fn run() -> anyhow::Result<()> {
+async fn run() -> CliOutputResult {
     let cli = Cli::parse();
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
-        .with_env_var_overrides()?
+        .with_env_var_overrides()
+        .map_err(ServerError::InternalClientError)?
         .bind()
-        .await?;
+        .await
+        .map_err(ServerError::InternalClientError)?;
     let client = GatewayApi::new(cli.rpcpassword, connector_registry);
 
     let output = match cli.command {
@@ -173,16 +294,16 @@ async fn run() -> anyhow::Result<()> {
                 "gateway-cli",
                 &mut std::io::stdout(),
             );
-            return Ok(());
+            return Ok(CliOutput::Empty);
         }
     };
 
     // Only print output for non-empty results
     if !matches!(output, CliOutput::Empty) {
-        print_response(output);
+        print_response(&output);
     }
 
-    Ok(())
+    Ok(output)
 }
 
 fn print_response<T: Serialize>(val: T) {

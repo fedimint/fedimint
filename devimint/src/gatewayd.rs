@@ -553,7 +553,7 @@ impl Gatewayd {
     ) -> Result<Txid> {
         let pubkey = gw.lightning_pubkey().await?;
 
-        let mut command = cmd!(
+        let value = cmd!(
             self,
             "lightning",
             "open-channel",
@@ -565,9 +565,14 @@ impl Gatewayd {
             channel_size_sats,
             "--push-amount-sats",
             push_amount_sats.unwrap_or(0)
-        );
+        )
+        .out_json()
+        .await?;
 
-        Ok(Txid::from_str(&command.out_string().await?)?)
+        let txid_str = value["funding_txid"]
+            .as_str()
+            .context("funding_txid must be a string")?;
+        Ok(Txid::from_str(txid_str)?)
     }
 
     pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {
