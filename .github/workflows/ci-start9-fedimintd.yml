@@ -53,7 +53,7 @@ jobs:
           cargo install --force --locked toml-cli "web-static-pack-packer@0.5.0"
           cargo install --git=https://github.com/Start9Labs/md-packer.git --branch=main
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Checkout start-os SDK
