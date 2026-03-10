@@ -521,7 +521,14 @@ impl Gatewayd {
         .out_json()
         .await?;
 
-        let txid: bitcoin::Txid = serde_json::from_value(value)?;
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let txid: bitcoin::Txid = if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "txid" field
+            serde_json::from_value(value["txid"].clone())?
+        } else {
+            // Old format: raw txid string
+            serde_json::from_value(value)?
+        };
         Ok(txid)
     }
 

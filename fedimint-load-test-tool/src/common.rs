@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use devimint::cmd;
 use devimint::util::{FedimintCli, GatewayLdkCli, LnCli};
+use devimint::version_constants::VERSION_0_11_0_ALPHA;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
@@ -299,9 +300,22 @@ pub async fn gateway_pay_invoice(
 }
 
 pub async fn ldk_create_invoice(amount: Amount) -> anyhow::Result<Bolt11Invoice> {
-    let invoice_string = cmd!(GatewayLdkCli, "lightning", "create-invoice", amount.msats)
-        .out_string()
-        .await?;
+    let gateway_cli_version = devimint::util::GatewayCli::version_or_default().await;
+    let invoice_string = if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+        // New format: JSON object with "invoice" field
+        let value = cmd!(GatewayLdkCli, "lightning", "create-invoice", amount.msats)
+            .out_json()
+            .await?;
+        value["invoice"]
+            .as_str()
+            .context("invoice must be a string")?
+            .to_owned()
+    } else {
+        // Old format: raw invoice string
+        cmd!(GatewayLdkCli, "lightning", "create-invoice", amount.msats)
+            .out_string()
+            .await?
+    };
     Ok(Bolt11Invoice::from_str(&invoice_string)?)
 }
 
