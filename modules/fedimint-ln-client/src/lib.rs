@@ -604,6 +604,21 @@ impl ClientModule for LightningClientModule {
                     self.update_gateway_cache().await?;
                     yield serde_json::Value::Null;
                 }
+                "pay_lightning_address" => {
+                    let address = payload.get("address")
+                        .and_then(serde_json::Value::as_str)
+                        .context("Missing or invalid 'address' field")?
+                        .to_string();
+                    let amount_msat = payload.get("amount")
+                        .and_then(serde_json::Value::as_u64)
+                        .context("Missing or invalid 'amount' field")?;
+
+                    let invoice = get_invoice(&address, Some(Amount::from_msats(amount_msat)), None).await?;
+                    let gateway = self.get_gateway(None, false).await?;
+                    let output = self.pay_bolt11_invoice(gateway, invoice, ()).await?;
+
+                    yield serde_json::to_value(output)?;
+                }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
                     unreachable!()

@@ -2909,6 +2909,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln-client",
+ "fedimint-lnurl",
  "fedimint-meta-client",
  "fedimint-mint-client",
  "fedimint-wallet-client",
