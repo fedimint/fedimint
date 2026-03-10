@@ -48,12 +48,14 @@ pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAY_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/pay_offer_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
+pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
+pub const WITHDRAW_TO_ONCHAIN_ENDPOINT: &str = "/withdraw_to_onchain";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -86,6 +88,13 @@ pub struct DepositAddressPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PeginFromOnchainPayload {
+    pub federation_id: FederationId,
+    pub amount: BitcoinAmountOrAll,
+    pub fee_rate_sats_per_vbyte: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressRecheckPayload {
     pub address: Address<NetworkUnchecked>,
     pub federation_id: FederationId,
@@ -100,6 +109,12 @@ pub struct WithdrawPayload {
     /// When None, fetches current fees from the wallet.
     #[serde(default)]
     pub quoted_fees: Option<PegOutFees>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawToOnchainPayload {
+    pub federation_id: FederationId,
+    pub amount: BitcoinAmountOrAll,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

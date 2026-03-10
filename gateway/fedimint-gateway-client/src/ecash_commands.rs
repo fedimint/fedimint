@@ -5,11 +5,12 @@ use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_client::{
-    backup, get_deposit_address, receive_ecash, recheck_address, spend_ecash, withdraw,
+    backup, get_deposit_address, pegin_from_onchain, receive_ecash, recheck_address, spend_ecash,
+    withdraw, withdraw_to_onchain,
 };
 use fedimint_gateway_common::{
-    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
-    SpendEcashPayload, WithdrawPayload,
+    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, PeginFromOnchainPayload,
+    ReceiveEcashPayload, SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_mint_client::OOBNotes;
@@ -36,6 +37,18 @@ pub enum EcashCommands {
         #[clap(long)]
         federation_id: FederationId,
     },
+    /// Send funds from the gateway's onchain wallet to the federation's ecash
+    /// wallet
+    PeginFromOnchain {
+        #[clap(long)]
+        federation_id: FederationId,
+        /// The amount to pegin
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
+        /// The fee rate to use in satoshis per vbyte.
+        #[clap(long)]
+        fee_rate_sats_per_vbyte: u64,
+    },
     /// Claim funds from a gateway federation to an on-chain address.
     Pegout {
         #[clap(long)]
@@ -46,6 +59,14 @@ pub enum EcashCommands {
         /// The address to send the funds to
         #[clap(long)]
         address: Address<NetworkUnchecked>,
+    },
+    /// Claim funds from a gateway federation to the gateway's onchain wallet
+    PegoutToOnchain {
+        #[clap(long)]
+        federation_id: FederationId,
+        /// The amount to withdraw
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
     },
     /// Send e-cash out of band
     Send {
@@ -90,6 +111,24 @@ impl EcashCommands {
                 .await?;
                 print_response(response);
             }
+            Self::PeginFromOnchain {
+                federation_id,
+                amount,
+                fee_rate_sats_per_vbyte,
+            } => {
+                let response = pegin_from_onchain(
+                    client,
+                    base_url,
+                    PeginFromOnchainPayload {
+                        federation_id,
+                        amount,
+                        fee_rate_sats_per_vbyte,
+                    },
+                )
+                .await?;
+
+                print_response(response);
+            }
             Self::Pegout {
                 federation_id,
                 amount,
@@ -103,6 +142,22 @@ impl EcashCommands {
                         amount,
                         address,
                         quoted_fees: None,
+                    },
+                )
+                .await?;
+
+                print_response(response);
+            }
+            Self::PegoutToOnchain {
+                federation_id,
+                amount,
+            } => {
+                let response = withdraw_to_onchain(
+                    client,
+                    base_url,
+                    WithdrawToOnchainPayload {
+                        federation_id,
+                        amount,
                     },
                 )
                 .await?;

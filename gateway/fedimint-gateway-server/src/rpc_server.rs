@@ -23,11 +23,12 @@ use fedimint_gateway_common::{
     INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
     LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
     OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
-    PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload,
+    PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
+    SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -270,6 +271,20 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        WITHDRAW_TO_ONCHAIN_ENDPOINT,
+        withdraw_to_onchain,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
+        PEGIN_FROM_ONCHAIN_ENDPOINT,
+        pegin_from_onchain,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         CONNECT_FED_ENDPOINT,
         connect_fed,
         is_authenticated,
@@ -487,6 +502,16 @@ async fn address(
     Ok(Json(json!(address)))
 }
 
+/// Pegs in funds from the gateway's onchain wallet
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn pegin_from_onchain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<PeginFromOnchainPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let address = gateway.handle_pegin_from_onchain_msg(payload).await?;
+    Ok(Json(json!(address)))
+}
+
 /// Withdraw from a gateway federation.
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn withdraw(
@@ -494,6 +519,16 @@ async fn withdraw(
     Json(payload): Json<WithdrawPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
+    Ok(Json(json!(txid)))
+}
+
+/// Withdraw from a gateway federation.
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn withdraw_to_onchain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<WithdrawToOnchainPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let txid = gateway.handle_withdraw_to_onchain_msg(payload).await?;
     Ok(Json(json!(txid)))
 }
 
