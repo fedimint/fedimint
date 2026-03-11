@@ -36,6 +36,69 @@ use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 
+pub struct GatewayClient<'a> {
+    gw: &'a Gatewayd,
+    password: Option<String>,
+}
+
+impl<'a> GatewayClient<'a> {
+    pub fn new(gw: &'a Gatewayd) -> Self {
+        Self { gw, password: None }
+    }
+
+    pub fn cmd(&self) -> Command {
+        match &self.password {
+            Some(pass) => {
+                cmd!(
+                    crate::util::get_gateway_cli_path(),
+                    "--rpcpassword",
+                    pass,
+                    "-a",
+                    &self.gw.addr
+                )
+            }
+            None => {
+                cmd!(
+                    crate::util::get_gateway_cli_path(),
+                    "--rpcpassword=theresnosecondbest",
+                    "-a",
+                    &self.gw.addr
+                )
+            }
+        }
+    }
+
+    pub fn with_password(mut self, password: &str) -> Self {
+        self.password = Some(password.to_string());
+        self
+    }
+
+    pub async fn send_onchain(
+        &self,
+        bitcoind: &Bitcoind,
+        amount: BitcoinAmountOrAll,
+        fee_rate: u64,
+    ) -> Result<bitcoin::Txid> {
+        let withdraw_address = bitcoind.get_new_address().await?;
+        let value = cmd!(
+            self,
+            "onchain",
+            "send",
+            "--address",
+            withdraw_address,
+            "--amount",
+            amount,
+            "--fee-rate-sats-per-vbyte",
+            fee_rate
+        )
+        .out_json()
+        .await?;
+
+        let txid: bitcoin::Txid = serde_json::from_value(value)?;
+        Ok(txid)
+    }
+}
+
 #[derive(Clone)]
 pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
@@ -278,6 +341,10 @@ impl Gatewayd {
         Ok(())
     }
 
+    pub fn client(&self) -> GatewayClient<'_> {
+        GatewayClient::new(self)
+    }
+
     pub fn cmd(&self) -> Command {
         cmd!(
             crate::util::get_gateway_cli_path(),
@@ -462,31 +529,6 @@ impl Gatewayd {
             .ecash_balance_msats
             .msats;
         Ok(ecash_balance)
-    }
-
-    pub async fn send_onchain(
-        &self,
-        bitcoind: &Bitcoind,
-        amount: BitcoinAmountOrAll,
-        fee_rate: u64,
-    ) -> Result<bitcoin::Txid> {
-        let withdraw_address = bitcoind.get_new_address().await?;
-        let value = cmd!(
-            self,
-            "onchain",
-            "send",
-            "--address",
-            withdraw_address,
-            "--amount",
-            amount,
-            "--fee-rate-sats-per-vbyte",
-            fee_rate
-        )
-        .out_json()
-        .await?;
-
-        let txid: bitcoin::Txid = serde_json::from_value(value)?;
-        Ok(txid)
     }
 
     pub async fn close_channel(&self, remote_pubkey: PublicKey, force: bool) -> Result<()> {

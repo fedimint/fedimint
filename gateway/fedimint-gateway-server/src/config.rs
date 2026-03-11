@@ -146,7 +146,7 @@ impl GatewayOpts {
         });
         let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
         let bcrypt_password_user_hash = if let Some(h) = &self.bcrypt_password_user_hash {
-            Some(bcrypt::HashParts::from_str(&h)?)
+            Some(bcrypt::HashParts::from_str(h)?)
         } else {
             None
         };
