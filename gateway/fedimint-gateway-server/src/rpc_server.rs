@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use axum::body::Body;
 use axum::extract::{Path, Query, Request};
 use axum::http::{StatusCode, header};
 use axum::middleware::{self, Next};
@@ -174,20 +175,38 @@ async fn auth_middleware(
 
     // Check the less-privileged user
     if let Some(user_password) = gateway.bcrypt_password_user_hash.deref() {
-        tracing::info!(target: LOG_GATEWAY, user_password_hash = %user_password.to_string(), "User password hash");
         if bcrypt::verify(token, &user_password.to_string())
             .expect("Bcrypt hash is valid since we just stringified it")
         {
-            if !ADMIN_ROUTES.contains(&request.uri().path()) {
-                return Ok(next.run(request).await);
-            } else {
-                tracing::warn!(target: LOG_GATEWAY, "Route is an admin route");
+            let path = request.uri().path().to_string();
+
+            if ADMIN_ROUTES.contains(&path.as_str()) {
+                return Err(StatusCode::UNAUTHORIZED);
             }
-        } else {
-            tracing::warn!(target: LOG_GATEWAY, "Password didnt match user password");
+
+            // For open_channel, require admin password if push_amount_sats > 0
+            if path == OPEN_CHANNEL_ENDPOINT {
+                let (parts, body) = request.into_parts();
+                let bytes = axum::body::to_bytes(body, usize::MAX)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let open_channel_request: OpenChannelRequest =
+                    serde_json::from_slice(&bytes).map_err(|_| StatusCode::BAD_REQUEST)?;
+                if open_channel_request.push_amount_sats > 0 {
+                    tracing::warn!(
+                        target: LOG_GATEWAY,
+                        push_amount_sats = open_channel_request.push_amount_sats,
+                        "open_channel with push_amount_sats > 0 requires admin password"
+                    );
+                    return Err(StatusCode::UNAUTHORIZED);
+                }
+                // Reconstruct the request with the buffered body
+                let request = Request::from_parts(parts, Body::from(bytes));
+                return Ok(next.run(request).await);
+            }
+
+            return Ok(next.run(request).await);
         }
-    } else {
-        tracing::warn!(target: LOG_GATEWAY, "Password is not set");
     }
 
     Err(StatusCode::UNAUTHORIZED)
