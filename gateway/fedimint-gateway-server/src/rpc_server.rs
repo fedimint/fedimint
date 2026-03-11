@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -50,6 +51,21 @@ use tracing::{info, instrument, warn};
 use crate::error::{GatewayError, LnurlError};
 use crate::iroh_server::{Handlers, start_iroh_endpoint};
 use crate::{Gateway, GatewayState};
+
+// Gateway routes that must be authenticated by the admin password
+// For now, all endpoints that can spend money should be authenticated by the
+// admin.
+const ADMIN_ROUTES: [&str; 9] = [
+    WITHDRAW_ENDPOINT,
+    CONNECT_FED_ENDPOINT,
+    LEAVE_FED_ENDPOINT,
+    BACKUP_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+    SEND_ONCHAIN_ENDPOINT,
+    SPEND_ECASH_ENDPOINT,
+    MNEMONIC_ENDPOINT,
+];
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(
@@ -150,10 +166,28 @@ async fn auth_middleware(
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    if bcrypt::verify(token, &gateway.bcrypt_password_hash.to_string())
+    if bcrypt::verify(token.clone(), &gateway.bcrypt_password_hash.to_string())
         .expect("Bcrypt hash is valid since we just stringified it")
     {
         return Ok(next.run(request).await);
+    }
+
+    // Check the less-privileged user
+    if let Some(user_password) = gateway.bcrypt_password_user_hash.deref() {
+        tracing::info!(target: LOG_GATEWAY, user_password_hash = %user_password.to_string(), "User password hash");
+        if bcrypt::verify(token, &user_password.to_string())
+            .expect("Bcrypt hash is valid since we just stringified it")
+        {
+            if !ADMIN_ROUTES.contains(&request.uri().path()) {
+                return Ok(next.run(request).await);
+            } else {
+                tracing::warn!(target: LOG_GATEWAY, "Route is an admin route");
+            }
+        } else {
+            tracing::warn!(target: LOG_GATEWAY, "Password didnt match user password");
+        }
+    } else {
+        tracing::warn!(target: LOG_GATEWAY, "Password is not set");
     }
 
     Err(StatusCode::UNAUTHORIZED)
