@@ -39,7 +39,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
     KIND, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes,
-    WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    WalletOutput, WalletOutputV0, descriptor_taproot, is_potential_receive,
 };
 use futures::StreamExt;
 use secp256k1::Keypair;
@@ -378,7 +378,7 @@ impl WalletClientModule {
     }
 
     fn derive_address(&self, index: u64) -> Address {
-        descriptor(
+        descriptor_taproot(
             &self.cfg.bitcoin_pks,
             &self.derive_tweak(index).public_key().consensus_hash(),
         )
