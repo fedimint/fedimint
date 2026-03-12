@@ -162,7 +162,7 @@ struct ServerOpts {
     iroh_dns: Option<SafeUrl>,
 
     /// Optional URLs of the Iroh relays to use for registering
-    #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh")]
+    #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh", value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
 
     /// Number of checkpoints from the current session to retain on disk
