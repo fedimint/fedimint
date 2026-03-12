@@ -124,7 +124,7 @@ pub struct GatewayOpts {
     iroh_dns: Option<SafeUrl>,
 
     /// Optional URLs of the Iroh relays to use for registering
-    #[arg(long, env = FM_IROH_RELAY_ENV)]
+    #[arg(long, env = FM_IROH_RELAY_ENV, value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
 
     #[arg(long, env = FM_GATEWAY_SKIP_SETUP_ENV, default_value_t = false)]
