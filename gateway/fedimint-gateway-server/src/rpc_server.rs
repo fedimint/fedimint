@@ -51,20 +51,28 @@ use crate::error::{GatewayError, LnurlError};
 use crate::iroh_server::{Handlers, start_iroh_endpoint};
 use crate::{Gateway, GatewayState};
 
-// Gateway routes that must be authenticated by the admin password
-// For now, all endpoints that can spend money should be authenticated by the
-// admin.
-const ADMIN_ROUTES: [&str; 10] = [
-    WITHDRAW_ENDPOINT,
-    CONNECT_FED_ENDPOINT,
-    LEAVE_FED_ENDPOINT,
-    BACKUP_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_OFFER_FOR_OPERATOR_ENDPOINT,
-    SEND_ONCHAIN_ENDPOINT,
-    SPEND_ECASH_ENDPOINT,
-    MNEMONIC_ENDPOINT,
-    OPEN_CHANNEL_WITH_PUSH_ENDPOINT,
+// Routes that the liquidity manager is allowed to access. Any authenticated
+// route NOT in this list requires the admin password.
+const LIQUIDITY_MANAGER_ROUTES: [&str; 19] = [
+    ADDRESS_ENDPOINT,
+    ADDRESS_RECHECK_ENDPOINT,
+    CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT,
+    GET_BALANCES_ENDPOINT,
+    GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    INVITE_CODES_ENDPOINT,
+    LIST_CHANNELS_ENDPOINT,
+    LIST_TRANSACTIONS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT,
+    PAYMENT_SUMMARY_ENDPOINT,
+    PEGIN_FROM_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT,
 ];
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
@@ -179,7 +187,7 @@ async fn auth_middleware(
     {
         let path = request.uri().path().to_string();
 
-        if ADMIN_ROUTES.contains(&path.as_str()) {
+        if !LIQUIDITY_MANAGER_ROUTES.contains(&path.as_str()) {
             return Err(StatusCode::UNAUTHORIZED);
         }
 
