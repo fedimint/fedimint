@@ -203,6 +203,16 @@ impl std::ops::Add for Amount {
     }
 }
 
+impl std::ops::Sub for Amount {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            msats: self.msats - rhs.msats,
+        }
+    }
+}
+
 impl std::ops::AddAssign for Amount {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;

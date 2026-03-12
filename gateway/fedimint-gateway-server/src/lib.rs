@@ -51,6 +51,7 @@ use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
+use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Committable, Database, DatabaseTransaction, apply_migrations};
@@ -114,7 +115,10 @@ use fedimint_lnv2_common::gateway_api::{
     CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
-use fedimint_mint_client::{MintClientInit, MintClientModule};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
+use fedimint_mintv2_client::{
+    MintClientInit as MintV2ClientInit, MintClientModule as MintV2ClientModule,
+};
 use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, WithdrawState};
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -414,8 +418,12 @@ async fn calculate_max_withdrawable(
             failure_reason: "Insufficient balance to cover peg-out fees".to_string(),
         })?;
 
-    let mint_module = client.get_first_module::<MintClientModule>()?;
-    let mint_fees = mint_module.estimate_spend_all_fees().await;
+    // MintV2 doesn't have fee estimation - only compute fees for MintV1
+    let mint_fees = if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
+        mint_module.estimate_spend_all_fees().await
+    } else {
+        Amount::ZERO
+    };
 
     let max_withdrawable = max_withdrawable_before_mint_fees.saturating_sub(mint_fees);
 
@@ -575,6 +583,7 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
+        registry.attach(MintV2ClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
         registry.attach(fedimint_walletv2_client::WalletClientInit);
 
@@ -1372,45 +1381,97 @@ impl Gateway {
         &self,
         payload: ReceiveEcashPayload,
     ) -> Result<ReceiveEcashResponse> {
-        let amount = payload.notes.total_amount();
+        // Extract federation_id_prefix from either format
+        let federation_id_prefix = base32::decode_prefixed::<fedimint_mintv2_client::ECash>(
+            FEDIMINT_PREFIX,
+            &payload.notes,
+        )
+        .ok()
+        .and_then(|e| e.mint())
+        .map(|id| id.to_prefix())
+        .or_else(|| {
+            OOBNotes::from_str(&payload.notes)
+                .ok()
+                .map(|n| n.federation_id_prefix())
+        })
+        .ok_or_else(|| PublicGatewayError::ReceiveEcashError {
+            failure_reason: "Invalid ecash format: could not parse as ECash or OOBNotes"
+                .to_string(),
+        })?;
+
         let client = self
             .federation_manager
             .read()
             .await
-            .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
+            .get_client_for_federation_id_prefix(federation_id_prefix)
             .ok_or(FederationNotConnected {
-                federation_id_prefix: payload.notes.federation_id_prefix(),
-            })?;
-        let mint = client
-            .value()
-            .get_first_module::<MintClientModule>()
-            .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                failure_reason: format!("Mint module does not exist: {e:?}"),
+                federation_id_prefix,
             })?;
 
-        let operation_id = mint
-            .reissue_external_notes(payload.notes, ())
-            .await
-            .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                failure_reason: e.to_string(),
+        // Check which module is present and parse accordingly
+        if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
+            let notes = OOBNotes::from_str(&payload.notes).map_err(|e| {
+                PublicGatewayError::ReceiveEcashError {
+                    failure_reason: format!("Expected OOBNotes for MintV1 federation: {e}"),
+                }
             })?;
-        if payload.wait {
-            let mut updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .await
-                .unwrap()
-                .into_stream();
+            let amount = notes.total_amount();
 
-            while let Some(update) = updates.next().await {
-                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    return Err(PublicGatewayError::ReceiveEcashError {
-                        failure_reason: e.clone(),
-                    });
+            let operation_id = mint.reissue_external_notes(notes, ()).await.map_err(|e| {
+                PublicGatewayError::ReceiveEcashError {
+                    failure_reason: e.to_string(),
+                }
+            })?;
+            if payload.wait {
+                let mut updates = mint
+                    .subscribe_reissue_external_notes(operation_id)
+                    .await
+                    .unwrap()
+                    .into_stream();
+
+                while let Some(update) = updates.next().await {
+                    if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                        return Err(PublicGatewayError::ReceiveEcashError {
+                            failure_reason: e.clone(),
+                        });
+                    }
                 }
             }
-        }
 
-        Ok(ReceiveEcashResponse { amount })
+            Ok(ReceiveEcashResponse { amount })
+        } else if let Ok(mint) = client.value().get_first_module::<MintV2ClientModule>() {
+            let ecash: fedimint_mintv2_client::ECash =
+                base32::decode_prefixed(FEDIMINT_PREFIX, &payload.notes).map_err(|e| {
+                    PublicGatewayError::ReceiveEcashError {
+                        failure_reason: format!("Expected ECash for MintV2 federation: {e}"),
+                    }
+                })?;
+            let amount = ecash.amount();
+
+            let operation_id = mint
+                .receive(ecash, serde_json::Value::Null)
+                .await
+                .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                    failure_reason: e.to_string(),
+                })?;
+
+            if payload.wait {
+                match mint.await_final_receive_operation_state(operation_id).await {
+                    fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
+                    fedimint_mintv2_client::FinalReceiveOperationState::Rejected => {
+                        return Err(PublicGatewayError::ReceiveEcashError {
+                            failure_reason: "ECash receive was rejected".to_string(),
+                        });
+                    }
+                }
+            }
+
+            Ok(ReceiveEcashResponse { amount })
+        } else {
+            Err(PublicGatewayError::ReceiveEcashError {
+                failure_reason: "No mint module found".to_string(),
+            })
+        }
     }
 
     /// Retrieves an invoice by the payment hash if it exists, otherwise returns
@@ -2323,10 +2384,27 @@ impl IAdminGateway for Gateway {
             .select_client(payload.federation_id)
             .await?
             .into_value();
-        let mint_module = client.get_first_module::<MintClientModule>()?;
-        let notes = mint_module.send_oob_notes(payload.amount, ()).await?;
-        debug!(target: LOG_GATEWAY, ?notes, "Spend ecash notes");
-        Ok(SpendEcashResponse { notes })
+
+        if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
+            let notes = mint_module.send_oob_notes(payload.amount, ()).await?;
+            debug!(target: LOG_GATEWAY, ?notes, "Spend ecash notes");
+            Ok(SpendEcashResponse {
+                notes: notes.to_string(),
+            })
+        } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
+            let ecash = mint_module
+                .send(payload.amount, serde_json::Value::Null)
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
+
+            Ok(SpendEcashResponse {
+                notes: base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
+            })
+        } else {
+            Err(AdminGatewayError::Unexpected(anyhow::anyhow!(
+                "No mint module available"
+            )))
+        }
     }
 
     /// Instructs the gateway to shutdown, but only after all incoming payments

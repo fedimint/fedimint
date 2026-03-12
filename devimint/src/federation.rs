@@ -866,6 +866,8 @@ impl Federation {
                 let amount_sats = amount / 1000;
                 let module_fee_sats = 100 + amount_sats / 100;
                 module_fee_sats * 1000 + 2000
+            } else if crate::util::supports_mint_v2() {
+                4000
             } else {
                 2000
             };

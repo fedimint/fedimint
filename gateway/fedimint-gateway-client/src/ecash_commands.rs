@@ -13,7 +13,6 @@ use fedimint_gateway_common::{
     ReceiveEcashPayload, SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
-use fedimint_mint_client::OOBNotes;
 
 use crate::print_response;
 
@@ -76,8 +75,9 @@ pub enum EcashCommands {
     },
     /// Receive e-cash out of band
     Receive {
+        /// E-cash notes (`OOBNotes` for v1 or `ECash` for v2)
         #[clap(long)]
-        notes: OOBNotes,
+        notes: String,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
     },

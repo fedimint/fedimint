@@ -44,6 +44,7 @@ fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-logging = { workspace = true }
 fedimint-meta-client = { workspace = true, features = ["cli"] }
 fedimint-mint-client = { workspace = true, features = ["cli"] }
+fedimint-mintv2-client = { workspace = true, features = ["cli"] }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fedimint-walletv2-client = { workspace = true, features = ["cli"] }

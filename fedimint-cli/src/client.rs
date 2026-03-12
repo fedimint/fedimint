@@ -637,11 +637,6 @@ pub async fn handle_command(
 }
 
 async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
-    let mint_client = client.get_first_module::<MintClientModule>()?;
-    let mint_module_id = client
-        .get_first_instance(&fedimint_mint_client::KIND)
-        .context("Mint module not found")?;
-
     // Try wallet v1 first, then walletv2
     let network = if let Ok(wallet_client) = client.get_first_module::<WalletClientModule>() {
         wallet_client.get_network()
@@ -653,16 +648,34 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
         anyhow::bail!("No wallet module found");
     };
 
-    let summary = mint_client
-        .get_note_counts_by_denomination(
-            &mut client
-                .db()
-                .begin_transaction_nc()
-                .await
-                .to_ref_with_prefix_module_id(mint_module_id)
-                .0,
-        )
-        .await;
+    let summary = if let Ok(mint_client) = client.get_first_module::<MintClientModule>() {
+        let mint_module_id = client
+            .get_first_instance(&fedimint_mint_client::KIND)
+            .context("Mint module not found")?;
+        mint_client
+            .get_note_counts_by_denomination(
+                &mut client
+                    .db()
+                    .begin_transaction_nc()
+                    .await
+                    .to_ref_with_prefix_module_id(mint_module_id)
+                    .0,
+            )
+            .await
+    } else if let Ok(mintv2_client) =
+        client.get_first_module::<fedimint_mintv2_client::MintClientModule>()
+    {
+        let counts = mintv2_client.get_count_by_denomination().await;
+        let mut summary = TieredCounts::default();
+        #[allow(clippy::cast_possible_truncation)]
+        for (denomination, count) in counts {
+            summary.inc(denomination.amount(), count as usize);
+        }
+        summary
+    } else {
+        anyhow::bail!("No mint module found");
+    };
+
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
         network,

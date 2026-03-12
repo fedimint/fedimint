@@ -34,6 +34,7 @@ fedimint-meta-server = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
+fedimint-mintv2-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 fedimint-server-bitcoin-rpc = { workspace = true }

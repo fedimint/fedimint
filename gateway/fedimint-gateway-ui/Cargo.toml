@@ -28,6 +28,7 @@ fedimint-gwv2-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
+fedimint-mintv2-client = { workspace = true }
 fedimint-ui-common = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 lightning = { workspace = true }
