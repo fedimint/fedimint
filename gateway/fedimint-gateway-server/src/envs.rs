@@ -13,8 +13,9 @@ pub const FM_GATEWAY_API_ADDR_ENV: &str = "FM_GATEWAY_API_ADDR";
 pub const FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV: &str = "FM_GATEWAY_BCRYPT_PASSWORD_HASH";
 
 /// Environment variable that specifies the bcrypt password hash for the gateway
-/// user.
-pub const FM_GATEWAY_USER_BCRYPT_PASSWORD_HASH_ENV: &str = "FM_GATEWAY_USER_BCRYPT_PASSWORD_HASH";
+/// liquidity manager.
+pub const FM_GATEWAY_LIQUIDITY_MANAGER_BCRYPT_PASSWORD_HASH_ENV: &str =
+    "FM_GATEWAY_LIQUIDITY_MANAGER_BCRYPT_PASSWORD_HASH";
 
 /// Environment variable that specifies that Bitcoin network that the gateway
 /// should use. Must match the network of the Lightning node.

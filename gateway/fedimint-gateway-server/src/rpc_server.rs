@@ -172,9 +172,9 @@ async fn auth_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Check the less-privileged user
-    if let Some(user_password) = &*gateway.bcrypt_password_user_hash
-        && bcrypt::verify(token, &user_password.to_string())
+    // Check the liquidity manager
+    if let Some(liquidity_manager_password) = &*gateway.bcrypt_password_liquidity_manager_hash
+        && bcrypt::verify(token, &liquidity_manager_password.to_string())
             .expect("Bcrypt hash is valid since we just stringified it")
     {
         let path = request.uri().path().to_string();
