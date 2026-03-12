@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use axum::body::Body;
 use axum::extract::{Path, Query, Request};
 use axum::http::{StatusCode, header};
 use axum::middleware::{self, Next};
@@ -23,13 +22,13 @@ use fedimint_gateway_common::{
     GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest,
     INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
     LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT,
-    PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload,
-    PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
-    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
+    OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
+    PaymentSummaryPayload, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -55,7 +54,7 @@ use crate::{Gateway, GatewayState};
 // Gateway routes that must be authenticated by the admin password
 // For now, all endpoints that can spend money should be authenticated by the
 // admin.
-const ADMIN_ROUTES: [&str; 9] = [
+const ADMIN_ROUTES: [&str; 10] = [
     WITHDRAW_ENDPOINT,
     CONNECT_FED_ENDPOINT,
     LEAVE_FED_ENDPOINT,
@@ -65,6 +64,7 @@ const ADMIN_ROUTES: [&str; 9] = [
     SEND_ONCHAIN_ENDPOINT,
     SPEND_ECASH_ENDPOINT,
     MNEMONIC_ENDPOINT,
+    OPEN_CHANNEL_WITH_PUSH_ENDPOINT,
 ];
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
@@ -181,27 +181,6 @@ async fn auth_middleware(
 
         if ADMIN_ROUTES.contains(&path.as_str()) {
             return Err(StatusCode::UNAUTHORIZED);
-        }
-
-        // For open_channel, require admin password if push_amount_sats > 0
-        if path == OPEN_CHANNEL_ENDPOINT {
-            let (parts, body) = request.into_parts();
-            let bytes = axum::body::to_bytes(body, usize::MAX)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            let open_channel_request: OpenChannelRequest =
-                serde_json::from_slice(&bytes).map_err(|_| StatusCode::BAD_REQUEST)?;
-            if open_channel_request.push_amount_sats > 0 {
-                tracing::warn!(
-                    target: LOG_GATEWAY,
-                    push_amount_sats = open_channel_request.push_amount_sats,
-                    "open_channel with push_amount_sats > 0 requires admin password"
-                );
-                return Err(StatusCode::UNAUTHORIZED);
-            }
-            // Reconstruct the request with the buffered body
-            let request = Request::from_parts(parts, Body::from(bytes));
-            return Ok(next.run(request).await);
         }
 
         return Ok(next.run(request).await);
@@ -401,6 +380,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
         handlers,
         OPEN_CHANNEL_ENDPOINT,
         open_channel,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
+        OPEN_CHANNEL_WITH_PUSH_ENDPOINT,
+        open_channel_with_push,
         is_authenticated,
         authenticated_routes,
     );
@@ -661,6 +647,16 @@ async fn get_ln_onchain_address(
 
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
 async fn open_channel(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(mut payload): Json<OpenChannelRequest>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    payload.push_amount_sats = 0;
+    let funding_txid = gateway.handle_open_channel_msg(payload).await?;
+    Ok(Json(json!(funding_txid)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn open_channel_with_push(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelRequest>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
