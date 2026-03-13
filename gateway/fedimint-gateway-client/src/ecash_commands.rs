@@ -15,8 +15,10 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_mint_client::OOBNotes;
 
-use crate::print_response;
+use crate::{CliOutput, CliOutputResult};
 
+/// Ecash management commands for pegging funds into a federation, pegging funds
+/// out of a federation, or spending/receiving ecash.
 #[derive(Subcommand)]
 pub enum EcashCommands {
     /// Make a backup of snapshot of all e-cash.
@@ -84,17 +86,18 @@ pub enum EcashCommands {
 }
 
 impl EcashCommands {
-    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> CliOutputResult {
         match self {
             Self::Backup { federation_id } => {
                 backup(client, base_url, BackupPayload { federation_id }).await?;
+                Ok(CliOutput::Empty)
             }
             Self::Pegin { federation_id } => {
-                let response =
+                let address =
                     get_deposit_address(client, base_url, DepositAddressPayload { federation_id })
                         .await?;
 
-                print_response(response);
+                Ok(CliOutput::DepositAddress { address })
             }
             Self::PeginRecheck {
                 address,
@@ -109,14 +112,14 @@ impl EcashCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::DepositRecheck(response))
             }
             Self::PeginFromOnchain {
                 federation_id,
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
-                let response = pegin_from_onchain(
+                let txid = pegin_from_onchain(
                     client,
                     base_url,
                     PeginFromOnchainPayload {
@@ -127,7 +130,7 @@ impl EcashCommands {
                 )
                 .await?;
 
-                print_response(response);
+                Ok(CliOutput::PeginTxid { txid })
             }
             Self::Pegout {
                 federation_id,
@@ -146,7 +149,7 @@ impl EcashCommands {
                 )
                 .await?;
 
-                print_response(response);
+                Ok(CliOutput::Withdraw(response))
             }
             Self::PegoutToOnchain {
                 federation_id,
@@ -162,7 +165,7 @@ impl EcashCommands {
                 )
                 .await?;
 
-                print_response(response);
+                Ok(CliOutput::Withdraw(response))
             }
             Self::Send {
                 federation_id,
@@ -178,15 +181,13 @@ impl EcashCommands {
                 )
                 .await?;
 
-                print_response(response);
+                Ok(CliOutput::SpendEcash(response))
             }
             Self::Receive { notes, wait } => {
                 let response =
                     receive_ecash(client, base_url, ReceiveEcashPayload { notes, wait }).await?;
-                print_response(response);
+                Ok(CliOutput::ReceiveEcash(response))
             }
         }
-
-        Ok(())
     }
 }

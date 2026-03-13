@@ -34,7 +34,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -372,16 +372,40 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
-            .out_json()
-            .await?
-            .as_str()
-            .context("address must be a string")?
-            .to_owned())
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "address" field
+            let value = cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
+                .out_json()
+                .await?;
+            Ok(value["address"]
+                .as_str()
+                .context("address must be a string")?
+                .to_owned())
+        } else {
+            // Old format: raw address string
+            Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
+                .out_json()
+                .await?
+                .as_str()
+                .context("address must be a string")?
+                .to_owned())
+        }
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
-        cmd!(self, "onchain", "address").out_string().await
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "address" field
+            let value = cmd!(self, "onchain", "address").out_json().await?;
+            Ok(value["address"]
+                .as_str()
+                .context("address must be a string")?
+                .to_owned())
+        } else {
+            // Old format: raw address string
+            cmd!(self, "onchain", "address").out_string().await
+        }
     }
 
     pub async fn get_mnemonic(&self) -> Result<MnemonicResponse> {
@@ -404,11 +428,23 @@ impl Gatewayd {
     }
 
     pub async fn create_invoice(&self, amount_msats: u64) -> Result<Bolt11Invoice> {
-        Ok(Bolt11Invoice::from_str(
-            &cmd!(self, "lightning", "create-invoice", amount_msats)
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let invoice_str = if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "invoice" field
+            let value = cmd!(self, "lightning", "create-invoice", amount_msats)
+                .out_json()
+                .await?;
+            value["invoice"]
+                .as_str()
+                .context("invoice must be a string")?
+                .to_owned()
+        } else {
+            // Old format: raw invoice string
+            cmd!(self, "lightning", "create-invoice", amount_msats)
                 .out_string()
-                .await?,
-        )?)
+                .await?
+        };
+        Ok(Bolt11Invoice::from_str(&invoice_str)?)
     }
 
     pub async fn pay_invoice(&self, invoice: Bolt11Invoice) -> Result<()> {
@@ -485,7 +521,14 @@ impl Gatewayd {
         .out_json()
         .await?;
 
-        let txid: bitcoin::Txid = serde_json::from_value(value)?;
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let txid: bitcoin::Txid = if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "txid" field
+            serde_json::from_value(value["txid"].clone())?
+        } else {
+            // Old format: raw txid string
+            serde_json::from_value(value)?
+        };
         Ok(txid)
     }
 
@@ -545,22 +588,50 @@ impl Gatewayd {
         push_amount_sats: Option<u64>,
     ) -> Result<Txid> {
         let pubkey = gw.lightning_pubkey().await?;
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
 
-        let mut command = cmd!(
-            self,
-            "lightning",
-            "open-channel",
-            "--pubkey",
-            pubkey,
-            "--host",
-            gw.lightning_node_addr,
-            "--channel-size-sats",
-            channel_size_sats,
-            "--push-amount-sats",
-            push_amount_sats.unwrap_or(0)
-        );
+        let txid_str = if gateway_cli_version >= *VERSION_0_11_0_ALPHA {
+            // New format: JSON object with "funding_txid" field
+            let value = cmd!(
+                self,
+                "lightning",
+                "open-channel",
+                "--pubkey",
+                pubkey,
+                "--host",
+                gw.lightning_node_addr,
+                "--channel-size-sats",
+                channel_size_sats,
+                "--push-amount-sats",
+                push_amount_sats.unwrap_or(0)
+            )
+            .out_json()
+            .await?;
 
-        Ok(Txid::from_str(&command.out_string().await?)?)
+            value["funding_txid"]
+                .as_str()
+                .context("funding_txid must be a string")?
+                .to_owned()
+        } else {
+            // Old format: raw txid string
+            cmd!(
+                self,
+                "lightning",
+                "open-channel",
+                "--pubkey",
+                pubkey,
+                "--host",
+                gw.lightning_node_addr,
+                "--channel-size-sats",
+                channel_size_sats,
+                "--push-amount-sats",
+                push_amount_sats.unwrap_or(0)
+            )
+            .out_string()
+            .await?
+        };
+
+        Ok(Txid::from_str(&txid_str)?)
     }
 
     pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {

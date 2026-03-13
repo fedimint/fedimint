@@ -6,8 +6,10 @@ use fedimint_gateway_client::{get_ln_onchain_address, send_onchain};
 use fedimint_gateway_common::SendOnchainRequest;
 use fedimint_ln_common::client::GatewayApi;
 
-use crate::print_response;
+use crate::{CliOutput, CliOutputResult};
 
+/// Onchain management commands for sending or receiving funds from the
+/// gateway's onchain wallet.
 #[derive(Subcommand)]
 pub enum OnchainCommands {
     /// Get a Bitcoin address from the gateway's lightning node's onchain
@@ -34,20 +36,22 @@ pub enum OnchainCommands {
 }
 
 impl OnchainCommands {
-    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> CliOutputResult {
         match self {
             Self::Address => {
                 let response = get_ln_onchain_address(client, base_url)
                     .await?
                     .assume_checked();
-                println!("{response}");
+                Ok(CliOutput::OnchainAddress {
+                    address: response.to_string(),
+                })
             }
             Self::Send {
                 address,
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
-                let response = send_onchain(
+                let txid = send_onchain(
                     client,
                     base_url,
                     SendOnchainRequest {
@@ -57,10 +61,8 @@ impl OnchainCommands {
                     },
                 )
                 .await?;
-                print_response(response);
+                Ok(CliOutput::SendOnchainTxid { txid })
             }
         }
-
-        Ok(())
     }
 }
