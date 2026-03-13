@@ -1569,6 +1569,11 @@ impl Client {
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
+        let module_kinds: BTreeMap<ModuleInstanceId, String> = self
+            .modules
+            .iter_modules_id_kind()
+            .map(|(id, kind)| (id, kind.to_string()))
+            .collect();
         self.task_group
             .spawn("module recoveries", |_task_handle| async {
                 Self::run_module_recoveries_task(
@@ -1577,6 +1582,7 @@ impl Client {
                     recovery_sender,
                     module_recoveries,
                     module_recovery_progress_receivers,
+                    module_kinds,
                 )
                 .await;
             });
@@ -1594,6 +1600,7 @@ impl Client {
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
+        module_kinds: BTreeMap<ModuleInstanceId, String>,
     ) {
         debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
         let mut completed_stream = Vec::new();
@@ -1667,6 +1674,7 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
+                    kind = module_kinds.get(&module_instance_id).map(String::as_str).unwrap_or("unknown"),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery progress"
                 );
