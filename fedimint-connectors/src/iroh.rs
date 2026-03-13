@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, bail};
 use async_trait::async_trait;
+use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::envs::{
     FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
     parse_kv_list_from_env,
@@ -13,6 +14,16 @@ use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
     IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
 };
+
+/// The maximum number of bytes we are willing to buffer when reading an API
+/// response from an iroh QUIC stream. This must be large enough to accommodate
+/// the largest possible signed session outcome. A session can contain up to
+/// `broadcast_rounds_per_session` (default 3600) rounds, each peer produces one
+/// unit per round, and each unit can be up to `ALEPH_BFT_UNIT_BYTE_LIMIT`
+/// bytes. The response is JSON-serialized which hex-encodes the consensus
+/// bytes, roughly doubling the size. We use 2x the raw max as a conservative
+/// upper bound. For a 4-peer federation this is ~1.44 GB.
+const IROH_MAX_RESPONSE_BYTES: usize = ALEPH_BFT_UNIT_BYTE_LIMIT * 3600 * 4 * 2;
 use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
@@ -456,7 +467,7 @@ impl IGuardianConnection for Connection {
             .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
-            .read_to_end(1_000_000)
+            .read_to_end(IROH_MAX_RESPONSE_BYTES)
             .await
             .map_err(|e| ServerError::Transport(e.into()))?;
 
@@ -498,7 +509,7 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
             .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
-            .read_to_end(1_000_000)
+            .read_to_end(IROH_MAX_RESPONSE_BYTES)
             .await
             .map_err(|e| ServerError::Transport(e.into()))?;
 
@@ -539,7 +550,7 @@ impl IGatewayConnection for Connection {
             .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
-            .read_to_end(1_000_000)
+            .read_to_end(IROH_MAX_RESPONSE_BYTES)
             .await
             .map_err(|e| ServerError::Transport(e.into()))?;
 
