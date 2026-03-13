@@ -459,8 +459,7 @@ jobs:
           done
 
   pkgs:
-    # TODO: Remove 'pull_request' trigger after MacOS tarball bundling is verified working
-    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
+    if: github.repository == 'fedimint/fedimint' && (startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
     name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform.name }}"
 
     strategy:
