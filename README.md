@@ -56,7 +56,7 @@ You can pick one of Fedimint-supporting applications:
 * [Conduit Wallet](https://conduit.cash/) - iOS and Android wallet
 * [Harbor Wallet](https://harbor.cash/) - desktop wallet
 * [Vipr Wallet](https://github.com/ngutech21/vipr-wallet) - Web (PWA) wallet
-* `fedimint-cli` - Fedimint's built in CLI wallet for developers and agents
+* `fedimint-cli` - built-in CLI wallet
 
 ## Running your own Fedimint federation
 
