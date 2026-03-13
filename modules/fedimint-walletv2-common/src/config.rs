@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 
-use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
+use bitcoin::{Network, XOnlyPublicKey};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vbytes};
-use secp256k1::{PublicKey, SecretKey};
+use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
-use crate::{WalletCommonInit, descriptor};
+use crate::{WalletCommonInit, descriptor_taproot};
 
 plugin_types_trait_impl_config!(
     WalletCommonInit,
@@ -32,7 +32,7 @@ pub struct WalletConfigPrivate {
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletConfigConsensus {
     /// The public keys for the bitcoin multisig
-    pub bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+    pub bitcoin_pks: BTreeMap<PeerId, XOnlyPublicKey>,
     /// Total vbytes of a pegout bitcoin transaction
     pub send_tx_vbytes: u64,
     /// Total vbytes of a pegin bitcoin transaction
@@ -73,7 +73,7 @@ impl WalletConfigConsensus {
     /// | 19        | 539  | 937     |
     /// | 20        | 565  | 991     |
     pub fn new(
-        bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+        bitcoin_pks: BTreeMap<PeerId, XOnlyPublicKey>,
         fee_consensus: FeeConsensus,
         network: Network,
     ) -> Self {
@@ -84,7 +84,7 @@ impl WalletConfigConsensus {
             + 4 // up to 2 outputs
             + 4 * 4; // nLockTime
 
-        let change_witness_weight = descriptor(&bitcoin_pks, &sha256::Hash::all_zeros())
+        let change_witness_weight = descriptor_taproot(&bitcoin_pks, &sha256::Hash::all_zeros())
             .max_weight_to_satisfy()
             .expect("Cannot satisfy the change descriptor.")
             .to_wu();
@@ -204,7 +204,7 @@ fn test_fee_consensus() {
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletClientConfig {
     /// The public keys for the bitcoin multisig
-    pub bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+    pub bitcoin_pks: BTreeMap<PeerId, XOnlyPublicKey>,
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs

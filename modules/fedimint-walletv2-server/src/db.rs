@@ -2,7 +2,7 @@ use bitcoin::{TxOut, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_walletv2_common::TxInfo;
-use secp256k1::ecdsa::Signature;
+use secp256k1::schnorr::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 

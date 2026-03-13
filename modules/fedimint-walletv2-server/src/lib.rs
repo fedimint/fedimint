@@ -17,10 +17,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, anyhow, bail, ensure};
 use bitcoin::absolute::LockTime;
 use bitcoin::hashes::{Hash, sha256};
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::sighash::{EcdsaSighashType, SighashCache};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::LeafVersion;
 use bitcoin::transaction::Version;
-use bitcoin::{Amount, Network, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{Amount, Network, Sequence, TapLeafHash, Transaction, TxIn, TxOut, Txid};
 use common::config::WalletConfigConsensus;
 use common::{
     DepositRange, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
@@ -71,13 +71,13 @@ use fedimint_walletv2_common::endpoint_constants::{
 };
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    descriptor_taproot, is_potential_receive, tweak_xonly_public_key,
 };
 use futures::StreamExt;
-use miniscript::descriptor::Wsh;
+use miniscript::descriptor::Tr;
 use rand::rngs::OsRng;
-use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, SecretKey};
+use secp256k1::schnorr::Signature;
+use secp256k1::{Keypair, Scalar, SecretKey, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::info;
@@ -304,8 +304,13 @@ impl ServerModuleInit for WalletInit {
 
         let bitcoin_pks = bitcoin_sks
             .iter()
-            .map(|(peer, sk)| (*peer, sk.public_key(secp256k1::SECP256K1)))
-            .collect::<BTreeMap<PeerId, PublicKey>>();
+            .map(|(peer, sk)| {
+                (
+                    *peer,
+                    sk.public_key(secp256k1::SECP256K1).x_only_public_key().0,
+                )
+            })
+            .collect::<BTreeMap<PeerId, XOnlyPublicKey>>();
 
         bitcoin_sks
             .into_iter()
@@ -332,9 +337,10 @@ impl ServerModuleInit for WalletInit {
         let fee_consensus = FeeConsensus::new(0).expect("Relative fee is within range");
 
         let (bitcoin_sk, bitcoin_pk) = secp256k1::generate_keypair(&mut OsRng);
+        let bitcoin_xonly_pk = bitcoin_pk.x_only_public_key().0;
 
-        let bitcoin_pks: BTreeMap<PeerId, PublicKey> = peers
-            .exchange_encodable(bitcoin_pk)
+        let bitcoin_pks: BTreeMap<PeerId, XOnlyPublicKey> = peers
+            .exchange_encodable(bitcoin_xonly_pk)
             .await?
             .into_iter()
             .collect();
@@ -356,7 +362,12 @@ impl ServerModuleInit for WalletInit {
                 .bitcoin_pks
                 .get(identity)
                 .ok_or(anyhow::anyhow!("No public key for our identity"))?
-                == &config.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
+                == &config
+                    .private
+                    .bitcoin_sk
+                    .public_key(secp256k1::SECP256K1)
+                    .x_only_public_key()
+                    .0,
             "Bitcoin wallet private key doesn't match multisig pubkey"
         );
 
@@ -406,7 +417,12 @@ impl ServerModule for Wallet {
                     self.verify_signatures(
                         &unsigned_tx,
                         &signatures,
-                        self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1)
+                        self.cfg
+                            .private
+                            .bitcoin_sk
+                            .public_key(secp256k1::SECP256K1)
+                            .x_only_public_key()
+                            .0
                     )
                     .is_ok(),
                     "Our signatures failed verification against our private key"
@@ -978,13 +994,13 @@ impl Wallet {
                 dbtx.remove_entry(&UnconfirmedTxKey(tx.compute_txid()))
                     .await;
 
-                // We maintain an append-only log of valid P2WSH transaction outputs created
+                // We maintain an append-only log of valid P2TR transaction outputs created
                 // since the federation was established. This is downloaded by clients to
                 // detect pegins and claim them by index.
 
                 for (vout, tx_out) in tx.output.iter().enumerate() {
                     if is_potential_receive(&tx_out.script_pubkey, &pks_hash)
-                        && tx_out.script_pubkey.is_p2wsh()
+                        && tx_out.script_pubkey.is_p2tr()
                     {
                         let outpoint = bitcoin::OutPoint {
                             txid: tx.compute_txid(),
@@ -1170,11 +1186,32 @@ impl Wallet {
             .await
     }
 
-    fn descriptor(&self, tweak: &sha256::Hash) -> Wsh<secp256k1::PublicKey> {
-        descriptor(&self.cfg.consensus.bitcoin_pks, tweak)
+    fn descriptor(&self, tweak: &sha256::Hash) -> Tr<secp256k1::XOnlyPublicKey> {
+        descriptor_taproot(&self.cfg.consensus.bitcoin_pks, tweak)
+    }
+
+    fn tap_leaf_hash(&self, tweak: &sha256::Hash) -> TapLeafHash {
+        let tr = self.descriptor(tweak);
+        let (_, ms) = tr
+            .iter_scripts()
+            .next()
+            .expect("Descriptor always has exactly one script leaf");
+        TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript)
+    }
+
+    fn build_prevouts(&self, unsigned_tx: &FederationTx) -> Vec<TxOut> {
+        unsigned_tx
+            .spent_tx_outs
+            .iter()
+            .map(|utxo| TxOut {
+                value: utxo.value,
+                script_pubkey: self.descriptor(&utxo.tweak).script_pubkey(),
+            })
+            .collect()
     }
 
     fn sign_tx(&self, unsigned_tx: &FederationTx) -> Vec<Signature> {
+        let prevouts = self.build_prevouts(unsigned_tx);
         let mut sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
 
         unsigned_tx
@@ -1182,23 +1219,26 @@ impl Wallet {
             .iter()
             .enumerate()
             .map(|(index, utxo)| {
-                let descriptor = self.descriptor(&utxo.tweak).ecdsa_sighash_script_code();
-
-                let p2wsh_sighash = sighash_cache
-                    .p2wsh_signature_hash(index, &descriptor, utxo.value, EcdsaSighashType::All)
-                    .expect("Failed to compute P2WSH segwit sighash");
+                let leaf_hash = self.tap_leaf_hash(&utxo.tweak);
+                let sighash = sighash_cache
+                    .taproot_script_spend_signature_hash(
+                        index,
+                        &Prevouts::All(&prevouts),
+                        leaf_hash,
+                        bitcoin::TapSighashType::Default,
+                    )
+                    .expect("Failed to compute taproot script spend sighash");
 
                 let scalar = &Scalar::from_be_bytes(utxo.tweak.to_byte_array())
                     .expect("Hash is within field order");
 
-                let sk = self
-                    .cfg
-                    .private
-                    .bitcoin_sk
-                    .add_tweak(scalar)
-                    .expect("Failed to tweak bitcoin secret key");
-
-                Secp256k1::new().sign_ecdsa(&p2wsh_sighash.into(), &sk)
+                let keypair =
+                    Keypair::from_secret_key(secp256k1::SECP256K1, &self.cfg.private.bitcoin_sk);
+                let tweaked_keypair = keypair
+                    .add_xonly_tweak(secp256k1::SECP256K1, scalar)
+                    .expect("Failed to tweak bitcoin keypair");
+                secp256k1::SECP256K1
+                    .sign_schnorr(&secp256k1::Message::from(sighash), &tweaked_keypair)
             })
             .collect()
     }
@@ -1207,13 +1247,14 @@ impl Wallet {
         &self,
         unsigned_tx: &FederationTx,
         signatures: &[Signature],
-        pk: PublicKey,
+        pk: XOnlyPublicKey,
     ) -> anyhow::Result<()> {
         ensure!(
             unsigned_tx.spent_tx_outs.len() == signatures.len(),
             "Incorrect number of signatures"
         );
 
+        let prevouts = self.build_prevouts(unsigned_tx);
         let mut sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
 
         for ((index, utxo), signature) in unsigned_tx
@@ -1222,15 +1263,24 @@ impl Wallet {
             .enumerate()
             .zip(signatures.iter())
         {
-            let descriptor = self.descriptor(&utxo.tweak).ecdsa_sighash_script_code();
+            let leaf_hash = self.tap_leaf_hash(&utxo.tweak);
 
-            let p2wsh_sighash = sighash_cache
-                .p2wsh_signature_hash(index, &descriptor, utxo.value, EcdsaSighashType::All)
-                .expect("Failed to compute P2WSH segwit sighash");
+            let sighash = sighash_cache
+                .taproot_script_spend_signature_hash(
+                    index,
+                    &Prevouts::All(&prevouts),
+                    leaf_hash,
+                    bitcoin::TapSighashType::Default,
+                )
+                .expect("Failed to compute taproot script spend sighash");
 
-            let pk = tweak_public_key(&pk, &utxo.tweak);
+            let pk = tweak_xonly_public_key(&pk, &utxo.tweak);
 
-            secp256k1::SECP256K1.verify_ecdsa(&p2wsh_sighash.into(), signature, &pk)?;
+            secp256k1::SECP256K1.verify_schnorr(
+                signature,
+                &secp256k1::Message::from(sighash),
+                &pk,
+            )?;
         }
 
         Ok(())
@@ -1247,25 +1297,34 @@ impl Wallet {
         );
 
         for (index, utxo) in federation_tx.spent_tx_outs.iter().enumerate() {
-            let satisfier: BTreeMap<PublicKey, bitcoin::ecdsa::Signature> = signatures
-                .iter()
-                .map(|(peer, sigs)| {
-                    assert_eq!(sigs.len(), federation_tx.tx.input.len());
+            let leaf_hash = self.tap_leaf_hash(&utxo.tweak);
 
-                    let pk = *self
-                        .cfg
-                        .consensus
-                        .bitcoin_pks
-                        .get(peer)
-                        .expect("Failed to get public key of peer from config");
+            let satisfier: BTreeMap<(XOnlyPublicKey, TapLeafHash), bitcoin::taproot::Signature> =
+                signatures
+                    .iter()
+                    .map(|(peer, sigs)| {
+                        assert_eq!(sigs.len(), federation_tx.tx.input.len());
 
-                    let pk = tweak_public_key(&pk, &utxo.tweak);
+                        let pk = *self
+                            .cfg
+                            .consensus
+                            .bitcoin_pks
+                            .get(peer)
+                            .expect("Failed to get public key of peer from config");
 
-                    (pk, bitcoin::ecdsa::Signature::sighash_all(sigs[index]))
-                })
-                .collect();
+                        let pk = tweak_xonly_public_key(&pk, &utxo.tweak);
 
-            miniscript::Descriptor::Wsh(self.descriptor(&utxo.tweak))
+                        (
+                            (pk, leaf_hash),
+                            bitcoin::taproot::Signature {
+                                signature: sigs[index],
+                                sighash_type: bitcoin::TapSighashType::Default,
+                            },
+                        )
+                    })
+                    .collect();
+
+            miniscript::Descriptor::Tr(self.descriptor(&utxo.tweak))
                 .satisfy(&mut federation_tx.tx.input[index], satisfier)
                 .expect("Failed to satisfy descriptor");
         }
@@ -1391,7 +1450,7 @@ impl Wallet {
             .consensus
             .bitcoin_pks
             .iter()
-            .map(|(peer, pk)| (*peer, tweak_public_key(pk, &wallet.tweak).to_string()))
+            .map(|(peer, pk)| (*peer, tweak_xonly_public_key(pk, &wallet.tweak).to_string()))
             .collect();
 
         let tweak = &Scalar::from_be_bytes(wallet.tweak.to_byte_array())
