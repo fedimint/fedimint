@@ -4,7 +4,7 @@ use clap::Subcommand;
 use fedimint_core::Amount;
 use fedimint_gateway_client::{
     close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
-    list_transactions, open_channel, pay_invoice, pay_offer,
+    list_transactions, open_channel, open_channel_with_push, pay_invoice, pay_offer,
 };
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
@@ -151,17 +151,17 @@ impl LightningCommands {
                 channel_size_sats,
                 push_amount_sats,
             } => {
-                let funding_txid = open_channel(
-                    client,
-                    base_url,
-                    OpenChannelRequest {
-                        pubkey,
-                        host,
-                        channel_size_sats,
-                        push_amount_sats: push_amount_sats.unwrap_or(0),
-                    },
-                )
-                .await?;
+                let payload = OpenChannelRequest {
+                    pubkey,
+                    host,
+                    channel_size_sats,
+                    push_amount_sats: push_amount_sats.unwrap_or(0),
+                };
+                let funding_txid = if payload.push_amount_sats > 0 {
+                    open_channel_with_push(client, base_url, payload).await?
+                } else {
+                    open_channel(client, base_url, payload).await?
+                };
                 println!("{funding_txid}");
             }
             Self::CloseChannelsWithPeer {

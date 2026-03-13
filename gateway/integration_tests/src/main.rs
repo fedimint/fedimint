@@ -465,10 +465,15 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 .pegout_gateways(500_000_000, gateways.clone())
                 .await?;
 
+            info!(target: LOG_TEST, "Testing only admin can send onchain...");
+            let send_result = gw_lnd.client().with_password("secondbest").send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await;
+            assert!(send_result.is_err(), "Only admins can send onchain");
+
             info!(target: LOG_TEST, "Testing sending onchain...");
             let bitcoind = dev_fed.bitcoind().await?;
             for gw in &gateways {
                 let txid = gw
+                    .client()
                     .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
                     .await?;
                 bitcoind.poll_get_transaction(txid).await?;

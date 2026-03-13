@@ -282,6 +282,7 @@ impl Fixtures {
                 &bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
             )
             .unwrap(),
+            None,
             bitcoin::Network::Regtest,
             0,
             gateway_db,

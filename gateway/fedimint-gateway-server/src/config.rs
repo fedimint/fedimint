@@ -68,6 +68,11 @@ pub struct GatewayOpts {
     #[arg(long = "bcrypt-password-hash", env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV)]
     bcrypt_password_hash: String,
 
+    /// Gateway liquidity manager for channel and liquidity management
+    /// operations
+    #[arg(long = "bcrypt-password-liquidity-manager-hash", env = envs::FM_GATEWAY_LIQUIDITY_MANAGER_BCRYPT_PASSWORD_HASH_ENV)]
+    bcrypt_password_liquidity_manager_hash: Option<String>,
+
     /// Bitcoin network this gateway will be running on
     #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
     network: Network,
@@ -141,6 +146,12 @@ impl GatewayOpts {
                 .expect("Could not join v1 api_addr")
         });
         let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
+        let bcrypt_password_liquidity_manager_hash =
+            if let Some(h) = &self.bcrypt_password_liquidity_manager_hash {
+                Some(bcrypt::HashParts::from_str(h)?)
+            } else {
+                None
+            };
 
         // Default metrics listen to localhost on UI port + 1
         let metrics_listen = self.metrics_listen.unwrap_or_else(|| {
@@ -154,6 +165,7 @@ impl GatewayOpts {
             listen: self.listen,
             versioned_api,
             bcrypt_password_hash,
+            bcrypt_password_liquidity_manager_hash,
             network: self.network,
             num_route_hints: self.num_route_hints,
             default_routing_fees: self.default_routing_fees,
@@ -178,6 +190,7 @@ pub struct GatewayParameters {
     pub listen: SocketAddr,
     pub versioned_api: Option<SafeUrl>,
     pub bcrypt_password_hash: bcrypt::HashParts,
+    pub bcrypt_password_liquidity_manager_hash: Option<bcrypt::HashParts>,
     pub network: Network,
     pub num_route_hints: u32,
     pub default_routing_fees: PaymentFee,
