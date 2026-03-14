@@ -368,8 +368,12 @@ impl ServerModuleInit for WalletInit {
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<WalletClientConfig> {
         let config = WalletConfigConsensus::from_erased(config)?;
+
         Ok(WalletClientConfig {
             bitcoin_pks: config.bitcoin_pks,
+            send_tx_vbytes: config.send_tx_vbytes,
+            receive_tx_vbytes: config.receive_tx_vbytes,
+            feerate_base: config.feerate_base,
             dust_limit: config.dust_limit,
             fee_consensus: config.fee_consensus,
             network: config.network,
