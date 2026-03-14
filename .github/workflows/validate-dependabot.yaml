@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: marocchino/validate-dependabot@v3
         id: validate
-      - uses: marocchino/sticky-pull-request-comment@v2
+      - uses: marocchino/sticky-pull-request-comment@v3
         if: always()
         with:
           header: validate-dependabot
