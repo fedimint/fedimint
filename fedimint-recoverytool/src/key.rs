@@ -7,10 +7,25 @@ use miniscript::MiniscriptKey;
 
 /// `MiniscriptKey` that is either a WIF-encoded private key or a compressed,
 /// hex-encoded public key
-#[derive(Debug, Clone, Copy, Eq)]
+#[derive(Clone, Copy, Eq)]
 pub enum Key {
     Public(CompressedPublicKey),
     Private(bitcoin::key::PrivateKey),
+}
+
+impl std::fmt::Debug for Key {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Public(pk) => f.debug_tuple("Key::Public").field(pk).finish(),
+            Key::Private(sk) => {
+                if fedimint_core::fmt_utils::show_secrets() || f.alternate() {
+                    f.debug_tuple("Key::Private").field(sk).finish()
+                } else {
+                    f.debug_tuple("Key::Private").field(&"<redacted>").finish()
+                }
+            }
+        }
+    }
 }
 
 impl PartialOrd for Key {
@@ -54,6 +69,8 @@ impl Display for Key {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Key::Public(pk) => Display::fmt(pk, f),
+            // The recoverytool is specifically meant for dealing with secrets,
+            // so displaying the private key in plain-text is intentional here.
             Key::Private(sk) => Display::fmt(sk, f),
         }
     }
