@@ -28,6 +28,7 @@ use fedimint_core::{PeerId, base32};
 use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
+use subtle::ConstantTimeEq as _;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
@@ -503,7 +504,7 @@ impl HasApiContext<SetupApi> for SetupApi {
         let is_authenticated = match self.state.lock().await.local_params {
             None => false,
             Some(ref params) => match request.auth.as_ref() {
-                Some(auth) => *auth == params.auth,
+                Some(auth) => bool::from(auth.0.as_bytes().ct_eq(params.auth.0.as_bytes())),
                 None => false,
             },
         };

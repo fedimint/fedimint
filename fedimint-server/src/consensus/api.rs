@@ -63,6 +63,7 @@ use fedimint_server_core::dashboard_ui::{
 };
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
+use subtle::ConstantTimeEq as _;
 use tokio::sync::watch::{self, Receiver, Sender};
 use tracing::{debug, info, warn};
 
@@ -681,7 +682,13 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
             self,
             ApiEndpointContext::new(
                 db,
-                request.auth == Some(self.cfg.private.api_auth.clone()),
+                request.auth.as_ref().is_some_and(|auth| {
+                    bool::from(
+                        auth.0
+                            .as_bytes()
+                            .ct_eq(self.cfg.private.api_auth.0.as_bytes()),
+                    )
+                }),
                 request.auth.clone(),
             ),
         )
@@ -801,7 +808,7 @@ impl IDashboardApi for ConsensusApi {
         guardian_auth: &GuardianAuthToken,
     ) -> Result<(), String> {
         let auth = &self.auth().await.0;
-        if auth != current_password {
+        if !bool::from(auth.as_bytes().ct_eq(current_password.as_bytes())) {
             return Err("Current password is incorrect".into());
         }
         self.change_guardian_password(new_password, guardian_auth)

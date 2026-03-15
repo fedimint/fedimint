@@ -23,6 +23,7 @@ use fedimint_ui_common::{
     dashboard_layout, login_form_response,
 };
 use maud::html;
+use subtle::ConstantTimeEq as _;
 use {
     fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server, fedimint_walletv2_server,
 };
@@ -105,7 +106,12 @@ async fn change_password(
     let api_auth = state.api.auth().await;
 
     // Verify current password
-    if api_auth.0 != input.current_password {
+    if !bool::from(
+        api_auth
+            .0
+            .as_bytes()
+            .ct_eq(input.current_password.as_bytes()),
+    ) {
         let content = html! {
             div class="alert alert-danger" { "Current password is incorrect" }
             div class="button-container" {
