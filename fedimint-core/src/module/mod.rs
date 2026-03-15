@@ -250,7 +250,7 @@ impl TransactionItemAmounts {
 /// All requests from client to server contain these fields
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiRequest<T> {
-    /// Hashed user password if the API requires authentication
+    /// Authentication secret for this API request, if required
     pub auth: Option<ApiAuth>,
     /// Parameters required by the API
     pub params: T,
@@ -341,7 +341,7 @@ pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
 // TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
 // Option<ApiAuth>`
-/// Authentication uses the hashed user password in PHC format
+/// Authentication secret used to verify guardian admin API requests
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);
 
