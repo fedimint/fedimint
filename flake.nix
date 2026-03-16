@@ -359,6 +359,10 @@
                   # librocksdb-sys 0.17+ no longer links stdc++ when using a prebuilt library via ROCKSDB_LIB_DIR
                   export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="$CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS -C link-arg=-lstdc++ -Zthreads=0"
 
+                  # try new cargo build layout, which should result in less locking
+                  # (better rust-analyzer vs cargo behavior)
+                  export CARGO_UNSTABLE_BUILD_DIR_NEW_LAYOUT=true
+
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
 
