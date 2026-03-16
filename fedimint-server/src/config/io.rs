@@ -34,8 +34,9 @@ pub const CLIENT_INVITE_CODE_FILE: &str = "invite-code";
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";
 
-/// Plain-text stored password, used to restart the server without having to
-/// send a password in via the API
+/// Stored password (bcrypt hash), used to restart the server without having to
+/// send a password in via the API. For legacy configs this may contain the
+/// plaintext password.
 pub const PLAINTEXT_PASSWORD: &str = "password.private";
 
 /// Database file name
@@ -177,10 +178,12 @@ pub fn reencrypt_private_config(
     info!(target: LOG_CORE, ?data_dir, "Re-encrypting private config with new password");
     let trimmed_password = trim_password(new_password);
 
+    let hashed_password = crate::auth::hash_password(trimmed_password);
+
     // we keep the same salt so we don't have to atomically update 3 files, 2 is
     // annoying enough (if we have to write the password file)
     let salt = fs::read_to_string(data_dir.join(SALT_FILE))?;
-    let new_key = get_encryption_key(trimmed_password, &salt)?;
+    let new_key = get_encryption_key(&hashed_password, &salt)?;
 
     let password_file_path = data_dir.join(PLAINTEXT_PASSWORD);
     let private_config_path = data_dir.join(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT);
@@ -196,10 +199,10 @@ pub fn reencrypt_private_config(
     // Ensure backups are written durably before setting up password change
     OpenOptions::new().read(true).open(data_dir)?.sync_all()?;
 
-    // Create new private config with updated password
+    // Create new private config with updated password (bcrypt hash)
     let new_private_config = {
         let mut new_private_config = private_config.clone();
-        new_private_config.api_auth = ApiAuth::new(trimmed_password.to_string());
+        new_private_config.api_auth = ApiAuth::new(hashed_password.clone());
         new_private_config
     };
 
@@ -217,7 +220,7 @@ pub fn reencrypt_private_config(
     debug!(target: LOG_CORE, "Creating temporary files");
     let temp_password_file_path = password_file_path.with_extension(NEW_VERSION_FILE_EXT);
     if password_file_present {
-        write_new(&temp_password_file_path, trimmed_password)?;
+        write_new(&temp_password_file_path, &hashed_password)?;
     }
 
     let temp_private_config_path = private_config_path.with_extension(NEW_VERSION_FILE_EXT);

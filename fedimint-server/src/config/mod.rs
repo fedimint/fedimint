@@ -104,7 +104,7 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
-    /// Secret API auth string
+    /// API auth credential (bcrypt hash of the guardian password)
     pub api_auth: ApiAuth,
     /// Optional secret key for our websocket p2p endpoint
     pub tls_key: Option<String>,
@@ -238,7 +238,7 @@ pub struct ConfigGenParams {
     pub iroh_api_sk: Option<iroh::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
-    /// Secret API auth string
+    /// API auth credential (bcrypt hash of the guardian password)
     pub api_auth: ApiAuth,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,

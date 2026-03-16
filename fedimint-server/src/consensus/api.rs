@@ -804,7 +804,7 @@ impl IDashboardApi for ConsensusApi {
         guardian_auth: &GuardianAuthToken,
     ) -> Result<(), String> {
         let auth = self.auth().await;
-        if !auth.verify(current_password) {
+        if !crate::auth::verify_password(current_password, auth.as_str()) {
             return Err("Current password is incorrect".into());
         }
         self.change_guardian_password(new_password, guardian_auth)

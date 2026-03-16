@@ -21,6 +21,7 @@
 //! Server side fedimint module traits
 
 extern crate fedimint_core;
+pub mod auth;
 pub mod connection_limits;
 pub mod db;
 

@@ -48,7 +48,7 @@ pub struct SetupState {
 #[derive(Clone, Debug)]
 /// Connection information sent between peers in order to start config gen
 pub struct LocalParams {
-    /// Our auth string
+    /// Our auth credential (bcrypt hash of the guardian password)
     auth: ApiAuth,
     /// Our TLS private key
     tls_key: Option<Arc<rustls::pki_types::PrivateKeyDer<'static>>>,
@@ -178,7 +178,8 @@ impl ISetupApi for SetupApi {
         federation_size: Option<u32>,
     ) -> anyhow::Result<String> {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
-            && existing_local_parameters.auth.as_str() == auth.as_str()
+            && crate::auth::verify_password(&auth.0, &existing_local_parameters.auth.0)
+            && crate::auth::verify_password(auth.as_str(), existing_local_parameters.auth.as_str())
             && existing_local_parameters.name == name
             && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
@@ -225,6 +226,8 @@ impl ISetupApi for SetupApi {
             "Local parameters have already been set"
         );
 
+        let hashed_auth = ApiAuth::new(crate::auth::hash_password(auth.as_str()));
+
         let lp = if self.settings.enable_iroh {
             let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
                 SecretKey::from_str(&var)
@@ -241,7 +244,7 @@ impl ISetupApi for SetupApi {
             };
 
             LocalParams {
-                auth,
+                auth: hashed_auth,
                 tls_key: None,
                 iroh_api_sk: Some(iroh_api_sk.clone()),
                 iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
@@ -260,7 +263,7 @@ impl ISetupApi for SetupApi {
                 gen_cert_and_key(&name).expect("Failed to generate TLS for given guardian name");
 
             LocalParams {
-                auth,
+                auth: hashed_auth,
                 tls_key: Some(tls_key),
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
@@ -502,10 +505,9 @@ impl HasApiContext<SetupApi> for SetupApi {
 
         let is_authenticated = match self.state.lock().await.local_params {
             None => false,
-            Some(ref params) => match request.auth.as_ref() {
-                Some(auth) => params.auth.verify(auth.as_str()),
-                None => false,
-            },
+            Some(ref params) => {
+                crate::auth::verify_api_auth(request.auth.as_ref(), &params.auth)
+            }
         };
 
         let context = ApiEndpointContext::new(db, is_authenticated, request.auth.clone());

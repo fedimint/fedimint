@@ -58,11 +58,24 @@ async fn login_submit(
 async fn download_backup(
     State(state): State<UiState<DynDashboardApi>>,
     user_auth: UserAuth,
+    Form(input): Form<crate::BackupDownloadInput>,
 ) -> impl IntoResponse {
     let api_auth = state.api.auth().await;
+
+    if !crate::verify_password(&input.password, &api_auth.0) {
+        let content = html! {
+            div class="alert alert-danger" { "Incorrect password" }
+            div class="button-container" {
+                a href="/" class="btn btn-primary" { "Return to Dashboard" }
+            }
+        };
+        return Html(dashboard_layout(content, "Backup Failed", None).into_string())
+            .into_response();
+    }
+
     let backup = state
         .api
-        .download_guardian_config_backup(api_auth.as_str(), &user_auth.guardian_auth_token)
+        .download_guardian_config_backup(&input.password, &user_auth.guardian_auth_token)
         .await;
     let filename = "guardian-backup.tar";
 
@@ -74,6 +87,7 @@ async fn download_backup(
         )
         .body(Body::from(backup.tar_archive_bytes))
         .expect("Failed to build response")
+        .into_response()
 }
 
 // Prometheus metrics handler
@@ -104,8 +118,7 @@ async fn change_password(
 ) -> impl IntoResponse {
     let api_auth = state.api.auth().await;
 
-    // Verify current password
-    if !api_auth.verify(&input.current_password) {
+    if !crate::verify_password(&input.current_password, api_auth.as_str()) {
         let content = html! {
             div class="alert alert-danger" { "Current password is incorrect" }
             a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
@@ -259,11 +272,31 @@ async fn dashboard_view(
                 div class="card h-100" {
                     div class="card-header dashboard-header" { "Guardian Backup" }
                     div class="card-body" {
-                        div class="alert alert-warning mb-3" {
-                            "You only need to download this backup once. Use it to restore your guardian if your server fails. Store this file securely since it contains your guardians private key for the onchain threshold signature protecting your funds."
-                        }
-                        a href="/download-backup" class="btn btn-primary" {
-                            "Download"
+                        div class="row" {
+                            div class="col-lg-6 mb-3 mb-lg-0" {
+                                p {
+                                    "You only need to download this backup once."
+                                }
+                                p {
+                                    "Use it to restore your guardian if your server fails."
+                                }
+                                form action="/download-backup" method="post" class="mt-2" {
+                                    div class="mb-2" {
+                                        label for="backup-password" class="form-label" { "Enter your password to encrypt the backup:" }
+                                        input type="password" name="password" id="backup-password" class="form-control" required;
+                                    }
+                                    button type="submit" class="btn btn-outline-warning btn-lg" {
+                                        "Download Guardian Backup"
+                                    }
+                                }
+                            }
+                            div class="col-lg-6" {
+                                div class="alert alert-warning mb-0" {
+                                    strong { "Security Warning" }
+                                    br;
+                                    "Store this file securely since anyone with it and your password can run your guardian node."
+                                }
+                            }
                         }
                     }
                 }
@@ -308,7 +341,7 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(EXPLORER_ROUTE, get(consensus_explorer_view))
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
-        .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
+        .route(DOWNLOAD_BACKUP_ROUTE, post(download_backup))
         .route(CHANGE_PASSWORD_ROUTE, post(change_password))
         .route(METRICS_ROUTE, get(metrics_handler))
         .route(
