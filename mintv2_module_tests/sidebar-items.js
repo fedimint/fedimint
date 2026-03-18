@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["main","module_is_present","test_mintv2"],"struct":["Cli"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["lnv2","meta","wallet","walletv2"]};
+window.SIDEBAR_ITEMS = {"mod":["lnv2","meta","mintv2","wallet","walletv2"]};

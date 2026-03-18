@@ -412,21 +412,22 @@
 <a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
 <a href=#413 id=413 data-nosnippet>413</a>
 <a href=#414 id=414 data-nosnippet>414</a>    server_gens.attach(MintInit);
-<a href=#415 id=415 data-nosnippet>415</a>
-<a href=#416 id=416 data-nosnippet>416</a>    server_gens.attach(WalletInit);
-<a href=#417 id=417 data-nosnippet>417</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a>    server_gens.attach(LightningInit);
-<a href=#420 id=420 data-nosnippet>420</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
-<a href=#421 id=421 data-nosnippet>421</a>
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-<a href=#423 id=423 data-nosnippet>423</a>        server_gens.attach(MetaInit);
-<a href=#424 id=424 data-nosnippet>424</a>    }
-<a href=#425 id=425 data-nosnippet>425</a>
-<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-<a href=#427 id=427 data-nosnippet>427</a>        server_gens.attach(UnknownInit);
-<a href=#428 id=428 data-nosnippet>428</a>    }
-<a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a>    server_gens
-<a href=#431 id=431 data-nosnippet>431</a>}
+<a href=#415 id=415 data-nosnippet>415</a>    server_gens.attach(fedimint_mintv2_server::MintInit);
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>    server_gens.attach(WalletInit);
+<a href=#418 id=418 data-nosnippet>418</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>    server_gens.attach(LightningInit);
+<a href=#421 id=421 data-nosnippet>421</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+<a href=#424 id=424 data-nosnippet>424</a>        server_gens.attach(MetaInit);
+<a href=#425 id=425 data-nosnippet>425</a>    }
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+<a href=#428 id=428 data-nosnippet>428</a>        server_gens.attach(UnknownInit);
+<a href=#429 id=429 data-nosnippet>429</a>    }
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>    server_gens
+<a href=#432 id=432 data-nosnippet>432</a>}
 </code></pre></div></section></main></body></html>

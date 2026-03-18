@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["client_denominations","consensus_denominations"],"struct":["FeeConsensus","MintClientConfig","MintConfig","MintConfigConsensus","MintConfigPrivate","MintGenParams"]};
