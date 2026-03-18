@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a>    jar: CookieJar,
 <a href=#32 id=32 data-nosnippet>32</a>    input: LoginInput,
 <a href=#33 id=33 data-nosnippet>33</a>) -&gt; <span class="kw">impl </span>IntoResponse {
-<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">if </span>auth.<span class="number">0 </span>== input.password {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">if </span>auth.verify(<span class="kw-2">&amp;</span>input.password) {
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="kw">let </span><span class="kw-2">mut </span>cookie = Cookie::new(auth_cookie_name, auth_cookie_value);
 <a href=#36 id=36 data-nosnippet>36</a>
 <a href=#37 id=37 data-nosnippet>37</a>        cookie.set_http_only(<span class="bool-val">true</span>);

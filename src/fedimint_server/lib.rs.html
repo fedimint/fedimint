@@ -356,16 +356,19 @@
 <a href=#356 id=356 data-nosnippet>356</a>    );
 <a href=#357 id=357 data-nosnippet>357</a>
 <a href=#358 id=358 data-nosnippet>358</a>    <span class="comment">// TODO: Make writing password optional
-<a href=#359 id=359 data-nosnippet>359</a>    </span>write_new(data_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>)<span class="question-mark">?</span>;
-<a href=#360 id=360 data-nosnippet>360</a>    write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
-<a href=#361 id=361 data-nosnippet>361</a>    write_server_config(
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw-2">&amp;</span>cfg,
-<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw-2">&amp;</span>data_dir,
-<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
-<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw-2">&amp;</span>module_init_registry,
-<a href=#366 id=366 data-nosnippet>366</a>        api_secrets.get_active(),
-<a href=#367 id=367 data-nosnippet>367</a>    )<span class="question-mark">?</span>;
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a>    <span class="prelude-val">Ok</span>((cfg, connections, p2p_status_receivers))
-<a href=#370 id=370 data-nosnippet>370</a>}
+<a href=#359 id=359 data-nosnippet>359</a>    </span>write_new(
+<a href=#360 id=360 data-nosnippet>360</a>        data_dir.join(PLAINTEXT_PASSWORD),
+<a href=#361 id=361 data-nosnippet>361</a>        cfg.private.api_auth.as_str(),
+<a href=#362 id=362 data-nosnippet>362</a>    )<span class="question-mark">?</span>;
+<a href=#363 id=363 data-nosnippet>363</a>    write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
+<a href=#364 id=364 data-nosnippet>364</a>    write_server_config(
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw-2">&amp;</span>cfg,
+<a href=#366 id=366 data-nosnippet>366</a>        <span class="kw-2">&amp;</span>data_dir,
+<a href=#367 id=367 data-nosnippet>367</a>        cfg.private.api_auth.as_str(),
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw-2">&amp;</span>module_init_registry,
+<a href=#369 id=369 data-nosnippet>369</a>        api_secrets.get_active(),
+<a href=#370 id=370 data-nosnippet>370</a>    )<span class="question-mark">?</span>;
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a>    <span class="prelude-val">Ok</span>((cfg, connections, p2p_status_receivers))
+<a href=#373 id=373 data-nosnippet>373</a>}
 </code></pre></div></section></main></body></html>

@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_server::net::p2p_connector::gen_cert_and_key;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>tokio_rustls::rustls;
 <a href=#12 id=12 data-nosnippet>12</a>
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub static </span>API_AUTH: LazyLock&lt;ApiAuth&gt; = LazyLock::new(|| ApiAuth(<span class="string">"pass"</span>.to_string()));
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub static </span>API_AUTH: LazyLock&lt;ApiAuth&gt; = LazyLock::new(|| ApiAuth::new(<span class="string">"pass"</span>.to_string()));
 <a href=#14 id=14 data-nosnippet>14</a>
 <a href=#15 id=15 data-nosnippet>15</a><span class="doccomment">/// Creates the config gen params for each peer
 <a href=#16 id=16 data-nosnippet>16</a>///

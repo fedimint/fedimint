@@ -306,7 +306,7 @@
 <a href=#306 id=306 data-nosnippet>306</a>            </span>.password
 <a href=#307 id=307 data-nosnippet>307</a>            .clone()
 <a href=#308 id=308 data-nosnippet>308</a>            .ok_or_cli_msg(<span class="string">"CLI needs password set"</span>)<span class="question-mark">?</span>;
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="prelude-val">Ok</span>(ApiAuth(password))
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="prelude-val">Ok</span>(ApiAuth::new(password))
 <a href=#310 id=310 data-nosnippet>310</a>    }
 <a href=#311 id=311 data-nosnippet>311</a>
 <a href=#312 id=312 data-nosnippet>312</a>    <span class="kw">async fn </span>load_database(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;Database&gt; {
@@ -480,7 +480,7 @@
 <a href=#480 id=480 data-nosnippet>480</a>            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Using stored admin credentials"</span>);
 <a href=#481 id=481 data-nosnippet>481</a>            client_builder.set_admin_creds(AdminCreds {
 <a href=#482 id=482 data-nosnippet>482</a>                peer_id: stored_creds.peer_id,
-<a href=#483 id=483 data-nosnippet>483</a>                auth: ApiAuth(stored_creds.auth),
+<a href=#483 id=483 data-nosnippet>483</a>                auth: ApiAuth::new(stored_creds.auth),
 <a href=#484 id=484 data-nosnippet>484</a>            });
 <a href=#485 id=485 data-nosnippet>485</a>        }
 <a href=#486 id=486 data-nosnippet>486</a>
@@ -671,7 +671,7 @@
 <a href=#671 id=671 data-nosnippet>671</a>            }) =&gt; {
 <a href=#672 id=672 data-nosnippet>672</a>                <span class="kw">let </span>db = cli.load_database().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#673 id=673 data-nosnippet>673</a>                <span class="kw">let </span>peer_id = PeerId::from(peer_id);
-<a href=#674 id=674 data-nosnippet>674</a>                <span class="kw">let </span>auth = ApiAuth(password);
+<a href=#674 id=674 data-nosnippet>674</a>                <span class="kw">let </span>auth = ApiAuth::new(password);
 <a href=#675 id=675 data-nosnippet>675</a>
 <a href=#676 id=676 data-nosnippet>676</a>                <span class="comment">// Check if credentials already exist
 <a href=#677 id=677 data-nosnippet>677</a>                </span><span class="kw">if </span>!force {
@@ -753,7 +753,7 @@
 <a href=#753 id=753 data-nosnippet>753</a>                    <span class="kw-2">&amp;</span>db,
 <a href=#754 id=754 data-nosnippet>754</a>                    <span class="kw-2">&amp;</span>StoredAdminCreds {
 <a href=#755 id=755 data-nosnippet>755</a>                        peer_id,
-<a href=#756 id=756 data-nosnippet>756</a>                        auth: auth.<span class="number">0</span>.clone(),
+<a href=#756 id=756 data-nosnippet>756</a>                        auth: auth.as_str().to_string(),
 <a href=#757 id=757 data-nosnippet>757</a>                    },
 <a href=#758 id=758 data-nosnippet>758</a>                )
 <a href=#759 id=759 data-nosnippet>759</a>                .<span class="kw">await</span>;
@@ -934,7 +934,7 @@
 <a href=#934 id=934 data-nosnippet>934</a>
 <a href=#935 id=935 data-nosnippet>935</a>                <span class="kw">let </span><span class="kw-2">mut </span>params = ApiRequestErased::new(params);
 <a href=#936 id=936 data-nosnippet>936</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(auth) = auth {
-<a href=#937 id=937 data-nosnippet>937</a>                    params = params.with_auth(ApiAuth(auth));
+<a href=#937 id=937 data-nosnippet>937</a>                    params = params.with_auth(ApiAuth::new(auth));
 <a href=#938 id=938 data-nosnippet>938</a>                }
 <a href=#939 id=939 data-nosnippet>939</a>                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#940 id=940 data-nosnippet>940</a>

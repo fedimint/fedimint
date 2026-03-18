@@ -551,7 +551,7 @@
 <a href=#551 id=551 data-nosnippet>551</a>
 <a href=#552 id=552 data-nosnippet>552</a>        <span class="self">self</span>.handle_submit_request(
 <a href=#553 id=553 data-nosnippet>553</a>            <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-<a href=#554 id=554 data-nosnippet>554</a>            <span class="kw-2">&amp;</span>ApiAuth(String::new()),
+<a href=#554 id=554 data-nosnippet>554</a>            <span class="kw-2">&amp;</span>ApiAuth::new(String::new()),
 <a href=#555 id=555 data-nosnippet>555</a>            <span class="kw-2">&amp;</span>SubmitRequest {
 <a href=#556 id=556 data-nosnippet>556</a>                key: DEFAULT_META_KEY,
 <a href=#557 id=557 data-nosnippet>557</a>                value: MetaValue::from(serde_json::to_vec(<span class="kw-2">&amp;</span>value).unwrap().as_slice()),
@@ -599,7 +599,7 @@
 <a href=#599 id=599 data-nosnippet>599</a>        <span class="kw">for </span>(peer_id, value) <span class="kw">in </span><span class="self">self
 <a href=#600 id=600 data-nosnippet>600</a>            </span>.handle_get_submissions_request(
 <a href=#601 id=601 data-nosnippet>601</a>                <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-<a href=#602 id=602 data-nosnippet>602</a>                <span class="kw-2">&amp;</span>ApiAuth(String::new()),
+<a href=#602 id=602 data-nosnippet>602</a>                <span class="kw-2">&amp;</span>ApiAuth::new(String::new()),
 <a href=#603 id=603 data-nosnippet>603</a>                <span class="kw-2">&amp;</span>GetSubmissionsRequest(DEFAULT_META_KEY),
 <a href=#604 id=604 data-nosnippet>604</a>            )
 <a href=#605 id=605 data-nosnippet>605</a>            .<span class="kw">await</span><span class="question-mark">?
