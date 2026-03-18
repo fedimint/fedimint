@@ -6,6 +6,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::hashes::{Hash, hash160, sha256};
@@ -18,8 +19,10 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::{
     NumPeersExt, PeerId, extensible_associated_module_type, plugin_types_trait_impl_common,
 };
-use miniscript::descriptor::Wsh;
-use secp256k1::ecdsa::Signature;
+use miniscript::descriptor::{TapTree, Tr};
+use miniscript::miniscript::decode::Terminal;
+use miniscript::{Miniscript, Tap, Threshold};
+use secp256k1::schnorr::Signature;
 use secp256k1::{PublicKey, Scalar, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -42,14 +45,35 @@ pub fn sleep_duration() -> Duration {
     }
 }
 
-pub fn descriptor(pks: &BTreeMap<PeerId, PublicKey>, tweak: &sha256::Hash) -> Wsh<PublicKey> {
-    Wsh::new_sortedmulti(
-        pks.to_num_peers().threshold(),
-        pks.values()
-            .map(|pk| tweak_public_key(pk, tweak))
-            .collect::<Vec<PublicKey>>(),
-    )
-    .expect("Failed to construct Descriptor")
+/// Provably unspendable x-only public key (BIP-341 NUMS point from the
+/// BIP-341 spec). Since no one knows the discrete log of this point,
+/// key-path spending is impossible.
+pub fn nums_point() -> XOnlyPublicKey {
+    XOnlyPublicKey::from_slice(&[
+        0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54, 0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a,
+        0x5e, 0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80,
+        0x3a, 0xc0,
+    ])
+    .expect("Valid x-only public key")
+}
+
+pub fn descriptor(
+    pks: &BTreeMap<PeerId, XOnlyPublicKey>,
+    tweak: &sha256::Hash,
+) -> Tr<XOnlyPublicKey> {
+    let threshold = pks.to_num_peers().threshold();
+    let mut tweaked: Vec<XOnlyPublicKey> = pks
+        .values()
+        .map(|pk| tweak_xonly_public_key(pk, tweak))
+        .collect();
+    tweaked.sort();
+
+    let thresh = Threshold::new(threshold, tweaked).expect("Failed to create multi_a threshold");
+    let ms = Miniscript::<XOnlyPublicKey, Tap>::from_ast(Terminal::MultiA(thresh))
+        .expect("Failed to create multi_a miniscript");
+    let tree = TapTree::Leaf(Arc::new(ms));
+
+    Tr::new(nums_point(), Some(tree)).expect("Failed to construct Tr descriptor")
 }
 
 pub fn tweak_public_key(pk: &PublicKey, tweak: &sha256::Hash) -> PublicKey {
@@ -60,8 +84,19 @@ pub fn tweak_public_key(pk: &PublicKey, tweak: &sha256::Hash) -> PublicKey {
     .expect("Failed to tweak bitcoin public key")
 }
 
+pub fn tweak_xonly_public_key(pk: &XOnlyPublicKey, tweak: &sha256::Hash) -> XOnlyPublicKey {
+    let full_pk = PublicKey::from_x_only_public_key(*pk, secp256k1::Parity::Even);
+    let tweaked = full_pk
+        .add_exp_tweak(
+            secp256k1::SECP256K1,
+            &Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order"),
+        )
+        .expect("Failed to tweak bitcoin public key");
+    tweaked.x_only_public_key().0
+}
+
 /// Returns true if the script pubkey potentially belongs to the federation.
-/// This uses a probabilistic filter - only ~1/65536 of P2WSH scripts pass.
+/// This uses a probabilistic filter - only ~1/65536 of P2TR scripts pass.
 pub fn is_potential_receive(script_pubkey: &ScriptBuf, pks_hash: &sha256::Hash) -> bool {
     (script_pubkey, pks_hash)
         .consensus_hash::<sha256::Hash>()
