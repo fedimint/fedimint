@@ -103,7 +103,7 @@ where
     }
 }
 
-/// Implementations of the IP2PFrame and IP2PConnection traits for Iroh
+/// Implementations of the IP2PFrame and IP2PConnection traits for Iroh (stable)
 
 #[async_trait]
 impl<M> IP2PFrame<M> for RecvStream
@@ -146,5 +146,52 @@ where
 
     fn rtt(&self) -> Option<Duration> {
         Some(Connection::rtt(self))
+    }
+}
+
+/// Implementations of the IP2PFrame and IP2PConnection traits for Iroh-next
+/// (v0.90)
+
+#[async_trait]
+impl<M> IP2PFrame<M> for iroh_next::endpoint::RecvStream
+where
+    M: Decodable + DeserializeOwned + Send + 'static,
+{
+    async fn read_to_end(&mut self) -> anyhow::Result<M> {
+        let bytes = self.read_to_end(MAX_P2P_MESSAGE_SIZE).await?;
+
+        if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
+            return Ok(message);
+        }
+
+        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
+    }
+}
+
+#[async_trait]
+impl<M> IP2PConnection<M> for iroh_next::endpoint::Connection
+where
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
+{
+    async fn send(&mut self, message: M) -> anyhow::Result<()> {
+        let mut bytes = Vec::new();
+
+        bincode::serialize_into(&mut bytes, &message)?;
+
+        let mut sink = self.open_uni().await?;
+
+        sink.write_all(&bytes).await?;
+
+        sink.finish()?;
+
+        Ok(())
+    }
+
+    async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>> {
+        Ok(self.accept_uni().await?.into_dyn())
+    }
+
+    fn rtt(&self) -> Option<Duration> {
+        iroh_next::endpoint::Connection::rtt(self, iroh_next::endpoint::PathId::ZERO)
     }
 }

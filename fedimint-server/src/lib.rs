@@ -24,6 +24,7 @@ extern crate fedimint_core;
 pub mod connection_limits;
 pub mod db;
 
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -76,6 +77,14 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// Runtime settings for the iroh-next (v0.90) dual-stack endpoints.
+/// Passed as `Option<IrohNextSettings>` — `None` means disabled.
+#[derive(Debug, Clone)]
+pub struct IrohNextSettings {
+    pub api_bind: SocketAddr,
+    pub p2p_bind: SocketAddr,
+}
+
 /// A function/closure type for handling dashboard UI
 pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>;
 
@@ -100,6 +109,7 @@ pub async fn run(
     db_checkpoint_retention: u64,
     session_timeout: Duration,
     iroh_api_limits: ConnectionLimits,
+    iroh_next_settings: Option<IrohNextSettings>,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -123,6 +133,8 @@ pub async fn run(
                         .iter()
                         .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                         .collect(),
+                    iroh_next_settings.as_ref(),
+                    Some(&cfg.private.broadcast_secret_key),
                 )
                 .await?
                 .into_dyn()
@@ -202,6 +214,7 @@ pub async fn run(
         db_checkpoint_retention,
         session_timeout,
         iroh_api_limits,
+        iroh_next_settings.as_ref(),
     ))
     .await?;
 
@@ -432,6 +445,8 @@ pub async fn run_config_gen(
                             .iter()
                             .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                             .collect(),
+                        None,
+                        None,
                     )
                     .await?
                     .into_dyn()
@@ -515,6 +530,8 @@ pub async fn run_config_gen(
                                 .iter()
                                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                                 .collect(),
+                            None,
+                            None,
                         )
                         .await?
                         .into_dyn()

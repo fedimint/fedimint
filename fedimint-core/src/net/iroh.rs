@@ -9,8 +9,11 @@ use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::endpoint::{Builder, TransportConfig};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use url::Url;
+
+/// Protocol version string for the iroh-next dual-stack endpoints.
+pub const IROH_NEXT_VERSION: &str = "0.90";
 
 use crate::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
@@ -28,6 +31,97 @@ pub const IROH_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// QUIC keep-alive interval used for iroh API endpoints.
 pub const IROH_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
+#[cfg(not(target_family = "wasm"))]
+pub async fn build_iroh_next_endpoint(
+    secret_key: iroh_next::SecretKey,
+    bind_addr: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
+    alpn: &[u8],
+) -> Result<iroh_next::Endpoint, anyhow::Error> {
+    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
+        warn!(
+            target: LOG_NET_IROH,
+            "Iroh-next relays are disabled"
+        );
+        iroh_next::RelayMode::Disabled
+    } else if iroh_relays.is_empty() {
+        iroh_next::RelayMode::Default
+    } else {
+        iroh_next::RelayMode::custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| iroh_next::RelayUrl::from(url.to_unsafe())),
+        )
+    };
+
+    let mut builder = iroh_next::Endpoint::builder(iroh_next::endpoint::presets::Minimal);
+
+    if let Some(iroh_dns) = iroh_dns.map(SafeUrl::to_unsafe) {
+        if is_env_var_set_opt(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV).unwrap_or(true) {
+            builder = builder.address_lookup(iroh_next::address_lookup::PkarrPublisher::builder(
+                iroh_dns.clone(),
+            ));
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh-next pkarr publisher is disabled"
+            );
+        }
+
+        if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
+            builder =
+                builder.address_lookup(iroh_next::address_lookup::PkarrResolver::builder(iroh_dns));
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh-next pkarr resolver is disabled"
+            );
+        }
+    }
+
+    if is_env_var_set(FM_IROH_DHT_ENABLE_ENV) {
+        #[cfg(not(target_family = "wasm"))]
+        {
+            builder =
+                builder.address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder());
+        }
+    } else {
+        info!(
+            target: LOG_NET_IROH,
+            "Iroh-next DHT is disabled"
+        );
+    }
+
+    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
+        builder = builder.address_lookup(iroh_next::address_lookup::DnsAddressLookup::n0_dns());
+    } else {
+        warn!(
+            target: LOG_NET_IROH,
+            "Iroh-next n0 discovery is disabled"
+        );
+    }
+
+    let endpoint = builder
+        .relay_mode(relay_mode)
+        .secret_key(secret_key)
+        .alpns(vec![alpn.to_vec()])
+        .bind_addr(bind_addr)?
+        .bind()
+        .await
+        .context("Failed to bind iroh-next endpoint")?;
+
+    info!(
+        target: LOG_NET_IROH,
+        %bind_addr,
+        node_id = %endpoint.id(),
+        node_id_pkarr = %z32::encode(endpoint.id().as_bytes()),
+        "Iroh-next p2p server endpoint"
+    );
+
+    Ok(endpoint)
+}
 
 pub async fn build_iroh_endpoint(
     secret_key: SecretKey,
@@ -89,7 +183,7 @@ pub async fn build_iroh_endpoint(
     if is_env_var_set(FM_IROH_DHT_ENABLE_ENV) {
         #[cfg(not(target_family = "wasm"))]
         {
-            debug!(
+            tracing::debug!(
                 target: LOG_NET_IROH,
                 "Iroh DHT is enabled"
             );
