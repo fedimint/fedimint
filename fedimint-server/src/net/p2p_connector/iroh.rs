@@ -10,7 +10,6 @@ use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env}
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::net::iroh::{build_iroh_endpoint, build_iroh_next_endpoint};
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
-use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_NET_IROH;
 use fedimint_server_core::dashboard_ui::ConnectionType;
 use futures::Future;
@@ -23,6 +22,7 @@ use tracing::{trace, warn};
 
 use super::IP2PConnector;
 use crate::IrohNextSettings;
+use crate::net::broadcast_keys::derive_iroh_next_p2p_sk;
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
 /// Parses the host and port from a url
@@ -35,9 +35,6 @@ pub fn parse_p2p(url: &SafeUrl) -> anyhow::Result<String> {
 
     Ok(format!("{host}:{port}"))
 }
-
-/// Child key index for deriving iroh-next P2P key
-const IROH_NEXT_P2P_CHILD_ID: ChildId = ChildId(1);
 
 #[derive(Debug, Clone)]
 pub struct IrohConnector {
@@ -54,17 +51,6 @@ pub struct IrohConnector {
 }
 
 pub(crate) const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
-
-/// Derive an iroh-next secret key deterministically from the broadcast secret
-/// key.
-fn derive_iroh_next_p2p_sk(
-    broadcast_sk: &fedimint_core::secp256k1::SecretKey,
-) -> iroh_next::SecretKey {
-    let root = DerivableSecret::new_root(&broadcast_sk.secret_bytes(), b"fedimint-iroh-next");
-    let child = root.child_key(IROH_NEXT_P2P_CHILD_ID);
-    let seed: [u8; 32] = child.to_random_bytes();
-    iroh_next::SecretKey::from_bytes(&seed)
-}
 
 impl IrohConnector {
     pub async fn new(

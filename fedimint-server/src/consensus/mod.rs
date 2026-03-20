@@ -26,10 +26,8 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
 use fedimint_core::net::iroh::{build_iroh_endpoint, build_iroh_next_endpoint};
 use fedimint_core::net::peers::DynP2PConnections;
-use fedimint_core::secp256k1::SecretKey;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
-use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
@@ -52,20 +50,9 @@ use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
+use crate::net::broadcast_keys::derive_iroh_next_api_sk;
 use crate::net::p2p::P2PStatusReceivers;
 use crate::{DashboardUiRouter, IrohNextSettings, net, update_server_info_version_dbtx};
-
-/// Child key index for deriving iroh-next API key
-const IROH_NEXT_API_CHILD_ID: ChildId = ChildId(0);
-
-/// Derive an iroh-next secret key deterministically from the broadcast secret
-/// key using HKDF with domain separation.
-fn derive_iroh_next_sk(broadcast_sk: &SecretKey, child_id: ChildId) -> iroh_next::SecretKey {
-    let root = DerivableSecret::new_root(&broadcast_sk.secret_bytes(), b"fedimint-iroh-next");
-    let child = root.child_key(child_id);
-    let seed: [u8; 32] = child.to_random_bytes();
-    iroh_next::SecretKey::from_bytes(&seed)
-}
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -248,8 +235,7 @@ pub async fn run(
         }
 
         if let Some(next_settings) = iroh_next_settings {
-            let next_api_sk =
-                derive_iroh_next_sk(&cfg.private.broadcast_secret_key, IROH_NEXT_API_CHILD_ID);
+            let next_api_sk = derive_iroh_next_api_sk(&cfg.private.broadcast_secret_key);
             if let Err(e) = Box::pin(start_iroh_api_next(
                 next_api_sk,
                 next_settings.api_bind,
