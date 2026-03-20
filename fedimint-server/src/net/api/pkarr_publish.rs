@@ -7,32 +7,17 @@ use fedimint_core::envs::{
 use fedimint_core::secp256k1::SecretKey;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
-use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_NET_API;
 use pkarr::SignedPacket;
 use tracing::{debug, info, warn};
 
 use crate::config::ServerConfig;
-
-/// Child key index for deriving the pkarr identity from the broadcast secret
-const PKARR_IDENTITY_CHILD_ID: ChildId = ChildId(0);
+use crate::net::broadcast_keys::derive_pkarr_keypair;
 
 const PUBLISH_INTERVAL_SECS: u64 = 600;
 const FAILURE_RETRY_SECS: u64 = 60;
 const INITIAL_DELAY_SECS: u64 = 10;
 const TXT_RECORD_TTL: u32 = 1800;
-
-/// Derive a pkarr keypair deterministically from the server's broadcast secret
-/// key.
-///
-/// Uses HKDF-based derivation with domain separation to produce an ed25519
-/// seed.
-pub fn derive_pkarr_keypair(broadcast_sk: &SecretKey) -> pkarr::Keypair {
-    let root = DerivableSecret::new_root(&broadcast_sk.secret_bytes(), b"fedimint-pkarr");
-    let pkarr_child = root.child_key(PKARR_IDENTITY_CHILD_ID);
-    let seed: [u8; 32] = pkarr_child.to_random_bytes();
-    pkarr::Keypair::from_secret_key(&seed)
-}
 
 /// Get the z-base32 encoded pkarr public key derived from the broadcast secret
 /// key.
