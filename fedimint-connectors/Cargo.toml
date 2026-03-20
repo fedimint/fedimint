@@ -50,7 +50,7 @@ z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 arti-client = { workspace = true, optional = true }
-aws-lc-sys = { version = "0.38", features = ["bindgen"] }
+aws-lc-sys = { version = "0.39", features = ["bindgen"] }
 curve25519-dalek = { workspace = true, optional = true }
 iroh = { workspace = true, default-features = false, features = [
     "discovery-pkarr-dht",

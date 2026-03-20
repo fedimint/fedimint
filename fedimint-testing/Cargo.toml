@@ -22,7 +22,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-aws-lc-sys = { version = "0.38", features = ["bindgen"] }
+aws-lc-sys = { version = "0.39", features = ["bindgen"] }
 axum = { workspace = true }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
