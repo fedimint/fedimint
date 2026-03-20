@@ -189,127 +189,125 @@
 <a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// Classify a `ServerError` into an appropriate `ErrorCode`.
 <a href=#190 id=190 data-nosnippet>190</a>    </span><span class="kw">const fn </span>classify_server_error(err: <span class="kw-2">&amp;</span>ServerError) -&gt; ErrorCode {
 <a href=#191 id=191 data-nosnippet>191</a>        <span class="kw">match </span>err {
-<a href=#192 id=192 data-nosnippet>192</a>            <span class="comment">// Authentication/authorization errors
-<a href=#193 id=193 data-nosnippet>193</a>            </span>ServerError::InvalidRequest(<span class="kw">_</span>) =&gt; ErrorCode::AuthFailed,
+<a href=#192 id=192 data-nosnippet>192</a>            <span class="comment">// Connection and transport errors
+<a href=#193 id=193 data-nosnippet>193</a>            </span>ServerError::Connection(<span class="kw">_</span>) | ServerError::Transport(<span class="kw">_</span>) =&gt; ErrorCode::ConnectionFailed,
 <a href=#194 id=194 data-nosnippet>194</a>
-<a href=#195 id=195 data-nosnippet>195</a>            <span class="comment">// Connection and transport errors
-<a href=#196 id=196 data-nosnippet>196</a>            </span>ServerError::Connection(<span class="kw">_</span>) | ServerError::Transport(<span class="kw">_</span>) =&gt; ErrorCode::ConnectionFailed,
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a>            <span class="comment">// Invalid input errors
-<a href=#199 id=199 data-nosnippet>199</a>            </span>ServerError::InvalidPeerId { .. }
-<a href=#200 id=200 data-nosnippet>200</a>            | ServerError::InvalidPeerUrl { .. }
-<a href=#201 id=201 data-nosnippet>201</a>            | ServerError::InvalidEndpoint(<span class="kw">_</span>)
-<a href=#202 id=202 data-nosnippet>202</a>            | ServerError::InvalidRpcId(<span class="kw">_</span>) =&gt; ErrorCode::InvalidInput,
-<a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a>            <span class="comment">// Internal errors (response parsing, server errors, client errors)
-<a href=#205 id=205 data-nosnippet>205</a>            </span>ServerError::ResponseDeserialization(<span class="kw">_</span>)
-<a href=#206 id=206 data-nosnippet>206</a>            | ServerError::InvalidResponse(<span class="kw">_</span>)
-<a href=#207 id=207 data-nosnippet>207</a>            | ServerError::ServerError(<span class="kw">_</span>)
-<a href=#208 id=208 data-nosnippet>208</a>            | ServerError::InternalClientError(<span class="kw">_</span>) =&gt; ErrorCode::Internal,
-<a href=#209 id=209 data-nosnippet>209</a>
-<a href=#210 id=210 data-nosnippet>210</a>            <span class="comment">// Condition failures (often "not found" scenarios)
-<a href=#211 id=211 data-nosnippet>211</a>            </span>ServerError::ConditionFailed(<span class="kw">_</span>) =&gt; ErrorCode::NotFound,
-<a href=#212 id=212 data-nosnippet>212</a>
-<a href=#213 id=213 data-nosnippet>213</a>            <span class="comment">// Catch-all for future ServerError variants (enum is non_exhaustive)
-<a href=#214 id=214 data-nosnippet>214</a>            </span><span class="kw">_ </span>=&gt; ErrorCode::Unknown,
-<a href=#215 id=215 data-nosnippet>215</a>        }
-<a href=#216 id=216 data-nosnippet>216</a>    }
-<a href=#217 id=217 data-nosnippet>217</a>}
-<a href=#218 id=218 data-nosnippet>218</a>
-<a href=#219 id=219 data-nosnippet>219</a><span class="attr">#[derive(Parser)]
-<a href=#220 id=220 data-nosnippet>220</a>#[command(version)]
-<a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">struct </span>Cli {
-<a href=#222 id=222 data-nosnippet>222</a>    <span class="doccomment">/// The address of the gateway webserver
-<a href=#223 id=223 data-nosnippet>223</a>    </span><span class="attr">#[clap(long, short, default_value = <span class="string">"http://127.0.0.1:80"</span>)]
-<a href=#224 id=224 data-nosnippet>224</a>    </span>address: SafeUrl,
-<a href=#225 id=225 data-nosnippet>225</a>
-<a href=#226 id=226 data-nosnippet>226</a>    <span class="doccomment">/// The command to execute
-<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="attr">#[command(subcommand)]
-<a href=#228 id=228 data-nosnippet>228</a>    </span>command: Commands,
-<a href=#229 id=229 data-nosnippet>229</a>
-<a href=#230 id=230 data-nosnippet>230</a>    <span class="doccomment">/// Password for authenticated requests to the gateway
-<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="attr">#[clap(long)]
-<a href=#232 id=232 data-nosnippet>232</a>    </span>rpcpassword: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#233 id=233 data-nosnippet>233</a>}
-<a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a><span class="attr">#[derive(Subcommand)]
-<a href=#236 id=236 data-nosnippet>236</a></span><span class="kw">enum </span>Commands {
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="attr">#[command(flatten)]
-<a href=#238 id=238 data-nosnippet>238</a>    </span>General(GeneralCommands),
+<a href=#195 id=195 data-nosnippet>195</a>            <span class="comment">// Invalid input errors
+<a href=#196 id=196 data-nosnippet>196</a>            </span>ServerError::InvalidPeerId { .. }
+<a href=#197 id=197 data-nosnippet>197</a>            | ServerError::InvalidPeerUrl { .. }
+<a href=#198 id=198 data-nosnippet>198</a>            | ServerError::InvalidEndpoint(<span class="kw">_</span>)
+<a href=#199 id=199 data-nosnippet>199</a>            | ServerError::InvalidRpcId(<span class="kw">_</span>) =&gt; ErrorCode::InvalidInput,
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>            <span class="comment">// Internal errors (response parsing, server errors, client errors)
+<a href=#202 id=202 data-nosnippet>202</a>            </span>ServerError::InvalidRequest(<span class="kw">_</span>)
+<a href=#203 id=203 data-nosnippet>203</a>            | ServerError::ResponseDeserialization(<span class="kw">_</span>)
+<a href=#204 id=204 data-nosnippet>204</a>            | ServerError::InvalidResponse(<span class="kw">_</span>)
+<a href=#205 id=205 data-nosnippet>205</a>            | ServerError::ServerError(<span class="kw">_</span>)
+<a href=#206 id=206 data-nosnippet>206</a>            | ServerError::InternalClientError(<span class="kw">_</span>) =&gt; ErrorCode::Internal,
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a>            <span class="comment">// Condition failures (often "not found" scenarios)
+<a href=#209 id=209 data-nosnippet>209</a>            </span>ServerError::ConditionFailed(<span class="kw">_</span>) =&gt; ErrorCode::NotFound,
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>            <span class="comment">// Catch-all for future ServerError variants (enum is non_exhaustive)
+<a href=#212 id=212 data-nosnippet>212</a>            </span><span class="kw">_ </span>=&gt; ErrorCode::Unknown,
+<a href=#213 id=213 data-nosnippet>213</a>        }
+<a href=#214 id=214 data-nosnippet>214</a>    }
+<a href=#215 id=215 data-nosnippet>215</a>}
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a><span class="attr">#[derive(Parser)]
+<a href=#218 id=218 data-nosnippet>218</a>#[command(version)]
+<a href=#219 id=219 data-nosnippet>219</a></span><span class="kw">struct </span>Cli {
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="doccomment">/// The address of the gateway webserver
+<a href=#221 id=221 data-nosnippet>221</a>    </span><span class="attr">#[clap(long, short, default_value = <span class="string">"http://127.0.0.1:80"</span>)]
+<a href=#222 id=222 data-nosnippet>222</a>    </span>address: SafeUrl,
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="doccomment">/// The command to execute
+<a href=#225 id=225 data-nosnippet>225</a>    </span><span class="attr">#[command(subcommand)]
+<a href=#226 id=226 data-nosnippet>226</a>    </span>command: Commands,
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="doccomment">/// Password for authenticated requests to the gateway
+<a href=#229 id=229 data-nosnippet>229</a>    </span><span class="attr">#[clap(long)]
+<a href=#230 id=230 data-nosnippet>230</a>    </span>rpcpassword: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#231 id=231 data-nosnippet>231</a>}
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a><span class="attr">#[derive(Subcommand)]
+<a href=#234 id=234 data-nosnippet>234</a></span><span class="kw">enum </span>Commands {
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="attr">#[command(flatten)]
+<a href=#236 id=236 data-nosnippet>236</a>    </span>General(GeneralCommands),
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="attr">#[command(subcommand)]
+<a href=#238 id=238 data-nosnippet>238</a>    </span>Lightning(LightningCommands),
 <a href=#239 id=239 data-nosnippet>239</a>    <span class="attr">#[command(subcommand)]
-<a href=#240 id=240 data-nosnippet>240</a>    </span>Lightning(LightningCommands),
+<a href=#240 id=240 data-nosnippet>240</a>    </span>Ecash(EcashCommands),
 <a href=#241 id=241 data-nosnippet>241</a>    <span class="attr">#[command(subcommand)]
-<a href=#242 id=242 data-nosnippet>242</a>    </span>Ecash(EcashCommands),
+<a href=#242 id=242 data-nosnippet>242</a>    </span>Onchain(OnchainCommands),
 <a href=#243 id=243 data-nosnippet>243</a>    <span class="attr">#[command(subcommand)]
-<a href=#244 id=244 data-nosnippet>244</a>    </span>Onchain(OnchainCommands),
-<a href=#245 id=245 data-nosnippet>245</a>    <span class="attr">#[command(subcommand)]
-<a href=#246 id=246 data-nosnippet>246</a>    </span>Cfg(ConfigCommands),
-<a href=#247 id=247 data-nosnippet>247</a>    Completion {
-<a href=#248 id=248 data-nosnippet>248</a>        shell: clap_complete::Shell,
-<a href=#249 id=249 data-nosnippet>249</a>    },
-<a href=#250 id=250 data-nosnippet>250</a>}
-<a href=#251 id=251 data-nosnippet>251</a>
-<a href=#252 id=252 data-nosnippet>252</a><span class="attr">#[tokio::main]
-<a href=#253 id=253 data-nosnippet>253</a></span><span class="kw">async fn </span>main() {
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = TracingSetup::default().init() {
-<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">let </span>cli_err = CliError {
-<a href=#256 id=256 data-nosnippet>256</a>            error: <span class="macro">format!</span>(<span class="string">"Failed to initialize logging: {err}"</span>),
-<a href=#257 id=257 data-nosnippet>257</a>            code: ErrorCode::Internal,
-<a href=#258 id=258 data-nosnippet>258</a>            cause: <span class="prelude-val">None</span>,
-<a href=#259 id=259 data-nosnippet>259</a>        };
-<a href=#260 id=260 data-nosnippet>260</a>        print_response(<span class="kw-2">&amp;</span>cli_err);
-<a href=#261 id=261 data-nosnippet>261</a>        std::process::exit(ExitCode::GeneralError <span class="kw">as </span>i32);
-<a href=#262 id=262 data-nosnippet>262</a>    }
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = run().<span class="kw">await </span>{
-<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span>cli_err = CliError::from_server_error(<span class="kw-2">&amp;</span>err);
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>exit_code = ExitCode::from(cli_err.code);
-<a href=#267 id=267 data-nosnippet>267</a>        print_response(<span class="kw-2">&amp;</span>cli_err);
-<a href=#268 id=268 data-nosnippet>268</a>        std::process::exit(exit_code <span class="kw">as </span>i32);
-<a href=#269 id=269 data-nosnippet>269</a>    }
-<a href=#270 id=270 data-nosnippet>270</a>}
-<a href=#271 id=271 data-nosnippet>271</a>
-<a href=#272 id=272 data-nosnippet>272</a><span class="kw">async fn </span>run() -&gt; CliOutputResult {
-<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">let </span>cli = Cli::parse();
-<a href=#274 id=274 data-nosnippet>274</a>    <span class="kw">let </span>connector_registry = ConnectorRegistry::build_from_client_defaults()
-<a href=#275 id=275 data-nosnippet>275</a>        .with_env_var_overrides()
-<a href=#276 id=276 data-nosnippet>276</a>        .map_err(ServerError::InternalClientError)<span class="question-mark">?
-<a href=#277 id=277 data-nosnippet>277</a>        </span>.bind()
-<a href=#278 id=278 data-nosnippet>278</a>        .<span class="kw">await
-<a href=#279 id=279 data-nosnippet>279</a>        </span>.map_err(ServerError::InternalClientError)<span class="question-mark">?</span>;
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">let </span>client = GatewayApi::new(cli.rpcpassword, connector_registry);
-<a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a>    <span class="kw">let </span>output = <span class="kw">match </span>cli.command {
-<a href=#283 id=283 data-nosnippet>283</a>        Commands::General(general_command) =&gt; general_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#284 id=284 data-nosnippet>284</a>        Commands::Lightning(lightning_command) =&gt; {
-<a href=#285 id=285 data-nosnippet>285</a>            lightning_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?
-<a href=#286 id=286 data-nosnippet>286</a>        </span>}
-<a href=#287 id=287 data-nosnippet>287</a>        Commands::Ecash(ecash_command) =&gt; ecash_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#288 id=288 data-nosnippet>288</a>        Commands::Onchain(onchain_command) =&gt; onchain_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#289 id=289 data-nosnippet>289</a>        Commands::Cfg(config_commands) =&gt; config_commands.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#290 id=290 data-nosnippet>290</a>        Commands::Completion { shell } =&gt; {
-<a href=#291 id=291 data-nosnippet>291</a>            clap_complete::generate(
-<a href=#292 id=292 data-nosnippet>292</a>                shell,
-<a href=#293 id=293 data-nosnippet>293</a>                <span class="kw-2">&amp;mut </span>Cli::command(),
-<a href=#294 id=294 data-nosnippet>294</a>                <span class="string">"gateway-cli"</span>,
-<a href=#295 id=295 data-nosnippet>295</a>                <span class="kw-2">&amp;mut </span>std::io::stdout(),
-<a href=#296 id=296 data-nosnippet>296</a>            );
-<a href=#297 id=297 data-nosnippet>297</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(CliOutput::Empty);
-<a href=#298 id=298 data-nosnippet>298</a>        }
-<a href=#299 id=299 data-nosnippet>299</a>    };
-<a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a>    <span class="comment">// Only print output for non-empty results
-<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">if </span>!<span class="macro">matches!</span>(output, CliOutput::Empty) {
-<a href=#303 id=303 data-nosnippet>303</a>        print_response(<span class="kw-2">&amp;</span>output);
-<a href=#304 id=304 data-nosnippet>304</a>    }
-<a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="prelude-val">Ok</span>(output)
-<a href=#307 id=307 data-nosnippet>307</a>}
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a><span class="kw">fn </span>print_response&lt;T: Serialize&gt;(val: T) {
-<a href=#310 id=310 data-nosnippet>310</a>    <span class="macro">println!</span>(
-<a href=#311 id=311 data-nosnippet>311</a>        <span class="string">"{}"</span>,
-<a href=#312 id=312 data-nosnippet>312</a>        serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
-<a href=#313 id=313 data-nosnippet>313</a>    );
-<a href=#314 id=314 data-nosnippet>314</a>}
+<a href=#244 id=244 data-nosnippet>244</a>    </span>Cfg(ConfigCommands),
+<a href=#245 id=245 data-nosnippet>245</a>    Completion {
+<a href=#246 id=246 data-nosnippet>246</a>        shell: clap_complete::Shell,
+<a href=#247 id=247 data-nosnippet>247</a>    },
+<a href=#248 id=248 data-nosnippet>248</a>}
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a><span class="attr">#[tokio::main]
+<a href=#251 id=251 data-nosnippet>251</a></span><span class="kw">async fn </span>main() {
+<a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = TracingSetup::default().init() {
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">let </span>cli_err = CliError {
+<a href=#254 id=254 data-nosnippet>254</a>            error: <span class="macro">format!</span>(<span class="string">"Failed to initialize logging: {err}"</span>),
+<a href=#255 id=255 data-nosnippet>255</a>            code: ErrorCode::Internal,
+<a href=#256 id=256 data-nosnippet>256</a>            cause: <span class="prelude-val">None</span>,
+<a href=#257 id=257 data-nosnippet>257</a>        };
+<a href=#258 id=258 data-nosnippet>258</a>        print_response(<span class="kw-2">&amp;</span>cli_err);
+<a href=#259 id=259 data-nosnippet>259</a>        std::process::exit(ExitCode::GeneralError <span class="kw">as </span>i32);
+<a href=#260 id=260 data-nosnippet>260</a>    }
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = run().<span class="kw">await </span>{
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">let </span>cli_err = CliError::from_server_error(<span class="kw-2">&amp;</span>err);
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">let </span>exit_code = ExitCode::from(cli_err.code);
+<a href=#265 id=265 data-nosnippet>265</a>        print_response(<span class="kw-2">&amp;</span>cli_err);
+<a href=#266 id=266 data-nosnippet>266</a>        std::process::exit(exit_code <span class="kw">as </span>i32);
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>}
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a><span class="kw">async fn </span>run() -&gt; CliOutputResult {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">let </span>cli = Cli::parse();
+<a href=#272 id=272 data-nosnippet>272</a>    <span class="kw">let </span>connector_registry = ConnectorRegistry::build_from_client_defaults()
+<a href=#273 id=273 data-nosnippet>273</a>        .with_env_var_overrides()
+<a href=#274 id=274 data-nosnippet>274</a>        .map_err(ServerError::InternalClientError)<span class="question-mark">?
+<a href=#275 id=275 data-nosnippet>275</a>        </span>.bind()
+<a href=#276 id=276 data-nosnippet>276</a>        .<span class="kw">await
+<a href=#277 id=277 data-nosnippet>277</a>        </span>.map_err(ServerError::InternalClientError)<span class="question-mark">?</span>;
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">let </span>client = GatewayApi::new(cli.rpcpassword, connector_registry);
+<a href=#279 id=279 data-nosnippet>279</a>
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">let </span>output = <span class="kw">match </span>cli.command {
+<a href=#281 id=281 data-nosnippet>281</a>        Commands::General(general_command) =&gt; general_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#282 id=282 data-nosnippet>282</a>        Commands::Lightning(lightning_command) =&gt; {
+<a href=#283 id=283 data-nosnippet>283</a>            lightning_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?
+<a href=#284 id=284 data-nosnippet>284</a>        </span>}
+<a href=#285 id=285 data-nosnippet>285</a>        Commands::Ecash(ecash_command) =&gt; ecash_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#286 id=286 data-nosnippet>286</a>        Commands::Onchain(onchain_command) =&gt; onchain_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#287 id=287 data-nosnippet>287</a>        Commands::Cfg(config_commands) =&gt; config_commands.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#288 id=288 data-nosnippet>288</a>        Commands::Completion { shell } =&gt; {
+<a href=#289 id=289 data-nosnippet>289</a>            clap_complete::generate(
+<a href=#290 id=290 data-nosnippet>290</a>                shell,
+<a href=#291 id=291 data-nosnippet>291</a>                <span class="kw-2">&amp;mut </span>Cli::command(),
+<a href=#292 id=292 data-nosnippet>292</a>                <span class="string">"gateway-cli"</span>,
+<a href=#293 id=293 data-nosnippet>293</a>                <span class="kw-2">&amp;mut </span>std::io::stdout(),
+<a href=#294 id=294 data-nosnippet>294</a>            );
+<a href=#295 id=295 data-nosnippet>295</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(CliOutput::Empty);
+<a href=#296 id=296 data-nosnippet>296</a>        }
+<a href=#297 id=297 data-nosnippet>297</a>    };
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// Only print output for non-empty results
+<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="kw">if </span>!<span class="macro">matches!</span>(output, CliOutput::Empty) {
+<a href=#301 id=301 data-nosnippet>301</a>        print_response(<span class="kw-2">&amp;</span>output);
+<a href=#302 id=302 data-nosnippet>302</a>    }
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="prelude-val">Ok</span>(output)
+<a href=#305 id=305 data-nosnippet>305</a>}
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a><span class="kw">fn </span>print_response&lt;T: Serialize&gt;(val: T) {
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="macro">println!</span>(
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="string">"{}"</span>,
+<a href=#310 id=310 data-nosnippet>310</a>        serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
+<a href=#311 id=311 data-nosnippet>311</a>    );
+<a href=#312 id=312 data-nosnippet>312</a>}
 </code></pre></div></section></main></body></html>
