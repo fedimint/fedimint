@@ -31,6 +31,7 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_rocksdb::RocksDb;
+use fedimint_server::IrohNextSettings;
 use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
 use fedimint_server::core::ServerModuleInitRegistry;
@@ -43,12 +44,13 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
 use fedimintd_envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
-    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
-    FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_NEXT_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
+    FM_BIND_P2P_NEXT_ENV, FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
+    FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV,
+    FM_BITCOIND_USERNAME_ENV, FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV,
+    FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ENABLE_IROH_NEXT_ENV, FM_ESPLORA_URL_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_IROH_API_MAX_CONNECTIONS_ENV,
+    FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
 };
 use futures::FutureExt as _;
 use tracing::{debug, error, info};
@@ -205,6 +207,18 @@ struct ServerOpts {
     /// Maximum number of parallel requests per Iroh API connection
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
+
+    /// Enable iroh-next (v0.90) dual-stack endpoints alongside stable iroh
+    #[arg(long, env = FM_ENABLE_IROH_NEXT_ENV)]
+    enable_iroh_next: bool,
+
+    /// Bind address for iroh-next P2P endpoint (default: P2P port + 10)
+    #[arg(long, env = FM_BIND_P2P_NEXT_ENV)]
+    bind_p2p_next: Option<SocketAddr>,
+
+    /// Bind address for iroh-next API endpoint (default: API port + 10)
+    #[arg(long, env = FM_BIND_API_NEXT_ENV)]
+    bind_api_next: Option<SocketAddr>,
 }
 
 impl ServerOpts {
@@ -361,6 +375,22 @@ pub async fn run(
 
     install_crypto_provider().await;
 
+    let iroh_next_settings = if server_opts.enable_iroh_next {
+        let p2p_bind = server_opts.bind_p2p_next.unwrap_or_else(|| {
+            let mut addr = server_opts.bind_p2p;
+            addr.set_port(addr.port() + 10);
+            addr
+        });
+        let api_bind = server_opts.bind_api_next.unwrap_or_else(|| {
+            let mut addr = server_opts.bind_api;
+            addr.set_port(addr.port() + 10);
+            addr
+        });
+        Some(IrohNextSettings { api_bind, p2p_bind })
+    } else {
+        None
+    };
+
     let task_group = root_task_group.clone();
     root_task_group.spawn_cancellable("main", async move {
         fedimint_server::run(
@@ -379,6 +409,7 @@ pub async fn run(
                 server_opts.iroh_api_max_connections,
                 server_opts.iroh_api_max_requests_per_connection,
             ),
+            iroh_next_settings,
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));

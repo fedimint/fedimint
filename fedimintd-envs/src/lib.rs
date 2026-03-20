@@ -38,6 +38,12 @@ pub const FM_BITCOIND_USERNAME_ENV: &str = "FM_BITCOIND_USERNAME";
 
 pub const FM_BITCOIND_PASSWORD_ENV: &str = "FM_BITCOIND_PASSWORD";
 
+pub const FM_ENABLE_IROH_NEXT_ENV: &str = "FM_ENABLE_IROH_NEXT";
+
+pub const FM_BIND_P2P_NEXT_ENV: &str = "FM_BIND_P2P_NEXT";
+
+pub const FM_BIND_API_NEXT_ENV: &str = "FM_BIND_API_NEXT";
+
 // TODO: Eventually Iroh should provide something better than this.
 // <https://github.com/n0-computer/iroh/discussions/3212>
 pub const FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV: &str =

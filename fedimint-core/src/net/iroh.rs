@@ -13,6 +13,98 @@ use crate::envs::{
     FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set, is_env_var_set_opt,
 };
 
+pub async fn build_iroh_next_endpoint(
+    secret_key: iroh_next::SecretKey,
+    bind_addr: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
+    alpn: &[u8],
+) -> Result<iroh_next::Endpoint, anyhow::Error> {
+    let relay_mode = if iroh_relays.is_empty() {
+        iroh_next::RelayMode::Default
+    } else {
+        iroh_next::RelayMode::Custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| iroh_next::RelayNode {
+                    url: iroh_next::RelayUrl::from(url.to_unsafe()),
+                    #[allow(clippy::default_trait_access)]
+                    quic: Some(Default::default()),
+                })
+                .collect(),
+        )
+    };
+
+    let mut builder = iroh_next::Endpoint::builder();
+
+    if let Some(iroh_dns) = iroh_dns.map(SafeUrl::to_unsafe) {
+        if is_env_var_set_opt(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV).unwrap_or(true) {
+            builder = builder.add_discovery(iroh_next::discovery::pkarr::PkarrPublisher::builder(
+                iroh_dns.clone(),
+            ));
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh-next pkarr publisher is disabled"
+            );
+        }
+
+        if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
+            builder = builder.add_discovery(
+                iroh_next::discovery::pkarr::PkarrResolver::builder(iroh_dns).build(),
+            );
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh-next pkarr resolver is disabled"
+            );
+        }
+    }
+
+    if is_env_var_set(FM_IROH_DHT_ENABLE_ENV) {
+        #[cfg(not(target_family = "wasm"))]
+        {
+            builder = builder.discovery_dht();
+        }
+    } else {
+        info!(
+            target: LOG_NET_IROH,
+            "Iroh-next DHT is disabled"
+        );
+    }
+
+    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
+        builder = builder.discovery_n0();
+    } else {
+        warn!(
+            target: LOG_NET_IROH,
+            "Iroh-next n0 discovery is disabled"
+        );
+    }
+
+    let builder = builder
+        .relay_mode(relay_mode)
+        .secret_key(secret_key)
+        .alpns(vec![alpn.to_vec()]);
+
+    let builder = match bind_addr {
+        SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
+        SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
+    };
+
+    let endpoint = builder.bind().await.expect("Could not bind to port");
+
+    info!(
+        target: LOG_NET_IROH,
+        %bind_addr,
+        node_id = %endpoint.node_id(),
+        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+        "Iroh-next p2p server endpoint"
+    );
+
+    Ok(endpoint)
+}
+
 pub async fn build_iroh_endpoint(
     secret_key: SecretKey,
     bind_addr: SocketAddr,

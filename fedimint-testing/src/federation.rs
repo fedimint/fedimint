@@ -393,6 +393,7 @@ impl FederationTestBuilder {
                         max_connections: 1000,
                         max_requests_per_connection: 100,
                     },
+                    None,
                 ))
                 .await
                 .expect("Could not initialise consensus");

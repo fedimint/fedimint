@@ -24,10 +24,12 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
-use fedimint_core::net::iroh::build_iroh_endpoint;
+use fedimint_core::net::iroh::{build_iroh_endpoint, build_iroh_next_endpoint};
 use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::secp256k1::SecretKey;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
@@ -51,7 +53,19 @@ use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
-use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
+use crate::{DashboardUiRouter, IrohNextSettings, net, update_server_info_version_dbtx};
+
+/// Child key index for deriving iroh-next API key
+const IROH_NEXT_API_CHILD_ID: ChildId = ChildId(0);
+
+/// Derive an iroh-next secret key deterministically from the broadcast secret
+/// key using HKDF with domain separation.
+fn derive_iroh_next_sk(broadcast_sk: &SecretKey, child_id: ChildId) -> iroh_next::SecretKey {
+    let root = DerivableSecret::new_root(&broadcast_sk.secret_bytes(), b"fedimint-iroh-next");
+    let child = root.child_key(child_id);
+    let seed: [u8; 32] = child.to_random_bytes();
+    iroh_next::SecretKey::from_bytes(&seed)
+}
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -76,6 +90,7 @@ pub async fn run(
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
+    iroh_next_settings: Option<&IrohNextSettings>,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -215,22 +230,42 @@ pub async fn run(
     )
     .await;
 
-    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone()
-        && let Err(e) = Box::pin(start_iroh_api(
+    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
+        if let Err(e) = Box::pin(start_iroh_api(
             iroh_api_sk,
             api_bind,
-            iroh_dns,
-            iroh_relays,
+            iroh_dns.clone(),
+            iroh_relays.clone(),
             consensus_api.clone(),
             task_group,
             iroh_api_limits,
         ))
         .await
-    {
-        // clean up ws api before propagating error
-        api_handler.stop().expect("Just started");
-        api_handler.stopped().await;
-        return Err(e);
+        {
+            api_handler.stop().expect("Just started");
+            api_handler.stopped().await;
+            return Err(e);
+        }
+
+        if let Some(next_settings) = iroh_next_settings {
+            let next_api_sk =
+                derive_iroh_next_sk(&cfg.private.broadcast_secret_key, IROH_NEXT_API_CHILD_ID);
+            if let Err(e) = Box::pin(start_iroh_api_next(
+                next_api_sk,
+                next_settings.api_bind,
+                iroh_dns,
+                iroh_relays,
+                consensus_api.clone(),
+                task_group,
+                iroh_api_limits,
+            ))
+            .await
+            {
+                api_handler.stop().expect("Just started");
+                api_handler.stopped().await;
+                return Err(e);
+            }
+        }
     }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
@@ -598,4 +633,168 @@ async fn await_response(
             (endpoint.handler)(state, context, request.request).await
         }
     }
+}
+
+// --- iroh-next (v0.90) API endpoint functions ---
+
+async fn start_iroh_api_next(
+    secret_key: iroh_next::SecretKey,
+    api_bind: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
+    consensus_api: ConsensusApi,
+    task_group: &TaskGroup,
+    iroh_api_limits: ConnectionLimits,
+) -> anyhow::Result<()> {
+    let endpoint = build_iroh_next_endpoint(
+        secret_key,
+        api_bind,
+        iroh_dns,
+        iroh_relays,
+        FEDIMINT_API_ALPN,
+    )
+    .await?;
+    task_group.spawn_cancellable(
+        "iroh-next-api",
+        run_iroh_api_next(consensus_api, endpoint, task_group.clone(), iroh_api_limits),
+    );
+
+    Ok(())
+}
+
+async fn run_iroh_api_next(
+    consensus_api: ConsensusApi,
+    endpoint: iroh_next::Endpoint,
+    task_group: TaskGroup,
+    iroh_api_limits: ConnectionLimits,
+) {
+    let core_api = server_endpoints()
+        .into_iter()
+        .map(|endpoint| (endpoint.path.to_string(), endpoint))
+        .collect::<BTreeMap<String, ApiEndpoint<ConsensusApi>>>();
+
+    let module_api = consensus_api
+        .modules
+        .iter_modules()
+        .map(|(id, _, module)| {
+            let api_endpoints = module
+                .api_endpoints()
+                .into_iter()
+                .map(|endpoint| (endpoint.path.to_string(), endpoint))
+                .collect::<BTreeMap<String, ApiEndpoint<DynServerModule>>>();
+
+            (id, api_endpoints)
+        })
+        .collect::<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>();
+
+    let consensus_api = Arc::new(consensus_api);
+    let core_api = Arc::new(core_api);
+    let module_api = Arc::new(module_api);
+    let parallel_connections_limit = Arc::new(Semaphore::new(iroh_api_limits.max_connections));
+
+    loop {
+        match endpoint.accept().await {
+            Some(incoming) => {
+                if parallel_connections_limit.available_permits() == 0 {
+                    warn!(
+                        target: LOG_NET_API,
+                        limit = iroh_api_limits.max_connections,
+                        "Iroh-next API connection limit reached, blocking new connections"
+                    );
+                }
+                let permit = parallel_connections_limit
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .expect("semaphore should not be closed");
+                task_group.spawn_cancellable_silent(
+                    "handle-iroh-next-connection",
+                    handle_incoming_next(
+                        consensus_api.clone(),
+                        core_api.clone(),
+                        module_api.clone(),
+                        task_group.clone(),
+                        incoming,
+                        permit,
+                        iroh_api_limits.max_requests_per_connection,
+                    )
+                    .then(|result| async {
+                        if let Err(err) = result {
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh-next connection");
+                        }
+                    }),
+                );
+            }
+            None => return,
+        }
+    }
+}
+
+async fn handle_incoming_next(
+    consensus_api: Arc<ConsensusApi>,
+    core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
+    task_group: TaskGroup,
+    incoming: iroh_next::endpoint::Incoming,
+    _connection_permit: tokio::sync::OwnedSemaphorePermit,
+    iroh_api_max_requests_per_connection: usize,
+) -> anyhow::Result<()> {
+    let connection = incoming.accept()?.await?;
+    let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
+
+    loop {
+        let (send_stream, recv_stream) = connection.accept_bi().await?;
+
+        if parallel_requests_limit.available_permits() == 0 {
+            warn!(
+                target: LOG_NET_API,
+                limit = iroh_api_max_requests_per_connection,
+                "Iroh-next API request limit reached for connection, blocking new requests"
+            );
+        }
+        let permit = parallel_requests_limit
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should not be closed");
+        task_group.spawn_cancellable_silent(
+            "handle-iroh-next-request",
+            handle_request_next(
+                consensus_api.clone(),
+                core_api.clone(),
+                module_api.clone(),
+                send_stream,
+                recv_stream,
+                permit,
+            )
+            .then(|result| async {
+                if let Err(err) = result {
+                    warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh-next request");
+                }
+            }),
+        );
+    }
+}
+
+async fn handle_request_next(
+    consensus_api: Arc<ConsensusApi>,
+    core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
+    mut send_stream: iroh_next::endpoint::SendStream,
+    mut recv_stream: iroh_next::endpoint::RecvStream,
+    _request_permit: tokio::sync::OwnedSemaphorePermit,
+) -> anyhow::Result<()> {
+    let request = recv_stream.read_to_end(100_000).await?;
+
+    let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
+
+    let response = await_response(consensus_api, core_api, module_api, request).await;
+
+    let response = serde_json::to_vec(&response)?;
+
+    send_stream.write_all(&response).await?;
+
+    send_stream.finish()?;
+
+    Ok(())
 }
