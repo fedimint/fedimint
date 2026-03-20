@@ -292,7 +292,7 @@
 <a href=#292 id=292 data-nosnippet>292</a>    request: <span class="kw-2">&amp;</span>IrohGatewayRequest,
 <a href=#293 id=293 data-nosnippet>293</a>) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = request.password.as_ref()
-<a href=#295 id=295 data-nosnippet>295</a>        &amp;&amp; bcrypt::verify(password, <span class="kw-2">&amp;</span>gateway.bcrypt_password_hash.to_string())<span class="question-mark">?
+<a href=#295 id=295 data-nosnippet>295</a>        &amp;&amp; bcrypt::verify(password, <span class="kw-2">&amp;</span>gateway.bcrypt_password_hash)<span class="question-mark">?
 <a href=#296 id=296 data-nosnippet>296</a>    </span>{
 <a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
 <a href=#298 id=298 data-nosnippet>298</a>    }

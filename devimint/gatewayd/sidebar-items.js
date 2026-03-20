@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Gatewayd"]};
+window.SIDEBAR_ITEMS = {"struct":["GatewayClient","Gatewayd"]};

@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::Amount;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_gateway_client::{
 <a href=#7 id=7 data-nosnippet>7</a>    close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
-<a href=#8 id=8 data-nosnippet>8</a>    list_transactions, open_channel, pay_invoice, pay_offer,
+<a href=#8 id=8 data-nosnippet>8</a>    list_transactions, open_channel, open_channel_with_push, pay_invoice, pay_offer,
 <a href=#9 id=9 data-nosnippet>9</a>};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_gateway_common::{
 <a href=#11 id=11 data-nosnippet>11</a>    CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
@@ -153,17 +153,17 @@
 <a href=#153 id=153 data-nosnippet>153</a>                channel_size_sats,
 <a href=#154 id=154 data-nosnippet>154</a>                push_amount_sats,
 <a href=#155 id=155 data-nosnippet>155</a>            } =&gt; {
-<a href=#156 id=156 data-nosnippet>156</a>                <span class="kw">let </span>funding_txid = open_channel(
-<a href=#157 id=157 data-nosnippet>157</a>                    client,
-<a href=#158 id=158 data-nosnippet>158</a>                    base_url,
-<a href=#159 id=159 data-nosnippet>159</a>                    OpenChannelRequest {
-<a href=#160 id=160 data-nosnippet>160</a>                        pubkey,
-<a href=#161 id=161 data-nosnippet>161</a>                        host,
-<a href=#162 id=162 data-nosnippet>162</a>                        channel_size_sats,
-<a href=#163 id=163 data-nosnippet>163</a>                        push_amount_sats: push_amount_sats.unwrap_or(<span class="number">0</span>),
-<a href=#164 id=164 data-nosnippet>164</a>                    },
-<a href=#165 id=165 data-nosnippet>165</a>                )
-<a href=#166 id=166 data-nosnippet>166</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#156 id=156 data-nosnippet>156</a>                <span class="kw">let </span>payload = OpenChannelRequest {
+<a href=#157 id=157 data-nosnippet>157</a>                    pubkey,
+<a href=#158 id=158 data-nosnippet>158</a>                    host,
+<a href=#159 id=159 data-nosnippet>159</a>                    channel_size_sats,
+<a href=#160 id=160 data-nosnippet>160</a>                    push_amount_sats: push_amount_sats.unwrap_or(<span class="number">0</span>),
+<a href=#161 id=161 data-nosnippet>161</a>                };
+<a href=#162 id=162 data-nosnippet>162</a>                <span class="kw">let </span>funding_txid = <span class="kw">if </span>payload.push_amount_sats &gt; <span class="number">0 </span>{
+<a href=#163 id=163 data-nosnippet>163</a>                    open_channel_with_push(client, base_url, payload).<span class="kw">await</span><span class="question-mark">?
+<a href=#164 id=164 data-nosnippet>164</a>                </span>} <span class="kw">else </span>{
+<a href=#165 id=165 data-nosnippet>165</a>                    open_channel(client, base_url, payload).<span class="kw">await</span><span class="question-mark">?
+<a href=#166 id=166 data-nosnippet>166</a>                </span>};
 <a href=#167 id=167 data-nosnippet>167</a>                <span class="prelude-val">Ok</span>(CliOutput::FundingTxid { funding_txid })
 <a href=#168 id=168 data-nosnippet>168</a>            }
 <a href=#169 id=169 data-nosnippet>169</a>            <span class="self">Self</span>::CloseChannelsWithPeer {
