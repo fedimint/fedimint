@@ -13,6 +13,9 @@
 use fedimint_core::secp256k1::SecretKey;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 
+/// Protocol version string for the iroh-next dual-stack endpoints.
+pub const IROH_NEXT_VERSION: &str = "0.90";
+
 // ── Domain: fedimint-pkarr ──────────────────────────────────────────
 
 const PKARR_DOMAIN: &[u8] = b"fedimint-pkarr";
