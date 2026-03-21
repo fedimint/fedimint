@@ -170,6 +170,8 @@ pub async fn run(
         }
     };
 
+    let iroh_enabled = !cfg.consensus.iroh_endpoints.is_empty();
+
     let decoders = module_init_registry.decoders_strict(
         cfg.consensus
             .modules
@@ -187,7 +189,7 @@ pub async fn run(
         &task_group,
         &cfg,
         force_api_secrets.get_active(),
-        iroh_next_settings.as_ref(),
+        iroh_next_settings.as_ref().filter(|_| iroh_enabled),
     )
     .await?;
     start_pkarr_publish_service(&db, &task_group, &cfg).await?;
@@ -221,7 +223,7 @@ pub async fn run(
         db_checkpoint_retention,
         session_timeout,
         iroh_api_limits,
-        iroh_next_settings.as_ref(),
+        iroh_next_settings.as_ref().filter(|_| iroh_enabled),
     ))
     .await?;
 
