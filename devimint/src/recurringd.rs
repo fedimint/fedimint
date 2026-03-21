@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use reqwest::get;
+use reqwest::{self, get};
+use serde_json;
 use tracing::info;
-use {reqwest, serde_json};
 
 use crate::cmd;
 use crate::envs::{

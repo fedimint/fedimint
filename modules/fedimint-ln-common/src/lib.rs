@@ -25,6 +25,7 @@ use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as AnyhowContext;
+pub use bitcoin;
 use bitcoin::hashes::{Hash, sha256};
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -37,13 +38,13 @@ use fedimint_core::{
     Amount, PeerId, encode_bolt11_invoice_features_without_length,
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
+pub use lightning_invoice;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 pub use reqwest::Method;
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-pub use {bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
