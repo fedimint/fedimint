@@ -46,22 +46,20 @@ use std::str::FromStr;
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
-pub use bitcoin;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
 use envs::BitcoinRpcConfig;
-pub use hex;
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
 pub use peer_id::*;
-pub use secp256k1;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
 use util::SafeUrl;
+pub use {bitcoin, hex, secp256k1};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;

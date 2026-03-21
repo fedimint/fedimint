@@ -622,7 +622,13 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = db_no_decoders.with_decoders(decoders.clone());
-        let peer_urls = get_api_urls(&db, &config).await;
+        self.iroh_enable_next &= connectors.iroh_next_enabled();
+        let iroh_next_version = if self.iroh_enable_next {
+            Some(fedimint_core::net::iroh::IROH_NEXT_VERSION)
+        } else {
+            None
+        };
+        let peer_urls = get_api_urls(&db, &config, iroh_next_version).await;
         let api = match self.admin_creds.as_ref() {
             Some(admin_creds) => FederationApi::new(
                 connectors.clone(),

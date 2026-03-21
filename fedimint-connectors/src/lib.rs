@@ -128,6 +128,7 @@ impl ConnectorRegistryBuilder {
                 connection_overrides: self.connection_overrides,
                 initialized: SetOnce::new(),
                 path_change,
+                iroh_next: self.iroh_next,
             }
             .into(),
         })
@@ -242,6 +243,8 @@ struct ConnectorRegistryInner {
     /// Ticks whenever a connector observes a transport-level path change
     /// (e.g. iroh relay → direct). Only Iroh bumps this today.
     path_change: Arc<watch::Sender<u64>>,
+    /// Whether the registry constructs Iroh connectors with iroh-next support.
+    iroh_next: bool,
 }
 
 /// A set of available connectivity protocols a client can use to make
@@ -266,11 +269,16 @@ impl fmt::Debug for ConnectorRegistry {
         f.debug_struct("ConnectorRegistry")
             .field("connectors_lazy", &self.inner.connectors_lazy.len())
             .field("connection_overrides", &self.inner.connection_overrides)
+            .field("iroh_next", &self.inner.iroh_next)
             .finish()
     }
 }
 
 impl ConnectorRegistry {
+    pub fn iroh_next_enabled(&self) -> bool {
+        self.inner.iroh_next
+    }
+
     /// Create a builder with recommended defaults intended for client-side
     /// usage
     ///
