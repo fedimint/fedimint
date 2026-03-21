@@ -14,10 +14,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use consensus_explorer::consensus_explorer_view;
-use fedimint_lnv2_server;
-use fedimint_meta_server;
 use fedimint_metrics::{Encoder, REGISTRY, TextEncoder};
-use fedimint_mintv2_server;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -25,9 +22,11 @@ use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, ROOT_ROUTE, UiState, connectivity_check_handler,
     dashboard_layout, login_form_response,
 };
-use fedimint_wallet_server;
-use fedimint_walletv2_server;
 use maud::html;
+use {
+    fedimint_lnv2_server, fedimint_meta_server, fedimint_mintv2_server, fedimint_wallet_server,
+    fedimint_walletv2_server,
+};
 
 use crate::dashboard::modules::{lnv2, meta, mintv2, wallet, walletv2};
 use crate::{

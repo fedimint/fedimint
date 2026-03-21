@@ -1742,7 +1742,12 @@ impl Client {
 
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
-        get_api_urls(&self.db, &self.config().await).await
+        let iroh_next_version = if self.iroh_enable_next {
+            Some(fedimint_connectors::iroh::IROH_NEXT_VERSION)
+        } else {
+            None
+        };
+        get_api_urls(&self.db, &self.config().await, iroh_next_version).await
     }
 
     /// Create an invite code with the api endpoint of the given peer which can

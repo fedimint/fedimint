@@ -40,6 +40,10 @@ use serde_json::Value;
 use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+
+/// Protocol version string for the iroh-next dual-stack endpoints.
+/// Must match the value in `fedimint-server/src/net/broadcast_keys.rs`.
+pub const IROH_NEXT_VERSION: &str = "0.90";
 use crate::{DynGatewayConnection, IConnection, IGatewayConnection};
 
 #[derive(Clone)]
