@@ -189,50 +189,46 @@
 <a href=#189 id=189 data-nosnippet>189</a>                                    }
 <a href=#190 id=190 data-nosnippet>190</a>                                    div id=<span class="string">"shutdownCollapse" </span>class=<span class="string">"accordion-collapse collapse" </span>data-bs-parent=<span class="string">"#shutdownAccordion" </span>{
 <a href=#191 id=191 data-nosnippet>191</a>                                        div class=<span class="string">"accordion-body" </span>{
-<a href=#192 id=192 data-nosnippet>192</a>                                            div class=<span class="string">"alert alert-info mb-3" </span>{
+<a href=#192 id=192 data-nosnippet>192</a>                                            div class=<span class="string">"alert alert-warning mb-3" </span>{
 <a href=#193 id=193 data-nosnippet>193</a>                                                <span class="string">"To recover your remaining funds after decommissioning the federation, please go to the "
 <a href=#194 id=194 data-nosnippet>194</a>                                                </span>a href=<span class="string">"https://recovery.fedimint.org" </span>target=<span class="string">"_blank" </span>{ <span class="string">"recovery tool" </span>}
-<a href=#195 id=195 data-nosnippet>195</a>                                                <span class="string">" and follow the instructions."
+<a href=#195 id=195 data-nosnippet>195</a>                                                <span class="string">" and follow the instructions. The recovery keys change with every transaction. All guardians must be fully synced before extracting keys, otherwise the keys will not match the current federation UTXO."
 <a href=#196 id=196 data-nosnippet>196</a>                                            </span>}
 <a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a>                                            div class=<span class="string">"alert alert-warning mb-3" </span>{
-<a href=#199 id=199 data-nosnippet>199</a>                                                <span class="string">"The recovery keys change with every transaction. All guardians must be fully synced before extracting keys, otherwise the keys will not match the current federation UTXO."
-<a href=#200 id=200 data-nosnippet>200</a>                                            </span>}
-<a href=#201 id=201 data-nosnippet>201</a>
-<a href=#202 id=202 data-nosnippet>202</a>                                            div class=<span class="string">"mb-3" </span>{
-<a href=#203 id=203 data-nosnippet>203</a>                                                table class=<span class="string">"table table-sm" </span>{
-<a href=#204 id=204 data-nosnippet>204</a>                                                    thead {
-<a href=#205 id=205 data-nosnippet>205</a>                                                        tr {
-<a href=#206 id=206 data-nosnippet>206</a>                                                            th { <span class="string">"Guardian" </span>}
-<a href=#207 id=207 data-nosnippet>207</a>                                                            th { <span class="string">"Public Key (hex)" </span>}
-<a href=#208 id=208 data-nosnippet>208</a>                                                        }
-<a href=#209 id=209 data-nosnippet>209</a>                                                    }
-<a href=#210 id=210 data-nosnippet>210</a>                                                    tbody {
-<a href=#211 id=211 data-nosnippet>211</a>                                                        @<span class="kw">for </span>(peer, pk) <span class="kw">in </span>recovery_public_keys {
-<a href=#212 id=212 data-nosnippet>212</a>                                                            tr {
-<a href=#213 id=213 data-nosnippet>213</a>                                                                td { (peer) }
-<a href=#214 id=214 data-nosnippet>214</a>                                                                td class=<span class="string">"text-break" </span>style=<span class="string">"word-break: break-all; font-family: monospace;" </span>{ (pk) }
-<a href=#215 id=215 data-nosnippet>215</a>                                                            }
-<a href=#216 id=216 data-nosnippet>216</a>                                                        }
-<a href=#217 id=217 data-nosnippet>217</a>                                                    }
-<a href=#218 id=218 data-nosnippet>218</a>                                                }
-<a href=#219 id=219 data-nosnippet>219</a>                                            }
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>                                            div class=<span class="string">"mb-3" </span>{
-<a href=#222 id=222 data-nosnippet>222</a>                                                p class=<span class="string">"mb-2" </span>{ strong { <span class="string">"Your Private Key (WIF)" </span>} }
-<a href=#223 id=223 data-nosnippet>223</a>                                                div class=<span class="string">"alert alert-danger text-break" </span>style=<span class="string">"word-break: break-all;" </span>{
-<a href=#224 id=224 data-nosnippet>224</a>                                                    (recovery_private_key)
-<a href=#225 id=225 data-nosnippet>225</a>                                                }
-<a href=#226 id=226 data-nosnippet>226</a>                                            }
-<a href=#227 id=227 data-nosnippet>227</a>                                        }
-<a href=#228 id=228 data-nosnippet>228</a>                                    }
-<a href=#229 id=229 data-nosnippet>229</a>                                }
-<a href=#230 id=230 data-nosnippet>230</a>                            }
-<a href=#231 id=231 data-nosnippet>231</a>                        }
-<a href=#232 id=232 data-nosnippet>232</a>                    }
-<a href=#233 id=233 data-nosnippet>233</a>                }
-<a href=#234 id=234 data-nosnippet>234</a>            }
-<a href=#235 id=235 data-nosnippet>235</a>        }
-<a href=#236 id=236 data-nosnippet>236</a>    }
-<a href=#237 id=237 data-nosnippet>237</a>}
+<a href=#198 id=198 data-nosnippet>198</a>                                            div class=<span class="string">"mb-3" </span>{
+<a href=#199 id=199 data-nosnippet>199</a>                                                table class=<span class="string">"table table-sm" </span>{
+<a href=#200 id=200 data-nosnippet>200</a>                                                    thead {
+<a href=#201 id=201 data-nosnippet>201</a>                                                        tr {
+<a href=#202 id=202 data-nosnippet>202</a>                                                            th { <span class="string">"Guardian" </span>}
+<a href=#203 id=203 data-nosnippet>203</a>                                                            th { <span class="string">"Public Key (hex)" </span>}
+<a href=#204 id=204 data-nosnippet>204</a>                                                        }
+<a href=#205 id=205 data-nosnippet>205</a>                                                    }
+<a href=#206 id=206 data-nosnippet>206</a>                                                    tbody {
+<a href=#207 id=207 data-nosnippet>207</a>                                                        @<span class="kw">for </span>(peer, pk) <span class="kw">in </span>recovery_public_keys {
+<a href=#208 id=208 data-nosnippet>208</a>                                                            tr {
+<a href=#209 id=209 data-nosnippet>209</a>                                                                td { (peer) }
+<a href=#210 id=210 data-nosnippet>210</a>                                                                td class=<span class="string">"text-break" </span>style=<span class="string">"word-break: break-all; font-family: monospace;" </span>{ (pk) }
+<a href=#211 id=211 data-nosnippet>211</a>                                                            }
+<a href=#212 id=212 data-nosnippet>212</a>                                                        }
+<a href=#213 id=213 data-nosnippet>213</a>                                                    }
+<a href=#214 id=214 data-nosnippet>214</a>                                                }
+<a href=#215 id=215 data-nosnippet>215</a>                                            }
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>                                            div class=<span class="string">"mb-3" </span>{
+<a href=#218 id=218 data-nosnippet>218</a>                                                p class=<span class="string">"mb-2" </span>{ strong { <span class="string">"Your Private Key (WIF)" </span>} }
+<a href=#219 id=219 data-nosnippet>219</a>                                                div class=<span class="string">"alert alert-danger text-break" </span>style=<span class="string">"word-break: break-all;" </span>{
+<a href=#220 id=220 data-nosnippet>220</a>                                                    (recovery_private_key)
+<a href=#221 id=221 data-nosnippet>221</a>                                                }
+<a href=#222 id=222 data-nosnippet>222</a>                                            }
+<a href=#223 id=223 data-nosnippet>223</a>                                        }
+<a href=#224 id=224 data-nosnippet>224</a>                                    }
+<a href=#225 id=225 data-nosnippet>225</a>                                }
+<a href=#226 id=226 data-nosnippet>226</a>                            }
+<a href=#227 id=227 data-nosnippet>227</a>                        }
+<a href=#228 id=228 data-nosnippet>228</a>                    }
+<a href=#229 id=229 data-nosnippet>229</a>                }
+<a href=#230 id=230 data-nosnippet>230</a>            }
+<a href=#231 id=231 data-nosnippet>231</a>        }
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>}
 </code></pre></div></section></main></body></html>
