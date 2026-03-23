@@ -9,6 +9,7 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{FeeRate, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
+use fedimint_core::time::now;
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
 use fedimint_gateway_common::{
@@ -841,6 +842,12 @@ impl ILnRpcClient for GatewayLdkClient {
                 })?
         };
 
+        // Timeout for polling LDK payment status. BOLT12 payments involve
+        // onion message round-trips (InvoiceRequest → Invoice → Payment) which
+        // can be slow, but we should not block indefinitely if LDK never
+        // transitions the payment out of Pending.
+        const PAY_OFFER_TIMEOUT: Duration = Duration::from_secs(30);
+        let start = now();
         loop {
             if let Some(payment_details) = self.node.payment(&payment_id) {
                 match payment_details.status {
@@ -866,6 +873,14 @@ impl ILnRpcClient for GatewayLdkClient {
                     }
                 }
             }
+
+            if now().duration_since(start).expect("time goes forward") > PAY_OFFER_TIMEOUT {
+                warn!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, "Bolt12 payment timed out waiting for status update");
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: "Bolt12 payment timed out".to_string(),
+                });
+            }
+
             fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
         }
     }

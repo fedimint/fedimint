@@ -452,8 +452,11 @@ async fn liquidity_test() -> anyhow::Result<()> {
             assert_eq!(lnd_transactions.len(), 0);
 
             info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
-            // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
-            poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
+            // The first BOLT12 payment attempt often fails because the LDK
+            // nodes haven't fully established onion message routing paths to
+            // each other yet. The InvoiceRequest expires before the recipient
+            // can respond. Subsequent attempts succeed once routes are known.
+            poll_with_timeout("First BOLT12 payment", Duration::from_secs(120), || async {
                 let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
                 gw_ldk.pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
                 assert!(get_transaction(gw_ldk_second, PaymentKind::Bolt12Offer, Amount::from_msats(10_000_000), PaymentStatus::Succeeded).await.is_some());
