@@ -80,7 +80,7 @@
 <a href=#80 id=80 data-nosnippet>80</a>            <span class="kw">let </span>invoice_response = fedimint_lnurl::get_invoice(<span class="kw-2">&amp;</span>pay_response, <span class="number">1_000_000</span>)
 <a href=#81 id=81 data-nosnippet>81</a>                .<span class="kw">await
 <a href=#82 id=82 data-nosnippet>82</a>                </span>.expect(<span class="string">"invoice request"</span>);
-<a href=#83 id=83 data-nosnippet>83</a>            gw_ldk_second.pay_invoice(invoice_response.pr.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#83 id=83 data-nosnippet>83</a>            gw_ldk_second.client().pay_invoice(invoice_response.pr.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#84 id=84 data-nosnippet>84</a>
 <a href=#85 id=85 data-nosnippet>85</a>            <span class="kw">let </span>invoice_op_id = poll(<span class="string">"lnurl_receive"</span>, || <span class="kw">async </span>{
 <a href=#86 id=86 data-nosnippet>86</a>                <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"2"</span>)
