@@ -12,7 +12,7 @@
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>futures::stream;
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>imbl::OrdMap;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>redb::{Database, ReadableTable, TableDefinition};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">const </span>KV_TABLE: TableDefinition&lt;<span class="kw-2">&amp;</span>[u8], <span class="kw-2">&amp;</span>[u8]&gt; = TableDefinition::new(<span class="string">"fedimint_kv"</span>);
 <a href=#18 id=18 data-nosnippet>18</a>
@@ -335,5 +335,50 @@
 <a href=#335 id=335 data-nosnippet>335</a>        <span class="kw">let </span>(db, _dir) = open_temp_db(<span class="string">"fcb-redb-test-remove-by-prefix"</span>).<span class="kw">await</span>;
 <a href=#336 id=336 data-nosnippet>336</a>        fedimint_core::db::verify_remove_by_prefix(db).<span class="kw">await</span>;
 <a href=#337 id=337 data-nosnippet>337</a>    }
-<a href=#338 id=338 data-nosnippet>338</a>}
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// Create a v2 database with redb2, close it, then open with our
+<a href=#340 id=340 data-nosnippet>340</a>    /// MemAndRedb (redb3) and verify the data survived the migration.
+<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
+<a href=#342 id=342 data-nosnippet>342</a>    </span><span class="kw">async fn </span>test_v2_to_v3_migration() {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>temp_dir = tempfile::Builder::new()
+<a href=#344 id=344 data-nosnippet>344</a>            .prefix(<span class="string">"fcb-redb-test-v2-migration"</span>)
+<a href=#345 id=345 data-nosnippet>345</a>            .tempdir()
+<a href=#346 id=346 data-nosnippet>346</a>            .unwrap();
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let </span>db_path = temp_dir.path().join(<span class="string">"test.redb"</span>);
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">let </span>table_def: redb2::TableDefinition&lt;<span class="kw-2">&amp;</span>[u8], <span class="kw-2">&amp;</span>[u8]&gt; =
+<a href=#350 id=350 data-nosnippet>350</a>            redb2::TableDefinition::new(<span class="string">"fedimint_kv"</span>);
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="comment">// Write some data using redb2 (v2 format)
+<a href=#353 id=353 data-nosnippet>353</a>        </span>{
+<a href=#354 id=354 data-nosnippet>354</a>            <span class="kw">let </span>db = redb2::Database::create(<span class="kw-2">&amp;</span>db_path).unwrap();
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="kw">let </span>tx = db.begin_write().unwrap();
+<a href=#356 id=356 data-nosnippet>356</a>            {
+<a href=#357 id=357 data-nosnippet>357</a>                <span class="kw">let </span><span class="kw-2">mut </span>table = tx.open_table(table_def).unwrap();
+<a href=#358 id=358 data-nosnippet>358</a>                table
+<a href=#359 id=359 data-nosnippet>359</a>                    .insert(<span class="string">b"key1"</span>.as_slice(), <span class="string">b"value1"</span>.as_slice())
+<a href=#360 id=360 data-nosnippet>360</a>                    .unwrap();
+<a href=#361 id=361 data-nosnippet>361</a>                table
+<a href=#362 id=362 data-nosnippet>362</a>                    .insert(<span class="string">b"key2"</span>.as_slice(), <span class="string">b"value2"</span>.as_slice())
+<a href=#363 id=363 data-nosnippet>363</a>                    .unwrap();
+<a href=#364 id=364 data-nosnippet>364</a>            }
+<a href=#365 id=365 data-nosnippet>365</a>            tx.commit().unwrap();
+<a href=#366 id=366 data-nosnippet>366</a>        }
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="comment">// Open with MemAndRedb — should trigger v2-&gt;v3 migration
+<a href=#369 id=369 data-nosnippet>369</a>        </span><span class="kw">let </span>locked_db = MemAndRedb::new(<span class="kw-2">&amp;</span>db_path).<span class="kw">await</span>.unwrap();
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">let </span>db = Database::new(locked_db, ModuleDecoderRegistry::default());
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="comment">// Verify data survived
+<a href=#373 id=373 data-nosnippet>373</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="macro">assert_eq!</span>(
+<a href=#375 id=375 data-nosnippet>375</a>            dbtx.raw_get_bytes(<span class="string">b"key1"</span>).<span class="kw">await</span>.unwrap(),
+<a href=#376 id=376 data-nosnippet>376</a>            <span class="prelude-val">Some</span>(<span class="string">b"value1"</span>.to_vec())
+<a href=#377 id=377 data-nosnippet>377</a>        );
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="macro">assert_eq!</span>(
+<a href=#379 id=379 data-nosnippet>379</a>            dbtx.raw_get_bytes(<span class="string">b"key2"</span>).<span class="kw">await</span>.unwrap(),
+<a href=#380 id=380 data-nosnippet>380</a>            <span class="prelude-val">Some</span>(<span class="string">b"value2"</span>.to_vec())
+<a href=#381 id=381 data-nosnippet>381</a>        );
+<a href=#382 id=382 data-nosnippet>382</a>    }
+<a href=#383 id=383 data-nosnippet>383</a>}
 </code></pre></div></section></main></body></html>
