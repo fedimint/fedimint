@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["coefficient","dealer_agg_pk","dealer_pk","dealer_sk","get_recovery_count","get_recovery_slice"],"mod":["db"],"struct":["Mint","MintInit"]};
+window.SIDEBAR_ITEMS = {"fn":["coefficient","dealer_agg_pk","dealer_pk","dealer_sk","get_recovery_count","get_recovery_slice","get_signature_shares","get_signature_shares_recovery"],"mod":["db"],"struct":["Mint","MintInit"]};

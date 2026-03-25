@@ -185,45 +185,43 @@
 <a href=#185 id=185 data-nosnippet>185</a>
 <a href=#186 id=186 data-nosnippet>186</a><span class="kw">pub struct </span>MintModuleTypes;
 <a href=#187 id=187 data-nosnippet>187</a>
-<a href=#188 id=188 data-nosnippet>188</a><span class="kw">impl </span>Note {
-<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: tbs::AggregatePublicKey) -&gt; bool {
-<a href=#190 id=190 data-nosnippet>190</a>        tbs::verify(nonce_message(<span class="self">self</span>.nonce), <span class="self">self</span>.signature, pk)
-<a href=#191 id=191 data-nosnippet>191</a>    }
-<a href=#192 id=192 data-nosnippet>192</a>}
-<a href=#193 id=193 data-nosnippet>193</a>
-<a href=#194 id=194 data-nosnippet>194</a><span class="kw">pub fn </span>nonce_message(nonce: PublicKey) -&gt; Message {
-<a href=#195 id=195 data-nosnippet>195</a>    tbs::Message::from_bytes_sha256(<span class="kw-2">&amp;</span>nonce.serialize())
-<a href=#196 id=196 data-nosnippet>196</a>}
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a><span class="macro">plugin_types_trait_impl_common!</span>(
-<a href=#199 id=199 data-nosnippet>199</a>    KIND,
-<a href=#200 id=200 data-nosnippet>200</a>    MintModuleTypes,
-<a href=#201 id=201 data-nosnippet>201</a>    MintClientConfig,
-<a href=#202 id=202 data-nosnippet>202</a>    MintInput,
-<a href=#203 id=203 data-nosnippet>203</a>    MintOutput,
-<a href=#204 id=204 data-nosnippet>204</a>    MintOutputOutcome,
-<a href=#205 id=205 data-nosnippet>205</a>    MintConsensusItem,
-<a href=#206 id=206 data-nosnippet>206</a>    MintInputError,
-<a href=#207 id=207 data-nosnippet>207</a>    MintOutputError
-<a href=#208 id=208 data-nosnippet>208</a>);
-<a href=#209 id=209 data-nosnippet>209</a>
-<a href=#210 id=210 data-nosnippet>210</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
-<a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">pub enum </span>MintInputError {
-<a href=#212 id=212 data-nosnippet>212</a>    <span class="attr">#[error(<span class="string">"The mint input version is not supported by this federation"</span>)]
-<a href=#213 id=213 data-nosnippet>213</a>    </span>UnknownInputVariant(<span class="attr">#[from] </span>UnknownMintInputVariantError),
-<a href=#214 id=214 data-nosnippet>214</a>    <span class="attr">#[error(<span class="string">"The note is already spent"</span>)]
-<a href=#215 id=215 data-nosnippet>215</a>    </span>SpentCoin,
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="attr">#[error(<span class="string">"The note has an invalid amount not issued by the mint"</span>)]
-<a href=#217 id=217 data-nosnippet>217</a>    </span>InvalidAmountTier,
-<a href=#218 id=218 data-nosnippet>218</a>    <span class="attr">#[error(<span class="string">"The note has an invalid signature"</span>)]
-<a href=#219 id=219 data-nosnippet>219</a>    </span>InvalidSignature,
-<a href=#220 id=220 data-nosnippet>220</a>}
-<a href=#221 id=221 data-nosnippet>221</a>
-<a href=#222 id=222 data-nosnippet>222</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
-<a href=#223 id=223 data-nosnippet>223</a></span><span class="kw">pub enum </span>MintOutputError {
-<a href=#224 id=224 data-nosnippet>224</a>    <span class="attr">#[error(<span class="string">"The mint output version is not supported by this federation"</span>)]
-<a href=#225 id=225 data-nosnippet>225</a>    </span>UnknownOutputVariant(<span class="attr">#[from] </span>UnknownMintOutputVariantError),
-<a href=#226 id=226 data-nosnippet>226</a>    <span class="attr">#[error(<span class="string">"The note has an invalid amount not issued by the mint"</span>)]
-<a href=#227 id=227 data-nosnippet>227</a>    </span>InvalidAmountTier,
-<a href=#228 id=228 data-nosnippet>228</a>}
+<a href=#188 id=188 data-nosnippet>188</a><span class="kw">pub fn </span>verify_note(note: Note, pk: tbs::AggregatePublicKey) -&gt; bool {
+<a href=#189 id=189 data-nosnippet>189</a>    tbs::verify(nonce_message(note.nonce), note.signature, pk)
+<a href=#190 id=190 data-nosnippet>190</a>}
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a><span class="kw">pub fn </span>nonce_message(nonce: PublicKey) -&gt; Message {
+<a href=#193 id=193 data-nosnippet>193</a>    tbs::Message::from_bytes_sha256(<span class="kw-2">&amp;</span>nonce.serialize())
+<a href=#194 id=194 data-nosnippet>194</a>}
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a><span class="macro">plugin_types_trait_impl_common!</span>(
+<a href=#197 id=197 data-nosnippet>197</a>    KIND,
+<a href=#198 id=198 data-nosnippet>198</a>    MintModuleTypes,
+<a href=#199 id=199 data-nosnippet>199</a>    MintClientConfig,
+<a href=#200 id=200 data-nosnippet>200</a>    MintInput,
+<a href=#201 id=201 data-nosnippet>201</a>    MintOutput,
+<a href=#202 id=202 data-nosnippet>202</a>    MintOutputOutcome,
+<a href=#203 id=203 data-nosnippet>203</a>    MintConsensusItem,
+<a href=#204 id=204 data-nosnippet>204</a>    MintInputError,
+<a href=#205 id=205 data-nosnippet>205</a>    MintOutputError
+<a href=#206 id=206 data-nosnippet>206</a>);
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+<a href=#209 id=209 data-nosnippet>209</a></span><span class="kw">pub enum </span>MintInputError {
+<a href=#210 id=210 data-nosnippet>210</a>    <span class="attr">#[error(<span class="string">"The mint input version is not supported by this federation"</span>)]
+<a href=#211 id=211 data-nosnippet>211</a>    </span>UnknownInputVariant(<span class="attr">#[from] </span>UnknownMintInputVariantError),
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="attr">#[error(<span class="string">"The note is already spent"</span>)]
+<a href=#213 id=213 data-nosnippet>213</a>    </span>SpentCoin,
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="attr">#[error(<span class="string">"The note has an invalid amount not issued by the mint"</span>)]
+<a href=#215 id=215 data-nosnippet>215</a>    </span>InvalidDenomination,
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="attr">#[error(<span class="string">"The note has an invalid signature"</span>)]
+<a href=#217 id=217 data-nosnippet>217</a>    </span>InvalidSignature,
+<a href=#218 id=218 data-nosnippet>218</a>}
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+<a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">pub enum </span>MintOutputError {
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="attr">#[error(<span class="string">"The mint output version is not supported by this federation"</span>)]
+<a href=#223 id=223 data-nosnippet>223</a>    </span>UnknownOutputVariant(<span class="attr">#[from] </span>UnknownMintOutputVariantError),
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="attr">#[error(<span class="string">"The note has an invalid amount not issued by the mint"</span>)]
+<a href=#225 id=225 data-nosnippet>225</a>    </span>InvalidDenomination,
+<a href=#226 id=226 data-nosnippet>226</a>}
 </code></pre></div></section></main></body></html>
