@@ -37,7 +37,7 @@
 <a href=#37 id=37 data-nosnippet>37</a>    <span class="doccomment">/// Display the chain of pending bitcoin transactions.
 <a href=#38 id=38 data-nosnippet>38</a>    </span>PendingTxChain,
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="doccomment">/// Display the chain of bitcoin transactions.
-<a href=#40 id=40 data-nosnippet>40</a>    </span>TxChain { n: usize },
+<a href=#40 id=40 data-nosnippet>40</a>    </span>TxChain,
 <a href=#41 id=41 data-nosnippet>41</a>}
 <a href=#42 id=42 data-nosnippet>42</a>
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>handle_cli_command(
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>            InfoOpts::BlockCount =&gt; json(wallet.block_count().<span class="kw">await</span><span class="question-mark">?</span>),
 <a href=#53 id=53 data-nosnippet>53</a>            InfoOpts::Feerate =&gt; json(wallet.feerate().<span class="kw">await</span><span class="question-mark">?</span>),
 <a href=#54 id=54 data-nosnippet>54</a>            InfoOpts::PendingTxChain =&gt; json(wallet.pending_tx_chain().<span class="kw">await</span><span class="question-mark">?</span>),
-<a href=#55 id=55 data-nosnippet>55</a>            InfoOpts::TxChain { n } =&gt; json(wallet.tx_chain(n).<span class="kw">await</span><span class="question-mark">?</span>),
+<a href=#55 id=55 data-nosnippet>55</a>            InfoOpts::TxChain =&gt; json(wallet.tx_chain().<span class="kw">await</span><span class="question-mark">?</span>),
 <a href=#56 id=56 data-nosnippet>56</a>        },
 <a href=#57 id=57 data-nosnippet>57</a>        Opts::SendFee =&gt; json(wallet.send_fee().<span class="kw">await</span><span class="question-mark">?</span>),
 <a href=#58 id=58 data-nosnippet>58</a>        Opts::Send {
