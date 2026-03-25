@@ -48,6 +48,10 @@ use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
+use crate::metrics::{
+    IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTIONS_ACTIVE,
+    IROH_API_REQUEST_DURATION_SECONDS,
+};
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
@@ -513,6 +517,13 @@ async fn handle_incoming(
     let connection = incoming.accept()?.await?;
     let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
 
+    IROH_API_CONNECTIONS_ACTIVE.inc();
+    let connection_timer = IROH_API_CONNECTION_DURATION_SECONDS.start_timer();
+    scopeguard::defer! {
+        IROH_API_CONNECTIONS_ACTIVE.dec();
+        connection_timer.observe_duration();
+    }
+
     loop {
         let (send_stream, recv_stream) = connection.accept_bi().await?;
 
@@ -559,7 +570,14 @@ async fn handle_request(
 
     let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
 
+    let method = request.method.to_string();
+    let timer = IROH_API_REQUEST_DURATION_SECONDS
+        .with_label_values(&[&method])
+        .start_timer();
+
     let response = await_response(consensus_api, core_api, module_api, request).await;
+
+    timer.observe_duration();
 
     let response = serde_json::to_vec(&response)?;
 
