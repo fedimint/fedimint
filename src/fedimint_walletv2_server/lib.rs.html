@@ -23,12 +23,12 @@
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>bitcoin::{Amount, Network, Sequence, Transaction, TxIn, TxOut, Txid};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>common::config::WalletConfigConsensus;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>common::{
-<a href=#26 id=26 data-nosnippet>26</a>    DepositRange, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
+<a href=#26 id=26 data-nosnippet>26</a>    OutputInfo, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
 <a href=#27 id=27 data-nosnippet>27</a>    WalletOutput, WalletOutputOutcome,
 <a href=#28 id=28 data-nosnippet>28</a>};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>db::{
-<a href=#30 id=30 data-nosnippet>30</a>    DbKeyPrefix, Deposit, DepositKey, DepositPrefix, FederationWalletKey, FederationWalletPrefix,
-<a href=#31 id=31 data-nosnippet>31</a>    SignaturesKey, SignaturesPrefix, SignaturesTxidPrefix, SpentDepositKey, SpentDepositPrefix,
+<a href=#30 id=30 data-nosnippet>30</a>    DbKeyPrefix, FederationWalletKey, FederationWalletPrefix, Output, OutputKey, OutputPrefix,
+<a href=#31 id=31 data-nosnippet>31</a>    SignaturesKey, SignaturesPrefix, SignaturesTxidPrefix, SpentOutputKey, SpentOutputPrefix,
 <a href=#32 id=32 data-nosnippet>32</a>    TxInfoIndexKey, TxInfoIndexPrefix,
 <a href=#33 id=33 data-nosnippet>33</a>};
 <a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_core::config::{
@@ -65,8 +65,8 @@
 <a href=#65 id=65 data-nosnippet>65</a>    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
 <a href=#66 id=66 data-nosnippet>66</a>};
 <a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_walletv2_common::endpoint_constants::{
-<a href=#68 id=68 data-nosnippet>68</a>    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, DEPOSIT_RANGE_ENDPOINT,
-<a href=#69 id=69 data-nosnippet>69</a>    FEDERATION_WALLET_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
+<a href=#68 id=68 data-nosnippet>68</a>    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
+<a href=#69 id=69 data-nosnippet>69</a>    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
 <a href=#70 id=70 data-nosnippet>70</a>    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 <a href=#71 id=71 data-nosnippet>71</a>};
 <a href=#72 id=72 data-nosnippet>72</a><span class="kw">use </span>fedimint_walletv2_common::{
@@ -151,24 +151,24 @@
 <a href=#151 id=151 data-nosnippet>151</a>
 <a href=#152 id=152 data-nosnippet>152</a>        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
 <a href=#153 id=153 data-nosnippet>153</a>            <span class="kw">match </span>table {
-<a href=#154 id=154 data-nosnippet>154</a>                DbKeyPrefix::Deposit =&gt; {
+<a href=#154 id=154 data-nosnippet>154</a>                DbKeyPrefix::Output =&gt; {
 <a href=#155 id=155 data-nosnippet>155</a>                    <span class="macro">push_db_pair_items!</span>(
 <a href=#156 id=156 data-nosnippet>156</a>                        dbtx,
-<a href=#157 id=157 data-nosnippet>157</a>                        DepositPrefix,
-<a href=#158 id=158 data-nosnippet>158</a>                        DepositKey,
-<a href=#159 id=159 data-nosnippet>159</a>                        Deposit,
+<a href=#157 id=157 data-nosnippet>157</a>                        OutputPrefix,
+<a href=#158 id=158 data-nosnippet>158</a>                        OutputKey,
+<a href=#159 id=159 data-nosnippet>159</a>                        Output,
 <a href=#160 id=160 data-nosnippet>160</a>                        wallet,
-<a href=#161 id=161 data-nosnippet>161</a>                        <span class="string">"Wallet Deposits"
+<a href=#161 id=161 data-nosnippet>161</a>                        <span class="string">"Wallet Outputs"
 <a href=#162 id=162 data-nosnippet>162</a>                    </span>);
 <a href=#163 id=163 data-nosnippet>163</a>                }
-<a href=#164 id=164 data-nosnippet>164</a>                DbKeyPrefix::SpentDeposit =&gt; {
+<a href=#164 id=164 data-nosnippet>164</a>                DbKeyPrefix::SpentOutput =&gt; {
 <a href=#165 id=165 data-nosnippet>165</a>                    <span class="macro">push_db_pair_items!</span>(
 <a href=#166 id=166 data-nosnippet>166</a>                        dbtx,
-<a href=#167 id=167 data-nosnippet>167</a>                        SpentDepositPrefix,
-<a href=#168 id=168 data-nosnippet>168</a>                        SpentDepositKey,
+<a href=#167 id=167 data-nosnippet>167</a>                        SpentOutputPrefix,
+<a href=#168 id=168 data-nosnippet>168</a>                        SpentOutputKey,
 <a href=#169 id=169 data-nosnippet>169</a>                        (),
 <a href=#170 id=170 data-nosnippet>170</a>                        wallet,
-<a href=#171 id=171 data-nosnippet>171</a>                        <span class="string">"Wallet Spent Deposits"
+<a href=#171 id=171 data-nosnippet>171</a>                        <span class="string">"Wallet Spent Outputs"
 <a href=#172 id=172 data-nosnippet>172</a>                    </span>);
 <a href=#173 id=173 data-nosnippet>173</a>                }
 <a href=#174 id=174 data-nosnippet>174</a>                DbKeyPrefix::BlockCountVote =&gt; {
@@ -483,23 +483,23 @@
 <a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
 <a href=#484 id=484 data-nosnippet>484</a>
 <a href=#485 id=485 data-nosnippet>485</a>        <span class="kw">if </span>dbtx
-<a href=#486 id=486 data-nosnippet>486</a>            .insert_entry(<span class="kw-2">&amp;</span>SpentDepositKey(input.deposit_index), <span class="kw-2">&amp;</span>())
+<a href=#486 id=486 data-nosnippet>486</a>            .insert_entry(<span class="kw-2">&amp;</span>SpentOutputKey(input.output_index), <span class="kw-2">&amp;</span>())
 <a href=#487 id=487 data-nosnippet>487</a>            .<span class="kw">await
 <a href=#488 id=488 data-nosnippet>488</a>            </span>.is_some()
 <a href=#489 id=489 data-nosnippet>489</a>        {
-<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::DepositAlreadySpent);
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::OutputAlreadySpent);
 <a href=#491 id=491 data-nosnippet>491</a>        }
 <a href=#492 id=492 data-nosnippet>492</a>
-<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">let </span>Deposit(tracked_outpoint, tracked_out) = dbtx
-<a href=#494 id=494 data-nosnippet>494</a>            .get_value(<span class="kw-2">&amp;</span>DepositKey(input.deposit_index))
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">let </span>Output(tracked_outpoint, tracked_output) = dbtx
+<a href=#494 id=494 data-nosnippet>494</a>            .get_value(<span class="kw-2">&amp;</span>OutputKey(input.output_index))
 <a href=#495 id=495 data-nosnippet>495</a>            .<span class="kw">await
-<a href=#496 id=496 data-nosnippet>496</a>            </span>.ok_or(WalletInputError::UnknownDepositIndex)<span class="question-mark">?</span>;
+<a href=#496 id=496 data-nosnippet>496</a>            </span>.ok_or(WalletInputError::UnknownOutputIndex)<span class="question-mark">?</span>;
 <a href=#497 id=497 data-nosnippet>497</a>
 <a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">let </span>tweaked_pubkey = <span class="self">self
 <a href=#499 id=499 data-nosnippet>499</a>            </span>.descriptor(<span class="kw-2">&amp;</span>input.tweak.consensus_hash())
 <a href=#500 id=500 data-nosnippet>500</a>            .script_pubkey();
 <a href=#501 id=501 data-nosnippet>501</a>
-<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">if </span>tracked_out.<span class="macro">script_pubkey !</span>= tweaked_pubkey {
+<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">if </span>tracked_output.<span class="macro">script_pubkey !</span>= tweaked_pubkey {
 <a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::WrongTweak);
 <a href=#504 id=504 data-nosnippet>504</a>        }
 <a href=#505 id=505 data-nosnippet>505</a>
@@ -516,7 +516,7 @@
 <a href=#516 id=516 data-nosnippet>516</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::InsufficientTotalFee);
 <a href=#517 id=517 data-nosnippet>517</a>        }
 <a href=#518 id=518 data-nosnippet>518</a>
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>deposit_value = tracked_out
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>output_value = tracked_output
 <a href=#520 id=520 data-nosnippet>520</a>            .value
 <a href=#521 id=521 data-nosnippet>521</a>            .checked_sub(input.fee)
 <a href=#522 id=522 data-nosnippet>522</a>            .ok_or(WalletInputError::ArithmeticOverflow)<span class="question-mark">?</span>;
@@ -527,7 +527,7 @@
 <a href=#527 id=527 data-nosnippet>527</a>            // limit. By induction so is this change value.
 <a href=#528 id=528 data-nosnippet>528</a>            </span><span class="kw">let </span>change_value = wallet
 <a href=#529 id=529 data-nosnippet>529</a>                .value
-<a href=#530 id=530 data-nosnippet>530</a>                .checked_add(deposit_value)
+<a href=#530 id=530 data-nosnippet>530</a>                .checked_add(output_value)
 <a href=#531 id=531 data-nosnippet>531</a>                .ok_or(WalletInputError::ArithmeticOverflow)<span class="question-mark">?</span>;
 <a href=#532 id=532 data-nosnippet>532</a>
 <a href=#533 id=533 data-nosnippet>533</a>            <span class="kw">let </span>tx = Transaction {
@@ -594,7 +594,7 @@
 <a href=#594 id=594 data-nosnippet>594</a>                            tweak: wallet.tweak,
 <a href=#595 id=595 data-nosnippet>595</a>                        },
 <a href=#596 id=596 data-nosnippet>596</a>                        SpentTxOut {
-<a href=#597 id=597 data-nosnippet>597</a>                            value: tracked_out.value,
+<a href=#597 id=597 data-nosnippet>597</a>                            value: tracked_output.value,
 <a href=#598 id=598 data-nosnippet>598</a>                            tweak: input.tweak.consensus_hash(),
 <a href=#599 id=599 data-nosnippet>599</a>                        },
 <a href=#600 id=600 data-nosnippet>600</a>                    ],
@@ -607,7 +607,7 @@
 <a href=#607 id=607 data-nosnippet>607</a>            dbtx.insert_new_entry(
 <a href=#608 id=608 data-nosnippet>608</a>                <span class="kw-2">&amp;</span>FederationWalletKey,
 <a href=#609 id=609 data-nosnippet>609</a>                <span class="kw-2">&amp;</span>FederationWallet {
-<a href=#610 id=610 data-nosnippet>610</a>                    value: tracked_out.value,
+<a href=#610 id=610 data-nosnippet>610</a>                    value: tracked_output.value,
 <a href=#611 id=611 data-nosnippet>611</a>                    outpoint: tracked_outpoint,
 <a href=#612 id=612 data-nosnippet>612</a>                    tweak: input.tweak.consensus_hash(),
 <a href=#613 id=613 data-nosnippet>613</a>                },
@@ -615,7 +615,7 @@
 <a href=#615 id=615 data-nosnippet>615</a>            .<span class="kw">await</span>;
 <a href=#616 id=616 data-nosnippet>616</a>        }
 <a href=#617 id=617 data-nosnippet>617</a>
-<a href=#618 id=618 data-nosnippet>618</a>        <span class="kw">let </span>amount = deposit_value
+<a href=#618 id=618 data-nosnippet>618</a>        <span class="kw">let </span>amount = output_value
 <a href=#619 id=619 data-nosnippet>619</a>            .to_sat()
 <a href=#620 id=620 data-nosnippet>620</a>            .checked_mul(<span class="number">1000</span>)
 <a href=#621 id=621 data-nosnippet>621</a>            .map(fedimint_core::Amount::from_msats)
@@ -841,12 +841,12 @@
 <a href=#841 id=841 data-nosnippet>841</a>                }
 <a href=#842 id=842 data-nosnippet>842</a>            },
 <a href=#843 id=843 data-nosnippet>843</a>            <span class="macro">api_endpoint!</span> {
-<a href=#844 id=844 data-nosnippet>844</a>                DEPOSIT_RANGE_ENDPOINT,
+<a href=#844 id=844 data-nosnippet>844</a>                OUTPUT_INFO_SLICE_ENDPOINT,
 <a href=#845 id=845 data-nosnippet>845</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-<a href=#846 id=846 data-nosnippet>846</a>                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (u64, u64)| -&gt; DepositRange {
+<a href=#846 id=846 data-nosnippet>846</a>                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (u64, u64)| -&gt; Vec&lt;OutputInfo&gt; {
 <a href=#847 id=847 data-nosnippet>847</a>                    <span class="kw">let </span>db = context.db();
 <a href=#848 id=848 data-nosnippet>848</a>                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#849 id=849 data-nosnippet>849</a>                    <span class="prelude-val">Ok</span>(module.get_deposits(<span class="kw-2">&amp;mut </span>dbtx, params.<span class="number">0</span>, params.<span class="number">1</span>).<span class="kw">await</span>)
+<a href=#849 id=849 data-nosnippet>849</a>                    <span class="prelude-val">Ok</span>(module.get_outputs(<span class="kw-2">&amp;mut </span>dbtx, params.<span class="number">0</span>, params.<span class="number">1</span>).<span class="kw">await</span>)
 <a href=#850 id=850 data-nosnippet>850</a>                }
 <a href=#851 id=851 data-nosnippet>851</a>            },
 <a href=#852 id=852 data-nosnippet>852</a>            <span class="macro">api_endpoint!</span> {
@@ -997,419 +997,420 @@
 <a href=#997 id=997 data-nosnippet>997</a>                        };
 <a href=#998 id=998 data-nosnippet>998</a>
 <a href=#999 id=999 data-nosnippet>999</a>                        <span class="kw">let </span>index = dbtx
-<a href=#1000 id=1000 data-nosnippet>1000</a>                            .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>DepositPrefix)
+<a href=#1000 id=1000 data-nosnippet>1000</a>                            .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>OutputPrefix)
 <a href=#1001 id=1001 data-nosnippet>1001</a>                            .<span class="kw">await
 <a href=#1002 id=1002 data-nosnippet>1002</a>                            </span>.next()
 <a href=#1003 id=1003 data-nosnippet>1003</a>                            .<span class="kw">await
 <a href=#1004 id=1004 data-nosnippet>1004</a>                            </span>.map_or(<span class="number">0</span>, |entry| entry.<span class="number">0.0 </span>+ <span class="number">1</span>);
 <a href=#1005 id=1005 data-nosnippet>1005</a>
-<a href=#1006 id=1006 data-nosnippet>1006</a>                        dbtx.insert_new_entry(
-<a href=#1007 id=1007 data-nosnippet>1007</a>                            <span class="kw-2">&amp;</span>DepositKey(index),
-<a href=#1008 id=1008 data-nosnippet>1008</a>                            <span class="kw-2">&amp;</span>Deposit(outpoint, tx_out.clone()),
-<a href=#1009 id=1009 data-nosnippet>1009</a>                        )
-<a href=#1010 id=1010 data-nosnippet>1010</a>                        .<span class="kw">await</span>;
-<a href=#1011 id=1011 data-nosnippet>1011</a>                    }
-<a href=#1012 id=1012 data-nosnippet>1012</a>                }
-<a href=#1013 id=1013 data-nosnippet>1013</a>            }
-<a href=#1014 id=1014 data-nosnippet>1014</a>        }
+<a href=#1006 id=1006 data-nosnippet>1006</a>                        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputKey(index), <span class="kw-2">&amp;</span>Output(outpoint, tx_out.clone()))
+<a href=#1007 id=1007 data-nosnippet>1007</a>                            .<span class="kw">await</span>;
+<a href=#1008 id=1008 data-nosnippet>1008</a>                    }
+<a href=#1009 id=1009 data-nosnippet>1009</a>                }
+<a href=#1010 id=1010 data-nosnippet>1010</a>            }
+<a href=#1011 id=1011 data-nosnippet>1011</a>        }
+<a href=#1012 id=1012 data-nosnippet>1012</a>
+<a href=#1013 id=1013 data-nosnippet>1013</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1014 id=1014 data-nosnippet>1014</a>    }
 <a href=#1015 id=1015 data-nosnippet>1015</a>
-<a href=#1016 id=1016 data-nosnippet>1016</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1017 id=1017 data-nosnippet>1017</a>    }
-<a href=#1018 id=1018 data-nosnippet>1018</a>
-<a href=#1019 id=1019 data-nosnippet>1019</a>    <span class="kw">async fn </span>process_signatures(
-<a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1021 id=1021 data-nosnippet>1021</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1022 id=1022 data-nosnippet>1022</a>        txid: bitcoin::Txid,
-<a href=#1023 id=1023 data-nosnippet>1023</a>        signatures: Vec&lt;Signature&gt;,
-<a href=#1024 id=1024 data-nosnippet>1024</a>        peer: PeerId,
-<a href=#1025 id=1025 data-nosnippet>1025</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#1026 id=1026 data-nosnippet>1026</a>        <span class="kw">let </span><span class="kw-2">mut </span>unsigned = dbtx
-<a href=#1027 id=1027 data-nosnippet>1027</a>            .get_value(<span class="kw-2">&amp;</span>UnsignedTxKey(txid))
-<a href=#1028 id=1028 data-nosnippet>1028</a>            .<span class="kw">await
-<a href=#1029 id=1029 data-nosnippet>1029</a>            </span>.context(<span class="string">"Unsigned transaction does not exist"</span>)<span class="question-mark">?</span>;
-<a href=#1030 id=1030 data-nosnippet>1030</a>
-<a href=#1031 id=1031 data-nosnippet>1031</a>        <span class="kw">let </span>pk = <span class="self">self
-<a href=#1032 id=1032 data-nosnippet>1032</a>            </span>.cfg
-<a href=#1033 id=1033 data-nosnippet>1033</a>            .consensus
-<a href=#1034 id=1034 data-nosnippet>1034</a>            .bitcoin_pks
-<a href=#1035 id=1035 data-nosnippet>1035</a>            .get(<span class="kw-2">&amp;</span>peer)
-<a href=#1036 id=1036 data-nosnippet>1036</a>            .expect(<span class="string">"Failed to get public key of peer from config"</span>);
-<a href=#1037 id=1037 data-nosnippet>1037</a>
-<a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="self">self</span>.verify_signatures(<span class="kw-2">&amp;</span>unsigned, <span class="kw-2">&amp;</span>signatures, <span class="kw-2">*</span>pk)<span class="question-mark">?</span>;
-<a href=#1039 id=1039 data-nosnippet>1039</a>
-<a href=#1040 id=1040 data-nosnippet>1040</a>        <span class="kw">if </span>dbtx
-<a href=#1041 id=1041 data-nosnippet>1041</a>            .insert_entry(<span class="kw-2">&amp;</span>SignaturesKey(txid, peer), <span class="kw-2">&amp;</span>signatures)
-<a href=#1042 id=1042 data-nosnippet>1042</a>            .<span class="kw">await
-<a href=#1043 id=1043 data-nosnippet>1043</a>            </span>.is_some()
-<a href=#1044 id=1044 data-nosnippet>1044</a>        {
-<a href=#1045 id=1045 data-nosnippet>1045</a>            <span class="macro">bail!</span>(<span class="string">"Already received valid signatures from this peer"</span>)
-<a href=#1046 id=1046 data-nosnippet>1046</a>        }
-<a href=#1047 id=1047 data-nosnippet>1047</a>
-<a href=#1048 id=1048 data-nosnippet>1048</a>        <span class="kw">let </span>signatures = dbtx
-<a href=#1049 id=1049 data-nosnippet>1049</a>            .find_by_prefix(<span class="kw-2">&amp;</span>SignaturesTxidPrefix(txid))
-<a href=#1050 id=1050 data-nosnippet>1050</a>            .<span class="kw">await
-<a href=#1051 id=1051 data-nosnippet>1051</a>            </span>.map(|(key, signatures)| (key.<span class="number">1</span>, signatures))
-<a href=#1052 id=1052 data-nosnippet>1052</a>            .collect::&lt;BTreeMap&lt;PeerId, Vec&lt;Signature&gt;&gt;&gt;()
-<a href=#1053 id=1053 data-nosnippet>1053</a>            .<span class="kw">await</span>;
+<a href=#1016 id=1016 data-nosnippet>1016</a>    <span class="kw">async fn </span>process_signatures(
+<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1018 id=1018 data-nosnippet>1018</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1019 id=1019 data-nosnippet>1019</a>        txid: bitcoin::Txid,
+<a href=#1020 id=1020 data-nosnippet>1020</a>        signatures: Vec&lt;Signature&gt;,
+<a href=#1021 id=1021 data-nosnippet>1021</a>        peer: PeerId,
+<a href=#1022 id=1022 data-nosnippet>1022</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#1023 id=1023 data-nosnippet>1023</a>        <span class="kw">let </span><span class="kw-2">mut </span>unsigned = dbtx
+<a href=#1024 id=1024 data-nosnippet>1024</a>            .get_value(<span class="kw-2">&amp;</span>UnsignedTxKey(txid))
+<a href=#1025 id=1025 data-nosnippet>1025</a>            .<span class="kw">await
+<a href=#1026 id=1026 data-nosnippet>1026</a>            </span>.context(<span class="string">"Unsigned transaction does not exist"</span>)<span class="question-mark">?</span>;
+<a href=#1027 id=1027 data-nosnippet>1027</a>
+<a href=#1028 id=1028 data-nosnippet>1028</a>        <span class="kw">let </span>pk = <span class="self">self
+<a href=#1029 id=1029 data-nosnippet>1029</a>            </span>.cfg
+<a href=#1030 id=1030 data-nosnippet>1030</a>            .consensus
+<a href=#1031 id=1031 data-nosnippet>1031</a>            .bitcoin_pks
+<a href=#1032 id=1032 data-nosnippet>1032</a>            .get(<span class="kw-2">&amp;</span>peer)
+<a href=#1033 id=1033 data-nosnippet>1033</a>            .expect(<span class="string">"Failed to get public key of peer from config"</span>);
+<a href=#1034 id=1034 data-nosnippet>1034</a>
+<a href=#1035 id=1035 data-nosnippet>1035</a>        <span class="self">self</span>.verify_signatures(<span class="kw-2">&amp;</span>unsigned, <span class="kw-2">&amp;</span>signatures, <span class="kw-2">*</span>pk)<span class="question-mark">?</span>;
+<a href=#1036 id=1036 data-nosnippet>1036</a>
+<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw">if </span>dbtx
+<a href=#1038 id=1038 data-nosnippet>1038</a>            .insert_entry(<span class="kw-2">&amp;</span>SignaturesKey(txid, peer), <span class="kw-2">&amp;</span>signatures)
+<a href=#1039 id=1039 data-nosnippet>1039</a>            .<span class="kw">await
+<a href=#1040 id=1040 data-nosnippet>1040</a>            </span>.is_some()
+<a href=#1041 id=1041 data-nosnippet>1041</a>        {
+<a href=#1042 id=1042 data-nosnippet>1042</a>            <span class="macro">bail!</span>(<span class="string">"Already received valid signatures from this peer"</span>)
+<a href=#1043 id=1043 data-nosnippet>1043</a>        }
+<a href=#1044 id=1044 data-nosnippet>1044</a>
+<a href=#1045 id=1045 data-nosnippet>1045</a>        <span class="kw">let </span>signatures = dbtx
+<a href=#1046 id=1046 data-nosnippet>1046</a>            .find_by_prefix(<span class="kw-2">&amp;</span>SignaturesTxidPrefix(txid))
+<a href=#1047 id=1047 data-nosnippet>1047</a>            .<span class="kw">await
+<a href=#1048 id=1048 data-nosnippet>1048</a>            </span>.map(|(key, signatures)| (key.<span class="number">1</span>, signatures))
+<a href=#1049 id=1049 data-nosnippet>1049</a>            .collect::&lt;BTreeMap&lt;PeerId, Vec&lt;Signature&gt;&gt;&gt;()
+<a href=#1050 id=1050 data-nosnippet>1050</a>            .<span class="kw">await</span>;
+<a href=#1051 id=1051 data-nosnippet>1051</a>
+<a href=#1052 id=1052 data-nosnippet>1052</a>        <span class="kw">if </span>signatures.len() == <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
+<a href=#1053 id=1053 data-nosnippet>1053</a>            dbtx.remove_entry(<span class="kw-2">&amp;</span>UnsignedTxKey(txid)).<span class="kw">await</span>;
 <a href=#1054 id=1054 data-nosnippet>1054</a>
-<a href=#1055 id=1055 data-nosnippet>1055</a>        <span class="kw">if </span>signatures.len() == <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
-<a href=#1056 id=1056 data-nosnippet>1056</a>            dbtx.remove_entry(<span class="kw-2">&amp;</span>UnsignedTxKey(txid)).<span class="kw">await</span>;
-<a href=#1057 id=1057 data-nosnippet>1057</a>
-<a href=#1058 id=1058 data-nosnippet>1058</a>            dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>SignaturesTxidPrefix(txid)).<span class="kw">await</span>;
-<a href=#1059 id=1059 data-nosnippet>1059</a>
-<a href=#1060 id=1060 data-nosnippet>1060</a>            <span class="self">self</span>.finalize_tx(<span class="kw-2">&amp;mut </span>unsigned, <span class="kw-2">&amp;</span>signatures);
+<a href=#1055 id=1055 data-nosnippet>1055</a>            dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>SignaturesTxidPrefix(txid)).<span class="kw">await</span>;
+<a href=#1056 id=1056 data-nosnippet>1056</a>
+<a href=#1057 id=1057 data-nosnippet>1057</a>            <span class="self">self</span>.finalize_tx(<span class="kw-2">&amp;mut </span>unsigned, <span class="kw-2">&amp;</span>signatures);
+<a href=#1058 id=1058 data-nosnippet>1058</a>
+<a href=#1059 id=1059 data-nosnippet>1059</a>            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>UnconfirmedTxKey(txid), <span class="kw-2">&amp;</span>unsigned)
+<a href=#1060 id=1060 data-nosnippet>1060</a>                .<span class="kw">await</span>;
 <a href=#1061 id=1061 data-nosnippet>1061</a>
-<a href=#1062 id=1062 data-nosnippet>1062</a>            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>UnconfirmedTxKey(txid), <span class="kw-2">&amp;</span>unsigned)
-<a href=#1063 id=1063 data-nosnippet>1063</a>                .<span class="kw">await</span>;
+<a href=#1062 id=1062 data-nosnippet>1062</a>            <span class="self">self</span>.btc_rpc.submit_transaction(unsigned.tx).<span class="kw">await</span>;
+<a href=#1063 id=1063 data-nosnippet>1063</a>        }
 <a href=#1064 id=1064 data-nosnippet>1064</a>
-<a href=#1065 id=1065 data-nosnippet>1065</a>            <span class="self">self</span>.btc_rpc.submit_transaction(unsigned.tx).<span class="kw">await</span>;
-<a href=#1066 id=1066 data-nosnippet>1066</a>        }
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1066 id=1066 data-nosnippet>1066</a>    }
 <a href=#1067 id=1067 data-nosnippet>1067</a>
-<a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1069 id=1069 data-nosnippet>1069</a>    }
-<a href=#1070 id=1070 data-nosnippet>1070</a>
-<a href=#1071 id=1071 data-nosnippet>1071</a>    <span class="kw">async fn </span>await_local_sync_to_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, block_count: u64) {
-<a href=#1072 id=1072 data-nosnippet>1072</a>        <span class="kw">loop </span>{
-<a href=#1073 id=1073 data-nosnippet>1073</a>            <span class="kw">if </span><span class="self">self
-<a href=#1074 id=1074 data-nosnippet>1074</a>                </span>.btc_rpc
-<a href=#1075 id=1075 data-nosnippet>1075</a>                .status()
-<a href=#1076 id=1076 data-nosnippet>1076</a>                .is_some_and(|status| status.block_count &gt;= block_count)
-<a href=#1077 id=1077 data-nosnippet>1077</a>            {
-<a href=#1078 id=1078 data-nosnippet>1078</a>                <span class="kw">break</span>;
-<a href=#1079 id=1079 data-nosnippet>1079</a>            }
-<a href=#1080 id=1080 data-nosnippet>1080</a>
-<a href=#1081 id=1081 data-nosnippet>1081</a>            <span class="macro">info!</span>(target: LOG_MODULE_WALLETV2, <span class="string">"Waiting for local bitcoin backend to sync to block count {block_count}"</span>);
-<a href=#1082 id=1082 data-nosnippet>1082</a>
-<a href=#1083 id=1083 data-nosnippet>1083</a>            sleep(common::sleep_duration()).<span class="kw">await</span>;
-<a href=#1084 id=1084 data-nosnippet>1084</a>        }
-<a href=#1085 id=1085 data-nosnippet>1085</a>    }
+<a href=#1068 id=1068 data-nosnippet>1068</a>    <span class="kw">async fn </span>await_local_sync_to_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, block_count: u64) {
+<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="kw">loop </span>{
+<a href=#1070 id=1070 data-nosnippet>1070</a>            <span class="kw">if </span><span class="self">self
+<a href=#1071 id=1071 data-nosnippet>1071</a>                </span>.btc_rpc
+<a href=#1072 id=1072 data-nosnippet>1072</a>                .status()
+<a href=#1073 id=1073 data-nosnippet>1073</a>                .is_some_and(|status| status.block_count &gt;= block_count)
+<a href=#1074 id=1074 data-nosnippet>1074</a>            {
+<a href=#1075 id=1075 data-nosnippet>1075</a>                <span class="kw">break</span>;
+<a href=#1076 id=1076 data-nosnippet>1076</a>            }
+<a href=#1077 id=1077 data-nosnippet>1077</a>
+<a href=#1078 id=1078 data-nosnippet>1078</a>            <span class="macro">info!</span>(target: LOG_MODULE_WALLETV2, <span class="string">"Waiting for local bitcoin backend to sync to block count {block_count}"</span>);
+<a href=#1079 id=1079 data-nosnippet>1079</a>
+<a href=#1080 id=1080 data-nosnippet>1080</a>            sleep(common::sleep_duration()).<span class="kw">await</span>;
+<a href=#1081 id=1081 data-nosnippet>1081</a>        }
+<a href=#1082 id=1082 data-nosnippet>1082</a>    }
+<a href=#1083 id=1083 data-nosnippet>1083</a>
+<a href=#1084 id=1084 data-nosnippet>1084</a>    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
+<a href=#1085 id=1085 data-nosnippet>1085</a>        <span class="kw">let </span>num_peers = <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers();
 <a href=#1086 id=1086 data-nosnippet>1086</a>
-<a href=#1087 id=1087 data-nosnippet>1087</a>    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
-<a href=#1088 id=1088 data-nosnippet>1088</a>        <span class="kw">let </span>num_peers = <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers();
-<a href=#1089 id=1089 data-nosnippet>1089</a>
-<a href=#1090 id=1090 data-nosnippet>1090</a>        <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
-<a href=#1091 id=1091 data-nosnippet>1091</a>            .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
-<a href=#1092 id=1092 data-nosnippet>1092</a>            .<span class="kw">await
-<a href=#1093 id=1093 data-nosnippet>1093</a>            </span>.map(|entry| entry.<span class="number">1</span>)
-<a href=#1094 id=1094 data-nosnippet>1094</a>            .collect::&lt;Vec&lt;u64&gt;&gt;()
-<a href=#1095 id=1095 data-nosnippet>1095</a>            .<span class="kw">await</span>;
-<a href=#1096 id=1096 data-nosnippet>1096</a>
-<a href=#1097 id=1097 data-nosnippet>1097</a>        <span class="macro">assert!</span>(counts.len() &lt;= num_peers.total());
-<a href=#1098 id=1098 data-nosnippet>1098</a>
-<a href=#1099 id=1099 data-nosnippet>1099</a>        counts.sort_unstable();
-<a href=#1100 id=1100 data-nosnippet>1100</a>
-<a href=#1101 id=1101 data-nosnippet>1101</a>        counts.reverse();
-<a href=#1102 id=1102 data-nosnippet>1102</a>
-<a href=#1103 id=1103 data-nosnippet>1103</a>        <span class="macro">assert!</span>(counts.last() &lt;= counts.first());
-<a href=#1104 id=1104 data-nosnippet>1104</a>
-<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="comment">// The block count we select guarantees that any threshold of correct peers can
-<a href=#1106 id=1106 data-nosnippet>1106</a>        // increase the consensus block count and any consensus block count has been
-<a href=#1107 id=1107 data-nosnippet>1107</a>        // confirmed by a threshold of peers.
+<a href=#1087 id=1087 data-nosnippet>1087</a>        <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
+<a href=#1088 id=1088 data-nosnippet>1088</a>            .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
+<a href=#1089 id=1089 data-nosnippet>1089</a>            .<span class="kw">await
+<a href=#1090 id=1090 data-nosnippet>1090</a>            </span>.map(|entry| entry.<span class="number">1</span>)
+<a href=#1091 id=1091 data-nosnippet>1091</a>            .collect::&lt;Vec&lt;u64&gt;&gt;()
+<a href=#1092 id=1092 data-nosnippet>1092</a>            .<span class="kw">await</span>;
+<a href=#1093 id=1093 data-nosnippet>1093</a>
+<a href=#1094 id=1094 data-nosnippet>1094</a>        <span class="macro">assert!</span>(counts.len() &lt;= num_peers.total());
+<a href=#1095 id=1095 data-nosnippet>1095</a>
+<a href=#1096 id=1096 data-nosnippet>1096</a>        counts.sort_unstable();
+<a href=#1097 id=1097 data-nosnippet>1097</a>
+<a href=#1098 id=1098 data-nosnippet>1098</a>        counts.reverse();
+<a href=#1099 id=1099 data-nosnippet>1099</a>
+<a href=#1100 id=1100 data-nosnippet>1100</a>        <span class="macro">assert!</span>(counts.last() &lt;= counts.first());
+<a href=#1101 id=1101 data-nosnippet>1101</a>
+<a href=#1102 id=1102 data-nosnippet>1102</a>        <span class="comment">// The block count we select guarantees that any threshold of correct peers can
+<a href=#1103 id=1103 data-nosnippet>1103</a>        // increase the consensus block count and any consensus block count has been
+<a href=#1104 id=1104 data-nosnippet>1104</a>        // confirmed by a threshold of peers.
+<a href=#1105 id=1105 data-nosnippet>1105</a>
+<a href=#1106 id=1106 data-nosnippet>1106</a>        </span>counts.get(num_peers.threshold() - <span class="number">1</span>).copied().unwrap_or(<span class="number">0</span>)
+<a href=#1107 id=1107 data-nosnippet>1107</a>    }
 <a href=#1108 id=1108 data-nosnippet>1108</a>
-<a href=#1109 id=1109 data-nosnippet>1109</a>        </span>counts.get(num_peers.threshold() - <span class="number">1</span>).copied().unwrap_or(<span class="number">0</span>)
-<a href=#1110 id=1110 data-nosnippet>1110</a>    }
+<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="kw">pub async fn </span>consensus_feerate(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#1110 id=1110 data-nosnippet>1110</a>        <span class="kw">let </span>num_peers = <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers();
 <a href=#1111 id=1111 data-nosnippet>1111</a>
-<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">pub async fn </span>consensus_feerate(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-<a href=#1113 id=1113 data-nosnippet>1113</a>        <span class="kw">let </span>num_peers = <span class="self">self</span>.cfg.consensus.bitcoin_pks.to_num_peers();
-<a href=#1114 id=1114 data-nosnippet>1114</a>
-<a href=#1115 id=1115 data-nosnippet>1115</a>        <span class="kw">let </span><span class="kw-2">mut </span>rates = dbtx
-<a href=#1116 id=1116 data-nosnippet>1116</a>            .find_by_prefix(<span class="kw-2">&amp;</span>FeeRateVotePrefix)
-<a href=#1117 id=1117 data-nosnippet>1117</a>            .<span class="kw">await
-<a href=#1118 id=1118 data-nosnippet>1118</a>            </span>.filter_map(|entry| <span class="kw">async move </span>{ entry.<span class="number">1 </span>})
-<a href=#1119 id=1119 data-nosnippet>1119</a>            .collect::&lt;Vec&lt;u64&gt;&gt;()
-<a href=#1120 id=1120 data-nosnippet>1120</a>            .<span class="kw">await</span>;
-<a href=#1121 id=1121 data-nosnippet>1121</a>
-<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="macro">assert!</span>(rates.len() &lt;= num_peers.total());
-<a href=#1123 id=1123 data-nosnippet>1123</a>
-<a href=#1124 id=1124 data-nosnippet>1124</a>        rates.sort_unstable();
-<a href=#1125 id=1125 data-nosnippet>1125</a>
-<a href=#1126 id=1126 data-nosnippet>1126</a>        <span class="macro">assert!</span>(rates.first() &lt;= rates.last());
+<a href=#1112 id=1112 data-nosnippet>1112</a>        <span class="kw">let </span><span class="kw-2">mut </span>rates = dbtx
+<a href=#1113 id=1113 data-nosnippet>1113</a>            .find_by_prefix(<span class="kw-2">&amp;</span>FeeRateVotePrefix)
+<a href=#1114 id=1114 data-nosnippet>1114</a>            .<span class="kw">await
+<a href=#1115 id=1115 data-nosnippet>1115</a>            </span>.filter_map(|entry| <span class="kw">async move </span>{ entry.<span class="number">1 </span>})
+<a href=#1116 id=1116 data-nosnippet>1116</a>            .collect::&lt;Vec&lt;u64&gt;&gt;()
+<a href=#1117 id=1117 data-nosnippet>1117</a>            .<span class="kw">await</span>;
+<a href=#1118 id=1118 data-nosnippet>1118</a>
+<a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="macro">assert!</span>(rates.len() &lt;= num_peers.total());
+<a href=#1120 id=1120 data-nosnippet>1120</a>
+<a href=#1121 id=1121 data-nosnippet>1121</a>        rates.sort_unstable();
+<a href=#1122 id=1122 data-nosnippet>1122</a>
+<a href=#1123 id=1123 data-nosnippet>1123</a>        <span class="macro">assert!</span>(rates.first() &lt;= rates.last());
+<a href=#1124 id=1124 data-nosnippet>1124</a>
+<a href=#1125 id=1125 data-nosnippet>1125</a>        rates.get(num_peers.threshold() - <span class="number">1</span>).copied()
+<a href=#1126 id=1126 data-nosnippet>1126</a>    }
 <a href=#1127 id=1127 data-nosnippet>1127</a>
-<a href=#1128 id=1128 data-nosnippet>1128</a>        rates.get(num_peers.threshold() - <span class="number">1</span>).copied()
-<a href=#1129 id=1129 data-nosnippet>1129</a>    }
-<a href=#1130 id=1130 data-nosnippet>1130</a>
-<a href=#1131 id=1131 data-nosnippet>1131</a>    <span class="kw">pub async fn </span>consensus_fee(
-<a href=#1132 id=1132 data-nosnippet>1132</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1133 id=1133 data-nosnippet>1133</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1134 id=1134 data-nosnippet>1134</a>        tx_vbytes: u64,
-<a href=#1135 id=1135 data-nosnippet>1135</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-<a href=#1136 id=1136 data-nosnippet>1136</a>        <span class="comment">// The minimum feerate is a protection against a catastrophic error in the
-<a href=#1137 id=1137 data-nosnippet>1137</a>        // feerate estimation and limits the length of the pending transaction stack.
-<a href=#1138 id=1138 data-nosnippet>1138</a>
-<a href=#1139 id=1139 data-nosnippet>1139</a>        </span><span class="kw">let </span>pending_txs = pending_txs_unordered(dbtx).<span class="kw">await</span>;
-<a href=#1140 id=1140 data-nosnippet>1140</a>
-<a href=#1141 id=1141 data-nosnippet>1141</a>        <span class="macro">assert!</span>(pending_txs.len() &lt;= <span class="number">32</span>);
-<a href=#1142 id=1142 data-nosnippet>1142</a>
-<a href=#1143 id=1143 data-nosnippet>1143</a>        <span class="kw">let </span>feerate = <span class="self">self
-<a href=#1144 id=1144 data-nosnippet>1144</a>            </span>.consensus_feerate(dbtx)
-<a href=#1145 id=1145 data-nosnippet>1145</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#1146 id=1146 data-nosnippet>1146</a>            </span>.max(<span class="self">self</span>.cfg.consensus.feerate_base &lt;&lt; pending_txs.len());
-<a href=#1147 id=1147 data-nosnippet>1147</a>
-<a href=#1148 id=1148 data-nosnippet>1148</a>        <span class="kw">let </span>tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(<span class="number">1000</span>);
-<a href=#1149 id=1149 data-nosnippet>1149</a>
-<a href=#1150 id=1150 data-nosnippet>1150</a>        <span class="kw">let </span>stack_vbytes = pending_txs
-<a href=#1151 id=1151 data-nosnippet>1151</a>            .iter()
-<a href=#1152 id=1152 data-nosnippet>1152</a>            .map(|t| t.vbytes)
-<a href=#1153 id=1153 data-nosnippet>1153</a>            .try_fold(tx_vbytes, u64::checked_add)
-<a href=#1154 id=1154 data-nosnippet>1154</a>            .expect(<span class="string">"Stack vbytes overflow with at most 32 pending txs"</span>);
-<a href=#1155 id=1155 data-nosnippet>1155</a>
-<a href=#1156 id=1156 data-nosnippet>1156</a>        <span class="kw">let </span>stack_fee = stack_vbytes.saturating_mul(feerate).saturating_div(<span class="number">1000</span>);
-<a href=#1157 id=1157 data-nosnippet>1157</a>
-<a href=#1158 id=1158 data-nosnippet>1158</a>        <span class="comment">// Deduct the fees already paid by currently pending transactions
-<a href=#1159 id=1159 data-nosnippet>1159</a>        </span><span class="kw">let </span>stack_fee = pending_txs
-<a href=#1160 id=1160 data-nosnippet>1160</a>            .iter()
-<a href=#1161 id=1161 data-nosnippet>1161</a>            .map(|t| t.fee.to_sat())
-<a href=#1162 id=1162 data-nosnippet>1162</a>            .fold(stack_fee, u64::saturating_sub);
+<a href=#1128 id=1128 data-nosnippet>1128</a>    <span class="kw">pub async fn </span>consensus_fee(
+<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1130 id=1130 data-nosnippet>1130</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1131 id=1131 data-nosnippet>1131</a>        tx_vbytes: u64,
+<a href=#1132 id=1132 data-nosnippet>1132</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+<a href=#1133 id=1133 data-nosnippet>1133</a>        <span class="comment">// The minimum feerate is a protection against a catastrophic error in the
+<a href=#1134 id=1134 data-nosnippet>1134</a>        // feerate estimation and limits the length of the pending transaction stack.
+<a href=#1135 id=1135 data-nosnippet>1135</a>
+<a href=#1136 id=1136 data-nosnippet>1136</a>        </span><span class="kw">let </span>pending_txs = pending_txs_unordered(dbtx).<span class="kw">await</span>;
+<a href=#1137 id=1137 data-nosnippet>1137</a>
+<a href=#1138 id=1138 data-nosnippet>1138</a>        <span class="macro">assert!</span>(pending_txs.len() &lt;= <span class="number">32</span>);
+<a href=#1139 id=1139 data-nosnippet>1139</a>
+<a href=#1140 id=1140 data-nosnippet>1140</a>        <span class="kw">let </span>feerate = <span class="self">self
+<a href=#1141 id=1141 data-nosnippet>1141</a>            </span>.consensus_feerate(dbtx)
+<a href=#1142 id=1142 data-nosnippet>1142</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#1143 id=1143 data-nosnippet>1143</a>            </span>.max(<span class="self">self</span>.cfg.consensus.feerate_base &lt;&lt; pending_txs.len());
+<a href=#1144 id=1144 data-nosnippet>1144</a>
+<a href=#1145 id=1145 data-nosnippet>1145</a>        <span class="kw">let </span>tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(<span class="number">1000</span>);
+<a href=#1146 id=1146 data-nosnippet>1146</a>
+<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="kw">let </span>stack_vbytes = pending_txs
+<a href=#1148 id=1148 data-nosnippet>1148</a>            .iter()
+<a href=#1149 id=1149 data-nosnippet>1149</a>            .map(|t| t.vbytes)
+<a href=#1150 id=1150 data-nosnippet>1150</a>            .try_fold(tx_vbytes, u64::checked_add)
+<a href=#1151 id=1151 data-nosnippet>1151</a>            .expect(<span class="string">"Stack vbytes overflow with at most 32 pending txs"</span>);
+<a href=#1152 id=1152 data-nosnippet>1152</a>
+<a href=#1153 id=1153 data-nosnippet>1153</a>        <span class="kw">let </span>stack_fee = stack_vbytes.saturating_mul(feerate).saturating_div(<span class="number">1000</span>);
+<a href=#1154 id=1154 data-nosnippet>1154</a>
+<a href=#1155 id=1155 data-nosnippet>1155</a>        <span class="comment">// Deduct the fees already paid by currently pending transactions
+<a href=#1156 id=1156 data-nosnippet>1156</a>        </span><span class="kw">let </span>stack_fee = pending_txs
+<a href=#1157 id=1157 data-nosnippet>1157</a>            .iter()
+<a href=#1158 id=1158 data-nosnippet>1158</a>            .map(|t| t.fee.to_sat())
+<a href=#1159 id=1159 data-nosnippet>1159</a>            .fold(stack_fee, u64::saturating_sub);
+<a href=#1160 id=1160 data-nosnippet>1160</a>
+<a href=#1161 id=1161 data-nosnippet>1161</a>        <span class="prelude-val">Some</span>(Amount::from_sat(tx_fee.max(stack_fee)))
+<a href=#1162 id=1162 data-nosnippet>1162</a>    }
 <a href=#1163 id=1163 data-nosnippet>1163</a>
-<a href=#1164 id=1164 data-nosnippet>1164</a>        <span class="prelude-val">Some</span>(Amount::from_sat(tx_fee.max(stack_fee)))
-<a href=#1165 id=1165 data-nosnippet>1165</a>    }
-<a href=#1166 id=1166 data-nosnippet>1166</a>
-<a href=#1167 id=1167 data-nosnippet>1167</a>    <span class="kw">pub async fn </span>send_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-<a href=#1168 id=1168 data-nosnippet>1168</a>        <span class="self">self</span>.consensus_fee(dbtx, <span class="self">self</span>.cfg.consensus.send_tx_vbytes)
-<a href=#1169 id=1169 data-nosnippet>1169</a>            .<span class="kw">await
-<a href=#1170 id=1170 data-nosnippet>1170</a>    </span>}
-<a href=#1171 id=1171 data-nosnippet>1171</a>
-<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="kw">pub async fn </span>receive_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="self">self</span>.consensus_fee(dbtx, <span class="self">self</span>.cfg.consensus.receive_tx_vbytes)
-<a href=#1174 id=1174 data-nosnippet>1174</a>            .<span class="kw">await
-<a href=#1175 id=1175 data-nosnippet>1175</a>    </span>}
-<a href=#1176 id=1176 data-nosnippet>1176</a>
-<a href=#1177 id=1177 data-nosnippet>1177</a>    <span class="kw">fn </span>descriptor(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>sha256::Hash) -&gt; Wsh&lt;secp256k1::PublicKey&gt; {
-<a href=#1178 id=1178 data-nosnippet>1178</a>        descriptor(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.bitcoin_pks, tweak)
-<a href=#1179 id=1179 data-nosnippet>1179</a>    }
+<a href=#1164 id=1164 data-nosnippet>1164</a>    <span class="kw">pub async fn </span>send_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+<a href=#1165 id=1165 data-nosnippet>1165</a>        <span class="self">self</span>.consensus_fee(dbtx, <span class="self">self</span>.cfg.consensus.send_tx_vbytes)
+<a href=#1166 id=1166 data-nosnippet>1166</a>            .<span class="kw">await
+<a href=#1167 id=1167 data-nosnippet>1167</a>    </span>}
+<a href=#1168 id=1168 data-nosnippet>1168</a>
+<a href=#1169 id=1169 data-nosnippet>1169</a>    <span class="kw">pub async fn </span>receive_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+<a href=#1170 id=1170 data-nosnippet>1170</a>        <span class="self">self</span>.consensus_fee(dbtx, <span class="self">self</span>.cfg.consensus.receive_tx_vbytes)
+<a href=#1171 id=1171 data-nosnippet>1171</a>            .<span class="kw">await
+<a href=#1172 id=1172 data-nosnippet>1172</a>    </span>}
+<a href=#1173 id=1173 data-nosnippet>1173</a>
+<a href=#1174 id=1174 data-nosnippet>1174</a>    <span class="kw">fn </span>descriptor(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>sha256::Hash) -&gt; Wsh&lt;secp256k1::PublicKey&gt; {
+<a href=#1175 id=1175 data-nosnippet>1175</a>        descriptor(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.bitcoin_pks, tweak)
+<a href=#1176 id=1176 data-nosnippet>1176</a>    }
+<a href=#1177 id=1177 data-nosnippet>1177</a>
+<a href=#1178 id=1178 data-nosnippet>1178</a>    <span class="kw">fn </span>sign_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, unsigned_tx: <span class="kw-2">&amp;</span>FederationTx) -&gt; Vec&lt;Signature&gt; {
+<a href=#1179 id=1179 data-nosnippet>1179</a>        <span class="kw">let </span><span class="kw-2">mut </span>sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
 <a href=#1180 id=1180 data-nosnippet>1180</a>
-<a href=#1181 id=1181 data-nosnippet>1181</a>    <span class="kw">fn </span>sign_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, unsigned_tx: <span class="kw-2">&amp;</span>FederationTx) -&gt; Vec&lt;Signature&gt; {
-<a href=#1182 id=1182 data-nosnippet>1182</a>        <span class="kw">let </span><span class="kw-2">mut </span>sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
-<a href=#1183 id=1183 data-nosnippet>1183</a>
-<a href=#1184 id=1184 data-nosnippet>1184</a>        unsigned_tx
-<a href=#1185 id=1185 data-nosnippet>1185</a>            .spent_tx_outs
-<a href=#1186 id=1186 data-nosnippet>1186</a>            .iter()
-<a href=#1187 id=1187 data-nosnippet>1187</a>            .enumerate()
-<a href=#1188 id=1188 data-nosnippet>1188</a>            .map(|(index, utxo)| {
-<a href=#1189 id=1189 data-nosnippet>1189</a>                <span class="kw">let </span>descriptor = <span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak).ecdsa_sighash_script_code();
-<a href=#1190 id=1190 data-nosnippet>1190</a>
-<a href=#1191 id=1191 data-nosnippet>1191</a>                <span class="kw">let </span>p2wsh_sighash = sighash_cache
-<a href=#1192 id=1192 data-nosnippet>1192</a>                    .p2wsh_signature_hash(index, <span class="kw-2">&amp;</span>descriptor, utxo.value, EcdsaSighashType::All)
-<a href=#1193 id=1193 data-nosnippet>1193</a>                    .expect(<span class="string">"Failed to compute P2WSH segwit sighash"</span>);
+<a href=#1181 id=1181 data-nosnippet>1181</a>        unsigned_tx
+<a href=#1182 id=1182 data-nosnippet>1182</a>            .spent_tx_outs
+<a href=#1183 id=1183 data-nosnippet>1183</a>            .iter()
+<a href=#1184 id=1184 data-nosnippet>1184</a>            .enumerate()
+<a href=#1185 id=1185 data-nosnippet>1185</a>            .map(|(index, utxo)| {
+<a href=#1186 id=1186 data-nosnippet>1186</a>                <span class="kw">let </span>descriptor = <span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak).ecdsa_sighash_script_code();
+<a href=#1187 id=1187 data-nosnippet>1187</a>
+<a href=#1188 id=1188 data-nosnippet>1188</a>                <span class="kw">let </span>p2wsh_sighash = sighash_cache
+<a href=#1189 id=1189 data-nosnippet>1189</a>                    .p2wsh_signature_hash(index, <span class="kw-2">&amp;</span>descriptor, utxo.value, EcdsaSighashType::All)
+<a href=#1190 id=1190 data-nosnippet>1190</a>                    .expect(<span class="string">"Failed to compute P2WSH segwit sighash"</span>);
+<a href=#1191 id=1191 data-nosnippet>1191</a>
+<a href=#1192 id=1192 data-nosnippet>1192</a>                <span class="kw">let </span>scalar = <span class="kw-2">&amp;</span>Scalar::from_be_bytes(utxo.tweak.to_byte_array())
+<a href=#1193 id=1193 data-nosnippet>1193</a>                    .expect(<span class="string">"Hash is within field order"</span>);
 <a href=#1194 id=1194 data-nosnippet>1194</a>
-<a href=#1195 id=1195 data-nosnippet>1195</a>                <span class="kw">let </span>scalar = <span class="kw-2">&amp;</span>Scalar::from_be_bytes(utxo.tweak.to_byte_array())
-<a href=#1196 id=1196 data-nosnippet>1196</a>                    .expect(<span class="string">"Hash is within field order"</span>);
-<a href=#1197 id=1197 data-nosnippet>1197</a>
-<a href=#1198 id=1198 data-nosnippet>1198</a>                <span class="kw">let </span>sk = <span class="self">self
-<a href=#1199 id=1199 data-nosnippet>1199</a>                    </span>.cfg
-<a href=#1200 id=1200 data-nosnippet>1200</a>                    .private
-<a href=#1201 id=1201 data-nosnippet>1201</a>                    .bitcoin_sk
-<a href=#1202 id=1202 data-nosnippet>1202</a>                    .add_tweak(scalar)
-<a href=#1203 id=1203 data-nosnippet>1203</a>                    .expect(<span class="string">"Failed to tweak bitcoin secret key"</span>);
-<a href=#1204 id=1204 data-nosnippet>1204</a>
-<a href=#1205 id=1205 data-nosnippet>1205</a>                Secp256k1::new().sign_ecdsa(<span class="kw-2">&amp;</span>p2wsh_sighash.into(), <span class="kw-2">&amp;</span>sk)
-<a href=#1206 id=1206 data-nosnippet>1206</a>            })
-<a href=#1207 id=1207 data-nosnippet>1207</a>            .collect()
-<a href=#1208 id=1208 data-nosnippet>1208</a>    }
-<a href=#1209 id=1209 data-nosnippet>1209</a>
-<a href=#1210 id=1210 data-nosnippet>1210</a>    <span class="kw">fn </span>verify_signatures(
-<a href=#1211 id=1211 data-nosnippet>1211</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1212 id=1212 data-nosnippet>1212</a>        unsigned_tx: <span class="kw-2">&amp;</span>FederationTx,
-<a href=#1213 id=1213 data-nosnippet>1213</a>        signatures: <span class="kw-2">&amp;</span>[Signature],
-<a href=#1214 id=1214 data-nosnippet>1214</a>        pk: PublicKey,
-<a href=#1215 id=1215 data-nosnippet>1215</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#1216 id=1216 data-nosnippet>1216</a>        <span class="macro">ensure!</span>(
-<a href=#1217 id=1217 data-nosnippet>1217</a>            unsigned_tx.spent_tx_outs.len() == signatures.len(),
-<a href=#1218 id=1218 data-nosnippet>1218</a>            <span class="string">"Incorrect number of signatures"
-<a href=#1219 id=1219 data-nosnippet>1219</a>        </span>);
-<a href=#1220 id=1220 data-nosnippet>1220</a>
-<a href=#1221 id=1221 data-nosnippet>1221</a>        <span class="kw">let </span><span class="kw-2">mut </span>sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
-<a href=#1222 id=1222 data-nosnippet>1222</a>
-<a href=#1223 id=1223 data-nosnippet>1223</a>        <span class="kw">for </span>((index, utxo), signature) <span class="kw">in </span>unsigned_tx
-<a href=#1224 id=1224 data-nosnippet>1224</a>            .spent_tx_outs
-<a href=#1225 id=1225 data-nosnippet>1225</a>            .iter()
-<a href=#1226 id=1226 data-nosnippet>1226</a>            .enumerate()
-<a href=#1227 id=1227 data-nosnippet>1227</a>            .zip(signatures.iter())
-<a href=#1228 id=1228 data-nosnippet>1228</a>        {
-<a href=#1229 id=1229 data-nosnippet>1229</a>            <span class="kw">let </span>code = <span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak).ecdsa_sighash_script_code();
-<a href=#1230 id=1230 data-nosnippet>1230</a>
-<a href=#1231 id=1231 data-nosnippet>1231</a>            <span class="kw">let </span>p2wsh_sighash = sighash_cache
-<a href=#1232 id=1232 data-nosnippet>1232</a>                .p2wsh_signature_hash(index, <span class="kw-2">&amp;</span>code, utxo.value, EcdsaSighashType::All)
-<a href=#1233 id=1233 data-nosnippet>1233</a>                .expect(<span class="string">"Failed to compute P2WSH segwit sighash"</span>);
-<a href=#1234 id=1234 data-nosnippet>1234</a>
-<a href=#1235 id=1235 data-nosnippet>1235</a>            <span class="kw">let </span>pk = tweak_public_key(<span class="kw-2">&amp;</span>pk, <span class="kw-2">&amp;</span>utxo.tweak);
+<a href=#1195 id=1195 data-nosnippet>1195</a>                <span class="kw">let </span>sk = <span class="self">self
+<a href=#1196 id=1196 data-nosnippet>1196</a>                    </span>.cfg
+<a href=#1197 id=1197 data-nosnippet>1197</a>                    .private
+<a href=#1198 id=1198 data-nosnippet>1198</a>                    .bitcoin_sk
+<a href=#1199 id=1199 data-nosnippet>1199</a>                    .add_tweak(scalar)
+<a href=#1200 id=1200 data-nosnippet>1200</a>                    .expect(<span class="string">"Failed to tweak bitcoin secret key"</span>);
+<a href=#1201 id=1201 data-nosnippet>1201</a>
+<a href=#1202 id=1202 data-nosnippet>1202</a>                Secp256k1::new().sign_ecdsa(<span class="kw-2">&amp;</span>p2wsh_sighash.into(), <span class="kw-2">&amp;</span>sk)
+<a href=#1203 id=1203 data-nosnippet>1203</a>            })
+<a href=#1204 id=1204 data-nosnippet>1204</a>            .collect()
+<a href=#1205 id=1205 data-nosnippet>1205</a>    }
+<a href=#1206 id=1206 data-nosnippet>1206</a>
+<a href=#1207 id=1207 data-nosnippet>1207</a>    <span class="kw">fn </span>verify_signatures(
+<a href=#1208 id=1208 data-nosnippet>1208</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1209 id=1209 data-nosnippet>1209</a>        unsigned_tx: <span class="kw-2">&amp;</span>FederationTx,
+<a href=#1210 id=1210 data-nosnippet>1210</a>        signatures: <span class="kw-2">&amp;</span>[Signature],
+<a href=#1211 id=1211 data-nosnippet>1211</a>        pk: PublicKey,
+<a href=#1212 id=1212 data-nosnippet>1212</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="macro">ensure!</span>(
+<a href=#1214 id=1214 data-nosnippet>1214</a>            unsigned_tx.spent_tx_outs.len() == signatures.len(),
+<a href=#1215 id=1215 data-nosnippet>1215</a>            <span class="string">"Incorrect number of signatures"
+<a href=#1216 id=1216 data-nosnippet>1216</a>        </span>);
+<a href=#1217 id=1217 data-nosnippet>1217</a>
+<a href=#1218 id=1218 data-nosnippet>1218</a>        <span class="kw">let </span><span class="kw-2">mut </span>sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
+<a href=#1219 id=1219 data-nosnippet>1219</a>
+<a href=#1220 id=1220 data-nosnippet>1220</a>        <span class="kw">for </span>((index, utxo), signature) <span class="kw">in </span>unsigned_tx
+<a href=#1221 id=1221 data-nosnippet>1221</a>            .spent_tx_outs
+<a href=#1222 id=1222 data-nosnippet>1222</a>            .iter()
+<a href=#1223 id=1223 data-nosnippet>1223</a>            .enumerate()
+<a href=#1224 id=1224 data-nosnippet>1224</a>            .zip(signatures.iter())
+<a href=#1225 id=1225 data-nosnippet>1225</a>        {
+<a href=#1226 id=1226 data-nosnippet>1226</a>            <span class="kw">let </span>code = <span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak).ecdsa_sighash_script_code();
+<a href=#1227 id=1227 data-nosnippet>1227</a>
+<a href=#1228 id=1228 data-nosnippet>1228</a>            <span class="kw">let </span>p2wsh_sighash = sighash_cache
+<a href=#1229 id=1229 data-nosnippet>1229</a>                .p2wsh_signature_hash(index, <span class="kw-2">&amp;</span>code, utxo.value, EcdsaSighashType::All)
+<a href=#1230 id=1230 data-nosnippet>1230</a>                .expect(<span class="string">"Failed to compute P2WSH segwit sighash"</span>);
+<a href=#1231 id=1231 data-nosnippet>1231</a>
+<a href=#1232 id=1232 data-nosnippet>1232</a>            <span class="kw">let </span>pk = tweak_public_key(<span class="kw-2">&amp;</span>pk, <span class="kw-2">&amp;</span>utxo.tweak);
+<a href=#1233 id=1233 data-nosnippet>1233</a>
+<a href=#1234 id=1234 data-nosnippet>1234</a>            secp256k1::SECP256K1.verify_ecdsa(<span class="kw-2">&amp;</span>p2wsh_sighash.into(), signature, <span class="kw-2">&amp;</span>pk)<span class="question-mark">?</span>;
+<a href=#1235 id=1235 data-nosnippet>1235</a>        }
 <a href=#1236 id=1236 data-nosnippet>1236</a>
-<a href=#1237 id=1237 data-nosnippet>1237</a>            secp256k1::SECP256K1.verify_ecdsa(<span class="kw-2">&amp;</span>p2wsh_sighash.into(), signature, <span class="kw-2">&amp;</span>pk)<span class="question-mark">?</span>;
-<a href=#1238 id=1238 data-nosnippet>1238</a>        }
+<a href=#1237 id=1237 data-nosnippet>1237</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1238 id=1238 data-nosnippet>1238</a>    }
 <a href=#1239 id=1239 data-nosnippet>1239</a>
-<a href=#1240 id=1240 data-nosnippet>1240</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1241 id=1241 data-nosnippet>1241</a>    }
-<a href=#1242 id=1242 data-nosnippet>1242</a>
-<a href=#1243 id=1243 data-nosnippet>1243</a>    <span class="kw">fn </span>finalize_tx(
-<a href=#1244 id=1244 data-nosnippet>1244</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1245 id=1245 data-nosnippet>1245</a>        federation_tx: <span class="kw-2">&amp;mut </span>FederationTx,
-<a href=#1246 id=1246 data-nosnippet>1246</a>        signatures: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Vec&lt;Signature&gt;&gt;,
-<a href=#1247 id=1247 data-nosnippet>1247</a>    ) {
-<a href=#1248 id=1248 data-nosnippet>1248</a>        <span class="macro">assert_eq!</span>(
-<a href=#1249 id=1249 data-nosnippet>1249</a>            federation_tx.spent_tx_outs.len(),
-<a href=#1250 id=1250 data-nosnippet>1250</a>            federation_tx.tx.input.len()
-<a href=#1251 id=1251 data-nosnippet>1251</a>        );
-<a href=#1252 id=1252 data-nosnippet>1252</a>
-<a href=#1253 id=1253 data-nosnippet>1253</a>        <span class="kw">for </span>(index, utxo) <span class="kw">in </span>federation_tx.spent_tx_outs.iter().enumerate() {
-<a href=#1254 id=1254 data-nosnippet>1254</a>            <span class="kw">let </span>satisfier: BTreeMap&lt;PublicKey, bitcoin::ecdsa::Signature&gt; = signatures
-<a href=#1255 id=1255 data-nosnippet>1255</a>                .iter()
-<a href=#1256 id=1256 data-nosnippet>1256</a>                .map(|(peer, sigs)| {
-<a href=#1257 id=1257 data-nosnippet>1257</a>                    <span class="macro">assert_eq!</span>(sigs.len(), federation_tx.tx.input.len());
-<a href=#1258 id=1258 data-nosnippet>1258</a>
-<a href=#1259 id=1259 data-nosnippet>1259</a>                    <span class="kw">let </span>pk = <span class="kw-2">*</span><span class="self">self
-<a href=#1260 id=1260 data-nosnippet>1260</a>                        </span>.cfg
-<a href=#1261 id=1261 data-nosnippet>1261</a>                        .consensus
-<a href=#1262 id=1262 data-nosnippet>1262</a>                        .bitcoin_pks
-<a href=#1263 id=1263 data-nosnippet>1263</a>                        .get(peer)
-<a href=#1264 id=1264 data-nosnippet>1264</a>                        .expect(<span class="string">"Failed to get public key of peer from config"</span>);
-<a href=#1265 id=1265 data-nosnippet>1265</a>
-<a href=#1266 id=1266 data-nosnippet>1266</a>                    <span class="kw">let </span>pk = tweak_public_key(<span class="kw-2">&amp;</span>pk, <span class="kw-2">&amp;</span>utxo.tweak);
-<a href=#1267 id=1267 data-nosnippet>1267</a>
-<a href=#1268 id=1268 data-nosnippet>1268</a>                    (pk, bitcoin::ecdsa::Signature::sighash_all(sigs[index]))
-<a href=#1269 id=1269 data-nosnippet>1269</a>                })
-<a href=#1270 id=1270 data-nosnippet>1270</a>                .collect();
-<a href=#1271 id=1271 data-nosnippet>1271</a>
-<a href=#1272 id=1272 data-nosnippet>1272</a>            miniscript::Descriptor::Wsh(<span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak))
-<a href=#1273 id=1273 data-nosnippet>1273</a>                .satisfy(<span class="kw-2">&amp;mut </span>federation_tx.tx.input[index], satisfier)
-<a href=#1274 id=1274 data-nosnippet>1274</a>                .expect(<span class="string">"Failed to satisfy descriptor"</span>);
-<a href=#1275 id=1275 data-nosnippet>1275</a>        }
-<a href=#1276 id=1276 data-nosnippet>1276</a>    }
+<a href=#1240 id=1240 data-nosnippet>1240</a>    <span class="kw">fn </span>finalize_tx(
+<a href=#1241 id=1241 data-nosnippet>1241</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1242 id=1242 data-nosnippet>1242</a>        federation_tx: <span class="kw-2">&amp;mut </span>FederationTx,
+<a href=#1243 id=1243 data-nosnippet>1243</a>        signatures: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Vec&lt;Signature&gt;&gt;,
+<a href=#1244 id=1244 data-nosnippet>1244</a>    ) {
+<a href=#1245 id=1245 data-nosnippet>1245</a>        <span class="macro">assert_eq!</span>(
+<a href=#1246 id=1246 data-nosnippet>1246</a>            federation_tx.spent_tx_outs.len(),
+<a href=#1247 id=1247 data-nosnippet>1247</a>            federation_tx.tx.input.len()
+<a href=#1248 id=1248 data-nosnippet>1248</a>        );
+<a href=#1249 id=1249 data-nosnippet>1249</a>
+<a href=#1250 id=1250 data-nosnippet>1250</a>        <span class="kw">for </span>(index, utxo) <span class="kw">in </span>federation_tx.spent_tx_outs.iter().enumerate() {
+<a href=#1251 id=1251 data-nosnippet>1251</a>            <span class="kw">let </span>satisfier: BTreeMap&lt;PublicKey, bitcoin::ecdsa::Signature&gt; = signatures
+<a href=#1252 id=1252 data-nosnippet>1252</a>                .iter()
+<a href=#1253 id=1253 data-nosnippet>1253</a>                .map(|(peer, sigs)| {
+<a href=#1254 id=1254 data-nosnippet>1254</a>                    <span class="macro">assert_eq!</span>(sigs.len(), federation_tx.tx.input.len());
+<a href=#1255 id=1255 data-nosnippet>1255</a>
+<a href=#1256 id=1256 data-nosnippet>1256</a>                    <span class="kw">let </span>pk = <span class="kw-2">*</span><span class="self">self
+<a href=#1257 id=1257 data-nosnippet>1257</a>                        </span>.cfg
+<a href=#1258 id=1258 data-nosnippet>1258</a>                        .consensus
+<a href=#1259 id=1259 data-nosnippet>1259</a>                        .bitcoin_pks
+<a href=#1260 id=1260 data-nosnippet>1260</a>                        .get(peer)
+<a href=#1261 id=1261 data-nosnippet>1261</a>                        .expect(<span class="string">"Failed to get public key of peer from config"</span>);
+<a href=#1262 id=1262 data-nosnippet>1262</a>
+<a href=#1263 id=1263 data-nosnippet>1263</a>                    <span class="kw">let </span>pk = tweak_public_key(<span class="kw-2">&amp;</span>pk, <span class="kw-2">&amp;</span>utxo.tweak);
+<a href=#1264 id=1264 data-nosnippet>1264</a>
+<a href=#1265 id=1265 data-nosnippet>1265</a>                    (pk, bitcoin::ecdsa::Signature::sighash_all(sigs[index]))
+<a href=#1266 id=1266 data-nosnippet>1266</a>                })
+<a href=#1267 id=1267 data-nosnippet>1267</a>                .collect();
+<a href=#1268 id=1268 data-nosnippet>1268</a>
+<a href=#1269 id=1269 data-nosnippet>1269</a>            miniscript::Descriptor::Wsh(<span class="self">self</span>.descriptor(<span class="kw-2">&amp;</span>utxo.tweak))
+<a href=#1270 id=1270 data-nosnippet>1270</a>                .satisfy(<span class="kw-2">&amp;mut </span>federation_tx.tx.input[index], satisfier)
+<a href=#1271 id=1271 data-nosnippet>1271</a>                .expect(<span class="string">"Failed to satisfy descriptor"</span>);
+<a href=#1272 id=1272 data-nosnippet>1272</a>        }
+<a href=#1273 id=1273 data-nosnippet>1273</a>    }
+<a href=#1274 id=1274 data-nosnippet>1274</a>
+<a href=#1275 id=1275 data-nosnippet>1275</a>    <span class="kw">async fn </span>tx_id(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;, outpoint: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;Txid&gt; {
+<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="kw">let </span>index = dbtx.get_value(<span class="kw-2">&amp;</span>TxInfoIndexKey(outpoint)).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1277 id=1277 data-nosnippet>1277</a>
-<a href=#1278 id=1278 data-nosnippet>1278</a>    <span class="kw">async fn </span>tx_id(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;, outpoint: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;Txid&gt; {
-<a href=#1279 id=1279 data-nosnippet>1279</a>        <span class="kw">let </span>index = dbtx.get_value(<span class="kw-2">&amp;</span>TxInfoIndexKey(outpoint)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1280 id=1280 data-nosnippet>1280</a>
-<a href=#1281 id=1281 data-nosnippet>1281</a>        dbtx.get_value(<span class="kw-2">&amp;</span>TxInfoKey(index))
-<a href=#1282 id=1282 data-nosnippet>1282</a>            .<span class="kw">await
-<a href=#1283 id=1283 data-nosnippet>1283</a>            </span>.map(|entry| entry.txid)
-<a href=#1284 id=1284 data-nosnippet>1284</a>    }
-<a href=#1285 id=1285 data-nosnippet>1285</a>
-<a href=#1286 id=1286 data-nosnippet>1286</a>    <span class="kw">async fn </span>get_deposits(
-<a href=#1287 id=1287 data-nosnippet>1287</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1288 id=1288 data-nosnippet>1288</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1289 id=1289 data-nosnippet>1289</a>        start_index: u64,
-<a href=#1290 id=1290 data-nosnippet>1290</a>        end_index: u64,
-<a href=#1291 id=1291 data-nosnippet>1291</a>    ) -&gt; DepositRange {
-<a href=#1292 id=1292 data-nosnippet>1292</a>        <span class="kw">let </span>deposits = dbtx
-<a href=#1293 id=1293 data-nosnippet>1293</a>            .find_by_range(DepositKey(start_index)..DepositKey(end_index))
-<a href=#1294 id=1294 data-nosnippet>1294</a>            .<span class="kw">await
-<a href=#1295 id=1295 data-nosnippet>1295</a>            </span>.map(|entry| entry.<span class="number">1.1</span>)
-<a href=#1296 id=1296 data-nosnippet>1296</a>            .collect()
-<a href=#1297 id=1297 data-nosnippet>1297</a>            .<span class="kw">await</span>;
-<a href=#1298 id=1298 data-nosnippet>1298</a>
-<a href=#1299 id=1299 data-nosnippet>1299</a>        <span class="kw">let </span>spent = dbtx
-<a href=#1300 id=1300 data-nosnippet>1300</a>            .find_by_range(SpentDepositKey(start_index)..SpentDepositKey(end_index))
-<a href=#1301 id=1301 data-nosnippet>1301</a>            .<span class="kw">await
-<a href=#1302 id=1302 data-nosnippet>1302</a>            </span>.map(|entry| entry.<span class="number">0.0</span>)
-<a href=#1303 id=1303 data-nosnippet>1303</a>            .collect()
-<a href=#1304 id=1304 data-nosnippet>1304</a>            .<span class="kw">await</span>;
-<a href=#1305 id=1305 data-nosnippet>1305</a>
-<a href=#1306 id=1306 data-nosnippet>1306</a>        DepositRange { deposits, spent }
-<a href=#1307 id=1307 data-nosnippet>1307</a>    }
-<a href=#1308 id=1308 data-nosnippet>1308</a>
-<a href=#1309 id=1309 data-nosnippet>1309</a>    <span class="kw">async fn </span>pending_tx_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;TxInfo&gt; {
-<a href=#1310 id=1310 data-nosnippet>1310</a>        <span class="kw">let </span>n_pending = pending_txs_unordered(dbtx).<span class="kw">await</span>.len();
-<a href=#1311 id=1311 data-nosnippet>1311</a>
-<a href=#1312 id=1312 data-nosnippet>1312</a>        dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>TxInfoPrefix)
-<a href=#1313 id=1313 data-nosnippet>1313</a>            .<span class="kw">await
-<a href=#1314 id=1314 data-nosnippet>1314</a>            </span>.take(n_pending)
-<a href=#1315 id=1315 data-nosnippet>1315</a>            .map(|entry| entry.<span class="number">1</span>)
-<a href=#1316 id=1316 data-nosnippet>1316</a>            .collect()
-<a href=#1317 id=1317 data-nosnippet>1317</a>            .<span class="kw">await
-<a href=#1318 id=1318 data-nosnippet>1318</a>    </span>}
-<a href=#1319 id=1319 data-nosnippet>1319</a>
-<a href=#1320 id=1320 data-nosnippet>1320</a>    <span class="kw">async fn </span>tx_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;TxInfo&gt; {
-<a href=#1321 id=1321 data-nosnippet>1321</a>        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>TxInfoPrefix)
-<a href=#1322 id=1322 data-nosnippet>1322</a>            .<span class="kw">await
-<a href=#1323 id=1323 data-nosnippet>1323</a>            </span>.map(|entry| entry.<span class="number">1</span>)
-<a href=#1324 id=1324 data-nosnippet>1324</a>            .collect()
-<a href=#1325 id=1325 data-nosnippet>1325</a>            .<span class="kw">await
-<a href=#1326 id=1326 data-nosnippet>1326</a>    </span>}
-<a href=#1327 id=1327 data-nosnippet>1327</a>
-<a href=#1328 id=1328 data-nosnippet>1328</a>    <span class="kw">async fn </span>total_txs(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
-<a href=#1329 id=1329 data-nosnippet>1329</a>        dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>TxInfoPrefix)
-<a href=#1330 id=1330 data-nosnippet>1330</a>            .<span class="kw">await
-<a href=#1331 id=1331 data-nosnippet>1331</a>            </span>.next()
-<a href=#1332 id=1332 data-nosnippet>1332</a>            .<span class="kw">await
-<a href=#1333 id=1333 data-nosnippet>1333</a>            </span>.map_or(<span class="number">0</span>, |entry| entry.<span class="number">0.0 </span>+ <span class="number">1</span>)
-<a href=#1334 id=1334 data-nosnippet>1334</a>    }
-<a href=#1335 id=1335 data-nosnippet>1335</a>
-<a href=#1336 id=1336 data-nosnippet>1336</a>    <span class="doccomment">/// Get the network for UI display
-<a href=#1337 id=1337 data-nosnippet>1337</a>    </span><span class="kw">pub fn </span>network_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
-<a href=#1338 id=1338 data-nosnippet>1338</a>        <span class="self">self</span>.cfg.consensus.network
-<a href=#1339 id=1339 data-nosnippet>1339</a>    }
-<a href=#1340 id=1340 data-nosnippet>1340</a>
-<a href=#1341 id=1341 data-nosnippet>1341</a>    <span class="doccomment">/// Get the current federation wallet info for UI display
-<a href=#1342 id=1342 data-nosnippet>1342</a>    </span><span class="kw">pub async fn </span>federation_wallet_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;FederationWallet&gt; {
-<a href=#1343 id=1343 data-nosnippet>1343</a>        <span class="self">self</span>.db
-<a href=#1344 id=1344 data-nosnippet>1344</a>            .begin_transaction_nc()
-<a href=#1345 id=1345 data-nosnippet>1345</a>            .<span class="kw">await
-<a href=#1346 id=1346 data-nosnippet>1346</a>            </span>.get_value(<span class="kw-2">&amp;</span>FederationWalletKey)
-<a href=#1347 id=1347 data-nosnippet>1347</a>            .<span class="kw">await
-<a href=#1348 id=1348 data-nosnippet>1348</a>    </span>}
-<a href=#1349 id=1349 data-nosnippet>1349</a>
-<a href=#1350 id=1350 data-nosnippet>1350</a>    <span class="doccomment">/// Get the current consensus block count for UI display
-<a href=#1351 id=1351 data-nosnippet>1351</a>    </span><span class="kw">pub async fn </span>consensus_block_count_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-<a href=#1352 id=1352 data-nosnippet>1352</a>        <span class="self">self</span>.consensus_block_count(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1353 id=1353 data-nosnippet>1353</a>            .<span class="kw">await
-<a href=#1354 id=1354 data-nosnippet>1354</a>    </span>}
-<a href=#1355 id=1355 data-nosnippet>1355</a>
-<a href=#1356 id=1356 data-nosnippet>1356</a>    <span class="doccomment">/// Get the current consensus feerate for UI display
-<a href=#1357 id=1357 data-nosnippet>1357</a>    </span><span class="kw">pub async fn </span>consensus_feerate_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-<a href=#1358 id=1358 data-nosnippet>1358</a>        <span class="self">self</span>.consensus_feerate(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1359 id=1359 data-nosnippet>1359</a>            .<span class="kw">await
-<a href=#1360 id=1360 data-nosnippet>1360</a>            </span>.map(|feerate| feerate / <span class="number">1000</span>)
-<a href=#1361 id=1361 data-nosnippet>1361</a>    }
-<a href=#1362 id=1362 data-nosnippet>1362</a>
-<a href=#1363 id=1363 data-nosnippet>1363</a>    <span class="doccomment">/// Get the current send fee for UI display
-<a href=#1364 id=1364 data-nosnippet>1364</a>    </span><span class="kw">pub async fn </span>send_fee_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-<a href=#1365 id=1365 data-nosnippet>1365</a>        <span class="self">self</span>.send_fee(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1366 id=1366 data-nosnippet>1366</a>            .<span class="kw">await
-<a href=#1367 id=1367 data-nosnippet>1367</a>    </span>}
-<a href=#1368 id=1368 data-nosnippet>1368</a>
-<a href=#1369 id=1369 data-nosnippet>1369</a>    <span class="doccomment">/// Get the current receive fee for UI display
-<a href=#1370 id=1370 data-nosnippet>1370</a>    </span><span class="kw">pub async fn </span>receive_fee_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-<a href=#1371 id=1371 data-nosnippet>1371</a>        <span class="self">self</span>.receive_fee(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1372 id=1372 data-nosnippet>1372</a>            .<span class="kw">await
-<a href=#1373 id=1373 data-nosnippet>1373</a>    </span>}
-<a href=#1374 id=1374 data-nosnippet>1374</a>
-<a href=#1375 id=1375 data-nosnippet>1375</a>    <span class="doccomment">/// Get the current pending transaction info for UI display
-<a href=#1376 id=1376 data-nosnippet>1376</a>    </span><span class="kw">pub async fn </span>pending_tx_chain_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TxInfo&gt; {
-<a href=#1377 id=1377 data-nosnippet>1377</a>        <span class="self">self</span>.pending_tx_chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1378 id=1378 data-nosnippet>1378</a>            .<span class="kw">await
-<a href=#1379 id=1379 data-nosnippet>1379</a>    </span>}
-<a href=#1380 id=1380 data-nosnippet>1380</a>
-<a href=#1381 id=1381 data-nosnippet>1381</a>    <span class="doccomment">/// Get the current transaction log for UI display
-<a href=#1382 id=1382 data-nosnippet>1382</a>    </span><span class="kw">pub async fn </span>tx_chain_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TxInfo&gt; {
-<a href=#1383 id=1383 data-nosnippet>1383</a>        <span class="self">self</span>.tx_chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
-<a href=#1384 id=1384 data-nosnippet>1384</a>            .<span class="kw">await
-<a href=#1385 id=1385 data-nosnippet>1385</a>    </span>}
-<a href=#1386 id=1386 data-nosnippet>1386</a>
-<a href=#1387 id=1387 data-nosnippet>1387</a>    <span class="doccomment">/// Export recovery keys for federation shutdown. Returns None if the
-<a href=#1388 id=1388 data-nosnippet>1388</a>    /// federation wallet has not been initialized yet.
-<a href=#1389 id=1389 data-nosnippet>1389</a>    </span><span class="kw">pub async fn </span>recovery_keys_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(BTreeMap&lt;PeerId, String&gt;, String)&gt; {
-<a href=#1390 id=1390 data-nosnippet>1390</a>        <span class="kw">let </span>wallet = <span class="self">self</span>.federation_wallet_ui().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1391 id=1391 data-nosnippet>1391</a>
-<a href=#1392 id=1392 data-nosnippet>1392</a>        <span class="kw">let </span>pks = <span class="self">self
-<a href=#1393 id=1393 data-nosnippet>1393</a>            </span>.cfg
-<a href=#1394 id=1394 data-nosnippet>1394</a>            .consensus
-<a href=#1395 id=1395 data-nosnippet>1395</a>            .bitcoin_pks
-<a href=#1396 id=1396 data-nosnippet>1396</a>            .iter()
-<a href=#1397 id=1397 data-nosnippet>1397</a>            .map(|(peer, pk)| (<span class="kw-2">*</span>peer, tweak_public_key(pk, <span class="kw-2">&amp;</span>wallet.tweak).to_string()))
-<a href=#1398 id=1398 data-nosnippet>1398</a>            .collect();
-<a href=#1399 id=1399 data-nosnippet>1399</a>
-<a href=#1400 id=1400 data-nosnippet>1400</a>        <span class="kw">let </span>tweak = <span class="kw-2">&amp;</span>Scalar::from_be_bytes(wallet.tweak.to_byte_array())
-<a href=#1401 id=1401 data-nosnippet>1401</a>            .expect(<span class="string">"Hash is within field order"</span>);
-<a href=#1402 id=1402 data-nosnippet>1402</a>
-<a href=#1403 id=1403 data-nosnippet>1403</a>        <span class="kw">let </span>sk = <span class="self">self
-<a href=#1404 id=1404 data-nosnippet>1404</a>            </span>.cfg
-<a href=#1405 id=1405 data-nosnippet>1405</a>            .private
-<a href=#1406 id=1406 data-nosnippet>1406</a>            .bitcoin_sk
-<a href=#1407 id=1407 data-nosnippet>1407</a>            .add_tweak(tweak)
-<a href=#1408 id=1408 data-nosnippet>1408</a>            .expect(<span class="string">"Failed to tweak bitcoin secret key"</span>);
-<a href=#1409 id=1409 data-nosnippet>1409</a>
-<a href=#1410 id=1410 data-nosnippet>1410</a>        <span class="kw">let </span>sk = bitcoin::PrivateKey::new(sk, <span class="self">self</span>.cfg.consensus.network).to_wif();
-<a href=#1411 id=1411 data-nosnippet>1411</a>
-<a href=#1412 id=1412 data-nosnippet>1412</a>        <span class="prelude-val">Some</span>((pks, sk))
-<a href=#1413 id=1413 data-nosnippet>1413</a>    }
-<a href=#1414 id=1414 data-nosnippet>1414</a>}
+<a href=#1278 id=1278 data-nosnippet>1278</a>        dbtx.get_value(<span class="kw-2">&amp;</span>TxInfoKey(index))
+<a href=#1279 id=1279 data-nosnippet>1279</a>            .<span class="kw">await
+<a href=#1280 id=1280 data-nosnippet>1280</a>            </span>.map(|entry| entry.txid)
+<a href=#1281 id=1281 data-nosnippet>1281</a>    }
+<a href=#1282 id=1282 data-nosnippet>1282</a>
+<a href=#1283 id=1283 data-nosnippet>1283</a>    <span class="kw">async fn </span>get_outputs(
+<a href=#1284 id=1284 data-nosnippet>1284</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1285 id=1285 data-nosnippet>1285</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1286 id=1286 data-nosnippet>1286</a>        start_index: u64,
+<a href=#1287 id=1287 data-nosnippet>1287</a>        end_index: u64,
+<a href=#1288 id=1288 data-nosnippet>1288</a>    ) -&gt; Vec&lt;OutputInfo&gt; {
+<a href=#1289 id=1289 data-nosnippet>1289</a>        <span class="kw">let </span>spent: BTreeSet&lt;u64&gt; = dbtx
+<a href=#1290 id=1290 data-nosnippet>1290</a>            .find_by_range(SpentOutputKey(start_index)..SpentOutputKey(end_index))
+<a href=#1291 id=1291 data-nosnippet>1291</a>            .<span class="kw">await
+<a href=#1292 id=1292 data-nosnippet>1292</a>            </span>.map(|entry| entry.<span class="number">0.0</span>)
+<a href=#1293 id=1293 data-nosnippet>1293</a>            .collect()
+<a href=#1294 id=1294 data-nosnippet>1294</a>            .<span class="kw">await</span>;
+<a href=#1295 id=1295 data-nosnippet>1295</a>
+<a href=#1296 id=1296 data-nosnippet>1296</a>        dbtx.find_by_range(OutputKey(start_index)..OutputKey(end_index))
+<a href=#1297 id=1297 data-nosnippet>1297</a>            .<span class="kw">await
+<a href=#1298 id=1298 data-nosnippet>1298</a>            </span>.filter_map(|entry| {
+<a href=#1299 id=1299 data-nosnippet>1299</a>                std::future::ready(entry.<span class="number">1.1</span>.script_pubkey.is_p2wsh().then(|| OutputInfo {
+<a href=#1300 id=1300 data-nosnippet>1300</a>                    index: entry.<span class="number">0.0</span>,
+<a href=#1301 id=1301 data-nosnippet>1301</a>                    script: entry.<span class="number">1.1</span>.script_pubkey,
+<a href=#1302 id=1302 data-nosnippet>1302</a>                    value: entry.<span class="number">1.1</span>.value,
+<a href=#1303 id=1303 data-nosnippet>1303</a>                    spent: spent.contains(<span class="kw-2">&amp;</span>entry.<span class="number">0.0</span>),
+<a href=#1304 id=1304 data-nosnippet>1304</a>                }))
+<a href=#1305 id=1305 data-nosnippet>1305</a>            })
+<a href=#1306 id=1306 data-nosnippet>1306</a>            .collect()
+<a href=#1307 id=1307 data-nosnippet>1307</a>            .<span class="kw">await
+<a href=#1308 id=1308 data-nosnippet>1308</a>    </span>}
+<a href=#1309 id=1309 data-nosnippet>1309</a>
+<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="kw">async fn </span>pending_tx_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;TxInfo&gt; {
+<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="kw">let </span>n_pending = pending_txs_unordered(dbtx).<span class="kw">await</span>.len();
+<a href=#1312 id=1312 data-nosnippet>1312</a>
+<a href=#1313 id=1313 data-nosnippet>1313</a>        dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>TxInfoPrefix)
+<a href=#1314 id=1314 data-nosnippet>1314</a>            .<span class="kw">await
+<a href=#1315 id=1315 data-nosnippet>1315</a>            </span>.take(n_pending)
+<a href=#1316 id=1316 data-nosnippet>1316</a>            .map(|entry| entry.<span class="number">1</span>)
+<a href=#1317 id=1317 data-nosnippet>1317</a>            .collect()
+<a href=#1318 id=1318 data-nosnippet>1318</a>            .<span class="kw">await
+<a href=#1319 id=1319 data-nosnippet>1319</a>    </span>}
+<a href=#1320 id=1320 data-nosnippet>1320</a>
+<a href=#1321 id=1321 data-nosnippet>1321</a>    <span class="kw">async fn </span>tx_chain(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;TxInfo&gt; {
+<a href=#1322 id=1322 data-nosnippet>1322</a>        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>TxInfoPrefix)
+<a href=#1323 id=1323 data-nosnippet>1323</a>            .<span class="kw">await
+<a href=#1324 id=1324 data-nosnippet>1324</a>            </span>.map(|entry| entry.<span class="number">1</span>)
+<a href=#1325 id=1325 data-nosnippet>1325</a>            .collect()
+<a href=#1326 id=1326 data-nosnippet>1326</a>            .<span class="kw">await
+<a href=#1327 id=1327 data-nosnippet>1327</a>    </span>}
+<a href=#1328 id=1328 data-nosnippet>1328</a>
+<a href=#1329 id=1329 data-nosnippet>1329</a>    <span class="kw">async fn </span>total_txs(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
+<a href=#1330 id=1330 data-nosnippet>1330</a>        dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>TxInfoPrefix)
+<a href=#1331 id=1331 data-nosnippet>1331</a>            .<span class="kw">await
+<a href=#1332 id=1332 data-nosnippet>1332</a>            </span>.next()
+<a href=#1333 id=1333 data-nosnippet>1333</a>            .<span class="kw">await
+<a href=#1334 id=1334 data-nosnippet>1334</a>            </span>.map_or(<span class="number">0</span>, |entry| entry.<span class="number">0.0 </span>+ <span class="number">1</span>)
+<a href=#1335 id=1335 data-nosnippet>1335</a>    }
+<a href=#1336 id=1336 data-nosnippet>1336</a>
+<a href=#1337 id=1337 data-nosnippet>1337</a>    <span class="doccomment">/// Get the network for UI display
+<a href=#1338 id=1338 data-nosnippet>1338</a>    </span><span class="kw">pub fn </span>network_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
+<a href=#1339 id=1339 data-nosnippet>1339</a>        <span class="self">self</span>.cfg.consensus.network
+<a href=#1340 id=1340 data-nosnippet>1340</a>    }
+<a href=#1341 id=1341 data-nosnippet>1341</a>
+<a href=#1342 id=1342 data-nosnippet>1342</a>    <span class="doccomment">/// Get the current federation wallet info for UI display
+<a href=#1343 id=1343 data-nosnippet>1343</a>    </span><span class="kw">pub async fn </span>federation_wallet_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;FederationWallet&gt; {
+<a href=#1344 id=1344 data-nosnippet>1344</a>        <span class="self">self</span>.db
+<a href=#1345 id=1345 data-nosnippet>1345</a>            .begin_transaction_nc()
+<a href=#1346 id=1346 data-nosnippet>1346</a>            .<span class="kw">await
+<a href=#1347 id=1347 data-nosnippet>1347</a>            </span>.get_value(<span class="kw-2">&amp;</span>FederationWalletKey)
+<a href=#1348 id=1348 data-nosnippet>1348</a>            .<span class="kw">await
+<a href=#1349 id=1349 data-nosnippet>1349</a>    </span>}
+<a href=#1350 id=1350 data-nosnippet>1350</a>
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="doccomment">/// Get the current consensus block count for UI display
+<a href=#1352 id=1352 data-nosnippet>1352</a>    </span><span class="kw">pub async fn </span>consensus_block_count_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#1353 id=1353 data-nosnippet>1353</a>        <span class="self">self</span>.consensus_block_count(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1354 id=1354 data-nosnippet>1354</a>            .<span class="kw">await
+<a href=#1355 id=1355 data-nosnippet>1355</a>    </span>}
+<a href=#1356 id=1356 data-nosnippet>1356</a>
+<a href=#1357 id=1357 data-nosnippet>1357</a>    <span class="doccomment">/// Get the current consensus feerate for UI display
+<a href=#1358 id=1358 data-nosnippet>1358</a>    </span><span class="kw">pub async fn </span>consensus_feerate_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="self">self</span>.consensus_feerate(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1360 id=1360 data-nosnippet>1360</a>            .<span class="kw">await
+<a href=#1361 id=1361 data-nosnippet>1361</a>            </span>.map(|feerate| feerate / <span class="number">1000</span>)
+<a href=#1362 id=1362 data-nosnippet>1362</a>    }
+<a href=#1363 id=1363 data-nosnippet>1363</a>
+<a href=#1364 id=1364 data-nosnippet>1364</a>    <span class="doccomment">/// Get the current send fee for UI display
+<a href=#1365 id=1365 data-nosnippet>1365</a>    </span><span class="kw">pub async fn </span>send_fee_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+<a href=#1366 id=1366 data-nosnippet>1366</a>        <span class="self">self</span>.send_fee(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1367 id=1367 data-nosnippet>1367</a>            .<span class="kw">await
+<a href=#1368 id=1368 data-nosnippet>1368</a>    </span>}
+<a href=#1369 id=1369 data-nosnippet>1369</a>
+<a href=#1370 id=1370 data-nosnippet>1370</a>    <span class="doccomment">/// Get the current receive fee for UI display
+<a href=#1371 id=1371 data-nosnippet>1371</a>    </span><span class="kw">pub async fn </span>receive_fee_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="self">self</span>.receive_fee(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1373 id=1373 data-nosnippet>1373</a>            .<span class="kw">await
+<a href=#1374 id=1374 data-nosnippet>1374</a>    </span>}
+<a href=#1375 id=1375 data-nosnippet>1375</a>
+<a href=#1376 id=1376 data-nosnippet>1376</a>    <span class="doccomment">/// Get the current pending transaction info for UI display
+<a href=#1377 id=1377 data-nosnippet>1377</a>    </span><span class="kw">pub async fn </span>pending_tx_chain_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TxInfo&gt; {
+<a href=#1378 id=1378 data-nosnippet>1378</a>        <span class="self">self</span>.pending_tx_chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1379 id=1379 data-nosnippet>1379</a>            .<span class="kw">await
+<a href=#1380 id=1380 data-nosnippet>1380</a>    </span>}
+<a href=#1381 id=1381 data-nosnippet>1381</a>
+<a href=#1382 id=1382 data-nosnippet>1382</a>    <span class="doccomment">/// Get the current transaction log for UI display
+<a href=#1383 id=1383 data-nosnippet>1383</a>    </span><span class="kw">pub async fn </span>tx_chain_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TxInfo&gt; {
+<a href=#1384 id=1384 data-nosnippet>1384</a>        <span class="self">self</span>.tx_chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>)
+<a href=#1385 id=1385 data-nosnippet>1385</a>            .<span class="kw">await
+<a href=#1386 id=1386 data-nosnippet>1386</a>    </span>}
+<a href=#1387 id=1387 data-nosnippet>1387</a>
+<a href=#1388 id=1388 data-nosnippet>1388</a>    <span class="doccomment">/// Export recovery keys for federation shutdown. Returns None if the
+<a href=#1389 id=1389 data-nosnippet>1389</a>    /// federation wallet has not been initialized yet.
+<a href=#1390 id=1390 data-nosnippet>1390</a>    </span><span class="kw">pub async fn </span>recovery_keys_ui(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(BTreeMap&lt;PeerId, String&gt;, String)&gt; {
+<a href=#1391 id=1391 data-nosnippet>1391</a>        <span class="kw">let </span>wallet = <span class="self">self</span>.federation_wallet_ui().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1392 id=1392 data-nosnippet>1392</a>
+<a href=#1393 id=1393 data-nosnippet>1393</a>        <span class="kw">let </span>pks = <span class="self">self
+<a href=#1394 id=1394 data-nosnippet>1394</a>            </span>.cfg
+<a href=#1395 id=1395 data-nosnippet>1395</a>            .consensus
+<a href=#1396 id=1396 data-nosnippet>1396</a>            .bitcoin_pks
+<a href=#1397 id=1397 data-nosnippet>1397</a>            .iter()
+<a href=#1398 id=1398 data-nosnippet>1398</a>            .map(|(peer, pk)| (<span class="kw-2">*</span>peer, tweak_public_key(pk, <span class="kw-2">&amp;</span>wallet.tweak).to_string()))
+<a href=#1399 id=1399 data-nosnippet>1399</a>            .collect();
+<a href=#1400 id=1400 data-nosnippet>1400</a>
+<a href=#1401 id=1401 data-nosnippet>1401</a>        <span class="kw">let </span>tweak = <span class="kw-2">&amp;</span>Scalar::from_be_bytes(wallet.tweak.to_byte_array())
+<a href=#1402 id=1402 data-nosnippet>1402</a>            .expect(<span class="string">"Hash is within field order"</span>);
+<a href=#1403 id=1403 data-nosnippet>1403</a>
+<a href=#1404 id=1404 data-nosnippet>1404</a>        <span class="kw">let </span>sk = <span class="self">self
+<a href=#1405 id=1405 data-nosnippet>1405</a>            </span>.cfg
+<a href=#1406 id=1406 data-nosnippet>1406</a>            .private
+<a href=#1407 id=1407 data-nosnippet>1407</a>            .bitcoin_sk
+<a href=#1408 id=1408 data-nosnippet>1408</a>            .add_tweak(tweak)
+<a href=#1409 id=1409 data-nosnippet>1409</a>            .expect(<span class="string">"Failed to tweak bitcoin secret key"</span>);
+<a href=#1410 id=1410 data-nosnippet>1410</a>
+<a href=#1411 id=1411 data-nosnippet>1411</a>        <span class="kw">let </span>sk = bitcoin::PrivateKey::new(sk, <span class="self">self</span>.cfg.consensus.network).to_wif();
+<a href=#1412 id=1412 data-nosnippet>1412</a>
+<a href=#1413 id=1413 data-nosnippet>1413</a>        <span class="prelude-val">Some</span>((pks, sk))
+<a href=#1414 id=1414 data-nosnippet>1414</a>    }
+<a href=#1415 id=1415 data-nosnippet>1415</a>}
 </code></pre></div></section></main></body></html>

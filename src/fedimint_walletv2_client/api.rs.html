@@ -3,11 +3,11 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>fedimint_core::{OutPoint, apply, async_trait_maybe_send};
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_walletv2_common::endpoint_constants::{
-<a href=#6 id=6 data-nosnippet>6</a>    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, DEPOSIT_RANGE_ENDPOINT,
-<a href=#7 id=7 data-nosnippet>7</a>    FEDERATION_WALLET_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
+<a href=#6 id=6 data-nosnippet>6</a>    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
+<a href=#7 id=7 data-nosnippet>7</a>    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
 <a href=#8 id=8 data-nosnippet>8</a>    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 <a href=#9 id=9 data-nosnippet>9</a>};
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_walletv2_common::{DepositRange, FederationWallet, TxInfo};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
 <a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">pub trait </span>WalletFederationApi {
@@ -25,11 +25,11 @@
 <a href=#25 id=25 data-nosnippet>25</a>
 <a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">async fn </span>tx_chain(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;TxInfo&gt;&gt;;
 <a href=#27 id=27 data-nosnippet>27</a>
-<a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">async fn </span>deposit_range(
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">async fn </span>output_info_slice(
 <a href=#29 id=29 data-nosnippet>29</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#30 id=30 data-nosnippet>30</a>        start_index: u64,
 <a href=#31 id=31 data-nosnippet>31</a>        end_index: u64,
-<a href=#32 id=32 data-nosnippet>32</a>    ) -&gt; FederationResult&lt;DepositRange&gt;;
+<a href=#32 id=32 data-nosnippet>32</a>    ) -&gt; FederationResult&lt;Vec&lt;OutputInfo&gt;&gt;;
 <a href=#33 id=33 data-nosnippet>33</a>
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">async fn </span>tx_id(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Txid&gt;;
 <a href=#35 id=35 data-nosnippet>35</a>}
@@ -89,13 +89,13 @@
 <a href=#89 id=89 data-nosnippet>89</a>        .<span class="kw">await
 <a href=#90 id=90 data-nosnippet>90</a>    </span>}
 <a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">async fn </span>deposit_range(
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">async fn </span>output_info_slice(
 <a href=#93 id=93 data-nosnippet>93</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#94 id=94 data-nosnippet>94</a>        start_index: u64,
 <a href=#95 id=95 data-nosnippet>95</a>        end_index: u64,
-<a href=#96 id=96 data-nosnippet>96</a>    ) -&gt; FederationResult&lt;DepositRange&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>    ) -&gt; FederationResult&lt;Vec&lt;OutputInfo&gt;&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>        <span class="self">self</span>.request_current_consensus(
-<a href=#98 id=98 data-nosnippet>98</a>            DEPOSIT_RANGE_ENDPOINT.to_string(),
+<a href=#98 id=98 data-nosnippet>98</a>            OUTPUT_INFO_SLICE_ENDPOINT.to_string(),
 <a href=#99 id=99 data-nosnippet>99</a>            ApiRequestErased::new((start_index, end_index)),
 <a href=#100 id=100 data-nosnippet>100</a>        )
 <a href=#101 id=101 data-nosnippet>101</a>        .<span class="kw">await
