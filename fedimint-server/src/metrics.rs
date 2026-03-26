@@ -95,6 +95,40 @@ pub(crate) static CONSENSUS_ORDERING_LATENCY_SECONDS: LazyLock<Histogram> = Lazy
     .unwrap()
 });
 
+pub(crate) static IROH_API_CONNECTIONS_ACTIVE: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "iroh_api_connections_active",
+            "Number of currently active iroh API connections",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+
+pub(crate) static IROH_API_CONNECTION_DURATION_SECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "iroh_api_connection_duration_seconds",
+            "Duration of iroh API connections",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+
+pub(crate) static IROH_API_REQUEST_DURATION_SECONDS: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec_with_registry!(
+        histogram_opts!(
+            "iroh_api_request_duration_seconds",
+            "Duration of processing an iroh API request",
+        ),
+        &["method"],
+        REGISTRY
+    )
+    .unwrap()
+});
+
 pub(crate) static JSONRPC_API_REQUEST_DURATION_SECONDS: LazyLock<HistogramVec> =
     LazyLock::new(|| {
         register_histogram_vec_with_registry!(
