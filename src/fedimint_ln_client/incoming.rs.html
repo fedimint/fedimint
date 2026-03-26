@@ -289,67 +289,93 @@
 <a href=#289 id=289 data-nosnippet>289</a>                )
 <a href=#290 id=290 data-nosnippet>290</a>                .<span class="kw">await</span>;
 <a href=#291 id=291 data-nosnippet>291</a>
-<a href=#292 id=292 data-nosnippet>292</a>                IncomingStateMachine {
-<a href=#293 id=293 data-nosnippet>293</a>                    common: old_state.common,
-<a href=#294 id=294 data-nosnippet>294</a>                    state: IncomingSmStates::Preimage(preimage),
-<a href=#295 id=295 data-nosnippet>295</a>                }
-<a href=#296 id=296 data-nosnippet>296</a>            }
-<a href=#297 id=297 data-nosnippet>297</a>            <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage { contract }) =&gt; {
-<a href=#298 id=298 data-nosnippet>298</a>                <span class="self">Self</span>::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
-<a href=#299 id=299 data-nosnippet>299</a>                    .<span class="kw">await
-<a href=#300 id=300 data-nosnippet>300</a>            </span>}
-<a href=#301 id=301 data-nosnippet>301</a>            <span class="prelude-val">Err</span>(e) =&gt; IncomingStateMachine {
-<a href=#302 id=302 data-nosnippet>302</a>                common: old_state.common,
-<a href=#303 id=303 data-nosnippet>303</a>                state: IncomingSmStates::Failure(<span class="macro">format!</span>(
-<a href=#304 id=304 data-nosnippet>304</a>                    <span class="string">"Unexpected internal error occurred while decrypting the preimage: {e:?}"
-<a href=#305 id=305 data-nosnippet>305</a>                </span>)),
-<a href=#306 id=306 data-nosnippet>306</a>            },
-<a href=#307 id=307 data-nosnippet>307</a>        }
-<a href=#308 id=308 data-nosnippet>308</a>    }
-<a href=#309 id=309 data-nosnippet>309</a>
-<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">async fn </span>refund_incoming_contract(
-<a href=#311 id=311 data-nosnippet>311</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#312 id=312 data-nosnippet>312</a>        global_context: DynGlobalClientContext,
-<a href=#313 id=313 data-nosnippet>313</a>        context: LightningClientContext,
-<a href=#314 id=314 data-nosnippet>314</a>        old_state: IncomingStateMachine,
-<a href=#315 id=315 data-nosnippet>315</a>        contract: Box&lt;IncomingContractAccount&gt;,
-<a href=#316 id=316 data-nosnippet>316</a>    ) -&gt; IncomingStateMachine {
-<a href=#317 id=317 data-nosnippet>317</a>        <span class="macro">debug!</span>(<span class="string">"Refunding incoming contract {contract:?}"</span>);
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">let </span>claim_input = contract.claim();
-<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
-<a href=#320 id=320 data-nosnippet>320</a>            input: claim_input,
-<a href=#321 id=321 data-nosnippet>321</a>            amounts: Amounts::new_bitcoin(contract.amount),
-<a href=#322 id=322 data-nosnippet>322</a>            keys: <span class="macro">vec!</span>[context.redeem_key],
-<a href=#323 id=323 data-nosnippet>323</a>        };
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw">let </span>change_range = global_context
-<a href=#326 id=326 data-nosnippet>326</a>            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
-<a href=#327 id=327 data-nosnippet>327</a>            .<span class="kw">await
-<a href=#328 id=328 data-nosnippet>328</a>            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="macro">debug!</span>(<span class="string">"Refunded incoming contract {contract:?} with {change_range:?}"</span>);
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a>        IncomingStateMachine {
-<a href=#332 id=332 data-nosnippet>332</a>            common: old_state.common,
-<a href=#333 id=333 data-nosnippet>333</a>            state: IncomingSmStates::RefundSubmitted {
-<a href=#334 id=334 data-nosnippet>334</a>                out_points: change_range.into_iter().collect(),
-<a href=#335 id=335 data-nosnippet>335</a>                error: IncomingSmError::InvalidPreimage { contract },
-<a href=#336 id=336 data-nosnippet>336</a>            },
-<a href=#337 id=337 data-nosnippet>337</a>        }
-<a href=#338 id=338 data-nosnippet>338</a>    }
-<a href=#339 id=339 data-nosnippet>339</a>}
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-<a href=#342 id=342 data-nosnippet>342</a></span><span class="kw">pub struct </span>AwaitingPreimageDecryption {
-<a href=#343 id=343 data-nosnippet>343</a>    txid: TransactionId,
-<a href=#344 id=344 data-nosnippet>344</a>}
-<a href=#345 id=345 data-nosnippet>345</a>
-<a href=#346 id=346 data-nosnippet>346</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-<a href=#347 id=347 data-nosnippet>347</a></span><span class="kw">pub struct </span>PreimageState {
-<a href=#348 id=348 data-nosnippet>348</a>    preimage: Preimage,
-<a href=#349 id=349 data-nosnippet>349</a>}
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-<a href=#352 id=352 data-nosnippet>352</a></span><span class="kw">pub struct </span>RefundSuccessState {
-<a href=#353 id=353 data-nosnippet>353</a>    refund_txid: TransactionId,
-<a href=#354 id=354 data-nosnippet>354</a>}
+<a href=#292 id=292 data-nosnippet>292</a>                <span class="comment">// client_ctx is None for the gateway since it does not emit the client events
+<a href=#293 id=293 data-nosnippet>293</a>                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>client_ctx) = context.client_ctx {
+<a href=#294 id=294 data-nosnippet>294</a>                    client_ctx
+<a href=#295 id=295 data-nosnippet>295</a>                        .log_event(
+<a href=#296 id=296 data-nosnippet>296</a>                            <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+<a href=#297 id=297 data-nosnippet>297</a>                            <span class="kw">crate</span>::events::SendPaymentUpdateEvent {
+<a href=#298 id=298 data-nosnippet>298</a>                                operation_id: old_state.common.operation_id,
+<a href=#299 id=299 data-nosnippet>299</a>                                status: <span class="kw">crate</span>::events::SendPaymentStatus::Success(preimage.<span class="number">0</span>),
+<a href=#300 id=300 data-nosnippet>300</a>                            },
+<a href=#301 id=301 data-nosnippet>301</a>                        )
+<a href=#302 id=302 data-nosnippet>302</a>                        .<span class="kw">await</span>;
+<a href=#303 id=303 data-nosnippet>303</a>                }
+<a href=#304 id=304 data-nosnippet>304</a>
+<a href=#305 id=305 data-nosnippet>305</a>                IncomingStateMachine {
+<a href=#306 id=306 data-nosnippet>306</a>                    common: old_state.common,
+<a href=#307 id=307 data-nosnippet>307</a>                    state: IncomingSmStates::Preimage(preimage),
+<a href=#308 id=308 data-nosnippet>308</a>                }
+<a href=#309 id=309 data-nosnippet>309</a>            }
+<a href=#310 id=310 data-nosnippet>310</a>            <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage { contract }) =&gt; {
+<a href=#311 id=311 data-nosnippet>311</a>                <span class="self">Self</span>::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
+<a href=#312 id=312 data-nosnippet>312</a>                    .<span class="kw">await
+<a href=#313 id=313 data-nosnippet>313</a>            </span>}
+<a href=#314 id=314 data-nosnippet>314</a>            <span class="prelude-val">Err</span>(e) =&gt; IncomingStateMachine {
+<a href=#315 id=315 data-nosnippet>315</a>                common: old_state.common,
+<a href=#316 id=316 data-nosnippet>316</a>                state: IncomingSmStates::Failure(<span class="macro">format!</span>(
+<a href=#317 id=317 data-nosnippet>317</a>                    <span class="string">"Unexpected internal error occurred while decrypting the preimage: {e:?}"
+<a href=#318 id=318 data-nosnippet>318</a>                </span>)),
+<a href=#319 id=319 data-nosnippet>319</a>            },
+<a href=#320 id=320 data-nosnippet>320</a>        }
+<a href=#321 id=321 data-nosnippet>321</a>    }
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">async fn </span>refund_incoming_contract(
+<a href=#324 id=324 data-nosnippet>324</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#325 id=325 data-nosnippet>325</a>        global_context: DynGlobalClientContext,
+<a href=#326 id=326 data-nosnippet>326</a>        context: LightningClientContext,
+<a href=#327 id=327 data-nosnippet>327</a>        old_state: IncomingStateMachine,
+<a href=#328 id=328 data-nosnippet>328</a>        contract: Box&lt;IncomingContractAccount&gt;,
+<a href=#329 id=329 data-nosnippet>329</a>    ) -&gt; IncomingStateMachine {
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="macro">debug!</span>(<span class="string">"Refunding incoming contract {contract:?}"</span>);
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="kw">let </span>claim_input = contract.claim();
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
+<a href=#333 id=333 data-nosnippet>333</a>            input: claim_input,
+<a href=#334 id=334 data-nosnippet>334</a>            amounts: Amounts::new_bitcoin(contract.amount),
+<a href=#335 id=335 data-nosnippet>335</a>            keys: <span class="macro">vec!</span>[context.redeem_key],
+<a href=#336 id=336 data-nosnippet>336</a>        };
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">let </span>change_range = global_context
+<a href=#339 id=339 data-nosnippet>339</a>            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
+<a href=#340 id=340 data-nosnippet>340</a>            .<span class="kw">await
+<a href=#341 id=341 data-nosnippet>341</a>            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="macro">debug!</span>(<span class="string">"Refunded incoming contract {contract:?} with {change_range:?}"</span>);
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="comment">// client_ctx is None for the gateway since it does not emit the client events
+<a href=#345 id=345 data-nosnippet>345</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>client_ctx) = context.client_ctx {
+<a href=#346 id=346 data-nosnippet>346</a>            client_ctx
+<a href=#347 id=347 data-nosnippet>347</a>                .log_event(
+<a href=#348 id=348 data-nosnippet>348</a>                    <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+<a href=#349 id=349 data-nosnippet>349</a>                    <span class="kw">crate</span>::events::SendPaymentUpdateEvent {
+<a href=#350 id=350 data-nosnippet>350</a>                        operation_id: old_state.common.operation_id,
+<a href=#351 id=351 data-nosnippet>351</a>                        status: <span class="kw">crate</span>::events::SendPaymentStatus::Refunded,
+<a href=#352 id=352 data-nosnippet>352</a>                    },
+<a href=#353 id=353 data-nosnippet>353</a>                )
+<a href=#354 id=354 data-nosnippet>354</a>                .<span class="kw">await</span>;
+<a href=#355 id=355 data-nosnippet>355</a>        }
+<a href=#356 id=356 data-nosnippet>356</a>
+<a href=#357 id=357 data-nosnippet>357</a>        IncomingStateMachine {
+<a href=#358 id=358 data-nosnippet>358</a>            common: old_state.common,
+<a href=#359 id=359 data-nosnippet>359</a>            state: IncomingSmStates::RefundSubmitted {
+<a href=#360 id=360 data-nosnippet>360</a>                out_points: change_range.into_iter().collect(),
+<a href=#361 id=361 data-nosnippet>361</a>                error: IncomingSmError::InvalidPreimage { contract },
+<a href=#362 id=362 data-nosnippet>362</a>            },
+<a href=#363 id=363 data-nosnippet>363</a>        }
+<a href=#364 id=364 data-nosnippet>364</a>    }
+<a href=#365 id=365 data-nosnippet>365</a>}
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<a href=#368 id=368 data-nosnippet>368</a></span><span class="kw">pub struct </span>AwaitingPreimageDecryption {
+<a href=#369 id=369 data-nosnippet>369</a>    txid: TransactionId,
+<a href=#370 id=370 data-nosnippet>370</a>}
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<a href=#373 id=373 data-nosnippet>373</a></span><span class="kw">pub struct </span>PreimageState {
+<a href=#374 id=374 data-nosnippet>374</a>    preimage: Preimage,
+<a href=#375 id=375 data-nosnippet>375</a>}
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<a href=#378 id=378 data-nosnippet>378</a></span><span class="kw">pub struct </span>RefundSuccessState {
+<a href=#379 id=379 data-nosnippet>379</a>    refund_txid: TransactionId,
+<a href=#380 id=380 data-nosnippet>380</a>}
 </code></pre></div></section></main></body></html>

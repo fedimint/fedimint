@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SendPaymentStatus"],"struct":["ReceivePaymentEvent","SendPaymentEvent","SendPaymentUpdateEvent"]};
