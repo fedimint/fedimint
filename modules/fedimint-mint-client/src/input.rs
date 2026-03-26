@@ -6,6 +6,7 @@ use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::MintInput;
@@ -380,20 +381,30 @@ impl MintInputStateRefundedBundle {
                 keys: vec![spendable_note.spend_key],
                 amounts: Amounts::new_bitcoin(amount),
             };
-            let change_range = global_context
+            match global_context
                 .claim_inputs(
                     dbtx,
                     // The input of the refund tx is managed by this state machine, so no new state
                     // machines need to be created
-                    ClientInputBundle::new_no_sm(vec![refund_input]),
+                    ClientInputBundle::new_no_sm(vec![refund_input.clone()]),
                 )
                 .await
-                .expect("Cannot claim input, additional funding needed");
-
-            refund_txids.push(change_range.txid());
+            {
+                Ok(change_range) => {
+                    refund_txids.push(change_range.txid());
+                }
+                Err(err) => {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_MINT,
+                        err = %err.fmt_compact_anyhow(),
+                        refund_input_amounts = ?refund_input.amounts,
+                        input = %refund_input.input,
+                        "Failed to remint a single note"
+                    );
+                }
+            }
         }
 
-        assert!(!refund_txids.is_empty());
         MintInputStateMachine {
             common: old_state.common,
             state: MintInputStates::RefundedPerNote(MintInputStateRefundedPerNote { refund_txids }),
