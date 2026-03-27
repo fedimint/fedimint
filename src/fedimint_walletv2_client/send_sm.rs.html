@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::WalletClientContext;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">crate</span>::events::{SendPaymentStatus, SendPaymentStatusEvent};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">crate</span>::events::{SendPaymentStatus, SendPaymentUpdateEvent};
 <a href=#10 id=10 data-nosnippet>10</a>
 <a href=#11 id=11 data-nosnippet>11</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 <a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub struct </span>SendStateMachine {
@@ -106,7 +106,7 @@
 <a href=#106 id=106 data-nosnippet>106</a>                    .client_ctx
 <a href=#107 id=107 data-nosnippet>107</a>                    .log_event(
 <a href=#108 id=108 data-nosnippet>108</a>                        <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
-<a href=#109 id=109 data-nosnippet>109</a>                        SendPaymentStatusEvent {
+<a href=#109 id=109 data-nosnippet>109</a>                        SendPaymentUpdateEvent {
 <a href=#110 id=110 data-nosnippet>110</a>                            operation_id: old_state.common.operation_id,
 <a href=#111 id=111 data-nosnippet>111</a>                            status: SendPaymentStatus::Success(txid),
 <a href=#112 id=112 data-nosnippet>112</a>                        },
@@ -120,7 +120,7 @@
 <a href=#120 id=120 data-nosnippet>120</a>                    .client_ctx
 <a href=#121 id=121 data-nosnippet>121</a>                    .log_event(
 <a href=#122 id=122 data-nosnippet>122</a>                        <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
-<a href=#123 id=123 data-nosnippet>123</a>                        SendPaymentStatusEvent {
+<a href=#123 id=123 data-nosnippet>123</a>                        SendPaymentUpdateEvent {
 <a href=#124 id=124 data-nosnippet>124</a>                            operation_id: old_state.common.operation_id,
 <a href=#125 id=125 data-nosnippet>125</a>                            status: SendPaymentStatus::Aborted,
 <a href=#126 id=126 data-nosnippet>126</a>                        },

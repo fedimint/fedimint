@@ -28,14 +28,14 @@
 <a href=#28 id=28 data-nosnippet>28</a>
 <a href=#29 id=29 data-nosnippet>29</a><span class="doccomment">/// Event emitted when a send (peg-out) operation reaches a final state.
 <a href=#30 id=30 data-nosnippet>30</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-<a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">pub struct </span>SendPaymentStatusEvent {
+<a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">pub struct </span>SendPaymentUpdateEvent {
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub </span>operation_id: OperationId,
 <a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">pub </span>status: SendPaymentStatus,
 <a href=#34 id=34 data-nosnippet>34</a>}
 <a href=#35 id=35 data-nosnippet>35</a>
-<a href=#36 id=36 data-nosnippet>36</a><span class="kw">impl </span>Event <span class="kw">for </span>SendPaymentStatusEvent {
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">impl </span>Event <span class="kw">for </span>SendPaymentUpdateEvent {
 <a href=#37 id=37 data-nosnippet>37</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_walletv2_common::KIND);
-<a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"payment-send-status"</span>);
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"payment-send-update"</span>);
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#40 id=40 data-nosnippet>40</a>}
 <a href=#41 id=41 data-nosnippet>41</a>
@@ -64,14 +64,14 @@
 <a href=#64 id=64 data-nosnippet>64</a>
 <a href=#65 id=65 data-nosnippet>65</a><span class="doccomment">/// Event emitted when a receive (peg-in) operation reaches a final state.
 <a href=#66 id=66 data-nosnippet>66</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-<a href=#67 id=67 data-nosnippet>67</a></span><span class="kw">pub struct </span>ReceivePaymentStatusEvent {
+<a href=#67 id=67 data-nosnippet>67</a></span><span class="kw">pub struct </span>ReceivePaymentUpdateEvent {
 <a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">pub </span>operation_id: OperationId,
 <a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">pub </span>status: ReceivePaymentStatus,
 <a href=#70 id=70 data-nosnippet>70</a>}
 <a href=#71 id=71 data-nosnippet>71</a>
-<a href=#72 id=72 data-nosnippet>72</a><span class="kw">impl </span>Event <span class="kw">for </span>ReceivePaymentStatusEvent {
+<a href=#72 id=72 data-nosnippet>72</a><span class="kw">impl </span>Event <span class="kw">for </span>ReceivePaymentUpdateEvent {
 <a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_walletv2_common::KIND);
-<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"payment-receive-status"</span>);
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"payment-receive-update"</span>);
 <a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#76 id=76 data-nosnippet>76</a>}
 </code></pre></div></section></main></body></html>
