@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>axum::response::{Html, IntoResponse, Redirect};
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>bip39::Language;
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_gateway_common::SetMnemonicPayload;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_ui_common::{ROOT_ROUTE, UiState, login_layout};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_ui_common::{ROOT_ROUTE, UiState, single_card_layout};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>maud::{PreEscaped, html};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>serde::Deserialize;
 <a href=#9 id=9 data-nosnippet>9</a>
@@ -71,7 +71,7 @@
 <a href=#71 id=71 data-nosnippet>71</a>        }
 <a href=#72 id=72 data-nosnippet>72</a>    };
 <a href=#73 id=73 data-nosnippet>73</a>
-<a href=#74 id=74 data-nosnippet>74</a>    Html(login_layout(<span class="string">"Setup Gateway"</span>, content).into_string())
+<a href=#74 id=74 data-nosnippet>74</a>    Html(single_card_layout(<span class="string">"Setup Gateway"</span>, content).into_string())
 <a href=#75 id=75 data-nosnippet>75</a>}
 <a href=#76 id=76 data-nosnippet>76</a>
 <a href=#77 id=77 data-nosnippet>77</a><span class="doccomment">/// Handler for creating a new wallet (generates new mnemonic)
@@ -170,7 +170,7 @@
 <a href=#170 id=170 data-nosnippet>170</a>        }
 <a href=#171 id=171 data-nosnippet>171</a>    };
 <a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a>    Html(login_layout(<span class="string">"Recover Wallet"</span>, content).into_string())
+<a href=#173 id=173 data-nosnippet>173</a>    Html(single_card_layout(<span class="string">"Recover Wallet"</span>, content).into_string())
 <a href=#174 id=174 data-nosnippet>174</a>}
 <a href=#175 id=175 data-nosnippet>175</a>
 <a href=#176 id=176 data-nosnippet>176</a><span class="doccomment">/// Handler for recovering a wallet with provided mnemonic words
