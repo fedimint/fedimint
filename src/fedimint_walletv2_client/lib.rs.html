@@ -311,7 +311,7 @@
 <a href=#311 id=311 data-nosnippet>311</a>            <span class="macro">vec!</span>[client_output_sm],
 <a href=#312 id=312 data-nosnippet>312</a>        ));
 <a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>address_string = address.assume_checked_ref().to_string();
+<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>address_clone = address.clone();
 <a href=#315 id=315 data-nosnippet>315</a>
 <a href=#316 id=316 data-nosnippet>316</a>        <span class="self">self</span>.client_ctx
 <a href=#317 id=317 data-nosnippet>317</a>            .finalize_and_submit_transaction(
@@ -320,7 +320,7 @@
 <a href=#320 id=320 data-nosnippet>320</a>                <span class="kw">move </span>|change_outpoint_range| {
 <a href=#321 id=321 data-nosnippet>321</a>                    WalletOperationMeta::Send(SendMeta {
 <a href=#322 id=322 data-nosnippet>322</a>                        change_outpoint_range,
-<a href=#323 id=323 data-nosnippet>323</a>                        address: address.clone(),
+<a href=#323 id=323 data-nosnippet>323</a>                        address: address_clone.clone(),
 <a href=#324 id=324 data-nosnippet>324</a>                        value,
 <a href=#325 id=325 data-nosnippet>325</a>                        fee,
 <a href=#326 id=326 data-nosnippet>326</a>                    })
@@ -337,7 +337,7 @@
 <a href=#337 id=337 data-nosnippet>337</a>                <span class="kw-2">&amp;mut </span>dbtx,
 <a href=#338 id=338 data-nosnippet>338</a>                SendPaymentEvent {
 <a href=#339 id=339 data-nosnippet>339</a>                    operation_id,
-<a href=#340 id=340 data-nosnippet>340</a>                    address: address_string,
+<a href=#340 id=340 data-nosnippet>340</a>                    address,
 <a href=#341 id=341 data-nosnippet>341</a>                    value,
 <a href=#342 id=342 data-nosnippet>342</a>                    fee,
 <a href=#343 id=343 data-nosnippet>343</a>                },
@@ -479,7 +479,7 @@
 <a href=#479 id=479 data-nosnippet>479</a>                <span class="kw-2">&amp;mut </span>dbtx,
 <a href=#480 id=480 data-nosnippet>480</a>                ReceivePaymentEvent {
 <a href=#481 id=481 data-nosnippet>481</a>                    operation_id,
-<a href=#482 id=482 data-nosnippet>482</a>                    address: <span class="self">self</span>.derive_address(address_index).to_string(),
+<a href=#482 id=482 data-nosnippet>482</a>                    address: <span class="self">self</span>.derive_address(address_index).as_unchecked().clone(),
 <a href=#483 id=483 data-nosnippet>483</a>                    value,
 <a href=#484 id=484 data-nosnippet>484</a>                    fee,
 <a href=#485 id=485 data-nosnippet>485</a>                },
