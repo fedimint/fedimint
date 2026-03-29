@@ -13,12 +13,12 @@
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Subcommands for operator to retrieve information about the wallet state.
 <a href=#14 id=14 data-nosnippet>14</a>    </span><span class="attr">#[command(subcommand)]
 <a href=#15 id=15 data-nosnippet>15</a>    </span>Info(InfoOpts),
-<a href=#16 id=16 data-nosnippet>16</a>    <span class="doccomment">/// Fetch the current fee required to send an on-chain payment.
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="doccomment">/// Fetch the current fee required to send an onchain payment.
 <a href=#17 id=17 data-nosnippet>17</a>    </span>SendFee,
-<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Send an on-chain payment.
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Send an onchain payment.
 <a href=#19 id=19 data-nosnippet>19</a>    </span>Send {
 <a href=#20 id=20 data-nosnippet>20</a>        address: Address&lt;NetworkUnchecked&gt;,
-<a href=#21 id=21 data-nosnippet>21</a>        amount: bitcoin::Amount,
+<a href=#21 id=21 data-nosnippet>21</a>        value: bitcoin::Amount,
 <a href=#22 id=22 data-nosnippet>22</a>        <span class="attr">#[arg(long)]
 <a href=#23 id=23 data-nosnippet>23</a>        </span>fee: <span class="prelude-ty">Option</span>&lt;bitcoin::Amount&gt;,
 <a href=#24 id=24 data-nosnippet>24</a>    },
@@ -57,11 +57,11 @@
 <a href=#57 id=57 data-nosnippet>57</a>        Opts::SendFee =&gt; json(wallet.send_fee().<span class="kw">await</span><span class="question-mark">?</span>),
 <a href=#58 id=58 data-nosnippet>58</a>        Opts::Send {
 <a href=#59 id=59 data-nosnippet>59</a>            address,
-<a href=#60 id=60 data-nosnippet>60</a>            amount,
+<a href=#60 id=60 data-nosnippet>60</a>            value,
 <a href=#61 id=61 data-nosnippet>61</a>            fee,
 <a href=#62 id=62 data-nosnippet>62</a>        } =&gt; json(
 <a href=#63 id=63 data-nosnippet>63</a>            wallet
-<a href=#64 id=64 data-nosnippet>64</a>                .await_final_send_operation_state(wallet.send(address, amount, fee).<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#64 id=64 data-nosnippet>64</a>                .await_final_send_operation_state(wallet.send(address, value, fee).<span class="kw">await</span><span class="question-mark">?</span>)
 <a href=#65 id=65 data-nosnippet>65</a>                .<span class="kw">await</span>,
 <a href=#66 id=66 data-nosnippet>66</a>        ),
 <a href=#67 id=67 data-nosnippet>67</a>        Opts::Receive =&gt; json(wallet.receive().<span class="kw">await</span>),
