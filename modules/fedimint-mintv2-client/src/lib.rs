@@ -800,6 +800,7 @@ impl MintClientModule {
                     custom_meta: cm.clone(),
                 },
                 TransactionBuilder::new().with_outputs(output),
+                vec![],
             )
             .await
             .map_err(|_| SendECashError::InsufficientBalance)?;
@@ -907,6 +908,11 @@ impl MintClientModule {
         let input = self.client_ctx.make_client_inputs(input);
         let ec = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
 
+        let receive_event = self.client_ctx.make_event(ReceivePaymentEvent {
+            operation_id,
+            amount: ecash.amount(),
+        });
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -917,23 +923,10 @@ impl MintClientModule {
                     custom_meta: custom_meta.clone(),
                 },
                 TransactionBuilder::new().with_inputs(input),
+                vec![receive_event],
             )
             .await
             .map_err(|_| ReceiveECashError::InsufficientFunds)?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    amount: ecash.amount(),
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
