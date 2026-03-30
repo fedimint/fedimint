@@ -1803,7 +1803,7 @@ impl Gateway {
 
     async fn create_lightning_client(
         &self,
-        runtime: Arc<tokio::runtime::Runtime>,
+        _runtime: Arc<tokio::runtime::Runtime>,
     ) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
             LightningMode::Lnd {
@@ -1834,7 +1834,6 @@ impl Gateway {
                         lightning_port,
                         alias.clone(),
                         mnemonic.clone(),
-                        runtime.clone(),
                     )
                     .map(Box::new)
                 })

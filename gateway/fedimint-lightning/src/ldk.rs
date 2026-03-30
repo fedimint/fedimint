@@ -18,9 +18,10 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
-use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
+use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
+use lightning::routing::router::RouteParametersConfig;
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
@@ -84,7 +85,6 @@ impl GatewayLdkClient {
         lightning_port: u16,
         alias: String,
         mnemonic: Mnemonic,
-        runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<Self> {
         let mut bytes = [0u8; 32];
         let alias = if alias.is_empty() {
@@ -138,7 +138,7 @@ impl GatewayLdkClient {
 
         info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
         let node = Arc::new(node_builder.build()?);
-        node.start_with_runtime(runtime).map_err(|err| {
+        node.start().map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
             LightningRpcError::FailedToConnect
         })?;
@@ -350,11 +350,10 @@ impl ILnRpcClient for GatewayLdkClient {
                     .bolt11_payment()
                     .send(
                         &invoice,
-                        Some(SendingParameters {
-                            max_total_routing_fee_msat: Some(Some(max_fee.msats)),
-                            max_total_cltv_expiry_delta: Some(max_delay as u32),
-                            max_path_count: None,
-                            max_channel_saturation_power_of_half: None,
+                        Some(RouteParametersConfig {
+                            max_total_routing_fee_msat: Some(max_fee.msats),
+                            max_total_cltv_expiry_delta: max_delay as u32,
+                            ..RouteParametersConfig::default()
                         }),
                     )
                     // TODO: Investigate whether all error types returned by `Bolt11Payment::send()`
@@ -838,14 +837,14 @@ impl ILnRpcClient for GatewayLdkClient {
         let payment_id = if let Some(amount) = amount {
             self.node
                 .bolt12_payment()
-                .send_using_amount(&offer, amount.msats, quantity, payer_note)
+                .send_using_amount(&offer, amount.msats, quantity, payer_note, None)
                 .map_err(|err| LightningRpcError::Bolt12Error {
                     failure_reason: err.to_string(),
                 })?
         } else {
             self.node
                 .bolt12_payment()
-                .send(&offer, quantity, payer_note)
+                .send(&offer, quantity, payer_note, None)
                 .map_err(|err| LightningRpcError::Bolt12Error {
                     failure_reason: err.to_string(),
                 })?
