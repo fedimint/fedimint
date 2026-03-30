@@ -491,24 +491,23 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
+        let incoming_event = self.client_ctx.make_event(IncomingPaymentStarted {
+            contract_id,
+            payment_hash: htlc.payment_hash,
+            invoice_amount: htlc.outgoing_amount_msat,
+            contract_amount: amount,
+            operation_id,
+        });
         self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .finalize_and_submit_transaction(
+                operation_id,
+                KIND.as_str(),
+                operation_meta_gen,
+                tx,
+                vec![incoming_event],
+            )
             .await?;
         debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
-                    contract_id,
-                    payment_hash: htlc.payment_hash,
-                    invoice_amount: htlc.outgoing_amount_msat,
-                    contract_amount: amount,
-                    operation_id,
-                },
-            )
-            .await;
-        dbtx.commit_tx().await;
         Ok(operation_id)
     }
 
@@ -533,7 +532,13 @@ impl GatewayClientModule {
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
         self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .finalize_and_submit_transaction(
+                operation_id,
+                KIND.as_str(),
+                operation_meta_gen,
+                tx,
+                vec![],
+            )
             .await?;
         debug!(
             ?operation_id,
