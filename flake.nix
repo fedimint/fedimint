@@ -4,14 +4,11 @@
       url = "github:nixos/nixpkgs/nixos-25.11";
     };
     nixpkgs-unstable = {
-      # temporary https://github.com/NixOS/nixpkgs/pull/459738
-      # url = "github:nixos/nixpkgs/nixos-unstable";
-      url = "github:nixos/nixpkgs?rev=d157ecd9b559c9103c4d69904277c37e062344bf";
+      url = "github:nixos/nixpkgs/nixos-unstable";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
-      # pined due to https://github.com/nix-community/fenix/issues/235
-      url = "github:nix-community/fenix?rev=6b5325a017a9a9fe7e6252ccac3680cc7181cd63";
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
