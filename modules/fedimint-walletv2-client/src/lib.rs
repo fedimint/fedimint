@@ -313,6 +313,13 @@ impl WalletClientModule {
 
         let address_clone = address.clone();
 
+        let send_event = self.client_ctx.make_event(SendPaymentEvent {
+            operation_id,
+            address,
+            value,
+            fee,
+        });
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -326,25 +333,10 @@ impl WalletClientModule {
                     })
                 },
                 TransactionBuilder::new().with_outputs(client_output_bundle),
+                vec![send_event],
             )
             .await
             .map_err(|_| SendError::InsufficientFunds)?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                SendPaymentEvent {
-                    operation_id,
-                    address,
-                    value,
-                    fee,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
@@ -455,6 +447,13 @@ impl WalletClientModule {
             vec![client_input_sm],
         ));
 
+        let receive_event = self.client_ctx.make_event(ReceivePaymentEvent {
+            operation_id,
+            address: self.derive_address(address_index).as_unchecked().clone(),
+            value,
+            fee,
+        });
+
         let range = self
             .client_ctx
             .finalize_and_submit_transaction(
@@ -468,25 +467,10 @@ impl WalletClientModule {
                     })
                 },
                 TransactionBuilder::new().with_inputs(client_input_bundle),
+                vec![receive_event],
             )
             .await
             .expect("Input amount is sufficient to finalize transaction");
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    address: self.derive_address(address_index).as_unchecked().clone(),
-                    value,
-                    fee,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         (operation_id, range.txid())
     }
