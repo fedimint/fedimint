@@ -54,6 +54,7 @@ async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result
             "Issue e-cash via dummy module",
             |_| (),
             TransactionBuilder::new().with_inputs(dummy_input),
+            vec![],
         )
         .await?;
 
@@ -102,6 +103,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
                     .client_ctx
                     .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
             ),
+            vec![],
         )
         .await
         .expect("Failed to finalize transaction")
@@ -189,7 +191,7 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
 
     let change_range = client_mint
         .client_ctx
-        .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
+        .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx, vec![])
         .await?;
 
     client.api().await_transaction(change_range.txid()).await;
