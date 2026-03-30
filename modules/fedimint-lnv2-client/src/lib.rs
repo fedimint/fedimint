@@ -628,6 +628,12 @@ impl LightningClientModule {
 
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
+        let send_event = self.client_ctx.make_event(SendPaymentEvent {
+            operation_id,
+            amount: send_fee.add_to(amount),
+            fee: send_fee.fee(amount),
+        });
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -642,24 +648,10 @@ impl LightningClientModule {
                     })
                 },
                 transaction,
+                vec![send_event],
             )
             .await
             .map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                SendPaymentEvent {
-                    operation_id,
-                    amount: send_fee.add_to(amount),
-                    fee: send_fee.fee(amount),
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
