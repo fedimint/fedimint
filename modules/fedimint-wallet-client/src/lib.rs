@@ -1406,6 +1406,12 @@ impl WalletClientModule {
 
             let extra_meta =
                 serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
+            let send_event = self.client_ctx.make_event(SendPaymentEvent {
+                operation_id,
+                amount: amount + fee.amount(),
+                fee: fee.amount(),
+            });
+
             self.client_ctx
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -1423,23 +1429,9 @@ impl WalletClientModule {
                         }
                     },
                     tx_builder,
+                    vec![send_event],
                 )
                 .await?;
-
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-            self.client_ctx
-                .log_event(
-                    &mut dbtx,
-                    SendPaymentEvent {
-                        operation_id,
-                        amount: amount + fee.amount(),
-                        fee: fee.amount(),
-                    },
-                )
-                .await;
-
-            dbtx.commit_tx().await;
 
             Ok(operation_id)
         }
@@ -1477,6 +1469,7 @@ impl WalletClientModule {
                     extra_meta: extra_meta.clone(),
                 },
                 tx_builder,
+                vec![],
             )
             .await?;
 
