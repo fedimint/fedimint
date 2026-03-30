@@ -454,27 +454,21 @@ impl GatewayClientModuleV2 {
         ));
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
+        let incoming_event = self.client_ctx.make_event(IncomingPaymentStarted {
+            operation_start,
+            incoming_contract_commitment: commitment,
+            invoice_amount: Amount::from_msats(amount_msat),
+        });
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 |_| GatewayOperationMetaV2,
                 transaction,
+                vec![incoming_event],
             )
             .await?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
-                    operation_start,
-                    incoming_contract_commitment: commitment,
-                    invoice_amount: Amount::from_msats(amount_msat),
-                },
-            )
-            .await;
-        dbtx.commit_tx().await;
 
         Ok(())
     }
@@ -528,21 +522,13 @@ impl GatewayClientModuleV2 {
                 LightningCommonInit::KIND.as_str(),
                 |_| GatewayOperationMetaV2,
                 transaction,
-            )
-            .await?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
+                vec![self.client_ctx.make_event(IncomingPaymentStarted {
                     operation_start,
                     incoming_contract_commitment: commitment,
                     invoice_amount: Amount::from_msats(amount_msat),
-                },
+                })],
             )
-            .await;
-        dbtx.commit_tx().await;
+            .await?;
 
         Ok(self.await_receive(operation_id).await)
     }
