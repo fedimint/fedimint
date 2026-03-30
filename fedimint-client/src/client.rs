@@ -65,8 +65,9 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
-    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
+    AnyEvent, DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind,
+    EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
+    PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -688,6 +689,7 @@ impl Client {
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
+        events: Vec<AnyEvent>,
     ) -> anyhow::Result<OutPointRange>
     where
         F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
@@ -702,6 +704,7 @@ impl Client {
                     let operation_type = operation_type.clone();
                     let tx_builder = tx_builder.clone();
                     let operation_meta_gen = operation_meta_gen.clone();
+                    let events = events.clone();
                     Box::pin(async move {
                         if Client::operation_exists_dbtx(dbtx, operation_id).await {
                             bail!("There already exists an operation with id {operation_id:?}")
@@ -719,6 +722,22 @@ impl Client {
                                 operation_meta_gen(out_point_range),
                             )
                             .await;
+
+                        for event in &events {
+                            self.log_event_raw_dbtx(
+                                dbtx,
+                                event.kind.clone(),
+                                event.module_kind.clone().map(|kind| {
+                                    (
+                                        kind,
+                                        event.module_id.expect("Module events must have module_id"),
+                                    )
+                                }),
+                                event.payload.clone(),
+                                event.persistence,
+                            )
+                            .await;
+                        }
 
                         Ok(out_point_range)
                     })
@@ -2203,6 +2222,7 @@ impl ClientContextIface for Client {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
+        events: Vec<AnyEvent>,
     ) -> anyhow::Result<OutPointRange> {
         Client::finalize_and_submit_transaction(
             self,
@@ -2211,6 +2231,7 @@ impl ClientContextIface for Client {
             // |out_point_range| operation_meta_gen(out_point_range),
             &operation_meta_gen,
             tx_builder,
+            events,
         )
         .await
     }
