@@ -37,7 +37,7 @@ use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
+use fedimint_core::module::{ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION, SupportedApiVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
@@ -615,8 +615,18 @@ impl ClientBuilder {
         debug!(
             target: LOG_CLIENT,
             version = %fedimint_build_code_version_env!(),
+            core_consensus = %CORE_CONSENSUS_VERSION,
             "Building fedimint client",
         );
+        for (kind, module) in self.module_inits.iter() {
+            let api_versions = module.supported_api_versions();
+            debug!(
+                target: LOG_CLIENT,
+                module = %kind,
+                api = ?api_versions,
+                "Module supported API versions",
+            );
+        }
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 

@@ -59,6 +59,7 @@ use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::CORE_CONSENSUS_VERSION;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -616,6 +617,21 @@ impl Gateway {
         registry.attach(MintV2ClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
         registry.attach(fedimint_walletv2_client::WalletClientInit);
+
+        info!(
+            target: LOG_GATEWAY,
+            core_consensus = %CORE_CONSENSUS_VERSION,
+            "Core consensus version",
+        );
+        for (kind, module) in registry.iter() {
+            let api_versions = module.supported_api_versions();
+            info!(
+                target: LOG_GATEWAY,
+                module = %kind,
+                api = ?api_versions,
+                "Module supported API versions",
+            );
+        }
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;

@@ -22,6 +22,7 @@ use fedimint_core::envs::{
     FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::CORE_CONSENSUS_VERSION;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
@@ -277,6 +278,23 @@ pub async fn run(
     tracing_builder.init().unwrap();
 
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
+
+    info!(
+        target: LOG_SERVER,
+        core_consensus = %CORE_CONSENSUS_VERSION,
+        "Core consensus version",
+    );
+    for (kind, module) in module_init_registry.iter() {
+        let supported = module.supported_api_versions();
+        info!(
+            target: LOG_SERVER,
+            module = %kind,
+            core_consensus = %supported.core_consensus,
+            module_consensus = %supported.module_consensus,
+            api = ?supported.api,
+            "Module supported versions",
+        );
+    }
 
     let code_version_str = code_version_vendor_suffix.map_or_else(
         || fedimint_version.to_string(),

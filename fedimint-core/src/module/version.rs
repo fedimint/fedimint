@@ -54,7 +54,7 @@
 //!
 //! [`ApiVersion`] and [`MultiApiVersion`] is used for API versioning.
 use std::collections::BTreeMap;
-use std::{cmp, result};
+use std::{cmp, fmt, result};
 
 use serde::{Deserialize, Serialize};
 
@@ -79,6 +79,12 @@ pub struct CoreConsensusVersion {
 impl CoreConsensusVersion {
     pub const fn new(major: u32, minor: u32) -> Self {
         Self { major, minor }
+    }
+}
+
+impl fmt::Display for CoreConsensusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
     }
 }
 
@@ -134,6 +140,12 @@ impl ModuleConsensusVersion {
     }
 }
 
+impl fmt::Display for ModuleConsensusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
 /// Api version supported by a core server or a client/server module at a given
 /// [`ModuleConsensusVersion`].
 ///
@@ -173,6 +185,12 @@ pub struct ApiVersion {
 impl ApiVersion {
     pub const fn new(major: u32, minor: u32) -> Self {
         Self { major, minor }
+    }
+}
+
+impl fmt::Display for ApiVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
     }
 }
 
