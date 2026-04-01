@@ -45,7 +45,7 @@ pub async fn start_guardian_metadata_service(
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    let initial_delay = if insert_signed_guardian_metadata_if_not_present(db, cfg).await {
+    let initial_delay = if update_signed_guardian_metadata(db, cfg).await {
         Duration::ZERO
     } else {
         Duration::from_secs(INITIAL_DELAY_SECONDS)
@@ -135,20 +135,11 @@ pub async fn start_guardian_metadata_service(
     Ok(())
 }
 
-/// Checks if we already have a signed guardian metadata for our own identity
-/// in the database and creates one if not.
-///
-/// Return `true` fresh metadata was inserted because it was not present
-async fn insert_signed_guardian_metadata_if_not_present(db: &Database, cfg: &ServerConfig) -> bool {
-    let mut dbtx = db.begin_transaction().await;
-    if dbtx
-        .get_value(&GuardianMetadataKey(cfg.local.identity))
-        .await
-        .is_some()
-    {
-        return false;
-    }
-
+/// Build and sign guardian metadata from the current config. If the
+/// resulting metadata differs from what is already stored in the DB
+/// (or no entry exists yet), write it and return `true` so the caller
+/// can trigger an immediate broadcast.
+async fn update_signed_guardian_metadata(db: &Database, cfg: &ServerConfig) -> bool {
     let timestamp_secs = fedimint_core::time::now()
         .duration_since(UNIX_EPOCH)
         .expect("System time should be after UNIX_EPOCH")
@@ -167,9 +158,25 @@ async fn insert_signed_guardian_metadata_if_not_present(db: &Database, cfg: &Ser
     let signed_metadata =
         guardian_metadata.sign(&ctx, &cfg.private.broadcast_secret_key.keypair(&ctx));
 
-    dbtx.insert_entry(&GuardianMetadataKey(cfg.local.identity), &signed_metadata)
-        .await;
+    let key = GuardianMetadataKey(cfg.local.identity);
+    let mut dbtx = db.begin_transaction().await;
+
+    let existing = dbtx.get_value(&key).await;
+    if existing
+        .as_ref()
+        .is_some_and(|old| old.tagged_hash() == signed_metadata.tagged_hash())
+    {
+        return false;
+    }
+
+    dbtx.insert_entry(&key, &signed_metadata).await;
     dbtx.commit_tx().await;
+
+    info!(
+        target: LOG_NET_API,
+        previously_existed = existing.is_some(),
+        "Guardian metadata updated"
+    );
 
     true
 }
