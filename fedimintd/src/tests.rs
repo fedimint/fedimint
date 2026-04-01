@@ -1,6 +1,65 @@
 use clap::{CommandFactory, Parser};
 
-use super::{FM_ENABLE_IROH_ENV, ServerOpts};
+use super::{FM_ENABLE_IROH_ENV, FM_OVERRIDE_API_URLS_ENV, ServerOpts};
+
+#[test]
+fn api_url_override_accepts_multiple_startup_urls() {
+    let command = ServerOpts::command();
+    let override_arg = command
+        .get_arguments()
+        .find(|arg| arg.get_id() == "override_api_urls")
+        .expect("override-api-urls argument exists");
+    assert_eq!(
+        override_arg.get_env(),
+        Some(std::ffi::OsStr::new(FM_OVERRIDE_API_URLS_ENV))
+    );
+
+    let mut args = server_opts_args();
+    args.extend([
+        "--override-api-urls",
+        "ws://guardian.example/,ws://guardian.onion/",
+    ]);
+
+    let opts = ServerOpts::try_parse_from(args).expect("API URL overrides should parse");
+
+    assert_eq!(
+        opts.override_api_urls,
+        [
+            "ws://guardian.example/".parse().expect("valid URL"),
+            "ws://guardian.onion/".parse().expect("valid URL"),
+        ]
+    );
+}
+
+#[test]
+fn api_url_override_parses_environment_list() {
+    let previous = std::env::var_os(FM_OVERRIDE_API_URLS_ENV);
+    // This test does not spawn threads while mutating this environment variable.
+    unsafe {
+        std::env::set_var(
+            FM_OVERRIDE_API_URLS_ENV,
+            "ws://guardian.example/,ws://guardian.onion/",
+        );
+    }
+
+    let opts = parse_server_opts();
+
+    // This test does not spawn threads while mutating this environment variable.
+    unsafe {
+        if let Some(previous) = previous {
+            std::env::set_var(FM_OVERRIDE_API_URLS_ENV, previous);
+        } else {
+            std::env::remove_var(FM_OVERRIDE_API_URLS_ENV);
+        }
+    }
+    assert_eq!(
+        opts.override_api_urls,
+        [
+            "ws://guardian.example/".parse().expect("valid URL"),
+            "ws://guardian.onion/".parse().expect("valid URL"),
+        ]
+    );
+}
 
 fn server_opts_args() -> Vec<&'static str> {
     vec![
