@@ -7,7 +7,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::guardian_metadata::{GuardianMetadata, SignedGuardianMetadata};
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::FmtCompact;
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use futures::future::join_all;
@@ -40,12 +40,13 @@ pub async fn start_guardian_metadata_service(
     tg: &TaskGroup,
     cfg: &ServerConfig,
     api_secret: Option<String>,
+    override_api_urls: &[SafeUrl],
 ) -> anyhow::Result<()> {
     const INITIAL_DELAY_SECONDS: u64 = 5;
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    let initial_delay = if update_signed_guardian_metadata(db, cfg).await {
+    let initial_delay = if update_signed_guardian_metadata(db, cfg, override_api_urls).await {
         Duration::ZERO
     } else {
         Duration::from_secs(INITIAL_DELAY_SECONDS)
@@ -139,18 +140,28 @@ pub async fn start_guardian_metadata_service(
 /// resulting metadata differs from what is already stored in the DB
 /// (or no entry exists yet), write it and return `true` so the caller
 /// can trigger an immediate broadcast.
-async fn update_signed_guardian_metadata(db: &Database, cfg: &ServerConfig) -> bool {
+async fn update_signed_guardian_metadata(
+    db: &Database,
+    cfg: &ServerConfig,
+    override_api_urls: &[SafeUrl],
+) -> bool {
     let timestamp_secs = fedimint_core::time::now()
         .duration_since(UNIX_EPOCH)
         .expect("System time should be after UNIX_EPOCH")
         .as_secs();
 
-    let guardian_metadata = GuardianMetadata::new(
+    let api_urls = if override_api_urls.is_empty() {
         cfg.consensus
             .api_endpoints()
             .get(&cfg.local.identity)
             .map(|endpoint| vec![endpoint.url.clone()])
-            .unwrap_or_default(),
+            .unwrap_or_default()
+    } else {
+        override_api_urls.to_vec()
+    };
+
+    let guardian_metadata = GuardianMetadata::new(
+        api_urls,
         super::pkarr_publish::pkarr_id_z32(&cfg.private.broadcast_secret_key),
         timestamp_secs,
     );

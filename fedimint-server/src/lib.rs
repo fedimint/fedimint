@@ -166,7 +166,14 @@ pub async fn run(
     initialize_gauge_metrics(&task_group, &db).await;
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
-    start_guardian_metadata_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
+    start_guardian_metadata_service(
+        &db,
+        &task_group,
+        &cfg,
+        force_api_secrets.get_active(),
+        &settings.override_api_urls,
+    )
+    .await?;
     start_pkarr_publish_service(&db, &task_group, &cfg).await?;
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");

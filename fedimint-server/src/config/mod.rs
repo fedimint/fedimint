@@ -224,6 +224,8 @@ pub struct ConfigGenSettings {
     pub default_modules: BTreeSet<ModuleKind>,
     /// Optional additional WebSocket API bind address
     pub extra_websocket_api_bind: Option<SocketAddr>,
+    /// Override API URLs announced in GuardianMetadata
+    pub override_api_urls: Vec<SafeUrl>,
 }
 
 #[derive(Debug, Clone)]
