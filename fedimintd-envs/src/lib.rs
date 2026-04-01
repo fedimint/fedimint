@@ -48,3 +48,5 @@ pub const FM_BITCOIND_PASSWORD_ENV: &str = "FM_BITCOIND_PASSWORD";
 // <https://github.com/n0-computer/iroh/discussions/3212>
 pub const FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV: &str =
     "FM_IROH_API_MAX_REQUESTS_PER_CONNECTION";
+
+pub const FM_OVERRIDE_API_URLS_ENV: &str = "FM_OVERRIDE_API_URLS";
