@@ -56,3 +56,6 @@ pub const FM_BIND_API_NEXT_ENV: &str = "FM_BIND_API_NEXT";
 // <https://github.com/n0-computer/iroh/discussions/3212>
 pub const FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV: &str =
     "FM_IROH_API_MAX_REQUESTS_PER_CONNECTION";
+
+/// Comma-separated authoritative guardian-metadata API URLs.
+pub const FM_OVERRIDE_API_URLS_ENV: &str = "FM_OVERRIDE_API_URLS";
