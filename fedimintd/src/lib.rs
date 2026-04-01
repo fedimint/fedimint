@@ -43,11 +43,11 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
 use fedimintd_envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
-    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
-    FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_EXTRA_WEBSOCKET_API_ENV, FM_BIND_METRICS_ENV,
+    FM_BIND_P2P_ENV, FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
+    FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV,
+    FM_BITCOIND_USERNAME_ENV, FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV,
+    FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
 };
 use futures::FutureExt as _;
@@ -205,6 +205,13 @@ struct ServerOpts {
     /// Maximum number of parallel requests per Iroh API connection
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
+
+    /// Bind an additional WebSocket API interface on this address
+    ///
+    /// This is useful for exposing the API on additional interfaces,
+    /// e.g. for Tor onion services or other overlay networks.
+    #[arg(long = "bind-extra-websocket-api", env = FM_BIND_EXTRA_WEBSOCKET_API_ENV)]
+    bind_extra_websocket_api: Option<SocketAddr>,
 }
 
 impl ServerOpts {
@@ -308,6 +315,7 @@ pub async fn run(
         network: server_opts.bitcoin_network,
         available_modules: module_init_registry.kinds(),
         default_modules: module_init_registry.default_modules(),
+        extra_websocket_api_bind: server_opts.bind_extra_websocket_api,
     };
 
     let db = Database::new(

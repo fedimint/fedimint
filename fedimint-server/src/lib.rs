@@ -180,6 +180,7 @@ pub async fn run(
         connections,
         p2p_status_receivers,
         settings.api_bind,
+        settings.extra_websocket_api_bind,
         settings.iroh_dns,
         settings.iroh_relays,
         cfg,

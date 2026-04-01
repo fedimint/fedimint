@@ -377,6 +377,7 @@ impl FederationTestBuilder {
                     p2p_status_receivers,
                     api_bind,
                     None,
+                    None,
                     vec![],
                     cfg.clone(),
                     db.clone(),

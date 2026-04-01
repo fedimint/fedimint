@@ -222,6 +222,8 @@ pub struct ConfigGenSettings {
     pub available_modules: BTreeSet<ModuleKind>,
     /// Modules that should be enabled by default in the setup UI
     pub default_modules: BTreeSet<ModuleKind>,
+    /// Optional additional WebSocket API bind address
+    pub extra_websocket_api_bind: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone)]
