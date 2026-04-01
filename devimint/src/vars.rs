@@ -287,6 +287,21 @@ impl Global {
     }
 }
 
+/// Collect per-instance env var overrides for fedimintd.
+///
+/// Looks for env vars matching `FM_DEVIMINT_FEDIMINTD_{peer_id}_{REST}`
+/// and returns them as `(FM_{REST}, value)` pairs to pass to that
+/// specific instance.
+pub fn per_instance_env_vars(peer_id: usize) -> Vec<(String, String)> {
+    let prefix = format!("FM_DEVIMINT_FEDIMINTD_{peer_id}_");
+    std::env::vars()
+        .filter_map(|(key, value)| {
+            key.strip_prefix(&prefix)
+                .map(|rest| (format!("FM_{rest}"), value))
+        })
+        .collect()
+}
+
 declare_vars! {
     Fedimintd = (globals: &Global, federation_name: String, peer_id: PeerId, overrides: &FedimintdPeerOverrides) => {
         FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
