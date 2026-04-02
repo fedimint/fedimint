@@ -43,7 +43,7 @@ use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
-    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, dashboard_layout,
+    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, dashboard_layout_with_title,
     login_form as render_login_form, single_card_layout,
 };
 use lightning_invoice::Bolt11Invoice;
@@ -312,7 +312,7 @@ where
                     (err.to_string())
                 }
             };
-            return Html(dashboard_layout(content, &gatewayd_version).into_string())
+            return Html(dashboard_layout_with_title(content, &gatewayd_version, Some("Gateway")).into_string())
                 .into_response();
         }
     };
@@ -401,7 +401,7 @@ where
         }
     };
 
-    Html(dashboard_layout(content, &gatewayd_version).into_string()).into_response()
+    Html(dashboard_layout_with_title(content, &gatewayd_version, Some("Gateway")).into_string()).into_response()
 }
 
 async fn stop_gateway_handler<E>(

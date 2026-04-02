@@ -173,6 +173,14 @@ pub fn login_submit_response(
 }
 
 pub fn dashboard_layout(content: Markup, version: &str) -> Markup {
+    dashboard_layout_with_title(content, version, None)
+}
+
+pub fn dashboard_layout_with_title(
+    content: Markup,
+    version: &str,
+    title: Option<&str>,
+) -> Markup {
     html! {
         (DOCTYPE)
         html {
@@ -181,6 +189,9 @@ pub fn dashboard_layout(content: Markup, version: &str) -> Markup {
             }
             body {
                 div class="container" {
+                    @if let Some(title) = title {
+                        h1 class="mt-4 mb-4" { (title) }
+                    }
                     (content)
 
                     div class="text-center mt-4 mb-3" {
