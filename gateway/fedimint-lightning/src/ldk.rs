@@ -24,7 +24,7 @@ use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::{Mutex, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, warn};
 
@@ -63,7 +63,7 @@ pub struct GatewayLdkClient {
     /// the API handler from the event handler when the channel has been
     /// opened and is now pending.
     pending_channels:
-        Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
+        Arc<Mutex<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -147,7 +147,7 @@ impl GatewayLdkClient {
         let task_group = TaskGroup::new();
 
         let node_clone = node.clone();
-        let pending_channels = Arc::new(RwLock::new(BTreeMap::new()));
+        let pending_channels = Arc::new(Mutex::new(BTreeMap::new()));
         let pending_channels_clone = pending_channels.clone();
         task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
@@ -177,7 +177,7 @@ impl GatewayLdkClient {
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
         pending_channels: Arc<
-            RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
+            Mutex<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
         >,
     ) {
         // We manually check for task termination in case we receive a payment while the
@@ -223,7 +223,7 @@ impl GatewayLdkClient {
                 funding_txo,
             } => {
                 info!(target: LOG_LIGHTNING, %channel_id, "LDK Channel is pending");
-                let mut channels = pending_channels.write().await;
+                let mut channels = pending_channels.lock().await;
                 if let Some(sender) = channels.remove(&UserChannelId(user_channel_id)) {
                     let _ = sender.send(Ok(funding_txo));
                 } else {
@@ -240,7 +240,7 @@ impl GatewayLdkClient {
                 reason,
             } => {
                 info!(target: LOG_LIGHTNING, %channel_id, "LDK Channel is closed");
-                let mut channels = pending_channels.write().await;
+                let mut channels = pending_channels.lock().await;
                 if let Some(sender) = channels.remove(&UserChannelId(user_channel_id)) {
                     let reason = if let Some(reason) = reason {
                         reason.to_string()
@@ -561,7 +561,7 @@ impl ILnRpcClient for GatewayLdkClient {
         let (tx, rx) = oneshot::channel::<anyhow::Result<OutPoint>>();
 
         {
-            let mut channels = self.pending_channels.write().await;
+            let mut channels = self.pending_channels.lock().await;
             let user_channel_id = self
                 .node
                 .open_announced_channel(

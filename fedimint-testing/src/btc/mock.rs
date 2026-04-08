@@ -45,7 +45,7 @@ struct FakeBitcoinTestInner {
 
 #[derive(Clone, Debug)]
 pub struct FakeBitcoinTest {
-    inner: Arc<std::sync::RwLock<FakeBitcoinTestInner>>,
+    inner: Arc<std::sync::Mutex<FakeBitcoinTestInner>>,
 }
 
 impl Default for FakeBitcoinTest {
@@ -65,7 +65,7 @@ impl FakeBitcoinTest {
             txid_to_block_height: BTreeMap::new(),
         };
         let res = FakeBitcoinTest {
-            inner: std::sync::RwLock::new(inner).into(),
+            inner: Arc::new(std::sync::Mutex::new(inner)),
         };
 
         // We always need one custom block for the ChainId
@@ -139,7 +139,7 @@ impl FakeBitcoinTest {
     }
 
     fn mine_blocks_no_async(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         let FakeBitcoinTestInner {
             ref mut blocks,
@@ -170,7 +170,7 @@ impl BitcoinTest for FakeBitcoinTest {
     async fn prepare_funding_wallet(&self) {
         // In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
-        let block_count = self.inner.write().unwrap().blocks.len() as u64;
+        let block_count = self.inner.lock().unwrap().blocks.len() as u64;
         if block_count < 100 {
             self.mine_blocks(100 - block_count).await;
         }
@@ -181,7 +181,7 @@ impl BitcoinTest for FakeBitcoinTest {
         address: &Address,
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(
             vec![TxOut {
@@ -231,7 +231,7 @@ impl BitcoinTest for FakeBitcoinTest {
         self.mine_blocks(1).await;
         let sats = self
             .inner
-            .read()
+            .lock()
             .unwrap()
             .blocks
             .iter()
@@ -244,7 +244,7 @@ impl BitcoinTest for FakeBitcoinTest {
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         loop {
             let (pending, addresses) = {
-                let inner = self.inner.read().unwrap();
+                let inner = self.inner.lock().unwrap();
                 (inner.pending.clone(), inner.addresses.clone())
             };
 
@@ -272,19 +272,19 @@ impl BitcoinTest for FakeBitcoinTest {
 
     async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
         self.inner
-            .read()
-            .expect("RwLock poisoned")
+            .lock()
+            .expect("Mutex poisoned")
             .txid_to_block_height
             .get(txid)
             .map(|height| height.to_owned() as u64)
     }
 
     async fn get_block_count(&self) -> u64 {
-        self.inner.read().expect("RwLock poisoned").blocks.len() as u64
+        self.inner.lock().expect("Mutex poisoned").blocks.len() as u64
     }
 
     async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let mempool_transactions = inner.pending.clone();
         mempool_transactions
             .iter()
@@ -296,7 +296,7 @@ impl BitcoinTest for FakeBitcoinTest {
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
     async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> Result<Option<u64>> {
-        for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
+        for (height, block) in self.inner.lock().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| &tx.compute_txid() == txid) {
                 return Ok(Some(height as u64));
             }
@@ -312,18 +312,18 @@ impl IBitcoindRpc for FakeBitcoinTest {
         &self,
         script: &bitcoin::ScriptBuf,
     ) -> Result<Vec<bitcoin::Transaction>> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         Ok(inner.scripts.get(script).cloned().unwrap_or_default())
     }
 
     async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<TxOutProof> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 
     async fn get_info(&self) -> Result<BlockchainInfo> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let count = inner.blocks.len() as u64;
         let synced = inner.pending.is_empty();
         Ok(BlockchainInfo {
@@ -355,12 +355,12 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
     }
 
     async fn get_block_count(&self) -> Result<u64> {
-        Ok(self.inner.read().unwrap().blocks.len() as u64)
+        Ok(self.inner.lock().unwrap().blocks.len() as u64)
     }
 
     async fn get_block_hash(&self, height: u64) -> Result<bitcoin::BlockHash> {
         self.inner
-            .read()
+            .lock()
             .unwrap()
             .blocks
             .get(height as usize)
@@ -370,7 +370,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> Result<bitcoin::Block> {
         self.inner
-            .read()
+            .lock()
             .unwrap()
             .blocks
             .iter()
@@ -384,7 +384,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
     }
 
     async fn submit_transaction(&self, transaction: bitcoin::Transaction) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.lock().unwrap();
         inner.pending.push(transaction);
 
         let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
