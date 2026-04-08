@@ -1,5 +1,7 @@
 pub mod bitcoind;
 pub mod esplora;
+pub mod metrics;
+pub mod tracked;
 
 use anyhow::Result;
 use bitcoin::{BlockHash, Transaction};

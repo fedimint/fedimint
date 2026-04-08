@@ -38,6 +38,7 @@ use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
+use fedimint_server_bitcoin_rpc::tracked::ServerBitcoinRpcTracked;
 use fedimint_server_core::ServerModuleInitRegistryExt;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_server::UnknownInit;
@@ -371,6 +372,8 @@ pub async fn run(
         }
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
+    let dyn_server_bitcoin_rpc =
+        ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, "server").into_dyn();
 
     root_task_group.install_kill_handler();
 

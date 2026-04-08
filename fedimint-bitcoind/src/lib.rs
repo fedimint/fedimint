@@ -18,12 +18,11 @@ use esplora_client::{AsyncClient, Builder};
 use fedimint_core::envs::FM_FORCE_BITCOIN_RPC_URL_ENV;
 use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_logging::LOG_BITCOIND;
 use fedimint_metrics::HistogramExt as _;
 use tracing::trace;
-
-use fedimint_logging::LOG_BITCOIND;
 
 use crate::metrics::{BITCOIND_RPC_DURATION_SECONDS, BITCOIND_RPC_REQUESTS_TOTAL};
 
