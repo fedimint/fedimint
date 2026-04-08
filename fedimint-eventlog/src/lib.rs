@@ -73,6 +73,7 @@ const TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS: usize = 100_000;
 /// and emitted only at runtime.
 ///
 /// Consult [`Event::PERSISTENCE`] to know which event uses which persistence.
+#[derive(Debug, Clone, Copy)]
 pub enum EventPersistence {
     /// Not written anywhere, just broadcasted as notification at runtime
     Transient,
@@ -87,6 +88,36 @@ pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
     const KIND: EventKind;
     const PERSISTENCE: EventPersistence;
+}
+
+/// A type-erased event that can be logged atomically alongside a transaction.
+///
+/// Created via [`AnyEvent::from_module_event`].
+/// This exists because [`Event`] has `DeserializeOwned` which prevents object
+/// safety, but we only need serialization at submission time.
+#[derive(Clone)]
+pub struct AnyEvent {
+    pub kind: EventKind,
+    pub module_kind: Option<ModuleKind>,
+    pub module_id: Option<ModuleInstanceId>,
+    pub payload: Vec<u8>,
+    pub persistence: EventPersistence,
+}
+
+impl AnyEvent {
+    /// Create from a module event, capturing the module's instance ID.
+    pub fn from_module_event<E: Event>(event: E, module_id: ModuleInstanceId) -> Self {
+        Self {
+            kind: E::KIND,
+            module_kind: E::MODULE,
+            module_id: Some(module_id),
+            payload: serde_json::to_vec(
+                &serde_json::to_value(&event).expect("Serialization can't fail"),
+            )
+            .expect("Serialization can't fail"),
+            persistence: E::PERSISTENCE,
+        }
+    }
 }
 
 /// An counter that resets on every restart, that guarantees that

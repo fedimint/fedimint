@@ -417,6 +417,7 @@ pub async fn try_remint_denomination(
             MintCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
+            vec![],
         )
         .await?
         .txid();

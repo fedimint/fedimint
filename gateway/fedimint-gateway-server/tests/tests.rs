@@ -417,6 +417,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                     fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
+                    vec![],
                 )
                 .await?
                 .txid();
@@ -707,6 +708,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
+                    vec![],
                 )
                 .await?
                 .txid();

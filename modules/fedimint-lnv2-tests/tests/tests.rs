@@ -337,6 +337,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             TransactionBuilder::new().with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(lnv2_module_id),
             ),
+            vec![],
         )
         .await
         .expect("Failed to claim outgoing contract");

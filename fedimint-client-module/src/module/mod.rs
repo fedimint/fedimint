@@ -24,7 +24,7 @@ use fedimint_core::{
     Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
     maybe_add_send_sync,
 };
-use fedimint_eventlog::{Event, EventKind, EventPersistence};
+use fedimint_eventlog::{AnyEvent, Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::Serialize;
@@ -63,6 +63,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
+        events: Vec<AnyEvent>,
     ) -> anyhow::Result<OutPointRange>;
 
     // TODO: unify
@@ -353,6 +354,7 @@ where
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
+        events: Vec<AnyEvent>,
     ) -> anyhow::Result<OutPointRange>
     where
         F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
@@ -367,6 +369,7 @@ where
                     serde_json::to_value(operation_meta_gen(out_point_range)).expect("Can't fail")
                 }),
                 tx_builder,
+                events,
             )
             .await
     }
@@ -672,6 +675,10 @@ where
                 serde_json::to_value(operation_meta).expect("Can't fail"),
             )
             .await;
+    }
+
+    pub fn make_event<E: Event>(&self, event: E) -> AnyEvent {
+        AnyEvent::from_module_event(event, self.module_instance_id)
     }
 
     pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)

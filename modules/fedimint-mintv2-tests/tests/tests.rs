@@ -90,6 +90,7 @@ async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result
             "Issue e-cash via dummy module",
             |_| (),
             TransactionBuilder::new().with_inputs(dummy_input),
+            vec![],
         )
         .await?;
 

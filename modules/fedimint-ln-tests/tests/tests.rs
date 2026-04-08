@@ -804,7 +804,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     }
 
     client1
-        .finalize_and_submit_transaction(operation_id_1, "", |_| (), transaction_builder_1)
+        .finalize_and_submit_transaction(operation_id_1, "", |_| (), transaction_builder_1, vec![])
         .await
         .expect("Tx finalization failed");
     await_tx_accepted(
@@ -817,7 +817,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     .expect("First offer should be accepted");
 
     client1
-        .finalize_and_submit_transaction(operation_id_2, "", |_| (), transaction_builder_2)
+        .finalize_and_submit_transaction(operation_id_2, "", |_| (), transaction_builder_2, vec![])
         .await
         .expect("Tx finalization failed");
     await_tx_accepted(

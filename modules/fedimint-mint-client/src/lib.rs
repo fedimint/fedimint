@@ -1806,33 +1806,22 @@ impl MintClientModule {
             extra_meta: extra_meta.clone(),
         };
 
+        let reissued_event = self.client_ctx.make_event(OOBNotesReissued { amount });
+        let receive_event = self.client_ctx.make_event(ReceivePaymentEvent {
+            operation_id,
+            amount,
+        });
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 MintCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
+                vec![reissued_event, receive_event],
             )
             .await
             .context(ReissueExternalNotesError::AlreadyReissued)?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(&mut dbtx, OOBNotesReissued { amount })
-            .await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    amount,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
@@ -2161,6 +2150,7 @@ impl MintClientModule {
                     extra_meta: em_clone.clone(),
                 },
                 TransactionBuilder::new().with_outputs(outputs),
+                vec![],
             )
             .await
             .context("Failed to submit reissuance transaction")?;
