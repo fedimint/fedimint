@@ -1,9 +1,11 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
+use iroh::endpoint::TransportConfig;
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
 use tracing::{info, warn};
@@ -83,10 +85,21 @@ pub async fn build_iroh_endpoint(
         );
     }
 
+    let mut transport_config = TransportConfig::default();
+    transport_config.max_idle_timeout(Some(
+        Duration::from_secs(60)
+            .try_into()
+            .expect("60s fits in IdleTimeout"),
+    ));
+    // Iroh's default builder sets keep_alive_interval to 1s, but since we're
+    // providing a custom TransportConfig we need to set it explicitly.
+    transport_config.keep_alive_interval(Some(Duration::from_secs(30)));
+
     let builder = builder
         .relay_mode(relay_mode)
         .secret_key(secret_key)
-        .alpns(vec![alpn.to_vec()]);
+        .alpns(vec![alpn.to_vec()])
+        .transport_config(transport_config);
 
     let builder = match bind_addr {
         SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::{Context, bail};
 use async_trait::async_trait;
@@ -140,7 +141,10 @@ impl IrohConnector {
                     }
                 }
 
-                let endpoint = builder.bind().await?;
+                let endpoint = builder
+                    .transport_config(quic_transport_config())
+                    .bind()
+                    .await?;
                 debug!(
                     target: LOG_NET_IROH,
                     node_id = %endpoint.node_id(),
@@ -183,7 +187,10 @@ impl IrohConnector {
                 }
             }
 
-            let endpoint = builder.bind().await?;
+            let endpoint = builder
+                .transport_config(quic_transport_config_next())
+                .bind()
+                .await?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.node_id(),
@@ -424,6 +431,32 @@ impl IrohConnector {
 
         Ok(conn)
     }
+}
+
+/// QUIC transport config with explicit idle timeout and keep-alive
+/// for the stable iroh endpoint.
+fn quic_transport_config() -> iroh::endpoint::TransportConfig {
+    let mut config = iroh::endpoint::TransportConfig::default();
+    config.max_idle_timeout(Some(
+        Duration::from_secs(60)
+            .try_into()
+            .expect("60s fits in IdleTimeout"),
+    ));
+    config.keep_alive_interval(Some(Duration::from_secs(30)));
+    config
+}
+
+/// QUIC transport config with explicit idle timeout and keep-alive
+/// for the next iroh endpoint.
+fn quic_transport_config_next() -> iroh_next::endpoint::TransportConfig {
+    let mut config = iroh_next::endpoint::TransportConfig::default();
+    config.max_idle_timeout(Some(
+        Duration::from_secs(60)
+            .try_into()
+            .expect("60s fits in IdleTimeout"),
+    ));
+    config.keep_alive_interval(Some(Duration::from_secs(30)));
+    config
 }
 
 fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
