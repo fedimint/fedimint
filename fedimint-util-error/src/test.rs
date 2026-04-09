@@ -56,3 +56,37 @@ pub(crate) fn fmt_compact_sanity() {
     };
     assert_eq!(err.fmt_compact().to_string(), "BarError: d");
 }
+
+#[test]
+pub(crate) fn fmt_compact_result_anyhow_sanity() {
+    use super::FmtCompactResultAnyhow as _;
+
+    fn foo() -> anyhow::Result<()> {
+        anyhow::bail!("Foo")
+    }
+
+    fn bar() -> anyhow::Result<()> {
+        foo().context("xyz")?;
+        unreachable!()
+    }
+
+    let ok_result: anyhow::Result<i32> = Ok(42);
+    assert_eq!(ok_result.fmt_compact_result_anyhow().to_string(), "-");
+
+    let err_result = bar();
+    assert_eq!(
+        err_result.fmt_compact_result_anyhow().to_string(),
+        "xyz: Foo"
+    );
+}
+
+#[test]
+pub(crate) fn fmt_compact_result_sanity() {
+    use super::FmtCompactResult as _;
+
+    let ok_result: Result<i32, io::Error> = Ok(42);
+    assert_eq!(ok_result.fmt_compact_result().to_string(), "-");
+
+    let err_result: Result<i32, io::Error> = Err(io::Error::other("d"));
+    assert_eq!(err_result.fmt_compact_result().to_string(), "d");
+}
