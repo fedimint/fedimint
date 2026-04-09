@@ -65,6 +65,15 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange>;
 
+    async fn finalize_and_submit_transaction_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>;
+
     // TODO: unify
     async fn finalize_and_submit_transaction_inner(
         &self,
@@ -361,6 +370,32 @@ where
         self.client
             .get()
             .finalize_and_submit_transaction(
+                operation_id,
+                operation_type,
+                Box::new(move |out_point_range| {
+                    serde_json::to_value(operation_meta_gen(out_point_range)).expect("Can't fail")
+                }),
+                tx_builder,
+            )
+            .await
+    }
+
+    pub async fn finalize_and_submit_transaction_dbtx<F, Meta>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>
+    where
+        F: Fn(OutPointRange) -> Meta + MaybeSend + MaybeSync + 'static,
+        Meta: serde::Serialize + MaybeSend,
+    {
+        self.client
+            .get()
+            .finalize_and_submit_transaction_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
                 operation_id,
                 operation_type,
                 Box::new(move |out_point_range| {
