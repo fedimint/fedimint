@@ -372,9 +372,11 @@ impl ClientModule for MintClientModule {
         amounts: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amounts> {
-        Some(Amounts::new_bitcoin(
-            self.cfg.fee_consensus.fee(amounts.get_bitcoin()),
-        ))
+        let unit = self.cfg.amount_unit;
+        let amount = amounts.get(&unit).copied().unwrap_or_default();
+        let fee = self.cfg.fee_consensus.fee(amount);
+
+        Some(Amounts::new_custom(unit, fee))
     }
 
     fn output_fee(
@@ -382,9 +384,11 @@ impl ClientModule for MintClientModule {
         amounts: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
-        Some(Amounts::new_bitcoin(
-            self.cfg.fee_consensus.fee(amounts.get_bitcoin()),
-        ))
+        let unit = self.cfg.amount_unit;
+        let amount = amounts.get(&unit).copied().unwrap_or_default();
+        let fee = self.cfg.fee_consensus.fee(amount);
+
+        Some(Amounts::new_custom(unit, fee))
     }
 
     #[cfg(feature = "cli")]
@@ -396,7 +400,7 @@ impl ClientModule for MintClientModule {
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
-        PrimaryModuleSupport::selected(PrimaryModulePriority::HIGH, [AmountUnit::BITCOIN])
+        PrimaryModuleSupport::selected(PrimaryModulePriority::HIGH, [self.cfg.amount_unit])
     }
 
     async fn create_final_inputs_and_outputs(
@@ -410,8 +414,8 @@ impl ClientModule for MintClientModule {
         ClientInputBundle<MintInput, MintClientStateMachines>,
         ClientOutputBundle<MintOutput, MintClientStateMachines>,
     )> {
-        if unit != AmountUnit::BITCOIN {
-            anyhow::bail!("Module can only handle Bitcoin");
+        if unit != self.cfg.amount_unit {
+            anyhow::bail!("Module can only handle its configured amount unit");
         }
 
         let funding_notes = self
@@ -464,7 +468,8 @@ impl ClientModule for MintClientModule {
         // We sort the notes by denomination to minimize the leaked information.
         spendable_notes.sort_by_key(|note| note.denomination);
 
-        let input_bundle = Self::create_input_bundle(operation_id, spendable_notes, false);
+        let input_bundle =
+            Self::create_input_bundle(operation_id, spendable_notes, false, self.cfg.amount_unit);
 
         let mut denominations = represent_amount_with_fees(
             input_amount.saturating_sub(output_amount),
@@ -494,7 +499,7 @@ impl ClientModule for MintClientModule {
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
-        if unit != AmountUnit::BITCOIN {
+        if unit != self.cfg.amount_unit {
             return Amount::ZERO;
         }
 
@@ -622,13 +627,14 @@ impl MintClientModule {
         operation_id: OperationId,
         notes: Vec<SpendableNote>,
         include_receive_sm: bool,
+        amount_unit: AmountUnit,
     ) -> ClientInputBundle<MintInput, MintClientStateMachines> {
         let inputs = notes
             .iter()
             .map(|spendable_note| ClientInput {
                 input: MintInput::new_v0(spendable_note.note()),
                 keys: vec![spendable_note.keypair],
-                amounts: Amounts::new_bitcoin(spendable_note.amount()),
+                amounts: Amounts::new_custom(amount_unit, spendable_note.amount()),
             })
             .collect();
 
@@ -671,11 +677,12 @@ impl MintClientModule {
             .collect::<Vec<NoteIssuanceRequest>>()
             .await;
 
+        let amount_unit = self.cfg.amount_unit;
         let outputs = issuance_requests
             .iter()
             .map(|request| ClientOutput {
                 output: request.output(),
-                amounts: Amounts::new_bitcoin(request.denomination.amount()),
+                amounts: Amounts::new_custom(amount_unit, request.denomination.amount()),
             })
             .collect();
 
@@ -903,7 +910,8 @@ impl MintClientModule {
             return Err(ReceiveECashError::UneconomicalDenomination);
         }
 
-        let input = Self::create_input_bundle(operation_id, ecash.notes(), true);
+        let input =
+            Self::create_input_bundle(operation_id, ecash.notes(), true, self.cfg.amount_unit);
         let input = self.client_ctx.make_client_inputs(input);
         let ec = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
 

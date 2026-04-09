@@ -22,9 +22,9 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmounts, api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::{
     Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
@@ -201,6 +201,7 @@ impl ServerModuleInit for MintInit {
                         tbs_agg_pks: tbs_agg_pks.clone(),
                         tbs_pks: tbs_pks.clone(),
                         fee_consensus: fee_consensus.clone(),
+                        amount_unit: AmountUnit::BITCOIN,
                     },
                     private: MintConfigPrivate {
                         tbs_sks: consensus_denominations()
@@ -256,6 +257,7 @@ impl ServerModuleInit for MintInit {
                 tbs_agg_pks,
                 tbs_pks,
                 fee_consensus,
+                amount_unit: AmountUnit::BITCOIN,
             },
         };
 
@@ -287,6 +289,7 @@ impl ServerModuleInit for MintInit {
             tbs_agg_pks: config.tbs_agg_pks,
             tbs_pks: config.tbs_pks.clone(),
             fee_consensus: config.fee_consensus.clone(),
+            amount_unit: config.amount_unit,
         })
     }
 
@@ -417,11 +420,12 @@ impl ServerModule for Mint {
         .await;
 
         let amount = input.note.amount();
+        let unit = self.cfg.consensus.amount_unit;
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
-                amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+                amounts: Amounts::new_custom(unit, amount),
+                fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
             },
             pub_key: input.note.nonce,
         })
@@ -474,10 +478,11 @@ impl ServerModule for Mint {
         .await;
 
         let amount = output.amount();
+        let unit = self.cfg.consensus.amount_unit;
 
         Ok(TransactionItemAmounts {
-            amounts: Amounts::new_bitcoin(amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+            amounts: Amounts::new_custom(unit, amount),
+            fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
         })
     }
 
