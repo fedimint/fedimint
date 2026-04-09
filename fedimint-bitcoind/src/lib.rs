@@ -18,7 +18,7 @@ use esplora_client::{AsyncClient, Builder};
 use fedimint_core::envs::FM_FORCE_BITCOIN_RPC_URL_ENV;
 use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompactResultAnyhow as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND;
 use fedimint_metrics::HistogramExt as _;
@@ -133,23 +133,14 @@ impl IBitcoindRpc for BitcoindTracked {
             .unwrap_or_default()
             .as_secs_f64()
             * 1000.0;
-        match &result {
-            Ok(_) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_tx_block_height",
-                name = self.name,
-                duration_ms,
-                "completed bitcoind rpc"
-            ),
-            Err(err) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_tx_block_height",
-                name = self.name,
-                duration_ms,
-                error = %err.fmt_compact_anyhow(),
-                "completed bitcoind rpc with error"
-            ),
-        }
+        trace!(
+            target: LOG_BITCOIND,
+            method = "get_tx_block_height",
+            name = self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
         result
     }
 
@@ -172,23 +163,14 @@ impl IBitcoindRpc for BitcoindTracked {
             .unwrap_or_default()
             .as_secs_f64()
             * 1000.0;
-        match &result {
-            Ok(()) => trace!(
-                target: LOG_BITCOIND,
-                method = "watch_script_history",
-                name = self.name,
-                duration_ms,
-                "completed bitcoind rpc"
-            ),
-            Err(err) => trace!(
-                target: LOG_BITCOIND,
-                method = "watch_script_history",
-                name = self.name,
-                duration_ms,
-                error = %err.fmt_compact_anyhow(),
-                "completed bitcoind rpc with error"
-            ),
-        }
+        trace!(
+            target: LOG_BITCOIND,
+            method = "watch_script_history",
+            name = self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
         result
     }
 
@@ -211,23 +193,14 @@ impl IBitcoindRpc for BitcoindTracked {
             .unwrap_or_default()
             .as_secs_f64()
             * 1000.0;
-        match &result {
-            Ok(_) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_script_history",
-                name = self.name,
-                duration_ms,
-                "completed bitcoind rpc"
-            ),
-            Err(err) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_script_history",
-                name = self.name,
-                duration_ms,
-                error = %err.fmt_compact_anyhow(),
-                "completed bitcoind rpc with error"
-            ),
-        }
+        trace!(
+            target: LOG_BITCOIND,
+            method = "get_script_history",
+            name = self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
         result
     }
 
@@ -250,23 +223,14 @@ impl IBitcoindRpc for BitcoindTracked {
             .unwrap_or_default()
             .as_secs_f64()
             * 1000.0;
-        match &result {
-            Ok(_) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_txout_proof",
-                name = self.name,
-                duration_ms,
-                "completed bitcoind rpc"
-            ),
-            Err(err) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_txout_proof",
-                name = self.name,
-                duration_ms,
-                error = %err.fmt_compact_anyhow(),
-                "completed bitcoind rpc with error"
-            ),
-        }
+        trace!(
+            target: LOG_BITCOIND,
+            method = "get_txout_proof",
+            name = self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
         result
     }
 
@@ -289,23 +253,14 @@ impl IBitcoindRpc for BitcoindTracked {
             .unwrap_or_default()
             .as_secs_f64()
             * 1000.0;
-        match &result {
-            Ok(_) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_info",
-                name = self.name,
-                duration_ms,
-                "completed bitcoind rpc"
-            ),
-            Err(err) => trace!(
-                target: LOG_BITCOIND,
-                method = "get_info",
-                name = self.name,
-                duration_ms,
-                error = %err.fmt_compact_anyhow(),
-                "completed bitcoind rpc with error"
-            ),
-        }
+        trace!(
+            target: LOG_BITCOIND,
+            method = "get_info",
+            name = self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
         result
     }
 }
