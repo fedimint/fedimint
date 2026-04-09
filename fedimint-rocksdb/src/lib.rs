@@ -25,7 +25,7 @@ use rocksdb::{
 };
 use tracing::debug;
 
-use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
+use crate::envs::{FM_ROCKSDB_BLOCK_CACHE_SIZE_ENV, FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV};
 
 // turn an `iter` into a `Stream` where every `next` is ran inside
 // `block_in_place` to offload the blocking calls
@@ -138,17 +138,60 @@ fn is_power_of_two_sanity() {
     assert!(!is_power_of_two((2 << 10) + 1));
 }
 
+/// Default write buffer size: 2 MiB (`RocksDB` default is 64 MiB)
+const DEFAULT_WRITE_BUFFER_SIZE: usize = 2 * 1024 * 1024;
+
+/// Default block cache size: 2 MiB (`RocksDB` default is 8 MiB).
+/// Index/filter blocks are placed in this cache too
+/// (`set_cache_index_and_filter_blocks`), so everything is bounded.
+/// We only need correctness, not throughput, so we keep this minimal.
+const DEFAULT_BLOCK_CACHE_SIZE: usize = 2 * 1024 * 1024;
+
+/// Default max open files: 256 (`RocksDB` default is unlimited which
+/// consumes memory for each open file handle and associated metadata)
+const DEFAULT_MAX_OPEN_FILES: i32 = 256;
+
+fn parse_env_size(env_name: &str) -> anyhow::Result<Option<usize>> {
+    let Ok(var) = std::env::var(env_name) else {
+        return Ok(None);
+    };
+    let size: usize =
+        FromStr::from_str(&var).with_context(|| format!("Could not parse {env_name}"))?;
+    if !is_power_of_two(size) {
+        bail!("{env_name} is not a power of 2");
+    }
+    Ok(Some(size))
+}
+
 fn get_default_options() -> anyhow::Result<rocksdb::Options> {
     let mut opts = rocksdb::Options::default();
-    if let Ok(var) = std::env::var(FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV) {
-        debug!(var, "Using custom write buffer size");
-        let size: usize = FromStr::from_str(&var)
-            .with_context(|| format!("Could not parse {FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV}"))?;
-        if !is_power_of_two(size) {
-            bail!("{} is not a power of 2", FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV);
-        }
-        opts.set_write_buffer_size(size);
-    }
+
+    let write_buffer_size =
+        parse_env_size(FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV)?.unwrap_or(DEFAULT_WRITE_BUFFER_SIZE);
+    opts.set_write_buffer_size(write_buffer_size);
+
+    // Keep at most 2 write buffers (1 active + 1 flushing)
+    opts.set_max_write_buffer_number(2);
+
+    let block_cache_size =
+        parse_env_size(FM_ROCKSDB_BLOCK_CACHE_SIZE_ENV)?.unwrap_or(DEFAULT_BLOCK_CACHE_SIZE);
+    let cache = rocksdb::Cache::new_lru_cache(block_cache_size);
+    let mut block_opts = rocksdb::BlockBasedOptions::default();
+    block_opts.set_block_cache(&cache);
+    // Put index and filter blocks into the block cache so they are
+    // bounded by the same memory budget instead of growing unbounded.
+    block_opts.set_cache_index_and_filter_blocks(true);
+    opts.set_block_based_table_factory(&block_opts);
+
+    opts.set_max_open_files(DEFAULT_MAX_OPEN_FILES);
+
+    debug!(
+        write_buffer_size,
+        block_cache_size,
+        max_open_files = DEFAULT_MAX_OPEN_FILES,
+        "RocksDB memory options"
+    );
+
     opts.create_if_missing(true);
     Ok(opts)
 }
