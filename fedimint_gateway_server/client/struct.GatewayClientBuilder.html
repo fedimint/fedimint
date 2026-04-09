@@ -14,13 +14,13 @@
 Only used for “legacy” federations before v0.5.0</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.create_client_builder" class="method"><a class="src rightside" href="../../src/fedimint_gateway_server/client.rs.html#62-89">Source</a><h4 class="code-header">async fn <a href="#method.create_client_builder" class="fn">create_client_builder</a>(
     &amp;self,
-    federation_config: &amp;<a class="struct" href="../../fedimint_gateway_common/struct.FederationConfig.html" title="struct fedimint_gateway_common::FederationConfig">FederationConfig</a>,
+    federation_config: &amp;FederationConfig,
     gateway: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../struct.Gateway.html" title="struct fedimint_gateway_server::Gateway">Gateway</a>&gt;,
 ) -&gt; <a class="type" href="../type.AdminResult.html" title="type fedimint_gateway_server::AdminResult">AdminResult</a>&lt;<a class="struct" href="../../fedimint_client/client/builder/struct.ClientBuilder.html" title="struct fedimint_client::client::builder::ClientBuilder">ClientBuilder</a>&gt;</h4></section></summary><div class="docblock"><p>Constructs the client builder with the modules, database, and connector
 used to create clients for connected federations.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.recover" class="method"><a class="src rightside" href="../../src/fedimint_gateway_server/client.rs.html#95-119">Source</a><h4 class="code-header">pub async fn <a href="#method.recover" class="fn">recover</a>(
     &amp;self,
-    config: <a class="struct" href="../../fedimint_gateway_common/struct.FederationConfig.html" title="struct fedimint_gateway_common::FederationConfig">FederationConfig</a>,
+    config: FederationConfig,
     gateway: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../struct.Gateway.html" title="struct fedimint_gateway_server::Gateway">Gateway</a>&gt;,
     mnemonic: &amp;Mnemonic,
 ) -&gt; <a class="type" href="../type.AdminResult.html" title="type fedimint_gateway_server::AdminResult">AdminResult</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Recovers a client with the provided mnemonic. This function will wait
@@ -29,7 +29,7 @@ afterwards and waited on until the state machines have finished
 for a balance to be present.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../../src/fedimint_gateway_server/client.rs.html#123-177">Source</a><h4 class="code-header">pub async fn <a href="#method.build" class="fn">build</a>(
     &amp;self,
-    config: <a class="struct" href="../../fedimint_gateway_common/struct.FederationConfig.html" title="struct fedimint_gateway_common::FederationConfig">FederationConfig</a>,
+    config: FederationConfig,
     gateway: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../struct.Gateway.html" title="struct fedimint_gateway_server::Gateway">Gateway</a>&gt;,
     mnemonic: &amp;Mnemonic,
 ) -&gt; <a class="type" href="../type.AdminResult.html" title="type fedimint_gateway_server::AdminResult">AdminResult</a>&lt;<a class="type" href="../../fedimint_client/client/handle/type.ClientHandleArc.html" title="type fedimint_client::client::handle::ClientHandleArc">ClientHandleArc</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a new client with the provided <code>FederationConfig</code> and <code>Mnemonic</code>.
