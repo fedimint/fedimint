@@ -25,6 +25,7 @@ pub mod connection_limits;
 pub mod db;
 
 use std::fs;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -79,6 +80,14 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// Runtime settings for the iroh-next (v0.90) dual-stack endpoints.
+/// Passed as `Option<IrohNextSettings>` — `None` means disabled.
+#[derive(Debug, Clone)]
+pub struct IrohNextSettings {
+    pub api_bind: SocketAddr,
+    pub p2p_bind: SocketAddr,
+}
+
 /// A function/closure type for handling dashboard UI
 pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>;
 
@@ -99,6 +108,7 @@ pub async fn run(
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
+    iroh_next_settings: Option<IrohNextSettings>,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -122,6 +132,8 @@ pub async fn run(
                         .iter()
                         .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                         .collect(),
+                    iroh_next_settings.as_ref(),
+                    Some(&cfg.private.broadcast_secret_key),
                 )
                 .await?
                 .into_dyn()
@@ -154,6 +166,8 @@ pub async fn run(
         }
     };
 
+    let iroh_enabled = !cfg.consensus.iroh_endpoints.is_empty();
+
     let decoders = module_init_registry.decoders_strict(
         cfg.consensus
             .modules
@@ -166,7 +180,14 @@ pub async fn run(
     initialize_gauge_metrics(&task_group, &db).await;
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
-    start_guardian_metadata_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
+    start_guardian_metadata_service(
+        &db,
+        &task_group,
+        &cfg,
+        force_api_secrets.get_active(),
+        iroh_next_settings.as_ref().filter(|_| iroh_enabled),
+    )
+    .await?;
     start_pkarr_publish_service(&db, &task_group, &cfg).await?;
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
@@ -194,6 +215,7 @@ pub async fn run(
         dashboard_ui_router,
         db_checkpoint_retention,
         iroh_api_limits,
+        iroh_next_settings.as_ref().filter(|_| iroh_enabled),
     ))
     .await?;
 
@@ -326,6 +348,8 @@ pub async fn run_config_gen(
                 .iter()
                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                 .collect(),
+            None,
+            None,
         )
         .await?
         .into_dyn()

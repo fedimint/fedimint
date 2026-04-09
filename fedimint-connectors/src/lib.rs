@@ -14,7 +14,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
+};
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
@@ -194,6 +196,12 @@ impl ConnectorRegistryBuilder {
         // TODO: read rest of the env
         for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
             self = self.with_connection_override(k, v);
+        }
+
+        // Disable iroh-next in test/devimint environments where
+        // iroh-next server endpoints are not running.
+        if is_running_in_test_env() {
+            self.iroh_next = false;
         }
 
         Ok(Self { ..self })

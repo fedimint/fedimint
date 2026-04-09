@@ -856,11 +856,11 @@ impl FedimintCli {
             Command::Admin(AdminCmd::SignGuardianMetadata { api_urls, pkarr_id }) => {
                 let client = self.client_open(&cli).await?;
 
-                let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata {
+                let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata::new(
                     api_urls,
-                    pkarr_id_z32: pkarr_id,
-                    timestamp_secs: fedimint_core::time::duration_since_epoch().as_secs(),
-                };
+                    pkarr_id,
+                    fedimint_core::time::duration_since_epoch().as_secs(),
+                );
 
                 let signed_metadata = cli
                     .admin_client(

@@ -15,8 +15,10 @@ use futures::stream::StreamExt;
 use tokio::select;
 use tracing::{debug, info};
 
+use crate::IrohNextSettings;
 use crate::config::ServerConfig;
 use crate::db::DbKeyPrefix;
+use crate::net::broadcast_keys;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct GuardianMetadataKey(pub PeerId);
@@ -40,12 +42,13 @@ pub async fn start_guardian_metadata_service(
     tg: &TaskGroup,
     cfg: &ServerConfig,
     api_secret: Option<String>,
+    iroh_next_settings: Option<&IrohNextSettings>,
 ) -> anyhow::Result<()> {
     const INITIAL_DELAY_SECONDS: u64 = 5;
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    let initial_delay = if insert_signed_guardian_metadata_if_not_present(db, cfg).await {
+    let initial_delay = if update_signed_guardian_metadata(db, cfg, iroh_next_settings).await {
         Duration::ZERO
     } else {
         Duration::from_secs(INITIAL_DELAY_SECONDS)
@@ -135,40 +138,50 @@ pub async fn start_guardian_metadata_service(
     Ok(())
 }
 
-/// Checks if we already have a signed guardian metadata for our own identity
-/// in the database and creates one if not.
+/// Builds and signs guardian metadata from the current config,
+/// updating the database if the metadata has changed.
 ///
-/// Return `true` fresh metadata was inserted because it was not present
-async fn insert_signed_guardian_metadata_if_not_present(db: &Database, cfg: &ServerConfig) -> bool {
-    let mut dbtx = db.begin_transaction().await;
-    if dbtx
-        .get_value(&GuardianMetadataKey(cfg.local.identity))
-        .await
-        .is_some()
-    {
-        return false;
-    }
-
-    let timestamp_secs = fedimint_core::time::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time should be after UNIX_EPOCH")
-        .as_secs();
-
-    let guardian_metadata = GuardianMetadata::new(
+/// Returns `true` if metadata was inserted/updated (new data to
+/// broadcast), `false` if the existing metadata is identical.
+async fn update_signed_guardian_metadata(
+    db: &Database,
+    cfg: &ServerConfig,
+    iroh_next_settings: Option<&IrohNextSettings>,
+) -> bool {
+    let mut guardian_metadata = GuardianMetadata::new(
         cfg.consensus
             .api_endpoints()
             .get(&cfg.local.identity)
             .map(|endpoint| vec![endpoint.url.clone()])
             .unwrap_or_default(),
         super::pkarr_publish::pkarr_id_z32(&cfg.private.broadcast_secret_key),
-        timestamp_secs,
+        fedimint_core::time::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time should be after UNIX_EPOCH")
+            .as_secs(),
     );
+
+    if iroh_next_settings.is_some() {
+        let iroh_sk = broadcast_keys::derive_iroh_next_api_sk(&cfg.private.broadcast_secret_key);
+        guardian_metadata = guardian_metadata.with_iroh_next(
+            broadcast_keys::IROH_NEXT_VERSION.to_string(),
+            iroh_sk.public().to_string(),
+        );
+    }
     let ctx = secp256k1::Secp256k1::new();
     let signed_metadata =
         guardian_metadata.sign(&ctx, &cfg.private.broadcast_secret_key.keypair(&ctx));
 
-    dbtx.insert_entry(&GuardianMetadataKey(cfg.local.identity), &signed_metadata)
-        .await;
+    let key = GuardianMetadataKey(cfg.local.identity);
+    let mut dbtx = db.begin_transaction().await;
+
+    if let Some(existing) = dbtx.get_value(&key).await
+        && existing.tagged_hash() == signed_metadata.tagged_hash()
+    {
+        return false;
+    }
+
+    dbtx.insert_entry(&key, &signed_metadata).await;
     dbtx.commit_tx().await;
 
     true

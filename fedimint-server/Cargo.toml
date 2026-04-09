@@ -47,6 +47,9 @@ iroh = { workspace = true, features = [
 iroh-base = { workspace = true, default-features = false, features = [
     "ticket",
 ] }
+iroh-next = { workspace = true, default-features = false, features = [
+    "discovery-pkarr-dht",
+] }
 iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
