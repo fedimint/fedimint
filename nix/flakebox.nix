@@ -384,6 +384,7 @@ in
         pname ? null,
         packages,
         mainProgram ? null,
+        features ? [ ],
         ...
       }@origArgs:
       let
@@ -391,6 +392,7 @@ in
           "mainProgram"
           "pname"
           "packages"
+          "features"
         ];
         pname =
           if builtins.hasAttr "pname" origArgs then
@@ -401,12 +403,20 @@ in
             null;
         # "--package x --package y" args passed to cargo
         pkgsArgs = lib.strings.concatStringsSep " " (builtins.map (name: "--package ${name}") packages);
+        # "--features pkg/feat --features pkg/feat" args passed to cargo
+        featuresArgs = lib.strings.concatStringsSep " " (builtins.map (f: "--features ${f}") features);
+        extraArgs = lib.strings.concatStringsSep " " (
+          builtins.filter (s: s != "") [
+            pkgsArgs
+            featuresArgs
+          ]
+        );
 
         deps = craneLib.buildDepsOnly (
           args
           // (lib.optionalAttrs (pname != null) { inherit pname; })
           // {
-            buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
+            buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE ${extraArgs}";
           }
         );
       in
@@ -417,7 +427,7 @@ in
           cargoArtifacts = deps;
           meta = { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
-          cargoExtraArgs = "${pkgsArgs}";
+          cargoExtraArgs = "${extraArgs}";
 
           # If the build contains `devimint`, wrap it in a script that will set
           # a correct `FM_DEVIMINT_STATIC_DATA_DIR`.
@@ -827,6 +837,13 @@ in
         "fedimint-cli"
         "fedimint-dbtool"
         "fedimint-recoverytool"
+      ];
+
+      # Cargo features can't be enabled by default conditionally on the target
+      # architecture, so we enable jemalloc here for the systems where it works.
+      features = lib.optionals (pkgs.stdenv.isLinux || pkgs.stdenv.isDarwin) [
+        "fedimintd/jemalloc"
+        "fedimint-cli/jemalloc"
       ];
     };
 

@@ -11,6 +11,10 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default = []
+jemalloc = ["rocksdb/jemalloc"]
+
 [lib]
 name = "fedimint_rocksdb"
 path = "src/lib.rs"
@@ -25,9 +29,6 @@ fedimint-logging = { workspace = true }
 futures = { workspace = true }
 rocksdb = { workspace = true }
 tracing = { workspace = true }
-
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
-rocksdb = { workspace = true, features = ["jemalloc"] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { workspace = true, features = [
