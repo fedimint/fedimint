@@ -6,9 +6,9 @@ use bitcoincore_rpc::jsonrpc::Error::Rpc;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
-use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{ChainId, Feerate};
-use fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
+use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
@@ -79,17 +79,15 @@ impl IServerBitcoinRpc for BitcoindClient {
         Ok(feerate)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) {
+    async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
         match block_in_place(|| self.client.send_raw_transaction(&transaction)) {
             // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
-            // This is considered a success case, so we don't surface the error log.
+            // This is considered a success case, so we don't surface it as an error.
             //
             // https://github.com/bitcoin/bitcoin/blob/daa56f7f665183bcce3df146f143be37f33c123e/src/rpc/protocol.h#L48
-            Err(JsonRpc(Rpc(e))) if e.code == -27 => (),
-            Err(e) => {
-                info!(target: LOG_BITCOIND_CORE, e = %e.fmt_compact(), "Error broadcasting transaction")
-            }
-            Ok(_) => (),
+            Err(JsonRpc(Rpc(e))) if e.code == -27 => Ok(()),
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(()),
         }
     }
 

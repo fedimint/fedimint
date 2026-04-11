@@ -50,6 +50,7 @@ use fedimint_core::module::{
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::sleep;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{
     InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, util,
 };
@@ -80,7 +81,7 @@ use secp256k1::ecdsa::Signature;
 use secp256k1::{PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
@@ -912,7 +913,13 @@ impl Wallet {
                     .await;
 
                 for unconfirmed_tx in unconfirmed_txs {
-                    btc_rpc.submit_transaction(unconfirmed_tx.tx).await;
+                    if let Err(err) = btc_rpc.submit_transaction(unconfirmed_tx.tx).await {
+                        debug!(
+                            target: LOG_MODULE_WALLETV2,
+                            err = %err.fmt_compact_anyhow(),
+                            "Error broadcasting unconfirmed transaction"
+                        );
+                    }
                 }
 
                 sleep(common::sleep_duration()).await;
@@ -1060,7 +1067,13 @@ impl Wallet {
             dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
                 .await;
 
-            self.btc_rpc.submit_transaction(unsigned.tx).await;
+            if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
+                debug!(
+                    target: LOG_MODULE_WALLETV2,
+                    err = %err.fmt_compact_anyhow(),
+                    "Error broadcasting finalized transaction"
+                );
+            }
         }
 
         Ok(())

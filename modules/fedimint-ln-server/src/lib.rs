@@ -1312,8 +1312,12 @@ mod tests {
             Err(anyhow::anyhow!("Mock feerate error"))
         }
 
-        async fn submit_transaction(&self, _transaction: fedimint_core::bitcoin::Transaction) {
+        async fn submit_transaction(
+            &self,
+            _transaction: fedimint_core::bitcoin::Transaction,
+        ) -> anyhow::Result<()> {
             // No-op for mock
+            Ok(())
         }
 
         async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {

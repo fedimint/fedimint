@@ -2005,7 +2005,13 @@ pub async fn broadcast_pending_tx(
                 "Broadcasting peg-out",
             );
             trace!(transaction = ?tx);
-            rpc.submit_transaction(tx).await;
+            if let Err(err) = rpc.submit_transaction(tx).await {
+                debug!(
+                    target: LOG_MODULE_WALLET,
+                    err = %err.fmt_compact_anyhow(),
+                    "Error broadcasting peg-out transaction"
+                );
+            }
         }
     }
 }

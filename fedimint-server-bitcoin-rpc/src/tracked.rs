@@ -100,7 +100,7 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
         tracked_call!(self, "get_feerate", self.inner.get_feerate().await)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) {
+    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
         trace!(
             target: LOG_BITCOIND,
             method = "submit_transaction",
@@ -111,8 +111,9 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
         let timer = SERVER_BITCOIN_RPC_DURATION_SECONDS
             .with_label_values(&["submit_transaction", self.name])
             .start_timer_ext();
-        self.inner.submit_transaction(transaction).await;
+        let result = self.inner.submit_transaction(transaction).await;
         timer.observe_duration();
+        self.record_call("submit_transaction", &result);
         let duration_ms = now()
             .duration_since(start)
             .unwrap_or_default()
@@ -123,8 +124,10 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
             method = "submit_transaction",
             name = self.name,
             duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
             "completed bitcoind rpc"
         );
+        result
     }
 
     async fn get_sync_progress(&self) -> Result<Option<f64>> {
