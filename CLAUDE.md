@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Additional agent-specific instructions (e.g. for CI-driven code review) can be found in `.github/agents/`.
+Additional agent-specific instructions (e.g., for CI-driven code review) can be found in `.github/agents/`.
 
 ## Project Overview
 
