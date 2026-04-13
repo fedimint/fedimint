@@ -6,9 +6,9 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoincore_rpc::{Auth, Client, RpcApi};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::runtime::block_in_place;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::{ChainId, Feerate};
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_logging::LOG_SERVER;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>tracing::info;
 <a href=#14 id=14 data-nosnippet>14</a>
@@ -79,28 +79,26 @@
 <a href=#79 id=79 data-nosnippet>79</a>        <span class="prelude-val">Ok</span>(feerate)
 <a href=#80 id=80 data-nosnippet>80</a>    }
 <a href=#81 id=81 data-nosnippet>81</a>
-<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.client.send_raw_transaction(<span class="kw-2">&amp;</span>transaction)) {
 <a href=#84 id=84 data-nosnippet>84</a>            <span class="comment">// Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
-<a href=#85 id=85 data-nosnippet>85</a>            // This is considered a success case, so we don't surface the error log.
+<a href=#85 id=85 data-nosnippet>85</a>            // This is considered a success case, so we don't surface it as an error.
 <a href=#86 id=86 data-nosnippet>86</a>            //
 <a href=#87 id=87 data-nosnippet>87</a>            // https://github.com/bitcoin/bitcoin/blob/daa56f7f665183bcce3df146f143be37f33c123e/src/rpc/protocol.h#L48
-<a href=#88 id=88 data-nosnippet>88</a>            </span><span class="prelude-val">Err</span>(JsonRpc(Rpc(e))) <span class="kw">if </span>e.code == -<span class="number">27 </span>=&gt; (),
-<a href=#89 id=89 data-nosnippet>89</a>            <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#90 id=90 data-nosnippet>90</a>                <span class="macro">info!</span>(target: LOG_BITCOIND_CORE, e = %e.fmt_compact(), <span class="string">"Error broadcasting transaction"</span>)
-<a href=#91 id=91 data-nosnippet>91</a>            }
-<a href=#92 id=92 data-nosnippet>92</a>            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; (),
-<a href=#93 id=93 data-nosnippet>93</a>        }
-<a href=#94 id=94 data-nosnippet>94</a>    }
-<a href=#95 id=95 data-nosnippet>95</a>
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">async fn </span>get_sync_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
-<a href=#97 id=97 data-nosnippet>97</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
-<a href=#98 id=98 data-nosnippet>98</a>            block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>.verification_progress,
-<a href=#99 id=99 data-nosnippet>99</a>        ))
-<a href=#100 id=100 data-nosnippet>100</a>    }
-<a href=#101 id=101 data-nosnippet>101</a>
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
-<a href=#103 id=103 data-nosnippet>103</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
-<a href=#104 id=104 data-nosnippet>104</a>    }
-<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#88 id=88 data-nosnippet>88</a>            </span><span class="prelude-val">Err</span>(JsonRpc(Rpc(e))) <span class="kw">if </span>e.code == -<span class="number">27 </span>=&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#89 id=89 data-nosnippet>89</a>            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e.into()),
+<a href=#90 id=90 data-nosnippet>90</a>            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#91 id=91 data-nosnippet>91</a>        }
+<a href=#92 id=92 data-nosnippet>92</a>    }
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">async fn </span>get_sync_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
+<a href=#96 id=96 data-nosnippet>96</a>            block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>.verification_progress,
+<a href=#97 id=97 data-nosnippet>97</a>        ))
+<a href=#98 id=98 data-nosnippet>98</a>    }
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
+<a href=#102 id=102 data-nosnippet>102</a>    }
+<a href=#103 id=103 data-nosnippet>103</a>}
 </code></pre></div></section></main></body></html>

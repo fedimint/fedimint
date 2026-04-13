@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FmtCompactErrorAnyhow","FmtErrorCompact"],"trait":["FmtCompact","FmtCompactAnyhow"]};
+window.SIDEBAR_ITEMS = {"struct":["FmtCompactErrorAnyhow","FmtCompactResultAnyhowDisplay","FmtCompactResultDisplay","FmtErrorCompact"],"trait":["FmtCompact","FmtCompactAnyhow","FmtCompactResult","FmtCompactResultAnyhow"]};

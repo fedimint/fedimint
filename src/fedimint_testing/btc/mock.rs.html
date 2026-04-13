@@ -383,7 +383,7 @@
 <a href=#383 id=383 data-nosnippet>383</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Feerate { sats_per_kvb: <span class="number">2000 </span>}))
 <a href=#384 id=384 data-nosnippet>384</a>    }
 <a href=#385 id=385 data-nosnippet>385</a>
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: bitcoin::Transaction) {
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: bitcoin::Transaction) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
 <a href=#388 id=388 data-nosnippet>388</a>        inner.pending.push(transaction);
 <a href=#389 id=389 data-nosnippet>389</a>
@@ -403,14 +403,16 @@
 <a href=#403 id=403 data-nosnippet>403</a>        }
 <a href=#404 id=404 data-nosnippet>404</a>
 <a href=#405 id=405 data-nosnippet>405</a>        inner.pending = filtered.into_values().collect();
-<a href=#406 id=406 data-nosnippet>406</a>    }
-<a href=#407 id=407 data-nosnippet>407</a>
-<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">async fn </span>get_sync_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
-<a href=#409 id=409 data-nosnippet>409</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-<a href=#410 id=410 data-nosnippet>410</a>    }
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
-<a href=#413 id=413 data-nosnippet>413</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
-<a href=#414 id=414 data-nosnippet>414</a>    }
-<a href=#415 id=415 data-nosnippet>415</a>}
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="prelude-val">Ok</span>(())
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">async fn </span>get_sync_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
+<a href=#411 id=411 data-nosnippet>411</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#412 id=412 data-nosnippet>412</a>    }
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
+<a href=#416 id=416 data-nosnippet>416</a>    }
+<a href=#417 id=417 data-nosnippet>417</a>}
 </code></pre></div></section></main></body></html>
