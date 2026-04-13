@@ -126,7 +126,7 @@ name = "fedimint"
 
 [workspace.dependencies]
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
-anyhow = "1.0.98"
+anyhow = "1.0.102"
 aquamarine = "0.5.0"
 argon2 = "0.5.3"
 arti-client = { version = "0.38.0", default-features = false }
@@ -135,7 +135,7 @@ async-channel = "2.5.0"
 async-lock = "3.4"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 axum = "0.8.8"
 axum-auth = "0.8.1"
 axum-extra = "0.12.5"
@@ -314,7 +314,7 @@ rocksdb = { version = "0.24.0" }
 rustls-pki-types = { version = "1.12.0" }
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
-semver = "1.0.27"
+semver = "1.0.28"
 send_wrapper = "0.6.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde-big-array = "0.5.1"
@@ -352,7 +352,7 @@ tower-http = { version = "0.6.8", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.11.0-alpha" }
 tracing = "0.1.44"
 tracing-opentelemetry = "0.29.0"
-tracing-subscriber = "0.3.22"
+tracing-subscriber = "0.3.23"
 tracing-test = "0.2.6"
 url = "2.5.4"
 wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
