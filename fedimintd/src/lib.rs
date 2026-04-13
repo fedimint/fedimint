@@ -51,6 +51,11 @@ use fedimintd_envs::{
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
 };
 use futures::FutureExt as _;
+#[cfg(all(
+    not(feature = "jemalloc"),
+    not(any(target_env = "msvc", target_os = "ios", target_os = "android"))
+))]
+use tracing::warn;
 use tracing::{debug, error, info};
 
 use crate::metrics::APP_START_TS;
@@ -277,6 +282,16 @@ pub async fn run(
     tracing_builder.init().unwrap();
 
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
+
+    #[cfg(all(
+        not(feature = "jemalloc"),
+        not(any(target_env = "msvc", target_os = "ios", target_os = "android"))
+    ))]
+    warn!(
+        target: LOG_SERVER,
+        "fedimintd was built without the `jemalloc` feature. rocksdb is prone to memory \
+         fragmentation with the default allocator; consider rebuilding with `--features jemalloc`."
+    );
 
     let code_version_str = code_version_vendor_suffix.map_or_else(
         || fedimint_version.to_string(),
