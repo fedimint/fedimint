@@ -17,7 +17,7 @@
     - Once this PR is merged, pull the release branch locally and push a new signed tag to GH
   - Start back-compat and upgrade tests (see [Back-Compat and Upgrade Tests](#back-compat-and-upgrade-tests))
   - Publish to crates.io
-  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by CI (`ci-start9-fedimintd.yml`) and test fresh install + upgrade on a Start9 server
+  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by the `start9` job in CI (nix) and test fresh install + upgrade on a Start9 server
 - For release candidates
   - Once the beta releases have passed initial testing and the release is considered production ready
     - Bump the version to the release candidate (e.g. `0.4.0-beta.0 -> 0.4.0-rc.0`)
@@ -28,14 +28,14 @@
   - Wait for tests to pass before publishing
     - Once you've cut an RC you're committed to back-compat support, so a test failure after publishing to crates.io puts you in a harder spot with a broken public artifact
   - Publish to crates.io
-  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by CI (`ci-start9-fedimintd.yml`) and test fresh install + upgrade on a Start9 server
+  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by the `start9` job in CI (nix) and test fresh install + upgrade on a Start9 server
 - For final releases
   - Bump the cargo version to a final release (e.g. `0.4.3`)
   - Create a new branch off of `releases/v*` with the final release tag (e.g. `releases/v0.4.3`)
     - This new branch isn't protected, so you can push directly to GH
   - Create a new signed tag and push to GH
   - Publish to crates.io
-  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by CI (`ci-start9-fedimintd.yml`) and test fresh install + upgrade on a Start9 server
+  - Verify the `fedimintd-v<version>.s9pk` was attached to the GH release by the `start9` job in CI (nix) and test fresh install + upgrade on a Start9 server
   - Sign binaries
     - `just sign-release <tag>`
     - ex: `just sign-release v0.5.0`
