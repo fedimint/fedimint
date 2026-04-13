@@ -137,7 +137,7 @@
 <a href=#137 id=137 data-nosnippet>137</a><span class="kw">impl </span>EventLogId {
 <a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">pub const </span>LOG_START: EventLogId = EventLogId(<span class="number">0</span>);
 <a href=#139 id=139 data-nosnippet>139</a>
-<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">fn </span>next(<span class="self">self</span>) -&gt; EventLogId {
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">pub fn </span>next(<span class="self">self</span>) -&gt; EventLogId {
 <a href=#141 id=141 data-nosnippet>141</a>        <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ <span class="number">1</span>)
 <a href=#142 id=142 data-nosnippet>142</a>    }
 <a href=#143 id=143 data-nosnippet>143</a>

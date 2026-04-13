@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cmd_notes","cmd_operations","cmd_transactions"]};

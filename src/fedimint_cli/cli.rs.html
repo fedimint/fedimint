@@ -393,5 +393,37 @@
 <a href=#393 id=393 data-nosnippet>393</a>    <span class="doccomment">/// Show the chain ID (bitcoin block hash at height 1) cached in the client
 <a href=#394 id=394 data-nosnippet>394</a>    /// database
 <a href=#395 id=395 data-nosnippet>395</a>    </span>ChainId,
-<a href=#396 id=396 data-nosnippet>396</a>}
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="doccomment">/// Visualize client internals for debugging
+<a href=#397 id=397 data-nosnippet>397</a>    </span>Visualize {
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="attr">#[clap(subcommand)]
+<a href=#399 id=399 data-nosnippet>399</a>        </span>visualize_type: VisualizeCmd,
+<a href=#400 id=400 data-nosnippet>400</a>    },
+<a href=#401 id=401 data-nosnippet>401</a>}
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a><span class="attr">#[derive(Debug, Clone, Subcommand)]
+<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>VisualizeCmd {
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="doccomment">/// Show every e-cash note with creation/spending provenance
+<a href=#406 id=406 data-nosnippet>406</a>    </span>Notes {
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="attr">#[arg(long)]
+<a href=#408 id=408 data-nosnippet>408</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#409 id=409 data-nosnippet>409</a>    },
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Show transactions with inputs and outputs
+<a href=#411 id=411 data-nosnippet>411</a>    </span>Transactions {
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="doccomment">/// Show a specific operation (by full ID)
+<a href=#413 id=413 data-nosnippet>413</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
+<a href=#414 id=414 data-nosnippet>414</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
+<a href=#415 id=415 data-nosnippet>415</a>        /// given)
+<a href=#416 id=416 data-nosnippet>416</a>        </span><span class="attr">#[arg(long)]
+<a href=#417 id=417 data-nosnippet>417</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#418 id=418 data-nosnippet>418</a>    },
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="doccomment">/// Show operations with their state machines
+<a href=#420 id=420 data-nosnippet>420</a>    </span>Operations {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="doccomment">/// Show a specific operation (by full ID)
+<a href=#422 id=422 data-nosnippet>422</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
+<a href=#424 id=424 data-nosnippet>424</a>        /// given)
+<a href=#425 id=425 data-nosnippet>425</a>        </span><span class="attr">#[arg(long)]
+<a href=#426 id=426 data-nosnippet>426</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#427 id=427 data-nosnippet>427</a>    },
+<a href=#428 id=428 data-nosnippet>428</a>}
 </code></pre></div></section></main></body></html>
