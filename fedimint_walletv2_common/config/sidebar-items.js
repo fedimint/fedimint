@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FeeConsensus","WalletClientConfig","WalletConfig","WalletConfigConsensus","WalletConfigPrivate"]};
+window.SIDEBAR_ITEMS = {"enum":["WalletDescriptor"],"struct":["FeeConsensus","WalletClientConfig","WalletConfig","WalletConfigConsensus","WalletConfigPrivate"]};
