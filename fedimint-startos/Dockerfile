@@ -1,3 +1,6 @@
+# ARG before any FROM so it's available in FROM instructions
+ARG FEDIMINTD_TAG=latest
+
 # Stage 1: Download yq in a full-featured image
 FROM alpine:latest AS downloader
 ARG TARGETARCH
@@ -11,7 +14,6 @@ RUN case "$TARGETARCH" in \
     chmod +x /tmp/yq
 
 # Stage 2: Main image
-ARG FEDIMINTD_TAG=latest
 FROM fedimint/fedimintd:${FEDIMINTD_TAG}
 
 # Copy yq from downloader stage
