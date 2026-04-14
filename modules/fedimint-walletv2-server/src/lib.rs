@@ -40,7 +40,9 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set_opt};
+use fedimint_core::envs::{
+    FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set_opt, is_running_in_test_env,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
@@ -96,6 +98,11 @@ pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 /// Maximum number of blocks the consensus block count can advance in a single
 /// consensus item to limit the work done in one `process_consensus_item` step.
 const MAX_BLOCK_COUNT_INCREMENT: u64 = 5;
+
+/// In test environments we raise the limit so that tests that mine many empty
+/// blocks (e.g. 21 confirmation blocks for pegins) don't have to wait through
+/// many consensus rounds to catch up.
+const MAX_BLOCK_COUNT_INCREMENT_TEST: u64 = 100;
 
 /// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
 /// below what Bitcoin Core will relay.
@@ -428,9 +435,15 @@ impl ServerModule for Wallet {
 
             let consensus_block_count = self.consensus_block_count(dbtx).await;
 
+            let max_increment = if is_running_in_test_env() {
+                MAX_BLOCK_COUNT_INCREMENT_TEST
+            } else {
+                MAX_BLOCK_COUNT_INCREMENT
+            };
+
             let block_count_vote = match consensus_block_count {
                 0 => block_count_vote,
-                _ => block_count_vote.min(consensus_block_count + MAX_BLOCK_COUNT_INCREMENT),
+                _ => block_count_vote.min(consensus_block_count + max_increment),
             };
 
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
