@@ -781,11 +781,11 @@ jobs:
         run: |
           curl -fsSL https://deno.land/install.sh | sh
           echo "$HOME/.deno/bin" >> $GITHUB_PATH
-      # start-os v0.3.5.1 doesn't compile on newer Rust versions
+      # md-packer's ICU dependencies require rustc 1.86+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85.1"
+          toolchain: "1.86.0"
       - name: Install cargo tools
         run: |
           # web-static-pack-packer 0.5.2 requires rustc 1.88+
