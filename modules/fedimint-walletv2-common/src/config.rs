@@ -33,6 +33,8 @@ pub struct WalletConfigPrivate {
 pub struct WalletConfigConsensus {
     /// The public keys for the bitcoin multisig
     pub bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+    /// The kind of descriptor the federation uses for the multisig.
+    pub descriptor: WalletDescriptor,
     /// Total vbytes of a pegout bitcoin transaction
     pub send_tx_vbytes: u64,
     /// Total vbytes of a pegin bitcoin transaction
@@ -105,6 +107,7 @@ impl WalletConfigConsensus {
 
         Self {
             bitcoin_pks,
+            descriptor: WalletDescriptor::Wsh,
             send_tx_vbytes: weight_to_vbytes(
                 tx_overhead_weight
                     + change_input_weight
@@ -201,10 +204,19 @@ fn test_fee_consensus() {
     );
 }
 
+/// Which kind of bitcoin descriptor the federation uses. Currently only `Wsh`
+/// is defined, we can expand in the future.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum WalletDescriptor {
+    Wsh,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletClientConfig {
     /// The public keys for the bitcoin multisig
     pub bitcoin_pks: BTreeMap<PeerId, PublicKey>,
+    /// The kind of descriptor the federation uses for the multisig.
+    pub descriptor: WalletDescriptor,
     /// Total vbytes of a pegout bitcoin transaction
     pub send_tx_vbytes: u64,
     /// Total vbytes of a pegin bitcoin transaction

@@ -371,6 +371,7 @@ impl ServerModuleInit for WalletInit {
 
         Ok(WalletClientConfig {
             bitcoin_pks: config.bitcoin_pks,
+            descriptor: config.descriptor,
             send_tx_vbytes: config.send_tx_vbytes,
             receive_tx_vbytes: config.receive_tx_vbytes,
             feerate_base: config.feerate_base,
