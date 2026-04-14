@@ -278,44 +278,10 @@ docs: build-docs
     $open_cmd "$fallback_index_path" || true
   fi
 
-# Bump all versions
+# Bump all cargo versions
 # ex: `just bump-version 0.5.0-alpha 0.5.0-rc.0`
 bump-version FROM_VERSION TO_VERSION:
   find . -name 'Cargo.toml' -exec sed -i 's/{{FROM_VERSION}}/{{TO_VERSION}}/g' {} +
-  just bump-start9-version {{TO_VERSION}}
-
-# Bump Start9 package version (Dockerfile, manifest.yaml, migrations.ts)
-# ex: `just bump-start9-version 0.10.0`
-bump-start9-version TO_VERSION:
-  #!/usr/bin/env bash
-  set -euo pipefail
-
-  # Dockerfile image tag
-  sed -i 's|FROM fedimint/fedimintd:v.*|FROM fedimint/fedimintd:v{{TO_VERSION}}|' fedimint-startos/Dockerfile
-
-  # Manifest version and release-notes link
-  sed -i 's/^version: .*/version: {{TO_VERSION}}/' fedimint-startos/manifest.yaml
-  sed -i 's|releases/tag/v.*)|releases/tag/v{{TO_VERSION}})|' fedimint-startos/manifest.yaml
-
-  # Update the target version in migrations.ts. Python is used here because
-  # the version to replace is always the last quoted version string in the
-  # file, which is hard to express readably in sed or awk
-  nix shell nixpkgs#python3 -c python3 << 'PYTHON'
-  import re
-
-  path = "fedimint-startos/scripts/procedures/migrations.ts"
-  content = open(path).read()
-
-  # Match quoted version strings like "0.10.0", "0.10.0.1", "0.10.0-beta.3"
-  version_pattern = r'"(\d+\.\d+\.\d+[^"]*?)"'
-  matches = list(re.finditer(version_pattern, content))
-  assert matches, f"No version strings found in {path}"
-
-  # Replace only the last match (always the fromMapping target version)
-  last = matches[-1]
-  content = content[:last.start()] + '"{{TO_VERSION}}"' + content[last.end():]
-  open(path, "w").write(content)
-  PYTHON
 
 publish-release:
   # We need to add CARGO_PROFILE_DEV_OPT_LEVEL because jemalloc fails to compile on our toolchain without optimizations enabled
