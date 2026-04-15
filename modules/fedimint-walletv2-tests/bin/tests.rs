@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::{Context, ensure};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
+use clap::Parser;
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
@@ -14,6 +15,13 @@ use serde::Deserialize;
 use tokio::task::JoinHandle;
 use tokio::try_join;
 use tracing::info;
+
+#[derive(Parser)]
+struct Opts {
+    /// Enable taproot support for walletv2
+    #[arg(long)]
+    taproot: bool,
+}
 
 /// Spawns a background task that mines a block every 100ms, simulating
 /// continuous block production. This prevents deadlocks where the federation's
@@ -219,8 +227,13 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, EventL
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let opts = Opts::parse();
+
     // Enable walletv2 module instead of wallet v1
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
+    if opts.taproot {
+        unsafe { std::env::set_var("FM_USE_TAPROOT_WALLETV2", "true") };
+    }
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
 
     devimint::run_devfed_test()
