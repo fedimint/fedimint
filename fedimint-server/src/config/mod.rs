@@ -246,6 +246,8 @@ pub struct ConfigGenParams {
     pub enabled_modules: BTreeSet<ModuleKind>,
     /// Bitcoin network for this federation
     pub network: bitcoin::Network,
+    /// Whether walletv2 should use a Taproot multisig instead of SegWit v0
+    pub use_taproot: bool,
 }
 
 impl ServerConfigConsensus {
@@ -481,6 +483,7 @@ impl ServerConfig {
         let args = ConfigGenModuleArgs {
             network: peer0.network,
             disable_base_fees: peer0.disable_base_fees,
+            use_taproot: peer0.use_taproot,
         };
 
         // Use legacy module ordering for backwards compatibility tests
@@ -641,6 +644,7 @@ impl ServerConfig {
         let args = ConfigGenModuleArgs {
             network: params.network,
             disable_base_fees: params.disable_base_fees,
+            use_taproot: params.use_taproot,
         };
 
         // Use legacy module ordering for backwards compatibility tests

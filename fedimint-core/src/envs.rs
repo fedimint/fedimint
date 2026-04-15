@@ -31,6 +31,9 @@ pub const FM_ENABLE_MODULE_WALLETV2_ENV: &str = "FM_ENABLE_MODULE_WALLETV2";
 /// Disable mint base fees for testing and development environments
 pub const FM_DISABLE_BASE_FEES_ENV: &str = "FM_DISABLE_BASE_FEES";
 
+/// Use taproot based wallet instead of segwit
+pub const FM_USE_TAPROOT_WALLETV2_ENV: &str = "FM_USE_TAPROOT_WALLETV2";
+
 /// Print sensitive secrets without redacting them. Use only for debugging.
 pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
 

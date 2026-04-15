@@ -1932,6 +1932,7 @@ impl FedimintCli {
                         None,
                         None,
                         *federation_size,
+                        None,
                         cli.auth()?,
                     )
                     .await?;
