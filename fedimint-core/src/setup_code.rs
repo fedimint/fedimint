@@ -26,6 +26,10 @@ pub struct PeerSetupCode {
     pub federation_size: Option<u32>,
     /// Bitcoin network configured locally by the guardian
     pub network: Network,
+    /// Whether the walletv2 module should use Taproot instead of SegWit v0.
+    /// Set by the leader. `None` means the value was not configured by this
+    /// peer; `Some(false)` is the default used by existing federations.
+    pub use_taproot: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]

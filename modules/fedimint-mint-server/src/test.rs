@@ -19,6 +19,7 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
     let args = ConfigGenModuleArgs {
         network: bitcoin::Network::Regtest,
         disable_base_fees: false,
+        use_taproot: false,
     };
     let mint_cfg = MintInit.trusted_dealer_gen(&peers, &args);
     let client_cfg = ClientModuleConfig::from_typed(

@@ -512,6 +512,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn setup_status(&self, auth: ApiAuth) -> FederationResult<SetupStatus>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn set_local_params(
         &self,
         name: String,
@@ -519,6 +520,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
+        use_taproot: Option<bool>,
         auth: ApiAuth,
     ) -> FederationResult<String>;
 

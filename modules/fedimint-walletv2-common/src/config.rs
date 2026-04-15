@@ -8,7 +8,7 @@ use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vb
 use secp256k1::{PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 
-use crate::{WalletCommonInit, descriptor};
+use crate::{WalletCommonInit, descriptor, descriptor_tr};
 
 plugin_types_trait_impl_config!(
     WalletCommonInit,
@@ -78,6 +78,7 @@ impl WalletConfigConsensus {
         bitcoin_pks: BTreeMap<PeerId, PublicKey>,
         fee_consensus: FeeConsensus,
         network: Network,
+        use_taproot: bool,
     ) -> Self {
         let tx_overhead_weight = 4 * 4 // nVersion
             + 1 // SegWit marker
@@ -86,10 +87,23 @@ impl WalletConfigConsensus {
             + 4 // up to 2 outputs
             + 4 * 4; // nLockTime
 
-        let change_witness_weight = descriptor(&bitcoin_pks, &sha256::Hash::all_zeros())
-            .max_weight_to_satisfy()
-            .expect("Cannot satisfy the change descriptor.")
-            .to_wu();
+        let change_witness_weight = if use_taproot {
+            descriptor_tr(&bitcoin_pks, &sha256::Hash::all_zeros())
+                .max_weight_to_satisfy()
+                .expect("Cannot satisfy the taproot change descriptor.")
+                .to_wu()
+        } else {
+            descriptor(&bitcoin_pks, &sha256::Hash::all_zeros())
+                .max_weight_to_satisfy()
+                .expect("Cannot satisfy the change descriptor.")
+                .to_wu()
+        };
+
+        let descriptor = if use_taproot {
+            WalletDescriptor::Tr
+        } else {
+            WalletDescriptor::Wsh
+        };
 
         let change_input_weight = 32 * 4 // txid
             + 4 * 4 // vout
@@ -107,7 +121,7 @@ impl WalletConfigConsensus {
 
         Self {
             bitcoin_pks,
-            descriptor: WalletDescriptor::Wsh,
+            descriptor,
             send_tx_vbytes: weight_to_vbytes(
                 tx_overhead_weight
                     + change_input_weight
@@ -209,6 +223,7 @@ fn test_fee_consensus() {
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum WalletDescriptor {
     Wsh,
+    Tr,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
