@@ -49,10 +49,12 @@ use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_se
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
-use fedimint_walletv2_common::config::WalletClientConfig;
+use fedimint_walletv2_common::config::{WalletClientConfig, WalletDescriptor};
 use fedimint_walletv2_common::{
     KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
-    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, descriptor_tr,
+    is_potential_receive,
+
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -609,11 +611,15 @@ impl WalletClientModule {
     }
 
     fn derive_address(&self, index: u64) -> Address {
-        descriptor(
-            &self.cfg.bitcoin_pks,
-            &self.derive_tweak(index).public_key().consensus_hash(),
-        )
-        .address(self.cfg.network)
+        let tweak = self.derive_tweak(index).public_key().consensus_hash();
+        match self.cfg.descriptor {
+            WalletDescriptor::Wsh => {
+                descriptor(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
+            }
+            WalletDescriptor::Tr => {
+                descriptor_tr(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
+            }
+        }
     }
 
     fn derive_tweak(&self, index: u64) -> Keypair {

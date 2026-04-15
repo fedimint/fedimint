@@ -11,6 +11,7 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+mod taproot;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -64,7 +65,7 @@ use fedimint_server_core::{
 };
 pub use fedimint_walletv2_common as common;
 use fedimint_walletv2_common::config::{
-    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
+    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate, WalletDescriptor,
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
@@ -73,20 +74,21 @@ use fedimint_walletv2_common::endpoint_constants::{
 };
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    descriptor, is_potential_receive, tweak_public_key, tweak_xonly_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
 use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, SecretKey};
+use secp256k1::{PublicKey, Scalar, SecretKey, schnorr};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
-    TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix,
+    UnsignedTxKey, UnsignedTxPrefix,
 };
 
 /// Number of confirmations required for a transaction to be considered as
@@ -237,6 +239,16 @@ impl ModuleInit for WalletInit {
                         "Wallet Signatures"
                     );
                 }
+                DbKeyPrefix::SchnorrSignatures => {
+                    push_db_pair_items!(
+                        dbtx,
+                        SchnorrSignaturesPrefix,
+                        SchnorrSignaturesKey,
+                        Vec<schnorr::Signature>,
+                        wallet,
+                        "Wallet Schnorr Signatures"
+                    );
+                }
                 DbKeyPrefix::UnconfirmedTx => {
                     push_db_pair_items!(
                         dbtx,
@@ -318,6 +330,7 @@ impl ServerModuleInit for WalletInit {
                         bitcoin_pks.clone(),
                         fee_consensus.clone(),
                         args.network,
+                        args.use_taproot,
                     ),
                 };
 
@@ -343,7 +356,12 @@ impl ServerModuleInit for WalletInit {
 
         let config = WalletConfig {
             private: WalletConfigPrivate { bitcoin_sk },
-            consensus: WalletConfigConsensus::new(bitcoin_pks, fee_consensus, args.network),
+            consensus: WalletConfigConsensus::new(
+                bitcoin_pks,
+                fee_consensus,
+                args.network,
+                args.use_taproot,
+            ),
         };
 
         Ok(config.to_erased())
@@ -403,20 +421,28 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
+        let our_pk = self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1);
+
         let mut items = dbtx
             .find_by_prefix(&UnsignedTxPrefix)
             .await
-            .map(|(key, unsigned_tx)| {
-                let signatures = self.sign_tx(&unsigned_tx);
-
-                self.verify_signatures(
-                    &unsigned_tx,
-                    &signatures,
-                    self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
-                )
-                .expect("Our signatures failed verification against our private key");
-
-                WalletConsensusItem::Signatures(key.0, signatures)
+            .map(|(key, unsigned_tx)| match self.cfg.consensus.descriptor {
+                WalletDescriptor::Wsh => {
+                    let signatures = self.sign_tx(&unsigned_tx);
+                    self.verify_signatures(
+                        &unsigned_tx,
+                        &signatures,
+                        self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
+                    )
+                    .expect("Our signatures failed verification against our private key");
+                    WalletConsensusItem::Signatures(key.0, signatures)
+                }
+                WalletDescriptor::Tr => {
+                    let signatures = self.sign_tx_schnorr(&unsigned_tx);
+                    self.verify_signatures_schnorr(&unsigned_tx, &signatures, our_pk)
+                        .expect("Our signatures failed verification against our private key");
+                    WalletConsensusItem::SchnorrSignatures(key.0, signatures)
+                }
             })
             .collect::<Vec<WalletConsensusItem>>()
             .await;
@@ -475,7 +501,19 @@ impl ServerModule for Wallet {
                 Ok(())
             }
             WalletConsensusItem::Signatures(txid, signatures) => {
+                ensure!(
+                    self.cfg.consensus.descriptor == WalletDescriptor::Wsh,
+                    "Received ECDSA signature on a Taproot Federation"
+                );
                 self.process_signatures(dbtx, txid, signatures, peer).await
+            }
+            WalletConsensusItem::SchnorrSignatures(txid, signatures) => {
+                ensure!(
+                    self.cfg.consensus.descriptor == WalletDescriptor::Tr,
+                    "Received Schnorr Signature on a Segwit Federation"
+                );
+                self.process_signatures_schnorr(dbtx, txid, signatures, peer)
+                    .await
             }
             WalletConsensusItem::Default { variant, .. } => Err(anyhow!(
                 "Received wallet consensus item with unknown variant {variant}"
@@ -504,9 +542,7 @@ impl ServerModule for Wallet {
             .await
             .ok_or(WalletInputError::UnknownOutputIndex)?;
 
-        let tweaked_pubkey = self
-            .descriptor(&input.tweak.consensus_hash())
-            .script_pubkey();
+        let tweaked_pubkey = self.script_pubkey_for(&input.tweak.consensus_hash());
 
         if tracked_output.script_pubkey != tweaked_pubkey {
             return Err(WalletInputError::WrongTweak);
@@ -558,7 +594,7 @@ impl ServerModule for Wallet {
                 ],
                 output: vec![TxOut {
                     value: change_value,
-                    script_pubkey: self.descriptor(&wallet.consensus_hash()).script_pubkey(),
+                    script_pubkey: self.script_pubkey_for(&wallet.consensus_hash()),
                 }],
             };
 
@@ -700,7 +736,7 @@ impl ServerModule for Wallet {
             output: vec![
                 TxOut {
                     value: change_value,
-                    script_pubkey: self.descriptor(&wallet.consensus_hash()).script_pubkey(),
+                    script_pubkey: self.script_pubkey_for(&wallet.consensus_hash()),
                 },
                 TxOut {
                     value: output.value,
@@ -1358,7 +1394,12 @@ impl Wallet {
         dbtx.find_by_range(OutputKey(start_index)..OutputKey(end_index))
             .await
             .filter_map(|entry| {
-                std::future::ready(entry.1.1.script_pubkey.is_p2wsh().then(|| OutputInfo {
+                let matches = if self.cfg.consensus.descriptor == WalletDescriptor::Tr {
+                    entry.1.1.script_pubkey.is_p2tr()
+                } else {
+                    entry.1.1.script_pubkey.is_p2wsh()
+                };
+                std::future::ready(matches.then(|| OutputInfo {
                     index: entry.0.0,
                     script: entry.1.1.script_pubkey,
                     value: entry.1.1.value,
@@ -1458,7 +1499,14 @@ impl Wallet {
             .consensus
             .bitcoin_pks
             .iter()
-            .map(|(peer, pk)| (*peer, tweak_public_key(pk, &wallet.tweak).to_string()))
+            .map(|(peer, pk)| {
+                let tweaked = if self.cfg.consensus.descriptor == WalletDescriptor::Tr {
+                    tweak_xonly_public_key(&pk.x_only_public_key().0, &wallet.tweak).to_string()
+                } else {
+                    tweak_public_key(pk, &wallet.tweak).to_string()
+                };
+                (*peer, tweaked)
+            })
             .collect();
 
         let tweak = &Scalar::from_be_bytes(wallet.tweak.to_byte_array())
