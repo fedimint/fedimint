@@ -1,3 +1,6 @@
+# ARG before any FROM so it's available in FROM instructions
+ARG GATEWAYD_TAG=latest
+
 # Stage 1: Download yq in a full-featured image
 FROM alpine:latest AS downloader
 ARG TARGETARCH
@@ -11,7 +14,7 @@ RUN case "$TARGETARCH" in \
     chmod +x /tmp/yq
 
 # Stage 2: Main image
-FROM fedimint/gatewayd:v0.10.0
+FROM fedimint/gatewayd:${GATEWAYD_TAG}
 
 # Copy yq from downloader stage
 COPY --from=downloader /tmp/yq /usr/local/bin/yq
