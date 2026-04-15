@@ -1749,6 +1749,7 @@ mod tests {
         let args = fedimint_server_core::ConfigGenModuleArgs {
             network: Network::Regtest,
             disable_base_fees: false,
+            use_taproot: false,
         };
         let server_cfg = ServerModuleInit::trusted_dealer_gen(&LightningInit, &peers, &args);
 

@@ -51,6 +51,11 @@ pub struct ConfigGenModuleArgs {
     pub network: Network,
     /// Whether to disable base fees for this federation
     pub disable_base_fees: bool,
+    /// Whether the walletv2 module should use a Taproot (P2TR + Schnorr)
+    /// multisig instead of the default SegWit v0 (P2WSH + ECDSA) multisig.
+    /// Decided once by the lead guardian during federation setup; other
+    /// modules ignore this flag.
+    pub use_taproot: bool,
 }
 
 /// Interface for Module Generation

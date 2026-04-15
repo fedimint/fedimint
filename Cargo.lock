@@ -5174,6 +5174,7 @@ dependencies = [
  "async-stream",
  "bitcoin",
  "bitcoincore-rpc",
+ "clap",
  "devimint",
  "fedimint-bitcoind",
  "fedimint-client",
