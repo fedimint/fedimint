@@ -34,6 +34,7 @@ pub trait ISetupApi {
     async fn reset_setup_codes(&self);
 
     /// Set local guardian parameters
+    #[allow(clippy::too_many_arguments)]
     async fn set_local_parameters(
         &self,
         name: String,
@@ -41,6 +42,7 @@ pub trait ISetupApi {
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
+        use_taproot: Option<bool>,
     ) -> Result<String>;
 
     /// Add peer connection info
@@ -63,6 +65,9 @@ pub trait ISetupApi {
 
     /// Returns whether base fees are disabled, if set by any setup code
     async fn cfg_base_fees_disabled(&self) -> Option<bool>;
+
+    /// Returns whether walletv2 should use Taproot, if set by any setup code
+    async fn cfg_use_taproot(&self) -> Option<bool>;
 
     /// Returns the enabled modules, if set by any setup code
     async fn cfg_enabled_modules(&self) -> Option<BTreeSet<ModuleKind>>;

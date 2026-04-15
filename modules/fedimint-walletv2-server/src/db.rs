@@ -3,6 +3,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_walletv2_common::TxInfo;
 use secp256k1::ecdsa::Signature;
+use secp256k1::schnorr;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -21,6 +22,7 @@ pub enum DbKeyPrefix {
     Signatures = 0x37,
     UnconfirmedTx = 0x38,
     FederationWallet = 0x39,
+    SchnorrSignatures = 0x3a,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -137,6 +139,31 @@ impl_db_record!(
 impl_db_lookup!(key = SignaturesKey, query_prefix = SignaturesTxidPrefix);
 
 impl_db_lookup!(key = SignaturesKey, query_prefix = SignaturesPrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct SchnorrSignaturesKey(pub Txid, pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct SchnorrSignaturesTxidPrefix(pub Txid);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct SchnorrSignaturesPrefix;
+
+impl_db_record!(
+    key = SchnorrSignaturesKey,
+    value = Vec<schnorr::Signature>,
+    db_prefix = DbKeyPrefix::SchnorrSignatures,
+);
+
+impl_db_lookup!(
+    key = SchnorrSignaturesKey,
+    query_prefix = SchnorrSignaturesTxidPrefix
+);
+
+impl_db_lookup!(
+    key = SchnorrSignaturesKey,
+    query_prefix = SchnorrSignaturesPrefix
+);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UnconfirmedTxKey(pub Txid);

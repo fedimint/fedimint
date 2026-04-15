@@ -55,6 +55,9 @@ pub struct SetLocalParamsRequest {
     /// Total number of guardians (including the one who sets this), set by the
     /// leader
     pub federation_size: Option<u32>,
+    /// Whether walletv2 should use Taproot, set by the leader
+    #[serde(default)]
+    pub use_taproot: Option<bool>,
 }
 
 /// Archive of all the guardian config files that can be used to recover a lost
