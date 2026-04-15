@@ -67,5 +67,63 @@ impl<'e> FmtCompactAnyhow<'e> for &'e anyhow::Error {
     }
 }
 
+/// A wrapper with `fmt::Display` for `Result<T, E>` where `E: Error` that
+/// prints the error chain on `Err` or `-` on `Ok`
+pub struct FmtCompactResultDisplay<'a, T, E>(pub &'a Result<T, E>);
+
+impl<T, E: error::Error> fmt::Display for FmtCompactResultDisplay<'_, T, E> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Ok(_) => f.write_str("-"),
+            Err(e) => FmtErrorCompact(e).fmt(f),
+        }
+    }
+}
+
+/// A wrapper with `fmt::Display` for `Result<T, anyhow::Error>` that
+/// prints the error chain on `Err` or `-` on `Ok`
+pub struct FmtCompactResultAnyhowDisplay<'a, T>(pub &'a Result<T, anyhow::Error>);
+
+impl<T> fmt::Display for FmtCompactResultAnyhowDisplay<'_, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Ok(_) => f.write_str("-"),
+            Err(e) => FmtCompactErrorAnyhow(e).fmt(f),
+        }
+    }
+}
+
+/// Extension trait to format `Result<T, E>` compactly (for `E: Error`)
+pub trait FmtCompactResult<'a> {
+    type Report: fmt::Display + 'a;
+    fn fmt_compact_result(&'a self) -> Self::Report;
+}
+
+/// Extension trait to format `Result<T, anyhow::Error>` compactly
+pub trait FmtCompactResultAnyhow<'a> {
+    type Report: fmt::Display + 'a;
+    fn fmt_compact_result_anyhow(&'a self) -> Self::Report;
+}
+
+impl<'a, T, E> FmtCompactResult<'a> for Result<T, E>
+where
+    E: error::Error + 'a,
+    T: 'a,
+{
+    type Report = FmtCompactResultDisplay<'a, T, E>;
+
+    fn fmt_compact_result(&'a self) -> Self::Report {
+        FmtCompactResultDisplay(self)
+    }
+}
+
+impl<'a, T: 'a> FmtCompactResultAnyhow<'a> for Result<T, anyhow::Error> {
+    type Report = FmtCompactResultAnyhowDisplay<'a, T>;
+
+    fn fmt_compact_result_anyhow(&'a self) -> Self::Report {
+        FmtCompactResultAnyhowDisplay(self)
+    }
+}
+
 #[cfg(test)]
 mod test;

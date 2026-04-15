@@ -383,7 +383,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
     }
 
-    async fn submit_transaction(&self, transaction: bitcoin::Transaction) {
+    async fn submit_transaction(&self, transaction: bitcoin::Transaction) -> anyhow::Result<()> {
         let mut inner = self.inner.write().unwrap();
         inner.pending.push(transaction);
 
@@ -403,6 +403,8 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         }
 
         inner.pending = filtered.into_values().collect();
+
+        Ok(())
     }
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {

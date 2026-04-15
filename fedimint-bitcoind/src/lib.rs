@@ -16,10 +16,13 @@ use anyhow::{Result, format_err};
 use bitcoin::{ScriptBuf, Transaction, Txid};
 use esplora_client::{AsyncClient, Builder};
 use fedimint_core::envs::FM_FORCE_BITCOIN_RPC_URL_ENV;
+use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactResultAnyhow as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_logging::LOG_BITCOIND;
 use fedimint_metrics::HistogramExt as _;
+use tracing::trace;
 
 use crate::metrics::{BITCOIND_RPC_DURATION_SECONDS, BITCOIND_RPC_REQUESTS_TOTAL};
 
@@ -109,56 +112,74 @@ impl BitcoindTracked {
     }
 }
 
+macro_rules! tracked_call {
+    ($self:ident, $method:expr, $call:expr) => {{
+        trace!(
+            target: LOG_BITCOIND,
+            method = $method,
+            name = $self.name,
+            "starting bitcoind rpc"
+        );
+        let start = now();
+        let timer = BITCOIND_RPC_DURATION_SECONDS
+            .with_label_values(&[$method, $self.name])
+            .start_timer_ext();
+        let result = $call;
+        timer.observe_duration();
+        $self.record_call($method, &result);
+        let duration_ms = now()
+            .duration_since(start)
+            .unwrap_or_default()
+            .as_secs_f64()
+            * 1000.0;
+        trace!(
+            target: LOG_BITCOIND,
+            method = $method,
+            name = $self.name,
+            duration_ms,
+            error = %result.fmt_compact_result_anyhow(),
+            "completed bitcoind rpc"
+        );
+        result
+    }};
+}
+
 #[apply(async_trait_maybe_send!)]
 impl IBitcoindRpc for BitcoindTracked {
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
-        let timer = BITCOIND_RPC_DURATION_SECONDS
-            .with_label_values(&["get_tx_block_height", self.name])
-            .start_timer_ext();
-        let result = self.inner.get_tx_block_height(txid).await;
-        timer.observe_duration();
-        self.record_call("get_tx_block_height", &result);
-        result
+        tracked_call!(
+            self,
+            "get_tx_block_height",
+            self.inner.get_tx_block_height(txid).await
+        )
     }
 
     async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()> {
-        let timer = BITCOIND_RPC_DURATION_SECONDS
-            .with_label_values(&["watch_script_history", self.name])
-            .start_timer_ext();
-        let result = self.inner.watch_script_history(script).await;
-        timer.observe_duration();
-        self.record_call("watch_script_history", &result);
-        result
+        tracked_call!(
+            self,
+            "watch_script_history",
+            self.inner.watch_script_history(script).await
+        )
     }
 
     async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>> {
-        let timer = BITCOIND_RPC_DURATION_SECONDS
-            .with_label_values(&["get_script_history", self.name])
-            .start_timer_ext();
-        let result = self.inner.get_script_history(script).await;
-        timer.observe_duration();
-        self.record_call("get_script_history", &result);
-        result
+        tracked_call!(
+            self,
+            "get_script_history",
+            self.inner.get_script_history(script).await
+        )
     }
 
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof> {
-        let timer = BITCOIND_RPC_DURATION_SECONDS
-            .with_label_values(&["get_txout_proof", self.name])
-            .start_timer_ext();
-        let result = self.inner.get_txout_proof(txid).await;
-        timer.observe_duration();
-        self.record_call("get_txout_proof", &result);
-        result
+        tracked_call!(
+            self,
+            "get_txout_proof",
+            self.inner.get_txout_proof(txid).await
+        )
     }
 
     async fn get_info(&self) -> Result<BlockchainInfo> {
-        let timer = BITCOIND_RPC_DURATION_SECONDS
-            .with_label_values(&["get_info", self.name])
-            .start_timer_ext();
-        let result = self.inner.get_info().await;
-        timer.observe_duration();
-        self.record_call("get_info", &result);
-        result
+        tracked_call!(self, "get_info", self.inner.get_info().await)
     }
 }
 

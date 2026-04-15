@@ -1,5 +1,7 @@
 pub mod bitcoind;
 pub mod esplora;
+pub mod metrics;
+pub mod tracked;
 
 use anyhow::Result;
 use bitcoin::{BlockHash, Transaction};
@@ -110,13 +112,22 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         }
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) {
-        // Since this endpoint does not return an error, we can just always broadcast to
-        // both places
-        self.bitcoind_client
+    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+        match self
+            .bitcoind_client
             .submit_transaction(transaction.clone())
-            .await;
-        self.esplora_client.submit_transaction(transaction).await;
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %e.fmt_compact_anyhow(),
+                    "BitcoindClient failed for submit_transaction, falling back to EsploraClient"
+                );
+                self.esplora_client.submit_transaction(transaction).await
+            }
+        }
     }
 
     async fn get_sync_progress(&self) -> Result<Option<f64>> {
