@@ -394,10 +394,13 @@ else
       # for dkg we need to use the fedimint-cli version that matches fedimintd
       if [ "$binary" == "fedimintd" ]; then
         var_name=$(nix_binary_version_var_name "fedimint-cli" "$version")
-        export "${var_name}=$(nix_build_binary_for_version "fedimint-cli" "$version")"
+        # NOTE: must separate from `export` — `export v=$(failing_cmd)` masks the failure
+        value=$(nix_build_binary_for_version "fedimint-cli" "$version")
+        export "${var_name}=$value"
       fi
       var_name=$(nix_binary_version_var_name "$binary" "$version")
-      export "${var_name}=$(nix_build_binary_for_version "$binary" "$version")"
+      value=$(nix_build_binary_for_version "$binary" "$version")
+      export "${var_name}=$value"
     done
   done
 
