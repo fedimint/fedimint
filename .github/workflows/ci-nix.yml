@@ -48,6 +48,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         with:
           name: fedimint
@@ -97,6 +99,8 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
@@ -141,6 +145,8 @@ jobs:
         uses: ./.github/actions/prepare
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
       - uses: cachix/cachix-action@v17
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -226,6 +232,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         with:
           name: fedimint
@@ -249,6 +257,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         with:
           name: fedimint
@@ -299,6 +309,8 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: cachix/cachix-action@v17
@@ -359,6 +371,8 @@ jobs:
       - uses: actions/checkout@v6
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
       - uses: cachix/cachix-action@v17
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
@@ -513,6 +527,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         with:
           name: fedimint
