@@ -39,6 +39,8 @@ pub(crate) struct SetupInput {
     pub enable_base_fees: bool,
     #[serde(default)] // list of enabled module kinds
     pub enabled_modules: Vec<String>,
+    #[serde(default)]
+    pub use_taproot: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +184,17 @@ fn setup_form_content(
                 #modules-list:has(.form-check-input:not(:checked)) ~ #modules-warning {
                     display: block;
                 }
+
+                #taproot-section {
+                    display: none;
+                    opacity: 0;
+                    transition: opacity 0.3s ease-in;
+                }
+
+                #taproot-section.visible {
+                    display: block;
+                    opacity: 1;
+                }
                 "#
             }
 
@@ -280,9 +293,43 @@ fn setup_form_content(
                                     div id="modules-warning" class="alert alert-warning mt-2 mb-0" style="font-size: 0.875rem;" {
                                         "Only modify this if you know what you are doing. Disabled modules cannot be enabled later."
                                     }
+
+                                    div id="taproot-section" class="mt-3" {
+                                        div class="form-check" {
+                                            input type="checkbox" class="form-check-input"
+                                                id="use_taproot" name="use_taproot" value="true";
+
+                                            label class="form-check-label" for="use_taproot" {
+                                                "Use Taproot (SegWit v1) for on-chain wallet"
+                                                span class="badge bg-warning text-dark ms-2" { "experimental" }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
+                    }
+
+                    script {
+                        (PreEscaped(r#"
+                        (function() {
+                            var clickCount = 0;
+                            var clickTimer = null;
+                            var btn = document.querySelector('#modulesAccordion .accordion-button');
+                            if (btn) {
+                                btn.addEventListener('click', function() {
+                                    clickCount++;
+                                    clearTimeout(clickTimer);
+                                    clickTimer = setTimeout(function() { clickCount = 0; }, 2000);
+                                    if (clickCount >= 7) {
+                                        var el = document.getElementById('taproot-section');
+                                        if (el) { el.classList.add('visible'); }
+                                        clickCount = 0;
+                                    }
+                                });
+                            }
+                        })();
+                        "#))
                     }
                 }
             }
@@ -365,6 +412,12 @@ async fn setup_submit(
         None
     };
 
+    let use_taproot = if input.is_lead && input.use_taproot {
+        Some(true)
+    } else {
+        None
+    };
+
     match state
         .api
         .set_local_parameters(
@@ -374,6 +427,7 @@ async fn setup_submit(
             disable_base_fees,
             enabled_modules,
             federation_size,
+            use_taproot,
         )
         .await
     {

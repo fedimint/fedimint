@@ -17,7 +17,7 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::envs::{
     FM_DISABLE_BASE_FEES_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV,
-    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, is_env_var_set,
+    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_USE_TAPROOT_WALLETV2_ENV, is_env_var_set,
 };
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
@@ -70,6 +70,8 @@ pub struct LocalParams {
     /// Total number of guardians (including the one who sets this), set by the
     /// leader
     federation_size: Option<u32>,
+    /// Whether walletv2 should use Taproot, set by the leader
+    use_taproot: Option<bool>,
 }
 
 impl LocalParams {
@@ -81,6 +83,7 @@ impl LocalParams {
             disable_base_fees: self.disable_base_fees,
             enabled_modules: self.enabled_modules.clone(),
             federation_size: self.federation_size,
+            use_taproot: self.use_taproot,
         }
     }
 }
@@ -176,6 +179,7 @@ impl ISetupApi for SetupApi {
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
+        use_taproot: Option<bool>,
     ) -> anyhow::Result<String> {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.auth.as_str() == auth.as_str()
@@ -184,6 +188,7 @@ impl ISetupApi for SetupApi {
             && existing_local_parameters.disable_base_fees == disable_base_fees
             && existing_local_parameters.enabled_modules == enabled_modules
             && existing_local_parameters.federation_size == federation_size
+            && existing_local_parameters.use_taproot == use_taproot
         {
             return Ok(base32::encode_prefixed(
                 FEDIMINT_PREFIX,
@@ -254,6 +259,7 @@ impl ISetupApi for SetupApi {
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
+                use_taproot,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -283,6 +289,7 @@ impl ISetupApi for SetupApi {
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
+                use_taproot,
             }
         };
 
@@ -336,6 +343,18 @@ impl ISetupApi for SetupApi {
             ensure!(
                 info.disable_base_fees.is_none(),
                 "Base fees setting has already been configured to disabled={disable_base_fees}"
+            );
+        }
+
+        if let Some(use_taproot) = state
+            .setup_codes
+            .iter()
+            .chain(once(&local_params.setup_code()))
+            .find_map(|info| info.use_taproot)
+        {
+            ensure!(
+                info.use_taproot.is_none(),
+                "Taproot wallet setting has already been configured to use_taproot={use_taproot}"
             );
         }
 
@@ -409,6 +428,12 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.disable_base_fees)
             .unwrap_or(is_env_var_set(FM_DISABLE_BASE_FEES_ENV));
 
+        let use_taproot = state
+            .setup_codes
+            .iter()
+            .find_map(|info| info.use_taproot)
+            .unwrap_or(is_env_var_set(FM_USE_TAPROOT_WALLETV2_ENV));
+
         let enabled_modules = state
             .setup_codes
             .iter()
@@ -438,6 +463,7 @@ impl ISetupApi for SetupApi {
             disable_base_fees,
             enabled_modules,
             network: self.settings.network,
+            use_taproot,
         };
 
         self.sender
@@ -476,6 +502,16 @@ impl ISetupApi for SetupApi {
             .iter()
             .chain(local_setup_code.iter())
             .find_map(|info| info.disable_base_fees)
+    }
+
+    async fn cfg_use_taproot(&self) -> Option<bool> {
+        let state = self.state.lock().await;
+        let local_setup_code = state.local_params.as_ref().map(LocalParams::setup_code);
+        state
+            .setup_codes
+            .iter()
+            .chain(local_setup_code.iter())
+            .find_map(|info| info.use_taproot)
     }
 
     async fn cfg_enabled_modules(&self) -> Option<BTreeSet<ModuleKind>> {
@@ -531,7 +567,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees, request.enabled_modules, request.federation_size)
+                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees, request.enabled_modules, request.federation_size, request.use_taproot)
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }

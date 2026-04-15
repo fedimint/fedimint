@@ -23,6 +23,10 @@ pub struct PeerSetupCode {
     /// Total number of guardians (including the one who sets this), set by the
     /// leader
     pub federation_size: Option<u32>,
+    /// Whether the walletv2 module should use Taproot instead of SegWit v0.
+    /// Set by the leader. `None` means the value was not configured by this
+    /// peer; `Some(false)` is the default used by existing federations.
+    pub use_taproot: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]

@@ -61,6 +61,7 @@ pub fn local_config_gen_params(
                 disable_base_fees: Some(!enable_mint_fees),
                 enabled_modules: None,
                 federation_size: None,
+                use_taproot: None,
             };
             (*peer, params)
         })
@@ -80,6 +81,7 @@ pub fn local_config_gen_params(
                 disable_base_fees: !enable_mint_fees,
                 enabled_modules: enabled_modules.clone(),
                 network: bitcoin::Network::Regtest,
+                use_taproot: false,
             };
             Ok((*peer, params))
         })
