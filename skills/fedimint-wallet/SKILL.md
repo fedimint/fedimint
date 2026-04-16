@@ -19,6 +19,8 @@ You are a **wallet operator** for a Fedimint federation. You can check balances,
 
 eCash notes are Chaumian blind-signed bearer tokens. Whoever holds the notes owns the value. Notes are private — the federation that signed them cannot link the spender to the receiver.
 
+**Note on command syntax:** The top-level shortcut commands (`spend`, `reissue`, `ln-invoice`, `ln-pay`, `deposit-address`, `withdraw`) are deprecated aliases. This skill documents both forms. The canonical commands use `$FM module <module> <command>` syntax. When a top-level shortcut exists, both forms are shown.
+
 ## Prerequisites
 
 **Install `fedimint-cli`:** Download from the [Fedimint releases page](https://github.com/fedimint/fedimint/releases). Choose the appropriate binary for your platform and ensure it's in your PATH.
@@ -74,7 +76,7 @@ $FM config
 
 **Get current session count (AlephBFT consensus round):**
 ```bash
-$FM session-count
+$FM module wallet session-count
 ```
 
 **Discover common API version with federation:**
@@ -86,19 +88,23 @@ $FM discover-version
 
 **Spend notes (create OOB notes to send to someone):**
 ```bash
+# Canonical form
+$FM module mint spend --amount <AMOUNT_MSATS>
+
+# Shortcut (deprecated, may emit warning)
 $FM spend <AMOUNT_MSATS>
 ```
 
 Options:
 ```bash
 # Allow overpayment (eCash comes in denominations — exact amounts may not be possible)
-$FM spend <AMOUNT_MSATS> --allow-overpay
+$FM module mint spend --amount <AMOUNT_MSATS> --allow-overpay
 
 # Set timeout in seconds for the spend operation
-$FM spend <AMOUNT_MSATS> --timeout 60
+$FM module mint spend --amount <AMOUNT_MSATS> --timeout 60
 
 # Include federation invite code in the notes (helps receiver join if not already a member)
-$FM spend <AMOUNT_MSATS> --include-invite
+$FM module mint spend --amount <AMOUNT_MSATS> --include-invite
 ```
 
 The command returns a string of OOB notes. Send this string to the recipient through any channel (message, QR code, HTTP header, file).
@@ -107,98 +113,96 @@ The command returns a string of OOB notes. Send this string to the recipient thr
 
 **Reissue notes received from someone (claim them into your wallet):**
 ```bash
-$FM reissue "<OOB_NOTES_STRING>"
+# Canonical form (waits for completion by default)
+$FM module mint reissue "<OOB_NOTES_STRING>"
+
+# Skip waiting for completion
+$FM module mint reissue "<OOB_NOTES_STRING>" --no-wait
 ```
 
-Options:
-```bash
-# Wait for the reissue to complete before returning
-$FM reissue "<OOB_NOTES_STRING>" --wait
-```
-
-The reissue operation validates the blind signatures and adds the notes to your wallet. If the notes were already spent (double-spend attempt), this will fail.
+The reissue operation validates the blind signatures and adds the notes to your wallet. By default it waits for completion. Use `--no-wait` to return immediately. If the notes were already spent (double-spend attempt), this will fail.
 
 **Split a multi-note string into individual notes:**
 ```bash
-$FM split "<OOB_NOTES_STRING>"
+$FM module mint split "<OOB_NOTES_STRING>"
 ```
 
 **Combine multiple note strings into one:**
 ```bash
-$FM combine "<NOTES_1>" "<NOTES_2>" "<NOTES_3>"
+$FM module mint combine "<NOTES_1>" "<NOTES_2>" "<NOTES_3>"
 ```
 
 ### Lightning Payments (via Gateway)
 
 **List available Lightning gateways:**
 ```bash
-$FM list-gateways
+$FM module ln list-gateways
 ```
 
 **Create a Lightning invoice to receive a payment:**
 ```bash
-$FM ln-invoice <AMOUNT_MSATS> "<DESCRIPTION>"
+$FM module ln ln-invoice --amount <AMOUNT_MSATS> --description "<DESCRIPTION>"
 ```
 
 Options:
 ```bash
 # Set expiry time in seconds
-$FM ln-invoice <AMOUNT_MSATS> "<DESCRIPTION>" --expiry-time 3600
+$FM module ln ln-invoice --amount <AMOUNT_MSATS> --description "<DESCRIPTION>" --expiry-time 3600
 
 # Use a specific gateway
-$FM ln-invoice <AMOUNT_MSATS> "<DESCRIPTION>" --gateway-id <GATEWAY_PUBKEY>
+$FM module ln ln-invoice --amount <AMOUNT_MSATS> --description "<DESCRIPTION>" --gateway-id <GATEWAY_PUBKEY>
 
 # Force internal payment (within same federation — no Lightning, faster)
-$FM ln-invoice <AMOUNT_MSATS> "<DESCRIPTION>" --force-internal
+$FM module ln ln-invoice --amount <AMOUNT_MSATS> --description "<DESCRIPTION>" --force-internal
 ```
 
 **Wait for an invoice to be paid:**
 ```bash
-$FM await-invoice <OPERATION_ID>
+$FM module ln await-invoice --operation-id <OPERATION_ID>
 ```
 
 **Pay a Lightning invoice or LNURL:**
 ```bash
-$FM ln-pay "<BOLT11_INVOICE_OR_LNURL>"
+$FM module ln ln-pay --payment-info "<BOLT11_INVOICE_OR_LNURL>"
 ```
 
 Options:
 ```bash
 # Specify amount (required for zero-amount invoices and LNURL)
-$FM ln-pay "<LNURL>" --amount <AMOUNT_MSATS>
+$FM module ln ln-pay --payment-info "<LNURL>" --amount <AMOUNT_MSATS>
 
 # Add LNURL comment
-$FM ln-pay "<LNURL>" --lnurl-comment "payment for service"
+$FM module ln ln-pay --payment-info "<LNURL>" --lnurl-comment "payment for service"
 
 # Use a specific gateway
-$FM ln-pay "<BOLT11>" --gateway-id <GATEWAY_PUBKEY>
+$FM module ln ln-pay --payment-info "<BOLT11>" --gateway-id <GATEWAY_PUBKEY>
 
 # Force internal payment
-$FM ln-pay "<BOLT11>" --force-internal
+$FM module ln ln-pay --payment-info "<BOLT11>" --force-internal
 ```
 
 **Wait for a Lightning payment to complete:**
 ```bash
-$FM await-ln-pay <OPERATION_ID>
+$FM module ln await-ln-pay --operation-id <OPERATION_ID>
 ```
 
 ### On-Chain (Peg-In / Peg-Out)
 
 **Generate a new deposit address (peg-in):**
 ```bash
-$FM deposit-address
+$FM module wallet deposit-address
 ```
 
 This returns a Bitcoin address controlled by the federation. Send BTC to this address to peg in. The federation will mint eCash once the deposit is confirmed on-chain.
 
 **Wait for a deposit to be confirmed:**
 ```bash
-$FM await-deposit <OPERATION_ID>
+$FM module wallet await-deposit --operation-id <OPERATION_ID>
 ```
 
 **Withdraw to an on-chain Bitcoin address (peg-out):**
 ```bash
-$FM withdraw <AMOUNT_SATS_OR_ALL> <BITCOIN_ADDRESS>
+$FM module wallet withdraw --amount <AMOUNT_SATS_OR_ALL> --address <BITCOIN_ADDRESS>
 ```
 
 Amount can be a specific satoshi amount or "all" to withdraw the entire balance.
@@ -251,7 +255,7 @@ If the user asks for any of these, explain that the wallet skill does not have p
 - **"Insufficient balance"** — not enough eCash to complete the operation. Check balance with `$FM info`.
 - **"Double spend"** / **"Already spent"** — notes have already been redeemed. They are gone. Do not retry.
 - **"Invoice expired"** — Lightning invoice expired before payment. Request a new invoice.
-- **"Gateway not available"** — no Lightning gateway registered or gateway is offline. Check with `$FM list-gateways`.
+- **"Gateway not available"** — no Lightning gateway registered or gateway is offline. Check with `$FM module ln list-gateways`.
 - **"Timeout"** — operation took too long. For spend operations, the notes may still be locked. Wait and check balance.
 - **Connection errors** — fedimint-cli cannot reach the federation API. Verify `$FM_CLIENT_DIR` is correct and federation is online.
 
@@ -261,44 +265,44 @@ If a spend operation fails mid-way, check your balance. The notes may be tempora
 
 ### Check wallet status
 1. `$FM info` — view balance by denomination tier
-2. `$FM list-gateways` — verify Lightning gateway is available
+2. `$FM module ln list-gateways` — verify Lightning gateway is available
 3. `$FM list-operations --limit 5` — check recent operations
 
 ### Send eCash to someone
 1. `$FM info` — verify sufficient balance
-2. `$FM spend <AMOUNT> --allow-overpay` — create OOB notes
+2. `$FM module mint spend --amount <AMOUNT> --allow-overpay` — create OOB notes
 3. Send the notes string to the recipient (message, QR, file, HTTP header)
-4. Recipient runs `$FM reissue "<NOTES>"` on their side
+4. Recipient runs `$FM module mint reissue "<NOTES>"` on their side
 
 ### Receive eCash from someone
 1. Receive OOB notes string from the sender
-2. `$FM reissue "<NOTES>" --wait` — claim notes into your wallet
+2. `$FM module mint reissue "<NOTES>"` — claim notes into your wallet (waits by default)
 3. `$FM info` — verify balance increased
 
 ### Pay a Lightning invoice
-1. `$FM list-gateways` — verify a gateway is available
-2. `$FM ln-pay "<BOLT11_INVOICE>"` — pay the invoice
+1. `$FM module ln list-gateways` — verify a gateway is available
+2. `$FM module ln ln-pay --payment-info "<BOLT11_INVOICE>"` — pay the invoice
 3. Note the operation_id from the output
-4. `$FM await-ln-pay <OPERATION_ID>` — wait for confirmation
+4. `$FM module ln await-ln-pay --operation-id <OPERATION_ID>` — wait for confirmation
 5. Confirmation includes the preimage as proof of payment
 
 ### Receive via Lightning
-1. `$FM ln-invoice <AMOUNT> "description"` — create an invoice
+1. `$FM module ln ln-invoice --amount <AMOUNT> --description "description"` — create an invoice
 2. Share the BOLT11 invoice with the payer
 3. Note the operation_id from the output
-4. `$FM await-invoice <OPERATION_ID>` — wait for payment
+4. `$FM module ln await-invoice --operation-id <OPERATION_ID>` — wait for payment
 5. `$FM info` — verify balance increased
 
 ### Peg in (deposit BTC)
-1. `$FM deposit-address` — get a federation deposit address
+1. `$FM module wallet deposit-address` — get a federation deposit address
 2. Note the operation_id from the output
 3. Send BTC to the address from any Bitcoin wallet
-4. `$FM await-deposit <OPERATION_ID>` — wait for on-chain confirmation
+4. `$FM module wallet await-deposit --operation-id <OPERATION_ID>` — wait for on-chain confirmation
 5. `$FM info` — verify eCash balance reflects the deposit
 
 ### Peg out (withdraw BTC)
 1. `$FM info` — verify sufficient balance
-2. `$FM withdraw <AMOUNT_OR_ALL> <YOUR_BITCOIN_ADDRESS>` — withdraw
+2. `$FM module wallet withdraw --amount <AMOUNT_OR_ALL> --address <YOUR_BITCOIN_ADDRESS>` — withdraw
 3. Wait for on-chain confirmation (federation broadcasts the transaction)
 4. Check your Bitcoin wallet for the incoming transaction
 
@@ -309,13 +313,13 @@ If a spend operation fails mid-way, check your balance. The notes may be tempora
 
 ### x402 Payment (agent paying for an HTTP resource)
 1. Receive 402 response with payment requirements (amount in msats)
-2. `$FM spend <AMOUNT> --allow-overpay` — create OOB notes
-3. Retry the HTTP request with notes in the `PAYMENT-SIGNATURE` header
+2. `$FM module mint spend --amount <AMOUNT> --allow-overpay` — create OOB notes
+3. Retry the HTTP request with notes in the `X-Payment` header
 4. Server reissues the notes (settlement) and returns the resource
-5. If server returns error after payment: attempt `$FM reissue "<NOTES>"` to recover
+5. If server returns error after payment: attempt `$FM module mint reissue "<NOTES>"` to recover
 
 ### Agent-to-agent eCash transfer
-1. Agent A: `$FM spend <AMOUNT> --allow-overpay` — create notes
+1. Agent A: `$FM module mint spend --amount <AMOUNT> --allow-overpay` — create notes
 2. Agent A sends notes to Agent B via any channel (API call, message, file)
-3. Agent B: `$FM reissue "<NOTES>" --wait` — claim notes
+3. Agent B: `$FM module mint reissue "<NOTES>"` — claim notes (waits by default)
 4. Transfer is complete — private, instant, no fees inside the federation
