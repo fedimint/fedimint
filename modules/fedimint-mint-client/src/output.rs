@@ -935,7 +935,6 @@ impl NoteIssuanceRequest {
 }
 
 impl MintClientContext {
-    #[allow(dead_code)]
     pub(crate) async fn await_note_signature_shares(
         &self,
         out_point: OutPoint,

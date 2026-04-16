@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{bail, ensure};
 use async_stream::stream;
@@ -47,6 +48,7 @@ impl MintClientModule {
     pub async fn spend_notes_with_exact_denominations<M: Serialize>(
         &self,
         requested_denominations: TieredCounts,
+        try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         ensure!(
@@ -177,6 +179,7 @@ impl MintClientModule {
                                                     SpendExactStateReissuing {
                                                         requested_notes_outpoints: out_point_range,
                                                         requested_notes_requests,
+                                                        try_cancel_after,
                                                     },
                                                 ),
                                             ),
@@ -310,6 +313,9 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactDenominations {
             if notes.tier_count(amount) < self.0.get(amount) {
                 notes.push(amount, note);
             }
+            if notes.summary() == self.0 {
+                break;
+            }
         }
 
         ensure!(
@@ -358,6 +364,8 @@ pub struct SpendExactStateReissuing {
     pub(crate) requested_notes_outpoints: OutPointRange,
     /// `out_idx -> (denomination, issuance_request)`
     pub(crate) requested_notes_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+    /// How long before wallet tries to auto-cancel.
+    pub(crate) try_cancel_after: Duration,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
