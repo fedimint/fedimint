@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, ensure};
 use async_stream::stream;
@@ -47,6 +48,7 @@ impl MintClientModule {
     pub async fn spend_notes_with_exact_denominations<M: Serialize>(
         &self,
         requested_denominations: TieredCounts,
+        try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         ensure!(
@@ -59,6 +61,7 @@ impl MintClientModule {
         );
 
         let operation_id = OperationId::new_random();
+        let timeout = fedimint_core::time::now() + try_cancel_after;
 
         // If we already have the right denominations, return immediately
         let spend_res: anyhow::Result<()> = self.client_ctx
@@ -177,6 +180,7 @@ impl MintClientModule {
                                                     SpendExactStateReissuing {
                                                         requested_notes_outpoints: out_point_range,
                                                         requested_notes_requests,
+                                                        timeout,
                                                     },
                                                 ),
                                             ),
@@ -256,10 +260,13 @@ impl MintClientModule {
                         SpendExactStates::Success(success) => {
                             if let Some(change_outpoints) = &change_outpoints {
                                 trace!(target: LOG_CLIENT_MODULE_MINT, "Awaiting reissue-exact change: {:?}", change_outpoints);
-                                ctx.await_primary_module_outputs(
+                                if let Err(e) = ctx.await_primary_module_outputs(
                                     operation_id,
                                     change_outpoints.into_iter().collect()
-                                ).await.expect("Must await outputs");
+                                ).await {
+                                    yield SpendExactState::Failed(e.to_string());
+                                    break;
+                                }
                             } else {
                                 trace!(target: LOG_CLIENT_MODULE_MINT, "No reissue-exact change outpoints to await");
                             }
@@ -310,6 +317,9 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactDenominations {
             if notes.tier_count(amount) < self.0.get(amount) {
                 notes.push(amount, note);
             }
+            if notes.summary() == self.0 {
+                break;
+            }
         }
 
         ensure!(
@@ -358,6 +368,8 @@ pub struct SpendExactStateReissuing {
     pub(crate) requested_notes_outpoints: OutPointRange,
     /// `out_idx -> (denomination, issuance_request)`
     pub(crate) requested_notes_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+    /// How long before wallet tries to auto-cancel.
+    pub(crate) timeout: SystemTime,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -422,12 +434,29 @@ impl SpendExactStateReissuing {
         let txid = self.requested_notes_outpoints.txid;
         let requested_notes_outpoints = self.requested_notes_outpoints;
         let requested_notes_requests = self.requested_notes_requests.clone();
+        let timeout = self.timeout;
+
         vec![StateTransition::new(
             async move {
-                global_context.await_tx_accepted(txid).await?;
+                let tx_accepted_fut = global_context.await_tx_accepted(txid);
+
+                let timeout_fut = fedimint_core::runtime::sleep(
+                    timeout
+                        .duration_since(fedimint_core::time::now())
+                        .unwrap_or(Duration::ZERO),
+                );
+
+                tokio::select! {
+                    result = tx_accepted_fut => {
+                        result.map_err(|e| format!("Transaction not accepted: {e:?}"))?;
+                    }
+                    () = timeout_fut => {
+                        return Err("Timed out waiting for transaction acceptance".to_owned());
+                    }
+                }
 
                 let blind_sig_shares = stream::iter(requested_notes_outpoints)
-                    .then(move |out_point| {
+                    .map(move |out_point| {
                         let requested_notes_requests_inner = requested_notes_requests.clone();
                         let context_inner = context_trigger.clone();
                         async move {
@@ -441,6 +470,7 @@ impl SpendExactStateReissuing {
                             (out_point.out_idx, shares)
                         }
                     })
+                    .buffer_unordered(requested_notes_outpoints.count())
                     .collect::<Vec<_>>()
                     .await;
 
@@ -460,13 +490,10 @@ impl SpendExactStateReissuing {
                     let blind_sig_shares = match result {
                         Ok(shares) => shares,
                         Err(e) => {
-                            error!("Failed to get blind signature shares: {e}");
-
+                            error!("Failed spend exact reissuing: {e}");
                             return SpendExactStateMachine {
                                 operation_id,
-                                state: SpendExactStates::Failure(format!(
-                                    "Failed to get blind signature shares: {e}"
-                                )),
+                                state: SpendExactStates::Failure(e),
                             };
                         }
                     };

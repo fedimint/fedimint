@@ -275,8 +275,12 @@ impl Decodable for TieredCounts {
         Ok(Self(
             tiered_counts_u64
                 .into_iter()
-                .map(|(amount, count)| (amount, count as usize))
-                .collect(),
+                .map(|(amount, count)| {
+                    usize::try_from(count)
+                        .map(|c| (amount, c))
+                        .map_err(DecodeError::from_err)
+                })
+                .collect::<Result<_, _>>()?,
         ))
     }
 }
