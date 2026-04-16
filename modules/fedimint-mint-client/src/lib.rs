@@ -45,8 +45,9 @@ use backup::recovery::{MintRecovery, RecoveryStateV2};
 use base64::Engine as _;
 use bitcoin_hashes::{Hash, HashEngine as BitcoinHashEngine, sha256, sha256t};
 use client_db::{
-    DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, RecoveryStateKey, RecoveryStateV2Key,
-    ReusedNoteIndices, migrate_state_to_v2, migrate_to_v1,
+    DbKeyPrefix, NoteKeyPrefix, PendingRecoveryInFlight, PendingRecoveryReissueKey,
+    RecoveryFinalizedKey, RecoveryStateKey, RecoveryStateV2Key, ReusedNoteIndices,
+    migrate_state_to_v2, migrate_to_v1, migrate_to_v2,
 };
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::DynModuleApi;
@@ -82,7 +83,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
 use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
-use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompactAnyhow as _, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
     async_trait_maybe_send, base32, push_db_pair_items,
@@ -760,6 +761,12 @@ impl ModuleInit for MintClientInit {
                         mint_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
                     }
                 }
+                DbKeyPrefix::PendingRecoveryReissue => {
+                    if let Some(val) = dbtx.get_value(&PendingRecoveryReissueKey).await {
+                        mint_client_items
+                            .insert("PendingRecoveryReissue".to_string(), Box::new(val));
+                    }
+                }
                 DbKeyPrefix::RecoveryState
                 | DbKeyPrefix::ReusedNoteIndices
                 | DbKeyPrefix::RecoveryStateV2
@@ -833,6 +840,12 @@ impl ClientModuleInit for MintClientInit {
         migrations.insert(DatabaseVersion(1), |_, active_states, inactive_states| {
             Box::pin(async { migrate_state(active_states, inactive_states, migrate_state_to_v2) })
         });
+        migrations.insert(
+            DatabaseVersion(2),
+            |dbtx, active_states, inactive_states| {
+                Box::pin(migrate_to_v2(dbtx, active_states, inactive_states))
+            },
+        );
 
         migrations
     }
@@ -953,6 +966,10 @@ impl ClientModule for MintClientModule {
             module_db: self.client_ctx.module_db().clone(),
             balance_update_sender: self.balance_update_sender.clone(),
         }
+    }
+
+    async fn start(&self) {
+        self.submit_pending_recovery_reissue_if_any().await;
     }
 
     fn input_fee(
@@ -1246,7 +1263,235 @@ pub enum ReissueExternalNotesError {
     AlreadyReissued,
 }
 
+fn is_duplicate_client_operation_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .to_string()
+            .contains("There already exists an operation with id")
+    })
+}
+
 impl MintClientModule {
+    /// Submit notes queued during [`MintRecovery`](crate::backup::recovery::MintRecovery) finalize.
+    async fn submit_pending_recovery_reissue_if_any(&self) {
+        loop {
+            let pending = {
+                let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+                dbtx.get_value(&PendingRecoveryReissueKey).await
+            };
+            let Some(pending) = pending else {
+                return;
+            };
+
+            if pending.in_flight.is_none() && pending.remaining.is_empty() {
+                if let Err(err) = self
+                    .client_ctx
+                    .module_db()
+                    .autocommit(
+                        |dbtx, _| {
+                            Box::pin(async move {
+                                dbtx.remove_entry(&PendingRecoveryReissueKey).await;
+                                Ok::<(), anyhow::Error>(())
+                            })
+                        },
+                        None,
+                    )
+                    .await
+                {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_MINT,
+                        %err,
+                        "Failed to remove empty pending recovery reissue marker",
+                    );
+                }
+                return;
+            }
+
+            if pending.in_flight.is_none() {
+                if let Err(err) = self.claim_next_pending_recovery_reissue_chunk().await {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_MINT,
+                        err = %err.fmt_compact_anyhow(),
+                        "Failed to claim next pending recovery reissue chunk",
+                    );
+                    return;
+                }
+                continue;
+            }
+
+            let Some(flight) = pending.in_flight.clone() else {
+                continue;
+            };
+            let operation_id = flight.operation_id;
+            let amount = flight.notes.total_amount();
+
+            if let Err(err) = self
+                .finalize_recovery_reissue_submission(operation_id, flight.notes.clone(), amount)
+                .await
+            {
+                warn!(
+                    target: LOG_CLIENT_MODULE_MINT,
+                    err = %err.fmt_compact_anyhow(),
+                    "Pending recovery reissue failed; will retry on next client start",
+                );
+                return;
+            }
+
+            if let Err(err) = self
+                .complete_pending_recovery_reissue_chunk(operation_id, amount)
+                .await
+            {
+                warn!(
+                    target: LOG_CLIENT_MODULE_MINT,
+                    err = %err.fmt_compact_anyhow(),
+                    "Failed to log recovery reissue completion or clear pending queue entry",
+                );
+                return;
+            }
+        }
+    }
+
+    async fn claim_next_pending_recovery_reissue_chunk(&self) -> anyhow::Result<()> {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async move {
+                        let Some(mut pending) = dbtx.get_value(&PendingRecoveryReissueKey).await
+                        else {
+                            return Ok::<(), anyhow::Error>(());
+                        };
+                        if pending.in_flight.is_some() {
+                            return Ok::<(), anyhow::Error>(());
+                        }
+                        let Some(notes) = pending.remaining.pop_front() else {
+                            return Ok::<(), anyhow::Error>(());
+                        };
+                        pending.in_flight = Some(PendingRecoveryInFlight {
+                            operation_id: OperationId::new_random(),
+                            notes,
+                        });
+                        dbtx.insert_entry(&PendingRecoveryReissueKey, &pending)
+                            .await;
+                        Ok::<(), anyhow::Error>(())
+                    })
+                },
+                None,
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
+    }
+
+    async fn finalize_recovery_reissue_submission(
+        &self,
+        operation_id: OperationId,
+        notes: TieredMulti<SpendableNote>,
+        amount: Amount,
+    ) -> anyhow::Result<()> {
+        ensure!(
+            notes.total_amount() > Amount::ZERO,
+            "empty recovery reissue chunk"
+        );
+        let mint_inputs = self.create_input_from_notes(notes)?;
+        let extra_meta = serde_json::Value::Null;
+        let operation_meta_gen = {
+            let extra_meta = extra_meta.clone();
+            move |change_range: OutPointRange| MintOperationMeta {
+                variant: MintOperationMetaVariant::Reissuance {
+                    legacy_out_point: None,
+                    txid: Some(change_range.txid()),
+                    out_point_indices: change_range
+                        .into_iter()
+                        .map(|out_point| out_point.out_idx)
+                        .collect(),
+                },
+                amount,
+                extra_meta: extra_meta.clone(),
+            }
+        };
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
+        );
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Ok(());
+        }
+        match self
+            .client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(err) if is_duplicate_client_operation_error(&err) => Ok(()),
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn complete_pending_recovery_reissue_chunk(
+        &self,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> anyhow::Result<()> {
+        let client_ctx = self.client_ctx.clone();
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                move |mut dbtx, _| {
+                    let client_ctx = client_ctx.clone();
+                    Box::pin(async move {
+                        let Some(mut pending) = dbtx.get_value(&PendingRecoveryReissueKey).await
+                        else {
+                            return Ok::<(), anyhow::Error>(());
+                        };
+                        let Some(flight) = pending.in_flight.as_ref() else {
+                            return Ok::<(), anyhow::Error>(());
+                        };
+                        if flight.operation_id != operation_id {
+                            return Ok::<(), anyhow::Error>(());
+                        }
+                        client_ctx
+                            .log_event(&mut dbtx, OOBNotesReissued { amount })
+                            .await;
+                        client_ctx
+                            .log_event(
+                                &mut dbtx,
+                                ReceivePaymentEvent {
+                                    operation_id,
+                                    amount,
+                                },
+                            )
+                            .await;
+                        pending.in_flight = None;
+                        if pending.remaining.is_empty() {
+                            dbtx.remove_entry(&PendingRecoveryReissueKey).await;
+                        } else {
+                            dbtx.insert_entry(&PendingRecoveryReissueKey, &pending)
+                                .await;
+                        }
+                        Ok::<(), anyhow::Error>(())
+                    })
+                },
+                None,
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
+    }
+
     async fn create_sufficient_input(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -3317,6 +3562,38 @@ mod tests {
                     "out_point_indices": [dummy_outpoint.out_idx],
                 }
             })
+        );
+    }
+
+    #[test]
+    fn pending_recovery_reissue_notes_consensus_roundtrip() {
+        use fedimint_core::encoding::{Decodable, Encodable};
+        use fedimint_core::secp256k1::rand::rngs::OsRng;
+        use fedimint_core::secp256k1::{Keypair, Secp256k1};
+        use tbs::Signature;
+        use threshold_crypto::G1Affine;
+
+        let keypair = Keypair::new(&Secp256k1::new(), &mut OsRng);
+        let note = SpendableNote {
+            signature: Signature(G1Affine::generator()),
+            spend_key: keypair,
+        };
+        let mut notes_by_amount = std::collections::BTreeMap::new();
+        notes_by_amount.insert(Amount::from_sats(1000), vec![note]);
+        let pending = crate::client_db::PendingRecoveryReissueNotes {
+            in_flight: None,
+            remaining: std::collections::VecDeque::from([TieredMulti::new(notes_by_amount)]),
+        };
+        let bytes = pending.consensus_encode_to_vec();
+        let decoded = crate::client_db::PendingRecoveryReissueNotes::consensus_decode_whole(
+            &bytes,
+            &ModuleRegistry::default(),
+        )
+        .expect("decode roundtrip");
+        assert_eq!(pending.remaining.len(), decoded.remaining.len());
+        assert_eq!(
+            pending.remaining[0].total_amount(),
+            decoded.remaining[0].total_amount()
         );
     }
 }

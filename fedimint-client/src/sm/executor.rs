@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::io::{Error, Write};
 use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -85,6 +86,9 @@ struct ExecutorInner {
     sm_update_tx: mpsc::UnboundedSender<DynState>,
     client_task_group: TaskGroup,
     log_ordering_wakeup_tx: watch::Sender<()>,
+    /// Count of transitions where terminality could not be determined because the module context
+    /// was missing (see [`ExecutorInner::run_state_machines_executor_inner`]).
+    missing_module_context_terminality_events: Arc<AtomicU64>,
 }
 
 enum ExecutorState {
@@ -689,6 +693,8 @@ impl ExecutorInner {
                         let notifier = self.notifier.clone();
                         let module_contexts = self.module_contexts.clone();
                         let global_context_gen = global_context_gen.clone();
+                        let missing_module_context_terminality_events =
+                            self.missing_module_context_terminality_events.clone();
                         Box::pin(
                             async move {
                                 debug!(
@@ -709,9 +715,10 @@ impl ExecutorInner {
                                     .autocommit::<'_, '_, _, _, Infallible>(
                                         |dbtx, _| {
                                             let state = state.clone();
-                                            let state_module_instance_id = state.module_instance_id();
                                             let transition_fn = transition_fn.clone();
                                             let transition_outcome = outcome.clone();
+                                            let missing_module_context_terminality_events =
+                                                missing_module_context_terminality_events.clone();
                                             Box::pin(async move {
                                                 let new_state = transition_fn(
                                                     &mut ClientSMDatabaseTransaction::new(
@@ -732,23 +739,44 @@ impl ExecutorInner {
                                                 )
                                                 .await;
 
-                                                let context = &module_contexts
-                                                    .get(&state.module_instance_id())
-                                                    .expect("Unknown module");
+                                                let new_module_id = new_state.module_instance_id();
+                                                let operation_id = new_state.operation_id();
+                                                let global_context =
+                                                    global_context_gen(new_module_id, operation_id);
 
-                                                let operation_id = state.operation_id();
-                                                let global_context = global_context_gen(
-                                                    state.module_instance_id(),
-                                                    operation_id,
-                                                );
-
-                                                let is_terminal = new_state.is_terminal(context, &global_context);
+                                                let is_terminal = match module_contexts
+                                                    .get(&new_module_id)
+                                                {
+                                                    Some(context) => {
+                                                        new_state.is_terminal(context, &global_context)
+                                                    }
+                                                    None => {
+                                                        let n = missing_module_context_terminality_events
+                                                            .fetch_add(1, Ordering::Relaxed)
+                                                            + 1;
+                                                        warn!(
+                                                            target: LOG_CLIENT_REACTOR,
+                                                            module_id = %new_module_id,
+                                                            operation_id = %operation_id.fmt_short(),
+                                                            missing_module_context_count = n,
+                                                            "Cannot determine state machine terminality without module context; keeping state active",
+                                                        );
+                                                        if n.is_power_of_two() {
+                                                            info!(
+                                                                target: LOG_CLIENT_REACTOR,
+                                                                missing_module_context_count = n,
+                                                                "Repeated missing module context when determining state machine terminality; verify modules are registered if this persists",
+                                                            );
+                                                        }
+                                                        false
+                                                    }
+                                                };
 
                                                 self.log_event_dbtx(dbtx,
                                                     StateMachineUpdated{
                                                         started: false,
                                                         operation_id,
-                                                        module_id: state_module_instance_id,
+                                                        module_id: new_module_id,
                                                         terminal: is_terminal,
                                                     }
                                                 ).await;
@@ -973,6 +1001,7 @@ impl ExecutorBuilder {
             notifier,
             sm_update_tx,
             client_task_group,
+            missing_module_context_terminality_events: Arc::new(AtomicU64::new(0)),
         });
 
         debug!(

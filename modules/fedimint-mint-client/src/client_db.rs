@@ -1,23 +1,27 @@
+use std::collections::VecDeque;
 use std::io::Cursor;
 
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
+use fedimint_core::db::{
+    DatabaseKeyPrefix, DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
+use fedimint_core::{Amount, TieredMulti, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::Nonce;
 use serde::Serialize;
 use strum_macros::EnumIter;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::backup::recovery::MintRecoveryState;
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStateMachineV0};
 use crate::oob::{MintOOBStateMachine, MintOOBStateMachineV0, MintOOBStates, MintOOBStatesV0};
 use crate::output::{MintOutputCommon, MintOutputStateMachine, MintOutputStateMachineV0};
-use crate::{MintClientStateMachines, NoteIndex, SpendableNoteUndecoded};
+use crate::{MintClientStateMachines, NoteIndex, SpendableNote, SpendableNoteUndecoded};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -35,6 +39,8 @@ pub enum DbKeyPrefix {
     /// Prefixes between 0xd0..=0xff shall all be considered allocated for
     /// historical and future internal use
     CoreInternalReservedStart = 0xd0,
+    /// Spendable notes queued for consensus reissue after history recovery
+    PendingRecoveryReissue = 0xd1,
     CoreInternalReservedEnd = 0xff,
 }
 
@@ -136,6 +142,47 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::RecoveryStateV2,
 );
 
+/// Notes to reissue through consensus once [`MintClientModule`](crate::MintClientModule) is
+/// initialized (recovery cannot submit transactions while the module is absent from the client).
+///
+/// `in_flight` holds the chunk currently being submitted (with a stable [`OperationId`] assigned
+/// before calling [`fedimint_client_module::module::ClientContext::finalize_and_submit_transaction`])
+/// so a crash after submit cannot strand later chunks. `remaining` is processed FIFO without
+/// repeated `Vec::remove(0)` cost.
+#[derive(Debug, Clone, Encodable, Decodable, serde::Serialize)]
+pub struct PendingRecoveryReissueNotes {
+    pub in_flight: Option<PendingRecoveryInFlight>,
+    pub remaining: VecDeque<TieredMulti<SpendableNote>>,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, serde::Serialize)]
+pub struct PendingRecoveryInFlight {
+    pub operation_id: OperationId,
+    pub notes: TieredMulti<SpendableNote>,
+}
+
+/// Legacy encoding for [`PendingRecoveryReissueKey`] (single `chunks` field only).
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub(crate) struct PendingRecoveryReissueNotesV0 {
+    pub chunks: Vec<TieredMulti<SpendableNote>>,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct PendingRecoveryReissueKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct PendingRecoveryReissueKeyPrefix;
+
+impl_db_record!(
+    key = PendingRecoveryReissueKey,
+    value = PendingRecoveryReissueNotes,
+    db_prefix = DbKeyPrefix::PendingRecoveryReissue,
+);
+impl_db_lookup!(
+    key = PendingRecoveryReissueKey,
+    query_prefix = PendingRecoveryReissueKeyPrefix
+);
+
 pub async fn migrate_to_v1(
     dbtx: &mut DatabaseTransaction<'_>,
 ) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
@@ -152,6 +199,46 @@ pub async fn migrate_to_v1(
         debug!(target: LOG_CLIENT_MODULE_MINT, "Deleted previous recovery state");
     }
 
+    Ok(None)
+}
+
+/// Rewrites [`PendingRecoveryReissueNotes`] from the pre-PR single-`chunks` encoding to
+/// `in_flight` / `remaining`.
+pub async fn migrate_to_v2(
+    dbtx: &mut DatabaseTransaction<'_>,
+    _active_states: Vec<(Vec<u8>, OperationId)>,
+    _inactive_states: Vec<(Vec<u8>, OperationId)>,
+) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
+    dbtx.ensure_isolated().expect("Must be in our database");
+    let key_bytes = PendingRecoveryReissueKey.to_bytes();
+    let Some(value_bytes) = dbtx
+        .raw_get_bytes(&key_bytes)
+        .await
+        .map_err(anyhow::Error::from)?
+    else {
+        return Ok(None);
+    };
+    let decoders = ModuleDecoderRegistry::default();
+    if let Ok(v0) = PendingRecoveryReissueNotesV0::consensus_decode_whole(&value_bytes, &decoders) {
+        let migrated = PendingRecoveryReissueNotes {
+            in_flight: None,
+            remaining: v0.chunks.into_iter().collect(),
+        };
+        dbtx.insert_entry(&PendingRecoveryReissueKey, &migrated)
+            .await;
+        debug!(
+            target: LOG_CLIENT_MODULE_MINT,
+            "Migrated PendingRecoveryReissueNotes from V0 (chunks only) to in_flight/remaining"
+        );
+        return Ok(None);
+    }
+    if PendingRecoveryReissueNotes::consensus_decode_whole(&value_bytes, &decoders).is_ok() {
+        return Ok(None);
+    }
+    warn!(
+        target: LOG_CLIENT_MODULE_MINT,
+        "PendingRecoveryReissue value is neither decodable as V0 nor as the current format; leaving it unchanged"
+    );
     Ok(None)
 }
 

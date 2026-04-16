@@ -1130,6 +1130,7 @@ mod fedimint_migration_tests {
                             // New prefix for slice-based recovery, no migration
                             // needed
                         }
+                        fedimint_mint_client::client_db::DbKeyPrefix::PendingRecoveryReissue => {}
                         fedimint_mint_client::client_db::DbKeyPrefix::ExternalReservedStart
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedEnd
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedStart =>

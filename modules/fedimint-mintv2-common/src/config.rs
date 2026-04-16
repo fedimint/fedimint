@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{AmountUnit, serde_json};
-use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config};
+use fedimint_core::module::{serde_json, AmountUnit};
+use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
 

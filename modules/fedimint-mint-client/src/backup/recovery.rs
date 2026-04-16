@@ -1,5 +1,5 @@
 use std::cmp::max;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::ops::Add;
 
@@ -17,7 +17,7 @@ use fedimint_core::{
     Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply, async_trait_maybe_send,
 };
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
+use fedimint_logging::{LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
@@ -27,13 +27,16 @@ use tracing::{debug, info, trace, warn};
 use super::EcashBackup;
 use crate::backup::EcashBackupV0;
 use crate::client_db::{
-    NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
+    NextECashNoteIndexKey, PendingRecoveryReissueKey, PendingRecoveryReissueNotes,
+    RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
 };
-use crate::events::NoteCreated;
+use crate::events::RecoveryReissuancePending;
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
 };
 use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote};
+
+const MAX_REISSUE_NOTES_PER_TX: usize = 100;
 
 #[derive(Clone, Debug)]
 pub struct MintRecovery {
@@ -182,26 +185,38 @@ impl RecoveryFromHistory for MintRecovery {
 
         dbtx.insert_new_entry(&ReusedNoteIndices, &finalized.reused_note_indices)
             .await;
-        debug!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            len = finalized.spendable_notes.count_items(),
-            "Restoring spendable notes"
-        );
-        for (amount, note) in finalized.spendable_notes.into_iter_items() {
-            let key = NoteKey {
-                amount,
-                nonce: note.nonce(),
-            };
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
+        let reissue_amount = finalized.spendable_notes.total_amount();
+        let spendable_items: Vec<(Amount, SpendableNote)> =
+            finalized.spendable_notes.into_iter_items().collect();
+        let chunks: Vec<TieredMulti<SpendableNote>> = spendable_items
+            .chunks(MAX_REISSUE_NOTES_PER_TX)
+            .map(|chunk| TieredMulti::from_iter(chunk.iter().cloned()))
+            .collect();
+        let chunk_count = chunks.len();
+        if !chunks.is_empty() {
+            debug!(
+                target: LOG_CLIENT_RECOVERY_MINT,
+                len = spendable_items.len(),
+                chunk_count,
+                "Queued spendable notes for post-recovery consensus reissue"
+            );
+            dbtx.insert_new_entry(
+                &PendingRecoveryReissueKey,
+                &PendingRecoveryReissueNotes {
+                    in_flight: None,
+                    remaining: VecDeque::from(chunks),
+                },
+            )
+            .await;
             self.client_ctx
                 .log_event(
                     dbtx,
-                    NoteCreated {
-                        nonce: note.nonce(),
+                    RecoveryReissuancePending {
+                        amount: reissue_amount,
+                        chunk_count: u32::try_from(chunk_count).unwrap_or(u32::MAX),
                     },
                 )
                 .await;
-            dbtx.insert_new_entry(&key, &note.to_undecoded()).await;
         }
 
         for (amount, note_idx) in finalized.next_note_idx.iter() {
