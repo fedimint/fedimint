@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a>
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>anyhow::{anyhow, format_err};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>bitcoin::secp256k1;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_connectors::{DynGuaridianConnection, ServerResult};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_connectors::{DynGuaridianConnection, PeerStatus, ServerResult};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::admin_client::{GuardianConfigBackup, SetLocalParamsRequest, SetupStatus};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
@@ -241,7 +241,7 @@
 <a href=#241 id=241 data-nosnippet>241</a>        <span class="self">self</span>.inner.request_raw(peer_id, method, params).<span class="kw">await
 <a href=#242 id=242 data-nosnippet>242</a>    </span>}
 <a href=#243 id=243 data-nosnippet>243</a>
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">fn </span>connection_status_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, BTreeMap&lt;PeerId, bool&gt;&gt; {
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">fn </span>connection_status_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, BTreeMap&lt;PeerId, PeerStatus&gt;&gt; {
 <a href=#245 id=245 data-nosnippet>245</a>        <span class="self">self</span>.inner.connection_status_stream()
 <a href=#246 id=246 data-nosnippet>246</a>    }
 <a href=#247 id=247 data-nosnippet>247</a>

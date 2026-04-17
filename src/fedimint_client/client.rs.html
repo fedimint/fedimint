@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>    AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
 <a href=#34 id=34 data-nosnippet>34</a>    ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 <a href=#35 id=35 data-nosnippet>35</a>};
-<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_connectors::ConnectorRegistry;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_connectors::{ConnectorRegistry, PeerStatus};
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_core::config::{
 <a href=#38 id=38 data-nosnippet>38</a>    ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 <a href=#39 id=39 data-nosnippet>39</a>};
@@ -211,7 +211,7 @@
 <a href=#211 id=211 data-nosnippet>211</a>
 <a href=#212 id=212 data-nosnippet>212</a>    <span class="doccomment">/// Returns a stream that emits the current connection status of all peers
 <a href=#213 id=213 data-nosnippet>213</a>    /// whenever any peer's status changes. Emits initial state immediately.
-<a href=#214 id=214 data-nosnippet>214</a>    </span><span class="kw">pub fn </span>connection_status_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Stream&lt;Item = BTreeMap&lt;PeerId, bool&gt;&gt; {
+<a href=#214 id=214 data-nosnippet>214</a>    </span><span class="kw">pub fn </span>connection_status_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Stream&lt;Item = BTreeMap&lt;PeerId, PeerStatus&gt;&gt; {
 <a href=#215 id=215 data-nosnippet>215</a>        <span class="self">self</span>.api.connection_status_stream()
 <a href=#216 id=216 data-nosnippet>216</a>    }
 <a href=#217 id=217 data-nosnippet>217</a>
