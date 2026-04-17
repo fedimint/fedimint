@@ -484,11 +484,28 @@ async fn liquidity_test() -> anyhow::Result<()> {
             // Force close LDK's channels
             gw_ldk_second.client().close_all_channels(true).await?;
 
-            // Verify none of the channels are active
+            // Verify none of the channels are active. Channel closes are
+            // asynchronous so we need to poll until the state propagates.
             for gw in gateways {
-                let channels = gw.client().list_channels().await?;
-                let active_channel = channels.into_iter().any(|chan| chan.is_active);
-                assert!(!active_channel);
+                poll_with_timeout(
+                    "all channels inactive",
+                    Duration::from_secs(60),
+                    || async {
+                        let channels = gw
+                            .client()
+                            .list_channels()
+                            .await
+                            .map_err(ControlFlow::Break)?;
+                        if channels.iter().any(|chan| chan.is_active) {
+                            Err(ControlFlow::Continue(anyhow::anyhow!(
+                                "some channels are still active"
+                            )))
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )
+                .await?;
             }
 
             Ok(())
