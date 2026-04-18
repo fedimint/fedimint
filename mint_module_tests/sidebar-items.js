@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Cmd"],"fn":["main","restore","sanity","test_restore_gap_test"]};
+window.SIDEBAR_ITEMS = {"constant":["PEGIN_SATS"],"enum":["Cmd"],"fn":["main","mint_recovery_test","restore","sanity","test_recovery_after_activity","test_recovery_with_backup","test_recovery_with_post_backup_activity","test_recovery_without_backup","test_restore_gap_test"]};
