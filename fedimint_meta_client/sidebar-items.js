@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_meta_module_value"],"mod":["api","cli","db","states"],"struct":["MetaClientContext","MetaClientInit","MetaClientModule","MetaModuleMetaSourceWithFallback"]};
+window.SIDEBAR_ITEMS = {"fn":["format_rpc_consensus_value_response","get_meta_module_value"],"mod":["api","cli","db","states"],"struct":["GetConsensusValueRequest","MetaClientContext","MetaClientInit","MetaClientModule","MetaModuleMetaSourceWithFallback"]};
