@@ -486,7 +486,7 @@ async fn migrate_db_v2(mut ctx: ServerModuleDbMigrationFnContext<'_, Mint>) -> a
 
     for (blind_nonce, out_point) in blind_nonce_outpoints {
         ctx.dbtx()
-            .insert_new_entry(&RecoveryBlindNonceOutpointKey(blind_nonce), &out_point)
+            .insert_entry(&RecoveryBlindNonceOutpointKey(blind_nonce), &out_point)
             .await;
     }
 
@@ -659,7 +659,7 @@ impl ServerModule for Mint {
         )
         .await;
 
-        dbtx.insert_new_entry(
+        dbtx.insert_entry(
             &RecoveryBlindNonceOutpointKey(output.blind_nonce),
             &out_point,
         )
