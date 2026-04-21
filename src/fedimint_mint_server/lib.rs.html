@@ -493,7 +493,7 @@
 <a href=#493 id=493 data-nosnippet>493</a>
 <a href=#494 id=494 data-nosnippet>494</a>    <span class="kw">for </span>(blind_nonce, out_point) <span class="kw">in </span>blind_nonce_outpoints {
 <a href=#495 id=495 data-nosnippet>495</a>        ctx.dbtx()
-<a href=#496 id=496 data-nosnippet>496</a>            .insert_new_entry(<span class="kw-2">&amp;</span>RecoveryBlindNonceOutpointKey(blind_nonce), <span class="kw-2">&amp;</span>out_point)
+<a href=#496 id=496 data-nosnippet>496</a>            .insert_entry(<span class="kw-2">&amp;</span>RecoveryBlindNonceOutpointKey(blind_nonce), <span class="kw-2">&amp;</span>out_point)
 <a href=#497 id=497 data-nosnippet>497</a>            .<span class="kw">await</span>;
 <a href=#498 id=498 data-nosnippet>498</a>    }
 <a href=#499 id=499 data-nosnippet>499</a>
@@ -666,7 +666,7 @@
 <a href=#666 id=666 data-nosnippet>666</a>        )
 <a href=#667 id=667 data-nosnippet>667</a>        .<span class="kw">await</span>;
 <a href=#668 id=668 data-nosnippet>668</a>
-<a href=#669 id=669 data-nosnippet>669</a>        dbtx.insert_new_entry(
+<a href=#669 id=669 data-nosnippet>669</a>        dbtx.insert_entry(
 <a href=#670 id=670 data-nosnippet>670</a>            <span class="kw-2">&amp;</span>RecoveryBlindNonceOutpointKey(output.blind_nonce),
 <a href=#671 id=671 data-nosnippet>671</a>            <span class="kw-2">&amp;</span>out_point,
 <a href=#672 id=672 data-nosnippet>672</a>        )
