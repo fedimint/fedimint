@@ -862,7 +862,7 @@ checksum = "5b5d691fd092aacec7e05046b7d04897d58d6d65ed3152cb6cf65dababcfabed"
 dependencies = [
  "bdk_core",
  "bitcoin",
- "miniscript",
+ "miniscript 12.3.6",
  "serde",
 ]
 
@@ -908,7 +908,7 @@ dependencies = [
  "bdk_chain",
  "bip39",
  "bitcoin",
- "miniscript",
+ "miniscript 12.3.6",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
@@ -3199,7 +3199,7 @@ dependencies = [
  "lightning-invoice",
  "lightning-types",
  "macro_rules_attribute",
- "miniscript",
+ "miniscript 13.0.0",
  "n0-future 0.1.3",
  "rand 0.8.5",
  "scopeguard",
@@ -4378,7 +4378,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "hex",
- "miniscript",
+ "miniscript 13.0.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -4817,7 +4817,7 @@ dependencies = [
  "fedimint-core",
  "hex",
  "impl-tools",
- "miniscript",
+ "miniscript 13.0.0",
  "serde",
  "test-log",
  "thiserror 2.0.18",
@@ -4841,7 +4841,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.14.0",
- "miniscript",
+ "miniscript 13.0.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -4918,7 +4918,7 @@ dependencies = [
  "anyhow",
  "bitcoin",
  "fedimint-core",
- "miniscript",
+ "miniscript 13.0.0",
  "secp256k1",
  "serde",
  "thiserror 2.0.18",
@@ -4937,7 +4937,7 @@ dependencies = [
  "fedimint-server-core",
  "fedimint-walletv2-common",
  "futures",
- "miniscript",
+ "miniscript 13.0.0",
  "rand 0.8.5",
  "secp256k1",
  "serde",
@@ -7580,12 +7580,24 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.4"
+version = "12.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1eeb3bbebc87062b99fbb8c9067d30dab85469f4cf12248a2667777cc86b282"
+checksum = "c14116d8342edd3626b0f8e84df16f4e6a76dc04799ba747493403236a1b8ac5"
 dependencies = [
  "bech32",
  "bitcoin",
+ "serde",
+]
+
+[[package]]
+name = "miniscript"
+version = "13.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "867b1f11e0545ad5ebbddd8a9f18756d9657a6758bf10d96cf15ddd0b726b650"
+dependencies = [
+ "bech32",
+ "bitcoin",
+ "hex-conservative 1.0.1",
  "serde",
 ]
 
@@ -13754,8 +13766,8 @@ dependencies = [
  "log",
  "serde",
  "thiserror 2.0.18",
- "windows 0.61.3",
- "windows-core 0.61.2",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
