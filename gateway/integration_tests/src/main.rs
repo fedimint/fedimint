@@ -23,6 +23,7 @@ use fedimint_gateway_common::{FederationInfo, PaymentDetails, PaymentKind, Payme
 use fedimint_logging::LOG_TEST;
 use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
+use tokio::time::timeout;
 use tracing::info;
 
 #[derive(Parser)]
@@ -431,13 +432,27 @@ async fn liquidity_test() -> anyhow::Result<()> {
             assert_eq!(lnd_transactions.len(), 0);
 
             info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
-            // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
-            poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
-                let offer_with_amount = gw_ldk_second.client().create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
-                gw_ldk.client().pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
-                assert!(get_transaction(gw_ldk_second, PaymentKind::Bolt12Offer, Amount::from_msats(10_000_000), PaymentStatus::Succeeded).await.is_some());
-                Ok(())
-            }).await?;
+            info!(target: LOG_TEST, "Waiting for Bolt12 offer routing between LDK gateways...");
+            wait_for_bolt12_offer_routing(gw_ldk, gw_ldk_second, Amount::from_msats(1_000_000))
+                .await?;
+            wait_for_bolt12_offer_routing(gw_ldk_second, gw_ldk, Amount::from_msats(2_000_000))
+                .await?;
+
+            let offer_with_amount = gw_ldk_second
+                .client()
+                .create_offer(Some(Amount::from_msats(10_000_000)))
+                .await?;
+            gw_ldk.client().pay_offer(offer_with_amount, None).await?;
+            assert!(
+                get_transaction(
+                    gw_ldk_second,
+                    PaymentKind::Bolt12Offer,
+                    Amount::from_msats(10_000_000),
+                    PaymentStatus::Succeeded,
+                )
+                .await
+                .is_some()
+            );
 
             let offer_without_amount = gw_ldk.client().create_offer(None).await?;
             gw_ldk_second.client().pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
@@ -566,4 +581,38 @@ async fn get_transaction(
     transactions.into_iter().find(|details| {
         details.payment_kind == kind && details.amount == amount && details.status == status
     })
+}
+
+async fn wait_for_bolt12_offer_routing(
+    gw_send: &Gatewayd,
+    gw_receive: &Gatewayd,
+    amount: Amount,
+) -> anyhow::Result<()> {
+    poll_with_timeout(
+        &format!(
+            "Bolt12 offer routing from {} to {}",
+            gw_send.gw_name, gw_receive.gw_name
+        ),
+        Duration::from_secs(120),
+        || async {
+            let offer = gw_receive
+                .client()
+                .create_offer(Some(amount))
+                .await
+                .map_err(ControlFlow::Continue)?;
+            timeout(
+                Duration::from_secs(30),
+                gw_send.client().pay_offer(offer, None),
+            )
+            .await
+            .map_err(|_| {
+                ControlFlow::Continue(anyhow::anyhow!(
+                    "Bolt12 payment attempt timed out before the route finished propagating"
+                ))
+            })?
+            .map_err(ControlFlow::Continue)?;
+            Ok(())
+        },
+    )
+    .await
 }
