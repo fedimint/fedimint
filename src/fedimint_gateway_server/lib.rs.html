@@ -2329,7 +2329,7 @@
 <a href=#2329 id=2329 data-nosnippet>2329</a>    ) -&gt; AdminResult&lt;ReceiveEcashResponse&gt; {
 <a href=#2330 id=2330 data-nosnippet>2330</a>        <span class="self">Self</span>::handle_receive_ecash_msg(<span class="self">self</span>, payload)
 <a href=#2331 id=2331 data-nosnippet>2331</a>            .<span class="kw">await
-<a href=#2332 id=2332 data-nosnippet>2332</a>            </span>.map_err(|e| AdminGatewayError::Unexpected(<span class="macro">anyhow::anyhow!</span>(<span class="string">"{}"</span>, e)))
+<a href=#2332 id=2332 data-nosnippet>2332</a>            </span>.map_err(|e| AdminGatewayError::Unexpected(<span class="macro">anyhow::anyhow!</span>(<span class="string">"{e}"</span>)))
 <a href=#2333 id=2333 data-nosnippet>2333</a>    }
 <a href=#2334 id=2334 data-nosnippet>2334</a>
 <a href=#2335 id=2335 data-nosnippet>2335</a>    <span class="doccomment">/// Creates an invoice that is directly payable to the gateway's lightning

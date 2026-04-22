@@ -56,7 +56,7 @@
 <a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">if </span>parts.len() == <span class="number">2 </span>{
 <a href=#57 id=57 data-nosnippet>57</a>            map.insert(parts[<span class="number">0</span>].to_string(), parts[<span class="number">1</span>].to_string());
 <a href=#58 id=58 data-nosnippet>58</a>        } <span class="kw">else </span>{
-<a href=#59 id=59 data-nosnippet>59</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid pair in map: {}"</span>, pair));
+<a href=#59 id=59 data-nosnippet>59</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid pair in map: {pair}"</span>));
 <a href=#60 id=60 data-nosnippet>60</a>        }
 <a href=#61 id=61 data-nosnippet>61</a>    }
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="prelude-val">Ok</span>(map)
@@ -400,7 +400,7 @@
 <a href=#400 id=400 data-nosnippet>400</a>            </span>.wait()
 <a href=#401 id=401 data-nosnippet>401</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">if </span>!status.success() {
-<a href=#403 id=403 data-nosnippet>403</a>            <span class="macro">bail!</span>(<span class="string">"{}"</span>, status);
+<a href=#403 id=403 data-nosnippet>403</a>            <span class="macro">bail!</span>(<span class="string">"{status}"</span>);
 <a href=#404 id=404 data-nosnippet>404</a>        }
 <a href=#405 id=405 data-nosnippet>405</a>        <span class="prelude-val">Ok</span>(())
 <a href=#406 id=406 data-nosnippet>406</a>    }

@@ -164,7 +164,7 @@
 <a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>num = u32::consensus_decode_partial(d, modules)<span class="question-mark">?</span>;
 <a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>network = bitcoin::Network::from_magic(magic).ok_or_else(|| {
-<a href=#167 id=167 data-nosnippet>167</a>            DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
+<a href=#167 id=167 data-nosnippet>167</a>            DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {magic:x}"</span>))
 <a href=#168 id=168 data-nosnippet>168</a>        })<span class="question-mark">?</span>;
 <a href=#169 id=169 data-nosnippet>169</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(network))
 <a href=#170 id=170 data-nosnippet>170</a>    }

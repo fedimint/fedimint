@@ -1181,7 +1181,7 @@
 <a href=#1181 id=1181 data-nosnippet>1181</a>                    <span class="kw">yield </span>serde_json::to_value(note_counts)<span class="question-mark">?</span>;
 <a href=#1182 id=1182 data-nosnippet>1182</a>                }
 <a href=#1183 id=1183 data-nosnippet>1183</a>                <span class="kw">_ </span>=&gt; {
-<a href=#1184 id=1184 data-nosnippet>1184</a>                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {}"</span>, method))<span class="question-mark">?</span>;
+<a href=#1184 id=1184 data-nosnippet>1184</a>                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {method}"</span>))<span class="question-mark">?</span>;
 <a href=#1185 id=1185 data-nosnippet>1185</a>                    <span class="macro">unreachable!</span>()
 <a href=#1186 id=1186 data-nosnippet>1186</a>                },
 <a href=#1187 id=1187 data-nosnippet>1187</a>            }

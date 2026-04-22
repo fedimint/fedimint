@@ -504,10 +504,10 @@
 <a href=#504 id=504 data-nosnippet>504</a>
 <a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>lightning_fee = fed[<span class="string">"config"</span>][<span class="string">"lightning_fee"</span>].clone();
 <a href=#506 id=506 data-nosnippet>506</a>        <span class="kw">let </span>base: Amount = serde_json::from_value(lightning_fee[<span class="string">"base"</span>].clone())
-<a href=#507 id=507 data-nosnippet>507</a>            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Couldnt parse base: {}"</span>, e))<span class="question-mark">?</span>;
+<a href=#507 id=507 data-nosnippet>507</a>            .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Couldnt parse base: {e}"</span>))<span class="question-mark">?</span>;
 <a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span>parts_per_million: u64 =
 <a href=#509 id=509 data-nosnippet>509</a>            serde_json::from_value(lightning_fee[<span class="string">"parts_per_million"</span>].clone())
-<a href=#510 id=510 data-nosnippet>510</a>                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Couldnt parse parts_per_million: {}"</span>, e))<span class="question-mark">?</span>;
+<a href=#510 id=510 data-nosnippet>510</a>                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Couldnt parse parts_per_million: {e}"</span>))<span class="question-mark">?</span>;
 <a href=#511 id=511 data-nosnippet>511</a>
 <a href=#512 id=512 data-nosnippet>512</a>        <span class="prelude-val">Ok</span>(PaymentFee {
 <a href=#513 id=513 data-nosnippet>513</a>            base,

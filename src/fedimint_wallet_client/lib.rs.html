@@ -630,7 +630,7 @@
 <a href=#630 id=630 data-nosnippet>630</a>                    <span class="kw">let </span>req: PegInRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
 <a href=#631 id=631 data-nosnippet>631</a>                    <span class="kw">let </span>response = <span class="self">self</span>.peg_in(req)
 <a href=#632 id=632 data-nosnippet>632</a>                        .<span class="kw">await
-<a href=#633 id=633 data-nosnippet>633</a>                        </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"peg_in failed: {}"</span>, e))<span class="question-mark">?</span>;
+<a href=#633 id=633 data-nosnippet>633</a>                        </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"peg_in failed: {e}"</span>))<span class="question-mark">?</span>;
 <a href=#634 id=634 data-nosnippet>634</a>                    <span class="kw">let </span>result = serde_json::to_value(<span class="kw-2">&amp;</span>response)<span class="question-mark">?</span>;
 <a href=#635 id=635 data-nosnippet>635</a>                    <span class="kw">yield </span>result;
 <a href=#636 id=636 data-nosnippet>636</a>                },
@@ -638,7 +638,7 @@
 <a href=#638 id=638 data-nosnippet>638</a>                    <span class="kw">let </span>req: PegOutRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
 <a href=#639 id=639 data-nosnippet>639</a>                    <span class="kw">let </span>response = <span class="self">self</span>.peg_out(req)
 <a href=#640 id=640 data-nosnippet>640</a>                        .<span class="kw">await
-<a href=#641 id=641 data-nosnippet>641</a>                        </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"peg_out failed: {}"</span>, e))<span class="question-mark">?</span>;
+<a href=#641 id=641 data-nosnippet>641</a>                        </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"peg_out failed: {e}"</span>))<span class="question-mark">?</span>;
 <a href=#642 id=642 data-nosnippet>642</a>                    <span class="kw">let </span>result = serde_json::to_value(<span class="kw-2">&amp;</span>response)<span class="question-mark">?</span>;
 <a href=#643 id=643 data-nosnippet>643</a>                    <span class="kw">yield </span>result;
 <a href=#644 id=644 data-nosnippet>644</a>                },
@@ -655,7 +655,7 @@
 <a href=#655 id=655 data-nosnippet>655</a>                    }
 <a href=#656 id=656 data-nosnippet>656</a>                }
 <a href=#657 id=657 data-nosnippet>657</a>                <span class="kw">_ </span>=&gt; {
-<a href=#658 id=658 data-nosnippet>658</a>                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {}"</span>, method))<span class="question-mark">?</span>;
+<a href=#658 id=658 data-nosnippet>658</a>                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {method}"</span>))<span class="question-mark">?</span>;
 <a href=#659 id=659 data-nosnippet>659</a>                }
 <a href=#660 id=660 data-nosnippet>660</a>            }
 <a href=#661 id=661 data-nosnippet>661</a>        })
@@ -1371,7 +1371,7 @@
 <a href=#1371 id=1371 data-nosnippet>1371</a>                <span class="kw">let </span>tx_subscriber = <span class="self">self</span>.client_ctx.transaction_updates(operation_id).<span class="kw">await</span>;
 <a href=#1372 id=1372 data-nosnippet>1372</a>
 <a href=#1373 id=1373 data-nosnippet>1373</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx_subscriber.await_tx_accepted(transaction_id).<span class="kw">await </span>{
-<a href=#1374 id=1374 data-nosnippet>1374</a>                    <span class="macro">bail!</span>(<span class="string">"{}"</span>, e);
+<a href=#1374 id=1374 data-nosnippet>1374</a>                    <span class="macro">bail!</span>(<span class="string">"{e}"</span>);
 <a href=#1375 id=1375 data-nosnippet>1375</a>                }
 <a href=#1376 id=1376 data-nosnippet>1376</a>
 <a href=#1377 id=1377 data-nosnippet>1377</a>                <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, out_points=<span class="question-mark">?</span>change, <span class="string">"Ensuring outputs claimed"</span>);
