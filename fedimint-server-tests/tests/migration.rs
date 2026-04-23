@@ -9,13 +9,13 @@ use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::db::{
     Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{AmountUnit, CommonModuleInit};
 use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
 use fedimint_core::secp256k1::Message;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::rand::thread_rng;
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::{Amount, BitcoinHash, PeerId, TransactionId, anyhow};
