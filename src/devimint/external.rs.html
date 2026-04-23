@@ -713,192 +713,191 @@
 <a href=#713 id=713 data-nosnippet>713</a>    )
 <a href=#714 id=714 data-nosnippet>714</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#715 id=715 data-nosnippet>715</a>
-<a href=#716 id=716 data-nosnippet>716</a>    <span class="comment">// All unique pairs of gateways.
-<a href=#717 id=717 data-nosnippet>717</a>    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C)].
-<a href=#718 id=718 data-nosnippet>718</a>    // Since the first gateway within each pair initiates the channel open,
-<a href=#719 id=719 data-nosnippet>719</a>    // order within each pair needs to be enforced so that each Lightning node opens
-<a href=#720 id=720 data-nosnippet>720</a>    // 1 channel.
-<a href=#721 id=721 data-nosnippet>721</a>    </span><span class="kw">let </span>gateway_pairs: Vec&lt;(<span class="kw-2">&amp;</span>NamedGateway, <span class="kw-2">&amp;</span>NamedGateway)&gt; =
-<a href=#722 id=722 data-nosnippet>722</a>        gateways.iter().tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect();
-<a href=#723 id=723 data-nosnippet>723</a>
-<a href=#724 id=724 data-nosnippet>724</a>    <span class="macro">info!</span>(target: LOG_DEVIMINT, block_height = %block_height, <span class="string">"devimint current block"</span>);
-<a href=#725 id=725 data-nosnippet>725</a>    <span class="kw">let </span>sats_per_side = <span class="number">5_000_000</span>;
-<a href=#726 id=726 data-nosnippet>726</a>    <span class="kw">for </span>((gw_a, gw_a_name), (gw_b, gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
-<a href=#727 id=727 data-nosnippet>727</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opening channel with {sats_per_side} sats on each side..."</span>);
-<a href=#728 id=728 data-nosnippet>728</a>        <span class="kw">let </span>txid = gw_a
-<a href=#729 id=729 data-nosnippet>729</a>            .client()
-<a href=#730 id=730 data-nosnippet>730</a>            .open_channel(gw_b, sats_per_side * <span class="number">2</span>, <span class="prelude-val">Some</span>(sats_per_side))
-<a href=#731 id=731 data-nosnippet>731</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#732 id=732 data-nosnippet>732</a>
-<a href=#733 id=733 data-nosnippet>733</a>        bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#734 id=734 data-nosnippet>734</a>    }
-<a href=#735 id=735 data-nosnippet>735</a>
-<a href=#736 id=736 data-nosnippet>736</a>    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#737 id=737 data-nosnippet>737</a>
-<a href=#738 id=738 data-nosnippet>738</a>    <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
-<a href=#739 id=739 data-nosnippet>739</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_height, <span class="string">"Syncing gateway lightning nodes to block height..."</span>);
-<a href=#740 id=740 data-nosnippet>740</a>    futures::future::try_join_all(
-<a href=#741 id=741 data-nosnippet>741</a>        gateways
-<a href=#742 id=742 data-nosnippet>742</a>            .iter()
-<a href=#743 id=743 data-nosnippet>743</a>            .map(|(gw, _gw_name)| <span class="kw">async </span>{ gw.client().wait_for_block_height(block_height).<span class="kw">await </span>}),
-<a href=#744 id=744 data-nosnippet>744</a>    )
-<a href=#745 id=745 data-nosnippet>745</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#746 id=746 data-nosnippet>746</a>
-<a href=#747 id=747 data-nosnippet>747</a>    <span class="kw">for </span>((gw_a, _gw_a_name), (gw_b, _gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
-<a href=#748 id=748 data-nosnippet>748</a>        <span class="kw">let </span>gw_a_node_pubkey = gw_a.client().lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#749 id=749 data-nosnippet>749</a>        <span class="kw">let </span>gw_b_node_pubkey = gw_b.client().lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#750 id=750 data-nosnippet>750</a>
-<a href=#751 id=751 data-nosnippet>751</a>        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#752 id=752 data-nosnippet>752</a>        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#753 id=753 data-nosnippet>753</a>    }
-<a href=#754 id=754 data-nosnippet>754</a>
-<a href=#755 id=755 data-nosnippet>755</a>    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"open_channels_between_gateways successful"</span>);
-<a href=#756 id=756 data-nosnippet>756</a>
-<a href=#757 id=757 data-nosnippet>757</a>    <span class="prelude-val">Ok</span>(())
-<a href=#758 id=758 data-nosnippet>758</a>}
-<a href=#759 id=759 data-nosnippet>759</a>
-<a href=#760 id=760 data-nosnippet>760</a><span class="kw">async fn </span>wait_for_ready_channel_on_gateway_with_counterparty(
-<a href=#761 id=761 data-nosnippet>761</a>    gw: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#762 id=762 data-nosnippet>762</a>    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
-<a href=#763 id=763 data-nosnippet>763</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#764 id=764 data-nosnippet>764</a>    poll(
-<a href=#765 id=765 data-nosnippet>765</a>        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Wait for {} channel update"</span>, gw.gw_name),
-<a href=#766 id=766 data-nosnippet>766</a>        || <span class="kw">async </span>{
-<a href=#767 id=767 data-nosnippet>767</a>            <span class="kw">let </span>channels = gw
-<a href=#768 id=768 data-nosnippet>768</a>                .client()
-<a href=#769 id=769 data-nosnippet>769</a>                .list_channels()
-<a href=#770 id=770 data-nosnippet>770</a>                .<span class="kw">await
-<a href=#771 id=771 data-nosnippet>771</a>                </span>.context(<span class="string">"list channels"</span>)
-<a href=#772 id=772 data-nosnippet>772</a>                .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
-<a href=#773 id=773 data-nosnippet>773</a>
-<a href=#774 id=774 data-nosnippet>774</a>            <span class="kw">if </span>channels
-<a href=#775 id=775 data-nosnippet>775</a>                .iter()
-<a href=#776 id=776 data-nosnippet>776</a>                .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey &amp;&amp; channel.is_active)
-<a href=#777 id=777 data-nosnippet>777</a>            {
-<a href=#778 id=778 data-nosnippet>778</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#779 id=779 data-nosnippet>779</a>            }
-<a href=#780 id=780 data-nosnippet>780</a>
-<a href=#781 id=781 data-nosnippet>781</a>            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>channels, gw = gw.gw_name, <span class="string">"Counterparty channels not found open"</span>);
-<a href=#782 id=782 data-nosnippet>782</a>            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"channel not found"</span>)))
-<a href=#783 id=783 data-nosnippet>783</a>        },
-<a href=#784 id=784 data-nosnippet>784</a>    )
-<a href=#785 id=785 data-nosnippet>785</a>    .<span class="kw">await
-<a href=#786 id=786 data-nosnippet>786</a></span>}
-<a href=#787 id=787 data-nosnippet>787</a>
-<a href=#788 id=788 data-nosnippet>788</a><span class="attr">#[derive(Clone)]
-<a href=#789 id=789 data-nosnippet>789</a></span><span class="kw">pub enum </span>LightningNode {
-<a href=#790 id=790 data-nosnippet>790</a>    Lnd(Lnd),
-<a href=#791 id=791 data-nosnippet>791</a>    Ldk {
-<a href=#792 id=792 data-nosnippet>792</a>        name: String,
-<a href=#793 id=793 data-nosnippet>793</a>        gw_port: u16,
-<a href=#794 id=794 data-nosnippet>794</a>        ldk_port: u16,
-<a href=#795 id=795 data-nosnippet>795</a>        metrics_port: u16,
-<a href=#796 id=796 data-nosnippet>796</a>    },
-<a href=#797 id=797 data-nosnippet>797</a>}
-<a href=#798 id=798 data-nosnippet>798</a>
-<a href=#799 id=799 data-nosnippet>799</a><span class="kw">impl </span>LightningNode {
-<a href=#800 id=800 data-nosnippet>800</a>    <span class="kw">pub fn </span>ln_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
-<a href=#801 id=801 data-nosnippet>801</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#802 id=802 data-nosnippet>802</a>            LightningNode::Lnd(<span class="kw">_</span>) =&gt; LightningNodeType::Lnd,
-<a href=#803 id=803 data-nosnippet>803</a>            LightningNode::Ldk {
-<a href=#804 id=804 data-nosnippet>804</a>                name: <span class="kw">_</span>,
-<a href=#805 id=805 data-nosnippet>805</a>                gw_port: <span class="kw">_</span>,
-<a href=#806 id=806 data-nosnippet>806</a>                ldk_port: <span class="kw">_</span>,
-<a href=#807 id=807 data-nosnippet>807</a>                metrics_port: <span class="kw">_</span>,
-<a href=#808 id=808 data-nosnippet>808</a>            } =&gt; LightningNodeType::Ldk,
-<a href=#809 id=809 data-nosnippet>809</a>        }
-<a href=#810 id=810 data-nosnippet>810</a>    }
-<a href=#811 id=811 data-nosnippet>811</a>}
-<a href=#812 id=812 data-nosnippet>812</a>
-<a href=#813 id=813 data-nosnippet>813</a><span class="attr">#[derive(Clone)]
-<a href=#814 id=814 data-nosnippet>814</a></span><span class="kw">pub struct </span>Esplora {
-<a href=#815 id=815 data-nosnippet>815</a>    _process: ProcessHandle,
-<a href=#816 id=816 data-nosnippet>816</a>    _bitcoind: Bitcoind,
-<a href=#817 id=817 data-nosnippet>817</a>}
-<a href=#818 id=818 data-nosnippet>818</a>
-<a href=#819 id=819 data-nosnippet>819</a><span class="kw">impl </span>Esplora {
-<a href=#820 id=820 data-nosnippet>820</a>    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#821 id=821 data-nosnippet>821</a>        <span class="macro">debug!</span>(<span class="string">"Starting esplora"</span>);
-<a href=#822 id=822 data-nosnippet>822</a>        <span class="kw">let </span>daemon_dir = process_mgr
-<a href=#823 id=823 data-nosnippet>823</a>            .globals
-<a href=#824 id=824 data-nosnippet>824</a>            .FM_BTC_DIR
-<a href=#825 id=825 data-nosnippet>825</a>            .to_str()
-<a href=#826 id=826 data-nosnippet>826</a>            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
-<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span>esplora_dir = process_mgr
-<a href=#828 id=828 data-nosnippet>828</a>            .globals
-<a href=#829 id=829 data-nosnippet>829</a>            .FM_ESPLORA_DIR
-<a href=#830 id=830 data-nosnippet>830</a>            .to_str()
-<a href=#831 id=831 data-nosnippet>831</a>            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
-<a href=#832 id=832 data-nosnippet>832</a>
-<a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
-<a href=#834 id=834 data-nosnippet>834</a>        <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
-<a href=#835 id=835 data-nosnippet>835</a>        <span class="kw">let </span>esplora_monitoring_port = process_mgr.globals.FM_PORT_ESPLORA_MONITORING;
-<a href=#836 id=836 data-nosnippet>836</a>        <span class="comment">// spawn esplora
-<a href=#837 id=837 data-nosnippet>837</a>        </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
-<a href=#838 id=838 data-nosnippet>838</a>            <span class="kw">crate</span>::util::Esplora,
-<a href=#839 id=839 data-nosnippet>839</a>            <span class="string">"--daemon-dir={daemon_dir}"</span>,
-<a href=#840 id=840 data-nosnippet>840</a>            <span class="string">"--db-dir={esplora_dir}"</span>,
-<a href=#841 id=841 data-nosnippet>841</a>            <span class="string">"--cookie=bitcoin:bitcoin"</span>,
-<a href=#842 id=842 data-nosnippet>842</a>            <span class="string">"--network=regtest"</span>,
-<a href=#843 id=843 data-nosnippet>843</a>            <span class="string">"--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}"</span>,
-<a href=#844 id=844 data-nosnippet>844</a>            <span class="string">"--http-addr=127.0.0.1:{esplora_port}"</span>,
-<a href=#845 id=845 data-nosnippet>845</a>            <span class="string">"--monitoring-addr=127.0.0.1:{esplora_monitoring_port}"</span>,
-<a href=#846 id=846 data-nosnippet>846</a>            <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
-<a href=#847 id=847 data-nosnippet>847</a>            </span><span class="string">"--cors=*"</span>,         <span class="comment">// Allow CORS for WASM recovery tool
-<a href=#848 id=848 data-nosnippet>848</a>        </span>);
-<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#850 id=850 data-nosnippet>850</a>
-<a href=#851 id=851 data-nosnippet>851</a>        <span class="self">Self</span>::wait_for_ready(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#852 id=852 data-nosnippet>852</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Esplora ready"</span>);
-<a href=#853 id=853 data-nosnippet>853</a>
-<a href=#854 id=854 data-nosnippet>854</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#855 id=855 data-nosnippet>855</a>            _bitcoind: bitcoind,
-<a href=#856 id=856 data-nosnippet>856</a>            _process: process,
-<a href=#857 id=857 data-nosnippet>857</a>        })
-<a href=#858 id=858 data-nosnippet>858</a>    }
-<a href=#859 id=859 data-nosnippet>859</a>
-<a href=#860 id=860 data-nosnippet>860</a>    <span class="doccomment">/// Wait until the server is able to respond to requests.
-<a href=#861 id=861 data-nosnippet>861</a>    </span><span class="kw">async fn </span>wait_for_ready(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>client = esplora_client::Builder::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#863 id=863 data-nosnippet>863</a>            <span class="string">"http://localhost:{}"</span>,
-<a href=#864 id=864 data-nosnippet>864</a>            process_mgr.globals.FM_PORT_ESPLORA
-<a href=#865 id=865 data-nosnippet>865</a>        ))
-<a href=#866 id=866 data-nosnippet>866</a>        <span class="comment">// Disable retrying in the client since we're already retrying in the poll below.
-<a href=#867 id=867 data-nosnippet>867</a>        </span>.max_retries(<span class="number">0</span>)
-<a href=#868 id=868 data-nosnippet>868</a>        .build_async()
-<a href=#869 id=869 data-nosnippet>869</a>        .expect(<span class="string">"esplora client build failed"</span>);
-<a href=#870 id=870 data-nosnippet>870</a>
-<a href=#871 id=871 data-nosnippet>871</a>        poll(<span class="string">"esplora server ready"</span>, || <span class="kw">async </span>{
-<a href=#872 id=872 data-nosnippet>872</a>            client
-<a href=#873 id=873 data-nosnippet>873</a>                .get_fee_estimates()
-<a href=#874 id=874 data-nosnippet>874</a>                .<span class="kw">await
-<a href=#875 id=875 data-nosnippet>875</a>                </span>.map_err(|e| ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(e)))<span class="question-mark">?</span>;
-<a href=#876 id=876 data-nosnippet>876</a>
-<a href=#877 id=877 data-nosnippet>877</a>            <span class="prelude-val">Ok</span>(())
-<a href=#878 id=878 data-nosnippet>878</a>        })
-<a href=#879 id=879 data-nosnippet>879</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#880 id=880 data-nosnippet>880</a>
-<a href=#881 id=881 data-nosnippet>881</a>        <span class="prelude-val">Ok</span>(())
-<a href=#882 id=882 data-nosnippet>882</a>    }
-<a href=#883 id=883 data-nosnippet>883</a>}
-<a href=#884 id=884 data-nosnippet>884</a>
-<a href=#885 id=885 data-nosnippet>885</a><span class="attr">#[allow(unused)]
-<a href=#886 id=886 data-nosnippet>886</a></span><span class="kw">pub struct </span>ExternalDaemons {
-<a href=#887 id=887 data-nosnippet>887</a>    <span class="kw">pub </span>bitcoind: Bitcoind,
-<a href=#888 id=888 data-nosnippet>888</a>    <span class="kw">pub </span>esplora: Esplora,
-<a href=#889 id=889 data-nosnippet>889</a>}
-<a href=#890 id=890 data-nosnippet>890</a>
-<a href=#891 id=891 data-nosnippet>891</a><span class="kw">pub async fn </span>external_daemons(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;ExternalDaemons&gt; {
-<a href=#892 id=892 data-nosnippet>892</a>    <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">let </span>esplora = Esplora::new(process_mgr, bitcoind.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#894 id=894 data-nosnippet>894</a>    <span class="kw">let </span>start_time = fedimint_core::time::now();
-<a href=#895 id=895 data-nosnippet>895</a>    <span class="comment">// make sure the bitcoind wallet is ready
-<a href=#896 id=896 data-nosnippet>896</a>    </span><span class="kw">let _ </span>= bitcoind.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#897 id=897 data-nosnippet>897</a>    <span class="macro">info!</span>(
-<a href=#898 id=898 data-nosnippet>898</a>        target: LOG_DEVIMINT,
-<a href=#899 id=899 data-nosnippet>899</a>        <span class="string">"starting base daemons took {:?}"</span>,
-<a href=#900 id=900 data-nosnippet>900</a>        start_time.elapsed()<span class="question-mark">?
-<a href=#901 id=901 data-nosnippet>901</a>    </span>);
-<a href=#902 id=902 data-nosnippet>902</a>    <span class="prelude-val">Ok</span>(ExternalDaemons { bitcoind, esplora })
-<a href=#903 id=903 data-nosnippet>903</a>}
+<a href=#716 id=716 data-nosnippet>716</a>    <span class="comment">// Cyclic pairs of gateways, so every node gets a channel with every other
+<a href=#717 id=717 data-nosnippet>717</a>    // node for our typical 3-gateway setup. For a list [A, B, C] this produces
+<a href=#718 id=718 data-nosnippet>718</a>    // [(A, B), (B, C), (C, A)]. The first gateway in each pair initiates the
+<a href=#719 id=719 data-nosnippet>719</a>    // channel open, so each Lightning node opens exactly one channel.
+<a href=#720 id=720 data-nosnippet>720</a>    </span><span class="kw">let </span>gateway_pairs: Vec&lt;(<span class="kw-2">&amp;</span>NamedGateway, <span class="kw-2">&amp;</span>NamedGateway)&gt; =
+<a href=#721 id=721 data-nosnippet>721</a>        gateways.iter().circular_tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect();
+<a href=#722 id=722 data-nosnippet>722</a>
+<a href=#723 id=723 data-nosnippet>723</a>    <span class="macro">info!</span>(target: LOG_DEVIMINT, block_height = %block_height, <span class="string">"devimint current block"</span>);
+<a href=#724 id=724 data-nosnippet>724</a>    <span class="kw">let </span>sats_per_side = <span class="number">5_000_000</span>;
+<a href=#725 id=725 data-nosnippet>725</a>    <span class="kw">for </span>((gw_a, gw_a_name), (gw_b, gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
+<a href=#726 id=726 data-nosnippet>726</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, <span class="string">"Opening channel with {sats_per_side} sats on each side..."</span>);
+<a href=#727 id=727 data-nosnippet>727</a>        <span class="kw">let </span>txid = gw_a
+<a href=#728 id=728 data-nosnippet>728</a>            .client()
+<a href=#729 id=729 data-nosnippet>729</a>            .open_channel(gw_b, sats_per_side * <span class="number">2</span>, <span class="prelude-val">Some</span>(sats_per_side))
+<a href=#730 id=730 data-nosnippet>730</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#731 id=731 data-nosnippet>731</a>
+<a href=#732 id=732 data-nosnippet>732</a>        bitcoind.poll_get_transaction(txid).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#733 id=733 data-nosnippet>733</a>    }
+<a href=#734 id=734 data-nosnippet>734</a>
+<a href=#735 id=735 data-nosnippet>735</a>    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#736 id=736 data-nosnippet>736</a>
+<a href=#737 id=737 data-nosnippet>737</a>    <span class="kw">let </span>block_height = bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_height, <span class="string">"Syncing gateway lightning nodes to block height..."</span>);
+<a href=#739 id=739 data-nosnippet>739</a>    futures::future::try_join_all(
+<a href=#740 id=740 data-nosnippet>740</a>        gateways
+<a href=#741 id=741 data-nosnippet>741</a>            .iter()
+<a href=#742 id=742 data-nosnippet>742</a>            .map(|(gw, _gw_name)| <span class="kw">async </span>{ gw.client().wait_for_block_height(block_height).<span class="kw">await </span>}),
+<a href=#743 id=743 data-nosnippet>743</a>    )
+<a href=#744 id=744 data-nosnippet>744</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#745 id=745 data-nosnippet>745</a>
+<a href=#746 id=746 data-nosnippet>746</a>    <span class="kw">for </span>((gw_a, _gw_a_name), (gw_b, _gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
+<a href=#747 id=747 data-nosnippet>747</a>        <span class="kw">let </span>gw_a_node_pubkey = gw_a.client().lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#748 id=748 data-nosnippet>748</a>        <span class="kw">let </span>gw_b_node_pubkey = gw_b.client().lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#749 id=749 data-nosnippet>749</a>
+<a href=#750 id=750 data-nosnippet>750</a>        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#751 id=751 data-nosnippet>751</a>        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#752 id=752 data-nosnippet>752</a>    }
+<a href=#753 id=753 data-nosnippet>753</a>
+<a href=#754 id=754 data-nosnippet>754</a>    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"open_channels_between_gateways successful"</span>);
+<a href=#755 id=755 data-nosnippet>755</a>
+<a href=#756 id=756 data-nosnippet>756</a>    <span class="prelude-val">Ok</span>(())
+<a href=#757 id=757 data-nosnippet>757</a>}
+<a href=#758 id=758 data-nosnippet>758</a>
+<a href=#759 id=759 data-nosnippet>759</a><span class="kw">async fn </span>wait_for_ready_channel_on_gateway_with_counterparty(
+<a href=#760 id=760 data-nosnippet>760</a>    gw: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#761 id=761 data-nosnippet>761</a>    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+<a href=#762 id=762 data-nosnippet>762</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#763 id=763 data-nosnippet>763</a>    poll(
+<a href=#764 id=764 data-nosnippet>764</a>        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Wait for {} channel update"</span>, gw.gw_name),
+<a href=#765 id=765 data-nosnippet>765</a>        || <span class="kw">async </span>{
+<a href=#766 id=766 data-nosnippet>766</a>            <span class="kw">let </span>channels = gw
+<a href=#767 id=767 data-nosnippet>767</a>                .client()
+<a href=#768 id=768 data-nosnippet>768</a>                .list_channels()
+<a href=#769 id=769 data-nosnippet>769</a>                .<span class="kw">await
+<a href=#770 id=770 data-nosnippet>770</a>                </span>.context(<span class="string">"list channels"</span>)
+<a href=#771 id=771 data-nosnippet>771</a>                .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+<a href=#772 id=772 data-nosnippet>772</a>
+<a href=#773 id=773 data-nosnippet>773</a>            <span class="kw">if </span>channels
+<a href=#774 id=774 data-nosnippet>774</a>                .iter()
+<a href=#775 id=775 data-nosnippet>775</a>                .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey &amp;&amp; channel.is_active)
+<a href=#776 id=776 data-nosnippet>776</a>            {
+<a href=#777 id=777 data-nosnippet>777</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#778 id=778 data-nosnippet>778</a>            }
+<a href=#779 id=779 data-nosnippet>779</a>
+<a href=#780 id=780 data-nosnippet>780</a>            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>channels, gw = gw.gw_name, <span class="string">"Counterparty channels not found open"</span>);
+<a href=#781 id=781 data-nosnippet>781</a>            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"channel not found"</span>)))
+<a href=#782 id=782 data-nosnippet>782</a>        },
+<a href=#783 id=783 data-nosnippet>783</a>    )
+<a href=#784 id=784 data-nosnippet>784</a>    .<span class="kw">await
+<a href=#785 id=785 data-nosnippet>785</a></span>}
+<a href=#786 id=786 data-nosnippet>786</a>
+<a href=#787 id=787 data-nosnippet>787</a><span class="attr">#[derive(Clone)]
+<a href=#788 id=788 data-nosnippet>788</a></span><span class="kw">pub enum </span>LightningNode {
+<a href=#789 id=789 data-nosnippet>789</a>    Lnd(Lnd),
+<a href=#790 id=790 data-nosnippet>790</a>    Ldk {
+<a href=#791 id=791 data-nosnippet>791</a>        name: String,
+<a href=#792 id=792 data-nosnippet>792</a>        gw_port: u16,
+<a href=#793 id=793 data-nosnippet>793</a>        ldk_port: u16,
+<a href=#794 id=794 data-nosnippet>794</a>        metrics_port: u16,
+<a href=#795 id=795 data-nosnippet>795</a>    },
+<a href=#796 id=796 data-nosnippet>796</a>}
+<a href=#797 id=797 data-nosnippet>797</a>
+<a href=#798 id=798 data-nosnippet>798</a><span class="kw">impl </span>LightningNode {
+<a href=#799 id=799 data-nosnippet>799</a>    <span class="kw">pub fn </span>ln_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#801 id=801 data-nosnippet>801</a>            LightningNode::Lnd(<span class="kw">_</span>) =&gt; LightningNodeType::Lnd,
+<a href=#802 id=802 data-nosnippet>802</a>            LightningNode::Ldk {
+<a href=#803 id=803 data-nosnippet>803</a>                name: <span class="kw">_</span>,
+<a href=#804 id=804 data-nosnippet>804</a>                gw_port: <span class="kw">_</span>,
+<a href=#805 id=805 data-nosnippet>805</a>                ldk_port: <span class="kw">_</span>,
+<a href=#806 id=806 data-nosnippet>806</a>                metrics_port: <span class="kw">_</span>,
+<a href=#807 id=807 data-nosnippet>807</a>            } =&gt; LightningNodeType::Ldk,
+<a href=#808 id=808 data-nosnippet>808</a>        }
+<a href=#809 id=809 data-nosnippet>809</a>    }
+<a href=#810 id=810 data-nosnippet>810</a>}
+<a href=#811 id=811 data-nosnippet>811</a>
+<a href=#812 id=812 data-nosnippet>812</a><span class="attr">#[derive(Clone)]
+<a href=#813 id=813 data-nosnippet>813</a></span><span class="kw">pub struct </span>Esplora {
+<a href=#814 id=814 data-nosnippet>814</a>    _process: ProcessHandle,
+<a href=#815 id=815 data-nosnippet>815</a>    _bitcoind: Bitcoind,
+<a href=#816 id=816 data-nosnippet>816</a>}
+<a href=#817 id=817 data-nosnippet>817</a>
+<a href=#818 id=818 data-nosnippet>818</a><span class="kw">impl </span>Esplora {
+<a href=#819 id=819 data-nosnippet>819</a>    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#820 id=820 data-nosnippet>820</a>        <span class="macro">debug!</span>(<span class="string">"Starting esplora"</span>);
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="kw">let </span>daemon_dir = process_mgr
+<a href=#822 id=822 data-nosnippet>822</a>            .globals
+<a href=#823 id=823 data-nosnippet>823</a>            .FM_BTC_DIR
+<a href=#824 id=824 data-nosnippet>824</a>            .to_str()
+<a href=#825 id=825 data-nosnippet>825</a>            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
+<a href=#826 id=826 data-nosnippet>826</a>        <span class="kw">let </span>esplora_dir = process_mgr
+<a href=#827 id=827 data-nosnippet>827</a>            .globals
+<a href=#828 id=828 data-nosnippet>828</a>            .FM_ESPLORA_DIR
+<a href=#829 id=829 data-nosnippet>829</a>            .to_str()
+<a href=#830 id=830 data-nosnippet>830</a>            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
+<a href=#831 id=831 data-nosnippet>831</a>
+<a href=#832 id=832 data-nosnippet>832</a>        <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="kw">let </span>esplora_monitoring_port = process_mgr.globals.FM_PORT_ESPLORA_MONITORING;
+<a href=#835 id=835 data-nosnippet>835</a>        <span class="comment">// spawn esplora
+<a href=#836 id=836 data-nosnippet>836</a>        </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
+<a href=#837 id=837 data-nosnippet>837</a>            <span class="kw">crate</span>::util::Esplora,
+<a href=#838 id=838 data-nosnippet>838</a>            <span class="string">"--daemon-dir={daemon_dir}"</span>,
+<a href=#839 id=839 data-nosnippet>839</a>            <span class="string">"--db-dir={esplora_dir}"</span>,
+<a href=#840 id=840 data-nosnippet>840</a>            <span class="string">"--cookie=bitcoin:bitcoin"</span>,
+<a href=#841 id=841 data-nosnippet>841</a>            <span class="string">"--network=regtest"</span>,
+<a href=#842 id=842 data-nosnippet>842</a>            <span class="string">"--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}"</span>,
+<a href=#843 id=843 data-nosnippet>843</a>            <span class="string">"--http-addr=127.0.0.1:{esplora_port}"</span>,
+<a href=#844 id=844 data-nosnippet>844</a>            <span class="string">"--monitoring-addr=127.0.0.1:{esplora_monitoring_port}"</span>,
+<a href=#845 id=845 data-nosnippet>845</a>            <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
+<a href=#846 id=846 data-nosnippet>846</a>            </span><span class="string">"--cors=*"</span>,         <span class="comment">// Allow CORS for WASM recovery tool
+<a href=#847 id=847 data-nosnippet>847</a>        </span>);
+<a href=#848 id=848 data-nosnippet>848</a>        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>        <span class="self">Self</span>::wait_for_ready(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#851 id=851 data-nosnippet>851</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Esplora ready"</span>);
+<a href=#852 id=852 data-nosnippet>852</a>
+<a href=#853 id=853 data-nosnippet>853</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#854 id=854 data-nosnippet>854</a>            _bitcoind: bitcoind,
+<a href=#855 id=855 data-nosnippet>855</a>            _process: process,
+<a href=#856 id=856 data-nosnippet>856</a>        })
+<a href=#857 id=857 data-nosnippet>857</a>    }
+<a href=#858 id=858 data-nosnippet>858</a>
+<a href=#859 id=859 data-nosnippet>859</a>    <span class="doccomment">/// Wait until the server is able to respond to requests.
+<a href=#860 id=860 data-nosnippet>860</a>    </span><span class="kw">async fn </span>wait_for_ready(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#861 id=861 data-nosnippet>861</a>        <span class="kw">let </span>client = esplora_client::Builder::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#862 id=862 data-nosnippet>862</a>            <span class="string">"http://localhost:{}"</span>,
+<a href=#863 id=863 data-nosnippet>863</a>            process_mgr.globals.FM_PORT_ESPLORA
+<a href=#864 id=864 data-nosnippet>864</a>        ))
+<a href=#865 id=865 data-nosnippet>865</a>        <span class="comment">// Disable retrying in the client since we're already retrying in the poll below.
+<a href=#866 id=866 data-nosnippet>866</a>        </span>.max_retries(<span class="number">0</span>)
+<a href=#867 id=867 data-nosnippet>867</a>        .build_async()
+<a href=#868 id=868 data-nosnippet>868</a>        .expect(<span class="string">"esplora client build failed"</span>);
+<a href=#869 id=869 data-nosnippet>869</a>
+<a href=#870 id=870 data-nosnippet>870</a>        poll(<span class="string">"esplora server ready"</span>, || <span class="kw">async </span>{
+<a href=#871 id=871 data-nosnippet>871</a>            client
+<a href=#872 id=872 data-nosnippet>872</a>                .get_fee_estimates()
+<a href=#873 id=873 data-nosnippet>873</a>                .<span class="kw">await
+<a href=#874 id=874 data-nosnippet>874</a>                </span>.map_err(|e| ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(e)))<span class="question-mark">?</span>;
+<a href=#875 id=875 data-nosnippet>875</a>
+<a href=#876 id=876 data-nosnippet>876</a>            <span class="prelude-val">Ok</span>(())
+<a href=#877 id=877 data-nosnippet>877</a>        })
+<a href=#878 id=878 data-nosnippet>878</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="prelude-val">Ok</span>(())
+<a href=#881 id=881 data-nosnippet>881</a>    }
+<a href=#882 id=882 data-nosnippet>882</a>}
+<a href=#883 id=883 data-nosnippet>883</a>
+<a href=#884 id=884 data-nosnippet>884</a><span class="attr">#[allow(unused)]
+<a href=#885 id=885 data-nosnippet>885</a></span><span class="kw">pub struct </span>ExternalDaemons {
+<a href=#886 id=886 data-nosnippet>886</a>    <span class="kw">pub </span>bitcoind: Bitcoind,
+<a href=#887 id=887 data-nosnippet>887</a>    <span class="kw">pub </span>esplora: Esplora,
+<a href=#888 id=888 data-nosnippet>888</a>}
+<a href=#889 id=889 data-nosnippet>889</a>
+<a href=#890 id=890 data-nosnippet>890</a><span class="kw">pub async fn </span>external_daemons(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;ExternalDaemons&gt; {
+<a href=#891 id=891 data-nosnippet>891</a>    <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#892 id=892 data-nosnippet>892</a>    <span class="kw">let </span>esplora = Esplora::new(process_mgr, bitcoind.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">let </span>start_time = fedimint_core::time::now();
+<a href=#894 id=894 data-nosnippet>894</a>    <span class="comment">// make sure the bitcoind wallet is ready
+<a href=#895 id=895 data-nosnippet>895</a>    </span><span class="kw">let _ </span>= bitcoind.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#896 id=896 data-nosnippet>896</a>    <span class="macro">info!</span>(
+<a href=#897 id=897 data-nosnippet>897</a>        target: LOG_DEVIMINT,
+<a href=#898 id=898 data-nosnippet>898</a>        <span class="string">"starting base daemons took {:?}"</span>,
+<a href=#899 id=899 data-nosnippet>899</a>        start_time.elapsed()<span class="question-mark">?
+<a href=#900 id=900 data-nosnippet>900</a>    </span>);
+<a href=#901 id=901 data-nosnippet>901</a>    <span class="prelude-val">Ok</span>(ExternalDaemons { bitcoind, esplora })
+<a href=#902 id=902 data-nosnippet>902</a>}
 </code></pre></div></section></main></body></html>
