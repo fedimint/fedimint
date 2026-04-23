@@ -379,6 +379,14 @@ impl ClientModule for MintClientModule {
         Some(Amounts::new_custom(unit, fee))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let unit = self.cfg.amount_unit;
+        Some(Amounts::new_custom(
+            unit,
+            input.maybe_v0_ref()?.note.amount(),
+        ))
+    }
+
     fn output_fee(
         &self,
         amounts: &Amounts,
@@ -389,6 +397,14 @@ impl ClientModule for MintClientModule {
         let fee = self.cfg.fee_consensus.fee(amount);
 
         Some(Amounts::new_custom(unit, fee))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let unit = self.cfg.amount_unit;
+        Some(Amounts::new_custom(unit, output.maybe_v0_ref()?.amount()))
     }
 
     #[cfg(feature = "cli")]
