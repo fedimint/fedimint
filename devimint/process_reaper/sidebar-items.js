@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GRACE_PERIOD"],"fn":["kill_process","reap_killed_processes","reaper_loop"],"static":["REAPER"],"struct":["PendingKill","Reaper"]};
