@@ -31,13 +31,15 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Backwards-compatibility tests"
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v6
       - name: Prepare
         uses: ./.github/actions/prepare
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+        with:
+          github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v17
         with:
           name: fedimint

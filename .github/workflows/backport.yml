@@ -3,10 +3,12 @@ on:
   pull_request_target:
     # Run on merge (close) or if label is added after merging
     types: [closed, labeled]
-# Set concurrenty limit to a single backport workflow per branch
-# https://docs.github.com/en/actions/using-jobs/using-concurrency
+# Scope concurrency to the PR so that backport runs for different PRs don't
+# cancel each other.  (github.ref resolves to the base branch for
+# pull_request_target events, so the old group key was shared by all PRs
+# targeting the same branch.)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
   backport:

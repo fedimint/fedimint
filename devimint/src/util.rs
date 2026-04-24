@@ -974,7 +974,13 @@ fn get_command_str_for_alias(aliases: &[&str], default: &[&str]) -> Vec<String> 
     // try to use one of the aliases if set
     for alias in aliases {
         if let Ok(cmd) = std::env::var(alias) {
-            return cmd.split_whitespace().map(ToOwned::to_owned).collect();
+            let parts: Vec<String> = cmd.split_whitespace().map(ToOwned::to_owned).collect();
+            assert!(
+                !parts.is_empty(),
+                "Environment variable {alias} is set to an empty/whitespace-only string — \
+                 it should either be unset or contain a valid command path"
+            );
+            return parts;
         }
     }
     // otherwise return the default value
