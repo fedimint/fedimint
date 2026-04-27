@@ -162,11 +162,11 @@
 <a href=#162 id=162 data-nosnippet>162</a>
 <a href=#163 id=163 data-nosnippet>163</a>    Json(LnurlResponse::Ok(InvoiceResponse {
 <a href=#164 id=164 data-nosnippet>164</a>        pr: invoice.clone(),
-<a href=#165 id=165 data-nosnippet>165</a>        verify: <span class="prelude-val">Some</span>(<span class="macro">format!</span>(
-<a href=#166 id=166 data-nosnippet>166</a>            <span class="string">"{}/verify/{}"</span>,
-<a href=#167 id=167 data-nosnippet>167</a>            gateway.to_string().trim_end_matches(<span class="string">'/'</span>),
-<a href=#168 id=168 data-nosnippet>168</a>            invoice.payment_hash()
-<a href=#169 id=169 data-nosnippet>169</a>        )),
+<a href=#165 id=165 data-nosnippet>165</a>        verify: <span class="prelude-val">Some</span>(
+<a href=#166 id=166 data-nosnippet>166</a>            gateway
+<a href=#167 id=167 data-nosnippet>167</a>                .join_path(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"verify/{}"</span>, invoice.payment_hash()))
+<a href=#168 id=168 data-nosnippet>168</a>                .to_string(),
+<a href=#169 id=169 data-nosnippet>169</a>        ),
 <a href=#170 id=170 data-nosnippet>170</a>    }))
 <a href=#171 id=171 data-nosnippet>171</a>}
 <a href=#172 id=172 data-nosnippet>172</a>
