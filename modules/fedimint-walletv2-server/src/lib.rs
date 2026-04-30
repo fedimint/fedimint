@@ -956,6 +956,16 @@ impl Wallet {
 
         assert!(old_consensus_block_count <= new_consensus_block_count);
 
+        debug!(
+            target: LOG_MODULE_WALLETV2,
+            %peer,
+            vote = block_count_vote,
+            old_consensus = old_consensus_block_count,
+            new_consensus = new_consensus_block_count,
+            advanced = new_consensus_block_count - old_consensus_block_count,
+            "Processed block count vote"
+        );
+
         // We do not sync blocks that predate the federation itself.
         if old_consensus_block_count == 0 {
             return Ok(());
@@ -994,6 +1004,9 @@ impl Wallet {
 
             let pks_hash = self.cfg.consensus.bitcoin_pks.consensus_hash();
 
+            let txs_num = block.txdata.len();
+            let mut potential_receives_num: usize = 0;
+
             for tx in block.txdata {
                 dbtx.remove_entry(&UnconfirmedTxKey(tx.compute_txid()))
                     .await;
@@ -1020,9 +1033,28 @@ impl Wallet {
 
                         dbtx.insert_new_entry(&OutputKey(index), &Output(outpoint, tx_out.clone()))
                             .await;
+
+                        debug!(
+                            target: LOG_MODULE_WALLETV2,
+                            output_index = index,
+                            %outpoint,
+                            value_sat = tx_out.value.to_sat(),
+                            height,
+                            "Recorded potential receive"
+                        );
+
+                        potential_receives_num += 1;
                     }
                 }
             }
+
+            debug!(
+                target: LOG_MODULE_WALLETV2,
+                height,
+                txs_num,
+                potential_receives_num,
+                "Scanned block"
+            );
         }
 
         Ok(())
