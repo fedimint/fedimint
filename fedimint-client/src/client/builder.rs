@@ -48,7 +48,7 @@ use fedimint_eventlog::{
 };
 use fedimint_logging::LOG_CLIENT;
 use tokio::sync::{broadcast, watch};
-use tracing::{debug, trace, warn};
+use tracing::{Span, debug, trace, warn};
 
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
@@ -652,6 +652,7 @@ impl ClientBuilder {
         };
 
         let task_group = TaskGroup::new();
+        let client_span = Client::make_client_span(fed_id);
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
@@ -694,6 +695,7 @@ impl ClientBuilder {
             &api,
             &db,
             &task_group,
+            &client_span,
         )
         .await
         .inspect_err(|err| {
@@ -705,31 +707,33 @@ impl ClientBuilder {
             modules: BTreeMap::new(),
         });
 
-        debug!(
-            target: LOG_CLIENT,
-            core = %common_api_versions.core,
-            "Negotiated core API version",
-        );
-        for (module_id, api_version) in &common_api_versions.modules {
-            let kind = config.modules.get(module_id).map(|m| m.kind());
-            let kind_str = kind
-                .as_ref()
-                .map(|k| k.to_string())
-                .unwrap_or_else(|| format!("unknown({module_id})"));
-            let supported = kind
-                .and_then(|k| self.module_inits.get(k))
-                .map(|m| m.supported_api_versions().to_string());
+        client_span.in_scope(|| {
             debug!(
                 target: LOG_CLIENT,
-                module = %kind_str,
-                api = %api_version,
-                supported = %supported.as_deref().unwrap_or("unknown"),
-                "Negotiated module API version",
+                core = %common_api_versions.core,
+                "Negotiated core API version",
             );
-        }
+            for (module_id, api_version) in &common_api_versions.modules {
+                let kind = config.modules.get(module_id).map(|m| m.kind());
+                let kind_str = kind
+                    .as_ref()
+                    .map(|k| k.to_string())
+                    .unwrap_or_else(|| format!("unknown({module_id})"));
+                let supported = kind
+                    .and_then(|k| self.module_inits.get(k))
+                    .map(|m| m.supported_api_versions().to_string());
+                debug!(
+                    target: LOG_CLIENT,
+                    module = %kind_str,
+                    api = %api_version,
+                    supported = %supported.as_deref().unwrap_or("unknown"),
+                    "Negotiated module API version",
+                );
+            }
+        });
 
         // Asynchronously refetch client config and compare with existing
-        Self::load_and_refresh_client_config_static(&config, &api, &db, &task_group);
+        Self::load_and_refresh_client_config_static(&config, &api, &db, &task_group, &client_span);
 
         // Try to cache chain_id if not already cached
         // This is best-effort - if the server doesn't support the endpoint yet, we'll
@@ -782,22 +786,26 @@ impl ClientBuilder {
             for (module_instance_id, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 let Some(module_init) = self.module_inits.get(&kind).cloned() else {
-                    debug!(
-                        target: LOG_CLIENT,
-                        kind=%kind,
-                        instance_id=%module_instance_id,
-                        "Module kind of instance not found in module gens, skipping");
+                    client_span.in_scope(|| {
+                        debug!(
+                            target: LOG_CLIENT,
+                            kind=%kind,
+                            instance_id=%module_instance_id,
+                            "Module kind of instance not found in module gens, skipping");
+                    });
                     continue;
                 };
 
                 let Some(&api_version) = common_api_versions.modules.get(&module_instance_id)
                 else {
-                    warn!(
-                        target: LOG_CLIENT,
-                        kind=%kind,
-                        instance_id=%module_instance_id,
-                        "Module kind of instance has incompatible api version, skipping"
-                    );
+                    client_span.in_scope(|| {
+                        warn!(
+                            target: LOG_CLIENT,
+                            kind=%kind,
+                            instance_id=%module_instance_id,
+                            "Module kind of instance has incompatible api version, skipping"
+                        );
+                    });
                     continue;
                 };
 
@@ -985,7 +993,7 @@ impl ClientBuilder {
             }
         }
 
-        let executor = {
+        let executor = client_span.in_scope(|| {
             let mut executor_builder = Executor::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
@@ -1004,7 +1012,7 @@ impl ClientBuilder {
                 task_group.clone(),
                 log_ordering_wakeup_tx.clone(),
             )
-        };
+        });
 
         let recovery_receiver_init_val = module_recovery_progress_receivers
             .iter()
@@ -1034,6 +1042,7 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             task_group,
+            client_span,
             operation_log: OperationLog::new(db.clone()),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
@@ -1042,63 +1051,55 @@ impl ClientBuilder {
             user_bitcoind_rpc,
             user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
-        client_inner
-            .task_group
-            .spawn_cancellable("MetaService::update_continuously", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .meta_service
-                        .update_continuously(&client_inner)
-                        .await;
-                }
-            });
+        client_inner.spawn_cancellable("MetaService::update_continuously", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .meta_service
+                    .update_continuously(&client_inner)
+                    .await;
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("update-api-announcements", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
-                    run_api_announcement_refresh_task(client_inner.clone()).await
-                }
-            });
+        client_inner.spawn_cancellable("update-api-announcements", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
+                run_api_announcement_refresh_task(client_inner.clone()).await
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("guardian metadata refresh task", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
-                    run_guardian_metadata_refresh_task(client_inner.clone()).await
-                }
-            });
+        client_inner.spawn_cancellable("guardian metadata refresh task", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
+                run_guardian_metadata_refresh_task(client_inner.clone()).await
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("event log ordering task", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
+        client_inner.spawn_cancellable("event log ordering task", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
 
-                    run_event_log_ordering_task(
-                        db.clone(),
-                        log_ordering_wakeup_rx,
-                        log_event_added_tx,
-                        log_event_added_transient_tx,
-                    )
-                    .await
-                }
-            });
+                run_event_log_ordering_task(
+                    db.clone(),
+                    log_ordering_wakeup_rx,
+                    log_event_added_tx,
+                    log_event_added_transient_tx,
+                )
+                .await
+            }
+        });
 
         // If chain_id is not cached yet, spawn a background task to fetch it
         // This handles the case where join/open happened before the server supported
@@ -1111,11 +1112,9 @@ impl ClientBuilder {
             .await
             .is_none()
         {
-            client_inner
-                .task_group
-                .spawn_cancellable("fetch-chain-id", {
-                    let client_inner = client_inner.clone();
-                    async move {
+            client_inner.spawn_cancellable("fetch-chain-id", {
+                let client_inner = client_inner.clone();
+                async move {
                         client_inner.api.wait_for_initialized_connections().await;
                         match client_inner.api.chain_id().await {
                             Ok(chain_id) => {
@@ -1234,6 +1233,7 @@ impl ClientBuilder {
         api: &DynGlobalApi,
         db: &Database,
         task_group: &TaskGroup,
+        client_span: &Span,
     ) {
         let config = config.clone();
         let api = api.clone();
@@ -1241,10 +1241,14 @@ impl ClientBuilder {
         let task_group = task_group.clone();
 
         // Spawn background task to refetch config
-        task_group.spawn_cancellable("refresh_client_config_static", async move {
-            api.wait_for_initialized_connections().await;
-            Self::refresh_client_config_static(&config, &api, &db).await;
-        });
+        task_group.spawn_cancellable_with_span(
+            client_span.clone(),
+            "refresh_client_config_static",
+            async move {
+                api.wait_for_initialized_connections().await;
+                Self::refresh_client_config_static(&config, &api, &db).await;
+            },
+        );
     }
 
     /// Wrapper that handles errors from config refresh with proper logging

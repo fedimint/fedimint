@@ -53,7 +53,9 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::runtime::sleep;
-use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{
+    Elapsed, MaybeSend, MaybeSync, ShuttingDownError, TaskGroup, TaskHandle,
+};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{
@@ -73,9 +75,9 @@ use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, oneshot, watch};
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, info, warn};
+use tracing::{Span, debug, info, warn};
 
 use crate::ClientBuilder;
 use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
@@ -149,6 +151,11 @@ pub struct Client {
     meta_service: Arc<MetaService>,
 
     task_group: TaskGroup,
+
+    /// Long-lived span attached to every task spawned via [`Client::spawn`] /
+    /// [`Client::spawn_cancellable`], so logs from background tasks carry the
+    /// federation prefix.
+    client_span: Span,
 
     /// Updates about client recovery progress
     client_recovery_progress_receiver:
@@ -227,19 +234,16 @@ impl Client {
 
         for peer_id in peers {
             let api = self.api.clone();
-            self.task_group.spawn_cancellable(
-                format!("federation-reconnect-once-{peer_id}"),
-                async move {
-                    if let Err(e) = api.get_peer_connection(peer_id).await {
-                        debug!(
-                            target: LOG_CLIENT_NET_API,
-                            %peer_id,
-                            err = %e.fmt_compact(),
-                            "Failed to connect to peer"
-                        );
-                    }
-                },
-            );
+            self.spawn_cancellable(format!("federation-reconnect-once-{peer_id}"), async move {
+                if let Err(e) = api.get_peer_connection(peer_id).await {
+                    debug!(
+                        target: LOG_CLIENT_NET_API,
+                        %peer_id,
+                        err = %e.fmt_compact(),
+                        "Failed to connect to peer"
+                    );
+                }
+            });
         }
     }
 
@@ -269,34 +273,76 @@ impl Client {
 
         for peer_id in peers {
             let api = self.api.clone();
-            self.task_group.spawn_cancellable(
-                format!("federation-reconnect-{peer_id}"),
-                async move {
-                    loop {
-                        match api.get_peer_connection(peer_id).await {
-                            Ok(conn) => {
-                                conn.await_disconnection().await;
-                            }
-                            Err(e) => {
-                                // Connection failed, backoff is handled inside
-                                // get_or_create_connection
-                                debug!(
-                                    target: LOG_CLIENT_NET_API,
-                                    %peer_id,
-                                    err = %e.fmt_compact(),
-                                    "Failed to connect to peer, will retry"
-                                );
-                            }
+            self.spawn_cancellable(format!("federation-reconnect-{peer_id}"), async move {
+                loop {
+                    match api.get_peer_connection(peer_id).await {
+                        Ok(conn) => {
+                            conn.await_disconnection().await;
+                        }
+                        Err(e) => {
+                            // Connection failed, backoff is handled inside
+                            // get_or_create_connection
+                            debug!(
+                                target: LOG_CLIENT_NET_API,
+                                %peer_id,
+                                err = %e.fmt_compact(),
+                                "Failed to connect to peer, will retry"
+                            );
                         }
                     }
-                },
-            );
+                }
+            });
         }
     }
 
     /// Get the [`TaskGroup`] that is tied to Client's lifetime.
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
+    }
+
+    /// Construct the long-lived span attached to all tasks spawned by this
+    /// client.
+    ///
+    /// `parent: None` keeps the span tree shallow; `runtime::spawn` already
+    /// wraps each task in its own `spawn(task=…)` span, so log events from
+    /// these tasks carry both `task` and `fed_id`.
+    pub(crate) fn make_client_span(federation_id: FederationId) -> Span {
+        tracing::info_span!(
+            target: LOG_CLIENT,
+            parent: None,
+            "client",
+            fed_id = %federation_id.to_prefix(),
+        )
+    }
+
+    /// Spawn a cancellable task on the client's task group, instrumented with
+    /// the client's [`Span`] so all events from the task carry `fed_id`.
+    pub(crate) fn spawn_cancellable<R>(
+        &self,
+        name: impl Into<String>,
+        future: impl Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_cancellable_with_span(self.client_span.clone(), name, future)
+    }
+
+    /// Spawn a task on the client's task group, parented to the client's
+    /// [`Span`] so all events from the task carry `fed_id` (including the
+    /// task lifecycle events emitted by [`TaskGroup`] itself).
+    pub(crate) fn spawn<Fut, R>(
+        &self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_with_span(self.client_span.clone(), name, f)
     }
 
     /// Returns all registered Prometheus metrics encoded in text format.
@@ -392,11 +438,14 @@ impl Client {
     }
 
     pub fn start_executor(self: &Arc<Self>) {
-        debug!(
-            target: LOG_CLIENT,
-            "Starting fedimint client executor",
-        );
-        self.executor.start_executor(self.context_gen());
+        self.client_span.in_scope(|| {
+            debug!(
+                target: LOG_CLIENT,
+                "Starting fedimint client executor",
+            );
+        });
+        self.executor
+            .start_executor(self.context_gen(), self.client_span.clone());
     }
 
     pub fn federation_id(&self) -> FederationId {
@@ -1321,6 +1370,7 @@ impl Client {
             &self.api,
             &self.db,
             &self.task_group,
+            &self.client_span,
         )
         .await
     }
@@ -1330,13 +1380,14 @@ impl Client {
     ///
     /// This is a compromise, so we not have to wait for version discovery to
     /// complete every time a [`Client`] is being built.
-    async fn load_and_refresh_common_api_version_static(
+    pub(crate) async fn load_and_refresh_common_api_version_static(
         config: &ClientConfig,
         module_init: &ClientModuleInitRegistry,
         connectors: ConnectorRegistry,
         api: &DynGlobalApi,
         db: &Database,
         task_group: &TaskGroup,
+        client_span: &Span,
     ) -> anyhow::Result<ApiVersionSet> {
         if let Some(v) = db
             .begin_transaction_nc()
@@ -1344,20 +1395,24 @@ impl Client {
             .get_value(&CachedApiVersionSetKey)
             .await
         {
-            debug!(
-                target: LOG_CLIENT,
-                "Found existing cached common api versions"
-            );
+            client_span.in_scope(|| {
+                debug!(
+                    target: LOG_CLIENT,
+                    "Found existing cached common api versions"
+                );
+            });
             let config = config.clone();
             let client_module_init = module_init.clone();
             let api = api.clone();
             let db = db.clone();
             let task_group = task_group.clone();
+            let client_span_owned = client_span.clone();
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            task_group
-                .clone()
-                .spawn_cancellable("refresh_common_api_version_static", async move {
+            task_group.clone().spawn_cancellable_with_span(
+                client_span.clone(),
+                "refresh_common_api_version_static",
+                async move {
                     connectors.wait_for_initialized_connections().await;
 
                     if let Err(error) = Self::refresh_common_api_version_static(
@@ -1366,6 +1421,7 @@ impl Client {
                         &api,
                         &db,
                         task_group,
+                        &client_span_owned,
                         false,
                     )
                     .await
@@ -1375,7 +1431,8 @@ impl Client {
                             err = %error.fmt_compact_anyhow(), "Failed to discover common api versions"
                         );
                     }
-                });
+                },
+            );
 
             return Ok(v.0);
         }
@@ -1390,6 +1447,7 @@ impl Client {
             api,
             db,
             task_group.clone(),
+            client_span,
             true,
         )
         .await
@@ -1401,6 +1459,7 @@ impl Client {
         api: &DynGlobalApi,
         db: &Database,
         task_group: TaskGroup,
+        client_span: &Span,
         block_until_ok: bool,
     ) -> anyhow::Result<ApiVersionSet> {
         debug!(
@@ -1411,14 +1470,16 @@ impl Client {
         let (num_responses_sender, mut num_responses_receiver) = tokio::sync::watch::channel(0);
         let num_peers = NumPeers::from(config.global.api_endpoints.len());
 
-        task_group.spawn_cancellable("refresh peers api versions", {
+        task_group.spawn_cancellable_with_span(
+            client_span.clone(),
+            "refresh peers api versions",
             Client::fetch_common_api_versions_from_all_peers(
                 num_peers,
                 api.clone(),
                 db.clone(),
                 num_responses_sender,
-            )
-        });
+            ),
+        );
 
         let common_api_versions = loop {
             // Wait to collect enough answers before calculating a set of common api
@@ -1598,18 +1659,17 @@ impl Client {
             .iter_modules_id_kind()
             .map(|(id, kind)| (id, kind.to_string()))
             .collect();
-        self.task_group
-            .spawn("module recoveries", |_task_handle| async {
-                Self::run_module_recoveries_task(
-                    db,
-                    log_ordering_wakeup_tx,
-                    recovery_sender,
-                    module_recoveries,
-                    module_recovery_progress_receivers,
-                    module_kinds,
-                )
-                .await;
-            });
+        self.spawn("module recoveries", |_task_handle| async {
+            Self::run_module_recoveries_task(
+                db,
+                log_ordering_wakeup_tx,
+                recovery_sender,
+                module_recoveries,
+                module_recovery_progress_receivers,
+                module_kinds,
+            )
+            .await;
+        });
     }
 
     async fn run_module_recoveries_task(

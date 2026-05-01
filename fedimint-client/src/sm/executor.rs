@@ -383,7 +383,7 @@ impl Executor {
     ///
     /// ## Panics
     /// If called more than once.
-    pub fn start_executor(&self, context_gen: ContextGen) {
+    pub fn start_executor(&self, context_gen: ContextGen, client_span: tracing::Span) {
         let Some((shutdown_receiver, sm_update_rx)) = self
             .inner
             .state
@@ -395,37 +395,41 @@ impl Executor {
         };
 
         let task_runner_inner = self.inner.clone();
-        let _handle = self.inner.client_task_group.spawn("sm-executor", |task_handle| async move {
-            let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
-            let task_group_shutdown_rx = task_handle.make_shutdown_rx();
-            select! {
-                () = task_group_shutdown_rx => {
-                    debug!(
-                        target: LOG_CLIENT_REACTOR,
-                        "Shutting down state machine executor runner due to task group shutdown signal"
-                    );
-                },
-                shutdown_happened_sender = shutdown_receiver => {
-                    match shutdown_happened_sender {
-                        Ok(()) => {
-                            debug!(
-                                target: LOG_CLIENT_REACTOR,
-                                "Shutting down state machine executor runner due to explicit shutdown signal"
-                            );
-                        },
-                        Err(_) => {
-                            warn!(
-                                target: LOG_CLIENT_REACTOR,
-                                "Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"
-                            );
+        let _handle = self.inner.client_task_group.spawn_with_span(
+            client_span,
+            "sm-executor",
+            |task_handle| async move {
+                let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
+                let task_group_shutdown_rx = task_handle.make_shutdown_rx();
+                select! {
+                    () = task_group_shutdown_rx => {
+                        debug!(
+                            target: LOG_CLIENT_REACTOR,
+                            "Shutting down state machine executor runner due to task group shutdown signal"
+                        );
+                    },
+                    shutdown_happened_sender = shutdown_receiver => {
+                        match shutdown_happened_sender {
+                            Ok(()) => {
+                                debug!(
+                                    target: LOG_CLIENT_REACTOR,
+                                    "Shutting down state machine executor runner due to explicit shutdown signal"
+                                );
+                            },
+                            Err(_) => {
+                                warn!(
+                                    target: LOG_CLIENT_REACTOR,
+                                    "Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"
+                                );
+                            }
                         }
-                    }
-                },
-                () = executor_runner => {
-                    error!(target: LOG_CLIENT_REACTOR, "State machine executor runner exited unexpectedly!");
-                },
-            };
-        });
+                    },
+                    () = executor_runner => {
+                        error!(target: LOG_CLIENT_REACTOR, "State machine executor runner exited unexpectedly!");
+                    },
+                };
+            },
+        );
     }
 
     /// Stops the background task that runs the state machines.
