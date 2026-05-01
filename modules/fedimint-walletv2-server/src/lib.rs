@@ -45,9 +45,8 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
-    api_endpoint,
+    Amounts, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, TransactionItemAmounts, api_endpoint,
 };
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
@@ -271,17 +270,6 @@ impl ServerModuleInit for WalletInit {
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 1)],
-        )
     }
 
     fn is_enabled_by_default(&self) -> bool {
@@ -809,7 +797,7 @@ impl ServerModule for Wallet {
         vec![
             api_endpoint! {
                 CONSENSUS_BLOCK_COUNT_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> u64 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -818,7 +806,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 CONSENSUS_FEERATE_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> Option<u64> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -827,7 +815,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 FEDERATION_WALLET_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, _params: ()| -> Option<FederationWallet> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -836,7 +824,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 SEND_FEE_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -845,7 +833,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 RECEIVE_FEE_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -854,7 +842,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 TRANSACTION_ID_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, params: OutPoint| -> Option<Txid> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -863,7 +851,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 OUTPUT_INFO_SLICE_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, params: (u64, u64)| -> Vec<OutputInfo> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -872,7 +860,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 PENDING_TRANSACTION_CHAIN_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> Vec<TxInfo> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -881,7 +869,7 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 TRANSACTION_CHAIN_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> Vec<TxInfo> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;

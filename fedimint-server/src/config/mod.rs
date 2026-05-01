@@ -11,9 +11,10 @@ pub use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
-    ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
@@ -22,7 +23,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
-use fedimint_server_core::{ConfigGenModuleArgs, DynServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, DynServerModule, DynServerModuleInit, ServerModuleInitRegistry,
+};
 use futures::future::select_all;
 use hex::{FromHex, ToHex};
 use peer_handle::PeerHandle;
@@ -81,24 +84,48 @@ impl ServerConfig {
 
     pub(crate) fn supported_api_versions_summary(
         modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-        module_inits: &ServerModuleInitRegistry,
+        module_registry: &ModuleRegistry<DynServerModule>,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: Self::supported_api_versions(),
             modules: modules
                 .iter()
                 .map(|(&id, config)| {
+                    let module = module_registry.get_expect(id);
+                    let api = api_versions_from_endpoints(module.api_endpoints());
                     (
                         id,
-                        module_inits
-                            .get(&config.kind)
-                            .expect("missing module kind gen")
-                            .supported_api_versions(),
+                        SupportedModuleApiVersions {
+                            core_consensus: CORE_CONSENSUS_VERSION,
+                            module_consensus: config.version,
+                            api,
+                        },
                     )
                 })
                 .collect(),
         }
     }
+}
+
+fn api_versions_from_endpoints(
+    endpoints: impl IntoIterator<Item = ApiEndpoint<DynServerModule>>,
+) -> MultiApiVersion {
+    let mut api_map: BTreeMap<u32, u32> = BTreeMap::new();
+    for endpoint in endpoints {
+        let minor = api_map.entry(endpoint.version.major).or_insert(0);
+        *minor = (*minor).max(endpoint.version.minor);
+    }
+
+    if api_map.is_empty() {
+        api_map.insert(0, 0);
+    }
+
+    MultiApiVersion::try_from_iter(
+        api_map
+            .into_iter()
+            .map(|(major, minor)| ApiVersion { major, minor }),
+    )
+    .expect("api versions are grouped by major before constructing MultiApiVersion")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -485,7 +512,7 @@ impl ServerConfig {
 
         // Use legacy module ordering for backwards compatibility tests
         let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
-        let module_iter: Vec<_> = if use_legacy_order {
+        let module_iter: Vec<(&ModuleKind, &DynServerModuleInit)> = if use_legacy_order {
             registry.iter_legacy_order()
         } else {
             registry.iter().collect()
@@ -645,7 +672,7 @@ impl ServerConfig {
 
         // Use legacy module ordering for backwards compatibility tests
         let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
-        let module_iter: Vec<_> = if use_legacy_order {
+        let module_iter: Vec<(&ModuleKind, &DynServerModuleInit)> = if use_legacy_order {
             registry.iter_legacy_order()
         } else {
             registry.iter().collect()
@@ -866,5 +893,48 @@ impl ConfigGenParams {
                 .map(|peer| (*id, peer))
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::module::{ApiEndpoint, ApiVersion};
+    use fedimint_server_core::DynServerModule;
+
+    use super::api_versions_from_endpoints;
+
+    fn make_endpoint(major: u32, minor: u32) -> ApiEndpoint<DynServerModule> {
+        ApiEndpoint {
+            path: "/fake",
+            version: ApiVersion::new(major, minor),
+            handler: Box::new(|_, _, _| Box::pin(async { Ok(serde_json::Value::Null) })),
+        }
+    }
+
+    #[test]
+    fn version_derived_from_endpoints_max_minor() {
+        let endpoints = vec![
+            make_endpoint(0, 1),
+            make_endpoint(0, 3), // highest minor for major 0
+            make_endpoint(0, 2),
+            make_endpoint(1, 0), // separate major
+        ];
+
+        let expected = fedimint_core::module::MultiApiVersion::try_from_iter([
+            ApiVersion::new(0, 3),
+            ApiVersion::new(1, 0),
+        ])
+        .expect("test versions have unique majors");
+
+        assert_eq!(api_versions_from_endpoints(endpoints), expected);
+    }
+
+    #[test]
+    fn version_derived_from_empty_endpoints_defaults_to_zero() {
+        let expected =
+            fedimint_core::module::MultiApiVersion::try_from_iter([ApiVersion::new(0, 0)])
+                .expect("test versions have unique majors");
+
+        assert_eq!(api_versions_from_endpoints(vec![]), expected);
     }
 }

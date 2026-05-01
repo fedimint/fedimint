@@ -498,7 +498,7 @@ pub trait TypedApiEndpoint {
 
     /// example: /transaction
     const PATH: &'static str;
-
+    const VERSION: ApiVersion;
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
@@ -541,6 +541,7 @@ macro_rules! __api_endpoint {
         impl $crate::module::TypedApiEndpoint for Endpoint {
             #[allow(deprecated)]
             const PATH: &'static str = $path;
+            const VERSION: $crate::module::ApiVersion = $version_introduced;
             type State = $state_ty;
             type Param = $param_ty;
             type Response = $resp_ty;
@@ -550,10 +551,6 @@ macro_rules! __api_endpoint {
                 $context: &'context mut $crate::module::ApiEndpointContext,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
-                {
-                    // just to enforce the correct type
-                    const __API_VERSION: $crate::module::ApiVersion = $version_introduced;
-                }
                 $body
             }
         }
@@ -585,6 +582,7 @@ pub struct ApiEndpoint<M> {
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
     pub handler: HandlerFn<M>,
+    pub version: ApiVersion,
 }
 
 /// Global request ID used for logging
@@ -623,6 +621,7 @@ impl ApiEndpoint<()> {
 
         ApiEndpoint {
             path: E::PATH,
+            version: E::VERSION,
             handler: Box::new(|m, mut context, request| {
                 Box::pin(async move {
                     let request = request
