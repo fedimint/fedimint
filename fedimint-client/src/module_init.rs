@@ -22,6 +22,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
+use tracing::Span;
 
 use crate::sm::notifier::Notifier;
 
@@ -56,6 +57,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
         task_group: TaskGroup,
+        client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
     ) -> anyhow::Result<()>;
@@ -76,6 +78,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        client_span: Span,
         connector_registry: ConnectorRegistry,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
@@ -126,6 +129,7 @@ where
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
         task_group: TaskGroup,
+        client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
     ) -> anyhow::Result<()> {
@@ -160,6 +164,7 @@ where
                 ),
                 progress_tx,
                 task_group,
+                client_span,
                 user_bitcoind_rpc,
                 user_bitcoind_rpc_no_chain_id,
             },
@@ -184,6 +189,7 @@ where
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        client_span: Span,
         connector_registry: ConnectorRegistry,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
@@ -211,6 +217,7 @@ where
                     module_db,
                 ),
                 task_group,
+                client_span,
                 connector_registry,
                 user_bitcoind_rpc,
                 user_bitcoind_rpc_no_chain_id,

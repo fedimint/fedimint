@@ -12,12 +12,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, CommonModuleInit, ModuleInit, MultiApiVersion};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{MaybeSend, ShuttingDownError, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{ChainId, NumPeers, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT;
-use tracing::warn;
+use tokio::sync::oneshot;
+use tracing::{Span, warn};
 
 use super::ClientContext;
 use super::recovery::RecoveryProgress;
@@ -61,6 +62,11 @@ where
     pub module_api: DynModuleApi,
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub task_group: TaskGroup,
+    /// Long-lived span carrying `fed_id`. Use [`Self::spawn_cancellable`] /
+    /// [`Self::spawn`] (or pass [`Self::client_span`] to
+    /// [`TaskGroup::spawn_cancellable_with_span`]) so log events from
+    /// background tasks carry the federation prefix.
+    pub client_span: Span,
     pub connector_registry: ConnectorRegistry,
     /// User-provided Bitcoin RPC client
     ///
@@ -141,6 +147,40 @@ where
         &self.task_group
     }
 
+    /// Long-lived span identifying this client (with `fed_id`).
+    pub fn client_span(&self) -> &Span {
+        &self.client_span
+    }
+
+    /// Spawn a cancellable task on the client's task group, parented to the
+    /// client's span so all events from the task carry `fed_id` (including
+    /// the lifecycle events emitted by [`TaskGroup`] itself).
+    pub fn spawn_cancellable<R>(
+        &self,
+        name: impl Into<String>,
+        future: impl std::future::Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_cancellable_with_span(self.client_span.clone(), name, future)
+    }
+
+    /// Spawn a task on the client's task group, parented to the client's span.
+    pub fn spawn<Fut, R>(
+        &self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: std::future::Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_with_span(self.client_span.clone(), name, f)
+    }
+
     pub fn connector_registry(&self) -> &ConnectorRegistry {
         &self.connector_registry
     }
@@ -181,6 +221,8 @@ where
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub progress_tx: tokio::sync::watch::Sender<RecoveryProgress>,
     pub task_group: TaskGroup,
+    /// See [`ClientModuleInitArgs::client_span`].
+    pub client_span: Span,
     /// User-provided Bitcoin RPC client
     ///
     /// If set by the application using `ClientBuilder::with_bitcoind_rpc`,
@@ -218,6 +260,39 @@ where
 
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
+    }
+
+    /// Long-lived span identifying this client (with `fed_id`).
+    pub fn client_span(&self) -> &Span {
+        &self.client_span
+    }
+
+    /// Spawn a cancellable task on the client's task group, parented to the
+    /// client's span so all events from the task carry `fed_id`.
+    pub fn spawn_cancellable<R>(
+        &self,
+        name: impl Into<String>,
+        future: impl std::future::Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_cancellable_with_span(self.client_span.clone(), name, future)
+    }
+
+    /// Spawn a task on the client's task group, parented to the client's span.
+    pub fn spawn<Fut, R>(
+        &self,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: std::future::Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
+        self.task_group
+            .spawn_with_span(self.client_span.clone(), name, f)
     }
 
     pub fn core_api_version(&self) -> &ApiVersion {

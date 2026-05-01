@@ -719,7 +719,7 @@ impl LightningClientModule {
         let secp = Secp256k1::new();
 
         let new_recurring_payment_code = Arc::new(Notify::new());
-        args.task_group().spawn_cancellable(
+        args.spawn_cancellable(
             "Recurring payment sync",
             Self::scan_recurring_payment_code_invoices(
                 args.context(),

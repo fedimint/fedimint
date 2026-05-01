@@ -279,6 +279,7 @@ impl ClientModuleInit for LightningClientInit {
             self.custom_meta_fn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
+            args.client_span(),
         ))
     }
 
@@ -378,6 +379,7 @@ impl LightningClientModule {
         custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
         admin_auth: Option<ApiAuth>,
         task_group: &TaskGroup,
+        client_span: &tracing::Span,
     ) -> Self {
         let module = Self {
             federation_id,
@@ -395,21 +397,25 @@ impl LightningClientModule {
             admin_auth,
         };
 
-        module.spawn_receive_lnurl_task(custom_meta_fn, task_group);
+        module.spawn_receive_lnurl_task(custom_meta_fn, task_group, client_span);
 
-        module.spawn_gateway_map_update_task(task_group);
+        module.spawn_gateway_map_update_task(task_group, client_span);
 
         module
     }
 
-    fn spawn_gateway_map_update_task(&self, task_group: &TaskGroup) {
+    fn spawn_gateway_map_update_task(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
         let api = self.module_api.clone();
 
-        task_group.spawn_cancellable("gateway_map_update_task", async move {
-            api.wait_for_initialized_connections().await;
-            module.update_gateway_map().await;
-        });
+        task_group.spawn_cancellable_with_span(
+            client_span.clone(),
+            "gateway_map_update_task",
+            async move {
+                api.wait_for_initialized_connections().await;
+                module.update_gateway_map().await;
+            },
+        );
     }
 
     async fn update_gateway_map(&self) {
@@ -1098,16 +1104,21 @@ impl LightningClientModule {
         &self,
         custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
         task_group: &TaskGroup,
+        client_span: &tracing::Span,
     ) {
         let module = self.clone();
         let api = self.module_api.clone();
 
-        task_group.spawn_cancellable("receive_lnurl_task", async move {
-            api.wait_for_initialized_connections().await;
-            loop {
-                module.receive_lnurl(custom_meta_fn()).await;
-            }
-        });
+        task_group.spawn_cancellable_with_span(
+            client_span.clone(),
+            "receive_lnurl_task",
+            async move {
+                api.wait_for_initialized_connections().await;
+                loop {
+                    module.receive_lnurl(custom_meta_fn()).await;
+                }
+            },
+        );
     }
 
     async fn receive_lnurl(&self, custom_meta: Value) {

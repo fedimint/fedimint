@@ -828,6 +828,7 @@ impl ClientBuilder {
                         let user_bitcoind_rpc = user_bitcoind_rpc.clone();
                         let user_bitcoind_rpc_no_chain_id =
                             self.bitcoind_rpc_no_chain_id_factory.clone();
+                        let client_span = client_span.clone();
                         (
                             Box::pin(async move {
                                 module_init
@@ -847,6 +848,7 @@ impl ClientBuilder {
                                         snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
+                                        client_span,
                                         user_bitcoind_rpc,
                                         user_bitcoind_rpc_no_chain_id,
                                     )
@@ -946,6 +948,7 @@ impl ClientBuilder {
                                 api.clone(),
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
+                                client_span.clone(),
                                 connectors.clone(),
                                 user_bitcoind_rpc.clone(),
                                 self.bitcoind_rpc_no_chain_id_factory.clone(),
