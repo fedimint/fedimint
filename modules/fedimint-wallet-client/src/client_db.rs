@@ -20,6 +20,7 @@ pub enum DbKeyPrefix {
     RecoveryFinalized = 0x2f,
     RecoveryState = 0x30,
     SupportsSafeDeposit = 0x31,
+    PegInPoolCursor = 0x32,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -209,4 +210,19 @@ impl_db_record!(
 impl_db_lookup!(
     key = SupportsSafeDepositKey,
     query_prefix = SupportsSafeDepositPrefix
+);
+
+/// Round-robin cursor for
+/// [`crate::WalletClientModule::allocate_deposit_address_pooled`].
+///
+/// Stores the [`TweakIdx`] of the most recently reused unused address. The
+/// next reuse picks the smallest unused tweak with `tweak_idx > cursor`,
+/// wrapping back to the smallest unused tweak when none exists.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct PegInPoolCursorKey;
+
+impl_db_record!(
+    key = PegInPoolCursorKey,
+    value = TweakIdx,
+    db_prefix = DbKeyPrefix::PegInPoolCursor,
 );
