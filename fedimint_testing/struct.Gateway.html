@@ -286,7 +286,15 @@ withdrawal. Used by the UI for two-step withdrawal confirmation.</p>
     __arg1: <a class="struct" href="../fedimint_gateway_common/struct.PaymentLogPayload.html" title="struct fedimint_gateway_common::PaymentLogPayload">PaymentLogPayload</a>,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="../fedimint_gateway_common/struct.PaymentLogResponse.html" title="struct fedimint_gateway_common::PaymentLogResponse">PaymentLogResponse</a>, AdminGatewayError&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     'life0: 'async_trait,
-    <a class="struct" href="struct.Gateway.html" title="struct fedimint_testing::Gateway">Gateway</a>: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Queries the client log for payment events and returns to the user.</p>
+    <a class="struct" href="struct.Gateway.html" title="struct fedimint_testing::Gateway">Gateway</a>: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Queries the client log for payment events and returns to the user.
+Returns a paginated list of gateway payment-related events, ordered from
+newest to oldest.</p>
+<p>If <code>event_kinds</code> is empty, only events matching <code>ALL_GATEWAY_EVENTS</code>
+are returned — this is <strong>not</strong> equivalent to “all events”. Other
+internal events (e.g. <code>tx-created</code>, <code>NoteCreated</code>) share the same event
+log and consume IDs, so returned event IDs may be non-contiguous.</p>
+<p>Pagination works backwards from <code>end_position</code> (or the log tip if
+<code>None</code>), returning at most <code>pagination_size</code> matching events.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.handle_set_mnemonic_msg" class="method trait-impl"><a href="#method.handle_set_mnemonic_msg" class="anchor">§</a><h4 class="code-header">fn <a class="fn">handle_set_mnemonic_msg</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
     payload: <a class="struct" href="../fedimint_gateway_common/struct.SetMnemonicPayload.html" title="struct fedimint_gateway_common::SetMnemonicPayload">SetMnemonicPayload</a>,
