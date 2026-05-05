@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>            .without_auth()
 <a href=#76 id=76 data-nosnippet>76</a>            .map_err(|()| <span class="macro">anyhow!</span>(<span class="string">"Failed to strip auth from Bitcoin Rpc Url"</span>))<span class="question-mark">?
 <a href=#77 id=77 data-nosnippet>77</a>            </span>.to_string();
-<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span>wallet_name = <span class="string">""</span>;
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span>wallet_name = <span class="string">"default"</span>;
 <a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">let </span>host = <span class="macro">format!</span>(<span class="string">"{host}wallet/{wallet_name}"</span>);
 <a href=#80 id=80 data-nosnippet>80</a>
 <a href=#81 id=81 data-nosnippet>81</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"bitcoind host: {:?}, auth: {:?}"</span>, <span class="kw-2">&amp;</span>host, auth);
@@ -124,7 +124,7 @@
 <a href=#124 id=124 data-nosnippet>124</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting up bitcoind..."</span>);
 <a href=#125 id=125 data-nosnippet>125</a>        <span class="comment">// create RPC wallet
 <a href=#126 id=126 data-nosnippet>126</a>        </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
-<a href=#127 id=127 data-nosnippet>127</a>            <span class="kw">match </span>block_in_place(|| client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)) {
+<a href=#127 id=127 data-nosnippet>127</a>            <span class="kw">match </span>block_in_place(|| client.create_wallet(<span class="string">"default"</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)) {
 <a href=#128 id=128 data-nosnippet>128</a>                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
 <a href=#129 id=129 data-nosnippet>129</a>                    <span class="kw">break</span>;
 <a href=#130 id=130 data-nosnippet>130</a>                }
