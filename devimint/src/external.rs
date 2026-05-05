@@ -75,7 +75,7 @@ impl Bitcoind {
             .without_auth()
             .map_err(|()| anyhow!("Failed to strip auth from Bitcoin Rpc Url"))?
             .to_string();
-        let wallet_name = "";
+        let wallet_name = "default";
         let host = format!("{host}wallet/{wallet_name}");
 
         debug!(target: LOG_DEVIMINT, "bitcoind host: {:?}, auth: {:?}", &host, auth);
@@ -124,7 +124,7 @@ impl Bitcoind {
         debug!(target: LOG_DEVIMINT, "Setting up bitcoind...");
         // create RPC wallet
         for attempt in 0.. {
-            match block_in_place(|| client.create_wallet("", None, None, None, None)) {
+            match block_in_place(|| client.create_wallet("default", None, None, None, None)) {
                 Ok(_) => {
                     break;
                 }
