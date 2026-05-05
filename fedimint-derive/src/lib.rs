@@ -8,8 +8,8 @@ use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    Attribute, Data, DataEnum, DataStruct, DeriveInput, Fields, Index, Lit, Token, Variant,
-    parse_macro_input,
+    Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, Index, ItemFn, Lit, Token,
+    Variant, parse_macro_input,
 };
 
 fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
@@ -443,4 +443,90 @@ fn derive_named_decode_block(
             }
         }
     }
+}
+
+/// Instruments a function body with an existing `tracing::Span`, so every log
+/// event and every `.await` inside the function automatically inherits the
+/// span's fields (e.g. `fed_id`).
+///
+/// The argument is an expression that evaluates to a `Span` (typically a struct
+/// field like `self.client_span`). The span is **cloned** once at entry.
+///
+/// # Examples
+///
+/// ```ignore
+/// impl Client {
+///     #[instrument_in_span(self.client_span)]
+///     async fn refresh(&self) -> Result<()> {
+///         debug!("refreshing");          // carries fed_id
+///         self.do_work().await?;
+///         debug!("done");                // still carries fed_id
+///         Ok(())
+///     }
+///
+///     #[instrument_in_span(self.client_span)]
+///     fn start(&self) {
+///         debug!("starting");            // carries fed_id
+///     }
+/// }
+/// ```
+///
+/// # How it works
+///
+/// **Async functions** are wrapped with `tracing::Instrument::instrument`
+/// so the span is active across `.await` points:
+///
+/// ```ignore
+/// async fn method(&self) -> R {
+///     let __span = self.client_span.clone();
+///     async move { /* body */ }.instrument(__span).await
+/// }
+/// ```
+///
+/// **Sync functions** use `tracing::Span::in_scope`:
+///
+/// ```ignore
+/// fn method(&self) -> R {
+///     let __span = self.client_span.clone();
+///     __span.in_scope(move || { /* body */ })
+/// }
+/// ```
+///
+/// # Limitations
+///
+/// Sync functions wrap the body in a `move` closure.  Labeled `break` or
+/// `continue` targeting a loop *outside* the annotated function will not
+/// compile because the closure boundary prevents crossing labels.
+#[proc_macro_attribute]
+pub fn instrument_in_span(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let span_expr: Expr = parse_macro_input!(attr as Expr);
+    let input_fn: ItemFn = parse_macro_input!(item as ItemFn);
+
+    let attrs = &input_fn.attrs;
+    let vis = &input_fn.vis;
+    let sig = &input_fn.sig;
+    let body = &input_fn.block;
+
+    let output = if sig.asyncness.is_some() {
+        quote! {
+            #(#attrs)*
+            #vis #sig {
+                let __instrument_span: ::tracing::Span = ::core::clone::Clone::clone(&#span_expr);
+                ::tracing::Instrument::instrument(
+                    async move #body,
+                    __instrument_span,
+                ).await
+            }
+        }
+    } else {
+        quote! {
+            #(#attrs)*
+            #vis #sig {
+                let __instrument_span: ::tracing::Span = ::core::clone::Clone::clone(&#span_expr);
+                ::tracing::Span::in_scope(&__instrument_span, move || #body)
+            }
+        }
+    };
+
+    output.into()
 }

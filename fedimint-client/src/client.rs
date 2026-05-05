@@ -299,6 +299,17 @@ impl Client {
         &self.task_group
     }
 
+    /// Construct the long-lived span attached to all tasks spawned by this
+    /// client.
+    pub(crate) fn make_client_span(federation_id: FederationId) -> tracing::Span {
+        tracing::info_span!(
+            target: LOG_CLIENT,
+            parent: None,
+            "client",
+            fed_id = %federation_id.to_prefix(),
+        )
+    }
+
     /// Returns all registered Prometheus metrics encoded in text format.
     ///
     /// This can be used by downstream clients to expose metrics via their own
@@ -391,6 +402,7 @@ impl Client {
             .is_some()
     }
 
+    #[fedimint_core::instrument_in_span(self.task_group.span())]
     pub fn start_executor(self: &Arc<Self>) {
         debug!(
             target: LOG_CLIENT,
