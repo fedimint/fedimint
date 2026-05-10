@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::{Context, bail};
 use async_trait::async_trait;
@@ -24,6 +25,51 @@ use fedimint_core::module::{
 /// bytes, roughly doubling the size. We use 2x the raw max as a conservative
 /// upper bound. For a 4-peer federation this is ~1.44 GB.
 const IROH_MAX_RESPONSE_BYTES: usize = ALEPH_BFT_UNIT_BYTE_LIMIT * 3600 * 4 * 2;
+
+/// Wall-clock budget for a single iroh API request to make it through the QUIC
+/// bi-stream (open + write + finish + read response). If exceeded we close the
+/// underlying [`Connection`], which causes [`IConnection::is_connected`] to
+/// return false on the next pool lookup so a fresh connection is established
+/// for the retry. Used for endpoints that respond promptly (`block_count`,
+/// `status`, etc).
+const IROH_REQUEST_TIMEOUT_DEFAULT: Duration = Duration::from_secs(60);
+
+/// Wall-clock budget for an iroh API request to a server-side long-poll
+/// endpoint (`await_*` / `wait_*`). These wait on the server until an event
+/// fires (block height reached, contract cancelled, etc.) before responding,
+/// so they need a generous bound. Set well above realistic mainnet block
+/// intervals; if a long-poll legitimately needs longer than this the upstream
+/// `request_current_consensus_retry` loop will reconnect and retry.
+const IROH_REQUEST_TIMEOUT_LONG_POLL: Duration = Duration::from_secs(60 * 60);
+
+/// Application-level QUIC error code we use when closing a [`Connection`]
+/// after a request timeout. Recorded by the peer as the close reason; chosen
+/// arbitrarily but stable across stable and `iroh_next` impls so the two
+/// emit identical telemetry. The value 1 distinguishes us from a graceful
+/// close (0).
+const IROH_REQUEST_TIMEOUT_ERROR_CODE: u32 = 1;
+const IROH_REQUEST_TIMEOUT_ERROR_REASON: &[u8] = b"request timeout";
+
+/// Request timeout strategy: long-poll endpoints (`await_*` / `wait_*`)
+/// get the long bound, everything else gets the default. The string match
+/// is a heuristic; it covers all currently-defined fedimint long-poll
+/// endpoints and stays correct if new ones follow the existing naming
+/// convention. False positives (a non-long-poll endpoint that happens to
+/// match the prefix) just give that one method a longer leash; the worse
+/// case is a false negative — a long-poll method that doesn't match
+/// either prefix would get the 60s default and fail fast on legitimate
+/// waits, but the upstream retry loop would reconnect and try again.
+fn request_timeout_for_method(method: &ApiMethod) -> Duration {
+    let name = match method {
+        ApiMethod::Core(name) => name.as_str(),
+        ApiMethod::Module(_, name) => name.as_str(),
+    };
+    if name.starts_with("await_") || name.starts_with("wait_") {
+        IROH_REQUEST_TIMEOUT_LONG_POLL
+    } else {
+        IROH_REQUEST_TIMEOUT_DEFAULT
+    }
+}
 use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
@@ -451,25 +497,56 @@ impl IConnection for Connection {
 #[async_trait]
 impl IGuardianConnection for Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
+        let timeout = request_timeout_for_method(&method);
+        let method_str = method.to_string();
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
-        let (mut sink, mut stream) = self
-            .open_bi()
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+        let result = fedimint_core::runtime::timeout(timeout, async {
+            let (mut sink, mut stream) = self
+                .open_bi()
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.write_all(&json)
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            sink.write_all(&json)
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish()
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            sink.finish()
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        let response = stream
-            .read_to_end(IROH_MAX_RESPONSE_BYTES)
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            stream
+                .read_to_end(IROH_MAX_RESPONSE_BYTES)
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))
+        })
+        .await;
+
+        let response = match result {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(err)) => return Err(err),
+            Err(_) => {
+                // The bi-stream stalled past our budget. Close the QUIC
+                // connection so [`Self::is_connected`] (which reads
+                // `close_reason`) starts returning false; the connection
+                // pool's `get_or_init_pool_entry` will then evict this
+                // entry on the next access and the upstream retry loop
+                // will get a fresh connection.
+                warn!(
+                    target: LOG_NET_IROH,
+                    method = %method_str,
+                    timeout_secs = timeout.as_secs(),
+                    "iroh request timed out, closing connection",
+                );
+                self.close(
+                    iroh::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
+                    IROH_REQUEST_TIMEOUT_ERROR_REASON,
+                );
+                return Err(ServerError::Transport(anyhow::anyhow!(
+                    "iroh request {method_str} timed out after {timeout:?}"
+                )));
+            }
+        };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
@@ -493,25 +570,50 @@ impl IConnection for iroh_next::endpoint::Connection {
 #[async_trait]
 impl IGuardianConnection for iroh_next::endpoint::Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
+        let timeout = request_timeout_for_method(&method);
+        let method_str = method.to_string();
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
-        let (mut sink, mut stream) = self
-            .open_bi()
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+        let result = fedimint_core::runtime::timeout(timeout, async {
+            let (mut sink, mut stream) = self
+                .open_bi()
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.write_all(&json)
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            sink.write_all(&json)
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish()
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            sink.finish()
+                .map_err(|e| ServerError::Transport(e.into()))?;
 
-        let response = stream
-            .read_to_end(IROH_MAX_RESPONSE_BYTES)
-            .await
-            .map_err(|e| ServerError::Transport(e.into()))?;
+            stream
+                .read_to_end(IROH_MAX_RESPONSE_BYTES)
+                .await
+                .map_err(|e| ServerError::Transport(e.into()))
+        })
+        .await;
+
+        let response = match result {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(err)) => return Err(err),
+            Err(_) => {
+                warn!(
+                    target: LOG_NET_IROH,
+                    method = %method_str,
+                    timeout_secs = timeout.as_secs(),
+                    "iroh request timed out, closing connection",
+                );
+                self.close(
+                    iroh_next::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
+                    IROH_REQUEST_TIMEOUT_ERROR_REASON,
+                );
+                return Err(ServerError::Transport(anyhow::anyhow!(
+                    "iroh request {method_str} timed out after {timeout:?}"
+                )));
+            }
+        };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
@@ -565,5 +667,104 @@ impl IGatewayConnection for Connection {
                 status
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::module::ApiMethod;
+
+    use super::{
+        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
+    };
+
+    /// Every `await_*` endpoint currently exposed by fedimint modules
+    /// should be classified as long-poll. If a new endpoint is added
+    /// without the prefix it will silently fall through to the default
+    /// 60s budget — this list documents the contract and will surface
+    /// renames as test churn.
+    const AWAIT_ENDPOINTS: &[&str] = &[
+        // fedimint-core
+        "await_output_outcome",
+        "await_outputs_outcomes",
+        "await_session_outcome",
+        "await_signed_session_outcome",
+        "await_transaction",
+        // fedimint-ln-common
+        "await_account",
+        "await_block_height",
+        "await_offer",
+        "await_outgoing_contract_cancelled",
+        "await_preimage_decryption",
+        // fedimint-lnv2-common
+        "await_incoming_contract",
+        "await_incoming_contracts",
+        "await_preimage",
+    ];
+
+    /// A representative sample of prompt endpoints — anything that is
+    /// expected to respond without server-side blocking.
+    const PROMPT_ENDPOINTS: &[&str] = &[
+        "block_count",
+        "session_count",
+        "session_status",
+        "status",
+        "version",
+        "client_config",
+        "audit",
+        "account",
+        "offer",
+        "list_gateways",
+        "submit_transaction",
+        "consensus_block_count",
+    ];
+
+    #[test]
+    fn await_prefix_gets_long_poll_timeout() {
+        for name in AWAIT_ENDPOINTS {
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Core((*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_LONG_POLL,
+                "core endpoint {name} should map to the long-poll timeout"
+            );
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Module(0, (*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_LONG_POLL,
+                "module endpoint {name} should map to the long-poll timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn wait_prefix_also_gets_long_poll_timeout() {
+        // No fedimint endpoint currently uses this prefix, but the
+        // selector accepts it so future additions following the
+        // alternate naming convention don't silently get the default.
+        assert_eq!(
+            request_timeout_for_method(&ApiMethod::Core("wait_for_event".to_owned())),
+            IROH_REQUEST_TIMEOUT_LONG_POLL,
+        );
+    }
+
+    #[test]
+    fn prompt_endpoints_get_default_timeout() {
+        for name in PROMPT_ENDPOINTS {
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Core((*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_DEFAULT,
+                "endpoint {name} should map to the default timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn endpoints_that_merely_contain_await_are_not_misclassified() {
+        // The selector is prefix-based, so an endpoint name with
+        // "await" elsewhere in the string must not get the long
+        // budget by accident.
+        assert_eq!(
+            request_timeout_for_method(&ApiMethod::Core("submit_await_thing".to_owned())),
+            IROH_REQUEST_TIMEOUT_DEFAULT,
+        );
     }
 }
