@@ -1,6 +1,7 @@
 pub mod ldk;
 pub mod lnd;
 pub mod metrics;
+pub mod none;
 
 use std::fmt::Debug;
 use std::str::FromStr;
