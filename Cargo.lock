@@ -3743,6 +3743,7 @@ name = "fedimint-lightning"
 version = "0.12.0-alpha"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bitcoin",
  "fedimint-bip39",

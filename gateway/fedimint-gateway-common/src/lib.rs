@@ -500,6 +500,11 @@ pub enum LightningMode {
         #[arg(long = "ldk-alias", env = FM_LDK_ALIAS_ENV)]
         alias: String,
     },
+    /// Run without a Lightning node. The gateway can still bridge between
+    /// federations it is registered with via internal swap short-circuits, but
+    /// cannot send to or receive from the wider Lightning Network.
+    #[clap(name = "none")]
+    None,
 }
 
 #[derive(Clone)]

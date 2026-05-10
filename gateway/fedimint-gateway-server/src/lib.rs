@@ -101,7 +101,7 @@ use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
     InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, PayInvoiceResponse,
-    PaymentAction, RouteHtlcStream, ldk,
+    PaymentAction, RouteHtlcStream, ldk, none,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::LightningCommonInit;
@@ -959,7 +959,10 @@ impl Gateway {
             .await;
         info!(target: LOG_GATEWAY, "Gateway is running");
 
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+        if matches!(
+            self.lightning_mode,
+            LightningMode::Lnd { .. } | LightningMode::None
+        ) {
             // Re-register the gateway with all federations after connecting to the
             // lightning node
             let mut dbtx = self.gateway_db.begin_transaction_nc().await;
@@ -1682,7 +1685,10 @@ impl Gateway {
     /// include route hints in the registration.
     fn register_clients_timer(&self) {
         // Only spawn background registration thread if gateway is LND
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+        if matches!(
+            self.lightning_mode,
+            LightningMode::Lnd { .. } | LightningMode::None
+        ) {
             info!(target: LOG_GATEWAY, "Spawning register task...");
             let gateway = self.clone();
             let register_task_group = self.task_group.make_subgroup();
@@ -1790,7 +1796,10 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+        if matches!(
+            self.lightning_mode,
+            LightningMode::Lnd { .. } | LightningMode::None
+        ) {
             for registration in self.registrations.values() {
                 self.federation_manager
                     .read()
@@ -1840,6 +1849,15 @@ impl Gateway {
                 })
                 .await
                 .expect("Could not create LDK Node")
+            }
+            LightningMode::None => {
+                let mnemonic = Self::load_mnemonic(&self.gateway_db)
+                    .await
+                    .expect("mnemonic should be set");
+                Box::new(none::GatewayNoneClient::new(
+                    &mnemonic.to_seed(""),
+                    self.network,
+                ))
             }
         }
     }
@@ -2063,8 +2081,10 @@ impl IAdminGateway for Gateway {
         };
 
         Self::check_federation_network(&client, self.network).await?;
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. })
-            && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
+        if matches!(
+            self.lightning_mode,
+            LightningMode::Lnd { .. } | LightningMode::None
+        ) && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
         {
             for registration in self.registrations.values() {
                 lnv1.try_register_with_federation(
@@ -2185,7 +2205,10 @@ impl IAdminGateway for Gateway {
 
         dbtx.commit_tx().await;
 
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+        if matches!(
+            self.lightning_mode,
+            LightningMode::Lnd { .. } | LightningMode::None
+        ) {
             let register_task_group = TaskGroup::new();
 
             self.register_federations(&fed_configs, &register_task_group)
