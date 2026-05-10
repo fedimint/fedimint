@@ -192,8 +192,35 @@ impl Fixtures {
         )
     }
 
-    /// Creates a new Gateway that can be used for module tests.
+    /// Creates a new Gateway that can be used for module tests, backed by
+    /// `FakeLightningTest`.
     pub async fn new_gateway(&self) -> Gateway {
+        let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
+        self.new_gateway_with_lightning(
+            ln_client,
+            LightningMode::Lnd {
+                lnd_rpc_addr: "FakeRpcAddr".to_string(),
+                lnd_tls_cert: "FakeTlsCert".to_string(),
+                lnd_macaroon: "FakeMacaroon".to_string(),
+            },
+        )
+        .await
+    }
+
+    /// Creates a new Gateway with a caller-supplied [`ILnRpcClient`].
+    ///
+    /// Use this when the test needs a specific Lightning backend, e.g.
+    /// [`fedimint_lightning::none::GatewayNoneClient`] for tests that exercise
+    /// the federation-to-federation swap paths under an LN-less gateway.
+    /// `lightning_mode` is recorded on the gateway as it would be in
+    /// production and used by the gateway's UI / status reporting; it does not
+    /// have to match `ln_client` byte-for-byte (the latter is what's actually
+    /// invoked).
+    pub async fn new_gateway_with_lightning(
+        &self,
+        ln_client: Arc<dyn ILnRpcClient>,
+        lightning_mode: LightningMode,
+    ) -> Gateway {
         // Use server_gens.iter() to match the alphabetical order used by the server
         // when assigning module instance IDs (BTreeMap iteration order)
         let module_kinds: Vec<_> = self
@@ -235,8 +262,6 @@ impl Fixtures {
                 .await
                 .expect("Failed to initialize gateway");
 
-        let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
-
         let LightningInfo::Connected {
             public_key: lightning_public_key,
             alias: lightning_alias,
@@ -264,37 +289,27 @@ impl Fixtures {
         ))
         .expect("Failed to parse default esplora server");
 
-        Gateway::builder(
-            // Fixtures does not use real lightning connection, so just fake the connection
-            // parameters
-            LightningMode::Lnd {
-                lnd_rpc_addr: "FakeRpcAddr".to_string(),
-                lnd_tls_cert: "FakeTlsCert".to_string(),
-                lnd_macaroon: "FakeMacaroon".to_string(),
-            },
-            client_builder,
-            gateway_db,
-        )
-        .listen(listen)
-        .api_addr(address)
-        .bcrypt_password_hash(
-            bcrypt::HashParts::from_str(
-                &bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
+        Gateway::builder(lightning_mode, client_builder, gateway_db)
+            .listen(listen)
+            .api_addr(address)
+            .bcrypt_password_hash(
+                bcrypt::HashParts::from_str(
+                    &bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
+                )
+                .unwrap(),
             )
-            .unwrap(),
-        )
-        .network(bitcoin::Network::Regtest)
-        .num_route_hints(0)
-        // Manually set the gateway's state to `Running`. In tests, we don't run the
-        // webserver or intercept HTLCs, so this is necessary for instructing the
-        // gateway that it is connected to the mock Lightning node.
-        .gateway_state(fedimint_gateway_server::GatewayState::Running { lightning_context })
-        .chain_source(ChainSource::Esplora {
-            server_url: esplora_server_url,
-        })
-        .build()
-        .await
-        .expect("Failed to create gateway")
+            .network(bitcoin::Network::Regtest)
+            .num_route_hints(0)
+            // Manually set the gateway's state to `Running`. In tests, we don't run the
+            // webserver or intercept HTLCs, so this is necessary for instructing the
+            // gateway that it is connected to the mock Lightning node.
+            .gateway_state(fedimint_gateway_server::GatewayState::Running { lightning_context })
+            .chain_source(ChainSource::Esplora {
+                server_url: esplora_server_url,
+            })
+            .build()
+            .await
+            .expect("Failed to create gateway")
     }
 
     /// Get a server bitcoin RPC config

@@ -23,7 +23,7 @@ use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
-use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
+use fedimint_gateway_common::{LightningMode, PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
@@ -37,6 +37,8 @@ use fedimint_gwv2_client::events::{
     OutgoingPaymentStarted, OutgoingPaymentSucceeded,
 };
 use fedimint_gwv2_client::{FinalReceiveState, GatewayClientModuleV2};
+use fedimint_lightning::ILnRpcClient;
+use fedimint_lightning::none::GatewayNoneClient;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -130,10 +132,24 @@ async fn multi_federation_test<B>(
 where
     B: Future<Output = anyhow::Result<()>>,
 {
+    multi_federation_test_with_gateway(f, |fixtures| {
+        Box::pin(async move { fixtures.new_gateway().await })
+    })
+    .await
+}
+
+async fn multi_federation_test_with_gateway<B, G>(
+    f: impl FnOnce(Gateway, FederationTest, FederationTest, Arc<dyn BitcoinTest>) -> B + Copy,
+    new_gateway: G,
+) -> anyhow::Result<()>
+where
+    B: Future<Output = anyhow::Result<()>>,
+    G: for<'a> FnOnce(&'a Fixtures) -> std::pin::Pin<Box<dyn Future<Output = Gateway> + 'a>>,
+{
     let fixtures = fixtures();
     let fed1 = fixtures.new_fed_degraded().await;
     let fed2 = fixtures.new_fed_degraded().await;
-    let gateway = fixtures.new_gateway().await;
+    let gateway = new_gateway(&fixtures).await;
 
     f(gateway, fed1, fed2, fixtures.bitcoin()).await?;
     Ok(())
@@ -802,121 +818,156 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     .await
 }
 
+async fn assert_lnv1_cross_fed_direct_swap(
+    gateway: Gateway,
+    fed1: FederationTest,
+    fed2: FederationTest,
+) -> anyhow::Result<()> {
+    let gateway_id = gateway.http_gateway_id().await;
+    let id1 = fed1.invite_code().federation_id();
+    let id2 = fed2.invite_code().federation_id();
+
+    fed1.connect_gateway(&gateway).await;
+    fed2.connect_gateway(&gateway).await;
+
+    // setting specific routing fees for fed1
+    gateway
+        .handle_set_fees_msg(SetFeesPayload {
+            federation_id: Some(id1),
+            lightning_base: Some(Amount::from_msats(10)),
+            lightning_parts_per_million: Some(10000),
+            transaction_base: None,
+            transaction_parts_per_million: None,
+        })
+        .await?;
+
+    send_msats_to_gateway(&gateway, id1, 10_000).await;
+    send_msats_to_gateway(&gateway, id2, 10_000).await;
+
+    let client1 = fed1.new_client().await;
+    // if lightning module is present, update the gateway cache
+    if let Ok(ln_client) = client1.get_first_module::<LightningClientModule>() {
+        let _ = ln_client.update_gateway_cache().await;
+    }
+    let client2 = fed2.new_client().await;
+    // if lightning module is present, update the gateway cache
+    if let Ok(ln_client) = client2.get_first_module::<LightningClientModule>() {
+        let _ = ln_client.update_gateway_cache().await;
+    }
+
+    // Check gateway balances before facilitating direct swap between federations
+    let pre_balances = get_balances(&gateway, [id1, id2].to_vec()).await;
+    assert_eq!(pre_balances[0], 10_000);
+    assert_eq!(pre_balances[1], 10_000);
+
+    let deposit_amt = msats(5_000);
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
+    client1_dummy_module
+        .mock_receive(deposit_amt, AmountUnit::BITCOIN)
+        .await?;
+    assert_eq!(client1.get_balance_for_btc().await?, deposit_amt);
+
+    // User creates invoice in federation 2
+    let invoice_amt = msats(2_500);
+    let ln_module = client2.get_first_module::<LightningClientModule>()?;
+    let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+    let desc = Description::new("description".to_string())?;
+    let (receive_op, invoice, _) = ln_module
+        .create_bolt11_invoice(
+            invoice_amt,
+            Bolt11InvoiceDescription::Direct(desc),
+            None,
+            "test gw swap between federations",
+            lightning_gateway,
+        )
+        .await?;
+    let mut receive_sub = ln_module
+        .subscribe_ln_receive(receive_op)
+        .await?
+        .into_stream();
+
+    // A client pays invoice in federation 1
+    let gateway_client = gateway.select_client(id1).await?.into_value();
+    gateway_pay_valid_invoice(
+        invoice,
+        &client1,
+        &gateway_client,
+        &gateway.http_gateway_id().await,
+    )
+    .await?;
+
+    // A client receives cash via swap in federation 2
+    assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
+    let waiting_payment = receive_sub.ok().await?;
+    assert_matches!(waiting_payment, LnReceiveState::WaitingForPayment { .. });
+    let funded = receive_sub.ok().await?;
+    assert_matches!(funded, LnReceiveState::Funded);
+    let waiting_funds = receive_sub.ok().await?;
+    assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
+    let claimed = receive_sub.ok().await?;
+    assert_matches!(claimed, LnReceiveState::Claimed);
+    assert_eq!(client2.get_balance_for_btc().await?, invoice_amt);
+
+    // Check gateway balances after facilitating direct swap between federations
+    let gateway_fed1_balance = gateway_client.get_balance_for_btc().await?;
+    let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
+    let gateway_fed2_balance = gateway_fed2_client.get_balance_for_btc().await?;
+
+    // Balance in gateway of sending federation is deducted the invoice amount
+    assert_eq!(
+        gateway_fed2_balance.msats,
+        pre_balances[1] - invoice_amt.msats
+    );
+
+    let fee = routing_fees_in_msats(
+        &PaymentFee {
+            base: Amount::from_msats(10),
+            parts_per_million: 10000,
+        },
+        &invoice_amt,
+    );
+
+    // Balance in gateway of receiving federation is increased `invoice_amt` + `fee`
+    assert_eq!(
+        gateway_fed1_balance.msats,
+        pre_balances[0] + invoice_amt.msats + fee
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, fed1, fed2, _| async move {
-        let gateway_id = gateway.http_gateway_id().await;
-        let id1 = fed1.invite_code().federation_id();
-        let id2 = fed2.invite_code().federation_id();
-
-        fed1.connect_gateway(&gateway).await;
-        fed2.connect_gateway(&gateway).await;
-
-        // setting specific routing fees for fed1
-        gateway
-            .handle_set_fees_msg(SetFeesPayload {
-                federation_id: Some(id1),
-                lightning_base: Some(Amount::from_msats(10)),
-                lightning_parts_per_million: Some(10000),
-                transaction_base: None,
-                transaction_parts_per_million: None,
-            })
-            .await?;
-
-        send_msats_to_gateway(&gateway, id1, 10_000).await;
-        send_msats_to_gateway(&gateway, id2, 10_000).await;
-
-        let client1 = fed1.new_client().await;
-        // if lightning module is present, update the gateway cache
-        if let Ok(ln_client) = client1.get_first_module::<LightningClientModule>() {
-            let _ = ln_client.update_gateway_cache().await;
-        }
-        let client2 = fed2.new_client().await;
-        // if lightning module is present, update the gateway cache
-        if let Ok(ln_client) = client2.get_first_module::<LightningClientModule>() {
-            let _ = ln_client.update_gateway_cache().await;
-        }
-
-        // Check gateway balances before facilitating direct swap between federations
-        let pre_balances = get_balances(&gateway, [id1, id2].to_vec()).await;
-        assert_eq!(pre_balances[0], 10_000);
-        assert_eq!(pre_balances[1], 10_000);
-
-        let deposit_amt = msats(5_000);
-        let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
-        client1_dummy_module
-            .mock_receive(deposit_amt, AmountUnit::BITCOIN)
-            .await?;
-        assert_eq!(client1.get_balance_for_btc().await?, deposit_amt);
-
-        // User creates invoice in federation 2
-        let invoice_amt = msats(2_500);
-        let ln_module = client2.get_first_module::<LightningClientModule>()?;
-        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
-        let desc = Description::new("description".to_string())?;
-        let (receive_op, invoice, _) = ln_module
-            .create_bolt11_invoice(
-                invoice_amt,
-                Bolt11InvoiceDescription::Direct(desc),
-                None,
-                "test gw swap between federations",
-                lightning_gateway,
-            )
-            .await?;
-        let mut receive_sub = ln_module
-            .subscribe_ln_receive(receive_op)
-            .await?
-            .into_stream();
-
-        // A client pays invoice in federation 1
-        let gateway_client = gateway.select_client(id1).await?.into_value();
-        gateway_pay_valid_invoice(
-            invoice,
-            &client1,
-            &gateway_client,
-            &gateway.http_gateway_id().await,
-        )
-        .await?;
-
-        // A client receives cash via swap in federation 2
-        assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
-        let waiting_payment = receive_sub.ok().await?;
-        assert_matches!(waiting_payment, LnReceiveState::WaitingForPayment { .. });
-        let funded = receive_sub.ok().await?;
-        assert_matches!(funded, LnReceiveState::Funded);
-        let waiting_funds = receive_sub.ok().await?;
-        assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
-        let claimed = receive_sub.ok().await?;
-        assert_matches!(claimed, LnReceiveState::Claimed);
-        assert_eq!(client2.get_balance_for_btc().await?, invoice_amt);
-
-        // Check gateway balances after facilitating direct swap between federations
-        let gateway_fed1_balance = gateway_client.get_balance_for_btc().await?;
-        let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
-        let gateway_fed2_balance = gateway_fed2_client.get_balance_for_btc().await?;
-
-        // Balance in gateway of sending federation is deducted the invoice amount
-        assert_eq!(
-            gateway_fed2_balance.msats,
-            pre_balances[1] - invoice_amt.msats
-        );
-
-        let fee = routing_fees_in_msats(
-            &PaymentFee {
-                base: Amount::from_msats(10),
-                parts_per_million: 10000,
-            },
-            &invoice_amt,
-        );
-
-        // Balance in gateway of receiving federation is increased `invoice_amt` + `fee`
-        assert_eq!(
-            gateway_fed1_balance.msats,
-            pre_balances[0] + invoice_amt.msats + fee
-        );
-
-        Ok(())
+        assert_lnv1_cross_fed_direct_swap(gateway, fed1, fed2).await
     })
+    .await
+}
+
+/// Same scenario as
+/// [`test_gateway_executes_swaps_between_connected_federations`] but with a
+/// gateway that has no Lightning node attached ([`LightningMode::None`]).
+/// Cross-federation LNv1 swaps must short-circuit before any LN RPC is called,
+/// so the absence of a backend should not affect the outcome.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lnless_gateway_executes_lnv1_swaps_between_connected_federations()
+-> anyhow::Result<()> {
+    multi_federation_test_with_gateway(
+        |gateway, fed1, fed2, _| async move {
+            assert_lnv1_cross_fed_direct_swap(gateway, fed1, fed2).await
+        },
+        |fixtures| {
+            Box::pin(async move {
+                let ln_client: Arc<dyn ILnRpcClient> = Arc::new(GatewayNoneClient::new(
+                    b"test-lnless-gateway-seed",
+                    bitcoin::Network::Regtest,
+                ));
+                fixtures
+                    .new_gateway_with_lightning(ln_client, LightningMode::None)
+                    .await
+            })
+        },
+    )
     .await
 }
 
