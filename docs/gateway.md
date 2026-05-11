@@ -111,7 +111,7 @@ Or copy it from the repository at [`docker/gatewayd/docker-compose.yaml`](../doc
 2. **Generate a password hash:**
 
 ```bash
-docker run fedimint/gatewayd:v0.10.0 gateway-cli create-password-hash YOUR_PASSWORD_HERE | sed 's/\$/$$/g'
+docker run fedimint/gatewayd:v0.11.1 gateway-cli create-password-hash YOUR_PASSWORD_HERE | sed 's/\$/$$/g'
 ```
 
 3. **Configure the gateway:**
