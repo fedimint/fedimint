@@ -311,14 +311,14 @@
 <a href=#311 id=311 data-nosnippet>311</a>            </span>other =&gt; <span class="kw">return </span>other,
 <a href=#312 id=312 data-nosnippet>312</a>        }
 <a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>block_height = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>block_count = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#315 id=315 data-nosnippet>315</a>
 <a href=#316 id=316 data-nosnippet>316</a>        <span class="comment">// Check each block for the tx, starting at the chain tip.
 <a href=#317 id=317 data-nosnippet>317</a>        // Buffer the requests to avoid spamming bitcoind.
 <a href=#318 id=318 data-nosnippet>318</a>        // We're doing this after checking the mempool since the tx should
 <a href=#319 id=319 data-nosnippet>319</a>        // usually be in the mempool, and we don't want to needlessly hit
 <a href=#320 id=320 data-nosnippet>320</a>        // the bitcoind with block requests.
-<a href=#321 id=321 data-nosnippet>321</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>buffered_tx_stream = futures::stream::iter((<span class="number">0</span>..block_height).rev())
+<a href=#321 id=321 data-nosnippet>321</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>buffered_tx_stream = futures::stream::iter((<span class="number">0</span>..block_count).rev())
 <a href=#322 id=322 data-nosnippet>322</a>            .map(|height| <span class="kw">async move </span>{
 <a href=#323 id=323 data-nosnippet>323</a>                <span class="kw">let </span>block_hash = <span class="self">self</span>.get_block_hash(height).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#324 id=324 data-nosnippet>324</a>                <span class="self">self</span>.get_raw_transaction(txid, <span class="prelude-val">Some</span>(block_hash)).<span class="kw">await
