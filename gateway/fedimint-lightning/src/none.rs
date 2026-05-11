@@ -146,7 +146,7 @@ impl ILnRpcClient for GatewayNoneClient {
 
         // No Lightning node, so no HTLCs ever arrive. Hold the stream open
         // until shutdown so the consumer doesn't see end-of-stream.
-        let (_sender, mut receiver) = mpsc::channel::<InterceptPaymentRequest>(0);
+        let (_sender, mut receiver) = mpsc::channel::<InterceptPaymentRequest>(1);
         let stream: BoxStream<'a, InterceptPaymentRequest> = Box::pin(stream! {
             shutdown_receiver.await;
             // Satisfy the type checker; this branch is never taken.
