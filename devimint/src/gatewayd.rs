@@ -793,7 +793,7 @@ impl Gatewayd {
             LightningNode::Lnd(_) => (
                 "gatewayd-lnd".to_string(),
                 process_mgr.globals.FM_PORT_GW_LND,
-                process_mgr.globals.FM_PORT_LND_LISTEN,
+                Some(process_mgr.globals.FM_PORT_LND_LISTEN),
                 process_mgr.globals.FM_PORT_GW_LND_METRICS,
             ),
             LightningNode::Ldk {
@@ -804,13 +804,25 @@ impl Gatewayd {
             } => (
                 name.to_owned(),
                 gw_port.to_owned(),
-                ldk_port.to_owned(),
+                Some(ldk_port.to_owned()),
+                metrics_port.to_owned(),
+            ),
+            LightningNode::None {
+                name,
+                gw_port,
+                metrics_port,
+            } => (
+                name.to_owned(),
+                gw_port.to_owned(),
+                None,
                 metrics_port.to_owned(),
             ),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
-        let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
+        let lightning_node_addr = lightning_node_port
+            .map(|p| format!("127.0.0.1:{p}"))
+            .unwrap_or_default();
         let iroh_endpoint = process_mgr
             .globals
             .gatewayd_overrides
@@ -828,7 +840,6 @@ impl Gatewayd {
                 format!("127.0.0.1:{port}"),
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
-            (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
             (
                 FM_GATEWAY_IROH_LISTEN_ADDR_ENV.to_owned(),
                 format!("127.0.0.1:{}", iroh_endpoint.port()),
@@ -842,6 +853,10 @@ impl Gatewayd {
                 format!("127.0.0.1:{metrics_port}"),
             ),
         ]);
+
+        if let Some(p) = lightning_node_port {
+            gateway_env.insert(FM_PORT_LDK_ENV.to_owned(), p.to_string());
+        }
 
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
 
@@ -921,7 +936,7 @@ impl Gatewayd {
             gw_name,
             log_path,
             gw_port: port,
-            ldk_port: lightning_node_port,
+            ldk_port: lightning_node_port.unwrap_or(0),
             metrics_port,
             gateway_id,
             iroh_gateway_id,
@@ -945,15 +960,14 @@ impl Gatewayd {
         info!(target: LOG_DEVIMINT, "Stopping lightning node");
         match self.ln.clone() {
             LightningNode::Lnd(lnd) => lnd.terminate().await,
-            LightningNode::Ldk {
-                name: _,
-                gw_port: _,
-                ldk_port: _,
-                metrics_port: _,
-            } => {
+            LightningNode::Ldk { .. } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
                 unimplemented!("LDK node termination not implemented")
+            }
+            LightningNode::None { .. } => {
+                // There is no Lightning process to stop for LN-less gateways.
+                unimplemented!("None gateway has no Lightning node to stop")
             }
         }
     }

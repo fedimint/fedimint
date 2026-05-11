@@ -1819,6 +1819,9 @@ pub async fn do_try_create_and_pay_invoice(
         LightningNodeType::Ldk => {
             unimplemented!("do_try_create_and_pay_invoice not implemented for LDK yet");
         }
+        LightningNodeType::None => {
+            unreachable!("gw_lnd is the LND gateway, never None");
+        }
     }
     Ok(())
 }
