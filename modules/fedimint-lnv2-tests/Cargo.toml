@@ -15,6 +15,10 @@ path = "bin/tests.rs"
 name = "lnv1-lnv2-swap-tests"
 path = "bin/swap_tests.rs"
 
+[[bin]]
+name = "cross-fed-swap-tests"
+path = "bin/cross_fed_swap_tests.rs"
+
 [[test]]
 name = "fedimint_lnv2_tests"
 path = "tests/tests.rs"
@@ -41,6 +45,7 @@ fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-portalloc = { workspace = true }
 fedimint-testing = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }

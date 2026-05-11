@@ -3990,6 +3990,7 @@ dependencies = [
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-logging",
+ "fedimint-portalloc",
  "fedimint-testing",
  "futures",
  "itertools 0.14.0",

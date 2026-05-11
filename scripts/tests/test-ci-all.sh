@@ -175,6 +175,11 @@ function lnv1_lnv2_swap() {
 }
 export -f lnv1_lnv2_swap
 
+function cross_fed_swap() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/cross-fed-swap-test.sh
+}
+export -f cross_fed_swap
+
 function walletv2_module() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh
 }
@@ -463,6 +468,7 @@ tests_to_run_in_parallel+=(
   "lnv2_module_lnurl_pay"
   "lnv2_module_lnurl_recovery"
   "lnv1_lnv2_swap"
+  "cross_fed_swap"
   "walletv2_module"
   "mintv2_module_test"
   "devimint_cli_test"
