@@ -5,6 +5,8 @@ use std::str::FromStr;
 pub enum LightningNodeType {
     Lnd,
     Ldk,
+    /// Gateway running without a Lightning node attached.
+    None,
 }
 
 impl fmt::Display for LightningNodeType {
@@ -12,6 +14,7 @@ impl fmt::Display for LightningNodeType {
         match self {
             LightningNodeType::Lnd => write!(f, "lnd"),
             LightningNodeType::Ldk => write!(f, "ldk"),
+            LightningNodeType::None => write!(f, "none"),
         }
     }
 }
@@ -23,6 +26,7 @@ impl FromStr for LightningNodeType {
         match s.to_lowercase().as_str() {
             "lnd" => Ok(LightningNodeType::Lnd),
             "ldk" => Ok(LightningNodeType::Ldk),
+            "none" => Ok(LightningNodeType::None),
             _ => Err(format!("Invalid value for LightningNodeType: {s}")),
         }
     }

@@ -793,6 +793,12 @@ pub enum LightningNode {
         ldk_port: u16,
         metrics_port: u16,
     },
+    /// Run gatewayd with no Lightning node attached.
+    None {
+        name: String,
+        gw_port: u16,
+        metrics_port: u16,
+    },
 }
 
 impl LightningNode {
@@ -805,6 +811,7 @@ impl LightningNode {
                 ldk_port: _,
                 metrics_port: _,
             } => LightningNodeType::Ldk,
+            LightningNode::None { .. } => LightningNodeType::None,
         }
     }
 }

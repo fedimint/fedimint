@@ -175,6 +175,11 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 let gw = match gw_type {
                     LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                     LightningNodeType::Ldk => dev_fed.gw_ldk_connected().await?,
+                    LightningNodeType::None => {
+                        anyhow::bail!(
+                            "gateway integration tests are not parametrized for LightningMode::None"
+                        )
+                    }
                 };
 
                 // Try to connect to already connected federation
