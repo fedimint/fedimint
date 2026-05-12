@@ -27,7 +27,8 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState,
+    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
+    WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -958,6 +959,18 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
     }
     let unique_addrs: HashSet<_> = fresh.iter().map(|(a, _)| a.script_pubkey()).collect();
     assert_eq!(unique_addrs.len(), GAP);
+
+    let stateless = wallet_module
+        .allocate_deposit_address_pooled_stateless(GAP)
+        .await?;
+    let MaybeNewAddress::TooManyUnusedAddresses { addresses } = stateless else {
+        panic!("expected reusable addresses from stateless allocation");
+    };
+    assert_eq!(addresses.len(), GAP);
+    for (available, expected) in addresses.iter().zip(&fresh) {
+        assert_eq!(available.address, expected.0);
+        assert_eq!(available.tweak_idx, expected.1);
+    }
 
     // Past the cap: round-robin reuse, starting from the oldest. Cursor
     // begins at TweakIdx(0) and advances to picked.next() each time, so the
