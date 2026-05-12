@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
@@ -928,16 +928,30 @@ async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow:
     let tweak_idx0 = deposit_address0.tweak_idx;
 
     // Subsequent calls keep returning the same address until a deposit lands
-    // on it.
+    // on it. Reuse must also keep pointing at the original operation instead
+    // of creating duplicate operation-log entries for the same address.
     for _ in 0..3 {
         let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
         assert_matches!(
             outcome,
             AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx0
         );
+        assert_eq!(deposit_address.operation_id, deposit_address0.operation_id);
         assert_eq!(deposit_address.address, addr0);
         assert_eq!(deposit_address.tweak_idx, tweak_idx0);
     }
+
+    let operations = client
+        .operation_log()
+        .paginate_operations_rev(10, None)
+        .await;
+    assert_eq!(
+        operations.len(),
+        1,
+        "reused addresses must not start new operations"
+    );
+    assert_eq!(operations[0].0.operation_id, deposit_address0.operation_id);
+
     Ok(())
 }
 
@@ -994,10 +1008,67 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
         assert_eq!(deposit_address.tweak_idx, expected.1);
     }
 
-    // After a full cycle, cursor wraps and we get the first entry again.
+    // After a full cycle, cursor wraps to one of the reusable entries.
     let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
     assert_matches!(outcome, AllocateDepositOutcome::Reused { .. });
-    assert_eq!(deposit_address.address, fresh[0].0);
+    assert!(fresh.iter().any(|expected| {
+        expected.0 == deposit_address.address && expected.1 == deposit_address.tweak_idx
+    }));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    bitcoin.mine_blocks(10).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    let (original, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
+    assert_eq!(outcome, AllocateDepositOutcome::Fresh);
+
+    let distant_past = fedimint_core::time::now() - Duration::from_secs(24 * 60 * 60);
+    {
+        let mut dbtx = wallet_module.db.begin_transaction().await;
+        let mut data = dbtx
+            .get_value(&fedimint_wallet_client::client_db::PegInTweakIndexKey(
+                original.tweak_idx,
+            ))
+            .await
+            .expect("allocated tweak must exist");
+        data.creation_time = distant_past;
+        data.last_check_time = Some(distant_past);
+        data.next_check_time = Some(distant_past + Duration::from_secs(60 * 60));
+        dbtx.insert_entry(
+            &fedimint_wallet_client::client_db::PegInTweakIndexKey(original.tweak_idx),
+            &data,
+        )
+        .await;
+        dbtx.commit_tx().await;
+    }
+
+    let (reused, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
+    assert_matches!(
+        outcome,
+        AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == original.tweak_idx
+    );
+    assert_eq!(reused.operation_id, original.operation_id);
+    assert_eq!(reused.address, original.address);
+
+    let data = wallet_module
+        .get_pegin_tweak_idx(original.tweak_idx)
+        .await?;
+    assert!(distant_past < data.creation_time);
+    assert_eq!(data.last_check_time, None);
+    assert!(data.next_check_time.is_some());
+    assert!(distant_past < data.next_check_time.expect("next check time must be set"));
+
     Ok(())
 }
 
