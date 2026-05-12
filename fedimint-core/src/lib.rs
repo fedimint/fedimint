@@ -50,6 +50,7 @@ use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
 use envs::BitcoinRpcConfig;
+pub use fedimint_derive::instrument_in_span;
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;

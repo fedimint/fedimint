@@ -48,7 +48,7 @@ use fedimint_eventlog::{
 };
 use fedimint_logging::LOG_CLIENT;
 use tokio::sync::{broadcast, watch};
-use tracing::{debug, trace, warn};
+use tracing::{Instrument as _, debug, trace, warn};
 
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
@@ -651,8 +651,10 @@ impl ClientBuilder {
                 .into(),
         };
 
-        let task_group = TaskGroup::new();
+        let client_span = Client::make_client_span(fed_id);
+        let task_group = TaskGroup::new().with_span(client_span.clone());
 
+        async move {
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
         self.migrate_module_dbs(&db, &config).await?;
@@ -1042,63 +1044,55 @@ impl ClientBuilder {
             user_bitcoind_rpc,
             user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
-        client_inner
-            .task_group
-            .spawn_cancellable("MetaService::update_continuously", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .meta_service
-                        .update_continuously(&client_inner)
-                        .await;
-                }
-            });
+        client_inner.task_group.spawn_cancellable("MetaService::update_continuously", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .meta_service
+                    .update_continuously(&client_inner)
+                    .await;
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("update-api-announcements", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
-                    run_api_announcement_refresh_task(client_inner.clone()).await
-                }
-            });
+        client_inner.task_group.spawn_cancellable("update-api-announcements", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
+                run_api_announcement_refresh_task(client_inner.clone()).await
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("guardian metadata refresh task", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
-                    run_guardian_metadata_refresh_task(client_inner.clone()).await
-                }
-            });
+        client_inner.task_group.spawn_cancellable("guardian metadata refresh task", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
+                run_guardian_metadata_refresh_task(client_inner.clone()).await
+            }
+        });
 
-        client_inner
-            .task_group
-            .spawn_cancellable("event log ordering task", {
-                let client_inner = client_inner.clone();
-                async move {
-                    client_inner
-                        .connectors
-                        .wait_for_initialized_connections()
-                        .await;
+        client_inner.task_group.spawn_cancellable("event log ordering task", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
 
-                    run_event_log_ordering_task(
-                        db.clone(),
-                        log_ordering_wakeup_rx,
-                        log_event_added_tx,
-                        log_event_added_transient_tx,
-                    )
-                    .await
-                }
-            });
+                run_event_log_ordering_task(
+                    db.clone(),
+                    log_ordering_wakeup_rx,
+                    log_event_added_tx,
+                    log_event_added_transient_tx,
+                )
+                .await
+            }
+        });
 
         // If chain_id is not cached yet, spawn a background task to fetch it
         // This handles the case where join/open happened before the server supported
@@ -1111,11 +1105,9 @@ impl ClientBuilder {
             .await
             .is_none()
         {
-            client_inner
-                .task_group
-                .spawn_cancellable("fetch-chain-id", {
-                    let client_inner = client_inner.clone();
-                    async move {
+            client_inner.task_group.spawn_cancellable("fetch-chain-id", {
+                let client_inner = client_inner.clone();
+                async move {
                         client_inner.api.wait_for_initialized_connections().await;
                         match client_inner.api.chain_id().await {
                             Ok(chain_id) => {
@@ -1151,6 +1143,7 @@ impl ClientBuilder {
         }
 
         Ok(client_arc)
+        }.instrument(client_span).await
     }
 
     async fn load_init_state(db: &Database) -> InitState {
