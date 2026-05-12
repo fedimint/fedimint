@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["block_in_place","block_on","sleep","sleep_until","spawn","timeout"],"struct":["Duration","Elapsed","Instant","JoinError","JoinHandle"]};
+window.SIDEBAR_ITEMS = {"fn":["block_in_place","block_on","sleep","sleep_until","spawn","spawn_with_span","timeout"],"struct":["Duration","Elapsed","Instant","JoinError","JoinHandle"]};
