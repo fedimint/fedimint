@@ -585,6 +585,13 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 /// 2. Payments to a pre-recovery LNURL are still claimed by the restored
 ///    client.
 async fn test_lnurl_recovery(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    // Before v0.10.0 the CLI registered LNURLs via a POST to the recurringd
+    // server.  That endpoint no longer exists, so old CLIs cannot generate
+    // LNURLs against the current recurringdv2.
+    if util::FedimintCli::version_or_default().await < *VERSION_0_10_0_ALPHA {
+        return Ok(());
+    }
+
     let federation = dev_fed.fed().await?;
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;
