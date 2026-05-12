@@ -65,9 +65,11 @@ async fn peg_in<'a>(
     await_consensus_upgrade(client, fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
@@ -231,9 +233,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
 
     // Test operation is created
     let operations = client
@@ -387,9 +391,12 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
-    let (op, address, tweak_idx) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
+    let tweak_idx = deposit_address.tweak_idx;
 
     // First peg-in
     {
@@ -839,9 +846,11 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
 
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
@@ -913,21 +922,21 @@ async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow:
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
 
     // First call has nothing to reuse → Fresh.
-    let (_op, addr0, tweak_idx0, outcome0) =
-        wallet_module.allocate_deposit_address_pooled(0).await?;
+    let (deposit_address0, outcome0) = wallet_module.allocate_deposit_address_pooled(0).await?;
     assert_eq!(outcome0, AllocateDepositOutcome::Fresh);
+    let addr0 = deposit_address0.address;
+    let tweak_idx0 = deposit_address0.tweak_idx;
 
     // Subsequent calls keep returning the same address until a deposit lands
     // on it.
     for _ in 0..3 {
-        let (_op, addr, tweak_idx, outcome) =
-            wallet_module.allocate_deposit_address_pooled(0).await?;
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
         assert_matches!(
             outcome,
             AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx0
         );
-        assert_eq!(addr, addr0);
-        assert_eq!(tweak_idx, tweak_idx0);
+        assert_eq!(deposit_address.address, addr0);
+        assert_eq!(deposit_address.tweak_idx, tweak_idx0);
     }
     Ok(())
 }
@@ -953,10 +962,9 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
         fedimint_wallet_client::client_db::TweakIdx,
     )> = vec![];
     for _ in 0..GAP {
-        let (_op, addr, tweak_idx, outcome) =
-            wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
         assert_eq!(outcome, AllocateDepositOutcome::Fresh);
-        fresh.push((addr, tweak_idx));
+        fresh.push((deposit_address.address, deposit_address.tweak_idx));
     }
     let unique_addrs: HashSet<_> = fresh.iter().map(|(a, _)| a.script_pubkey()).collect();
     assert_eq!(unique_addrs.len(), GAP);
@@ -964,7 +972,7 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
     let stateless = wallet_module
         .allocate_deposit_address_pooled_stateless(GAP)
         .await?;
-    let MaybeNewAddress::TooManyUnusedAddresses { addresses } = stateless else {
+    let MaybeNewAddress::TooManyUnusedAddresses(addresses) = stateless else {
         panic!("expected reusable addresses from stateless allocation");
     };
     assert_eq!(addresses.len(), GAP);
@@ -977,21 +985,19 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
     // begins at TweakIdx(0) and advances to picked.next() each time, so the
     // cycle is [0, 1, 2, 3].
     for expected in &fresh {
-        let (_op, addr, tweak_idx, outcome) =
-            wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
         assert_matches!(
             outcome,
-            AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx
+            AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == expected.1
         );
-        assert_eq!(addr, expected.0);
-        assert_eq!(tweak_idx, expected.1);
+        assert_eq!(deposit_address.address, expected.0);
+        assert_eq!(deposit_address.tweak_idx, expected.1);
     }
 
     // After a full cycle, cursor wraps and we get the first entry again.
-    let (_op, addr, _tweak_idx, outcome) =
-        wallet_module.allocate_deposit_address_pooled(GAP).await?;
+    let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
     assert_matches!(outcome, AllocateDepositOutcome::Reused { .. });
-    assert_eq!(addr, fresh[0].0);
+    assert_eq!(deposit_address.address, fresh[0].0);
     Ok(())
 }
 
@@ -1013,10 +1019,9 @@ async fn allocate_deposit_address_pooled_used_address_shrinks_gap() -> anyhow::R
 
     let mut fresh = vec![];
     for _ in 0..GAP {
-        let (_op, addr, tweak_idx, outcome) =
-            wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
         assert_eq!(outcome, AllocateDepositOutcome::Fresh);
-        fresh.push((addr, tweak_idx));
+        fresh.push((deposit_address.address, deposit_address.tweak_idx));
     }
 
     // Send an on-chain deposit to the first address and drive it to a
@@ -1035,15 +1040,14 @@ async fn allocate_deposit_address_pooled_used_address_shrinks_gap() -> anyhow::R
     bitcoin.mine_blocks(finality_delay).await;
     wallet_module.await_num_deposits(used_tweak_idx, 1).await?;
 
-    let (_op, addr, _tweak_idx, outcome) =
-        wallet_module.allocate_deposit_address_pooled(GAP).await?;
+    let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
     assert_eq!(
         outcome,
         AllocateDepositOutcome::Fresh,
         "expected Fresh after deposit landed"
     );
     assert_ne!(
-        addr, used_addr,
+        deposit_address.address, used_addr,
         "fresh allocation must not collide with the used address"
     );
 
