@@ -19,7 +19,7 @@ use inner::TaskGroupInner;
 use scopeguard::defer;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
-use tracing::{debug, info, trace};
+use tracing::{Span, debug, info, trace};
 
 use crate::runtime;
 // TODO: stop using `task::*`, and use `runtime::*` in the code
@@ -142,7 +142,7 @@ impl TaskGroup {
         Fut: Future<Output = R> + MaybeSend + 'static,
         R: MaybeSend + 'static,
     {
-        self.spawn_inner(name, f, false)
+        self.spawn_inner(name, f, false, None)
     }
 
     /// This is a version of [`Self::spawn`] that uses less noisy logging level
@@ -157,7 +157,23 @@ impl TaskGroup {
         Fut: Future<Output = R> + MaybeSend + 'static,
         R: MaybeSend + 'static,
     {
-        self.spawn_inner(name, f, true)
+        self.spawn_inner(name, f, true, None)
+    }
+
+    /// Like [`Self::spawn`] but the spawn span (and the lifecycle events the
+    /// task group emits around the user future) is parented to `parent_span`,
+    /// so events inherit fields from it (e.g. `fed_id`).
+    pub fn spawn_with_span<Fut, R>(
+        &self,
+        parent_span: Span,
+        name: impl Into<String>,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
+    ) -> oneshot::Receiver<R>
+    where
+        Fut: Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
+    {
+        self.spawn_inner(name, f, false, Some(parent_span))
     }
 
     fn spawn_inner<Fut, R>(
@@ -165,6 +181,7 @@ impl TaskGroup {
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
         quiet: bool,
+        parent_span: Option<Span>,
     ) -> oneshot::Receiver<R>
     where
         Fut: Future<Output = R> + MaybeSend + 'static,
@@ -184,49 +201,51 @@ impl TaskGroup {
             .lock()
             .expect("Locking failed")
             .insert_with_key(move |task_key| {
-                (
-                    name.clone(),
-                    crate::runtime::spawn(&name, {
-                        let name = name.clone();
-                        async move {
-                            defer! {
-                                // Panic or normal completion, it means the task
-                                // is complete, and does not need to be shutdown
-                                // via join handle. This prevents buildup of task
-                                // handles.
-                                if handle
-                                    .inner
-                                    .active_tasks_join_handles
-                                    .lock()
-                                    .expect("Locking failed")
-                                    .remove(task_key)
-                                    .is_none() {
-                                        trace!(target: LOG_TASK, %name, "Task already canceled");
-                                    }
-                            }
-                            // Unfortunately log levels need to be static
-                            if quiet {
-                                trace!(target: LOG_TASK, %name, "Starting task");
-                            } else {
-                                debug!(target: LOG_TASK, %name, "Starting task");
-                            }
-                            let r = f(handle.clone()).await;
-                            guard.completed = true;
-
-                            if quiet {
-                                trace!(target: LOG_TASK, %name, "Finished task");
-                            } else {
-                                debug!(target: LOG_TASK, %name, "Finished task");
-                            }
-                            // if receiver is not interested, just drop the message
-                            let _ = tx.send(r);
-
-                            // NOTE: Since this is a `async move` the guard will not get moved
-                            // if it's not moved inside the body. Weird.
-                            drop(guard);
+                let task_future = {
+                    let name = name.clone();
+                    async move {
+                        defer! {
+                            // Panic or normal completion, it means the task
+                            // is complete, and does not need to be shutdown
+                            // via join handle. This prevents buildup of task
+                            // handles.
+                            if handle
+                                .inner
+                                .active_tasks_join_handles
+                                .lock()
+                                .expect("Locking failed")
+                                .remove(task_key)
+                                .is_none() {
+                                    trace!(target: LOG_TASK, %name, "Task already canceled");
+                                }
                         }
-                    }),
-                )
+                        // Unfortunately log levels need to be static
+                        if quiet {
+                            trace!(target: LOG_TASK, %name, "Starting task");
+                        } else {
+                            debug!(target: LOG_TASK, %name, "Starting task");
+                        }
+                        let r = f(handle.clone()).await;
+                        guard.completed = true;
+
+                        if quiet {
+                            trace!(target: LOG_TASK, %name, "Finished task");
+                        } else {
+                            debug!(target: LOG_TASK, %name, "Finished task");
+                        }
+                        // if receiver is not interested, just drop the message
+                        let _ = tx.send(r);
+
+                        // NOTE: Since this is a `async move` the guard will not get moved
+                        // if it's not moved inside the body. Weird.
+                        drop(guard);
+                    }
+                };
+                let join_handle = match parent_span.as_ref() {
+                    Some(parent) => crate::runtime::spawn_with_span(parent, &name, task_future),
+                    None => crate::runtime::spawn(&name, task_future),
+                };
+                (name, join_handle)
             });
 
         rx
@@ -243,6 +262,27 @@ impl TaskGroup {
         R: MaybeSend + 'static,
     {
         self.spawn(name, |handle| async move {
+            let value = handle.cancel_on_shutdown(future).await;
+            if value.is_err() {
+                // name will part of span
+                debug!(target: LOG_TASK, "task cancelled on shutdown");
+            }
+            value
+        })
+    }
+
+    /// Like [`Self::spawn_cancellable`] but with an explicit parent span — see
+    /// [`Self::spawn_with_span`].
+    pub fn spawn_cancellable_with_span<R>(
+        &self,
+        parent_span: Span,
+        name: impl Into<String>,
+        future: impl Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.spawn_with_span(parent_span, name, |handle| async move {
             let value = handle.cancel_on_shutdown(future).await;
             if value.is_err() {
                 // name will part of span

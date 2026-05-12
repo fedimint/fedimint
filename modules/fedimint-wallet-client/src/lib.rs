@@ -355,6 +355,7 @@ impl ClientModuleInit for WalletClientInit {
             pegin_claimed_receiver,
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
+            client_span: args.client_span().clone(),
             admin_auth: args.admin_auth().cloned(),
         })
     }
@@ -507,6 +508,7 @@ pub struct WalletClientModule {
     pegin_claimed_sender: watch::Sender<()>,
     pegin_claimed_receiver: watch::Receiver<()>,
     task_group: TaskGroup,
+    client_span: tracing::Span,
     admin_auth: Option<ApiAuth>,
 }
 
@@ -529,32 +531,36 @@ impl ClientModule for WalletClientModule {
     }
 
     async fn start(&self) {
-        self.task_group.spawn_cancellable("peg-in monitor", {
-            let client_ctx = self.client_ctx.clone();
-            let db = self.db.clone();
-            let btc_rpc = self.rpc.clone();
-            let module_api = self.module_api.clone();
-            let data = self.data.clone();
-            let pegin_claimed_sender = self.pegin_claimed_sender.clone();
-            let pegin_monitor_wakeup_receiver = self.pegin_monitor_wakeup_receiver.clone();
-            pegin_monitor::run_peg_in_monitor(
-                client_ctx,
-                db,
-                btc_rpc,
-                module_api,
-                data,
-                pegin_claimed_sender,
-                pegin_monitor_wakeup_receiver,
-            )
-        });
-
         self.task_group
-            .spawn_cancellable("supports-safe-deposit-version", {
+            .spawn_cancellable_with_span(self.client_span.clone(), "peg-in monitor", {
+                let client_ctx = self.client_ctx.clone();
+                let db = self.db.clone();
+                let btc_rpc = self.rpc.clone();
+                let module_api = self.module_api.clone();
+                let data = self.data.clone();
+                let pegin_claimed_sender = self.pegin_claimed_sender.clone();
+                let pegin_monitor_wakeup_receiver = self.pegin_monitor_wakeup_receiver.clone();
+                pegin_monitor::run_peg_in_monitor(
+                    client_ctx,
+                    db,
+                    btc_rpc,
+                    module_api,
+                    data,
+                    pegin_claimed_sender,
+                    pegin_monitor_wakeup_receiver,
+                )
+            });
+
+        self.task_group.spawn_cancellable_with_span(
+            self.client_span.clone(),
+            "supports-safe-deposit-version",
+            {
                 let db = self.db.clone();
                 let module_api = self.module_api.clone();
 
                 poll_supports_safe_deposit_version(db, module_api)
-            });
+            },
+        );
     }
 
     fn supports_backup(&self) -> bool {

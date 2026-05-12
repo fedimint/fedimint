@@ -144,7 +144,10 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
         TaskGroup::new(),
         log_ordering_wakeup_tx,
     );
-    executor.start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()));
+    executor.start_executor(
+        Arc::new(|_, _| DynGlobalClientContext::new_fake()),
+        tracing::Span::none(),
+    );
 
     info!(
         target: LOG_CLIENT_REACTOR,

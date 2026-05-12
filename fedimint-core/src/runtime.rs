@@ -6,7 +6,7 @@ use std::future::Future;
 use fedimint_logging::LOG_RUNTIME;
 pub use n0_future::task::{JoinError, JoinHandle};
 pub use n0_future::time::{Duration, Elapsed, Instant, sleep, sleep_until, timeout};
-use tracing::Instrument;
+use tracing::{Instrument, Span};
 
 use crate::task::MaybeSend;
 
@@ -16,6 +16,20 @@ where
     T: MaybeSend + 'static,
 {
     let span = tracing::debug_span!(target: LOG_RUNTIME, parent: None, "spawn", task = name);
+    n0_future::task::spawn(future.instrument(span))
+}
+
+/// Like [`spawn`] but with an explicit parent span.
+///
+/// Events from the spawned future inherit fields from `parent` (e.g. `fed_id`
+/// from the client span), including the lifecycle events emitted by
+/// [`crate::task::TaskGroup`] around the user future.
+pub fn spawn_with_span<F, T>(parent: &Span, name: &str, future: F) -> JoinHandle<T>
+where
+    F: Future<Output = T> + 'static + MaybeSend,
+    T: MaybeSend + 'static,
+{
+    let span = tracing::debug_span!(target: LOG_RUNTIME, parent: parent, "spawn", task = name);
     n0_future::task::spawn(future.instrument(span))
 }
 

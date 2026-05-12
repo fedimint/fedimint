@@ -193,7 +193,7 @@ impl ClientModuleInit for WalletClientInit {
             module_api: args.module_api().clone(),
         };
 
-        module.spawn_output_scanner(args.task_group());
+        module.spawn_output_scanner(args.task_group(), args.client_span());
 
         Ok(module)
     }
@@ -491,10 +491,10 @@ impl WalletClientModule {
         (operation_id, range.txid())
     }
 
-    fn spawn_output_scanner(&self, task_group: &TaskGroup) {
+    fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
 
-        task_group.spawn_cancellable("output-scanner", async move {
+        task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
             let mut dbtx = module.db.begin_transaction().await;
 
             if dbtx

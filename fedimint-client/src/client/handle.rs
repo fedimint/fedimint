@@ -8,7 +8,7 @@ use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::LOG_CLIENT;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
-use tracing::{debug, error, trace, warn};
+use tracing::{Instrument as _, debug, error, trace, warn};
 
 use super::Client;
 use crate::ClientBuilder;
@@ -59,33 +59,43 @@ impl ClientHandle {
             );
             return;
         };
+        let client_span = inner.client_span.clone();
         inner.executor.stop_executor();
         let db = inner.db.clone();
-        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
+        client_span.in_scope(|| {
+            debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
+        });
         if let Err(err) = inner
             .task_group
             .clone()
             .shutdown_join_all(Some(Duration::from_secs(30)))
+            .instrument(client_span.clone())
             .await
         {
-            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Error waiting for client task group to shut down");
+            client_span.in_scope(|| {
+                warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Error waiting for client task group to shut down");
+            });
         }
 
         let client_strong_count = Arc::strong_count(&inner);
-        debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+        client_span.in_scope(|| {
+            debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+        });
         // We are sure that no background tasks are running in the client anymore, so we
         // can drop the (usually) last inner reference.
         drop(inner);
 
-        if client_strong_count != 1 {
-            debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
-        }
+        client_span.in_scope(|| {
+            if client_strong_count != 1 {
+                debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
+            }
 
-        let db_strong_count = db.strong_count();
-        if db_strong_count != 1 {
-            debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
-        }
-        trace!(target: LOG_CLIENT, "Dropped last handle to Client");
+            let db_strong_count = db.strong_count();
+            if db_strong_count != 1 {
+                debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
+            }
+            trace!(target: LOG_CLIENT, "Dropped last handle to Client");
+        });
     }
 
     /// Restart the client
@@ -164,7 +174,13 @@ impl Drop for ClientHandle {
             return;
         }
 
-        debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
+        self.inner
+            .as_ref()
+            .expect("Must have inner client set")
+            .client_span
+            .in_scope(|| {
+                debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
+            });
         #[cfg(not(target_family = "wasm"))]
         runtime::block_in_place(|| {
             runtime::block_on(self.shutdown_inner());
