@@ -3679,6 +3679,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-eventlog",
  "fedimint-lightning",
+ "fedimint-ln-common",
  "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-tpe",

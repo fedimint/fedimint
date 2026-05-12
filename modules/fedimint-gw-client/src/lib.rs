@@ -646,6 +646,8 @@ impl GatewayClientModule {
                             contract_id: payload.contract_id,
                             invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
                             operation_id,
+                            destination: Some(payload.payment_data.destination()),
+                            route_hints: Some(payload.payment_data.route_hints()),
                         }).await;
 
                         let state_machines =

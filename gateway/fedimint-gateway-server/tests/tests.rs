@@ -1144,6 +1144,8 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             invoice_amount: Amount::from_msats(10000),
             operation_start: now(),
             max_delay: 100,
+            destination: None,
+            route_hints: None,
         };
         fed1_lnv2
             .client_ctx
@@ -1299,4 +1301,61 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     assert_eq!(transactions.0.len(), 2);
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_outgoing_payment_started_includes_destination() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
+            dummy_module
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await?;
+
+            let invoice = other_lightning_client.invoice(sats(250), None)?;
+            gateway_pay_valid_invoice(
+                invoice,
+                &user_client,
+                &gateway_client,
+                &gateway.http_gateway_id().await,
+            )
+            .await?;
+
+            let started: fedimint_gw_client::events::OutgoingPaymentStarted = retry(
+                "wait for OutgoingPaymentStarted event",
+                backoff_util::custom_backoff(Duration::ZERO, Duration::ZERO, Some(20)),
+                || async {
+                    let response = gateway
+                        .handle_payment_log_msg(PaymentLogPayload {
+                            end_position: None,
+                            pagination_size: 20,
+                            federation_id: fed.id(),
+                            event_kinds: vec![
+                                fedimint_gw_client::events::OutgoingPaymentStarted::KIND,
+                            ],
+                        })
+                        .await?;
+                    response
+                        .0
+                        .into_iter()
+                        .find_map(|e| e.as_raw().to_event())
+                        .ok_or_else(|| anyhow::anyhow!("event not logged yet"))
+                },
+            )
+            .await?;
+
+            assert_eq!(
+                started.destination,
+                Some(other_lightning_client.gateway_node_pub_key)
+            );
+            // `FakeLightningTest::invoice` doesn't add route hints, but the
+            // field should still be present as an empty `Some(vec)` (we
+            // captured what the invoice carried, which happens to be empty).
+            assert_eq!(started.route_hints, Some(vec![]));
+
+            Ok(())
+        },
+    )
+    .await
 }
