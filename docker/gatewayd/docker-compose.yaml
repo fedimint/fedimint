@@ -4,7 +4,7 @@
 
 services:
   gatewayd:
-    image: fedimint/gatewayd:v0.10.0
+    image: fedimint/gatewayd:v0.11.1
     command: gatewayd ldk
     restart: unless-stopped
     ports:
@@ -23,7 +23,7 @@ services:
       # REQUIRED: Set the password hash to your own password
       # Run:
       #
-      # docker run fedimint/gatewayd:v0.10.0 gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
+      # docker run fedimint/gatewayd:v0.11.1 gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
       #
       # Then paste the result here.
       FM_GATEWAY_BCRYPT_PASSWORD_HASH: ""
