@@ -128,9 +128,9 @@ pub enum DepositStateV2 {
     Failed(String),
 }
 
-/// Deposit address already allocated by this client.
+/// Deposit address allocated by this client.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PooledDepositAddress {
+pub struct DepositAddressInfo {
     pub operation_id: OperationId,
     pub address: Address,
     pub tweak_idx: TweakIdx,
@@ -145,16 +145,11 @@ pub struct PooledDepositAddress {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaybeNewAddress {
     /// A new tweak/operation was created on this call.
-    NewAddress {
-        operation_id: OperationId,
-        address: Address,
-        tweak_idx: TweakIdx,
-    },
+    NewAddress(DepositAddressInfo),
     /// The unused-address gap is full. No new address was allocated.
-    TooManyUnusedAddresses {
-        /// Reusable unused addresses, ordered by `creation_time` ascending.
-        addresses: Vec<PooledDepositAddress>,
-    },
+    ///
+    /// Reusable unused addresses are ordered by `creation_time` ascending.
+    TooManyUnusedAddresses(Vec<DepositAddressInfo>),
 }
 
 /// Outcome of [`WalletClientModule::allocate_deposit_address_pooled`], so
@@ -803,7 +798,7 @@ impl WalletClientModule {
     async fn allocate_deposit_address_inner(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> (OperationId, Address, TweakIdx) {
+    ) -> DepositAddressInfo {
         dbtx.ensure_isolated().expect("Must be isolated db");
 
         let tweak_idx = get_next_peg_in_tweak_child_id(dbtx).await;
@@ -824,7 +819,11 @@ impl WalletClientModule {
         )
         .await;
 
-        (operation_id, address, tweak_idx)
+        DepositAddressInfo {
+            operation_id,
+            address,
+            tweak_idx,
+        }
     }
 
     /// Fetches the fees that would need to be paid to make the withdraw request
@@ -890,13 +889,16 @@ impl WalletClientModule {
     }
 
     pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
-        let (operation_id, address, _) = self.safe_allocate_deposit_address(req.extra_meta).await?;
+        let deposit_address = self.safe_allocate_deposit_address(req.extra_meta).await?;
 
         Ok(PegInResponse {
-            deposit_address: Address::from_script(&address.script_pubkey(), self.get_network())?
-                .as_unchecked()
-                .clone(),
-            operation_id,
+            deposit_address: Address::from_script(
+                &deposit_address.address.script_pubkey(),
+                self.get_network(),
+            )?
+            .as_unchecked()
+            .clone(),
+            operation_id: deposit_address.operation_id,
         })
     }
 
@@ -995,7 +997,7 @@ impl WalletClientModule {
     pub async fn safe_allocate_deposit_address<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    ) -> anyhow::Result<DepositAddressInfo>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
@@ -1027,48 +1029,55 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_expert_only<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    ) -> anyhow::Result<DepositAddressInfo>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
-        let (operation_id, address, tweak_idx) = self
+        let deposit_address = self
             .db
             .autocommit(
                 move |dbtx, _| {
                     let extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(async move {
-                        let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner(dbtx)
-                            .await;
+                        let deposit_address = self.allocate_deposit_address_inner(dbtx).await;
 
-                        self.client_ctx.manual_operation_start_dbtx(
-                            dbtx,
-                            operation_id,
-                            WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta {
-                                variant: WalletOperationMetaVariant::Deposit {
-                                    address: address.clone().into_unchecked(),
-                                    tweak_idx: Some(tweak_idx),
-                                    expires_at: None,
+                        self.client_ctx
+                            .manual_operation_start_dbtx(
+                                dbtx,
+                                deposit_address.operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta {
+                                    variant: WalletOperationMetaVariant::Deposit {
+                                        address: deposit_address.address.clone().into_unchecked(),
+                                        tweak_idx: Some(deposit_address.tweak_idx),
+                                        expires_at: None,
+                                    },
+                                    extra_meta: extra_meta_value_inner,
                                 },
-                                extra_meta: extra_meta_value_inner,
-                            },
-                            vec![]
-                        ).await?;
+                                vec![],
+                            )
+                            .await?;
 
-                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
+                        debug!(
+                            target: LOG_CLIENT_MODULE_WALLET,
+                            tweak_idx = %deposit_address.tweak_idx,
+                            address = %deposit_address.address,
+                            "Derived a new deposit address"
+                        );
 
                         // Begin watching the script address
-                        self.rpc.watch_script_history(&address.script_pubkey()).await?;
+                        self.rpc
+                            .watch_script_history(&deposit_address.address.script_pubkey())
+                            .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
                             sender.send_replace(());
                         });
 
-                        Ok((operation_id, address, tweak_idx))
+                        Ok(deposit_address)
                     })
                 },
                 Some(100),
@@ -1082,7 +1091,7 @@ impl WalletClientModule {
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
-        Ok((operation_id, address, tweak_idx))
+        Ok(deposit_address)
     }
 
     /// Allocate a deposit address, bounding the gap of consecutive unused
@@ -1145,7 +1154,7 @@ impl WalletClientModule {
 
                                     debug_assert_eq!(operation_id, data.operation_id);
 
-                                    PooledDepositAddress {
+                                    DepositAddressInfo {
                                         operation_id,
                                         address,
                                         tweak_idx,
@@ -1154,22 +1163,21 @@ impl WalletClientModule {
                                 .collect();
 
                             return Ok::<_, anyhow::Error>(
-                                MaybeNewAddress::TooManyUnusedAddresses { addresses },
+                                MaybeNewAddress::TooManyUnusedAddresses(addresses),
                             );
                         }
 
-                        let (operation_id, address, tweak_idx) =
-                            self.allocate_deposit_address_inner(dbtx).await;
+                        let deposit_address = self.allocate_deposit_address_inner(dbtx).await;
 
                         self.client_ctx
                             .manual_operation_start_dbtx(
                                 dbtx,
-                                operation_id,
+                                deposit_address.operation_id,
                                 WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta {
                                     variant: WalletOperationMetaVariant::Deposit {
-                                        address: address.clone().into_unchecked(),
-                                        tweak_idx: Some(tweak_idx),
+                                        address: deposit_address.address.clone().into_unchecked(),
+                                        tweak_idx: Some(deposit_address.tweak_idx),
                                         expires_at: None,
                                     },
                                     extra_meta: extra_meta_value_inner,
@@ -1180,12 +1188,13 @@ impl WalletClientModule {
 
                         debug!(
                             target: LOG_CLIENT_MODULE_WALLET,
-                            %tweak_idx, %address,
+                            tweak_idx = %deposit_address.tweak_idx,
+                            address = %deposit_address.address,
                             "Derived a new pooled deposit address"
                         );
 
                         self.rpc
-                            .watch_script_history(&address.script_pubkey())
+                            .watch_script_history(&deposit_address.address.script_pubkey())
                             .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
@@ -1193,11 +1202,7 @@ impl WalletClientModule {
                             sender.send_replace(());
                         });
 
-                        Ok(MaybeNewAddress::NewAddress {
-                            operation_id,
-                            address,
-                            tweak_idx,
-                        })
+                        Ok(MaybeNewAddress::NewAddress(deposit_address))
                     })
                 },
                 Some(100),
@@ -1262,25 +1267,16 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_pooled(
         &self,
         max_gap_size: usize,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx, AllocateDepositOutcome)> {
+    ) -> anyhow::Result<(DepositAddressInfo, AllocateDepositOutcome)> {
         let stateless = self
             .allocate_deposit_address_pooled_stateless(max_gap_size)
             .await?;
 
         let reused_addresses = match stateless {
-            MaybeNewAddress::NewAddress {
-                operation_id,
-                address,
-                tweak_idx,
-            } => {
-                return Ok((
-                    operation_id,
-                    address,
-                    tweak_idx,
-                    AllocateDepositOutcome::Fresh,
-                ));
+            MaybeNewAddress::NewAddress(deposit_address) => {
+                return Ok((deposit_address, AllocateDepositOutcome::Fresh));
             }
-            MaybeNewAddress::TooManyUnusedAddresses { addresses } => addresses,
+            MaybeNewAddress::TooManyUnusedAddresses(addresses) => addresses,
         };
 
         let result = self
@@ -1300,6 +1296,7 @@ impl WalletClientModule {
                             .unwrap_or(0);
                         let reused_address = reused_addresses[pick_pos].clone();
 
+                        let existing_tweak_idx = reused_address.tweak_idx;
                         let existing = dbtx
                             .get_value(&PegInTweakIndexKey(reused_address.tweak_idx))
                             .await
@@ -1345,11 +1342,9 @@ impl WalletClientModule {
                         });
 
                         Ok::<_, anyhow::Error>((
-                            reused_address.operation_id,
-                            reused_address.address,
-                            reused_address.tweak_idx,
+                            reused_address,
                             AllocateDepositOutcome::Reused {
-                                original_tweak_idx: reused_address.tweak_idx,
+                                original_tweak_idx: existing_tweak_idx,
                             },
                         ))
                     })
