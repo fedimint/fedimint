@@ -81,8 +81,8 @@ use crate::api::WalletFederationApi;
 use crate::backup::{FEDERATION_RECOVER_MAX_GAP, RecoveryStateV2, WalletRecovery};
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, RecoveryStateKey,
-    SupportsSafeDepositPrefix,
+    PegInPoolCursorKey, PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
+    RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -126,6 +126,45 @@ pub enum DepositStateV2 {
         btc_out_point: bitcoin::OutPoint,
     },
     Failed(String),
+}
+
+/// Deposit address allocated by this client.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DepositAddressInfo {
+    pub operation_id: OperationId,
+    pub address: Address,
+    pub tweak_idx: TweakIdx,
+}
+
+/// Result of [`WalletClientModule::allocate_deposit_address_pooled_stateless`].
+///
+/// Callers that need a custom address-picking strategy can use
+/// [`MaybeNewAddress::TooManyUnusedAddresses`] to see all currently reusable
+/// addresses instead of relying on this crate's round-robin policy.
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MaybeNewAddress {
+    /// A new tweak/operation was created on this call.
+    NewAddress(DepositAddressInfo),
+    /// The unused-address gap is full. No new address was allocated.
+    ///
+    /// Reusable unused addresses are ordered by `creation_time` ascending.
+    TooManyUnusedAddresses(Vec<DepositAddressInfo>),
+}
+
+/// Outcome of [`WalletClientModule::allocate_deposit_address_pooled`], so
+/// callers can decide whether to perform per-operation initialization (notes,
+/// fee bookkeeping, metadata writes) — for `Reused` returns, that work was
+/// already done at the time of the original `Fresh` allocation and must not be
+/// repeated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllocateDepositOutcome {
+    /// A new tweak/operation was created on this call.
+    Fresh,
+    /// An existing unused address was returned. The carried `TweakIdx` is the
+    /// same as the one returned in the tuple and refers to the original
+    /// allocation; it's exposed here as well for explicit diagnostic use.
+    Reused { original_tweak_idx: TweakIdx },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -284,6 +323,11 @@ impl ModuleInit for WalletClientInit {
                         wallet_client_items,
                         "Supports Safe Deposit"
                     );
+                }
+                DbKeyPrefix::PegInPoolCursor => {
+                    if let Some(cursor) = dbtx.get_value(&PegInPoolCursorKey).await {
+                        wallet_client_items.insert("PegInPoolCursor".to_string(), Box::new(cursor));
+                    }
                 }
                 DbKeyPrefix::RecoveryState
                 | DbKeyPrefix::ExternalReservedStart
@@ -760,7 +804,7 @@ impl WalletClientModule {
     async fn allocate_deposit_address_inner(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> (OperationId, Address, TweakIdx) {
+    ) -> DepositAddressInfo {
         dbtx.ensure_isolated().expect("Must be isolated db");
 
         let tweak_idx = get_next_peg_in_tweak_child_id(dbtx).await;
@@ -781,7 +825,11 @@ impl WalletClientModule {
         )
         .await;
 
-        (operation_id, address, tweak_idx)
+        DepositAddressInfo {
+            operation_id,
+            address,
+            tweak_idx,
+        }
     }
 
     /// Fetches the fees that would need to be paid to make the withdraw request
@@ -847,13 +895,16 @@ impl WalletClientModule {
     }
 
     pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
-        let (operation_id, address, _) = self.safe_allocate_deposit_address(req.extra_meta).await?;
+        let deposit_address = self.safe_allocate_deposit_address(req.extra_meta).await?;
 
         Ok(PegInResponse {
-            deposit_address: Address::from_script(&address.script_pubkey(), self.get_network())?
-                .as_unchecked()
-                .clone(),
-            operation_id,
+            deposit_address: Address::from_script(
+                &deposit_address.address.script_pubkey(),
+                self.get_network(),
+            )?
+            .as_unchecked()
+            .clone(),
+            operation_id: deposit_address.operation_id,
         })
     }
 
@@ -952,7 +1003,7 @@ impl WalletClientModule {
     pub async fn safe_allocate_deposit_address<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    ) -> anyhow::Result<DepositAddressInfo>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
@@ -984,48 +1035,55 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_expert_only<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    ) -> anyhow::Result<DepositAddressInfo>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
         let extra_meta_value =
             serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
-        let (operation_id, address, tweak_idx) = self
+        let deposit_address = self
             .db
             .autocommit(
                 move |dbtx, _| {
                     let extra_meta_value_inner = extra_meta_value.clone();
                     Box::pin(async move {
-                        let (operation_id, address, tweak_idx) = self
-                            .allocate_deposit_address_inner(dbtx)
-                            .await;
+                        let deposit_address = self.allocate_deposit_address_inner(dbtx).await;
 
-                        self.client_ctx.manual_operation_start_dbtx(
-                            dbtx,
-                            operation_id,
-                            WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta {
-                                variant: WalletOperationMetaVariant::Deposit {
-                                    address: address.clone().into_unchecked(),
-                                    tweak_idx: Some(tweak_idx),
-                                    expires_at: None,
+                        self.client_ctx
+                            .manual_operation_start_dbtx(
+                                dbtx,
+                                deposit_address.operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta {
+                                    variant: WalletOperationMetaVariant::Deposit {
+                                        address: deposit_address.address.clone().into_unchecked(),
+                                        tweak_idx: Some(deposit_address.tweak_idx),
+                                        expires_at: None,
+                                    },
+                                    extra_meta: extra_meta_value_inner,
                                 },
-                                extra_meta: extra_meta_value_inner,
-                            },
-                            vec![]
-                        ).await?;
+                                vec![],
+                            )
+                            .await?;
 
-                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
+                        debug!(
+                            target: LOG_CLIENT_MODULE_WALLET,
+                            tweak_idx = %deposit_address.tweak_idx,
+                            address = %deposit_address.address,
+                            "Derived a new deposit address"
+                        );
 
                         // Begin watching the script address
-                        self.rpc.watch_script_history(&address.script_pubkey()).await?;
+                        self.rpc
+                            .watch_script_history(&deposit_address.address.script_pubkey())
+                            .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
                             sender.send_replace(());
                         });
 
-                        Ok((operation_id, address, tweak_idx))
+                        Ok(deposit_address)
                     })
                 },
                 Some(100),
@@ -1039,7 +1097,276 @@ impl WalletClientModule {
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
-        Ok((operation_id, address, tweak_idx))
+        Ok(deposit_address)
+    }
+
+    /// Allocate a deposit address, bounding the gap of consecutive unused
+    /// addresses past the last-used one, without selecting a reusable address.
+    ///
+    /// "Unused" here means `PegInTweakIndexData::claimed.is_empty()` — the
+    /// `pegin_monitor` has not yet successfully claimed any deposit on this
+    /// address. There is a small race window where a deposit has been
+    /// observed in the mempool / awaiting confirmations but not yet claimed,
+    /// in which case the address still looks unused. Reusing such an address
+    /// is benign in practice: `pegin_monitor` claims any number of deposits
+    /// per address.
+    ///
+    /// Let `gap` be the count of unused tweak indices strictly greater than
+    /// the highest used index (or the count of all allocated tweaks if none
+    /// have been used yet). Semantics:
+    ///   - If `gap >= max_gap_size` and there is at least one unused address,
+    ///     returns all those addresses with
+    ///     [`MaybeNewAddress::TooManyUnusedAddresses`].
+    ///   - Otherwise, allocates a new address (equivalent to
+    ///     [`Self::allocate_deposit_address_expert_only`]) and returns it with
+    ///     [`MaybeNewAddress::NewAddress`].
+    ///
+    /// `max_gap_size == 0` therefore means "only allocate fresh when the
+    /// previous address was already used". The very first call still
+    /// allocates fresh because there are no addresses to reuse.
+    ///
+    /// `max_gap_size == usize::MAX` makes this method behave like
+    /// [`Self::allocate_deposit_address_expert_only`] — always allocating a new
+    /// address.
+    ///
+    /// Reusable addresses are ordered by `creation_time` ascending. This lets
+    /// callers that need a custom selection strategy choose from all available
+    /// candidates.
+    ///
+    /// Caveats inherited from
+    /// [`Self::allocate_deposit_address_expert_only`] (40KB tx limit, future
+    /// minimum peg-in amount) apply equally to newly allocated and reused
+    /// addresses.
+    pub async fn allocate_deposit_address_pooled_stateless(
+        &self,
+        max_gap_size: usize,
+    ) -> anyhow::Result<MaybeNewAddress> {
+        let max_gap_size_u64 = u64::try_from(max_gap_size).unwrap_or(u64::MAX);
+        let extra_meta_value = serde_json::Value::Null;
+        let result = self
+            .db
+            .autocommit(
+                move |dbtx, _| {
+                    let extra_meta_value_inner = extra_meta_value.clone();
+                    Box::pin(async move {
+                        let unused = self.unused_pooled_deposit_addresses(dbtx).await;
+
+                        if max_gap_size_u64 <= unused.len() as u64 && !unused.is_empty() {
+                            let addresses = unused
+                                .into_iter()
+                                .map(|(tweak_idx, data)| {
+                                    let (_script, address, _key, operation_id) =
+                                        self.data.derive_peg_in_script(tweak_idx);
+
+                                    debug_assert_eq!(operation_id, data.operation_id);
+
+                                    DepositAddressInfo {
+                                        operation_id,
+                                        address,
+                                        tweak_idx,
+                                    }
+                                })
+                                .collect();
+
+                            return Ok::<_, anyhow::Error>(
+                                MaybeNewAddress::TooManyUnusedAddresses(addresses),
+                            );
+                        }
+
+                        let deposit_address = self.allocate_deposit_address_inner(dbtx).await;
+
+                        self.client_ctx
+                            .manual_operation_start_dbtx(
+                                dbtx,
+                                deposit_address.operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta {
+                                    variant: WalletOperationMetaVariant::Deposit {
+                                        address: deposit_address.address.clone().into_unchecked(),
+                                        tweak_idx: Some(deposit_address.tweak_idx),
+                                        expires_at: None,
+                                    },
+                                    extra_meta: extra_meta_value_inner,
+                                },
+                                vec![],
+                            )
+                            .await?;
+
+                        debug!(
+                            target: LOG_CLIENT_MODULE_WALLET,
+                            tweak_idx = %deposit_address.tweak_idx,
+                            address = %deposit_address.address,
+                            "Derived a new pooled deposit address"
+                        );
+
+                        self.rpc
+                            .watch_script_history(&deposit_address.address.script_pubkey())
+                            .await?;
+
+                        let sender = self.pegin_monitor_wakeup_sender.clone();
+                        dbtx.on_commit(move || {
+                            sender.send_replace(());
+                        });
+
+                        Ok(MaybeNewAddress::NewAddress(deposit_address))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
+                AutocommitError::ClosureError { error, .. } => error,
+            })?;
+
+        Ok(result)
+    }
+
+    async fn unused_pooled_deposit_addresses(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<(TweakIdx, PegInTweakIndexData)> {
+        // Walk peg-in tweaks in descending order, taking unused ones
+        // (`claimed.is_empty()`) until we hit a used one. That gives us exactly
+        // the trailing gap — `gap + 1` reads regardless of total tweak count.
+        // No RPC and no separately-maintained `last_used` index needed.
+        let mut unused: Vec<(TweakIdx, PegInTweakIndexData)> = dbtx
+            .find_by_prefix_sorted_descending(&PegInTweakIndexPrefix)
+            .await
+            .take_while(|(_, d)| std::future::ready(d.claimed.is_empty()))
+            .map(|(k, v)| (k.0, v))
+            .collect()
+            .await;
+
+        // Order by `creation_time` ascending for caller selection and stable
+        // wraparound after stateful reuse mutates `creation_time`.
+        unused.sort_by_key(|(t, d)| (d.creation_time, *t));
+        unused
+    }
+
+    /// Allocate a deposit address, bounding the gap of consecutive unused
+    /// addresses past the last-used one.
+    ///
+    /// This is a stateful wrapper over
+    /// [`Self::allocate_deposit_address_pooled_stateless`]. If the stateless
+    /// method returns [`MaybeNewAddress::TooManyUnusedAddresses`], this method
+    /// picks one of those addresses with a persisted round-robin cursor and
+    /// returns it with [`AllocateDepositOutcome::Reused`].
+    ///
+    /// Selection policy when reusing: round-robin over unused addresses
+    /// ordered by `creation_time` ascending, with the cursor persisted
+    /// per-client in the wallet module's DB. The cursor stores the next
+    /// tweak index to consider; after picking idx X it advances to X+1, and
+    /// when no candidate has `tweak_idx >= cursor` it wraps to the
+    /// oldest-by-`creation_time` candidate. This gives the caller the
+    /// predictable "cycle through the unused addresses" behavior.
+    ///
+    /// On reuse the `creation_time` and check-schedule fields of the
+    /// underlying tweak entry are reset to "now", so `pegin_monitor`'s
+    /// age-proportional polling delay restarts from zero. Without this an
+    /// old entry would keep its long stale next-check delay and a user
+    /// sending to it could wait a long time before the client noticed.
+    #[allow(clippy::too_many_lines)]
+    pub async fn allocate_deposit_address_pooled(
+        &self,
+        max_gap_size: usize,
+    ) -> anyhow::Result<(DepositAddressInfo, AllocateDepositOutcome)> {
+        let stateless = self
+            .allocate_deposit_address_pooled_stateless(max_gap_size)
+            .await?;
+
+        let reused_addresses = match stateless {
+            MaybeNewAddress::NewAddress(deposit_address) => {
+                return Ok((deposit_address, AllocateDepositOutcome::Fresh));
+            }
+            MaybeNewAddress::TooManyUnusedAddresses(addresses) => addresses,
+        };
+
+        let result = self
+            .db
+            .autocommit(
+                move |dbtx, _| {
+                    let reused_addresses = reused_addresses.clone();
+                    Box::pin(async move {
+                        let cursor = dbtx
+                            .get_value(&PegInPoolCursorKey)
+                            .await
+                            .unwrap_or(TweakIdx(0));
+
+                        let pick_pos = reused_addresses
+                            .iter()
+                            .position(|a| cursor <= a.tweak_idx)
+                            .unwrap_or(0);
+                        let reused_address = reused_addresses[pick_pos].clone();
+
+                        let existing_tweak_idx = reused_address.tweak_idx;
+                        let existing = dbtx
+                            .get_value(&PegInTweakIndexKey(reused_address.tweak_idx))
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "Pooled address disappeared while reusing {}",
+                                    reused_address.tweak_idx
+                                )
+                            })?;
+
+                        ensure!(
+                            existing.claimed.is_empty(),
+                            "Pooled address was used while reusing {}",
+                            reused_address.tweak_idx
+                        );
+
+                        dbtx.insert_entry(&PegInPoolCursorKey, &reused_address.tweak_idx.next())
+                            .await;
+
+                        // Reset the monitoring schedule so the reused address
+                        // gets checked as aggressively as a freshly-allocated
+                        // one. Without this, an old entry would retain its
+                        // `age/10` next-check delay from `pegin_monitor`,
+                        // meaning a user who sends to a long-idle pool address
+                        // could wait hours before the client polls for the
+                        // deposit.
+                        let now = fedimint_core::time::now();
+                        dbtx.insert_entry(
+                            &PegInTweakIndexKey(reused_address.tweak_idx),
+                            &PegInTweakIndexData {
+                                creation_time: now,
+                                last_check_time: None,
+                                next_check_time: Some(now),
+                                operation_id: existing.operation_id,
+                                claimed: existing.claimed,
+                            },
+                        )
+                        .await;
+
+                        let sender = self.pegin_monitor_wakeup_sender.clone();
+                        dbtx.on_commit(move || {
+                            sender.send_replace(());
+                        });
+
+                        Ok::<_, anyhow::Error>((
+                            reused_address,
+                            AllocateDepositOutcome::Reused {
+                                original_tweak_idx: existing_tweak_idx,
+                            },
+                        ))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
+                AutocommitError::ClosureError { error, .. } => error,
+            })?;
+
+        Ok(result)
     }
 
     /// Returns a stream of updates about an ongoing deposit operation created

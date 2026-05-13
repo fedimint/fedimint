@@ -493,15 +493,15 @@ pub async fn handle_command(
                 target: LOG_CLIENT,
                 "Command deprecated. Use `fedimint-cli module wallet new-deposit-address` instead."
             );
-            let (operation_id, address, tweak_idx) = client
+            let deposit_address = client
                 .get_first_module::<WalletClientModule>()?
                 .allocate_deposit_address_expert_only(())
                 .await?;
             Ok(serde_json::json! {
                 {
-                    "address": address,
-                    "operation_id": operation_id,
-                    "idx": tweak_idx.0
+                    "address": deposit_address.address,
+                    "operation_id": deposit_address.operation_id,
+                    "idx": deposit_address.tweak_idx.0
                 }
             })
         }
