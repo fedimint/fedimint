@@ -104,6 +104,14 @@ pub(crate) async fn run_peg_in_monitor(
         Duration::from_secs(30)
     };
 
+    // Whether the previous iteration was triggered by an external wakeup
+    // signal (manual `recheck_pegin_address`, new address allocation). On
+    // such iterations we drop the `min_sleep` floor so the user-initiated
+    // recheck isn't artificially throttled — particularly relevant for
+    // fresh addresses where `retry_delay_vec` returns `age / 10`, which
+    // would otherwise be clamped to the 30s production minimum.
+    let mut woke_via_signal = false;
+
     loop {
         if let Err(err) = check_for_deposits(
             &db,
@@ -125,14 +133,20 @@ pub(crate) async fn run_peg_in_monitor(
         let next_wakeup = NextActions::from_db_state(&db).await.next.unwrap_or_else(||
             /* for simplicity just wake up every hour, even when there's no need */
               now + Duration::from_hours(1));
+        let effective_min_sleep = if woke_via_signal {
+            Duration::ZERO
+        } else {
+            min_sleep
+        };
         let next_wakeup_duration = next_wakeup
             .duration_since(now)
             .unwrap_or_default()
-            .max(min_sleep);
-        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), "Sleep after completing due checks");
+            .max(effective_min_sleep);
+        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), woke_via_signal, "Sleep after completing due checks");
         tokio::select! {
             () = sleep(next_wakeup_duration) => {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
+                woke_via_signal = false;
             },
             res = wakeup_receiver.changed() => {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a signal");
@@ -140,6 +154,7 @@ pub(crate) async fn run_peg_in_monitor(
                     debug!(target: LOG_CLIENT_MODULE_WALLET,  "Terminating peg-in monitor");
                     return;
                 }
+                woke_via_signal = true;
             }
         }
     }
