@@ -190,6 +190,32 @@ async fn check_and_claim_idx_pegins(
                 .autocommit(
                     |dbtx, _| {
                         Box::pin(async {
+                            // Re-read inside the transaction so a concurrent
+                            // `recheck_pegin_address` that landed while we were
+                            // doing Bitcoin RPC calls isn't silently overwritten.
+                            // Peg-in entries are never deleted, only updated,
+                            // so the entry is guaranteed to still exist even
+                            // across `autocommit` retries.
+                            let current = dbtx
+                                .get_value(&due_key)
+                                .await
+                                .expect("Peg-in entries are never deleted");
+
+                            // If `next_check_time` changed under us (a recheck set
+                            // it to "now"), keep the earliest of the two so the
+                            // recheck still triggers the next monitor iteration.
+                            let merged_next_check_time = if current.next_check_time
+                                == due_val.next_check_time
+                            {
+                                next_check_time
+                            } else {
+                                match (current.next_check_time, next_check_time) {
+                                    (Some(a), Some(b)) => Some(a.min(b)),
+                                    (a, None) => a,
+                                    (None, b) => b,
+                                }
+                            };
+
                             let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
                             let claimed_sender = pengin_claimed_sender.clone();
@@ -198,15 +224,15 @@ async fn check_and_claim_idx_pegins(
                             });
 
                             let peg_in_tweak_index_data = PegInTweakIndexData {
-                                next_check_time,
+                                next_check_time: merged_next_check_time,
                                 last_check_time: Some(now),
-                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
-                                ..due_val
+                                claimed: [current.claimed.clone(), claimed_now].concat(),
+                                ..current
                             };
                             trace!(
                                 target: LOG_CLIENT_MODULE_WALLET,
                                 tweak_idx=%due_key.0,
-                                due_in_secs=?next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
+                                due_in_secs=?merged_next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
                                 data=?peg_in_tweak_index_data,
                                 "Updating"
                             );
