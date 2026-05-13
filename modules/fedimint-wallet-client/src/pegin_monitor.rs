@@ -116,6 +116,8 @@ pub(crate) async fn run_peg_in_monitor(
         .await
         {
             warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
+            // Avoid tight-looping on a persistent failure (e.g. bitcoind down).
+            sleep(min_sleep).await;
             continue;
         }
 
