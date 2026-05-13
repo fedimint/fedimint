@@ -493,15 +493,15 @@
 <a href=#493 id=493 data-nosnippet>493</a>                target: LOG_CLIENT,
 <a href=#494 id=494 data-nosnippet>494</a>                <span class="string">"Command deprecated. Use `fedimint-cli module wallet new-deposit-address` instead."
 <a href=#495 id=495 data-nosnippet>495</a>            </span>);
-<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span>(operation_id, address, tweak_idx) = client
+<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span>deposit_address = client
 <a href=#497 id=497 data-nosnippet>497</a>                .get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?
 <a href=#498 id=498 data-nosnippet>498</a>                </span>.allocate_deposit_address_expert_only(())
 <a href=#499 id=499 data-nosnippet>499</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#500 id=500 data-nosnippet>500</a>            <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span> {
 <a href=#501 id=501 data-nosnippet>501</a>                {
-<a href=#502 id=502 data-nosnippet>502</a>                    <span class="string">"address"</span>: address,
-<a href=#503 id=503 data-nosnippet>503</a>                    <span class="string">"operation_id"</span>: operation_id,
-<a href=#504 id=504 data-nosnippet>504</a>                    <span class="string">"idx"</span>: tweak_idx.<span class="number">0
+<a href=#502 id=502 data-nosnippet>502</a>                    <span class="string">"address"</span>: deposit_address.address,
+<a href=#503 id=503 data-nosnippet>503</a>                    <span class="string">"operation_id"</span>: deposit_address.operation_id,
+<a href=#504 id=504 data-nosnippet>504</a>                    <span class="string">"idx"</span>: deposit_address.tweak_idx.<span class="number">0
 <a href=#505 id=505 data-nosnippet>505</a>                </span>}
 <a href=#506 id=506 data-nosnippet>506</a>            })
 <a href=#507 id=507 data-nosnippet>507</a>        }
