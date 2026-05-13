@@ -104,15 +104,29 @@ pub(crate) async fn run_peg_in_monitor(
         Duration::from_secs(30)
     };
 
-    // Whether the previous iteration was triggered by an external wakeup
-    // signal (manual `recheck_pegin_address`, new address allocation). On
-    // such iterations we drop the `min_sleep` floor so the user-initiated
-    // recheck isn't artificially throttled — particularly relevant for
-    // fresh addresses where `retry_delay_vec` returns `age / 10`, which
-    // would otherwise be clamped to the 30s production minimum.
-    let mut woke_via_signal = false;
+    // How long to wait before the next check. Seeded to ZERO so the
+    // first iteration runs a check immediately. Recomputed at the end
+    // of each successful iteration based on DB scheduling and how the
+    // previous wakeup arrived (see `woke_via_signal` below).
+    let mut next_wakeup_duration = Duration::ZERO;
 
     loop {
+        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), "Sleeping before next check");
+        let woke_via_signal = tokio::select! {
+            () = sleep(next_wakeup_duration) => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
+                false
+            },
+            res = wakeup_receiver.changed() => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a signal");
+                if res.is_err() {
+                    debug!(target: LOG_CLIENT_MODULE_WALLET,  "Terminating peg-in monitor");
+                    return;
+                }
+                true
+            }
+        };
+
         if let Err(err) = check_for_deposits(
             &db,
             &data,
@@ -124,8 +138,9 @@ pub(crate) async fn run_peg_in_monitor(
         .await
         {
             warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
-            // Avoid tight-looping on a persistent failure (e.g. bitcoind down).
-            sleep(min_sleep).await;
+            // Retry after `min_sleep`. The next iteration's select still
+            // honours signals, so a manual recheck wakes us up sooner.
+            next_wakeup_duration = min_sleep;
             continue;
         }
 
@@ -133,30 +148,20 @@ pub(crate) async fn run_peg_in_monitor(
         let next_wakeup = NextActions::from_db_state(&db).await.next.unwrap_or_else(||
             /* for simplicity just wake up every hour, even when there's no need */
               now + Duration::from_hours(1));
+        // When this iteration was signal-driven (manual recheck, new
+        // address allocation) drop the `min_sleep` floor so the natural
+        // retry_delay_vec drives timing — relevant for fresh addresses
+        // where the natural delay is `age / 10` and would otherwise be
+        // clamped to 30s in production.
         let effective_min_sleep = if woke_via_signal {
             Duration::ZERO
         } else {
             min_sleep
         };
-        let next_wakeup_duration = next_wakeup
+        next_wakeup_duration = next_wakeup
             .duration_since(now)
             .unwrap_or_default()
             .max(effective_min_sleep);
-        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), woke_via_signal, "Sleep after completing due checks");
-        tokio::select! {
-            () = sleep(next_wakeup_duration) => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
-                woke_via_signal = false;
-            },
-            res = wakeup_receiver.changed() => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a signal");
-                if res.is_err() {
-                    debug!(target: LOG_CLIENT_MODULE_WALLET,  "Terminating peg-in monitor");
-                    return;
-                }
-                woke_via_signal = true;
-            }
-        }
     }
 }
 
