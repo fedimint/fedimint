@@ -201,13 +201,12 @@ pub(crate) async fn handle_cli_command(
             serde_json::Value::Bool(true)
         }
         Opts::NewDepositAddress => {
-            let (operation_id, address, tweak_idx) =
-                module.allocate_deposit_address_expert_only(()).await?;
+            let deposit_address = module.allocate_deposit_address_expert_only(()).await?;
             serde_json::json! {
                 {
-                    "address": address,
-                    "operation_id": operation_id,
-                    "tweak_idx": tweak_idx.0
+                    "address": deposit_address.address,
+                    "operation_id": deposit_address.operation_id,
+                    "tweak_idx": deposit_address.tweak_idx.0
                 }
             }
         }

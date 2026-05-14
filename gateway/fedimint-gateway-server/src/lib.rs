@@ -1274,9 +1274,10 @@ impl Gateway {
         let client = self.select_client(payload.federation_id).await?;
 
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
-            let (_, address, _) = wallet_module
+            let address = wallet_module
                 .allocate_deposit_address_expert_only(())
-                .await?;
+                .await?
+                .address;
             Ok(address)
         } else if let Ok(wallet_module) = client
             .value()

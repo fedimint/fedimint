@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
@@ -26,7 +26,10 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
+use fedimint_wallet_client::{
+    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
+    WithdrawState,
+};
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
@@ -62,9 +65,11 @@ async fn peg_in<'a>(
     await_consensus_upgrade(client, fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
@@ -228,9 +233,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
 
     // Test operation is created
     let operations = client
@@ -384,9 +391,12 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
-    let (op, address, tweak_idx) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
+    let tweak_idx = deposit_address.tweak_idx;
 
     // First peg-in
     {
@@ -835,9 +845,11 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     await_consensus_upgrade(&client, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
-    let (op, address, _) = wallet_module
+    let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
+    let op = deposit_address.operation_id;
+    let address = deposit_address.address;
 
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
@@ -892,6 +904,223 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
 
     info!("Checking balance after deposit");
     assert_eq!(client.get_balance_for_btc().await?, Amount::ZERO);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    bitcoin.mine_blocks(10).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    // First call has nothing to reuse → Fresh.
+    let (deposit_address0, outcome0) = wallet_module.allocate_deposit_address_pooled(0).await?;
+    assert_eq!(outcome0, AllocateDepositOutcome::Fresh);
+    let addr0 = deposit_address0.address;
+    let tweak_idx0 = deposit_address0.tweak_idx;
+
+    // Subsequent calls keep returning the same address until a deposit lands
+    // on it. Reuse must also keep pointing at the original operation instead
+    // of creating duplicate operation-log entries for the same address.
+    for _ in 0..3 {
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
+        assert_matches!(
+            outcome,
+            AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx0
+        );
+        assert_eq!(deposit_address.operation_id, deposit_address0.operation_id);
+        assert_eq!(deposit_address.address, addr0);
+        assert_eq!(deposit_address.tweak_idx, tweak_idx0);
+    }
+
+    let operations = client
+        .operation_log()
+        .paginate_operations_rev(10, None)
+        .await;
+    assert_eq!(
+        operations.len(),
+        1,
+        "reused addresses must not start new operations"
+    );
+    assert_eq!(operations[0].0.operation_id, deposit_address0.operation_id);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    bitcoin.mine_blocks(10).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    const GAP: usize = 4;
+
+    // Fill the gap: every call should be Fresh and yield a distinct address.
+    let mut fresh: Vec<(
+        bitcoin::Address,
+        fedimint_wallet_client::client_db::TweakIdx,
+    )> = vec![];
+    for _ in 0..GAP {
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        assert_eq!(outcome, AllocateDepositOutcome::Fresh);
+        fresh.push((deposit_address.address, deposit_address.tweak_idx));
+    }
+    let unique_addrs: HashSet<_> = fresh.iter().map(|(a, _)| a.script_pubkey()).collect();
+    assert_eq!(unique_addrs.len(), GAP);
+
+    let stateless = wallet_module
+        .allocate_deposit_address_pooled_stateless(GAP)
+        .await?;
+    let MaybeNewAddress::TooManyUnusedAddresses(addresses) = stateless else {
+        panic!("expected reusable addresses from stateless allocation");
+    };
+    assert_eq!(addresses.len(), GAP);
+    for (available, expected) in addresses.iter().zip(&fresh) {
+        assert_eq!(available.address, expected.0);
+        assert_eq!(available.tweak_idx, expected.1);
+    }
+
+    // Past the cap: round-robin reuse, starting from the oldest. Cursor
+    // begins at TweakIdx(0) and advances to picked.next() each time, so the
+    // cycle is [0, 1, 2, 3].
+    for expected in &fresh {
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        assert_matches!(
+            outcome,
+            AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == expected.1
+        );
+        assert_eq!(deposit_address.address, expected.0);
+        assert_eq!(deposit_address.tweak_idx, expected.1);
+    }
+
+    // After a full cycle, cursor wraps to one of the reusable entries.
+    let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
+    assert_matches!(outcome, AllocateDepositOutcome::Reused { .. });
+    assert!(fresh.iter().any(|expected| {
+        expected.0 == deposit_address.address && expected.1 == deposit_address.tweak_idx
+    }));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    bitcoin.mine_blocks(10).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    let (original, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
+    assert_eq!(outcome, AllocateDepositOutcome::Fresh);
+
+    let distant_past = fedimint_core::time::now() - Duration::from_secs(24 * 60 * 60);
+    {
+        let mut dbtx = wallet_module.db.begin_transaction().await;
+        let mut data = dbtx
+            .get_value(&fedimint_wallet_client::client_db::PegInTweakIndexKey(
+                original.tweak_idx,
+            ))
+            .await
+            .expect("allocated tweak must exist");
+        data.creation_time = distant_past;
+        data.last_check_time = Some(distant_past);
+        data.next_check_time = Some(distant_past + Duration::from_secs(60 * 60));
+        dbtx.insert_entry(
+            &fedimint_wallet_client::client_db::PegInTweakIndexKey(original.tweak_idx),
+            &data,
+        )
+        .await;
+        dbtx.commit_tx().await;
+    }
+
+    let (reused, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
+    assert_matches!(
+        outcome,
+        AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == original.tweak_idx
+    );
+    assert_eq!(reused.operation_id, original.operation_id);
+    assert_eq!(reused.address, original.address);
+
+    let data = wallet_module
+        .get_pegin_tweak_idx(original.tweak_idx)
+        .await?;
+    assert!(distant_past < data.creation_time);
+    assert_eq!(data.last_check_time, None);
+    assert!(data.next_check_time.is_some());
+    assert!(distant_past < data.next_check_time.expect("next check time must be set"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn allocate_deposit_address_pooled_used_address_shrinks_gap() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    const GAP: usize = 3;
+
+    let mut fresh = vec![];
+    for _ in 0..GAP {
+        let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
+        assert_eq!(outcome, AllocateDepositOutcome::Fresh);
+        fresh.push((deposit_address.address, deposit_address.tweak_idx));
+    }
+
+    // Send an on-chain deposit to the first address and drive it to a
+    // claimed state — that's what flips `PegInTweakIndexData::claimed` from
+    // empty to non-empty in the DB, which is what shrinks the gap. The gap
+    // (count of unused with idx > last_used) drops from GAP=3 to 2, so the
+    // next call should allocate Fresh again.
+    let (used_addr, used_tweak_idx) = fresh[0].clone();
+    let _ = bitcoin
+        .send_and_mine_block(
+            &used_addr,
+            bsats(PEG_IN_AMOUNT_SATS)
+                + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
+        )
+        .await;
+    bitcoin.mine_blocks(finality_delay).await;
+    wallet_module.await_num_deposits(used_tweak_idx, 1).await?;
+
+    let (deposit_address, outcome) = wallet_module.allocate_deposit_address_pooled(GAP).await?;
+    assert_eq!(
+        outcome,
+        AllocateDepositOutcome::Fresh,
+        "expected Fresh after deposit landed"
+    );
+    assert_ne!(
+        deposit_address.address, used_addr,
+        "fresh allocation must not collide with the used address"
+    );
+
     Ok(())
 }
 
@@ -1651,6 +1880,7 @@ mod fedimint_migration_tests {
                         client_db::DbKeyPrefix::RecoveryFinalized => {}
                         client_db::DbKeyPrefix::RecoveryState => {}
                         client_db::DbKeyPrefix::SupportsSafeDeposit => {}
+                        client_db::DbKeyPrefix::PegInPoolCursor => {}
                         client_db::DbKeyPrefix::ExternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedEnd => {}
