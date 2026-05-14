@@ -417,8 +417,13 @@ impl WalletClientModule {
     }
 
     /// Issue ecash for an unspent output with a given fee.
+    ///
+    /// Submission and event logging happen inside the caller-supplied `dbtx`
+    /// so that the caller can atomically advance `NextOutputIndexKey` in the
+    /// same commit.
     async fn receive_output(
         &self,
+        dbtx: &mut DatabaseTransaction<'_>,
         output_index: u64,
         value: bitcoin::Amount,
         address_index: u64,
@@ -457,7 +462,8 @@ impl WalletClientModule {
 
         let range = self
             .client_ctx
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_dbtx(
+                dbtx,
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
                 move |change_outpoint_range| {
@@ -472,11 +478,9 @@ impl WalletClientModule {
             .await
             .expect("Input amount is sufficient to finalize transaction");
 
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
         self.client_ctx
             .log_event(
-                &mut dbtx,
+                dbtx,
                 ReceivePaymentEvent {
                     operation_id,
                     address: self.derive_address(address_index).as_unchecked().clone(),
@@ -485,8 +489,6 @@ impl WalletClientModule {
                 },
             )
             .await;
-
-        dbtx.commit_tx().await;
 
         (operation_id, range.txid())
     }
@@ -589,9 +591,25 @@ impl WalletClientModule {
                         .ok_or(anyhow!("No consensus feerate is available"))?;
 
                     if output.value > receive_fee {
+                        // Submit the claim and advance the scan cursor in the
+                        // same commit so cancellation between them cannot
+                        // cause a duplicate claim on restart.
+                        let mut dbtx = self.db.begin_transaction().await;
+
                         let (operation_id, txid) = self
-                            .receive_output(output.index, output.value, address_index, receive_fee)
+                            .receive_output(
+                                &mut dbtx.to_ref_nc(),
+                                output.index,
+                                output.value,
+                                address_index,
+                                receive_fee,
+                            )
                             .await;
+
+                        dbtx.insert_entry(&NextOutputIndexKey, &(output.index + 1))
+                            .await;
+
+                        dbtx.commit_tx_result().await?;
 
                         self.client_ctx
                             .transaction_updates(operation_id)
@@ -599,6 +617,8 @@ impl WalletClientModule {
                             .await_tx_accepted(txid)
                             .await
                             .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+
+                        continue;
                     }
                 }
             }
