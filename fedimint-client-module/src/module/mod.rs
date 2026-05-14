@@ -155,6 +155,14 @@ impl FinalClientIface {
             .expect("client module context must not be use past client shutdown")
     }
 
+    /// Like [`Self::get`] but returns `None` if the client has not been
+    /// finalized yet rather than panicking. Useful for background tasks
+    /// spawned during module init that may start before [`Self::set`] has
+    /// been called by the builder.
+    pub(crate) fn try_get(&self) -> Option<Arc<dyn ClientContextIface>> {
+        self.0.get()?.upgrade()
+    }
+
     pub fn set(&self, client: Weak<dyn ClientContextIface>) {
         self.0.set(client).expect("FinalLazyClient already set");
     }
@@ -255,6 +263,21 @@ where
             client: self.client.get(),
             module_instance_id: self.module_instance_id,
             _marker: marker::PhantomData,
+        }
+    }
+
+    /// Poll until the underlying client is fully constructed, then return.
+    ///
+    /// Background tasks spawned from `ClientModule::new` may start running
+    /// before the [`fedimint_client::Client`] is finished being built; calls
+    /// like [`Self::get_own_active_states`] would then panic. Tasks that need
+    /// to use the full client should await this future first.
+    pub async fn wait_for_client_ready(&self) {
+        use fedimint_core::task::sleep;
+        // 50ms keeps the polling cheap; setup typically completes in a few ms.
+        const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+        while self.client.try_get().is_none() {
+            sleep(POLL_INTERVAL).await;
         }
     }
 
@@ -474,6 +497,27 @@ where
             .get()
             .executor()
             .get_active_states()
+            .await
+            .into_iter()
+            .filter(|s| s.0.module_instance_id() == self.module_instance_id)
+            .map(|s| {
+                (
+                    Clone::clone(
+                        s.0.as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("incorrect output type passed to module plugin"),
+                    ),
+                    s.1,
+                )
+            })
+            .collect()
+    }
+
+    pub async fn get_own_inactive_states(&self) -> Vec<(M::States, InactiveStateMeta)> {
+        self.client
+            .get()
+            .executor()
+            .get_inactive_states()
             .await
             .into_iter()
             .filter(|s| s.0.module_instance_id() == self.module_instance_id)

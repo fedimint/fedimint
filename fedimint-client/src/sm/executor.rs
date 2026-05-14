@@ -181,6 +181,10 @@ impl Executor {
         self.inner.get_active_states().await
     }
 
+    pub async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
+        self.inner.get_inactive_states().await
+    }
+
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
     ///
@@ -1231,6 +1235,10 @@ impl ActiveOrInactiveState {
 impl IExecutor for Executor {
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         Self::get_active_states(self).await
+    }
+
+    async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
+        Self::get_inactive_states(self).await
     }
 
     async fn add_state_machines_dbtx(
