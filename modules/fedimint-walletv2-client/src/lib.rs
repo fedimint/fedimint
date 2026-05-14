@@ -44,7 +44,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, block_in_place, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place, sleep};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -406,14 +406,19 @@ impl WalletClientModule {
     }
 
     /// Find the next valid index starting from (and including) `start_index`.
+    ///
+    /// Returns `None` if the task group begins shutting down before a valid
+    /// index is found — `block_in_place` itself cannot be interrupted, so we
+    /// poll the task handle each iteration so this CPU-bound loop doesn't
+    /// hold up shutdown for the duration of the search.
     #[allow(clippy::maybe_infinite_iter)]
-    fn next_valid_index(&self, start_index: u64) -> u64 {
+    fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
         let pks_hash = self.cfg.bitcoin_pks.consensus_hash();
 
         block_in_place(|| {
             (start_index..)
+                .take_while(|_| !handle.is_shutting_down())
                 .find(|i| is_potential_receive(&self.derive_address(*i).script_pubkey(), &pks_hash))
-                .expect("Will always find a valid index")
         })
     }
 
@@ -498,6 +503,7 @@ impl WalletClientModule {
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
+        let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
             let mut dbtx = module.db.begin_transaction().await;
@@ -508,15 +514,15 @@ impl WalletClientModule {
                 .next()
                 .await
                 .is_none()
+                && let Some(idx) = module.next_valid_index(0, &handle)
             {
-                dbtx.insert_new_entry(&ValidAddressIndexKey(module.next_valid_index(0)), &())
-                    .await;
+                dbtx.insert_new_entry(&ValidAddressIndexKey(idx), &()).await;
             }
 
             dbtx.commit_tx().await;
 
             loop {
-                match module.check_outputs().await {
+                match module.check_outputs(&handle).await {
                     Ok(skip_wait) => {
                         if skip_wait {
                             continue;
@@ -532,17 +538,24 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self) -> anyhow::Result<bool> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
+        // Read both values from a single snapshot and drop the read-only
+        // dbtx before the RPC and loop run, so we don't pin a snapshot
+        // across the federation round-trips and inner write transactions.
+        let (next_output_index, mut valid_indices) = {
+            let mut dbtx = self.db.begin_transaction_nc().await;
 
-        let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
+            let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
 
-        let mut valid_indices: Vec<u64> = dbtx
-            .find_by_prefix(&ValidAddressIndexPrefix)
-            .await
-            .map(|entry| entry.0.0)
-            .collect()
-            .await;
+            let valid_indices: Vec<u64> = dbtx
+                .find_by_prefix(&ValidAddressIndexPrefix)
+                .await
+                .map(|entry| entry.0.0)
+                .collect()
+                .await;
+
+            (next_output_index, valid_indices)
+        };
 
         let mut address_map: BTreeMap<ScriptBuf, u64> = valid_indices
             .iter()
@@ -571,7 +584,12 @@ impl WalletClientModule {
                             .copied()
                             .expect("we have at least one address index") =>
                 {
-                    Some(self.next_valid_index(address_index + 1))
+                    // If shutdown is signaled mid-search, bail out without
+                    // committing anything — we'll resume on the next start.
+                    let Some(idx) = self.next_valid_index(address_index + 1, handle) else {
+                        return Ok(false);
+                    };
+                    Some(idx)
                 }
                 _ => None,
             };
