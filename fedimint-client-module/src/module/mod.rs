@@ -269,7 +269,7 @@ where
     /// Poll until the underlying client is fully constructed, then return.
     ///
     /// Background tasks spawned from `ClientModule::new` may start running
-    /// before the [`fedimint_client::Client`] is finished being built; calls
+    /// before the `fedimint_client::Client` is finished being built; calls
     /// like [`Self::get_own_active_states`] would then panic. Tasks that need
     /// to use the full client should await this future first.
     pub async fn wait_for_client_ready(&self) {
