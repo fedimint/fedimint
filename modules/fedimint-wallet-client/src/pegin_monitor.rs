@@ -104,7 +104,29 @@ pub(crate) async fn run_peg_in_monitor(
         Duration::from_secs(30)
     };
 
+    // How long to wait before the next check. Seeded to ZERO so the
+    // first iteration runs a check immediately. Recomputed at the end
+    // of each successful iteration based on DB scheduling and how the
+    // previous wakeup arrived (see `woke_via_signal` below).
+    let mut next_wakeup_duration = Duration::ZERO;
+
     loop {
+        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), "Sleeping before next check");
+        let woke_via_signal = tokio::select! {
+            () = sleep(next_wakeup_duration) => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
+                false
+            },
+            res = wakeup_receiver.changed() => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a signal");
+                if res.is_err() {
+                    debug!(target: LOG_CLIENT_MODULE_WALLET,  "Terminating peg-in monitor");
+                    return;
+                }
+                true
+            }
+        };
+
         if let Err(err) = check_for_deposits(
             &db,
             &data,
@@ -116,6 +138,9 @@ pub(crate) async fn run_peg_in_monitor(
         .await
         {
             warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
+            // Retry after `min_sleep`. The next iteration's select still
+            // honours signals, so a manual recheck wakes us up sooner.
+            next_wakeup_duration = min_sleep;
             continue;
         }
 
@@ -123,23 +148,20 @@ pub(crate) async fn run_peg_in_monitor(
         let next_wakeup = NextActions::from_db_state(&db).await.next.unwrap_or_else(||
             /* for simplicity just wake up every hour, even when there's no need */
               now + Duration::from_hours(1));
-        let next_wakeup_duration = next_wakeup
+        // When this iteration was signal-driven (manual recheck, new
+        // address allocation) drop the `min_sleep` floor so the natural
+        // retry_delay_vec drives timing — relevant for fresh addresses
+        // where the natural delay is `age / 10` and would otherwise be
+        // clamped to 30s in production.
+        let effective_min_sleep = if woke_via_signal {
+            Duration::ZERO
+        } else {
+            min_sleep
+        };
+        next_wakeup_duration = next_wakeup
             .duration_since(now)
             .unwrap_or_default()
-            .max(min_sleep);
-        debug!(target: LOG_CLIENT_MODULE_WALLET, sleep_msecs=%next_wakeup_duration.as_millis(), "Sleep after completing due checks");
-        tokio::select! {
-            () = sleep(next_wakeup_duration) => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a scheduled wakeup");
-            },
-            res = wakeup_receiver.changed() => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Woken up by a signal");
-                if res.is_err() {
-                    debug!(target: LOG_CLIENT_MODULE_WALLET,  "Terminating peg-in monitor");
-                    return;
-                }
-            }
-        }
+            .max(effective_min_sleep);
     }
 }
 
@@ -190,6 +212,32 @@ async fn check_and_claim_idx_pegins(
                 .autocommit(
                     |dbtx, _| {
                         Box::pin(async {
+                            // Re-read inside the transaction so a concurrent
+                            // `recheck_pegin_address` that landed while we were
+                            // doing Bitcoin RPC calls isn't silently overwritten.
+                            // Peg-in entries are never deleted, only updated,
+                            // so the entry is guaranteed to still exist even
+                            // across `autocommit` retries.
+                            let current = dbtx
+                                .get_value(&due_key)
+                                .await
+                                .expect("Peg-in entries are never deleted");
+
+                            // If `next_check_time` changed under us (a recheck set
+                            // it to "now"), keep the earliest of the two so the
+                            // recheck still triggers the next monitor iteration.
+                            let merged_next_check_time = if current.next_check_time
+                                == due_val.next_check_time
+                            {
+                                next_check_time
+                            } else {
+                                match (current.next_check_time, next_check_time) {
+                                    (Some(a), Some(b)) => Some(a.min(b)),
+                                    (a, None) => a,
+                                    (None, b) => b,
+                                }
+                            };
+
                             let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
                             let claimed_sender = pengin_claimed_sender.clone();
@@ -198,15 +246,15 @@ async fn check_and_claim_idx_pegins(
                             });
 
                             let peg_in_tweak_index_data = PegInTweakIndexData {
-                                next_check_time,
+                                next_check_time: merged_next_check_time,
                                 last_check_time: Some(now),
-                                claimed: [due_val.claimed.clone(), claimed_now].concat(),
-                                ..due_val
+                                claimed: [current.claimed.clone(), claimed_now].concat(),
+                                ..current
                             };
                             trace!(
                                 target: LOG_CLIENT_MODULE_WALLET,
                                 tweak_idx=%due_key.0,
-                                due_in_secs=?next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
+                                due_in_secs=?merged_next_check_time.map(|next_check_time| next_check_time.duration_since(now).unwrap_or_default().as_secs()),
                                 data=?peg_in_tweak_index_data,
                                 "Updating"
                             );
