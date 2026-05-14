@@ -45,7 +45,8 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, block_in_place, sleep};
-use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
+use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
@@ -420,7 +421,11 @@ impl WalletClientModule {
     ///
     /// Submission and event logging happen inside the caller-supplied `dbtx`
     /// so that the caller can atomically advance `NextOutputIndexKey` in the
-    /// same commit.
+    /// same commit. Returns an error if the transaction cannot be assembled
+    /// locally — most commonly because the remaining value after
+    /// `receive_fee` is too small to cover the mint module's output fee.
+    /// Federation acceptance is tracked by the receive state machine and
+    /// does not block this call.
     async fn receive_output(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -428,7 +433,7 @@ impl WalletClientModule {
         value: bitcoin::Amount,
         address_index: u64,
         fee: bitcoin::Amount,
-    ) -> (OperationId, TransactionId) {
+    ) -> anyhow::Result<()> {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -460,8 +465,7 @@ impl WalletClientModule {
             vec![client_input_sm],
         ));
 
-        let range = self
-            .client_ctx
+        self.client_ctx
             .finalize_and_submit_transaction_dbtx(
                 dbtx,
                 operation_id,
@@ -475,8 +479,7 @@ impl WalletClientModule {
                 },
                 TransactionBuilder::new().with_inputs(client_input_bundle),
             )
-            .await
-            .expect("Input amount is sufficient to finalize transaction");
+            .await?;
 
         self.client_ctx
             .log_event(
@@ -490,7 +493,7 @@ impl WalletClientModule {
             )
             .await;
 
-        (operation_id, range.txid())
+        Ok(())
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -555,80 +558,109 @@ impl WalletClientModule {
         let mut matched_num: usize = 0;
 
         for output in &outputs {
-            if let Some(&address_index) = address_map.get(&output.script) {
-                matched_num += 1;
-                let next_address_index = valid_indices
-                    .last()
-                    .copied()
-                    .expect("we have at least one address index");
+            // If this output landed on our current highest derived address,
+            // pre-compute the next valid index but DON'T persist it yet — it
+            // gets written in the same commit as the matching cursor advance
+            // below, so a cancellation or congestion early-return can't leave
+            // a phantom address ahead of the deposit that triggered it.
+            let new_valid_index = match address_map.get(&output.script) {
+                Some(&address_index)
+                    if address_index
+                        == valid_indices
+                            .last()
+                            .copied()
+                            .expect("we have at least one address index") =>
+                {
+                    Some(self.next_valid_index(address_index + 1))
+                }
+                _ => None,
+            };
 
-                // If we used the highest valid index, add the next valid one
-                if address_index == next_address_index {
-                    let index = self.next_valid_index(next_address_index + 1);
-
-                    let mut dbtx = self.db.begin_transaction().await;
-
-                    dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
-
-                    dbtx.commit_tx_result().await?;
-
-                    valid_indices.push(index);
-
-                    address_map.insert(self.derive_address(index).script_pubkey(), index);
+            if let Some(&address_index) = address_map.get(&output.script)
+                && !output.spent
+            {
+                // In order to not overpay on fees we choose to wait,
+                // the congestion will clear up within a few blocks.
+                if self.module_api.pending_tx_chain().await?.len() >= 3 {
+                    return Ok(false);
                 }
 
-                if !output.spent {
-                    // In order to not overpay on fees we choose to wait,
-                    // the congestion will clear up within a few blocks.
-                    if self.module_api.pending_tx_chain().await?.len() >= 3 {
-                        return Ok(false);
-                    }
+                matched_num += 1;
 
-                    let receive_fee = self
-                        .module_api
-                        .receive_fee()
-                        .await?
-                        .ok_or(anyhow!("No consensus feerate is available"))?;
+                let receive_fee = self
+                    .module_api
+                    .receive_fee()
+                    .await?
+                    .ok_or(anyhow!("No consensus feerate is available"))?;
 
-                    if output.value > receive_fee {
-                        // Submit the claim and advance the scan cursor in the
-                        // same commit so cancellation between them cannot
-                        // cause a duplicate claim on restart.
-                        let mut dbtx = self.db.begin_transaction().await;
+                if output.value > receive_fee {
+                    // Submit the claim, extend the address watermark (if any),
+                    // and advance the scan cursor in the same commit so
+                    // cancellation between them cannot cause a duplicate claim
+                    // or a phantom valid index on restart.
+                    let mut dbtx = self.db.begin_transaction().await;
 
-                        let (operation_id, txid) = self
-                            .receive_output(
-                                &mut dbtx.to_ref_nc(),
-                                output.index,
-                                output.value,
-                                address_index,
-                                receive_fee,
-                            )
-                            .await;
+                    let result = self
+                        .receive_output(
+                            &mut dbtx.to_ref_nc(),
+                            output.index,
+                            output.value,
+                            address_index,
+                            receive_fee,
+                        )
+                        .await;
 
-                        dbtx.insert_entry(&NextOutputIndexKey, &(output.index + 1))
-                            .await;
+                    match result {
+                        Ok(()) => {
+                            if let Some(idx) = new_valid_index {
+                                dbtx.insert_entry(&ValidAddressIndexKey(idx), &()).await;
+                            }
 
-                        dbtx.commit_tx_result().await?;
+                            dbtx.insert_entry(&NextOutputIndexKey, &(output.index + 1))
+                                .await;
 
-                        self.client_ctx
-                            .transaction_updates(operation_id)
-                            .await
-                            .await_tx_accepted(txid)
-                            .await
-                            .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+                            dbtx.commit_tx_result().await?;
 
-                        continue;
+                            if let Some(idx) = new_valid_index {
+                                valid_indices.push(idx);
+                                address_map.insert(self.derive_address(idx).script_pubkey(), idx);
+                            }
+
+                            continue;
+                        }
+                        Err(err) => {
+                            // The receive's dbtx goes out of scope
+                            // uncommitted; control falls through to the
+                            // unconditional cursor advance below so we skip
+                            // past this output instead of looping on it
+                            // forever.
+                            warn!(
+                                target: LOG_CLIENT_MODULE_WALLETV2,
+                                output_index = output.index,
+                                value_sat = output.value.to_sat(),
+                                err = %err.fmt_compact_anyhow(),
+                                "Output not economical to claim, advancing past it",
+                            );
+                        }
                     }
                 }
             }
 
             let mut dbtx = self.db.begin_transaction().await;
 
+            if let Some(idx) = new_valid_index {
+                dbtx.insert_entry(&ValidAddressIndexKey(idx), &()).await;
+            }
+
             dbtx.insert_entry(&NextOutputIndexKey, &(output.index + 1))
                 .await;
 
             dbtx.commit_tx_result().await?;
+
+            if let Some(idx) = new_valid_index {
+                valid_indices.push(idx);
+                address_map.insert(self.derive_address(idx).script_pubkey(), idx);
+            }
         }
 
         debug!(
