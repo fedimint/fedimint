@@ -24,9 +24,14 @@ enum Opts {
     },
     /// Return the next unused receive address.
     Receive,
-    /// Wait for a deposit to `address` to be observed and fully claimed.
-    /// Returns the final state of the claim operation.
-    AwaitReceive { address: Address<NetworkUnchecked> },
+    /// Wait for a deposit at each of the given addresses to be observed
+    /// and fully claimed, counting multiplicity (passing the same address
+    /// twice waits for two deposits at it). Returns the final state of
+    /// each claim operation as a JSON array.
+    AwaitReceive {
+        #[arg(required = true)]
+        addresses: Vec<Address<NetworkUnchecked>>,
+    },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -68,7 +73,7 @@ pub(crate) async fn handle_cli_command(
                 .await,
         ),
         Opts::Receive => json(wallet.receive().await),
-        Opts::AwaitReceive { address } => json(wallet.await_receive(address).await?),
+        Opts::AwaitReceive { addresses } => json(wallet.await_receive(addresses).await?),
     };
 
     Ok(value)

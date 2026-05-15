@@ -14,9 +14,8 @@ pub mod events;
 mod receive_sm;
 mod send_sm;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use api::WalletFederationApi;
@@ -55,6 +54,7 @@ use fedimint_walletv2_common::{
     WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
 };
 use futures::StreamExt;
+use futures::future::join_all;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use secp256k1::Keypair;
 use send_sm::{SendSMCommon, SendSMState, SendStateMachine};
@@ -409,17 +409,34 @@ impl WalletClientModule {
         }
     }
 
-    /// Drive the deposit scanner until a claim for `address` is submitted,
-    /// then block until that claim's state machine reaches a terminal state.
+    /// Drive the deposit scanner until a claim has been submitted for each
+    /// address in `addresses` (counting multiplicity — `vec![addr, addr]`
+    /// waits for two deposits at `addr`), then block until every collected
+    /// claim's state machine reaches a terminal state.
     ///
-    /// Forward-looking: only awaits deposits submitted *during this call*. If
-    /// the address was claimed in a previous session, this won't surface that
-    /// history — the funds are already in the user's balance.
+    /// Forward-looking: only awaits deposits whose claims are submitted
+    /// *during this call*. Claims already in flight from a background
+    /// scanner or prior session won't be surfaced — if the funds have
+    /// already landed, they're in the user's balance.
+    ///
+    /// Returns immediately with `Ok(vec![])` if `addresses` is empty.
     pub async fn await_receive(
         &self,
-        address: Address<NetworkUnchecked>,
-    ) -> anyhow::Result<FinalReceiveState> {
-        let script = address.assume_checked().script_pubkey();
+        addresses: Vec<Address<NetworkUnchecked>>,
+    ) -> anyhow::Result<Vec<FinalReceiveState>> {
+        if addresses.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut remaining: HashMap<ScriptBuf, usize> = HashMap::new();
+        for address in &addresses {
+            *remaining
+                .entry(address.clone().assume_checked().script_pubkey())
+                .or_insert(0) += 1;
+        }
+        let total_expected: usize = remaining.values().sum();
+        let mut collected: Vec<OperationId> = Vec::with_capacity(total_expected);
+
         // Foreground caller — no shared shutdown signal, so use a fresh group
         // whose handle never reports shutting-down. The group is dropped when
         // this function returns.
@@ -430,9 +447,21 @@ impl WalletClientModule {
             let progress = self.check_outputs(&handle).await?;
 
             for (operation_id, claim_script) in progress.submitted {
-                if claim_script == script {
-                    return Ok(self.await_final_receive_operation_state(operation_id).await);
+                if let Some(count) = remaining.get_mut(&claim_script)
+                    && *count > 0
+                {
+                    collected.push(operation_id);
+                    *count -= 1;
                 }
+            }
+
+            if collected.len() == total_expected {
+                return Ok(join_all(
+                    collected
+                        .into_iter()
+                        .map(|op| self.await_final_receive_operation_state(op)),
+                )
+                .await);
             }
 
             if !progress.more_outputs {
@@ -441,24 +470,37 @@ impl WalletClientModule {
         }
     }
 
-    /// Returns the next unused receive address, polling until the initial
-    /// address derivation has completed.
+    /// Returns the highest unused receive address, deriving the first one
+    /// on demand if no addresses exist yet.
     pub async fn receive(&self) -> Address {
-        loop {
-            if let Some(entry) = self
-                .db
-                .begin_transaction_nc()
-                .await
-                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-            {
-                return self.derive_address(entry.0.0);
-            }
+        let mut dbtx = self.db.begin_transaction().await;
 
-            sleep(Duration::from_secs(1)).await;
-        }
+        let index = if let Some(entry) = dbtx
+            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+        {
+            entry.0.0
+        } else {
+            // First call on this client — derive the initial valid index now.
+            // `receive()` is foreground-only so we use a fresh task group whose
+            // handle never reports shutting-down; the search is guaranteed to
+            // complete.
+            let task_group = TaskGroup::new();
+            let handle = task_group.make_handle();
+            let index = self
+                .next_valid_index(0, &handle)
+                .expect("never-shutting handle: search must return Some");
+
+            dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
+                .await;
+            dbtx.commit_tx().await;
+
+            index
+        };
+
+        self.derive_address(index)
     }
 
     fn derive_address(&self, index: u64) -> Address {

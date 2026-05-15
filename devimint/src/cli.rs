@@ -23,7 +23,7 @@ use crate::envs::{
 };
 use crate::util::{ProcessManager, poll};
 use crate::vars::mkdir;
-use crate::{external_daemons, vars};
+use crate::{cmd, external_daemons, vars};
 
 fn random_test_dir_suffix() -> String {
     rand::thread_rng()
@@ -278,7 +278,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         const GW_PEGIN_AMOUNT: u64 = 1_000_000;
                         const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
 
-                        let (operation_id, (), ()) = tokio::try_join!(
+                        let ((address, operation_id), (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -291,9 +291,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(address, CLIENT_PEGIN_AMOUNT)
+                                    .send_to(address.clone(), CLIENT_PEGIN_AMOUNT)
                                     .await?;
-                                Ok(operation_id)
+                                Ok((address, operation_id))
                             },
                             async {
                                 let address = dev_fed
@@ -342,11 +342,15 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                         dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
                         if crate::util::supports_wallet_v2() {
-                            dev_fed
-                                .internal_client()
-                                .await?
-                                .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
-                                .await?;
+                            cmd!(
+                                dev_fed.internal_client().await?,
+                                "module",
+                                "walletv2",
+                                "await-receive",
+                                &address
+                            )
+                            .run()
+                            .await?;
                         } else {
                             dev_fed
                                 .internal_client()

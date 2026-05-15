@@ -76,21 +76,6 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
     Ok(())
 }
 
-async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
-    loop {
-        cmd!(client, "dev", "wait", "3").out_json().await?;
-
-        let balance = client.balance().await?;
-
-        // Client balance is in msats, min_balance is in sats
-        if balance >= min_balance * 1000 {
-            return Ok(());
-        }
-
-        info!("Waiting for client balance {balance} to reach {min_balance}");
-    }
-}
-
 async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
     loop {
         let value = cmd!(client, "module", "walletv2", "info", "pending-tx-chain")
@@ -203,7 +188,16 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 290_000).await?;
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "await-receive",
+                federation_address_1.to_string(),
+                federation_address_1.to_string()
+            )
+            .run()
+            .await?;
 
             ensure_federation_total_value(&client, 290_000).await?;
 
@@ -221,7 +215,16 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 980_000).await?;
+            cmd!(
+                client,
+                "module",
+                "walletv2",
+                "await-receive",
+                federation_address_2.to_string(),
+                federation_address_2.to_string()
+            )
+            .run()
+            .await?;
 
             ensure_federation_total_value(&client, 980_000).await?;
 
@@ -313,7 +316,15 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_client_balance(&client_two, 99_000).await?;
+            cmd!(
+                client_two,
+                "module",
+                "walletv2",
+                "await-receive",
+                circular_address.to_string()
+            )
+            .run()
+            .await?;
 
             await_no_pending_txs(&client).await?;
 

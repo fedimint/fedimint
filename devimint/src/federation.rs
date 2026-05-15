@@ -218,25 +218,6 @@ impl Client {
             .unwrap())
     }
 
-    /// Waits for the client balance to reach at least `min_balance_msat`.
-    pub async fn await_balance(&self, min_balance_msat: u64) -> Result<()> {
-        loop {
-            cmd!(self, "dev", "wait", "3").out_json().await?;
-
-            let balance = self.balance().await?;
-            if balance >= min_balance_msat {
-                return Ok(());
-            }
-
-            info!(
-                target: LOG_DEVIMINT,
-                balance,
-                min_balance_msat,
-                "Waiting for client balance to reach minimum"
-            );
-        }
-    }
-
     pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
         if crate::util::supports_wallet_v2() {
             let address = cmd!(self, "module", "walletv2", "receive")
@@ -693,7 +674,16 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_client_no_wait(&self, amount: u64, client: &Client) -> Result<String> {
+    /// Send `amount` (sats) to a fresh deposit address on `client` and mine
+    /// confirmations. Returns `(address, operation_id)` so the caller can
+    /// drive the appropriate await — `operation_id` is meaningful for
+    /// walletv1's deposit state machine; `address` is what `await-receive`
+    /// keys off of for walletv2.
+    pub async fn pegin_client_no_wait(
+        &self,
+        amount: u64,
+        client: &Client,
+    ) -> Result<(String, String)> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
@@ -706,29 +696,20 @@ impl Federation {
         let (address, operation_id) = client.get_deposit_addr().await?;
 
         self.bitcoind
-            .send_to(address, amount + deposit_fees)
+            .send_to(address.clone(), amount + deposit_fees)
             .await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        Ok(operation_id)
+        Ok((address, operation_id))
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
-        // For walletv2, we need to capture the initial balance and wait for it to
-        // increase since there is no state machine - deposits are auto-claimed
-        let initial_balance = if crate::util::supports_wallet_v2() {
-            Some(client.balance().await?)
-        } else {
-            None
-        };
+        let (address, operation_id) = self.pegin_client_no_wait(amount, client).await?;
 
-        let operation_id = self.pegin_client_no_wait(amount, client).await?;
-
-        if let Some(initial) = initial_balance {
-            // Walletv2: wait for balance to increase. We expect slightly less than
-            // `amount` due to mint module fees when creating ecash notes.
-            let expected_balance = initial + (amount * 1000 * 9 / 10);
-            client.await_balance(expected_balance).await?;
+        if crate::util::supports_wallet_v2() {
+            cmd!(client, "module", "walletv2", "await-receive", address)
+                .run()
+                .await?;
         } else {
             client.await_deposit(&operation_id).await?;
         }
