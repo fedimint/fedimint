@@ -130,28 +130,6 @@ async fn await_consensus_block_count(
     }
 }
 
-async fn await_federation_total_value(
-    client: &ClientHandleArc,
-    min_value: bitcoin::Amount,
-) -> anyhow::Result<()> {
-    loop {
-        let current_value = client
-            .get_first_module::<WalletClientModule>()?
-            .total_value()
-            .await?;
-
-        if current_value >= min_value {
-            return Ok(());
-        }
-
-        sleep_in_test(
-            format!("Waiting for federation total value of {current_value} to reach {min_value}"),
-            Duration::from_secs(1),
-        )
-        .await;
-    }
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -177,9 +155,12 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
     await_finality_delay(&client, &bitcoin).await?;
 
-    info!("Wait for deposit to be auto-claimed...");
+    info!("Wait for deposit to be claimed...");
 
-    await_federation_total_value(&client, Amount::from_sat(99_000_000)).await?;
+    client
+        .get_first_module::<WalletClientModule>()?
+        .await_receive(vec![federation_address.as_unchecked().clone()])
+        .await?;
 
     let address = bitcoin.get_new_address().await.as_unchecked().clone();
 
