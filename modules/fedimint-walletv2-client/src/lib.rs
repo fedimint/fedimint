@@ -110,8 +110,11 @@ pub enum FinalReceiveState {
 /// Result of a single pass of [`WalletClientModule::check_outputs`].
 #[derive(Debug, Clone)]
 struct CheckOutputsProgress {
-    /// `(operation_id, script)` for each claim submitted during this pass.
-    submitted: Vec<(OperationId, ScriptBuf)>,
+    /// `(operation_id, script, change_outpoints)` for each claim submitted
+    /// during this pass. `change_outpoints` are the primary module's output
+    /// points (issued ecash) — callers awaiting completion need them to wait
+    /// for the mint state machines to credit the balance.
+    submitted: Vec<(OperationId, ScriptBuf, Vec<OutPoint>)>,
     /// True if the federation returned a non-empty slice, meaning there are
     /// likely more outputs to scan immediately; false if the slice was empty
     /// and the caller should back off before retrying.
@@ -435,7 +438,7 @@ impl WalletClientModule {
                 .or_insert(0) += 1;
         }
         let total_expected: usize = remaining.values().sum();
-        let mut collected: Vec<OperationId> = Vec::with_capacity(total_expected);
+        let mut collected: Vec<(OperationId, Vec<OutPoint>)> = Vec::with_capacity(total_expected);
 
         // Foreground caller — no shared shutdown signal, so use a fresh group
         // whose handle never reports shutting-down. The group is dropped when
@@ -446,22 +449,33 @@ impl WalletClientModule {
         loop {
             let progress = self.check_outputs(&handle).await?;
 
-            for (operation_id, claim_script) in progress.submitted {
+            for (operation_id, claim_script, change) in progress.submitted {
                 if let Some(count) = remaining.get_mut(&claim_script)
                     && *count > 0
                 {
-                    collected.push(operation_id);
+                    collected.push((operation_id, change));
                     *count -= 1;
                 }
             }
 
             if collected.len() == total_expected {
-                return Ok(join_all(
-                    collected
-                        .into_iter()
-                        .map(|op| self.await_final_receive_operation_state(op)),
-                )
-                .await);
+                return Ok(
+                    join_all(collected.into_iter().map(|(op, change)| async move {
+                        let state = self.await_final_receive_operation_state(op).await;
+                        // Wait for the primary (mint) module's outputs to finish
+                        // claiming so the caller sees the ecash in their balance —
+                        // the receive state machine only confirms the federation
+                        // accepted the claim transaction.
+                        if matches!(state, FinalReceiveState::Success) {
+                            let _ = self
+                                .client_ctx
+                                .await_primary_module_outputs(op, change)
+                                .await;
+                        }
+                        state
+                    }))
+                    .await,
+                );
             }
 
             if !progress.more_outputs {
@@ -552,7 +566,7 @@ impl WalletClientModule {
         value: bitcoin::Amount,
         address_index: u64,
         fee: bitcoin::Amount,
-    ) -> anyhow::Result<OperationId> {
+    ) -> anyhow::Result<(OperationId, OutPointRange)> {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -584,7 +598,8 @@ impl WalletClientModule {
             vec![client_input_sm],
         ));
 
-        self.client_ctx
+        let change_range = self
+            .client_ctx
             .finalize_and_submit_transaction_dbtx(
                 dbtx,
                 operation_id,
@@ -612,7 +627,7 @@ impl WalletClientModule {
             )
             .await;
 
-        Ok(operation_id)
+        Ok((operation_id, change_range))
     }
 
     /// Spawn a background task that scans the federation's deposit log and
@@ -684,7 +699,7 @@ impl WalletClientModule {
             .map(|&i| (self.derive_address(i).script_pubkey(), i))
             .collect();
 
-        let mut submitted: Vec<(OperationId, ScriptBuf)> = Vec::new();
+        let mut submitted: Vec<(OperationId, ScriptBuf, Vec<OutPoint>)> = Vec::new();
 
         let outputs = self
             .module_api
@@ -759,7 +774,7 @@ impl WalletClientModule {
                         .await;
 
                     match result {
-                        Ok(operation_id) => {
+                        Ok((operation_id, change_range)) => {
                             if let Some(idx) = new_valid_index {
                                 dbtx.insert_entry(&ValidAddressIndexKey(idx), &()).await;
                             }
@@ -774,7 +789,11 @@ impl WalletClientModule {
                                 address_map.insert(self.derive_address(idx).script_pubkey(), idx);
                             }
 
-                            submitted.push((operation_id, output.script.clone()));
+                            submitted.push((
+                                operation_id,
+                                output.script.clone(),
+                                change_range.into_iter().collect(),
+                            ));
 
                             continue;
                         }
