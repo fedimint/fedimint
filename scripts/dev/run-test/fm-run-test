@@ -38,10 +38,14 @@ on_error() {
   echo "## FAILED $test_name$version_str:"
   echo "## OUT:"
   cat "$test_out_path"
-  echo
-  echo
-  echo "## LOG FEDIMINTD-0:"
-  { cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/fedimintd-default-0.log | sed 's/^/fm0 /'; } || true
+  for fm_log in "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/fedimintd-default-*.log; do
+    [ -e "$fm_log" ] || continue
+    fm_idx="$(basename "$fm_log" .log | sed 's/^fedimintd-default-//')"
+    echo
+    echo
+    echo "## LOG FEDIMINTD-${fm_idx}:"
+    sed "s/^/fm${fm_idx} /" "$fm_log" || true
+  done
   echo
   echo
   echo "## LOG LND GATEWAY:"
