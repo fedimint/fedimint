@@ -299,7 +299,16 @@ export -f bckn_bitcoind_mint
 function bckn_bitcoind_wallet() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=wallet ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}_group_1" env \
+      FM_TEST_ONLY=bitcoind \
+      FM_BITCOIND_TEST_ONLY=wallet \
+      FM_BITCOIND_WALLET_TEST_GROUP=1 \
+      ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}_group_2" env \
+      FM_TEST_ONLY=bitcoind \
+      FM_BITCOIND_TEST_ONLY=wallet \
+      FM_BITCOIND_WALLET_TEST_GROUP=2 \
+      ./scripts/tests/backend-test.sh
   fi
 }
 export -f bckn_bitcoind_wallet
