@@ -98,6 +98,26 @@ pub enum FinalSendOperationState {
     Failure,
 }
 
+/// The final state of an operation claiming an onchain deposit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FinalReceiveState {
+    /// The deposit was successfully claimed.
+    Success,
+    /// The federation rejected the claim transaction.
+    Aborted(String),
+}
+
+/// Result of a single pass of [`WalletClientModule::check_outputs`].
+#[derive(Debug, Clone)]
+struct CheckOutputsProgress {
+    /// `(operation_id, script)` for each claim submitted during this pass.
+    submitted: Vec<(OperationId, ScriptBuf)>,
+    /// True if the federation returned a non-empty slice, meaning there are
+    /// likely more outputs to scan immediately; false if the slice was empty
+    /// and the caller should back off before retrying.
+    more_outputs: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct WalletClientModule {
     root_secret: DerivableSecret,
@@ -193,8 +213,6 @@ impl ClientModuleInit for WalletClientInit {
             db: args.db().clone(),
             module_api: args.module_api().clone(),
         };
-
-        module.spawn_output_scanner(args.task_group(), args.client_span());
 
         Ok(module)
     }
@@ -371,6 +389,58 @@ impl WalletClientModule {
         }
     }
 
+    /// Await the final state of the receive operation.
+    pub async fn await_final_receive_operation_state(
+        &self,
+        operation_id: OperationId,
+    ) -> FinalReceiveState {
+        let mut stream = self.notifier.subscribe(operation_id).await;
+
+        loop {
+            let Some(WalletClientStateMachines::Receive(state)) = stream.next().await else {
+                panic!("stream must produce a terminal receive state");
+            };
+
+            match state.state {
+                ReceiveSMState::Funding => {}
+                ReceiveSMState::Success => return FinalReceiveState::Success,
+                ReceiveSMState::Aborted(reason) => return FinalReceiveState::Aborted(reason),
+            }
+        }
+    }
+
+    /// Drive the deposit scanner until a claim for `address` is submitted,
+    /// then block until that claim's state machine reaches a terminal state.
+    ///
+    /// Forward-looking: only awaits deposits submitted *during this call*. If
+    /// the address was claimed in a previous session, this won't surface that
+    /// history — the funds are already in the user's balance.
+    pub async fn await_receive(
+        &self,
+        address: Address<NetworkUnchecked>,
+    ) -> anyhow::Result<FinalReceiveState> {
+        let script = address.assume_checked().script_pubkey();
+        // Foreground caller — no shared shutdown signal, so use a fresh group
+        // whose handle never reports shutting-down. The group is dropped when
+        // this function returns.
+        let task_group = TaskGroup::new();
+        let handle = task_group.make_handle();
+
+        loop {
+            let progress = self.check_outputs(&handle).await?;
+
+            for (operation_id, claim_script) in progress.submitted {
+                if claim_script == script {
+                    return Ok(self.await_final_receive_operation_state(operation_id).await);
+                }
+            }
+
+            if !progress.more_outputs {
+                sleep(fedimint_walletv2_common::sleep_duration()).await;
+            }
+        }
+    }
+
     /// Returns the next unused receive address, polling until the initial
     /// address derivation has completed.
     pub async fn receive(&self) -> Address {
@@ -426,8 +496,10 @@ impl WalletClientModule {
     ///
     /// Submission and event logging happen inside the caller-supplied `dbtx`
     /// so that the caller can atomically advance `NextOutputIndexKey` in the
-    /// same commit. Returns an error if the transaction cannot be assembled
-    /// locally — most commonly because the remaining value after
+    /// same commit. Returns the `OperationId` of the receive operation on
+    /// success — callers can use it to await the receive state machine's
+    /// terminal state. Returns an error if the transaction cannot be
+    /// assembled locally — most commonly because the remaining value after
     /// `receive_fee` is too small to cover the mint module's output fee.
     /// Federation acceptance is tracked by the receive state machine and
     /// does not block this call.
@@ -438,7 +510,7 @@ impl WalletClientModule {
         value: bitcoin::Amount,
         address_index: u64,
         fee: bitcoin::Amount,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -498,10 +570,17 @@ impl WalletClientModule {
             )
             .await;
 
-        Ok(())
+        Ok(operation_id)
     }
 
-    fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
+    /// Spawn a background task that scans the federation's deposit log and
+    /// claims any deposits that land on this client's addresses.
+    ///
+    /// Opt-in: not called from [`ClientModuleInit::init`]. Stateful apps that
+    /// want continuous auto-claiming should spawn this once at startup;
+    /// one-shot callers (e.g. CLI) can use [`Self::await_receive`] instead,
+    /// which drives its own scan loop for the duration of a single wait.
+    pub fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
         let handle = task_group.make_handle();
 
@@ -523,8 +602,8 @@ impl WalletClientModule {
 
             loop {
                 match module.check_outputs(&handle).await {
-                    Ok(skip_wait) => {
-                        if skip_wait {
+                    Ok(progress) => {
+                        if progress.more_outputs {
                             continue;
                         }
                     }
@@ -538,7 +617,8 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
+    #[allow(clippy::too_many_lines)]
+    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<CheckOutputsProgress> {
         // Read both values from a single snapshot and drop the read-only
         // dbtx before the RPC and loop run, so we don't pin a snapshot
         // across the federation round-trips and inner write transactions.
@@ -561,6 +641,8 @@ impl WalletClientModule {
             .iter()
             .map(|&i| (self.derive_address(i).script_pubkey(), i))
             .collect();
+
+        let mut submitted: Vec<(OperationId, ScriptBuf)> = Vec::new();
 
         let outputs = self
             .module_api
@@ -587,7 +669,10 @@ impl WalletClientModule {
                     // If shutdown is signaled mid-search, bail out without
                     // committing anything — we'll resume on the next start.
                     let Some(idx) = self.next_valid_index(address_index + 1, handle) else {
-                        return Ok(false);
+                        return Ok(CheckOutputsProgress {
+                            submitted,
+                            more_outputs: false,
+                        });
                     };
                     Some(idx)
                 }
@@ -600,7 +685,10 @@ impl WalletClientModule {
                 // In order to not overpay on fees we choose to wait,
                 // the congestion will clear up within a few blocks.
                 if self.module_api.pending_tx_chain().await?.len() >= 3 {
-                    return Ok(false);
+                    return Ok(CheckOutputsProgress {
+                        submitted,
+                        more_outputs: false,
+                    });
                 }
 
                 matched_num += 1;
@@ -629,7 +717,7 @@ impl WalletClientModule {
                         .await;
 
                     match result {
-                        Ok(()) => {
+                        Ok(operation_id) => {
                             if let Some(idx) = new_valid_index {
                                 dbtx.insert_entry(&ValidAddressIndexKey(idx), &()).await;
                             }
@@ -643,6 +731,8 @@ impl WalletClientModule {
                                 valid_indices.push(idx);
                                 address_map.insert(self.derive_address(idx).script_pubkey(), idx);
                             }
+
+                            submitted.push((operation_id, output.script.clone()));
 
                             continue;
                         }
@@ -690,7 +780,10 @@ impl WalletClientModule {
             "Scanning for outputs"
         );
 
-        Ok(!outputs.is_empty())
+        Ok(CheckOutputsProgress {
+            submitted,
+            more_outputs: !outputs.is_empty(),
+        })
     }
 }
 
