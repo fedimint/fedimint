@@ -1659,8 +1659,12 @@ impl Gateway {
             let federation_index = config.federation_index;
             match Box::pin(Spanned::try_new(
                 info_span!(target: LOG_GATEWAY, "client", federation_id  = %federation_id.clone()),
-                self.client_builder
-                    .build(config, Arc::new(self.clone()), &mnemonic),
+                self.client_builder.build(
+                    config,
+                    Arc::new(self.clone()),
+                    &mnemonic,
+                    &self.task_group,
+                ),
             ))
             .await
             {
@@ -2038,7 +2042,12 @@ impl IAdminGateway for Gateway {
 
         let client = self
             .client_builder
-            .build(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
+            .build(
+                federation_config.clone(),
+                Arc::new(self.clone()),
+                &mnemonic,
+                &self.task_group,
+            )
             .await?;
 
         if recover {

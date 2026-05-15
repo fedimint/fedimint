@@ -12,6 +12,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::TaskGroup;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_gateway_common::FederationConfig;
 use fedimint_gateway_server_db::GatewayDbExt as _;
@@ -125,6 +126,7 @@ impl GatewayClientBuilder {
         config: FederationConfig,
         gateway: Arc<Gateway>,
         mnemonic: &Mnemonic,
+        task_group: &TaskGroup,
     ) -> AdminResult<fedimint_client::ClientHandleArc> {
         let invite_code = config.invite_code.clone();
         let federation_id = invite_code.federation_id();
@@ -159,9 +161,9 @@ impl GatewayClientBuilder {
 
         Self::verify_client_config(&db, federation_id).await?;
 
-        let client_builder = self.create_client_builder(&config, gateway).await?;
+        let client_builder = self.create_client_builder(&config, gateway.clone()).await?;
 
-        if Client::is_initialized(&db).await {
+        let client = if Client::is_initialized(&db).await {
             client_builder
                 .open(self.connectors.clone(), db, root_secret)
                 .await
@@ -173,7 +175,15 @@ impl GatewayClientBuilder {
                 .await
         }
         .map(Arc::new)
-        .map_err(AdminGatewayError::ClientCreationError)
+        .map_err(AdminGatewayError::ClientCreationError)?;
+
+        if let Ok(wallet_v2) =
+            client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+        {
+            wallet_v2.spawn_output_scanner(task_group, &tracing::Span::current());
+        }
+
+        Ok(client)
     }
 
     /// Verifies that the saved `ClientConfig` contains the expected
