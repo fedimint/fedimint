@@ -36,6 +36,46 @@ pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
 pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;
 
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub enum LightningPaymentBackend {
+    Lnd,
+    Ldk,
+}
+
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailure {
+    pub backend: LightningPaymentBackend,
+    pub failure_reason: Option<String>,
+    pub attempts: Vec<LightningPaymentFailureAttempt>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailureAttempt {
+    pub attempt_id: Option<u64>,
+    pub failure_source_index: Option<u32>,
+    pub failure_code: Option<String>,
+    pub failure_node_pub_key: Option<String>,
+    pub failure_channel_id: Option<u64>,
+    pub route: Option<LightningPaymentRoute>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentRoute {
+    pub total_amount_msat: Option<u64>,
+    pub total_fees_msat: Option<u64>,
+    pub total_time_lock: u32,
+    pub hops: Vec<LightningPaymentRouteHop>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentRouteHop {
+    pub pub_key: Option<String>,
+    pub channel_id: Option<u64>,
+    pub amount_to_forward_msat: Option<u64>,
+    pub fee_msat: Option<u64>,
+    pub expiry: u32,
+}
+
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
@@ -48,6 +88,11 @@ pub enum LightningRpcError {
     FailedToGetRouteHints { failure_reason: String },
     #[error("Payment failed: {failure_reason}")]
     FailedPayment { failure_reason: String },
+    #[error("Payment failed: {failure_reason}")]
+    FailedPaymentWithDetails {
+        failure_reason: String,
+        payment_failure: LightningPaymentFailure,
+    },
     #[error("Failed to route HTLCs: {failure_reason}")]
     FailedToRouteHtlcs { failure_reason: String },
     #[error("Failed to complete HTLC: {failure_reason}")]
