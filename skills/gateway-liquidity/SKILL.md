@@ -7,8 +7,6 @@ description: >-
   Triggers on: "gateway", "liquidity", "channels", "routing fees", "peg-in",
   "peg-out", "ecash balance", "lightning balance", "open channel",
   "close channel", "set fees", "payment summary", "invoice", "gateway-cli".
-argument-hint: "[command description]"
-allowed-tools: [Bash, Read]
 ---
 
 # Gateway Liquidity Manager
