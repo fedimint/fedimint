@@ -43,13 +43,13 @@ let
   gitHashPlaceholderValue = "01234569abcdef7afa1d2683a099c7af48a523c1";
 
   filterWorkspaceDepsBuildFilesRegex = [
-    "Cargo.lock"
-    "Cargo.toml"
+    "Cargo\\.lock"
+    "Cargo\\.toml"
     ".cargo"
     ".cargo/.*"
     ".config"
     ".config/.*"
-    ".*/Cargo.toml"
+    ".*/Cargo\\.toml"
     ".*/proto/.*"
   ];
 
@@ -96,12 +96,13 @@ let
     filterSrcWithRegexes (
       filterWorkspaceDepsBuildFilesRegex
       ++ [
-        ".*.rs"
-        ".*.html"
+        ".*\\.rs"
+        ".*\\.html"
         ".*/proto/.*"
+        ".*/clippy\\.toml"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
-        "docs/.*.md"
+        "docs/.*\\.md"
         "fedimint-ui-common/assets/.*"
       ]
     ) src;
@@ -112,13 +113,13 @@ let
     filterSrcWithRegexes (
       filterWorkspaceDepsBuildFilesRegex
       ++ [
-        ".*.rs"
-        ".*.html"
+        ".*\\.rs"
+        ".*\\.html"
         ".*/proto/.*"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
         "scripts/.*"
-        "docs/.*.md"
+        "docs/.*\\.md"
         "fedimint-ui-common/assets/.*"
       ]
     ) src;
