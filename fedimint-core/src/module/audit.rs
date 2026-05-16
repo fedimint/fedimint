@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
 use fedimint_core::core::ModuleInstanceId;
@@ -97,7 +97,7 @@ pub struct ModuleSummary {
 impl AuditSummary {
     pub fn from_audit(
         audit: &Audit,
-        module_instance_id_to_kind: &HashMap<ModuleInstanceId, String>,
+        module_instance_id_to_kind: &BTreeMap<ModuleInstanceId, String>,
     ) -> Self {
         let empty_module_placeholders = module_instance_id_to_kind
             .keys()
@@ -116,7 +116,7 @@ impl AuditSummary {
 
 fn generate_module_summaries<'a>(
     audit_items: impl Iterator<Item = &'a AuditItem>,
-    module_instance_id_to_kind: &HashMap<ModuleInstanceId, String>,
+    module_instance_id_to_kind: &BTreeMap<ModuleInstanceId, String>,
 ) -> BTreeMap<ModuleInstanceId, ModuleSummary> {
     audit_items
         .filter_map(|item| {
@@ -204,7 +204,7 @@ fn creates_audit_summary_from_audit() {
 
     let audit_summary = AuditSummary::from_audit(
         &audit,
-        &HashMap::from([
+        &BTreeMap::from([
             (0, "ln".to_string()),
             (1, "mint".to_string()),
             (2, "wallet".to_string()),
@@ -244,7 +244,7 @@ fn creates_audit_summary_from_audit() {
 fn audit_summary_includes_placeholders() {
     let audit_summary = AuditSummary::from_audit(
         &Audit::default(),
-        &HashMap::from([
+        &BTreeMap::from([
             (0, "ln".to_string()),
             (1, "mint".to_string()),
             (2, "wallet".to_string()),

@@ -1,7 +1,7 @@
 mod error;
 pub mod global_api;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::future::pending;
 use std::pin::Pin;
@@ -845,7 +845,7 @@ impl IRawFederationApi for FederationApi {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LegacyFederationStatus {
     pub session_count: u64,
-    pub status_by_peer: HashMap<PeerId, LegacyPeerStatus>,
+    pub status_by_peer: BTreeMap<PeerId, LegacyPeerStatus>,
     pub peers_online: u64,
     pub peers_offline: u64,
     /// This should always be 0 if everything is okay, so a monitoring tool

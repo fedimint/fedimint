@@ -1,3 +1,6 @@
+#![allow(clippy::disallowed_types)]
+// Prometheus registration macros use `HashMap` internally.
+
 pub(crate) mod jsonrpsee;
 
 use std::sync::LazyLock;

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, LazyLock};
 
 use fedimint_core::PeerId;
@@ -20,12 +20,12 @@ pub fn local_config_gen_params(
     base_port: u16,
     enable_mint_fees: bool,
     registry: &ServerModuleInitRegistry,
-) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
+) -> anyhow::Result<BTreeMap<PeerId, ConfigGenParams>> {
     let enabled_modules: BTreeSet<ModuleKind> =
         registry.iter().map(|(kind, _)| kind.clone()).collect();
 
     // Generate TLS cert and private key
-    let tls_keys: HashMap<
+    let tls_keys: BTreeMap<
         PeerId,
         (
             rustls::pki_types::CertificateDer<'static>,

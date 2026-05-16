@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -480,7 +480,7 @@ impl ServerConfig {
     }
 
     pub fn trusted_dealer_gen(
-        params: &HashMap<PeerId, ConfigGenParams>,
+        params: &BTreeMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
     ) -> BTreeMap<PeerId, Self> {
@@ -554,7 +554,7 @@ impl ServerConfig {
         // in case we are running by ourselves, avoid DKG
         if params.peer_ids().len() == 1 {
             let server = Self::trusted_dealer_gen(
-                &HashMap::from([(params.identity, params.clone())]),
+                &BTreeMap::from([(params.identity, params.clone())]),
                 &registry,
                 &code_version_str,
             );

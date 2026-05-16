@@ -7,7 +7,7 @@
 pub mod db;
 mod metrics;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::bail;
 use fedimint_core::bitcoin::hashes::sha256;
@@ -218,7 +218,7 @@ impl ServerModuleInit for MintInit {
                     dealer_keygen(peers.to_num_peers().threshold(), peers.len());
                 (amount, (tbs_pk, tbs_pks, tbs_sks))
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
 
         let mint_cfg: BTreeMap<_, MintConfig> = peers
             .iter()
@@ -268,7 +268,7 @@ impl ServerModuleInit for MintInit {
     ) -> anyhow::Result<ServerModuleConfig> {
         let denominations = gen_denominations();
 
-        let mut amount_keys = HashMap::new();
+        let mut amount_keys = BTreeMap::new();
 
         for amount in &denominations {
             amount_keys.insert(*amount, peers.run_dkg_g2().await?);
@@ -544,7 +544,7 @@ fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
 pub struct Mint {
     cfg: MintConfig,
     sec_key: Tiered<SecretKeyShare>,
-    pub_key: HashMap<Amount, AggregatePublicKey>,
+    pub_key: BTreeMap<Amount, AggregatePublicKey>,
 }
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
@@ -970,7 +970,7 @@ impl Mint {
         }
     }
 
-    pub fn pub_key(&self) -> HashMap<Amount, AggregatePublicKey> {
+    pub fn pub_key(&self) -> BTreeMap<Amount, AggregatePublicKey> {
         self.pub_key.clone()
     }
 }
