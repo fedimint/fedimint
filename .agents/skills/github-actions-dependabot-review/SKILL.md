@@ -3,8 +3,6 @@ name: github-actions-dependabot-review
 description: >-
   Review Dependabot PRs updating GitHub Actions workflows/actions, with a
   security-focused upstream diff check before commenting.
-argument-hint: "[repo or PR scope]"
-allowed-tools: [Bash, Read, Grep]
 ---
 
 # GitHub Actions Dependabot Review
