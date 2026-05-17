@@ -38,48 +38,67 @@ udeps:
 bench:
   cargo bench
 
-final-lint: lint
-  just clippy
-  just cargo-sort-check
+[private]
+run-quietly *COMMAND:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  log="$(mktemp)"
+  trap 'rm -f "$log"' EXIT
+
+  >&2 printf 'Running: %s...\n' '{{COMMAND}}'
+
+  if ! {{COMMAND}} >"$log" 2>&1; then
+    >&2 printf 'Command failed: %s\n' '{{COMMAND}}'
+    cat "$log" >&2
+    exit 1
+  fi
+
+final-lint:
+  @just run-quietly just lint
+  @just run-quietly cargo clippy -q --locked --offline --workspace --all-targets -- -D warnings
+  @just run-quietly just cargo-sort-check
 
 # run all checks recommended before opening a PR
-final-check: lint
+final-check:
+  @just run-quietly just lint
   # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
-  cargo test --doc --workspace
-  just check-wasm
-  just test
+  @just run-quietly cargo test --doc --workspace
+  @just run-quietly just check-wasm
+  @just run-quietly just test
 
 # run all/most checks a CI would run
-final-check-ci: lint
-  just clippy
-  just cargo-sort-check
-  cargo test --doc --workspace
-  just check-wasm
-  ./scripts/tests/test-ci-all.sh
-  just test-compatibility
-  just udeps
+final-check-ci:
+  @just run-quietly just lint
+  @just run-quietly cargo clippy -q --locked --offline --workspace --all-targets -- -D warnings
+  @just run-quietly just cargo-sort-check
+  @just run-quietly cargo test --doc --workspace
+  @just run-quietly just check-wasm
+  @just run-quietly ./scripts/tests/test-ci-all.sh
+  @just run-quietly just test-compatibility
+  @just run-quietly just udeps
 
 # check before making a release
 final-check-release:
-  just check-packages-features
-  just final-check-ci
+  @just run-quietly just check-packages-features
+  @just run-quietly just final-check-ci
 
 # verify verify various feature combinations we might care about
 check-packages-features:
-  just check-wasm --no-default-features
+  @just run-quietly just check-wasm --no-default-features
   # TODO: broken, seems like one of the deps
   # just check-wasm --features iroh
-  cargo workspaces exec cargo check
-  cargo workspaces exec cargo check --no-default-features
+  @just run-quietly cargo workspaces exec cargo check
+  @just run-quietly cargo workspaces exec cargo check --no-default-features
   # there are some features that require nightly
-  nix shell github:nix-community/fenix#latest.toolchain -c cargo workspaces exec cargo check --all-features
+  @just run-quietly nix shell github:nix-community/fenix#latest.toolchain -c cargo workspaces exec cargo check --all-features
 
 # like `check-packages-features` but using nix
 check-packages-features-using-nix:
-  nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
-  nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
-  nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
-  nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
+  @just run-quietly nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
+  @just run-quietly nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
+  @just run-quietly nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+  @just run-quietly nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
 
 check-wasm *EXTRA_ARGS:
   #!/usr/bin/env bash
