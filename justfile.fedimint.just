@@ -38,6 +38,10 @@ udeps:
 bench:
   cargo bench
 
+final-lint: lint
+  just clippy
+  just cargo-sort-check
+
 # run all checks recommended before opening a PR
 final-check: lint
   # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
