@@ -70,6 +70,8 @@ pub struct LocalParams {
     /// Total number of guardians (including the one who sets this), set by the
     /// leader
     federation_size: Option<u32>,
+    /// Bitcoin network configured locally
+    network: bitcoin::Network,
 }
 
 impl LocalParams {
@@ -81,6 +83,7 @@ impl LocalParams {
             disable_base_fees: self.disable_base_fees,
             enabled_modules: self.enabled_modules.clone(),
             federation_size: self.federation_size,
+            network: self.network,
         }
     }
 }
@@ -254,6 +257,7 @@ impl ISetupApi for SetupApi {
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
+                network: self.settings.network,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -283,6 +287,7 @@ impl ISetupApi for SetupApi {
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
+                network: self.settings.network,
             }
         };
 
@@ -313,6 +318,13 @@ impl ISetupApi for SetupApi {
         ensure!(
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
+        );
+
+        ensure!(
+            info.network == local_params.network,
+            "Guardian uses Bitcoin network {} but we use {}",
+            info.network,
+            local_params.network,
         );
 
         if let Some(federation_name) = state
@@ -437,7 +449,7 @@ impl ISetupApi for SetupApi {
             )]),
             disable_base_fees,
             enabled_modules,
-            network: self.settings.network,
+            network: local_params.network,
         };
 
         self.sender
@@ -577,4 +589,89 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
             }
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use bitcoin::Network;
+    use fedimint_core::db::IRawDatabaseExt;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::module::ApiAuth;
+    use tokio::sync::mpsc;
+
+    use super::*;
+
+    fn setup_api(network: Network) -> SetupApi {
+        let (sender, _receiver) = mpsc::channel(1);
+        let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+
+        SetupApi::new(
+            ConfigGenSettings {
+                p2p_bind: bind,
+                api_bind: bind,
+                ui_bind: bind,
+                p2p_url: None,
+                api_url: None,
+                enable_iroh: true,
+                iroh_dns: None,
+                iroh_relays: Vec::new(),
+                network,
+                available_modules: BTreeSet::new(),
+                default_modules: BTreeSet::new(),
+            },
+            MemDatabase::new().into_database(),
+            sender,
+        )
+    }
+
+    async fn setup_code(api: &SetupApi, name: &str) -> String {
+        api.set_local_parameters(
+            ApiAuth::new(format!("{name}-password")),
+            name.to_string(),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("setting local parameters should succeed")
+    }
+
+    #[tokio::test]
+    async fn accepts_peer_setup_code_with_matching_network() {
+        let api = setup_api(Network::Regtest);
+        let peer_api = setup_api(Network::Regtest);
+
+        setup_code(&api, "local").await;
+        let peer_code = setup_code(&peer_api, "peer").await;
+
+        let added_peer = api
+            .add_peer_setup_code(peer_code)
+            .await
+            .expect("peer setup code with matching network should be accepted");
+
+        assert_eq!(added_peer, "peer");
+    }
+
+    #[tokio::test]
+    async fn rejects_peer_setup_code_with_different_network() {
+        let api = setup_api(Network::Regtest);
+        let peer_api = setup_api(Network::Signet);
+
+        setup_code(&api, "local").await;
+        let peer_code = setup_code(&peer_api, "peer").await;
+
+        let err = api
+            .add_peer_setup_code(peer_code)
+            .await
+            .expect_err("peer setup code with different network should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("Guardian uses Bitcoin network signet but we use regtest")
+        );
+    }
 }

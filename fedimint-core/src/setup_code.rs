@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use bitcoin::Network;
 use serde::Serialize;
 
 use crate::core::ModuleKind;
@@ -23,6 +24,8 @@ pub struct PeerSetupCode {
     /// Total number of guardians (including the one who sets this), set by the
     /// leader
     pub federation_size: Option<u32>,
+    /// Bitcoin network configured locally by the guardian
+    pub network: Network,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
