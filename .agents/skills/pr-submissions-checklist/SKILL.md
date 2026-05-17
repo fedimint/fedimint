@@ -9,7 +9,7 @@ Use this before creating or updating a PR for the Fedimint project.
 
 ## Pre-submit checks
 
-- Verify `just final-lint` passes locally before submitting, to catch easy issues without waiting for CI.
+- Verify `just final-lint` passes locally before submitting, to catch easy issues without waiting for CI. This is the fast lint-only subset of `just final-check`, which also runs tests and WASM checks.
 
 ## PR description
 
