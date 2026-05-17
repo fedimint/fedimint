@@ -21,6 +21,7 @@ Fedimint is a modular framework for building federated financial applications. I
 
 ### Testing
 - `just test-ci-all` - Run all tests in parallel like CI
+- `just final-lint` - Fast lint-only subset of pre-PR checks
 - `just final-check` - All checks recommended before opening a PR
 - `just check-wasm` - Verify WASM compatibility
 
@@ -109,7 +110,11 @@ fedimint-<module>-server/     # Server-side consensus logic
 - Always run `just format` after making code changes to ensure formatting is correct
 
 ### Before Opening a PR
-Run `just final-check` which includes:
+Read the `pr-submissions-checklist` skill for PR description and pre-submit guidance.
+
+Run `just final-lint` before submitting a PR to catch easy issues without waiting for CI. This is the fast lint-only subset of `just final-check`.
+
+Run `just final-check` before opening larger or riskier PRs, or when extra confidence is needed. It includes:
 - Linting and formatting
 - Full test suite
 - Documentation tests
