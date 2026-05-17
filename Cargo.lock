@@ -603,15 +603,27 @@ version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a054912289d18629dc78375ba2c3726a3afe3ff71b4edba9dedfca0e3446d1fc"
 dependencies = [
- "aws-lc-sys",
+ "aws-lc-sys 0.39.1",
  "zeroize",
 ]
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.39.0"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa7e52a4c5c547c741610a2c6f123f3881e409b714cd27e6798ef020c514f0a"
+checksum = "83a25cf98105baa966497416dbd42565ce3a8cf8dbfd59803ec9ad46f3126399"
+dependencies = [
+ "cc",
+ "cmake",
+ "dunce",
+ "fs_extra",
+]
+
+[[package]]
+name = "aws-lc-sys"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a2f9779ce85b93ab6170dd940ad0169b5766ff848247aff13bb788b832fe3f4"
 dependencies = [
  "bindgen",
  "cc",
@@ -3128,7 +3140,7 @@ dependencies = [
  "anyhow",
  "arti-client",
  "async-trait",
- "aws-lc-sys",
+ "aws-lc-sys 0.41.0",
  "base64 0.22.1",
  "curve25519-dalek 4.1.3",
  "fedimint-core",
@@ -3166,7 +3178,7 @@ dependencies = [
  "async-lock",
  "async-recursion",
  "async-trait",
- "aws-lc-sys",
+ "aws-lc-sys 0.41.0",
  "backon",
  "backtrace",
  "base64 0.22.1",
@@ -4627,7 +4639,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "aws-lc-sys",
+ "aws-lc-sys 0.41.0",
  "axum 0.8.8",
  "bcrypt",
  "bitcoin",
