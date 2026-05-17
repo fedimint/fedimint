@@ -300,7 +300,7 @@ rand_chacha = "0.3.1"
 rayon = "1.10.0"
 rcgen = "=0.13.2"
 redb = "3"
-reqwest = { version = "0.12.22", features = [
+reqwest = { version = "0.12.28", features = [
     "json",
     "rustls-tls",
     "charset",
