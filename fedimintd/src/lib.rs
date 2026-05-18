@@ -315,15 +315,7 @@ pub async fn run(
         core_consensus = %CORE_CONSENSUS_VERSION,
         "Supported core consensus version",
     );
-    for (kind, module) in module_init_registry.iter() {
-        let supported = module.supported_api_versions();
-        debug!(
-            target: LOG_SERVER,
-            module = %kind,
-            supported = %supported,
-            "Supported module versions",
-        );
-    }
+
     let code_version_str = code_version_vendor_suffix.map_or_else(
         || fedimint_version.to_string(),
         |suffix| format!("{fedimint_version}+{suffix}"),

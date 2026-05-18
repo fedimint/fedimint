@@ -487,20 +487,27 @@ where
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {
         <Self as ServerModule>::api_endpoints(self)
             .into_iter()
-            .map(|ApiEndpoint { path, handler }| ApiEndpoint {
-                path,
-                handler: Box::new(
-                    move |module: &DynServerModule,
-                          context: ApiEndpointContext,
-                          value: ApiRequestErased| {
-                        let typed_module = module
-                            .as_any()
-                            .downcast_ref::<T>()
-                            .expect("the dispatcher should always call with the right module");
-                        Box::pin(handler(typed_module, context, value))
-                    },
-                ),
-            })
+            .map(
+                |ApiEndpoint {
+                     path,
+                     version,
+                     handler,
+                 }| ApiEndpoint {
+                    path,
+                    version,
+                    handler: Box::new(
+                        move |module: &DynServerModule,
+                              context: ApiEndpointContext,
+                              value: ApiRequestErased| {
+                            let typed_module = module
+                                .as_any()
+                                .downcast_ref::<T>()
+                                .expect("the dispatcher should always call with the right module");
+                            Box::pin(handler(typed_module, context, value))
+                        },
+                    ),
+                },
+            )
             .collect()
     }
 }
