@@ -642,21 +642,6 @@ impl WalletClientModule {
         let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            let mut dbtx = module.db.begin_transaction().await;
-
-            if dbtx
-                .find_by_prefix(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-                .is_none()
-                && let Some(idx) = module.next_valid_index(0, &handle)
-            {
-                dbtx.insert_new_entry(&ValidAddressIndexKey(idx), &()).await;
-            }
-
-            dbtx.commit_tx().await;
-
             loop {
                 match module.check_outputs(&handle).await {
                     Ok(progress) => {
