@@ -71,6 +71,19 @@ async fn sleep_or_shutdown(handle: &TaskHandle, duration: Duration) -> bool {
     }
 }
 
+enum ForwardOutcome {
+    /// The external response channel was closed — gateway is going away.
+    ExternalClosed,
+    /// The internal forward channel was closed — stream side died, reconnect.
+    StreamClosed,
+}
+
+enum StreamOutcome {
+    Shutdown,
+    EndedCleanly,
+    Errored,
+}
+
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -432,37 +445,32 @@ impl GatewayLndClient {
             info!(target: LOG_LIGHTNING, "LND HTLC Subscription: stream established, processing HTLCs");
             backoff = MIN_BACKOFF;
 
-            loop {
-                tokio::select! {
-                    () = handle.make_shutdown_rx() => {
-                        info!(target: LOG_LIGHTNING, "LND HTLC Subscription task received shutdown signal");
-                        return;
+            // Drive forwarding (external `lnd_rx` -> internal `forward_tx`) concurrently
+            // with reading the stream. They run as two top-level futures of the same
+            // select so a blocked `forward_tx.send().await` cannot stall stream-error
+            // detection: if LND stops reading the request stream and `forward_tx` fills
+            // up, the read side will eventually error and the select wakes on that arm,
+            // cancelling the in-flight forward.
+            let lnd_rx_ref = &mut lnd_rx;
+            let forward_fut = async move {
+                loop {
+                    let Some(msg) = lnd_rx_ref.recv().await else {
+                        return ForwardOutcome::ExternalClosed;
+                    };
+                    if forward_tx.send(msg).await.is_err() {
+                        return ForwardOutcome::StreamClosed;
                     }
-                    response = lnd_rx.recv() => {
-                        let Some(response) = response else {
-                            info!(target: LOG_LIGHTNING, "LND response channel closed, exiting HTLC interceptor");
-                            return;
-                        };
-                        if let Err(err) = forward_tx.send(response).await {
-                            // Internal forward channel is closed, which means the stream
-                            // task on the other side has gone away. Reconnect.
-                            warn!(
-                                target: LOG_LIGHTNING,
-                                err = %err.fmt_compact(),
-                                "Internal forward channel closed, reconnecting HTLC stream"
-                            );
-                            break;
-                        }
-                    }
-                    htlc_message = htlc_stream.message() => {
-                        match htlc_message {
+                }
+            };
+            let stream_fut = async {
+                loop {
+                    tokio::select! {
+                        () = handle.make_shutdown_rx() => return StreamOutcome::Shutdown,
+                        htlc_message = htlc_stream.message() => match htlc_message {
                             Ok(Some(htlc)) => {
                                 Self::handle_intercepted_htlc(htlc, &lnd_sender, &gateway_sender).await;
                             }
-                            Ok(None) => {
-                                info!(target: LOG_LIGHTNING, "LND HTLC stream ended cleanly, reconnecting");
-                                break;
-                            }
+                            Ok(None) => return StreamOutcome::EndedCleanly,
                             Err(err) => {
                                 // Any transport-level error on the stream (e.g. LND
                                 // returning `Unknown: fwd not found` for a stale HTLC
@@ -474,11 +482,42 @@ impl GatewayLndClient {
                                     err = %err.fmt_compact(),
                                     "Error received over HTLC stream, reconnecting"
                                 );
-                                break;
+                                return StreamOutcome::Errored;
                             }
                         }
                     }
                 }
+            };
+
+            tokio::pin!(forward_fut);
+            tokio::pin!(stream_fut);
+
+            let should_reconnect = tokio::select! {
+                outcome = &mut forward_fut => match outcome {
+                    ForwardOutcome::ExternalClosed => {
+                        info!(target: LOG_LIGHTNING, "LND response channel closed, exiting HTLC interceptor");
+                        return;
+                    }
+                    ForwardOutcome::StreamClosed => {
+                        warn!(target: LOG_LIGHTNING, "Internal forward channel closed, reconnecting HTLC stream");
+                        true
+                    }
+                },
+                outcome = &mut stream_fut => match outcome {
+                    StreamOutcome::Shutdown => {
+                        info!(target: LOG_LIGHTNING, "LND HTLC Subscription task received shutdown signal");
+                        return;
+                    }
+                    StreamOutcome::EndedCleanly => {
+                        info!(target: LOG_LIGHTNING, "LND HTLC stream ended cleanly, reconnecting");
+                        true
+                    }
+                    StreamOutcome::Errored => true,
+                },
+            };
+
+            if !should_reconnect {
+                return;
             }
 
             if sleep_or_shutdown(&handle, backoff).await {
