@@ -54,9 +54,6 @@ impl RocksDb {
     #[builder(finish_fn = open_blocking)]
     pub fn open_blocking(
         #[builder(start_fn)] db_path: impl AsRef<Path>,
-        /// Relaxed consistency allows opening the database
-        /// even if the wal got corrupted.
-        relaxed_consistency: Option<bool>,
     ) -> anyhow::Result<Locked<RocksDb>> {
         let db_path = db_path.as_ref();
 
@@ -66,9 +63,7 @@ impl RocksDb {
                     .parent()
                     .ok_or_else(|| anyhow::anyhow!("db path must have a base dir"))?,
             )?;
-            LockedBuilder::new(db_path)?.with_db(|| {
-                Self::open_blocking_unlocked(db_path, relaxed_consistency.unwrap_or_default())
-            })
+            LockedBuilder::new(db_path)?.with_db(|| Self::open_blocking_unlocked(db_path))
         })
     }
 }
@@ -86,19 +81,16 @@ where
 }
 
 impl RocksDb {
-    fn open_blocking_unlocked(
-        db_path: &Path,
-        relaxed_consistency: bool,
-    ) -> anyhow::Result<RocksDb> {
+    fn open_blocking_unlocked(db_path: &Path) -> anyhow::Result<RocksDb> {
         let mut opts = get_default_options()?;
-        if relaxed_consistency {
-            // https://github.com/fedimint/fedimint/issues/8072
-            opts.set_wal_recovery_mode(DBRecoveryMode::TolerateCorruptedTailRecords);
-        } else {
-            // Since we turned synchronous writes one we should never encounter a corrupted
-            // WAL and should rather fail in this case
-            opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
-        }
+        // Synchronous writes (set_sync(true)) ensure completed writes are
+        // durable, but a SIGKILL mid-write can still leave a truncated WAL tail
+        // record. TolerateCorruptedTailRecords (RocksDB's own default) discards
+        // only incomplete tail records — no committed data is lost.
+        // AbsoluteConsistency was used previously but made the database
+        // permanently unrecoverable after any unclean shutdown.
+        // See: https://github.com/fedimint/fedimint/issues/8072
+        opts.set_wal_recovery_mode(DBRecoveryMode::TolerateCorruptedTailRecords);
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, db_path)?;
         Ok(RocksDb(db))
