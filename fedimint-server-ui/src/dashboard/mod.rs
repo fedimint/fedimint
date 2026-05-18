@@ -30,23 +30,25 @@ use {
 };
 
 use crate::dashboard::modules::{lnv2, meta, mintv2, wallet, walletv2};
-use crate::{
-    CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, METRICS_ROUTE,
-};
+use crate::{DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, METRICS_ROUTE};
 
 // Dashboard login form handler
 async fn login_form_handler() -> impl IntoResponse {
     Html(single_card_layout("Enter Password", login_form(None)).into_string())
 }
 
-// Dashboard login submit handler
+// Dashboard login submit handler. Only mounted when the guardian has a
+// password configured, so `auth()` is always `Some` here.
 async fn login_submit(
     State(state): State<UiState<DynDashboardApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
     login_submit_response(
-        state.api.auth().await,
+        state
+            .api
+            .auth_ui()
+            .expect("login route is mounted only when auth is configured"),
         state.auth_cookie_name,
         state.auth_cookie_value,
         jar,
@@ -59,10 +61,9 @@ async fn download_backup(
     State(state): State<UiState<DynDashboardApi>>,
     user_auth: UserAuth,
 ) -> impl IntoResponse {
-    let api_auth = state.api.auth().await;
     let backup = state
         .api
-        .download_guardian_config_backup(api_auth.as_str(), &user_auth.guardian_auth_token)
+        .download_guardian_config_backup(&user_auth.guardian_auth_token)
         .await;
     let filename = "guardian-backup.tar";
 
@@ -93,79 +94,6 @@ async fn metrics_handler(_user_auth: UserAuth) -> impl IntoResponse {
         )
             .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")).into_response(),
-    }
-}
-
-// Password change handler
-async fn change_password(
-    State(state): State<UiState<DynDashboardApi>>,
-    user_auth: UserAuth,
-    Form(input): Form<crate::PasswordChangeInput>,
-) -> impl IntoResponse {
-    let api_auth = state.api.auth().await;
-
-    // Verify current password
-    if !api_auth.verify(&input.current_password) {
-        let content = html! {
-            div class="alert alert-danger" { "Current password is incorrect" }
-            a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
-        };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
-    }
-
-    // Verify new password confirmation
-    if input.new_password != input.confirm_password {
-        let content = html! {
-            div class="alert alert-danger" { "New passwords do not match" }
-            a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
-        };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
-    }
-
-    // Check that new password is not empty
-    if input.new_password.is_empty() {
-        let content = html! {
-            div class="alert alert-danger" { "New password cannot be empty" }
-            a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
-        };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
-    }
-
-    // Call the API to change the password
-    match state
-        .api
-        .change_password(
-            &input.new_password,
-            &input.current_password,
-            &user_auth.guardian_auth_token,
-        )
-        .await
-    {
-        Ok(()) => {
-            let content = html! {
-                div class="alert alert-success" {
-                    "Password changed successfully! The server will restart now."
-                }
-                div class="alert alert-info" {
-                    "You will need to log in again with your new password once the server restarts."
-                }
-                a href="/login" class="btn btn-primary w-100 py-2" { "Go to Login" }
-            };
-            Html(single_card_layout("Password Changed", content).into_string()).into_response()
-        }
-        Err(err) => {
-            let content = html! {
-                div class="alert alert-danger" {
-                    "Failed to change password: " (err)
-                }
-                a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
-            };
-            Html(single_card_layout("Password Change Failed", content).into_string())
-                .into_response()
-        }
     }
 }
 
@@ -253,45 +181,17 @@ async fn dashboard_view(
             }
         }
 
-        // Guardian Backup and Password Change side by side
+        // Guardian Backup
         div class="row gy-4 mt-2" {
-            div class="col-lg-6" {
-                div class="card h-100" {
+            div class="col-12" {
+                div class="card" {
                     div class="card-header dashboard-header" { "Guardian Backup" }
                     div class="card-body" {
                         div class="alert alert-warning mb-3" {
-                            "You only need to download this backup once. Use it to restore your guardian if your server fails. Store this file securely since it contains your guardians private key for the onchain threshold signature protecting your funds."
+                            "You only need to download this backup once. Use it to restore your guardian if your server fails. Store this file securely since anyone with it can run your guardian node."
                         }
                         a href="/download-backup" class="btn btn-primary" {
                             "Download"
-                        }
-                    }
-                }
-            }
-
-            div class="col-lg-6" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { "Change Password" }
-                    div class="card-body" {
-                        div class="alert alert-warning mb-3" {
-                            "After changing your password, the server will restart and you will need to log in again. Depending on your setup, a manual restart may be required."
-                        }
-                        form method="post" action="/change-password" {
-                            div class="form-group mb-3" {
-                                label for="current_password" class="form-label" { "Current Password" }
-                                input type="password" class="form-control" id="current_password" name="current_password" placeholder="Enter current password" required;
-                            }
-                            div class="form-group mb-3" {
-                                label for="new_password" class="form-label" { "New Password" }
-                                input type="password" class="form-control" id="new_password" name="new_password" placeholder="Enter new password" required;
-                            }
-                            div class="form-group mb-3" {
-                                label for="confirm_password" class="form-label" { "Confirm New Password" }
-                                input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm new password" required;
-                            }
-                            button type="submit" class="btn btn-primary" {
-                                "Change Password"
-                            }
                         }
                     }
                 }
@@ -303,19 +203,23 @@ async fn dashboard_view(
 }
 
 pub fn router(api: DynDashboardApi) -> Router {
+    let requires_auth = api.auth_ui().is_some();
+
     let mut app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
-        .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(EXPLORER_ROUTE, get(consensus_explorer_view))
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
-        .route(CHANGE_PASSWORD_ROUTE, post(change_password))
         .route(METRICS_ROUTE, get(metrics_handler))
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynDashboardApi>),
         )
         .with_static_routes();
+
+    if requires_auth {
+        app = app.route(LOGIN_ROUTE, get(login_form_handler).post(login_submit));
+    }
 
     // routeradd LNv2 gateway routes if the module exists
     if api
@@ -339,5 +243,5 @@ pub fn router(api: DynDashboardApi) -> Router {
     }
 
     // Finalize the router with state
-    app.with_state(UiState::new(api))
+    app.with_state(UiState::new(api, requires_auth))
 }

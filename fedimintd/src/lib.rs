@@ -22,8 +22,8 @@ use fedimint_core::db::Database;
 use fedimint_core::envs::{
     FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
-use fedimint_core::module::CORE_CONSENSUS_VERSION;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
@@ -34,7 +34,7 @@ use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ConfigGenSettings;
-use fedimint_server::config::io::DB_FILE;
+use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
@@ -52,6 +52,7 @@ use fedimintd_envs::{
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
+    FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV,
 };
 use futures::FutureExt as _;
 #[cfg(all(
@@ -91,6 +92,20 @@ struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
     data_dir: PathBuf,
+
+    /// Password gating the guardian admin UI on bind-ui. Optional: falls
+    /// back to reading password.private from data-dir, and if neither is
+    /// present the UI is served without a login form. Only safe when
+    /// bind-ui stays on a trusted interface (the default 127.0.0.1).
+    #[arg(long, env = FM_PASSWORD_UI_ENV)]
+    password_ui: Option<String>,
+
+    /// Password gating admin RPCs on the public API (WebSocket on bind-api
+    /// and iroh). Optional: falls back to reading password.private from
+    /// data-dir, and if neither is present admin RPCs return 401
+    /// unconditionally.
+    #[arg(long, env = FM_PASSWORD_API_ENV)]
+    password_api: Option<String>,
 
     /// The bitcoin network of the federation
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
@@ -409,10 +424,26 @@ pub async fn run(
 
     install_crypto_provider().await;
 
+    // Each password (UI and API) independently falls back to the
+    // password.private file on disk if its env var is not set. Absence of
+    // both env var and file for a given plane opts that plane into
+    // passwordless mode.
+    let password_file = std::fs::read_to_string(server_opts.data_dir.join(PLAINTEXT_PASSWORD))
+        .ok()
+        .map(|s| s.trim().to_owned());
+
+    let auth_ui = server_opts
+        .password_ui
+        .or_else(|| password_file.clone())
+        .map(ApiAuth::new);
+    let auth_api = server_opts.password_api.or(password_file).map(ApiAuth::new);
+
     let task_group = root_task_group.clone();
     root_task_group.spawn_cancellable("main", async move {
         fedimint_server::run(
             server_opts.data_dir,
+            auth_ui,
+            auth_api,
             server_opts.force_api_secrets,
             settings,
             db,

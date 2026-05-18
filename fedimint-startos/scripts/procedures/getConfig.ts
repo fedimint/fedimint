@@ -51,6 +51,24 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
       }
     }
   },
+  "password": {
+    type: "string",
+    name: "Password",
+    description: "Password for the dashboard and admin API. Required for securing access to your node.",
+    nullable: false,
+    default: {
+      charset: "a-z,A-Z,0-9",
+      len: 20,
+    },
+    generate: {
+      charset: "a-z,A-Z,0-9",
+      len: 20,
+    },
+    pattern: "^[a-zA-Z0-9_]+$",
+    "pattern-description": "Must be alphanumeric (can contain underscore)",
+    copyable: true,
+    masked: true,
+  },
   "advanced": {
     type: "object",
     name: "Advanced Settings",

@@ -692,21 +692,6 @@ impl FedimintCli {
         }
     }
 
-    pub async fn set_password(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            auth.as_str(),
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "set-password",
-        )
-        .run()
-        .await
-    }
-
     pub async fn set_local_params_leader(
         self,
         peer: &PeerId,

@@ -339,14 +339,10 @@ pub struct IrohGatewayResponse {
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
-// TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
-// Option<ApiAuth>`
 /// Authentication secret used to verify guardian admin API requests.
 ///
 /// The inner value is private to prevent timing leaks via direct comparison.
-/// Use [`Self::verify`] for authentication checks. [`Self::as_str`] is a
-/// temporary escape hatch for I/O that still needs the plaintext value and
-/// should be removed once passwords are hashed at rest.
+/// Use [`Self::verify`] for authentication checks.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ApiAuth(String);
 

@@ -13,7 +13,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
+    ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
@@ -104,8 +104,6 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
-    /// Secret API auth string
-    pub api_auth: ApiAuth,
     /// Optional secret key for our websocket p2p endpoint
     pub tls_key: Option<String>,
     /// Optional secret key for our iroh api endpoint
@@ -238,8 +236,6 @@ pub struct ConfigGenParams {
     pub iroh_api_sk: Option<iroh::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
-    /// Secret API auth string
-    pub api_auth: ApiAuth,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
@@ -354,7 +350,6 @@ impl ServerConfig {
         };
 
         let private = ServerConfigPrivate {
-            api_auth: params.api_auth.clone(),
             tls_key: params
                 .tls_key
                 .map(|key| key.secret_der().to_vec().encode_hex()),

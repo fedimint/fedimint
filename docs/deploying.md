@@ -40,10 +40,10 @@ You can create a Fedimint in two ways:
 1. **Install & Launch `fedimintd`:**
     Each participating guardian runs their own instance of fedimintd.
 	See below [self-hosted solutions](#self-hosted-solutions) or [hosted solutions](#hosted-solutions) for installation options.
-2. **Set a Password:**
-	When starting fedimintd for the first time, each guardian must create a secure password.
+2. **Set Passwords:**
+	Each guardian sets two environment variables before starting fedimintd: `FM_PASSWORD_UI` (gates the admin UI login form) and `FM_PASSWORD_API` (gates admin RPCs on the public WS/iroh API). They can be the same value. Either is optional: unset `FM_PASSWORD_UI` serves the UI without a login form (only safe when `FM_BIND_UI` stays on a trusted interface — the default `127.0.0.1`), and unset `FM_PASSWORD_API` makes admin RPCs return 401 unconditionally. Both fall back to a `password.private` file in the data dir for backwards compatibility.
 3. **Generate Setup Code:**
-	After entering the password, a unique setup code is generated for each guardian.
+	After logging in with the password, a unique setup code is generated for each guardian.
 4. **Exchange Setup Codes:**
 	All guardians must share their setup codes with each other (every guardian needs every other guardian’s code).
 5. **Distributed Key Generation (DKG):**

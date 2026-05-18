@@ -905,21 +905,6 @@ impl FedimintCli {
                     serde_json::to_value(backup_statistics).expect("Can be encoded"),
                 ))
             }
-            Command::Admin(AdminCmd::ChangePassword { new_password }) => {
-                let client = self.client_open(&cli).await?;
-
-                cli.admin_client(
-                    &client.get_peer_urls().await,
-                    client.api_secret().as_deref(),
-                )
-                .await?
-                .change_password(cli.auth()?, &new_password)
-                .await?;
-
-                warn!(target: LOG_CLIENT, "Password changed, please restart fedimintd manually");
-
-                Ok(CliOutput::Raw(json!(null)))
-            }
             Command::Dev(DevCmd::Api {
                 method,
                 params,

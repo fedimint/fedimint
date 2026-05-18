@@ -33,6 +33,20 @@ let
 
         package = mkPackageOption pkgs "fedimint" { };
 
+        passwordUi = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Password for the guardian admin UI login form. Falls back to password.private file in data dir if not set, then to passwordless mode.";
+          example = "my-secure-password";
+        };
+
+        passwordApi = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Password for authenticating admin RPCs on the public API (WS/iroh). Falls back to password.private file in data dir if not set, then to admin RPCs returning 401 unconditionally.";
+          example = "my-secure-password";
+        };
+
         environment = mkOption {
           type = types.attrsOf types.str;
           description = "Extra Environment variables to pass to the fedimintd.";
@@ -297,6 +311,8 @@ in
             wantedBy = [ "multi-user.target" ];
             environment = lib.mkMerge [
               {
+                FM_PASSWORD_UI = lib.mkIf (cfg.passwordUi != null) cfg.passwordUi;
+                FM_PASSWORD_API = lib.mkIf (cfg.passwordApi != null) cfg.passwordApi;
                 FM_BIND_P2P = "${cfg.p2p.bind}:${toString cfg.p2p.port}";
                 FM_BIND_API_WS = "${cfg.api_ws.bind}:${toString cfg.api_ws.port}";
                 FM_BIND_API_IROH = "${cfg.api_iroh.bind}:${toString cfg.api_iroh.port}";

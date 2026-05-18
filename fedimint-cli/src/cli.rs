@@ -15,7 +15,7 @@ use crate::client::{ClientCmd, ModuleSelector};
 use crate::envs::FM_USE_TOR_ENV;
 use crate::envs::{
     FM_API_SECRET_ENV, FM_CLIENT_DIR_ENV, FM_DB_BACKEND_ENV, FM_FEDERATION_SECRET_HEX_ENV,
-    FM_IROH_ENABLE_DHT_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV,
+    FM_IROH_ENABLE_DHT_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_API_ENV,
 };
 use crate::utils::parse_peer_id;
 
@@ -41,7 +41,7 @@ pub(crate) struct Opts {
     pub our_id: Option<PeerId>,
 
     /// Guardian password for authentication
-    #[arg(long, env = FM_PASSWORD_ENV)]
+    #[arg(long, env = FM_PASSWORD_API_ENV)]
     pub password: Option<String>,
 
     /// Federation secret as consensus-encoded hex.
@@ -119,7 +119,7 @@ pub(crate) enum AdminCmd {
         #[arg(long, env = FM_OUR_ID_ENV)]
         peer_id: u16,
         /// Guardian password for authentication
-        #[arg(long, env = FM_PASSWORD_ENV)]
+        #[arg(long, env = FM_PASSWORD_API_ENV)]
         password: String,
         /// Skip interactive endpoint verification
         #[arg(long)]
@@ -165,12 +165,6 @@ pub(crate) enum AdminCmd {
     },
     /// Show statistics about client backups stored by the federation
     BackupStatistics,
-    /// Change guardian password, will shut down fedimintd and require manual
-    /// restart
-    ChangePassword {
-        /// New password to set
-        new_password: String,
-    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -331,7 +325,7 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = FM_PASSWORD_ENV)]
+        #[arg(env = FM_PASSWORD_API_ENV)]
         password: String,
     },
 
@@ -347,7 +341,7 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = FM_PASSWORD_ENV)]
+        #[arg(env = FM_PASSWORD_API_ENV)]
         password: String,
     },
 

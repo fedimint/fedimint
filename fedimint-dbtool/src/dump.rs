@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use erased_serde::Serialize;
 use fedimint_client::db::{ClientConfigKey, OperationLogKeyPrefix};
 use fedimint_client::module_init::ClientModuleInitRegistry;
@@ -69,7 +68,6 @@ impl DatabaseDump {
     pub async fn new(
         cfg_dir: PathBuf,
         data_dir: String,
-        password: String,
         module_inits: ServerModuleInitRegistry,
         client_module_inits: ClientModuleInitRegistry,
         modules: Vec<String>,
@@ -81,9 +79,7 @@ impl DatabaseDump {
 
         let read_only_db = Database::new(read_only_rocks_db, ModuleRegistry::default());
 
-        let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
-            read_server_config(&password, &cfg_dir).context("Failed to read server config")
-        {
+        let (server_cfg, client_cfg, decoders) = if let Ok(cfg) = read_server_config(&cfg_dir) {
             // Successfully read the server's config, that means this database is a server
             // db
             let decoders = module_inits

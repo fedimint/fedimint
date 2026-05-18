@@ -28,12 +28,11 @@ use futures::future::try_join_all;
 use serde_json::json;
 use substring::Substring;
 use tokio::net::TcpStream;
-use tokio::time::timeout;
 use tokio::{fs, try_join};
 use tracing::{debug, error, info};
 
 use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
-use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
+use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
@@ -578,8 +577,6 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
 pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    let data_dir = env::var(FM_DATA_DIR_ENV)?;
-
     let DevFed {
         bitcoind,
         lnd,
@@ -593,52 +590,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let client = fed.new_joined_client("cli-tests-client").await?;
     let lnd_gw_id = gw_lnd.gateway_id.clone();
-
-    cmd!(
-        client,
-        "dev",
-        "config-decrypt",
-        "--in-file={data_dir}/fedimintd-default-0/private.encrypt",
-        "--out-file={data_dir}/fedimintd-default-0/config-plaintext.json"
-    )
-    .env(FM_PASSWORD_ENV, "pass")
-    .run()
-    .await?;
-
-    cmd!(
-        client,
-        "dev",
-        "config-encrypt",
-        "--in-file={data_dir}/fedimintd-default-0/config-plaintext.json",
-        "--out-file={data_dir}/fedimintd-default-0/config-2"
-    )
-    .env(FM_PASSWORD_ENV, "pass-foo")
-    .run()
-    .await?;
-
-    cmd!(
-        client,
-        "dev",
-        "config-decrypt",
-        "--in-file={data_dir}/fedimintd-default-0/config-2",
-        "--out-file={data_dir}/fedimintd-default-0/config-plaintext-2.json"
-    )
-    .env(FM_PASSWORD_ENV, "pass-foo")
-    .run()
-    .await?;
-
-    let plaintext_one = fs::read_to_string(format!(
-        "{data_dir}/fedimintd-default-0/config-plaintext.json"
-    ))
-    .await?;
-    let plaintext_two = fs::read_to_string(format!(
-        "{data_dir}/fedimintd-default-0/config-plaintext-2.json"
-    ))
-    .await?;
-    anyhow::ensure!(
-        plaintext_one == plaintext_two,
-        "config-decrypt/encrypt failed"
-    );
 
     fed.pegin_gateways(10_000_000, vec![&gw_lnd]).await?;
 
@@ -1779,7 +1730,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "--db",
         "{data_dir}/fedimintd-default-0/database"
     )
-    .env(FM_PASSWORD_ENV, "pass")
     .out_json()
     .await?;
     let outputs = output.as_array().context("expected an array")?;
@@ -1845,7 +1795,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "--db",
         "{data_dir}/fedimintd-default-0/database"
     )
-    .env(FM_PASSWORD_ENV, "pass")
     .out_json()
     .await?
     .as_array()
@@ -1937,16 +1886,12 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     };
 
     write_file("backup.tar", &backup_tar);
-    write_file(
-        fedimint_server::config::io::PLAINTEXT_PASSWORD,
-        "pass".as_bytes(),
-    );
 
     assert_eq!(
         std::process::Command::new("tar")
             .arg("-xf")
             .arg("backup.tar")
-            .current_dir(data_dir)
+            .current_dir(&data_dir)
             .spawn()
             .expect("error spawning tar")
             .wait()
@@ -1955,6 +1900,12 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         Some(0),
         "tar failed"
     );
+
+    // If the backup contains encrypted config (from old fedimintd), write the
+    // password file so the current fedimintd can read it
+    if data_dir.join("private.encrypt").exists() {
+        write_file("password.private", "pass".as_bytes());
+    }
 
     fed.start_server(process_mgr, PEER_TO_TEST.into())
         .await
@@ -2248,7 +2199,6 @@ async fn modify_server_configs(config_dir: &Path, peer_ids: &[PeerId]) -> Result
 /// Modify configuration files for a single peer to add a new meta module
 /// instance
 async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result<()> {
-    use fedimint_aead::{encrypted_write, get_encryption_key};
     use fedimint_core::core::ModuleInstanceId;
     use fedimint_server::config::io::read_server_config;
     use serde_json::Value;
@@ -2265,9 +2215,8 @@ async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result
     let mut consensus_config: Value = serde_json::from_str(&consensus_config_content)
         .with_context(|| format!("Failed to parse consensus config for peer {peer_id}"))?;
 
-    // Read the encrypted private config using the server config reader
-    let password = "pass"; // Default password used in devimint
-    let server_config = read_server_config(password, &peer_dir)
+    // Read the private config using the server config reader
+    let server_config = read_server_config(&peer_dir)
         .with_context(|| format!("Failed to read server config for peer {peer_id}"))?;
 
     // Find existing meta module in configs to use as template
@@ -2338,25 +2287,14 @@ async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result
         .await
         .with_context(|| format!("Failed to write consensus config for peer {peer_id}"))?;
 
-    // Write back the modified private config using direct encryption
-    let salt = std::fs::read_to_string(peer_dir.join("private.salt"))
-        .with_context(|| format!("Failed to read salt file for peer {peer_id}"))?;
-    let key = get_encryption_key(password, &salt)
-        .with_context(|| format!("Failed to get encryption key for peer {peer_id}"))?;
+    // Write back the modified private config as plaintext JSON
+    let private_json_path = peer_dir.join("private.json");
+    let private_config_content = serde_json::to_string_pretty(&updated_private_config)
+        .with_context(|| format!("Failed to serialize private config for peer {peer_id}"))?;
 
-    let private_config_bytes = serde_json::to_string(&updated_private_config)
-        .with_context(|| format!("Failed to serialize private config for peer {peer_id}"))?
-        .into_bytes();
-
-    // Remove the existing encrypted file first
-    let encrypted_private_path = peer_dir.join("private.encrypt");
-    if encrypted_private_path.exists() {
-        std::fs::remove_file(&encrypted_private_path)
-            .with_context(|| format!("Failed to remove old private config for peer {peer_id}"))?;
-    }
-
-    encrypted_write(private_config_bytes, &key, encrypted_private_path)
-        .with_context(|| format!("Failed to write encrypted private config for peer {peer_id}"))?;
+    write_overwrite_async(&private_json_path, private_config_content)
+        .await
+        .with_context(|| format!("Failed to write private config for peer {peer_id}"))?;
 
     info!("Successfully modified configs for peer {}", peer_id);
     Ok(())
@@ -2463,82 +2401,6 @@ pub async fn admin_auth_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
-pub async fn test_guardian_password_change(
-    dev_fed: DevFed,
-    process_mgr: &ProcessManager,
-) -> Result<()> {
-    log_binary_versions().await?;
-
-    let DevFed { mut fed, .. } = dev_fed;
-    fed.await_all_peers().await?;
-
-    let client = fed.new_joined_client("config-change-test-client").await?;
-
-    let peer_id = 0;
-    let data_dir: PathBuf = fed
-        .vars
-        .get(&peer_id)
-        .expect("peer not found")
-        .FM_DATA_DIR
-        .clone();
-    let file_exists = |file: &str| {
-        let path = data_dir.join(file);
-        path.exists()
-    };
-    let pre_password_file_exists = file_exists("password.secret");
-
-    info!(target: LOG_DEVIMINT, "Changing password");
-    cmd!(
-        client,
-        "--our-id",
-        &peer_id.to_string(),
-        "--password",
-        "pass",
-        "admin",
-        "change-password",
-        "foobar"
-    )
-    .run()
-    .await
-    .context("Failed to change guardian password")?;
-
-    info!(target: LOG_DEVIMINT, "Waiting for fedimintd to be shut down");
-    timeout(
-        Duration::from_secs(30),
-        fed.await_server_terminated(peer_id),
-    )
-    .await
-    .context("Fedimintd didn't shut down in time after password change")??;
-
-    info!(target: LOG_DEVIMINT, "Restarting fedimintd");
-    fed.start_server(process_mgr, peer_id).await?;
-
-    info!(target: LOG_DEVIMINT, "Wait for fedimintd to come online again");
-    fed.await_peer(peer_id).await?;
-
-    info!(target: LOG_DEVIMINT, "Testing password change worked");
-    cmd!(
-        client,
-        "--our-id",
-        &peer_id.to_string(),
-        "--password",
-        "foobar",
-        "admin",
-        "backup-statistics"
-    )
-    .run()
-    .await
-    .context("Failed to run guardian command with new password")?;
-
-    assert!(!file_exists("private.bak"));
-    assert!(!file_exists("password.bak"));
-    assert!(!file_exists("private.new"));
-    assert!(!file_exists("password.new"));
-    assert_eq!(file_exists("password.secret"), pre_password_file_exists);
-
-    Ok(())
-}
-
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -2610,9 +2472,6 @@ pub enum TestCmd {
     /// Tests that client can detect federation config changes when servers
     /// restart with new module configurations
     TestClientConfigChangeDetection,
-    /// Tests that guardian password change works and the guardian can restart
-    /// afterwards
-    TestGuardianPasswordChange,
     /// `devfed` then tests admin auth credential storage
     TestAdminAuth,
     /// Test upgrade paths for a given binary
@@ -2733,11 +2592,6 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             test_client_config_change_detection(dev_fed, &process_mgr).await?;
-        }
-        TestCmd::TestGuardianPasswordChange => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
-            test_guardian_password_change(dev_fed, &process_mgr).await?;
         }
         TestCmd::TestAdminAuth => {
             // Check versions early before starting infrastructure

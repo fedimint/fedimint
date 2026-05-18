@@ -42,8 +42,9 @@ pub struct P2PConnectionStatus {
 /// Interface for guardian dashboard API in a running federation
 #[async_trait]
 pub trait IDashboardApi {
-    /// Get the guardian's authentication details
-    async fn auth(&self) -> ApiAuth;
+    /// Password protecting the dashboard UI login form. `None` means the UI
+    /// is served without a login form.
+    fn auth_ui(&self) -> Option<ApiAuth>;
 
     /// Get the guardian ID
     async fn guardian_id(&self) -> PeerId;
@@ -81,7 +82,6 @@ pub trait IDashboardApi {
     /// Download a backup of the guardian's configuration
     async fn download_guardian_config_backup(
         &self,
-        password: &str,
         guardian_auth: &GuardianAuthToken,
     ) -> GuardianConfigBackup;
 
@@ -90,14 +90,6 @@ pub trait IDashboardApi {
 
     /// Get the fedimintd version
     async fn fedimintd_version(&self) -> String;
-
-    /// Change the guardian password
-    async fn change_password(
-        &self,
-        new_password: &str,
-        current_password: &str,
-        guardian_auth: &GuardianAuthToken,
-    ) -> Result<(), String>;
 
     /// Create a trait object
     fn into_dyn(self) -> DynDashboardApi

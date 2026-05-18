@@ -7,7 +7,6 @@ use axum::routing::{get, post};
 use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::module::ApiAuth;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -28,7 +27,6 @@ pub const START_DKG_ROUTE: &str = "/start_dkg";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
-    pub password: String,
     pub name: String,
     #[serde(default)]
     pub is_lead: bool,
@@ -194,10 +192,6 @@ fn setup_form_content(
                 input type="text" class="form-control" id="name" name="name" placeholder="Your Guardian Name" required;
             }
 
-            div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Your Password" required;
-            }
-
             div class="alert alert-warning mb-3" style="font-size: 0.875rem;" {
                 "Exactly one guardian must set the global config."
             }
@@ -299,7 +293,10 @@ fn setup_form_content(
 }
 
 // GET handler for the /setup route (display the setup form)
-async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+async fn setup_form(
+    State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
+) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
@@ -314,6 +311,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 // POST handler for the /setup route (process the setup form)
 async fn setup_submit(
     State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
     // Only use these settings if is_lead is true
@@ -361,7 +359,6 @@ async fn setup_submit(
     match state
         .api
         .set_local_parameters(
-            ApiAuth::new(input.password),
             input.name,
             federation_name,
             disable_base_fees,
@@ -380,33 +377,28 @@ async fn setup_submit(
 }
 
 // GET handler for the /login route (display the login form)
-async fn login_form_handler(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.setup_code().await.is_none() {
-        return Redirect::to(ROOT_ROUTE).into_response();
-    }
-
+async fn login_form_handler() -> impl IntoResponse {
     Html(single_card_layout("Enter Password", login_form(None)).into_string()).into_response()
 }
 
-// POST handler for the /login route (authenticate and set session cookie)
+// POST handler for the /login route (authenticate and set session cookie).
+// Only mounted when the guardian has a password configured, so `auth()` is
+// always `Some` here.
 async fn login_submit(
     State(state): State<UiState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    let auth = match state.api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to(ROOT_ROUTE).into_response(),
-    };
-
     login_submit_response(
-        auth,
+        state
+            .api
+            .auth_ui()
+            .expect("login route is mounted only when auth is configured"),
         state.auth_cookie_name,
         state.auth_cookie_value,
         jar,
         input,
     )
-    .into_response()
 }
 
 // GET handler for the /federation-setup route (main federation management page)
@@ -661,9 +653,10 @@ async fn post_reset_setup_codes(
 }
 
 pub fn router(api: DynSetupApi) -> Router {
-    Router::new()
+    let requires_auth = api.auth_ui().is_some();
+
+    let mut router = Router::new()
         .route(ROOT_ROUTE, get(setup_form).post(setup_submit))
-        .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(FEDERATION_SETUP_ROUTE, get(federation_setup))
         .route(ADD_SETUP_CODE_ROUTE, post(post_add_setup_code))
         .route(RESET_SETUP_CODES_ROUTE, post(post_reset_setup_codes))
@@ -671,9 +664,15 @@ pub fn router(api: DynSetupApi) -> Router {
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynSetupApi>),
-        )
+        );
+
+    if requires_auth {
+        router = router.route(LOGIN_ROUTE, get(login_form_handler).post(login_submit));
+    }
+
+    router
         .with_static_routes()
-        .with_state(UiState::new(api))
+        .with_state(UiState::new(api, requires_auth))
 }
 
 #[cfg(test)]

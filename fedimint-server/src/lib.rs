@@ -24,22 +24,20 @@ extern crate fedimint_core;
 pub mod connection_limits;
 pub mod db;
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context;
 use config::ServerConfig;
-use config::io::{PLAINTEXT_PASSWORD, read_server_config};
+use config::io::read_server_config;
 pub use connection_limits::ConnectionLimits;
-use fedimint_aead::random_salt;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::ApiAuth;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::write_new;
 use fedimint_logging::LOG_CONSENSUS;
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
@@ -54,10 +52,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::config::ConfigGenSettings;
-use crate::config::io::{
-    SALT_FILE, finalize_password_change, recover_interrupted_password_change, trim_password,
-    write_server_config,
-};
+use crate::config::io::write_server_config;
 use crate::config::setup::SetupApi;
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
@@ -88,6 +83,8 @@ pub type SetupUiRouter = Box<dyn Fn(DynSetupApi) -> axum::Router + Send>;
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
     force_api_secrets: ApiSecrets,
     settings: ConfigGenSettings,
     db: Database,
@@ -149,6 +146,8 @@ pub async fn run(
                 force_api_secrets.clone(),
                 setup_ui_router,
                 module_init_registry.clone(),
+                auth_ui.clone(),
+                auth_api.clone(),
             ))
             .await?
         }
@@ -177,6 +176,8 @@ pub async fn run(
 
     Box::pin(consensus::run(
         connectors,
+        auth_ui,
+        auth_api,
         connections,
         p2p_status_receivers,
         settings.api_bind,
@@ -217,18 +218,11 @@ async fn update_server_info_version_dbtx(
 }
 
 pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
-    recover_interrupted_password_change(data_dir)?;
-
-    // Attempt get the config with local password, otherwise start config gen
-    let path = data_dir.join(PLAINTEXT_PASSWORD);
-    if let Ok(password_untrimmed) = fs::read_to_string(&path) {
-        let password = trim_password(&password_untrimmed);
-        let cfg = read_server_config(password, data_dir)?;
-        finalize_password_change(data_dir)?;
-        return Ok(Some(cfg));
+    if !data_dir.join("consensus.json").exists() {
+        return Ok(None);
     }
 
-    Ok(None)
+    read_server_config(data_dir).map(Some)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -241,6 +235,8 @@ pub async fn run_config_gen(
     api_secrets: ApiSecrets,
     setup_ui_handler: SetupUiRouter,
     module_init_registry: ServerModuleInitRegistry,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -252,7 +248,7 @@ pub async fn run_config_gen(
 
     let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let setup_api = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
+    let setup_api = SetupApi::new(settings.clone(), db.clone(), cgp_sender, auth_ui, auth_api);
 
     let mut rpc_module = RpcModule::new(setup_api.clone());
 
@@ -355,16 +351,9 @@ pub async fn run_config_gen(
         cfg.consensus.api_endpoints.is_empty(),
     );
 
-    // TODO: Make writing password optional
-    write_new(
-        data_dir.join(PLAINTEXT_PASSWORD),
-        cfg.private.api_auth.as_str(),
-    )?;
-    write_new(data_dir.join(SALT_FILE), random_salt())?;
     write_server_config(
         &cfg,
         &data_dir,
-        cfg.private.api_auth.as_str(),
         &module_init_registry,
         api_secrets.get_active(),
     )?;

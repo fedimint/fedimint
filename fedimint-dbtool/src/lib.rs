@@ -29,7 +29,7 @@ use futures::StreamExt;
 use hex::ToHex;
 
 use crate::dump::DatabaseDump;
-use crate::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV, FM_PASSWORD_ENV};
+use crate::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV};
 
 mod dump;
 
@@ -77,14 +77,10 @@ enum DbCommand {
     },
     /// Dump a subset of the specified database and serialize the retrieved data
     /// to JSON. Module and prefix are used to specify which subset of the
-    /// database to dump. Password is used to decrypt the server's
-    /// configuration file. If dumping the client database, the password can
-    /// be an arbitrary string.
+    /// database to dump.
     Dump {
         #[clap(long, env = FM_DBTOOL_CONFIG_DIR_ENV)]
         cfg_dir: PathBuf,
-        #[arg(long, env = FM_PASSWORD_ENV)]
-        password: String,
         #[arg(long, required = false)]
         modules: Option<String>,
         #[arg(long, required = false)]
@@ -190,7 +186,6 @@ impl FedimintDBTool {
                 cfg_dir,
                 modules,
                 prefixes,
-                password,
             } => {
                 let modules = match modules {
                     Some(mods) => mods
@@ -223,7 +218,6 @@ impl FedimintDBTool {
                 let mut dbdump = DatabaseDump::new(
                     cfg_dir.clone(),
                     options.database_dir.clone(),
-                    password.clone(),
                     module_inits,
                     client_module_inits,
                     modules,

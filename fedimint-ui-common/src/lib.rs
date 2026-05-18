@@ -26,14 +26,19 @@ pub struct UiState<T> {
     pub api: T,
     pub auth_cookie_name: String,
     pub auth_cookie_value: String,
+    /// Whether the UI requires a password login. When `false` (passwordless
+    /// mode), the `UserAuth` extractor auto-passes and the `/login` route
+    /// should not be mounted.
+    pub requires_auth: bool,
 }
 
 impl<T> UiState<T> {
-    pub fn new(api: T) -> Self {
+    pub fn new(api: T, requires_auth: bool) -> Self {
         Self {
             api,
             auth_cookie_name: thread_rng().r#gen::<[u8; 4]>().encode_hex(),
             auth_cookie_value: thread_rng().r#gen::<[u8; 32]>().encode_hex(),
+            requires_auth,
         }
     }
 }
@@ -220,10 +225,12 @@ pub async fn connectivity_check_handler<Api: Send + Sync + 'static>(
     State(state): State<UiState<Api>>,
     jar: CookieJar,
 ) -> Html<String> {
-    // Check auth manually — return empty fragment if not authenticated
-    let authenticated = jar
-        .get(&state.auth_cookie_name)
-        .is_some_and(|c| c.value() == state.auth_cookie_value);
+    // Check auth manually — return empty fragment if not authenticated.
+    // In passwordless mode (`!requires_auth`), this widget is always shown.
+    let authenticated = !state.requires_auth
+        || jar
+            .get(&state.auth_cookie_name)
+            .is_some_and(|c| c.value() == state.auth_cookie_value);
 
     if !authenticated {
         return Html(String::new());

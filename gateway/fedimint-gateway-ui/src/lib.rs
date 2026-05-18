@@ -514,5 +514,5 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         )
         .with_static_routes();
 
-    app.with_state(UiState::new(api))
+    app.with_state(UiState::new(api, true))
 }

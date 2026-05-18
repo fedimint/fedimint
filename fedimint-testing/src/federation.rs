@@ -373,6 +373,8 @@ impl FederationTestBuilder {
                         .bind()
                         .await
                         .unwrap(),
+                    Some(ApiAuth::new("pass".to_string())),
+                    Some(ApiAuth::new("pass".to_string())),
                     connections,
                     p2p_status_receivers,
                     api_bind,

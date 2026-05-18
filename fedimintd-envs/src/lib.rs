@@ -1,3 +1,7 @@
+pub const FM_PASSWORD_UI_ENV: &str = "FM_PASSWORD_UI";
+
+pub const FM_PASSWORD_API_ENV: &str = "FM_PASSWORD_API";
+
 pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";

@@ -71,7 +71,6 @@ pub fn local_config_gen_params(
         .map(|peer| {
             let params = ConfigGenParams {
                 identity: *peer,
-                api_auth: API_AUTH.clone(),
                 tls_key: Some(tls_keys[peer].1.clone()),
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
