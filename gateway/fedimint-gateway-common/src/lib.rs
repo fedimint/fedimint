@@ -334,6 +334,15 @@ pub struct ChannelInfo {
     pub remote_node_alias: Option<String>,
     #[serde(default)]
     pub remote_address: Option<String>,
+    /// The local-side base routing fee (msat) currently advertised for this
+    /// channel. `None` if the backend could not report a fee policy.
+    #[serde(default)]
+    pub base_fee_msat: Option<u64>,
+    /// The local-side proportional routing fee (parts per million) currently
+    /// advertised for this channel. `None` if the backend could not report a
+    /// fee policy.
+    #[serde(default)]
+    pub parts_per_million: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

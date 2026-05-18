@@ -723,6 +723,12 @@ impl ILnRpcClient for GatewayLdkClient {
                 funding_outpoint: channel_details.funding_txo,
                 remote_node_alias,
                 remote_address,
+                base_fee_msat: Some(u64::from(channel_details.config.forwarding_fee_base_msat)),
+                parts_per_million: Some(u64::from(
+                    channel_details
+                        .config
+                        .forwarding_fee_proportional_millionths,
+                )),
             });
         }
 
