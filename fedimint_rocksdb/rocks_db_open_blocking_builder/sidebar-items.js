@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["sealed"],"struct":["Empty","SetRelaxedConsistency"],"trait":["IsComplete","IsSet","IsUnset","State"]};
+window.SIDEBAR_ITEMS = {"mod":["sealed"],"struct":["Empty"],"trait":["IsComplete","IsSet","IsUnset","State"]};
