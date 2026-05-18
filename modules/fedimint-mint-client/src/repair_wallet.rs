@@ -43,16 +43,80 @@ impl MintClientModule {
     /// sure that the user has a backup of their seed before running this
     /// function.
     pub async fn try_repair_wallet(&self, gap_limit: u64) -> anyhow::Result<RepairSummary> {
-        let mut summary = RepairSummary::default();
-
         let module_api = self.client_ctx.module_api();
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
-        // First check if any of our notes are already spent and remove them
-        let spent_notes: Vec<NoteKey> = dbtx
-            .find_by_prefix_sorted_descending(&NoteKeyPrefix)
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let module_api = module_api.clone();
+
+                    Box::pin(async move {
+                        let mut summary = RepairSummary::default();
+
+                        let note_keys = dbtx
+                            .find_by_prefix_sorted_descending(&NoteKeyPrefix)
+                            .await
+                            .map(|(key, _)| key)
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        let spent_notes = Self::find_spent_notes(&module_api, note_keys).await?;
+
+                        for note_key in spent_notes {
+                            summary.spent_notes.inc(note_key.amount, 1);
+                            dbtx.remove_entry(&note_key).await;
+                        }
+
+                        let next_indices: BTreeMap<_, _> = {
+                            let mut db_next_indexes = dbtx
+                                .find_by_prefix_sorted_descending(&NextECashNoteIndexKeyPrefix)
+                                .await
+                                .map(|(key, idx)| (key.0, idx))
+                                .collect::<BTreeMap<_, _>>()
+                                .await;
+
+                            self.cfg
+                                .tbs_pks
+                                .tiers()
+                                .map(|&denomination| {
+                                    (
+                                        denomination,
+                                        db_next_indexes.remove(&denomination).unwrap_or_default(),
+                                    )
+                                })
+                                .collect()
+                        };
+
+                        let used_nonces = self
+                            .find_used_nonces(&module_api, next_indices, gap_limit)
+                            .await?;
+
+                        for (amount, next_index) in used_nonces {
+                            let old_index = dbtx
+                                .insert_entry(&NextECashNoteIndexKey(amount), &next_index)
+                                .await
+                                .unwrap_or_default();
+                            summary
+                                .used_indices
+                                .inc(amount, (next_index - old_index) as usize);
+                        }
+
+                        Ok::<_, anyhow::Error>(summary)
+                    })
+                },
+                Some(100),
+            )
             .await
-            .map(|(key, _)| {
+            .map_err(anyhow::Error::from)
+    }
+
+    async fn find_spent_notes(
+        module_api: &DynModuleApi,
+        note_keys: Vec<NoteKey>,
+    ) -> anyhow::Result<Vec<NoteKey>> {
+        stream::iter(note_keys.into_iter())
+            .map(|key| {
                 let module_api_inner = module_api.clone();
                 async move {
                     let spent = retry("fetch e-cash spentness", aggressive_backoff(), || async {
@@ -65,35 +129,16 @@ impl MintClientModule {
             .buffer_unordered(CHECK_PARALLELISM)
             .try_filter_map(|result| async move { Ok(result) })
             .try_collect()
-            .await?;
+            .await
+    }
 
-        for note_key in spent_notes {
-            summary.spent_notes.inc(note_key.amount, 1);
-            dbtx.remove_entry(&note_key).await;
-        }
-
-        let next_indices: BTreeMap<_, _> = {
-            let mut db_next_indexes = dbtx
-                .find_by_prefix_sorted_descending(&NextECashNoteIndexKeyPrefix)
-                .await
-                .map(|(key, idx)| (key.0, idx))
-                .collect::<BTreeMap<_, _>>()
-                .await;
-
-            self.cfg
-                .tbs_pks
-                .tiers()
-                .map(|&denomination| {
-                    (
-                        denomination,
-                        db_next_indexes.remove(&denomination).unwrap_or_default(),
-                    )
-                })
-                .collect()
-        };
-
-        // Next check if any of the indices for issuing new notes are already used
-        let used_nonces = stream::iter(next_indices.into_iter())
+    async fn find_used_nonces(
+        &self,
+        module_api: &DynModuleApi,
+        next_indices: BTreeMap<Amount, u64>,
+        gap_limit: u64,
+    ) -> anyhow::Result<Vec<(Amount, u64)>> {
+        stream::iter(next_indices.into_iter())
             .map(|(amount, original_next_index)| {
                 let module_api_inner = module_api.clone();
                 async move {
@@ -127,20 +172,7 @@ impl MintClientModule {
             .buffer_unordered(CHECK_PARALLELISM)
             .try_filter_map(|advanced_index| async move { Ok(advanced_index) })
             .try_collect::<Vec<_>>()
-            .await?;
-
-        for (amount, next_index) in used_nonces {
-            let old_index = dbtx
-                .insert_entry(&NextECashNoteIndexKey(amount), &next_index)
-                .await
-                .unwrap_or_default();
-            summary
-                .used_indices
-                .inc(amount, (next_index - old_index) as usize);
-        }
-
-        dbtx.commit_tx().await;
-        Ok(summary)
+            .await
     }
 
     /// Checks up to `gap_limit` nonces starting from `base_index` for having
