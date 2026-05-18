@@ -137,13 +137,18 @@ fn peer_list_section(
     }
 }
 
+fn setup_error_message(error: &str) -> Markup {
+    html! {
+        div class="alert alert-danger mb-3" { (error) }
+    }
+}
+
 fn setup_form_content(
     available_modules: &BTreeSet<ModuleKind>,
     default_modules: &BTreeSet<ModuleKind>,
-    error: Option<&str>,
 ) -> Markup {
     html! {
-        form id="setup-form" hx-post=(ROOT_ROUTE) hx-target="#setup-form" hx-swap="outerHTML" {
+        form id="setup-form" hx-post=(ROOT_ROUTE) hx-target="#setup-error" hx-swap="innerHTML" {
             style {
                 r#"
                 .toggle-content {
@@ -287,9 +292,7 @@ fn setup_form_content(
                 }
             }
 
-            @if let Some(error) = error {
-                div class="alert alert-danger mb-3" { (error) }
-            }
+            div id="setup-error" {}
             button type="submit" class="btn btn-primary w-100 py-2" { "Confirm" }
         }
     }
@@ -303,7 +306,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 
     let available_modules = state.api.available_modules();
     let default_modules = state.api.default_modules();
-    let content = setup_form_content(&available_modules, &default_modules, None);
+    let content = setup_form_content(&available_modules, &default_modules);
 
     Html(single_card_layout("Guardian Setup", content).into_string()).into_response()
 }
@@ -313,9 +316,6 @@ async fn setup_submit(
     State(state): State<UiState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
-    let available_modules = state.api.available_modules();
-    let default_modules = state.api.default_modules();
-
     // Only use these settings if is_lead is true
     let federation_name = if input.is_lead {
         Some(input.federation_name)
@@ -349,15 +349,8 @@ async fn setup_submit(
             match s.parse::<u32>() {
                 Ok(size) => Some(size),
                 Err(_) => {
-                    return Html(
-                        setup_form_content(
-                            &available_modules,
-                            &default_modules,
-                            Some("Invalid federation size"),
-                        )
-                        .into_string(),
-                    )
-                    .into_response();
+                    return Html(setup_error_message("Invalid federation size").into_string())
+                        .into_response();
                 }
             }
         }
@@ -382,11 +375,7 @@ async fn setup_submit(
             Html(String::new()),
         )
             .into_response(),
-        Err(e) => Html(
-            setup_form_content(&available_modules, &default_modules, Some(&e.to_string()))
-                .into_string(),
-        )
-        .into_response(),
+        Err(e) => Html(setup_error_message(&e.to_string()).into_string()).into_response(),
     }
 }
 
@@ -685,4 +674,25 @@ pub fn router(api: DynSetupApi) -> Router {
         )
         .with_static_routes()
         .with_state(UiState::new(api))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_form_targets_error_container() {
+        let content = setup_form_content(&BTreeSet::new(), &BTreeSet::new()).into_string();
+
+        assert!(content.contains(r##"hx-target="#setup-error""##));
+        assert!(content.contains(r#"<div id="setup-error"></div>"#));
+    }
+
+    #[test]
+    fn setup_error_message_is_partial() {
+        let content = setup_error_message("Invalid federation size").into_string();
+
+        assert!(content.contains("Invalid federation size"));
+        assert!(!content.contains("setup-form"));
+    }
 }
