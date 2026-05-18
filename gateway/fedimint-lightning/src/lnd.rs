@@ -1167,6 +1167,9 @@ impl ILnRpcClient for GatewayLndClient {
             host,
             channel_size_sats,
             push_amount_sats,
+            fee_rate_sats_per_vbyte,
+            base_fee_msat,
+            parts_per_million,
         }: crate::OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
@@ -1200,17 +1203,28 @@ impl ILnRpcClient for GatewayLndClient {
                 })?;
         }
 
+        // Build the request, leaving unspecified fee fields at their
+        // protobuf defaults so LND falls back to its own configuration.
+        let mut open_request = OpenChannelRequest {
+            node_pubkey: pubkey.serialize().to_vec(),
+            local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
+            push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
+            ..Default::default()
+        };
+        if let Some(rate) = fee_rate_sats_per_vbyte {
+            open_request.sat_per_vbyte = rate;
+        }
+        if let Some(base_fee) = base_fee_msat {
+            open_request.base_fee = base_fee;
+            open_request.use_base_fee = true;
+        }
+        if let Some(ppm) = parts_per_million {
+            open_request.fee_rate = ppm;
+            open_request.use_fee_rate = true;
+        }
+
         // Open the channel
-        match client
-            .lightning()
-            .open_channel_sync(OpenChannelRequest {
-                node_pubkey: pubkey.serialize().to_vec(),
-                local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
-                push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
-                ..Default::default()
-            })
-            .await
-        {
+        match client.lightning().open_channel_sync(open_request).await {
             Ok(res) => Ok(OpenChannelResponse {
                 funding_txid: match res.into_inner().funding_txid {
                     Some(txid) => match txid {

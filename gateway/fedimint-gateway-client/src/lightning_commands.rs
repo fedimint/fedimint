@@ -49,6 +49,20 @@ pub enum LightningCommands {
         /// The amount to push to the other side of the channel
         #[clap(long)]
         push_amount_sats: Option<u64>,
+
+        /// Feerate (sat/vB) for the channel-opening on-chain transaction.
+        /// Not honored by all backends (e.g. LDK).
+        #[clap(long)]
+        fee_rate_sats_per_vbyte: Option<u64>,
+
+        /// Base routing fee (msat) advertised for the new channel.
+        #[clap(long)]
+        base_fee_msat: Option<u64>,
+
+        /// Proportional routing fee (parts per million) advertised for the
+        /// new channel.
+        #[clap(long)]
+        parts_per_million: Option<u64>,
     },
     /// Close all channels with a peer, claiming the funds to the lightning
     /// node's on-chain wallet.
@@ -152,12 +166,18 @@ impl LightningCommands {
                 host,
                 channel_size_sats,
                 push_amount_sats,
+                fee_rate_sats_per_vbyte,
+                base_fee_msat,
+                parts_per_million,
             } => {
                 let payload = OpenChannelRequest {
                     pubkey,
                     host,
                     channel_size_sats,
                     push_amount_sats: push_amount_sats.unwrap_or(0),
+                    fee_rate_sats_per_vbyte,
+                    base_fee_msat,
+                    parts_per_million,
                 };
                 let funding_txid = if payload.push_amount_sats > 0 {
                     open_channel_with_push(client, base_url, payload).await?
