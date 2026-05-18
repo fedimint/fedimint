@@ -101,10 +101,14 @@ pub enum FinalSendOperationState {
 /// The final state of an operation claiming an onchain deposit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FinalReceiveState {
-    /// The deposit was successfully claimed.
+    /// The deposit was claimed and the issued ecash credited to the wallet.
     Success,
     /// The federation rejected the claim transaction.
     Aborted(String),
+    /// The federation accepted the claim transaction, but obtaining the
+    /// issued ecash from the mint module failed — the balance was not
+    /// credited.
+    MintFailure(String),
 }
 
 /// Result of a single pass of [`WalletClientModule::check_outputs`].
@@ -462,15 +466,13 @@ impl WalletClientModule {
                 return Ok(
                     join_all(collected.into_iter().map(|(op, change)| async move {
                         let state = self.await_final_receive_operation_state(op).await;
-                        // Wait for the primary (mint) module's outputs to finish
-                        // claiming so the caller sees the ecash in their balance —
-                        // the receive state machine only confirms the federation
-                        // accepted the claim transaction.
-                        if matches!(state, FinalReceiveState::Success) {
-                            let _ = self
+                        if matches!(state, FinalReceiveState::Success)
+                            && let Err(err) = self
                                 .client_ctx
                                 .await_primary_module_outputs(op, change)
-                                .await;
+                                .await
+                        {
+                            return FinalReceiveState::MintFailure(err.to_string());
                         }
                         state
                     }))
