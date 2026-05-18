@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,9 +16,10 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::task::timeout;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{Amount, BitcoinHash};
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_ln_client::common::LightningGateway;
 use fedimint_ln_client::recurring::{
     PaymentCodeId, PaymentCodeRootKey, RecurringPaymentError, RecurringPaymentProtocol,
 };
@@ -27,9 +28,13 @@ use fedimint_ln_client::{
     LightningOperationMetaVariant, LnReceiveState, tweak_user_key,
 };
 use fedimint_lnurl::{PayResponse, encode_lnurl, pay_request_tag};
+use fedimint_meta_client::{MetaClientInit, MetaClientModule};
+use fedimint_meta_common::DEFAULT_META_KEY;
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Sha256};
+use rand::rngs::OsRng;
+use rand::seq::IteratorRandom as _;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
@@ -65,6 +70,7 @@ impl RecurringInvoiceServer {
             let mut client_builder = Client::builder().await?;
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
+            client_builder.with_module(MetaClientInit);
             let client = client_builder
                 .open(
                     connectors.clone(),
@@ -144,6 +150,7 @@ impl RecurringInvoiceServer {
 
         client_builder.with_module(LightningClientInit::default());
         client_builder.with_module(MintClientInit);
+        client_builder.with_module(MetaClientInit);
 
         let client = client_builder
             .preview(connectors, invite_code)
@@ -277,12 +284,15 @@ impl RecurringInvoiceServer {
             .get_federation_client(payment_code.federation_id)
             .await?;
 
+        let gateway = select_vetted_gateway(&federation_client).await?;
+
         let (operation_id, invoice) = self
             .db
             .autocommit(
                 |dbtx, _| {
                     let federation_client = federation_client.clone();
                     let payment_code = payment_code.clone();
+                    let gateway = gateway.clone();
                     Box::pin(async move {
                         let invoice_index = self
                             .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
@@ -315,13 +325,7 @@ impl RecurringInvoiceServer {
                             invoice_index
                         };
 
-                        // This is where the main part starts: generate the invoice and save it to
-                        // the DB
                         let federation_client_ln_module = federation_client.get_ln_module()?;
-                        let gateway = federation_client_ln_module
-                            .get_gateway(None, false)
-                            .await?
-                            .ok_or(RecurringPaymentError::NoGatewayFound)?;
 
                         let lnurl_meta = match payment_code.variant {
                             PaymentCodeVariant::Lnurl { meta } => meta,
@@ -670,4 +674,151 @@ impl LnClientContextExt for ClientHandleArc {
                 RecurringPaymentError::NoLightningModuleFound
             })
     }
+}
+
+/// Selects a gateway, preferring vetted gateways from federation meta.
+///
+/// Tries the meta module first, then falls back to `meta_override_url`.
+/// If vetted gateways are configured and any are available, one is selected
+/// randomly from the vetted set. Otherwise falls back to any available gateway.
+async fn select_vetted_gateway(
+    client: &ClientHandleArc,
+) -> Result<LightningGateway, RecurringPaymentError> {
+    let ln = client.get_ln_module()?;
+    ln.update_gateway_cache().await.map_err(|e| {
+        RecurringPaymentError::Other(anyhow!("Failed to update gateway cache: {e}"))
+    })?;
+
+    let gateways = ln.list_gateways().await;
+    if gateways.is_empty() {
+        return Err(RecurringPaymentError::NoGatewayFound);
+    }
+
+    let vetted_ids = fetch_vetted_gateway_ids(client).await;
+
+    let (vetted, unvetted): (Vec<_>, Vec<_>) = gateways
+        .into_iter()
+        .partition(|g| vetted_ids.contains(&g.info.gateway_id));
+
+    let candidates = if vetted.is_empty() {
+        &unvetted
+    } else {
+        &vetted
+    };
+
+    candidates
+        .iter()
+        .choose(&mut OsRng)
+        .map(|gw| gw.info.clone())
+        .ok_or(RecurringPaymentError::NoGatewayFound)
+}
+
+/// Fetches the vetted gateway IDs from federation metadata.
+///
+/// Tries the meta module via `MetaClientModule::get_consensus_value` first,
+/// then falls back to `meta_override_url`. Returns an empty set if no vetted
+/// gateways are configured in either source.
+async fn fetch_vetted_gateway_ids(
+    client: &ClientHandleArc,
+) -> HashSet<fedimint_core::secp256k1::PublicKey> {
+    let vetted_gw_strings = match fetch_vetted_from_meta_module(client).await {
+        some @ Some(_) => some,
+        None => fetch_vetted_from_meta_override_url(client).await,
+    };
+
+    let Some(vetted_gw_strings) = vetted_gw_strings else {
+        info!("No vetted gateways configured in federation metadata");
+        return HashSet::new();
+    };
+
+    if vetted_gw_strings.is_empty() {
+        info!("Vetted gateways list is empty");
+        return HashSet::new();
+    }
+
+    vetted_gw_strings
+        .iter()
+        .filter_map(|s| {
+            s.parse()
+                .inspect_err(|e: &fedimint_core::secp256k1::Error| {
+                    warn!(
+                        gateway_id = %s,
+                        "Failed to parse vetted gateway ID, skipping: {e}"
+                    );
+                })
+                .ok()
+        })
+        .collect()
+}
+
+/// Read `vetted_gateways` from the meta module's consensus value.
+async fn fetch_vetted_from_meta_module(client: &ClientHandleArc) -> Option<Vec<String>> {
+    let meta_module = client.get_first_module::<MetaClientModule>().ok()?;
+
+    let consensus_value = match meta_module.get_consensus_value(DEFAULT_META_KEY).await {
+        Ok(Some(v)) => v,
+        Ok(None) => return None,
+        Err(e) => {
+            warn!(
+                err = %e.fmt_compact_anyhow(),
+                "Failed to fetch meta consensus value, \
+                 falling back to meta_override_url"
+            );
+            return None;
+        }
+    };
+
+    let json = match consensus_value.value.to_json() {
+        Ok(j) => j,
+        Err(e) => {
+            warn!(
+                err = %e.fmt_compact_anyhow(),
+                "Failed to parse meta value as JSON, \
+                 falling back to meta_override_url"
+            );
+            return None;
+        }
+    };
+
+    json.get("vetted_gateways").and_then(parse_string_or_array)
+}
+
+/// Read `vetted_gateways` from the `meta_override_url` JSON source.
+async fn fetch_vetted_from_meta_override_url(client: &ClientHandleArc) -> Option<Vec<String>> {
+    use fedimint_client_module::meta::fetch_meta_overrides;
+
+    let config = client.config().await;
+    let overrides =
+        match fetch_meta_overrides(&reqwest::Client::new(), &config, "meta_override_url").await {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(
+                    err = %e.fmt_compact_anyhow(),
+                    "Failed to fetch meta overrides for vetted gateways"
+                );
+                return None;
+            }
+        };
+
+    let key = fedimint_client_module::meta::MetaFieldKey("vetted_gateways".to_string());
+    let value = overrides.get(&key)?;
+    parse_string_or_array(&value.0)
+}
+
+/// Parse a `serde_json::Value` that may be either a JSON array of strings
+/// or a JSON string containing a serialized array (double-encoded).
+///
+/// Meta values are commonly stored as strings in federation config, so
+/// `"[\"abc\"]"` (a string) and `["abc"]` (an array) are both valid.
+fn parse_string_or_array(value: &serde_json::Value) -> Option<Vec<String>> {
+    if let Ok(v) = serde_json::from_value::<Vec<String>>(value.clone()) {
+        return Some(v);
+    }
+    if let Some(s) = value.as_str()
+        && let Ok(v) = serde_json::from_str::<Vec<String>>(s)
+    {
+        return Some(v);
+    }
+    warn!(?value, "vetted_gateways has unexpected type");
+    None
 }
