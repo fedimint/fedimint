@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bitcoin::OutPoint;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
 use fedimint_gateway_common::{
@@ -61,6 +61,15 @@ use crate::{
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
+
+/// Sleeps for `duration`, returning `true` if the task group is shutting down
+/// (so the caller should exit instead of continuing its loop).
+async fn sleep_or_shutdown(handle: &TaskHandle, duration: Duration) -> bool {
+    tokio::select! {
+        () = sleep(duration) => false,
+        () = handle.make_shutdown_rx() => true,
+    }
+}
 
 #[derive(Clone)]
 pub struct GatewayLndClient {
@@ -325,6 +334,10 @@ impl GatewayLndClient {
     /// Spawns a new background task that intercepts HTLCs from the LND node. In
     /// the LNv1 protocol, this is used as a trigger mechanism for
     /// requesting the Gateway to retrieve the preimage for a payment.
+    ///
+    /// The task reconnects automatically on stream errors. LND replays
+    /// still-pending HTLCs on a new stream, so the gateway's state machines
+    /// will see them again and can re-resolve them idempotently.
     async fn spawn_lnv1_htlc_interceptor(
         &self,
         task_group: &TaskGroup,
@@ -332,11 +345,10 @@ impl GatewayLndClient {
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
         gateway_sender: HtlcSubscriptionSender,
     ) -> Result<(), LightningRpcError> {
-        let mut client = self.connect().await?;
-
-        // Verify that LND is reachable via RPC before attempting to spawn a new thread
-        // that will intercept HTLCs.
-        client
+        // Verify LND is reachable up-front so a misconfigured gateway fails fast on
+        // startup instead of spinning in the reconnect loop forever.
+        self.connect()
+            .await?
             .lightning()
             .get_info(GetInfoRequest {})
             .await
@@ -344,83 +356,167 @@ impl GatewayLndClient {
                 failure_reason: format!("Failed to get node info {status:?}"),
             })?;
 
-        task_group.spawn("LND HTLC Subscription", |handle| async move {
-                let future_stream = client
-                    .router()
-                    .htlc_interceptor(ReceiverStream::new(lnd_rx));
-                let mut htlc_stream = tokio::select! {
-                    stream = future_stream => {
-                        match stream {
-                            Ok(stream) => stream.into_inner(),
-                            Err(e) => {
-                                crit!(target: LOG_LIGHTNING, err = %e.fmt_compact(), "Failed to establish htlc stream");
-                                return;
-                            }
-                        }
-                    },
-                    () = handle.make_shutdown_rx() => {
-                        info!(target: LOG_LIGHTNING, "LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting...");
+        let self_copy = self.clone();
+        task_group.spawn("LND HTLC Subscription", move |handle| async move {
+            self_copy
+                .run_lnv1_htlc_interceptor(handle, lnd_sender, lnd_rx, gateway_sender)
+                .await;
+        });
+
+        Ok(())
+    }
+
+    async fn run_lnv1_htlc_interceptor(
+        &self,
+        handle: TaskHandle,
+        lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
+        mut lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
+        gateway_sender: HtlcSubscriptionSender,
+    ) {
+        const FORWARD_CHANNEL_SIZE: usize = 100;
+        const MIN_BACKOFF: Duration = Duration::from_secs(1);
+        const MAX_BACKOFF: Duration = Duration::from_secs(60);
+        let mut backoff = MIN_BACKOFF;
+
+        loop {
+            let mut client = match self.connect().await {
+                Ok(c) => c,
+                Err(err) => {
+                    warn!(
+                        target: LOG_LIGHTNING,
+                        err = %err.fmt_compact(),
+                        backoff_secs = backoff.as_secs(),
+                        "Failed to connect to LND for HTLC interceptor, will retry"
+                    );
+                    if sleep_or_shutdown(&handle, backoff).await {
                         return;
                     }
-                };
+                    backoff = (backoff * 2).min(MAX_BACKOFF);
+                    continue;
+                }
+            };
 
-                debug!(target: LOG_LIGHTNING, "LND HTLC Subscription: starting to process stream");
-                // To gracefully handle shutdown signals, we need to be able to receive signals
-                // while waiting for the next message from the HTLC stream.
-                //
-                // If we're in the middle of processing a message from the stream, we need to
-                // finish before stopping the spawned task. Checking if the task group is
-                // shutting down at the start of each iteration will cause shutdown signals to
-                // not process until another message arrives from the HTLC stream, which may
-                // take a long time, or never.
-                while let Some(htlc) = tokio::select! {
+            // tonic consumes the input stream, so each reconnect needs a fresh internal
+            // channel. The external `lnd_rx` is the long-lived source that the rest of
+            // the gateway writes responses to via `lnd_sender`; we trampoline from it
+            // into the per-iteration internal stream.
+            let (forward_tx, forward_rx) =
+                mpsc::channel::<ForwardHtlcInterceptResponse>(FORWARD_CHANNEL_SIZE);
+
+            let future_stream = client
+                .router()
+                .htlc_interceptor(ReceiverStream::new(forward_rx));
+            let mut htlc_stream = tokio::select! {
+                stream = future_stream => match stream {
+                    Ok(stream) => stream.into_inner(),
+                    Err(err) => {
+                        warn!(
+                            target: LOG_LIGHTNING,
+                            err = %err.fmt_compact(),
+                            backoff_secs = backoff.as_secs(),
+                            "Failed to establish HTLC interceptor stream, will retry"
+                        );
+                        if sleep_or_shutdown(&handle, backoff).await {
+                            return;
+                        }
+                        backoff = (backoff * 2).min(MAX_BACKOFF);
+                        continue;
+                    }
+                },
+                () = handle.make_shutdown_rx() => {
+                    info!(target: LOG_LIGHTNING, "LND HTLC Subscription received shutdown signal while establishing stream, exiting...");
+                    return;
+                }
+            };
+
+            info!(target: LOG_LIGHTNING, "LND HTLC Subscription: stream established, processing HTLCs");
+            backoff = MIN_BACKOFF;
+
+            loop {
+                tokio::select! {
                     () = handle.make_shutdown_rx() => {
                         info!(target: LOG_LIGHTNING, "LND HTLC Subscription task received shutdown signal");
-                        None
+                        return;
+                    }
+                    response = lnd_rx.recv() => {
+                        let Some(response) = response else {
+                            info!(target: LOG_LIGHTNING, "LND response channel closed, exiting HTLC interceptor");
+                            return;
+                        };
+                        if let Err(err) = forward_tx.send(response).await {
+                            // Internal forward channel is closed, which means the stream
+                            // task on the other side has gone away. Reconnect.
+                            warn!(
+                                target: LOG_LIGHTNING,
+                                err = %err.fmt_compact(),
+                                "Internal forward channel closed, reconnecting HTLC stream"
+                            );
+                            break;
+                        }
                     }
                     htlc_message = htlc_stream.message() => {
                         match htlc_message {
-                            Ok(htlc) => htlc,
-                            Err(err) => {
-                                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Error received over HTLC stream");
-                                None
+                            Ok(Some(htlc)) => {
+                                Self::handle_intercepted_htlc(htlc, &lnd_sender, &gateway_sender).await;
                             }
-                    }}
-                } {
-                    trace!(target: LOG_LIGHTNING, ?htlc, "LND Handling HTLC");
-
-                    if htlc.incoming_circuit_key.is_none() {
-                        warn!(target: LOG_LIGHTNING, "Cannot route htlc with None incoming_circuit_key");
-                        continue;
-                    }
-
-                    let incoming_circuit_key = htlc.incoming_circuit_key.unwrap();
-
-                    // Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
-                    let intercept = InterceptPaymentRequest {
-                        payment_hash: Hash::from_slice(&htlc.payment_hash).expect("Failed to convert payment Hash"),
-                        amount_msat: htlc.outgoing_amount_msat,
-                        expiry: htlc.incoming_expiry,
-                        short_channel_id: Some(htlc.outgoing_requested_chan_id),
-                        incoming_chan_id: incoming_circuit_key.chan_id,
-                        htlc_id: incoming_circuit_key.htlc_id,
-                    };
-
-                    match gateway_sender.send(intercept).await {
-                        Ok(()) => {}
-                        Err(err) => {
-                            warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to send HTLC to gatewayd for processing");
-                            let _ = Self::cancel_htlc(incoming_circuit_key, lnd_sender.clone())
-                                .await
-                                .map_err(|err| {
-                                    warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to cancel HTLC");
-                                });
+                            Ok(None) => {
+                                info!(target: LOG_LIGHTNING, "LND HTLC stream ended cleanly, reconnecting");
+                                break;
+                            }
+                            Err(err) => {
+                                // Any transport-level error on the stream (e.g. LND
+                                // returning `Unknown: fwd not found` for a stale HTLC
+                                // after a gateway restart) kills the stream. Reconnect
+                                // instead of leaving the gateway unable to process
+                                // payments until manual restart.
+                                warn!(
+                                    target: LOG_LIGHTNING,
+                                    err = %err.fmt_compact(),
+                                    "Error received over HTLC stream, reconnecting"
+                                );
+                                break;
+                            }
                         }
                     }
                 }
-            });
+            }
 
-        Ok(())
+            if sleep_or_shutdown(&handle, backoff).await {
+                return;
+            }
+            backoff = (backoff * 2).min(MAX_BACKOFF);
+        }
+    }
+
+    async fn handle_intercepted_htlc(
+        htlc: tonic_lnd::routerrpc::ForwardHtlcInterceptRequest,
+        lnd_sender: &mpsc::Sender<ForwardHtlcInterceptResponse>,
+        gateway_sender: &HtlcSubscriptionSender,
+    ) {
+        trace!(target: LOG_LIGHTNING, ?htlc, "LND Handling HTLC");
+
+        let Some(incoming_circuit_key) = htlc.incoming_circuit_key else {
+            warn!(target: LOG_LIGHTNING, "Cannot route htlc with None incoming_circuit_key");
+            return;
+        };
+
+        // Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
+        let intercept = InterceptPaymentRequest {
+            payment_hash: Hash::from_slice(&htlc.payment_hash)
+                .expect("Failed to convert payment Hash"),
+            amount_msat: htlc.outgoing_amount_msat,
+            expiry: htlc.incoming_expiry,
+            short_channel_id: Some(htlc.outgoing_requested_chan_id),
+            incoming_chan_id: incoming_circuit_key.chan_id,
+            htlc_id: incoming_circuit_key.htlc_id,
+        };
+
+        if let Err(err) = gateway_sender.send(intercept).await {
+            warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to send HTLC to gatewayd for processing");
+            if let Err(err) = Self::cancel_htlc(incoming_circuit_key, lnd_sender.clone()).await {
+                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to cancel HTLC");
+            }
+        }
     }
 
     /// Spawns background tasks for monitoring the status of incoming payments.
