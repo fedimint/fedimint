@@ -62,15 +62,6 @@ type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
 
-/// Sleeps for `duration`, returning `true` if the task group is shutting down
-/// (so the caller should exit instead of continuing its loop).
-async fn sleep_or_shutdown(handle: &TaskHandle, duration: Duration) -> bool {
-    tokio::select! {
-        () = sleep(duration) => false,
-        () = handle.make_shutdown_rx() => true,
-    }
-}
-
 enum ForwardOutcome {
     /// The external response channel was closed — gateway is going away.
     ExternalClosed,
@@ -400,7 +391,7 @@ impl GatewayLndClient {
                         backoff_secs = delay.as_secs(),
                         "Failed to connect to LND for HTLC interceptor, will retry"
                     );
-                    if sleep_or_shutdown(&handle, delay).await {
+                    if handle.cancel_on_shutdown(sleep(delay)).await.is_err() {
                         return;
                     }
                     continue;
@@ -428,7 +419,7 @@ impl GatewayLndClient {
                             backoff_secs = delay.as_secs(),
                             "Failed to establish HTLC interceptor stream, will retry"
                         );
-                        if sleep_or_shutdown(&handle, delay).await {
+                        if handle.cancel_on_shutdown(sleep(delay)).await.is_err() {
                             return;
                         }
                         continue;
@@ -519,7 +510,7 @@ impl GatewayLndClient {
             }
 
             let delay = backoff.next().expect("Keeps retrying");
-            if sleep_or_shutdown(&handle, delay).await {
+            if handle.cancel_on_shutdown(sleep(delay)).await.is_err() {
                 return;
             }
         }
