@@ -16,7 +16,6 @@ mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use api::WalletFederationApi;
@@ -370,24 +369,27 @@ impl WalletClientModule {
         }
     }
 
-    /// Returns the next unused receive address, polling until the initial
-    /// address derivation has completed.
+    /// Returns the next unused receive address. If no valid address index has
+    /// been derived yet (e.g. the output scanner is disabled or hasn't run),
+    /// derive one inline.
     pub async fn receive(&self) -> Address {
-        loop {
-            if let Some(entry) = self
-                .db
-                .begin_transaction_nc()
-                .await
-                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-            {
-                return self.derive_address(entry.0.0);
-            }
-
-            sleep(Duration::from_secs(1)).await;
+        if let Some(entry) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+        {
+            return self.derive_address(entry.0.0);
         }
+
+        let idx = self.next_valid_index(0);
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_entry(&ValidAddressIndexKey(idx), &()).await;
+        dbtx.commit_tx().await;
+        self.derive_address(idx)
     }
 
     fn derive_address(&self, index: u64) -> Address {
@@ -495,21 +497,6 @@ impl WalletClientModule {
         let module = self.clone();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            let mut dbtx = module.db.begin_transaction().await;
-
-            if dbtx
-                .find_by_prefix(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-                .is_none()
-            {
-                dbtx.insert_new_entry(&ValidAddressIndexKey(module.next_valid_index(0)), &())
-                    .await;
-            }
-
-            dbtx.commit_tx().await;
-
             loop {
                 match module.check_outputs().await {
                     Ok(skip_wait) => {
