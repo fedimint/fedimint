@@ -1,6 +1,6 @@
 //! Implements the client API through which users interact with the federation
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -286,7 +286,7 @@ impl ConsensusApi {
 
                 (*peer, consensus_status)
             })
-            .collect::<HashMap<PeerId, LegacyPeerStatus>>();
+            .collect::<BTreeMap<_, _>>();
 
         let peers_flagged = status_by_peer
             .values()
@@ -325,7 +325,7 @@ impl ConsensusApi {
         dbtx.ignore_uncommitted();
 
         let mut audit = Audit::default();
-        let mut module_instance_id_to_kind: HashMap<ModuleInstanceId, String> = HashMap::new();
+        let mut module_instance_id_to_kind = BTreeMap::new();
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module

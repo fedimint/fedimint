@@ -1,3 +1,6 @@
+#![allow(clippy::disallowed_types)]
+// Prometheus registration macros use `HashMap` internally.
+
 use std::sync::LazyLock;
 
 use fedimint_metrics::prometheus::{

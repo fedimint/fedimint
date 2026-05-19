@@ -14,7 +14,7 @@ pub mod envs;
 
 use std::clone::Clone;
 use std::cmp::min;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 #[cfg(not(target_family = "wasm"))]
@@ -1533,7 +1533,7 @@ impl Wallet {
                 .find_by_prefix(&PendingTransactionPrefixKey)
                 .await
                 .map(|(key, transaction)| (key.0, transaction))
-                .collect::<HashMap<Txid, PendingTransaction>>()
+                .collect::<BTreeMap<Txid, PendingTransaction>>()
                 .await;
             let pending_transactions_len = pending_transactions.len();
 
