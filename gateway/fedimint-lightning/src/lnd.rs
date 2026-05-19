@@ -440,6 +440,13 @@ impl GatewayLndClient {
             // detection: if LND stops reading the request stream and `forward_tx` fills
             // up, the read side will eventually error and the select wakes on that arm,
             // cancelling the in-flight forward.
+            //
+            // When `stream_fut` wins the select and `forward_fut` is cancelled, any
+            // response message already dequeued from `lnd_rx` but still in flight on
+            // `forward_tx.send()` is dropped. This is safe for our use case: the
+            // stream is dead, the response would never reach LND anyway, and LND
+            // replays the still-pending HTLC on the new stream so the gateway's
+            // state machine has another chance to emit the response.
             let lnd_rx_ref = &mut lnd_rx;
             let forward_fut = async move {
                 loop {
@@ -481,7 +488,10 @@ impl GatewayLndClient {
             tokio::pin!(forward_fut);
             tokio::pin!(stream_fut);
 
-            let should_reconnect = tokio::select! {
+            // Every non-`return` arm falls through to the backoff-and-reconnect path
+            // at the bottom of the outer loop, so this select is "either exit or
+            // reconnect" with no third option.
+            tokio::select! {
                 outcome = &mut forward_fut => match outcome {
                     ForwardOutcome::ExternalClosed => {
                         info!(target: LOG_LIGHTNING, "LND response channel closed, exiting HTLC interceptor");
@@ -489,7 +499,6 @@ impl GatewayLndClient {
                     }
                     ForwardOutcome::StreamClosed => {
                         warn!(target: LOG_LIGHTNING, "Internal forward channel closed, reconnecting HTLC stream");
-                        true
                     }
                 },
                 outcome = &mut stream_fut => match outcome {
@@ -499,14 +508,9 @@ impl GatewayLndClient {
                     }
                     StreamOutcome::EndedCleanly => {
                         info!(target: LOG_LIGHTNING, "LND HTLC stream ended cleanly, reconnecting");
-                        true
                     }
-                    StreamOutcome::Errored => true,
+                    StreamOutcome::Errored => {}
                 },
-            };
-
-            if !should_reconnect {
-                return;
             }
 
             let delay = backoff.next().expect("Keeps retrying");
