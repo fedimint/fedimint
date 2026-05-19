@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -28,7 +28,10 @@ use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, warn};
 
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
+use super::{
+    ChannelInfo, ILnRpcClient, LightningPaymentBackend, LightningPaymentFailure, LightningRpcError,
+    ListChannelsResponse, RouteHtlcStream,
+};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
@@ -64,6 +67,8 @@ pub struct GatewayLdkClient {
     /// opened and is now pending.
     pending_channels:
         Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
+
+    failed_payments: Arc<RwLock<HashMap<PaymentId, Option<String>>>>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -149,6 +154,8 @@ impl GatewayLdkClient {
         let node_clone = node.clone();
         let pending_channels = Arc::new(RwLock::new(BTreeMap::new()));
         let pending_channels_clone = pending_channels.clone();
+        let failed_payments = Arc::new(RwLock::new(HashMap::new()));
+        let failed_payments_clone = failed_payments.clone();
         task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
                 Self::handle_next_event(
@@ -156,6 +163,7 @@ impl GatewayLdkClient {
                     &htlc_stream_sender,
                     &handle,
                     pending_channels_clone.clone(),
+                    failed_payments_clone.clone(),
                 )
                 .await;
             }
@@ -169,6 +177,7 @@ impl GatewayLdkClient {
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
             outbound_offer_lock_pool: lockable::LockPool::new(),
             pending_channels,
+            failed_payments,
         })
     }
 
@@ -179,6 +188,7 @@ impl GatewayLdkClient {
         pending_channels: Arc<
             RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
         >,
+        failed_payments: Arc<RwLock<HashMap<PaymentId, Option<String>>>>,
     ) {
         // We manually check for task termination in case we receive a payment while the
         // task is shutting down. In that case, we want to finish the payment
@@ -255,11 +265,21 @@ impl GatewayLdkClient {
                     );
                 }
             }
+            ldk_node::Event::PaymentFailed {
+                payment_id: Some(payment_id),
+                reason,
+                ..
+            } => {
+                failed_payments
+                    .write()
+                    .await
+                    .insert(payment_id, reason.map(|reason| format!("{reason:?}")));
+            }
             _ => {}
         }
 
-        // `PaymentClaimable` and `ChannelPending` events are the only event types that
-        // we are interested in. We can safely ignore all other events.
+        // `PaymentClaimable`, payment failure, and channel events are the only event
+        // types that we are interested in. We can safely ignore all other events.
         if let Err(err) = node.event_handled() {
             warn!(err = %err.fmt_compact(), "LDK could not mark event handled");
         }
@@ -386,8 +406,16 @@ impl ILnRpcClient for GatewayLdkClient {
                         }
                     }
                     PaymentStatus::Failed => {
-                        return Err(LightningRpcError::FailedPayment {
-                            failure_reason: "LDK payment failed".to_string(),
+                        let failure_reason = self
+                            .failed_payments
+                            .write()
+                            .await
+                            .remove(&payment_id)
+                            .flatten()
+                            .unwrap_or_else(|| "LDK payment failed".to_string());
+                        return Err(LightningRpcError::FailedPaymentWithDetails {
+                            failure_reason: failure_reason.clone(),
+                            payment_failure: ldk_payment_failure(Some(failure_reason)),
                         });
                     }
                 }
@@ -957,6 +985,14 @@ fn get_preimage_and_payment_hash(
 ///
 /// To handle this, we explicitly construct the esplora URL when a port is
 /// specified.
+fn ldk_payment_failure(reason: Option<String>) -> LightningPaymentFailure {
+    LightningPaymentFailure {
+        backend: LightningPaymentBackend::Ldk,
+        failure_reason: reason,
+        attempts: vec![],
+    }
+}
+
 fn get_esplora_url(server_url: SafeUrl) -> anyhow::Result<String> {
     // Esplora client cannot handle trailing slashes
     let host = server_url
