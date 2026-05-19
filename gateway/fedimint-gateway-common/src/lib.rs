@@ -334,6 +334,15 @@ pub struct ChannelInfo {
     pub remote_node_alias: Option<String>,
     #[serde(default)]
     pub remote_address: Option<String>,
+    /// The local-side base routing fee (msat) currently advertised for this
+    /// channel. `None` if the backend could not report a fee policy.
+    #[serde(default)]
+    pub base_fee_msat: Option<u64>,
+    /// The local-side proportional routing fee (parts per million) currently
+    /// advertised for this channel. `None` if the backend could not report a
+    /// fee policy.
+    #[serde(default)]
+    pub parts_per_million: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -342,6 +351,47 @@ pub struct OpenChannelRequest {
     pub host: String,
     pub channel_size_sats: u64,
     pub push_amount_sats: u64,
+    /// Feerate (sat/vB) for the channel-opening on-chain transaction. If
+    /// `None`, the Lightning backend picks a feerate. Not honored by all
+    /// backends (e.g. LDK manages its own fee estimation).
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub fee_rate_sats_per_vbyte: Option<u64>,
+    /// Base routing fee (msat) advertised for the opened channel. If `None`,
+    /// the backend's default policy is used.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub base_fee_msat: Option<u64>,
+    /// Proportional routing fee (parts per million) advertised for the opened
+    /// channel. If `None`, the backend's default policy is used.
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    pub parts_per_million: Option<u64>,
+}
+
+/// Helper for serde: deserializes missing values and empty form strings as
+/// `None`. Lets the same struct be used for JSON payloads and HTMX form
+/// submissions where numeric inputs may be left blank.
+fn empty_string_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr + Deserialize<'de>,
+    T::Err: std::fmt::Display,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrT<T> {
+        String(String),
+        T(T),
+    }
+
+    match Option::<StringOrT<T>>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(StringOrT::T(value)) => Ok(Some(value)),
+        Some(StringOrT::String(s)) if s.trim().is_empty() => Ok(None),
+        Some(StringOrT::String(s)) => s
+            .trim()
+            .parse::<T>()
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

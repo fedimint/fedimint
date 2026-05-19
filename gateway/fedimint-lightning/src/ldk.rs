@@ -16,6 +16,7 @@ use fedimint_gateway_common::{
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
+use ldk_node::config::ChannelConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
@@ -550,12 +551,49 @@ impl ILnRpcClient for GatewayLdkClient {
             host,
             channel_size_sats,
             push_amount_sats,
+            fee_rate_sats_per_vbyte,
+            base_fee_msat,
+            parts_per_million,
         }: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let push_amount_msats_or = if push_amount_sats == 0 {
             None
         } else {
             Some(push_amount_sats * 1000)
+        };
+
+        if fee_rate_sats_per_vbyte.is_some() {
+            // LDK manages its own fee estimation for funding transactions; the
+            // user-supplied rate cannot be applied here.
+            warn!(
+                target: LOG_LIGHTNING,
+                "Ignoring fee_rate_sats_per_vbyte on LDK channel open; LDK uses its built-in fee estimator"
+            );
+        }
+
+        let channel_config = match (base_fee_msat, parts_per_million) {
+            (None, None) => None,
+            (base, ppm) => {
+                let mut config = ChannelConfig::default();
+                if let Some(base) = base {
+                    config.forwarding_fee_base_msat = u32::try_from(base).map_err(|_| {
+                        LightningRpcError::FailedToOpenChannel {
+                            failure_reason: format!(
+                                "base_fee_msat {base} does not fit in u32 (LDK limit)"
+                            ),
+                        }
+                    })?;
+                }
+                if let Some(ppm) = ppm {
+                    config.forwarding_fee_proportional_millionths =
+                        u32::try_from(ppm).map_err(|_| LightningRpcError::FailedToOpenChannel {
+                            failure_reason: format!(
+                                "parts_per_million {ppm} does not fit in u32 (LDK limit)"
+                            ),
+                        })?;
+                }
+                Some(config)
+            }
         };
 
         let (tx, rx) = oneshot::channel::<anyhow::Result<OutPoint>>();
@@ -573,7 +611,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     })?,
                     channel_size_sats,
                     push_amount_msats_or,
-                    None,
+                    channel_config,
                 )
                 .map_err(|e| LightningRpcError::FailedToOpenChannel {
                     failure_reason: e.to_string(),
@@ -685,6 +723,12 @@ impl ILnRpcClient for GatewayLdkClient {
                 funding_outpoint: channel_details.funding_txo,
                 remote_node_alias,
                 remote_address,
+                base_fee_msat: Some(u64::from(channel_details.config.forwarding_fee_base_msat)),
+                parts_per_million: Some(u64::from(
+                    channel_details
+                        .config
+                        .forwarding_fee_proportional_millionths,
+                )),
             });
         }
 

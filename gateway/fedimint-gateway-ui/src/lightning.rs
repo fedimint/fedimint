@@ -1109,6 +1109,8 @@ where
                                     th { "Funding OutPoint" }
                                     th { "Size (sats)" }
                                     th { "Active" }
+                                    th { "Base Fee (msat)" }
+                                    th { "Fee Rate (ppm)" }
                                     th { "Liquidity" }
                                     th { "" }
                                 }
@@ -1179,6 +1181,20 @@ where
                                                 span class="badge bg-secondary" { "inactive" }
                                             }
                                         }
+                                        td {
+                                            @if let Some(base) = ch.base_fee_msat {
+                                                (base)
+                                            } @else {
+                                                span class="text-muted" { "-" }
+                                            }
+                                        }
+                                        td {
+                                            @if let Some(ppm) = ch.parts_per_million {
+                                                (ppm)
+                                            } @else {
+                                                span class="text-muted" { "-" }
+                                            }
+                                        }
 
                                         // Liquidity bar: single horizontal bar split by two divs
                                         td {
@@ -1224,7 +1240,7 @@ where
 
                                     // Collapsible open channel form for this peer
                                     tr class="collapse" id=(format!("open-form-{}", ch.remote_pubkey)) {
-                                        td colspan="8" {
+                                        td colspan="10" {
                                             div class="card card-body" {
                                                 form
                                                     hx-post=(OPEN_CHANNEL_ROUTE)
@@ -1280,7 +1296,7 @@ where
                                     }
 
                                     tr class="collapse" id=(row_id) {
-                                        td colspan="8" {
+                                        td colspan="10" {
                                             div class="card card-body" {
                                                 form
                                                     hx-post=(CLOSE_CHANNEL_ROUTE)
@@ -1393,6 +1409,23 @@ where
                                 div class="mb-2" {
                                     label class="form-label" { "Channel Size (sats)" }
                                     input type="number" name="channel_size_sats" class="form-control" placeholder="1000000" required {}
+                                }
+
+                                @if is_lnd {
+                                    div class="mb-2" {
+                                        label class="form-label" { "Funding Tx Feerate (sat/vB, optional)" }
+                                        input type="number" name="fee_rate_sats_per_vbyte" class="form-control" placeholder="Leave blank for node default" min="1" {}
+                                    }
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Channel Base Fee (msat, optional)" }
+                                    input type="number" name="base_fee_msat" class="form-control" placeholder="Leave blank for node default" min="0" {}
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Channel Fee Rate (ppm, optional)" }
+                                    input type="number" name="parts_per_million" class="form-control" placeholder="Leave blank for node default" min="0" {}
                                 }
 
                                 input type="hidden" name="push_amount_sats" value="0" {}

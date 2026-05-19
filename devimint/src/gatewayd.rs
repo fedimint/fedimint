@@ -464,6 +464,12 @@ impl<'a> GatewayClient {
                 let remote_address = channel
                     .get("remote_address")
                     .map(std::string::ToString::to_string);
+                let base_fee_msat = channel
+                    .get("base_fee_msat")
+                    .and_then(serde_json::Value::as_u64);
+                let parts_per_million = channel
+                    .get("parts_per_million")
+                    .and_then(serde_json::Value::as_u64);
                 Ok(ChannelInfo {
                     remote_pubkey: remote_pubkey
                         .parse()
@@ -475,6 +481,8 @@ impl<'a> GatewayClient {
                     funding_outpoint,
                     remote_node_alias,
                     remote_address,
+                    base_fee_msat,
+                    parts_per_million,
                 })
             })
             .collect::<Result<Vec<ChannelInfo>>>()?;
