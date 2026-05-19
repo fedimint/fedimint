@@ -432,6 +432,28 @@ impl<'a> GatewayClient {
         Ok(Txid::from_str(&txid_str)?)
     }
 
+    pub async fn set_channel_fees(
+        &self,
+        funding_outpoint: bitcoin::OutPoint,
+        base_fee_msat: u64,
+        parts_per_million: u64,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "lightning",
+            "set-channel-fees",
+            "--funding-outpoint",
+            funding_outpoint,
+            "--base-fee-msat",
+            base_fee_msat,
+            "--parts-per-million",
+            parts_per_million,
+        )
+        .run()
+        .await?;
+        Ok(())
+    }
+
     pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {
         let channels = cmd!(self, "lightning", "list-channels").out_json().await?;
 

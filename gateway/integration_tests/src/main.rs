@@ -8,13 +8,14 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{env, ffi};
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
-use devimint::version_constants::VERSION_0_10_0_ALPHA;
+use devimint::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_12_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -445,6 +446,83 @@ async fn liquidity_test() -> anyhow::Result<()> {
             // Verify we can pay the offer again
             gw_ldk_second.client().pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
             assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(3_000_000), PaymentStatus::Succeeded).await.is_some());
+
+            // `set-channel-fees` was added in 0.12.0-alpha for both the gateway
+            // API and the CLI. Skip the test against any older gateway/CLI binary
+            // to keep this test backwards-compatible with prior releases.
+            let gateway_cli_version = util::GatewayCli::version_or_default().await;
+            let all_gateways_support_fees = gateways
+                .iter()
+                .all(|gw| gw.gatewayd_version >= *VERSION_0_12_0_ALPHA);
+            if gateway_cli_version >= *VERSION_0_12_0_ALPHA && all_gateways_support_fees {
+                info!(target: LOG_TEST, "Testing updating channel fees on both gateways...");
+                for gw in &gateways {
+                    let channels = gw.client().list_channels().await?;
+                    let channel = channels
+                        .into_iter()
+                        .find(|c| c.funding_outpoint.is_some())
+                        .with_context(|| {
+                            format!(
+                                "{} gateway has no channel with a known funding outpoint",
+                                gw.ln.ln_type(),
+                            )
+                        })?;
+                    let funding_outpoint = channel.funding_outpoint.expect("filtered above");
+
+                    // Pick values that are unlikely to collide with any backend default.
+                    let new_base_fee_msat = 12_345u64;
+                    let new_parts_per_million = 678u64;
+
+                    gw.client()
+                        .set_channel_fees(
+                            funding_outpoint,
+                            new_base_fee_msat,
+                            new_parts_per_million,
+                        )
+                        .await?;
+
+                    // Both backends report local config synchronously, but poll briefly
+                    // in case the LND policy update needs a moment to be visible to
+                    // `fee_report`.
+                    poll_with_timeout(
+                        "channel fees reflect updated values",
+                        Duration::from_secs(15),
+                        || async {
+                            let updated = gw
+                                .client()
+                                .list_channels()
+                                .await
+                                .map_err(ControlFlow::Continue)?
+                                .into_iter()
+                                .find(|c| c.funding_outpoint == Some(funding_outpoint))
+                                .ok_or_else(|| {
+                                    ControlFlow::Break(anyhow::anyhow!(
+                                        "channel disappeared after fee update"
+                                    ))
+                                })?;
+                            if updated.base_fee_msat == Some(new_base_fee_msat)
+                                && updated.parts_per_million == Some(new_parts_per_million)
+                            {
+                                Ok(())
+                            } else {
+                                Err(ControlFlow::Continue(anyhow::anyhow!(
+                                    "{} gateway still reports base={:?}, ppm={:?}",
+                                    gw.ln.ln_type(),
+                                    updated.base_fee_msat,
+                                    updated.parts_per_million,
+                                )))
+                            }
+                        },
+                    )
+                    .await?;
+                }
+            } else {
+                info!(
+                    target: LOG_TEST,
+                    gateway_cli_version = %gateway_cli_version,
+                    "Skipping set-channel-fees test (requires gateway >= 0.12.0-alpha)"
+                );
+            }
 
             info!(target: LOG_TEST, "Pegging-out gateways...");
             federation
