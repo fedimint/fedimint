@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::ensure;
 use fedimint_aead::{LessSafeKey, encrypted_read, encrypted_write, get_encryption_key};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::util::write_new;
 use fedimint_logging::LOG_CORE;
@@ -90,7 +91,14 @@ pub fn write_server_config(
     plaintext_json_write(&server.local, &path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, &path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(
-        &server.get_invite_code(api_secret),
+        &InviteCode::new(
+            server.consensus.api_endpoints()[&server.local.identity]
+                .url
+                .clone(),
+            server.local.identity,
+            server.calculate_federation_id(),
+            api_secret,
+        ),
         &path.join(CLIENT_INVITE_CODE_FILE),
     )?;
     plaintext_json_write(&client_config, &path.join(CLIENT_CONFIG))?;

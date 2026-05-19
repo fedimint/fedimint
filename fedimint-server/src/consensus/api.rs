@@ -37,6 +37,7 @@ use fedimint_core::endpoint_constants::{
     SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
@@ -76,7 +77,7 @@ use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
-use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
+use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix, get_api_urls};
 use crate::net::p2p::P2PStatusReceivers;
 
 #[derive(Clone)]
@@ -664,6 +665,20 @@ impl ConsensusApi {
 
         Ok(())
     }
+
+    async fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
+        let identity = self.cfg.local.identity;
+        let mut api_urls = get_api_urls(&self.db, &self.cfg.consensus).await;
+
+        InviteCode::new(
+            api_urls
+                .remove(&identity)
+                .expect("API URL for our identity must be present"),
+            identity,
+            self.cfg.calculate_federation_id(),
+            api_secret,
+        )
+    }
 }
 
 #[async_trait]
@@ -754,8 +769,8 @@ impl IDashboardApi for ConsensusApi {
     }
 
     async fn federation_invite_code(&self) -> String {
-        self.cfg
-            .get_invite_code(self.get_active_api_secret())
+        self.get_invite_code(self.get_active_api_secret())
+            .await
             .to_string()
     }
 
@@ -871,7 +886,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
-                Ok(fedimint.cfg.get_invite_code(fedimint.get_active_api_secret()).to_string())
+                Ok(fedimint.get_invite_code(fedimint.get_active_api_secret()).await.to_string())
             }
         },
         api_endpoint! {
