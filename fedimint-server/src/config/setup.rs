@@ -8,7 +8,6 @@ use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::base32::FEDIMINT_PREFIX;
-use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
@@ -60,8 +59,6 @@ pub struct LocalParams {
     endpoints: PeerEndpoints,
     /// Name of the peer, used in TLS auth
     name: String,
-    /// Federation name set by the leader
-    federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     disable_base_fees: Option<bool>,
     /// Modules enabled by the leader (if None, all available modules are
@@ -77,7 +74,6 @@ impl LocalParams {
         PeerSetupCode {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
-            federation_name: self.federation_name.clone(),
             disable_base_fees: self.disable_base_fees,
             enabled_modules: self.enabled_modules.clone(),
             federation_size: self.federation_size,
@@ -172,7 +168,6 @@ impl ISetupApi for SetupApi {
         &self,
         auth: ApiAuth,
         name: String,
-        federation_name: Option<String>,
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
@@ -180,7 +175,6 @@ impl ISetupApi for SetupApi {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.auth.as_str() == auth.as_str()
             && existing_local_parameters.name == name
-            && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
             && existing_local_parameters.enabled_modules == enabled_modules
             && existing_local_parameters.federation_size == federation_size
@@ -200,24 +194,12 @@ impl ISetupApi for SetupApi {
             "The password contains leading/trailing whitespace",
         );
 
-        if let Some(federation_name) = federation_name.as_ref() {
-            ensure!(!federation_name.is_empty(), "The federation name is empty");
-        }
-
-        if federation_name.is_some() {
-            ensure!(
-                federation_size.is_some(),
-                "The leader must set the federation size"
-            );
-        }
-
         if let Some(size) = federation_size {
             ensure!(
                 size == 1 || 4 <= size,
                 "Federation size must be 1 or at least 4"
             );
         }
-
         let mut state = self.state.lock().await;
 
         ensure!(
@@ -250,7 +232,6 @@ impl ISetupApi for SetupApi {
                     p2p_pk: iroh_p2p_sk.public(),
                 },
                 name,
-                federation_name,
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
@@ -279,7 +260,6 @@ impl ISetupApi for SetupApi {
                     cert: tls_cert.as_ref().to_vec(),
                 },
                 name,
-                federation_name,
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
@@ -314,18 +294,6 @@ impl ISetupApi for SetupApi {
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
         );
-
-        if let Some(federation_name) = state
-            .setup_codes
-            .iter()
-            .chain(once(&local_params.setup_code()))
-            .find_map(|info| info.federation_name.clone())
-        {
-            ensure!(
-                info.federation_name.is_none(),
-                "Federation name has already been set to {federation_name}"
-            );
-        }
 
         if let Some(disable_base_fees) = state
             .setup_codes
@@ -396,13 +364,6 @@ impl ISetupApi for SetupApi {
                 state.setup_codes.len()
             );
         }
-
-        let federation_name = state
-            .setup_codes
-            .iter()
-            .find_map(|info| info.federation_name.clone())
-            .context("We need one guardian to configure the federations name")?;
-
         let disable_base_fees = state
             .setup_codes
             .iter()
@@ -431,10 +392,7 @@ impl ISetupApi for SetupApi {
                 .map(|i| PeerId::from(i as u16))
                 .zip(state.setup_codes.clone())
                 .collect(),
-            meta: BTreeMap::from_iter(vec![(
-                META_FEDERATION_NAME_KEY.to_string(),
-                federation_name,
-            )]),
+            meta: BTreeMap::new(),
             disable_base_fees,
             enabled_modules,
             network: self.settings.network,
@@ -459,13 +417,7 @@ impl ISetupApi for SetupApi {
     }
 
     async fn cfg_federation_name(&self) -> Option<String> {
-        let state = self.state.lock().await;
-        let local_setup_code = state.local_params.as_ref().map(LocalParams::setup_code);
-        state
-            .setup_codes
-            .iter()
-            .chain(local_setup_code.iter())
-            .find_map(|info| info.federation_name.clone())
+        None
     }
 
     async fn cfg_base_fees_disabled(&self) -> Option<bool> {
@@ -531,7 +483,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees, request.enabled_modules, request.federation_size)
+                config.set_local_parameters(
+                    auth,
+                    request.name,
+                    request.disable_base_fees,
+                    request.enabled_modules,
+                    request.federation_size,
+                )
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }

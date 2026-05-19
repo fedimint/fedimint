@@ -397,7 +397,7 @@ where
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiRequestErased::new(SetLocalParamsRequest {
                 name,
-                federation_name,
+                _federation_name: federation_name,
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
