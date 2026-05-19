@@ -205,7 +205,7 @@ impl FederationTest {
         let peer_id = PeerId::from(0);
         let cfg = &self.configs[&peer_id];
         InviteCode::new(
-            cfg.consensus.api_endpoints[&peer_id].url.clone(),
+            cfg.consensus.api_endpoints()[&peer_id].url.clone(),
             peer_id,
             cfg.calculate_federation_id(),
             None,

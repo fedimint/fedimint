@@ -92,7 +92,7 @@ pub fn write_server_config(
     plaintext_json_write(&server.consensus, &path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(
         &InviteCode::new(
-            server.consensus.api_endpoints[&server.local.identity]
+            server.consensus.api_endpoints()[&server.local.identity]
                 .url
                 .clone(),
             server.local.identity,
