@@ -13,6 +13,7 @@ use fedimint_core::util::BoxStream;
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
     GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
+    SetChannelFeesRequest,
 };
 use fedimint_lightning::{
     CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
@@ -288,6 +289,15 @@ impl ILnRpcClient for FakeLightningTest {
         Err(LightningRpcError::FailedToListChannels {
             failure_reason: "FakeLightningTest does not support listing active channels"
                 .to_string(),
+        })
+    }
+
+    async fn set_channel_fees(
+        &self,
+        _payload: SetChannelFeesRequest,
+    ) -> Result<(), LightningRpcError> {
+        Err(LightningRpcError::FailedToSetChannelFees {
+            failure_reason: "FakeLightningTest does not support updating channel fees".to_string(),
         })
     }
 

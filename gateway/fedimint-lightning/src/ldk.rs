@@ -13,6 +13,7 @@ use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
 use fedimint_gateway_common::{
     ChainSource, GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse,
+    SetChannelFeesRequest,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
@@ -733,6 +734,62 @@ impl ILnRpcClient for GatewayLdkClient {
         }
 
         Ok(ListChannelsResponse { channels })
+    }
+
+    async fn set_channel_fees(
+        &self,
+        payload: SetChannelFeesRequest,
+    ) -> Result<(), LightningRpcError> {
+        // ldk-node's `update_channel_config` is keyed by `UserChannelId` +
+        // counterparty pubkey, so resolve the funding outpoint to those by
+        // scanning the live channel list.
+        let channel = self
+            .node
+            .list_channels()
+            .into_iter()
+            .find(|c| c.funding_txo == Some(payload.funding_outpoint))
+            .ok_or_else(|| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!(
+                    "No channel found with funding outpoint {}",
+                    payload.funding_outpoint,
+                ),
+            })?;
+
+        let forwarding_fee_base_msat = u32::try_from(payload.base_fee_msat).map_err(|_| {
+            LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!(
+                    "base_fee_msat {} does not fit in u32 (LDK limit)",
+                    payload.base_fee_msat,
+                ),
+            }
+        })?;
+        let forwarding_fee_proportional_millionths = u32::try_from(payload.parts_per_million)
+            .map_err(|_| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!(
+                    "parts_per_million {} does not fit in u32 (LDK limit)",
+                    payload.parts_per_million,
+                ),
+            })?;
+
+        // Copy the channel's current config so we only change the two fee
+        // fields and preserve cltv_expiry_delta, dust limits, etc.
+        let new_config = ChannelConfig {
+            forwarding_fee_base_msat,
+            forwarding_fee_proportional_millionths,
+            ..channel.config
+        };
+
+        self.node
+            .update_channel_config(
+                &channel.user_channel_id,
+                channel.counterparty_node_id,
+                new_config,
+            )
+            .map_err(|e| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: e.to_string(),
+            })?;
+
+        Ok(())
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
