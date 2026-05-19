@@ -14,10 +14,11 @@ pub mod events;
 mod receive_sm;
 mod send_sm;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
@@ -133,6 +134,10 @@ pub struct WalletClientModule {
     client_ctx: ClientContext<Self>,
     db: Database,
     module_api: DynModuleApi,
+    /// Nonzero while at least one [`Self::spawn_output_scanner`] task is
+    /// active. Used by [`Self::await_receive`] to detect concurrent claim
+    /// submissions that would prevent it from observing its deposits.
+    scanner_running: Arc<AtomicUsize>,
 }
 
 #[derive(Debug, Clone)]
@@ -219,6 +224,7 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
             module_api: args.module_api().clone(),
+            scanner_running: Arc::new(AtomicUsize::new(0)),
         };
 
         Ok(module)
@@ -384,7 +390,7 @@ impl WalletClientModule {
 
         loop {
             let Some(WalletClientStateMachines::Send(state)) = stream.next().await else {
-                panic!("stream must produce a terminal send state");
+                continue;
             };
 
             match state.state {
@@ -405,7 +411,7 @@ impl WalletClientModule {
 
         loop {
             let Some(WalletClientStateMachines::Receive(state)) = stream.next().await else {
-                panic!("stream must produce a terminal receive state");
+                continue;
             };
 
             match state.state {
@@ -427,6 +433,11 @@ impl WalletClientModule {
     /// already landed, they're in the user's balance.
     ///
     /// Returns immediately with `Ok(vec![])` if `addresses` is empty.
+    ///
+    /// Errors if [`Self::spawn_output_scanner`] is active on this client:
+    /// the background scanner can claim a deposit before this call's
+    /// internal `check_outputs` loop observes it, which would cause this
+    /// function to wait indefinitely.
     pub async fn await_receive(
         &self,
         addresses: Vec<Address<NetworkUnchecked>>,
@@ -435,7 +446,15 @@ impl WalletClientModule {
             return Ok(Vec::new());
         }
 
-        let mut remaining: HashMap<ScriptBuf, usize> = HashMap::new();
+        if self.scanner_running.load(Ordering::SeqCst) > 0 {
+            bail!(
+                "await_receive cannot run while spawn_output_scanner is active: \
+                 background claim submissions would prevent this call from \
+                 observing its deposits"
+            );
+        }
+
+        let mut remaining: BTreeMap<ScriptBuf, usize> = BTreeMap::new();
         for address in &addresses {
             *remaining
                 .entry(address.clone().assume_checked().script_pubkey())
@@ -640,6 +659,8 @@ impl WalletClientModule {
     /// one-shot callers (e.g. CLI) can use [`Self::await_receive`] instead,
     /// which drives its own scan loop for the duration of a single wait.
     pub fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
+        self.scanner_running.fetch_add(1, Ordering::SeqCst);
+
         let module = self.clone();
         let handle = task_group.make_handle();
 
