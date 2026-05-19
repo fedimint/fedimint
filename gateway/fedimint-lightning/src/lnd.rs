@@ -9,7 +9,7 @@ use bitcoin::OutPoint;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
-use fedimint_core::util::FmtCompact;
+use fedimint_core::util::{FmtCompact, backoff_util};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
 use fedimint_gateway_common::{
     ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
@@ -387,24 +387,22 @@ impl GatewayLndClient {
         gateway_sender: HtlcSubscriptionSender,
     ) {
         const FORWARD_CHANNEL_SIZE: usize = 100;
-        const MIN_BACKOFF: Duration = Duration::from_secs(1);
-        const MAX_BACKOFF: Duration = Duration::from_secs(60);
-        let mut backoff = MIN_BACKOFF;
+        let mut backoff = backoff_util::background_backoff();
 
         loop {
             let mut client = match self.connect().await {
                 Ok(c) => c,
                 Err(err) => {
+                    let delay = backoff.next().expect("Keeps retrying");
                     warn!(
                         target: LOG_LIGHTNING,
                         err = %err.fmt_compact(),
-                        backoff_secs = backoff.as_secs(),
+                        backoff_secs = delay.as_secs(),
                         "Failed to connect to LND for HTLC interceptor, will retry"
                     );
-                    if sleep_or_shutdown(&handle, backoff).await {
+                    if sleep_or_shutdown(&handle, delay).await {
                         return;
                     }
-                    backoff = (backoff * 2).min(MAX_BACKOFF);
                     continue;
                 }
             };
@@ -423,16 +421,16 @@ impl GatewayLndClient {
                 stream = future_stream => match stream {
                     Ok(stream) => stream.into_inner(),
                     Err(err) => {
+                        let delay = backoff.next().expect("Keeps retrying");
                         warn!(
                             target: LOG_LIGHTNING,
                             err = %err.fmt_compact(),
-                            backoff_secs = backoff.as_secs(),
+                            backoff_secs = delay.as_secs(),
                             "Failed to establish HTLC interceptor stream, will retry"
                         );
-                        if sleep_or_shutdown(&handle, backoff).await {
+                        if sleep_or_shutdown(&handle, delay).await {
                             return;
                         }
-                        backoff = (backoff * 2).min(MAX_BACKOFF);
                         continue;
                     }
                 },
@@ -443,7 +441,7 @@ impl GatewayLndClient {
             };
 
             info!(target: LOG_LIGHTNING, "LND HTLC Subscription: stream established, processing HTLCs");
-            backoff = MIN_BACKOFF;
+            backoff = backoff_util::background_backoff();
 
             // Drive forwarding (external `lnd_rx` -> internal `forward_tx`) concurrently
             // with reading the stream. They run as two top-level futures of the same
@@ -520,10 +518,10 @@ impl GatewayLndClient {
                 return;
             }
 
-            if sleep_or_shutdown(&handle, backoff).await {
+            let delay = backoff.next().expect("Keeps retrying");
+            if sleep_or_shutdown(&handle, delay).await {
                 return;
             }
-            backoff = (backoff * 2).min(MAX_BACKOFF);
         }
     }
 
