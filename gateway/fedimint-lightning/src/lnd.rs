@@ -524,9 +524,21 @@ impl GatewayLndClient {
         trace!(target: LOG_LIGHTNING, ?htlc, "LND Handling HTLC");
 
         let Some(incoming_circuit_key) = htlc.incoming_circuit_key else {
-            warn!(target: LOG_LIGHTNING, "Cannot route htlc with None incoming_circuit_key");
+            // We have no circuit key, so the HTLC cannot be cancelled either; it
+            // will time out at LND. Log enough context to correlate with the
+            // sender's invoice and the target federation.
+            warn!(
+                target: LOG_LIGHTNING,
+                payment_hash = %PrettyPaymentHash(&htlc.payment_hash),
+                scid = htlc.outgoing_requested_chan_id,
+                amount_msat = htlc.outgoing_amount_msat,
+                "Cannot route HTLC: incoming_circuit_key is None"
+            );
             return;
         };
+
+        let chan_id = incoming_circuit_key.chan_id;
+        let htlc_id = incoming_circuit_key.htlc_id;
 
         // Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
         let intercept = InterceptPaymentRequest {
@@ -535,14 +547,28 @@ impl GatewayLndClient {
             amount_msat: htlc.outgoing_amount_msat,
             expiry: htlc.incoming_expiry,
             short_channel_id: Some(htlc.outgoing_requested_chan_id),
-            incoming_chan_id: incoming_circuit_key.chan_id,
-            htlc_id: incoming_circuit_key.htlc_id,
+            incoming_chan_id: chan_id,
+            htlc_id,
         };
 
         if let Err(err) = gateway_sender.send(intercept).await {
-            warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to send HTLC to gatewayd for processing");
+            warn!(
+                target: LOG_LIGHTNING,
+                err = %err.fmt_compact(),
+                payment_hash = %PrettyPaymentHash(&htlc.payment_hash),
+                scid = htlc.outgoing_requested_chan_id,
+                amount_msat = htlc.outgoing_amount_msat,
+                "Failed to send HTLC to gatewayd for processing"
+            );
             if let Err(err) = Self::cancel_htlc(incoming_circuit_key, lnd_sender.clone()).await {
-                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to cancel HTLC");
+                warn!(
+                    target: LOG_LIGHTNING,
+                    err = %err.fmt_compact(),
+                    payment_hash = %PrettyPaymentHash(&htlc.payment_hash),
+                    chan_id,
+                    htlc_id,
+                    "Failed to cancel HTLC"
+                );
             }
         }
     }
