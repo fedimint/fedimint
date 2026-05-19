@@ -1291,7 +1291,7 @@ where
                                                                 value=(ch.parts_per_million.unwrap_or(0)) {}
                                                         }
 
-                                                        button type="submit" class="btn btn-secondary btn-sm" {
+                                                        button type="submit" class="btn btn-success btn-sm" {
                                                             "Save Fees"
                                                         }
                                                     }
