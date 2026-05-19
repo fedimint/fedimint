@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub mod </span>db;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">mod </span>metrics;
 <a href=#9 id=9 data-nosnippet>9</a>
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>anyhow::bail;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::bitcoin::hashes::sha256;
@@ -218,7 +218,7 @@
 <a href=#218 id=218 data-nosnippet>218</a>                    dealer_keygen(peers.to_num_peers().threshold(), peers.len());
 <a href=#219 id=219 data-nosnippet>219</a>                (amount, (tbs_pk, tbs_pks, tbs_sks))
 <a href=#220 id=220 data-nosnippet>220</a>            })
-<a href=#221 id=221 data-nosnippet>221</a>            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+<a href=#221 id=221 data-nosnippet>221</a>            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 <a href=#222 id=222 data-nosnippet>222</a>
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">let </span>mint_cfg: BTreeMap&lt;<span class="kw">_</span>, MintConfig&gt; = peers
 <a href=#224 id=224 data-nosnippet>224</a>            .iter()
@@ -268,7 +268,7 @@
 <a href=#268 id=268 data-nosnippet>268</a>    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
 <a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">let </span>denominations = gen_denominations();
 <a href=#270 id=270 data-nosnippet>270</a>
-<a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span><span class="kw-2">mut </span>amount_keys = HashMap::new();
+<a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span><span class="kw-2">mut </span>amount_keys = BTreeMap::new();
 <a href=#272 id=272 data-nosnippet>272</a>
 <a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">for </span>amount <span class="kw">in </span><span class="kw-2">&amp;</span>denominations {
 <a href=#274 id=274 data-nosnippet>274</a>            amount_keys.insert(<span class="kw-2">*</span>amount, peers.run_dkg_g2().<span class="kw">await</span><span class="question-mark">?</span>);
@@ -544,7 +544,7 @@
 <a href=#544 id=544 data-nosnippet>544</a></span><span class="kw">pub struct </span>Mint {
 <a href=#545 id=545 data-nosnippet>545</a>    cfg: MintConfig,
 <a href=#546 id=546 data-nosnippet>546</a>    sec_key: Tiered&lt;SecretKeyShare&gt;,
-<a href=#547 id=547 data-nosnippet>547</a>    pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
+<a href=#547 id=547 data-nosnippet>547</a>    pub_key: BTreeMap&lt;Amount, AggregatePublicKey&gt;,
 <a href=#548 id=548 data-nosnippet>548</a>}
 <a href=#549 id=549 data-nosnippet>549</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 <a href=#550 id=550 data-nosnippet>550</a></span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Mint {
@@ -970,7 +970,7 @@
 <a href=#970 id=970 data-nosnippet>970</a>        }
 <a href=#971 id=971 data-nosnippet>971</a>    }
 <a href=#972 id=972 data-nosnippet>972</a>
-<a href=#973 id=973 data-nosnippet>973</a>    <span class="kw">pub fn </span>pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashMap&lt;Amount, AggregatePublicKey&gt; {
+<a href=#973 id=973 data-nosnippet>973</a>    <span class="kw">pub fn </span>pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;Amount, AggregatePublicKey&gt; {
 <a href=#974 id=974 data-nosnippet>974</a>        <span class="self">self</span>.pub_key.clone()
 <a href=#975 id=975 data-nosnippet>975</a>    }
 <a href=#976 id=976 data-nosnippet>976</a>}
