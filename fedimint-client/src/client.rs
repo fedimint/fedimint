@@ -190,6 +190,15 @@ struct ListOperationsParams {
     last_seen: Option<ChronologicalOperationLogKey>,
 }
 
+const DEFAULT_EVENT_LOG_PAGE_SIZE: u64 = 100;
+const MAX_EVENT_LOG_PAGE_SIZE: u64 = 10_000;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GetEventLogRequest {
+    pos: Option<EventLogId>,
+    limit: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetOperationIdRequest {
     operation_id: OperationId,
@@ -1978,6 +1987,15 @@ impl Client {
                         .paginate_operations_rev(limit, req.last_seen)
                         .await;
                     yield serde_json::to_value(operations)?;
+                }
+                "get_event_log" => {
+                    let req: GetEventLogRequest = serde_json::from_value(params)?;
+                    let limit = req
+                        .limit
+                        .unwrap_or(DEFAULT_EVENT_LOG_PAGE_SIZE)
+                        .min(MAX_EVENT_LOG_PAGE_SIZE);
+                    let events = self.get_event_log(req.pos, limit).await;
+                    yield serde_json::to_value(events)?;
                 }
                 "session_count" => {
                     let count = self.fetch_session_count().await?;
