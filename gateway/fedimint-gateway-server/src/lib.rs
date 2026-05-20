@@ -1049,8 +1049,11 @@ impl Gateway {
 
     /// Handles an intercepted lightning payment. If the payment is part of an
     /// incoming payment to a federation, spawns a state machine and hands the
-    /// payment off to it. Otherwise, forwards the payment to the next hop like
-    /// a normal lightning node.
+    /// payment off to it. If the payment's last-hop short channel id maps to
+    /// a known federation but no LNv1 or LNv2 offer matched, cancels (fails
+    /// back) the HTLC so the sender can retry rather than treating the
+    /// gateway as a dead route. Otherwise (real-channel forwards), resumes
+    /// the HTLC so LND can route it as a normal forward.
     ///
     /// Returns the outcome label for metrics tracking.
     async fn handle_lightning_payment(
@@ -1106,8 +1109,27 @@ impl Gateway {
             return "lnv1";
         }
 
-        Self::forward_lightning_payment(payment_request, lightning_context).await;
-        "forward"
+        // Neither LNv1 nor LNv2 matched. If the last-hop scid is one of our
+        // federation virtual scids, cancel so the sender gets a non-permanent
+        // failure (avoiding `UNKNOWN_NEXT_PEER` blacklisting). If the scid is
+        // for a real channel, resume so LND forwards normally.
+        let is_federation_scid = match payment_request.short_channel_id {
+            Some(scid) => self
+                .federation_manager
+                .read()
+                .await
+                .get_client_for_index(scid)
+                .is_some(),
+            None => false,
+        };
+
+        if is_federation_scid {
+            Self::cancel_unmatched_lightning_payment(payment_request, lightning_context).await;
+            "cancel"
+        } else {
+            Self::forward_lightning_payment(payment_request, lightning_context).await;
+            "forward"
+        }
     }
 
     /// Tries to handle a lightning payment using the LNv2 protocol.
@@ -1209,9 +1231,39 @@ impl Gateway {
             .await
     }
 
+    /// Cancels (fails back) a lightning payment whose last-hop scid maps to a
+    /// known federation but matched no LNv1 or LNv2 offer.
+    ///
+    /// Returning `PaymentAction::Forward` here would tell LND to resume the
+    /// HTLC as a normal forward, but the last-hop short channel id is a
+    /// virtual scid (no real channel exists), so LND would fail it back with
+    /// the permanent error `UNKNOWN_NEXT_PEER`. Senders' mission control
+    /// treats that as a permanent blacklist signal against the gateway,
+    /// breaking future payments across all federations.
+    ///
+    /// `PaymentAction::Cancel` maps to `ResolveHoldForwardAction::Fail`, which
+    /// fails the HTLC back with a non-permanent reason so the sender can
+    /// retry instead of blacklisting the gateway.
+    async fn cancel_unmatched_lightning_payment(
+        htlc_request: InterceptPaymentRequest,
+        lightning_context: &LightningContext,
+    ) {
+        let outcome = InterceptPaymentResponse {
+            action: PaymentAction::Cancel,
+            payment_hash: htlc_request.payment_hash,
+            incoming_chan_id: htlc_request.incoming_chan_id,
+            htlc_id: htlc_request.htlc_id,
+        };
+
+        if let Err(err) = lightning_context.lnrpc.complete_htlc(outcome).await {
+            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error sending lightning payment response to lightning node");
+        }
+    }
+
     /// Forwards a lightning payment to the next hop like a normal lightning
-    /// node. Only necessary for LNv1, since LNv2 uses hold invoices instead
-    /// of HTLC interception for routing incoming payments.
+    /// node. Used when the intercepted HTLC is not destined for any federation
+    /// this gateway serves, so LND should route it normally over a real
+    /// channel.
     async fn forward_lightning_payment(
         htlc_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
