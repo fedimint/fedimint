@@ -8,7 +8,8 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TIME_PREF_ENV,
+    FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -524,7 +525,25 @@ pub enum PaymentStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
+/// Default value for LND's `SendPaymentRequest::time_pref`. LND interprets this
+/// as a value in [`LND_TIME_PREF_MIN`, `LND_TIME_PREF_MAX`], where -1 optimizes
+/// purely for fees and 1 optimizes purely for reliability. We default to 0.5 to
+/// favor reliability while still considering fees.
+pub const LND_DEFAULT_TIME_PREF: f64 = 0.5;
+pub const LND_TIME_PREF_MIN: f64 = -1.0;
+pub const LND_TIME_PREF_MAX: f64 = 1.0;
+
+fn parse_lnd_time_pref(s: &str) -> Result<f64, String> {
+    let parsed: f64 = s.parse().map_err(|e| format!("invalid f64: {e}"))?;
+    if !parsed.is_finite() || !(LND_TIME_PREF_MIN..=LND_TIME_PREF_MAX).contains(&parsed) {
+        return Err(format!(
+            "must be a finite value in [{LND_TIME_PREF_MIN}, {LND_TIME_PREF_MAX}]"
+        ));
+    }
+    Ok(parsed)
+}
+
+#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, PartialEq)]
 pub enum LightningMode {
     #[clap(name = "lnd")]
     Lnd {
@@ -539,6 +558,16 @@ pub enum LightningMode {
         /// LND macaroon file path
         #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
         lnd_macaroon: String,
+
+        /// `time_pref` passed to LND `SendPaymentRequest`. -1.0 optimizes
+        /// purely for fees, 1.0 optimizes purely for reliability.
+        #[arg(
+            long = "lnd-time-pref",
+            env = FM_LND_TIME_PREF_ENV,
+            default_value_t = LND_DEFAULT_TIME_PREF,
+            value_parser = parse_lnd_time_pref,
+        )]
+        lnd_time_pref: f64,
     },
     #[clap(name = "ldk")]
     Ldk {

@@ -69,6 +69,7 @@ pub struct GatewayLndClient {
     address: String,
     tls_cert: String,
     macaroon: String,
+    time_pref: f64,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
 }
 
@@ -77,6 +78,7 @@ impl GatewayLndClient {
         address: String,
         tls_cert: String,
         macaroon: String,
+        time_pref: f64,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
     ) -> Self {
         info!(
@@ -84,12 +86,14 @@ impl GatewayLndClient {
             address = %address,
             tls_cert_path = %tls_cert,
             macaroon = %macaroon,
+            time_pref,
             "Gateway configured to connect to LND LnRpcClient",
         );
         GatewayLndClient {
             address,
             tls_cert,
             macaroon,
+            time_pref,
             lnd_sender,
         }
     }
@@ -843,6 +847,7 @@ impl ILnRpcClient for GatewayLndClient {
                         no_inflight_updates: false,
                         timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                         fee_limit_msat,
+                        time_pref: self.time_pref,
                         ..Default::default()
                     })
                     .await
@@ -961,6 +966,7 @@ impl ILnRpcClient for GatewayLndClient {
             address: self.address.clone(),
             tls_cert: self.tls_cert.clone(),
             macaroon: self.macaroon.clone(),
+            time_pref: self.time_pref,
             lnd_sender: Some(lnd_sender.clone()),
         });
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))

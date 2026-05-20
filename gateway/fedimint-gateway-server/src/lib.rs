@@ -1811,10 +1811,12 @@ impl Gateway {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
+                lnd_time_pref,
             } => Box::new(GatewayLndClient::new(
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
+                lnd_time_pref,
                 None,
             )),
             LightningMode::Ldk {
