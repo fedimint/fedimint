@@ -1083,8 +1083,14 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 }
 
 pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
+    use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
+    use fedimint_connectors::ConnectorRegistry;
     use fedimint_core::PeerId;
+    use fedimint_core::endpoint_constants::INVITE_CODE_ENDPOINT;
+    use fedimint_core::invite_code::InviteCode;
+    use fedimint_core::module::ApiRequestErased;
     use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
+    use fedimint_core::util::SafeUrl;
 
     log_binary_versions().await?;
 
@@ -1194,6 +1200,34 @@ pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(
         metadata.pkarr_id_z32, TEST_PKARR_ID,
         "Pkarr ID did not propagate correctly"
+    );
+
+    info!("Checking invite_code endpoint reflects overridden guardian metadata URL...");
+    // Connect directly to peer 0 via its real configured URL — `dev api --peer-id
+    // 0` would resolve through the client's propagated peer-URL map, which now
+    // points at the fake TEST_API_URL and would fail to connect.
+    let peer_id = PeerId::from(0);
+    let peer0_real_url: SafeUrl = fed
+        .vars
+        .get(&0)
+        .expect("peer 0 vars must exist")
+        .FM_API_URL
+        .parse()
+        .expect("FM_API_URL must be a valid SafeUrl");
+    let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+    let admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, None)?;
+    let invite: InviteCode = admin_api
+        .request_single_peer(
+            INVITE_CODE_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
+            peer_id,
+        )
+        .await
+        .expect("invite_code RPC request should succeed");
+    assert_eq!(
+        invite.url().to_string(),
+        TEST_API_URL,
+        "invite_code endpoint did not reflect overridden guardian metadata URL"
     );
 
     Ok(())
