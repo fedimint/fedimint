@@ -104,7 +104,7 @@ use fedimint_core::envs::{
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_portalloc::port_alloc;
 use fedimint_server::net::api::ApiSecrets;
-use fedimintd_envs::FM_FORCE_API_SECRETS_ENV;
+use fedimintd_envs::{FM_ENABLE_IROH_ENV, FM_FORCE_API_SECRETS_ENV};
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
@@ -139,6 +139,19 @@ declare_vars! {
 
         FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
         FM_SKIP_REL_NOTES_ACK: String = "1".to_string(); env: "FM_SKIP_REL_NOTES_ACK";
+
+        // Use the Iroh stack by default in the dev environment. Local
+        // connectivity (federation <-> gateway <-> client on the same host) is
+        // served by FM_IROH_CONNECT_OVERRIDES / FM_GW_IROH_CONNECT_OVERRIDES
+        // (set further down by FederationsNetOverrides / GatewaydNetOverrides),
+        // so the stack works fully offline. The default n0 discovery / pkarr
+        // publishing / relay registration are intentionally left enabled so
+        // that when the laptop *is* online, the federation and gateways are
+        // reachable from external clients (e.g. a phone) — those services run
+        // as best-effort background tasks and fail gracefully when offline.
+        // Honors any pre-existing env value so callers (e.g. backcompat tests)
+        // can opt out.
+        FM_ENABLE_IROH: String = std::env::var(FM_ENABLE_IROH_ENV).unwrap_or_else(|_| "true".into()); env: FM_ENABLE_IROH_ENV;
 
         FM_FED_SIZE: usize = fed_size; env: "FM_FED_SIZE";
         FM_NUM_FEDS: usize = num_feds; env: "FM_NUM_FEDS";
