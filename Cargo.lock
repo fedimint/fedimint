@@ -3755,6 +3755,7 @@ name = "fedimint-lightning"
 version = "0.12.0-alpha"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bitcoin",
  "fedimint-bip39",
@@ -4001,6 +4002,7 @@ dependencies = [
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-logging",
+ "fedimint-portalloc",
  "fedimint-testing",
  "futures",
  "itertools 0.14.0",

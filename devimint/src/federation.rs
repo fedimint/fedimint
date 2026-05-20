@@ -60,6 +60,11 @@ pub struct Federation {
     pub vars: BTreeMap<usize, vars::Fedimintd>,
     pub bitcoind: Bitcoind,
 
+    /// Invite code for this federation, captured at construction time so it
+    /// survives even when a second federation overwrites the shared
+    /// `FM_CLIENT_DIR/invite-code` file.
+    invite_code_cached: Option<String>,
+
     /// Built in [`Client`], already joined
     client: JitTryAnyhow<Client>,
     #[allow(dead_code)] // Will need it later, maybe
@@ -426,11 +431,22 @@ impl Federation {
             debug!("Moved invite-code files to client data directory");
         }
 
+        // Snapshot the invite code now, before another `Federation::new`
+        // overwrites the shared `FM_CLIENT_DIR/invite-code` file.
+        let invite_code_cached = if !skip_setup && !pre_dkg {
+            let client_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
+            Some(fs::read_to_string(client_dir.join("invite-code"))?)
+        } else {
+            None
+        };
+        let cached_for_client = invite_code_cached.clone();
+
         let client = JitTryAnyhow::new_try({
             move || async move {
                 let client = Client::open_or_create(federation_name.as_str())?;
-                let invite_code = Self::invite_code_static()?;
                 if !skip_setup && !pre_dkg {
+                    let invite_code = cached_for_client
+                        .ok_or_else(|| anyhow::anyhow!("invite code not captured"))?;
                     cmd!(client, "join-federation", invite_code).run().await?;
                 }
                 Ok(client)
@@ -441,6 +457,7 @@ impl Federation {
             members,
             vars: peer_to_env_vars_map,
             bitcoind,
+            invite_code_cached,
             client,
             connectors,
         })
@@ -508,8 +525,16 @@ impl Federation {
         }
     }
 
-    /// Read the invite code from the client data dir
+    /// Read the invite code for this federation.
+    ///
+    /// Prefers the value captured at construction time, since
+    /// `FM_CLIENT_DIR/invite-code` is shared across federations and gets
+    /// overwritten by later `Federation::new` calls. Falls back to the
+    /// shared file for backwards compatibility.
     pub fn invite_code(&self) -> Result<String> {
+        if let Some(cached) = &self.invite_code_cached {
+            return Ok(cached.clone());
+        }
         let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
         Ok(invite_code)
@@ -783,6 +808,10 @@ impl Federation {
             } else {
                 0
             };
+            let is_none_gateway = matches!(
+                gw.ln.ln_type(),
+                fedimint_testing_core::node_type::LightningNodeType::None
+            );
             let fed_id = fed_id.clone();
             poll("gateway pegin", move || {
                 let fed_id = fed_id.clone();
@@ -793,20 +822,25 @@ impl Federation {
                         .await
                         .map_err(ControlFlow::Continue)?;
 
-                    let block_height: u64 = if gw.gatewayd_version < *VERSION_0_10_0_ALPHA {
-                        gw_info["block_height"]
-                            .as_u64()
-                            .expect("Could not parse block height")
-                    } else {
-                        gw_info["lightning_info"]["connected"]["block_height"]
-                            .as_u64()
-                            .expect("Could not parse block height")
-                    };
+                    // Gateways with no Lightning node have no chain sync of
+                    // their own; deposits flow through federation consensus,
+                    // so skip the block-height liveness check.
+                    if !is_none_gateway {
+                        let block_height: u64 = if gw.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                            gw_info["block_height"]
+                                .as_u64()
+                                .expect("Could not parse block height")
+                        } else {
+                            gw_info["lightning_info"]["connected"]["block_height"]
+                                .as_u64()
+                                .expect("Could not parse block height")
+                        };
 
-                    if bitcoind_block_height != block_height {
-                        return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
-                            "gateway block height is not synced"
-                        )));
+                        if bitcoind_block_height != block_height {
+                            return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                                "gateway block height is not synced"
+                            )));
+                        }
                     }
 
                     let gateway_balance = gw

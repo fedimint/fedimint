@@ -102,7 +102,7 @@ impl IntoResponse for PublicGatewayError {
 /// error details are returned to the admin client for debugging purposes.
 #[derive(Debug, Error)]
 pub enum AdminGatewayError {
-    #[error("Failed to create a federation client")]
+    #[error("Failed to create a federation client: {}", .0.fmt_compact_anyhow())]
     ClientCreationError(anyhow::Error),
     #[error("Failed to remove a federation client: {0}")]
     ClientRemovalError(String),

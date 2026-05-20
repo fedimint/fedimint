@@ -272,7 +272,9 @@ impl Global {
                     .unwrap(),
             )?
         };
-        let num_gateways: usize = 3;
+        // 3 are used by DevFed (lnd, ldk-0, ldk-second); leave headroom for
+        // tests that spawn extra gateways (e.g. `LightningMode::None`).
+        let num_gateways: usize = 5;
         let this = Self::init(
             test_dir,
             num_feds,
