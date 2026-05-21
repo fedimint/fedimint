@@ -309,9 +309,12 @@ mod db {
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FederationWalletKey, FeeRateVoteKey,
-        FeeRateVotePrefix, Output, OutputKey, OutputPrefix, SignaturesKey, SignaturesPrefix,
-        SpentOutputKey, SpentOutputPrefix, TxInfoIndexKey, TxInfoIndexPrefix, TxInfoKey,
-        TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+        FeeRateVotePrefix, FrostAdvanceVotePrefix, FrostSignatureSharePrefix,
+        FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix, FrostSigningNoncesPrefix,
+        FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix, Output, OutputKey,
+        OutputPrefix, SchnorrSignaturesPrefix, SignaturesKey, SignaturesPrefix, SpentOutputKey,
+        SpentOutputPrefix, TxInfoIndexKey, TxInfoIndexPrefix, TxInfoKey, TxInfoPrefix,
+        UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
     };
     use fedimint_walletv2_server::{FederationTx, SpentTxOut};
     use futures::StreamExt;
@@ -668,6 +671,119 @@ mod db {
                                     tweak: tweak(),
                                 },
                             "the federation wallet must round-trip unchanged"
+                        );
+                    }
+                    // Taproot and FROST signing state postdates the v0 snapshot,
+                    // and the module still has no migrations, so migrating a v0
+                    // database has to leave every one of these prefixes untouched.
+                    // Asserting emptiness rather than skipping the variants keeps a
+                    // future migration from quietly seeding signing state into a
+                    // database that never had any.
+                    DbKeyPrefix::SchnorrSignatures => {
+                        let signatures = dbtx
+                            .find_by_prefix(&SchnorrSignaturesPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            signatures.is_empty(),
+                            "the v0 snapshot predates taproot, and no migration writes schnorr \
+                             signatures, got {signatures:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostSigningCommitments => {
+                        let commitments = dbtx
+                            .find_by_prefix(&FrostSigningCommitmentsPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            commitments.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes signing \
+                             commitments, got {commitments:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostSigningNonce => {
+                        let nonces = dbtx
+                            .find_by_prefix(&FrostSigningNoncesPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        // Reported by count rather than by value: the nonces are
+                        // secret, and there is nothing legible in them anyway.
+                        ensure!(
+                            nonces.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes signing \
+                             nonces, got {} of them",
+                            nonces.len()
+                        );
+                    }
+                    DbKeyPrefix::FrostSignatureShare => {
+                        let shares = dbtx
+                            .find_by_prefix(&FrostSignatureSharePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            shares.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes signature \
+                             shares, got {shares:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostSigningPackages => {
+                        let packages = dbtx
+                            .find_by_prefix(&FrostSigningPackagesPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            packages.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes signing \
+                             packages, got {packages:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostSigningAttempt => {
+                        let attempts = dbtx
+                            .find_by_prefix(&FrostSigningAttemptPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            attempts.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration opens signing \
+                             attempts, got {attempts:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostAdvanceVote => {
+                        let votes = dbtx
+                            .find_by_prefix(&FrostAdvanceVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            votes.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration casts advance \
+                             votes, got {votes:?}"
+                        );
+                    }
+                    DbKeyPrefix::LocalFrostSignatureShare => {
+                        let shares = dbtx
+                            .find_by_prefix(&LocalFrostSignatureSharePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            shares.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes local \
+                             signature shares, got {shares:?}"
                         );
                     }
                 }
