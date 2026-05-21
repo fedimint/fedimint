@@ -1356,7 +1356,7 @@ impl Gateway {
             .value()
             .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
         {
-            Ok(wallet_module.receive().await?)
+            Ok(wallet_module.receive().await)
         } else {
             Err(AdminGatewayError::Unexpected(anyhow!(
                 "No wallet module found"

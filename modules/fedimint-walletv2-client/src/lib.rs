@@ -411,9 +411,8 @@ impl WalletClientModule {
         }
     }
 
-    /// Returns the next unused receive address or an error if `scan_outputs`
-    /// has not been called yet to grind for a new valid index.
-    pub async fn receive(&self) -> anyhow::Result<Address> {
+    /// Returns the next unused receive address.
+    pub async fn receive(&self) -> Address {
         if let Some(entry) = self
             .db
             .begin_transaction_nc()
@@ -423,10 +422,10 @@ impl WalletClientModule {
             .next()
             .await
         {
-            return Ok(self.derive_address(entry.0.0));
+            return self.derive_address(entry.0.0);
         }
 
-        Err(anyhow!("No valid index, please scan_outputs first"))
+        unimplemented!("Need to wait for grinding")
     }
 
     fn derive_address(&self, index: u64) -> Address {
