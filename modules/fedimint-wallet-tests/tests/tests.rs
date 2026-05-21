@@ -1402,7 +1402,7 @@ fn build_wallet_server_configs() -> anyhow::Result<(
     let args = fedimint_server_core::ConfigGenModuleArgs {
         network: bitcoin::Network::Regtest,
         disable_base_fees: false,
-        use_taproot: false,
+        descriptor_kind: Default::default(),
     };
     let wallet_cfg =
         fedimint_server::core::ServerModuleInit::trusted_dealer_gen(&WalletInit, &peers, &args);
