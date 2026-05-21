@@ -501,7 +501,7 @@ where
 }
 
 const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_mins(1);
-const EXTRA_LONG_POLL_TIMEOUT: Duration = Duration::from_secs(90);
+const EXTRA_LONG_POLL_TIMEOUT: Duration = Duration::from_mins(5);
 
 /// Retry until `f` succeeds or default timeout is reached
 ///
