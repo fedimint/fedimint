@@ -24,11 +24,18 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-walletv2-common = { workspace = true }
+frost-core = { workspace = true }
+frost-secp256k1-tr = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 miniscript = { workspace = true }
 rand = { workspace = true }
+rand_chacha = { workspace = true }
 secp256k1 = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
