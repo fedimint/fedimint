@@ -16,6 +16,7 @@ mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::anyhow;
 use api::WalletFederationApi;
@@ -116,6 +117,7 @@ pub struct WalletClientModule {
     client_ctx: ClientContext<Self>,
     db: Database,
     module_api: DynModuleApi,
+    scanner_running: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +204,7 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
             module_api: args.module_api().clone(),
+            scanner_running: Arc::new(AtomicBool::new(false)),
         };
 
         Ok(module)
@@ -399,7 +402,7 @@ impl WalletClientModule {
                         .await_primary_module_outputs(operation_id, outputs)
                         .await
                     {
-                        Ok(_) => return FinalReceiveOperationState::Success,
+                        Ok(()) => return FinalReceiveOperationState::Success,
                         Err(err) => return FinalReceiveOperationState::Failure(err.to_string()),
                     }
                 }
@@ -411,28 +414,38 @@ impl WalletClientModule {
     }
 
     /// Returns the next unused receive address.
+    ///
+    /// If the background output scanner is running, defers the address-index
+    /// grinding to it and polls the DB until a valid index appears. Otherwise
+    /// grinds an initial index inline.
     pub async fn receive(&self) -> Address {
-        if let Some(entry) = self
-            .db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-            .await
-            .next()
-            .await
-        {
-            return self.derive_address(entry.0.0);
+        loop {
+            if let Some(entry) = self
+                .db
+                .begin_transaction_nc()
+                .await
+                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+                .await
+                .next()
+                .await
+            {
+                return self.derive_address(entry.0.0);
+            }
+
+            if self.scanner_running.load(Ordering::SeqCst) {
+                sleep(fedimint_walletv2_common::sleep_duration()).await;
+            } else {
+                let index = self.next_valid_index(0);
+
+                let mut dbtx = self.db.begin_transaction().await;
+
+                dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
+
+                dbtx.commit_tx().await;
+
+                return self.derive_address(index);
+            }
         }
-
-        let index = self.next_valid_index(0);
-
-        let mut dbtx = self.db.begin_transaction().await;
-
-        dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
-
-        dbtx.commit_tx().await;
-
-        self.derive_address(index)
     }
 
     fn derive_address(&self, index: u64) -> Address {
@@ -573,6 +586,8 @@ impl WalletClientModule {
     }
 
     pub fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
+        self.scanner_running.store(true, Ordering::SeqCst);
+
         let module = self.clone();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
