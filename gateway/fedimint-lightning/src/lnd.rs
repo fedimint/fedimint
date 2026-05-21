@@ -37,7 +37,7 @@ use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
     FeeReportRequest, GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress,
     ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
-    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, WalletBalanceRequest,
+    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -1566,13 +1566,36 @@ impl ILnRpcClient for GatewayLndClient {
             ..Default::default()
         };
 
-        client
+        let response = client
             .lightning()
             .update_channel_policy(request)
             .await
             .map_err(|e| LightningRpcError::FailedToSetChannelFees {
                 failure_reason: format!("update_channel_policy failed: {e:?}"),
-            })?;
+            })?
+            .into_inner();
+
+        if !response.failed_updates.is_empty() {
+            let details = response
+                .failed_updates
+                .iter()
+                .map(|f| {
+                    let outpoint = f
+                        .outpoint
+                        .as_ref()
+                        .map(|op| format!("{}:{}", op.txid_str, op.output_index))
+                        .unwrap_or_else(|| "<unknown outpoint>".to_string());
+                    let reason = UpdateFailure::try_from(f.reason)
+                        .map(|r| r.as_str_name())
+                        .unwrap_or("UPDATE_FAILURE_UNKNOWN");
+                    format!("{outpoint}: {reason} ({})", f.update_error)
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("update_channel_policy reported failures: {details}"),
+            });
+        }
 
         Ok(())
     }
