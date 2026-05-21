@@ -385,7 +385,6 @@ where
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
-        use_taproot: Option<bool>,
         auth: ApiAuth,
     ) -> FederationResult<String> {
         self.request_admin(
@@ -396,7 +395,6 @@ where
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
-                use_taproot,
             }),
             auth,
         )
