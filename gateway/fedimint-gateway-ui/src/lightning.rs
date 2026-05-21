@@ -1118,6 +1118,14 @@ where
                             tbody {
                                 @for ch in channels {
                                     @let row_id = format!("close-form-{}", ch.remote_pubkey);
+                                    // Keyed by sanitized funding outpoint so multiple channels
+                                    // with the same peer don't collide on a single collapse id.
+                                    @let fees_row_id = ch.funding_outpoint.as_ref().map(|op| {
+                                        let sanitized: String = op.to_string().chars()
+                                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                                            .collect();
+                                        format!("fees-form-{sanitized}")
+                                    });
                                     // precompute safely (no @let inline arithmetic)
                                     @let size = ch.channel_size_sats.max(1);
                                     @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
@@ -1219,7 +1227,6 @@ where
 
                                         td style="width: 150px" {
                                             @let open_row_id = format!("open-form-{}", ch.remote_pubkey);
-                                            @let fees_row_id = format!("fees-form-{}", ch.remote_pubkey);
                                             // + button to open another channel with this peer
                                             button class="btn btn-sm btn-outline-primary me-1"
                                                 type="button"
@@ -1231,7 +1238,7 @@ where
                                             // $ button toggles the fee-edit form (only when we
                                             // know the funding outpoint, which is required to
                                             // address the channel on the backend).
-                                            @if ch.funding_outpoint.is_some() {
+                                            @if let Some(fees_row_id) = &fees_row_id {
                                                 button class="btn btn-sm btn-outline-secondary me-1"
                                                     type="button"
                                                     title="Edit routing fees"
@@ -1254,8 +1261,8 @@ where
 
                                     // Collapsible edit-fees form (only rendered when funding
                                     // outpoint is known, so we have a stable channel identifier).
-                                    @if let Some(funding_outpoint) = ch.funding_outpoint {
-                                        tr class="collapse" id=(format!("fees-form-{}", ch.remote_pubkey)) {
+                                    @if let (Some(funding_outpoint), Some(fees_row_id)) = (ch.funding_outpoint, &fees_row_id) {
+                                        tr class="collapse" id=(fees_row_id) {
                                             td colspan="10" {
                                                 div class="card card-body" {
                                                     form
