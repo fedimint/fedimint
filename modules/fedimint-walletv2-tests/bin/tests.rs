@@ -18,9 +18,10 @@ use tracing::info;
 
 #[derive(Parser)]
 struct Opts {
-    /// Enable taproot support for walletv2
+    /// Wallet descriptor for walletv2 (`wsh`, `tr`, or `frost`). Defaults to
+    /// `wsh` when omitted. Sets `FM_WALLETV2_DESCRIPTOR` for the federation.
     #[arg(long)]
-    taproot: bool,
+    descriptor: Option<String>,
 }
 
 /// Spawns a background task that mines a block every 100ms, simulating
@@ -231,8 +232,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Enable walletv2 module instead of wallet v1
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
-    if opts.taproot {
-        unsafe { std::env::set_var("FM_USE_TAPROOT_WALLETV2", "true") };
+    if let Some(descriptor) = opts.descriptor.as_deref() {
+        unsafe { std::env::set_var("FM_WALLETV2_DESCRIPTOR", descriptor) };
     }
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
 

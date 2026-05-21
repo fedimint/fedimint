@@ -31,8 +31,12 @@ pub const FM_ENABLE_MODULE_WALLETV2_ENV: &str = "FM_ENABLE_MODULE_WALLETV2";
 /// Disable mint base fees for testing and development environments
 pub const FM_DISABLE_BASE_FEES_ENV: &str = "FM_DISABLE_BASE_FEES";
 
-/// Use taproot based wallet instead of segwit
-pub const FM_USE_TAPROOT_WALLETV2_ENV: &str = "FM_USE_TAPROOT_WALLETV2";
+/// Selects the on-chain wallet descriptor used by the walletv2 module.
+///
+/// Set by the federation leader at setup time. Accepted values (case
+/// insensitive): `wsh` (default), `tr`, `frost`. An invalid value causes
+/// setup to fail rather than silently default.
+pub const FM_WALLETV2_DESCRIPTOR_ENV: &str = "FM_WALLETV2_DESCRIPTOR";
 
 /// Print sensitive secrets without redacting them. Use only for debugging.
 pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
