@@ -76,8 +76,8 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
     Ok(())
 }
 
-async fn await_scan_outputs(client: &Client) -> anyhow::Result<()> {
-    cmd!(client, "module", "walletv2", "scan-outputs")
+async fn await_peg_in(client: &Client, address: &Address) -> anyhow::Result<()> {
+    cmd!(client, "module", "walletv2", "await-peg-in", address)
         .run()
         .await
 }
@@ -182,20 +182,19 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Deposit funds into the federation...");
 
-            await_scan_outputs(&client).await?;
             let federation_address_1 = get_deposit_address(&client).await?;
 
             fed.bitcoind
                 .send_to(federation_address_1.to_string(), 100_000)
                 .await?;
 
+            await_peg_in(&client, &federation_address_1).await?;
+
             fed.bitcoind
                 .send_to(federation_address_1.to_string(), 200_000)
                 .await?;
 
-            info!("Wait for deposits to be claimed...");
-
-            await_scan_outputs(&client).await?;
+            await_peg_in(&client, &federation_address_1).await?;
 
             ensure_federation_total_value(&client, 290_000).await?;
 
@@ -207,13 +206,13 @@ async fn main() -> anyhow::Result<()> {
                 .send_to(federation_address_2.to_string(), 300_000)
                 .await?;
 
+            await_peg_in(&client, &federation_address_2).await?;
+
             fed.bitcoind
                 .send_to(federation_address_2.to_string(), 400_000)
                 .await?;
 
-            info!("Wait for deposits to be claimed...");
-
-            await_scan_outputs(&client).await?;
+            await_peg_in(&client, &federation_address_2).await?;
 
             ensure_federation_total_value(&client, 980_000).await?;
 
@@ -305,7 +304,7 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_scan_outputs(&client).await?;
+            await_peg_in(&client_two, &circular_address).await?;
 
             await_no_pending_txs(&client).await?;
 

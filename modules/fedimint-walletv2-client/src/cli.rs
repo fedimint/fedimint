@@ -24,8 +24,9 @@ enum Opts {
     },
     /// Return the next unused receive address.
     Receive,
-    /// Scan the federation's outputs for peg-ins
-    ScanOutputs,
+    /// Wait until a peg-in to `address` is detected and its claim has reached
+    /// its final receive state.
+    AwaitPegIn { address: Address<NetworkUnchecked> },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -67,7 +68,7 @@ pub(crate) async fn handle_cli_command(
                 .await,
         ),
         Opts::Receive => json(wallet.receive().await),
-        Opts::ScanOutputs => json(wallet.scan_outputs().await?),
+        Opts::AwaitPegIn { address } => json(wallet.await_peg_in(address).await?),
     };
 
     Ok(value)

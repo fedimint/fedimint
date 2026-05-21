@@ -5,7 +5,6 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
-use futures::future::join_all;
 
 mod api;
 #[cfg(feature = "cli")]
@@ -105,7 +104,7 @@ pub enum FinalReceiveOperationState {
 
 #[derive(Debug, Clone)]
 struct CheckOutputsProgress {
-    submitted: Vec<(OperationId, Vec<OutPoint>)>,
+    submitted: Vec<(OperationId, Vec<OutPoint>, ScriptBuf)>,
     more_outputs: bool,
 }
 
@@ -425,7 +424,15 @@ impl WalletClientModule {
             return self.derive_address(entry.0.0);
         }
 
-        unimplemented!("Need to wait for grinding")
+        let index = self.next_valid_index(0);
+
+        let mut dbtx = self.db.begin_transaction().await;
+
+        dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
+
+        dbtx.commit_tx().await;
+
+        self.derive_address(index)
     }
 
     fn derive_address(&self, index: u64) -> Address {
@@ -529,41 +536,40 @@ impl WalletClientModule {
         (operation_id, range)
     }
 
-    pub async fn scan_outputs(&self) -> anyhow::Result<()> {
-        // In order for WalletV2 to receive, one valid index needs to be found
-        let mut dbtx = self.db.begin_transaction().await;
-
-        if dbtx
-            .find_by_prefix(&ValidAddressIndexPrefix)
-            .await
-            .next()
-            .await
-            .is_none()
-        {
-            dbtx.insert_new_entry(&ValidAddressIndexKey(self.next_valid_index(0)), &())
-                .await;
+    /// Scan the federation's outputs until a peg-in to `address` is detected,
+    /// then return once that peg-in has reached its final receive state.
+    ///
+    /// If multiple peg-ins to `address` exist, this returns after the first
+    /// one observed by `check_outputs`.
+    pub async fn await_peg_in(
+        &self,
+        address: Address<NetworkUnchecked>,
+    ) -> anyhow::Result<FinalReceiveOperationState> {
+        if !address.is_valid_for_network(self.cfg.network) {
+            return Err(anyhow!(
+                "Address is from a different network than the federation."
+            ));
         }
 
-        dbtx.commit_tx().await;
+        let target_script = address.assume_checked().script_pubkey();
 
         loop {
             let progress = self.check_outputs().await?;
-            join_all(progress.submitted.into_iter().map(|(op, outpoints)| async move {
-                match self.await_final_receive_operation_state(op, outpoints).await {
-                    FinalReceiveOperationState::Success => {},
-                    FinalReceiveOperationState::Failure(reason) => {
-                        warn!(target: LOG_CLIENT_MODULE_WALLETV2, operation_id = %op.fmt_full(), %reason, "Failed to claim peg-in");
-                    }
-                }
-            }))
-            .await;
+
+            if let Some((operation_id, outpoints, _)) = progress
+                .submitted
+                .into_iter()
+                .find(|(_, _, script)| script == &target_script)
+            {
+                return Ok(self
+                    .await_final_receive_operation_state(operation_id, outpoints)
+                    .await);
+            }
 
             if !progress.more_outputs {
-                break;
+                sleep(fedimint_walletv2_common::sleep_duration()).await;
             }
         }
-
-        Ok(())
     }
 
     pub fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -627,7 +633,7 @@ impl WalletClientModule {
         let returned_num = outputs.len();
         let mut matched_num: usize = 0;
 
-        let mut submitted: Vec<(OperationId, Vec<OutPoint>)> = Vec::new();
+        let mut submitted: Vec<(OperationId, Vec<OutPoint>, ScriptBuf)> = Vec::new();
         for output in &outputs {
             if let Some(&address_index) = address_map.get(&output.script) {
                 matched_num += 1;
@@ -679,7 +685,11 @@ impl WalletClientModule {
                             .await
                             .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
 
-                        submitted.push((operation_id, range.into_iter().collect()));
+                        submitted.push((
+                            operation_id,
+                            range.into_iter().collect(),
+                            output.script.clone(),
+                        ));
                     }
                 }
             }
