@@ -218,8 +218,10 @@ impl Client {
             .unwrap())
     }
 
-    pub async fn scan_walletv2_outputs(&self) -> anyhow::Result<()> {
-        cmd!(self, "module", "walletv2", "scan-outputs").run().await
+    pub async fn await_walletv2_peg_in(&self, address: &str) -> anyhow::Result<()> {
+        cmd!(self, "module", "walletv2", "await-peg-in", address)
+            .run()
+            .await
     }
 
     pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
@@ -678,7 +680,11 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_client_no_wait(&self, amount: u64, client: &Client) -> Result<String> {
+    pub async fn pegin_client_no_wait(
+        &self,
+        amount: u64,
+        client: &Client,
+    ) -> Result<(String, String)> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
@@ -691,18 +697,18 @@ impl Federation {
         let (address, operation_id) = client.get_deposit_addr().await?;
 
         self.bitcoind
-            .send_to(address, amount + deposit_fees)
+            .send_to(address.clone(), amount + deposit_fees)
             .await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        Ok(operation_id)
+        Ok((address, operation_id))
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
-        let operation_id = self.pegin_client_no_wait(amount, client).await?;
+        let (address, operation_id) = self.pegin_client_no_wait(amount, client).await?;
 
         if crate::util::supports_wallet_v2() {
-            client.scan_walletv2_outputs().await?;
+            client.await_walletv2_peg_in(&address).await?;
         } else {
             client.await_deposit(&operation_id).await?;
         }

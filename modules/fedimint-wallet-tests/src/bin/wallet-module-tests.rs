@@ -56,7 +56,7 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .await?;
 
                 info!("Join, but not claim");
-                let operation_id = fed
+                let (_address, operation_id) = fed
                     .pegin_client_no_wait(peg_in_amount_sats, &client)
                     .await?;
 
@@ -94,7 +94,7 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                 cmd!(client, "backup").run().await?;
 
                 info!("Join more, but not claim");
-                let operation_id = fed
+                let (_address, operation_id) = fed
                     .pegin_client_no_wait(peg_in_amount_sats, &client)
                     .await?;
 
@@ -140,7 +140,7 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                 .await
                 .expect("timeouted waiting for session to close");
 
-                let operation_id = fed
+                let (_address, operation_id) = fed
                     .pegin_client_no_wait(peg_in_amount_sats, &client)
                     .await?;
 
