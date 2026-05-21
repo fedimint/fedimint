@@ -520,7 +520,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
-        use_taproot: Option<bool>,
         auth: ApiAuth,
     ) -> FederationResult<String>;
 

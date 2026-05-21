@@ -180,10 +180,10 @@ function walletv2_module() {
 }
 export -f walletv2_module
 
-function walletv2_module_taproot() {
-  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh --taproot
+function walletv2_module_frost() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh --descriptor frost
 }
-export -f walletv2_module_taproot
+export -f walletv2_module_frost
 
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
@@ -478,7 +478,7 @@ tests_to_run_in_parallel+=(
   "lnv2_module_lnurl_recovery"
   "lnv1_lnv2_swap"
   "walletv2_module"
-  "walletv2_module_taproot"
+  "walletv2_module_frost"
   "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"

@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
+use fedimint_walletv2_common::taproot::{descriptor_tr, descriptor_tr_single_peer, nums_point};
 
 mod api;
 #[cfg(feature = "cli")]
@@ -51,7 +52,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::{WalletClientConfig, WalletDescriptor};
 use fedimint_walletv2_common::{
     KIND, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes,
-    WalletOutput, WalletOutputV0, descriptor, descriptor_tr, is_potential_receive,
+    WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -455,7 +456,13 @@ impl WalletClientModule {
                 descriptor(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
             }
             WalletDescriptor::Tr => {
-                descriptor_tr(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
+                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, nums_point()).address(self.cfg.network)
+            }
+            WalletDescriptor::SinglePeer(peer_xonly) => {
+                descriptor_tr_single_peer(peer_xonly, &tweak).address(self.cfg.network)
+            }
+            WalletDescriptor::Frost(internal_key) => {
+                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, internal_key).address(self.cfg.network)
             }
         }
     }
