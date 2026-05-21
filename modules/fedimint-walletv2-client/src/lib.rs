@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
+use futures::future::join_all;
 
 mod api;
 #[cfg(feature = "cli")]
@@ -16,7 +17,6 @@ mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use api::WalletFederationApi;
@@ -45,7 +45,7 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, block_in_place, sleep};
-use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
@@ -95,6 +95,18 @@ pub enum FinalSendOperationState {
     Aborted,
     /// A programming error has occurred or the federation is malicious.
     Failure,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FinalReceiveOperationState {
+    Success,
+    Failure(String),
+}
+
+#[derive(Debug, Clone)]
+struct CheckOutputsProgress {
+    submitted: Vec<(OperationId, Vec<OutPoint>)>,
+    more_outputs: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -192,8 +204,6 @@ impl ClientModuleInit for WalletClientInit {
             db: args.db().clone(),
             module_api: args.module_api().clone(),
         };
-
-        module.spawn_output_scanner(args.task_group(), args.client_span());
 
         Ok(module)
     }
@@ -370,24 +380,53 @@ impl WalletClientModule {
         }
     }
 
-    /// Returns the next unused receive address, polling until the initial
-    /// address derivation has completed.
-    pub async fn receive(&self) -> Address {
-        loop {
-            if let Some(entry) = self
-                .db
-                .begin_transaction_nc()
-                .await
-                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-            {
-                return self.derive_address(entry.0.0);
-            }
+    pub async fn await_final_receive_operation_state(
+        &self,
+        operation_id: OperationId,
+        outputs: Vec<OutPoint>,
+    ) -> FinalReceiveOperationState {
+        let mut stream = self.notifier.subscribe(operation_id).await;
 
-            sleep(Duration::from_secs(1)).await;
+        loop {
+            let Some(WalletClientStateMachines::Receive(state)) = stream.next().await else {
+                continue;
+            };
+
+            match state.state {
+                ReceiveSMState::Funding => {}
+                ReceiveSMState::Success => {
+                    match self
+                        .client_ctx
+                        .await_primary_module_outputs(operation_id, outputs)
+                        .await
+                    {
+                        Ok(_) => return FinalReceiveOperationState::Success,
+                        Err(err) => return FinalReceiveOperationState::Failure(err.to_string()),
+                    }
+                }
+                ReceiveSMState::Aborted(reason) => {
+                    return FinalReceiveOperationState::Failure(reason);
+                }
+            }
         }
+    }
+
+    /// Returns the next unused receive address or an error if `scan_outputs`
+    /// has not been called yet to grind for a new valid index.
+    pub async fn receive(&self) -> anyhow::Result<Address> {
+        if let Some(entry) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+        {
+            return Ok(self.derive_address(entry.0.0));
+        }
+
+        Err(anyhow!("No valid index, please scan_outputs first"))
     }
 
     fn derive_address(&self, index: u64) -> Address {
@@ -423,7 +462,7 @@ impl WalletClientModule {
         value: bitcoin::Amount,
         address_index: u64,
         fee: bitcoin::Amount,
-    ) -> (OperationId, TransactionId) {
+    ) -> (OperationId, OutPointRange) {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -488,10 +527,47 @@ impl WalletClientModule {
 
         dbtx.commit_tx().await;
 
-        (operation_id, range.txid())
+        (operation_id, range)
     }
 
-    fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
+    pub async fn scan_outputs(&self) -> anyhow::Result<()> {
+        // In order for WalletV2 to receive, one valid index needs to be found
+        let mut dbtx = self.db.begin_transaction().await;
+
+        if dbtx
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+            .is_none()
+        {
+            dbtx.insert_new_entry(&ValidAddressIndexKey(self.next_valid_index(0)), &())
+                .await;
+        }
+
+        dbtx.commit_tx().await;
+
+        loop {
+            let progress = self.check_outputs().await?;
+            join_all(progress.submitted.into_iter().map(|(op, outpoints)| async move {
+                match self.await_final_receive_operation_state(op, outpoints).await {
+                    FinalReceiveOperationState::Success => {},
+                    FinalReceiveOperationState::Failure(reason) => {
+                        warn!(target: LOG_CLIENT_MODULE_WALLETV2, operation_id = %op.fmt_full(), %reason, "Failed to claim peg-in");
+                    }
+                }
+            }))
+            .await;
+
+            if !progress.more_outputs {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
@@ -512,8 +588,8 @@ impl WalletClientModule {
 
             loop {
                 match module.check_outputs().await {
-                    Ok(skip_wait) => {
-                        if skip_wait {
+                    Ok(progress) => {
+                        if progress.more_outputs {
                             continue;
                         }
                     }
@@ -527,7 +603,7 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self) -> anyhow::Result<bool> {
+    async fn check_outputs(&self) -> anyhow::Result<CheckOutputsProgress> {
         let mut dbtx = self.db.begin_transaction_nc().await;
 
         let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
@@ -552,6 +628,7 @@ impl WalletClientModule {
         let returned_num = outputs.len();
         let mut matched_num: usize = 0;
 
+        let mut submitted: Vec<(OperationId, Vec<OutPoint>)> = Vec::new();
         for output in &outputs {
             if let Some(&address_index) = address_map.get(&output.script) {
                 matched_num += 1;
@@ -579,7 +656,10 @@ impl WalletClientModule {
                     // In order to not overpay on fees we choose to wait,
                     // the congestion will clear up within a few blocks.
                     if self.module_api.pending_tx_chain().await?.len() >= 3 {
-                        return Ok(false);
+                        return Ok(CheckOutputsProgress {
+                            submitted,
+                            more_outputs: false,
+                        });
                     }
 
                     let receive_fee = self
@@ -589,16 +669,18 @@ impl WalletClientModule {
                         .ok_or(anyhow!("No consensus feerate is available"))?;
 
                     if output.value > receive_fee {
-                        let (operation_id, txid) = self
+                        let (operation_id, range) = self
                             .receive_output(output.index, output.value, address_index, receive_fee)
                             .await;
 
                         self.client_ctx
                             .transaction_updates(operation_id)
                             .await
-                            .await_tx_accepted(txid)
+                            .await_tx_accepted(range.txid())
                             .await
                             .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+
+                        submitted.push((operation_id, range.into_iter().collect()));
                     }
                 }
             }
@@ -620,7 +702,10 @@ impl WalletClientModule {
             "Scanning for outputs"
         );
 
-        Ok(!outputs.is_empty())
+        Ok(CheckOutputsProgress {
+            submitted,
+            more_outputs: !outputs.is_empty(),
+        })
     }
 }
 

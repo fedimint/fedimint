@@ -76,19 +76,10 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
     Ok(())
 }
 
-async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
-    loop {
-        cmd!(client, "dev", "wait", "3").out_json().await?;
-
-        let balance = client.balance().await?;
-
-        // Client balance is in msats, min_balance is in sats
-        if balance >= min_balance * 1000 {
-            return Ok(());
-        }
-
-        info!("Waiting for client balance {balance} to reach {min_balance}");
-    }
+async fn await_scan_outputs(client: &Client) -> anyhow::Result<()> {
+    cmd!(client, "module", "walletv2", "scan-outputs")
+        .run()
+        .await
 }
 
 async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
@@ -191,6 +182,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Deposit funds into the federation...");
 
+            await_scan_outputs(&client).await?;
             let federation_address_1 = get_deposit_address(&client).await?;
 
             fed.bitcoind
@@ -203,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 290_000).await?;
+            await_scan_outputs(&client).await?;
 
             ensure_federation_total_value(&client, 290_000).await?;
 
@@ -221,7 +213,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 980_000).await?;
+            await_scan_outputs(&client).await?;
 
             ensure_federation_total_value(&client, 980_000).await?;
 
@@ -313,7 +305,7 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_client_balance(&client_two, 99_000).await?;
+            await_scan_outputs(&client).await?;
 
             await_no_pending_txs(&client).await?;
 

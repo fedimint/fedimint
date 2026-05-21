@@ -24,6 +24,8 @@ enum Opts {
     },
     /// Return the next unused receive address.
     Receive,
+    /// Scan the federation's outputs for peg-ins
+    ScanOutputs,
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -64,7 +66,8 @@ pub(crate) async fn handle_cli_command(
                 .await_final_send_operation_state(wallet.send(address, value, fee).await?)
                 .await,
         ),
-        Opts::Receive => json(wallet.receive().await),
+        Opts::Receive => json(wallet.receive().await?),
+        Opts::ScanOutputs => json(wallet.scan_outputs().await?),
     };
 
     Ok(value)

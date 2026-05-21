@@ -345,7 +345,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             dev_fed
                                 .internal_client()
                                 .await?
-                                .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
+                                .scan_walletv2_outputs()
                                 .await?;
                         } else {
                             dev_fed
