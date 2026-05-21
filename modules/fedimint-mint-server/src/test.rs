@@ -4,6 +4,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
 use fedimint_mint_common::{BlindNonce, MintInput, MintOutput, Nonce, Note};
@@ -20,7 +21,7 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
     let args = ConfigGenModuleArgs {
         network: bitcoin::Network::Regtest,
         disable_base_fees: false,
-        use_taproot: false,
+        descriptor_kind: WalletDescriptorKind::default(),
     };
     let mint_cfg = MintInit.trusted_dealer_gen(&peers, &args);
     let client_cfg = ClientModuleConfig::from_typed(
