@@ -19,4 +19,9 @@
 <a href=#19 id=19 data-nosnippet>19</a>
 <a href=#20 id=20 data-nosnippet>20</a><span class="doccomment">/// Environment variable for overriding the iroh secret key
 <a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">pub const </span>FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE"</span>;
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Environment variable that specifies the `time_pref` used in LND
+<a href=#24 id=24 data-nosnippet>24</a>/// `SendPaymentRequest`. Must parse as an f64 in the range [-1.0, 1.0], where
+<a href=#25 id=25 data-nosnippet>25</a>/// -1 optimizes for fees and 1 optimizes for reliability.
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub const </span>FM_LND_TIME_PREF_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_TIME_PREF"</span>;
 </code></pre></div></section></main></body></html>
