@@ -184,7 +184,7 @@ where
                         aria-labelledby="connection-tab" {
 
                         @match &gateway_info.lightning_mode {
-                            LightningMode::Lnd { lnd_rpc_addr, lnd_tls_cert, lnd_macaroon } => {
+                            LightningMode::Lnd { lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, .. } => {
                                 div id="node-type" class="alert alert-info" {
                                     "Node Type: " strong { "External LND" }
                                 }

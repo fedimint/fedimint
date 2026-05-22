@@ -19,3 +19,8 @@ pub const FM_LDK_ALIAS_ENV: &str = "FM_LDK_ALIAS";
 
 /// Environment variable for overriding the iroh secret key
 pub const FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV: &str = "FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE";
+
+/// Environment variable that specifies the `time_pref` used in LND
+/// `SendPaymentRequest`. Must parse as an f64 in the range [-1.0, 1.0], where
+/// -1 optimizes for fees and 1 optimizes for reliability.
+pub const FM_LND_TIME_PREF_ENV: &str = "FM_LND_TIME_PREF";
