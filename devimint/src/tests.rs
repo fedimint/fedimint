@@ -36,7 +36,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
+use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -1202,10 +1202,16 @@ pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
         "Pkarr ID did not propagate correctly"
     );
 
+    // `invite_code` only honors overridden API URLs since 0.12.0-alpha; skip
+    // against older fedimintd in backwards-compatibility tests.
+    if fedimintd_version < *VERSION_0_12_0_ALPHA {
+        info!("Skipping invite_code endpoint assertion: fedimintd < 0.12.0-alpha");
+        return Ok(());
+    }
+
     info!("Checking invite_code endpoint reflects overridden guardian metadata URL...");
-    // Connect directly to peer 0 via its real configured URL — `dev api --peer-id
-    // 0` would resolve through the client's propagated peer-URL map, which now
-    // points at the fake TEST_API_URL and would fail to connect.
+    // Query peer 0 directly: the client's peer-URL map now points at the fake
+    // override URL, so `dev api --peer-id 0` would fail to connect.
     let peer_id = PeerId::from(0);
     let peer0_real_url: SafeUrl = fed
         .vars
