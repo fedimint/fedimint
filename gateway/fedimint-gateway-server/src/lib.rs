@@ -1124,9 +1124,30 @@ impl Gateway {
         };
 
         if is_federation_scid {
+            // The HTLC targeted a federation we serve but we couldn't claim
+            // it (no LNv1 offer / no LNv2 contract / underfunded gateway /
+            // federation timeout / etc.). Surface the underlying error
+            // variants so operators can diagnose the cause; otherwise both
+            // `Err` values are dropped on the floor and the only visible
+            // signal is the metric label `"error"`.
+            warn!(
+                target: LOG_GATEWAY,
+                payment_hash = %payment_request.payment_hash,
+                short_channel_id = ?payment_request.short_channel_id,
+                amount_msat = payment_request.amount_msat,
+                incoming_chan_id = payment_request.incoming_chan_id,
+                htlc_id = payment_request.htlc_id,
+                lnv2_err = ?lnv2_result.as_ref().err(),
+                lnv1_err = ?lnv1_result.as_ref().err(),
+                "Unmatched lightning payment for federation scid: cancelling HTLC",
+            );
             Self::cancel_unmatched_lightning_payment(payment_request, lightning_context).await;
             "cancel"
         } else {
+            // Normal route-through traffic: the gateway's LND interceptor
+            // sees every HTLC, but only federation-scid HTLCs are ours to
+            // handle. Resume so LND forwards the rest as a regular routing
+            // node — no warning needed since this is the expected path.
             Self::forward_lightning_payment(payment_request, lightning_context).await;
             "forward"
         }
