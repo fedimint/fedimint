@@ -187,6 +187,34 @@ fn setup_form_content(
                 #modules-list:has(.form-check-input:not(:checked)) ~ #modules-warning {
                     display: block;
                 }
+
+                .federation-size-radios {
+                    display: flex;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                }
+
+                #testing-warning {
+                    display: none;
+                    width: 100%;
+                }
+
+                .federation-size-info {
+                    display: none;
+                    width: 100%;
+                }
+
+                .federation-size-radios:has(#federation_size_1:checked) #testing-warning {
+                    display: block;
+                }
+                .federation-size-radios:has(#federation_size_4:checked) #size-info-4,
+                .federation-size-radios:has(#federation_size_7:checked) #size-info-7,
+                .federation-size-radios:has(#federation_size_10:checked) #size-info-10,
+                .federation-size-radios:has(#federation_size_13:checked) #size-info-13,
+                .federation-size-radios:has(#federation_size_16:checked) #size-info-16,
+                .federation-size-radios:has(#federation_size_19:checked) #size-info-19 {
+                    display: block;
+                }
                 "#
             }
 
@@ -213,29 +241,40 @@ fn setup_form_content(
                     input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation Name";
 
                     div class="form-group mt-3" {
-                        label class="form-label" for="federation_size" {
+                        label class="form-label" {
                             "Total number of guardians (including you)"
                         }
-                        select class="form-select" id="federation_size" name="federation_size" {
-                            option value="" selected disabled { "Federation Size" }
-                            option value="1" { "1 — Testing" }
-                            option value="4" { "4 — Recommended" }
-                            option value="5" { "5" }
-                            option value="6" { "6" }
-                            option value="7" { "7 — Recommended" }
-                            option value="8" { "8" }
-                            option value="9" { "9" }
-                            option value="10" { "10 — Recommended" }
-                            option value="11" { "11" }
-                            option value="12" { "12" }
-                            option value="13" { "13 — Recommended" }
-                            option value="14" { "14" }
-                            option value="15" { "15" }
-                            option value="16" { "16 — Recommended" }
-                            option value="17" { "17" }
-                            option value="18" { "18" }
-                            option value="19" { "19 — Recommended" }
-                            option value="20" { "20" }
+                        div class="federation-size-radios" {
+                            @for &(value, label) in &[
+                                ("1", "1"),
+                                ("4", "4"),
+                                ("7", "7"),
+                                ("10", "10"),
+                                ("13", "13"),
+                                ("16", "16"),
+                                ("19", "19"),
+                            ] {
+                                div class="form-check" {
+                                    input type="radio" class="form-check-input"
+                                        id=(format!("federation_size_{value}"))
+                                        name="federation_size"
+                                        value=(value);
+                                    label class="form-check-label" for=(format!("federation_size_{value}")) {
+                                        (label)
+                                    }
+                                }
+                            }
+                            div id="testing-warning" class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
+                                "A single guardian setup is only suitable for testing purposes and should not be used in production."
+                            }
+                            @for &(value, tolerance) in &[
+                                ("4", "1"), ("7", "2"), ("10", "3"),
+                                ("13", "4"), ("16", "5"), ("19", "6"),
+                            ] {
+                                div id=(format!("size-info-{value}")) class="federation-size-info alert alert-info mt-2" style="font-size: 0.875rem;" {
+                                    (format!("The federation can tolerate up to {tolerance} guardian(s) going offline and still remain operational."))
+                                }
+                            }
                         }
                     }
 
