@@ -99,6 +99,19 @@ impl Event for ReceivePaymentEvent {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
+/// Recovery finished restoring spendable notes; they are queued for consensus reissue.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryReissuancePending {
+    pub amount: Amount,
+    pub chunk_count: u32,
+}
+
+impl Event for RecoveryReissuancePending {
+    const MODULE: Option<ModuleKind> = Some(KIND);
+    const KIND: EventKind = EventKind::from_static("recovery-reissuance-pending");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
+
 /// Status of a receive (reissuance) operation.
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum ReceivePaymentStatus {

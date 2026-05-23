@@ -1,6 +1,6 @@
-use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::Amount;
 
 use crate::SpendableNote;
 

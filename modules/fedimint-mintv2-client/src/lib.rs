@@ -25,7 +25,7 @@ use std::convert::Infallible;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::{anyhow, Context as _};
 use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
 pub use events::*;
@@ -44,7 +44,7 @@ use fedimint_client_module::module::{
     ClientContext, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
 };
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -53,16 +53,16 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::secp256k1::rand::{Rng, thread_rng};
+use fedimint_core::secp256k1::rand::{thread_rng, Rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::util::{BoxStream, NextOrPending};
-use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
+use fedimint_mintv2_common::config::{client_denominations, FeeConsensus, MintClientConfig};
 use fedimint_mintv2_common::{
-    Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
+    Denomination, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem, KIND,
 };
-use futures::{StreamExt, pin_mut};
+use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
 use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
@@ -297,17 +297,15 @@ impl ClientModuleInit for MintClientInit {
 
         let filter = issuance::tweak_filter(args.module_root_secret());
 
-        tokio::task::spawn_blocking(move || {
-            loop {
-                let tweak: [u8; 16] = thread_rng().r#gen();
+        tokio::task::spawn_blocking(move || loop {
+            let tweak: [u8; 16] = thread_rng().r#gen();
 
-                if !issuance::check_tweak(tweak, filter) {
-                    continue;
-                }
+            if !issuance::check_tweak(tweak, filter) {
+                continue;
+            }
 
-                if tweak_sender.send_blocking(tweak).is_err() {
-                    return;
-                }
+            if tweak_sender.send_blocking(tweak).is_err() {
+                return;
             }
         });
 
@@ -531,7 +529,7 @@ impl MintClientModule {
             let notes_amount = dbtx
                 .find_by_prefix(&SpendableNoteAmountPrefix(amount))
                 .await
-                .map(|entry| entry.0.0)
+                .map(|entry| entry.0 .0)
                 .collect::<Vec<SpendableNote>>()
                 .await;
 
@@ -588,7 +586,7 @@ impl MintClientModule {
         let mut notes = dbtx
             .find_by_prefix_sorted_descending(&SpendableNotePrefix)
             .await
-            .map(|entry| entry.0.0)
+            .map(|entry| entry.0 .0)
             .fuse();
 
         let mut input_notes = Vec::new();
@@ -748,7 +746,7 @@ impl MintClientModule {
         dbtx.find_by_prefix(&SpendableNotePrefix)
             .await
             .fold(BTreeMap::new(), |mut acc, entry| async move {
-                acc.entry(entry.0.0.denomination)
+                acc.entry(entry.0 .0.denomination)
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
 
@@ -829,7 +827,7 @@ impl MintClientModule {
         let mut stream = dbtx
             .find_by_prefix_sorted_descending(&SpendableNotePrefix)
             .await
-            .map(|entry| entry.0.0);
+            .map(|entry| entry.0 .0);
 
         let mut notes = vec![];
 
