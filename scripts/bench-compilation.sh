@@ -45,7 +45,51 @@ fi
 time_pipe_path="$CARGO_BUILD_TARGET_DIR/time.out"
 time_fmt='%e\t%U\t%S'
 
-echo -e "                       total    user     sys"
+bin_path() {
+  local profile=$1
+  local bin=$2
+  local target_profile=$profile
+
+  if [ "$target_profile" = "dev" ]; then
+    target_profile="debug"
+  fi
+
+  echo "$CARGO_BUILD_TARGET_DIR/$target_profile/$bin"
+}
+
+bin_size() {
+  local profile=$1
+  local bin=$2
+  local path
+
+  path=$(bin_path "$profile" "$bin")
+
+  if [ -f "$path" ]; then
+    stat --printf=%s "$path"
+  else
+    echo "-"
+  fi
+}
+
+print_result() {
+  local command=$1
+  local profile=$2
+  local fedimintd_size=-
+  local fedimint_cli_size=-
+
+  if [ "$command" = "build" ]; then
+    fedimintd_size=$(bin_size "$profile" fedimintd)
+    fedimint_cli_size=$(bin_size "$profile" fedimint-cli)
+  fi
+
+  awk \
+    -v fedimintd_size="$fedimintd_size" \
+    -v fedimint_cli_size="$fedimint_cli_size" \
+    'BEGIN {FS="\t"} {printf "%8.2f%8.2f%8.2f%12s%16s\n", $1, $2, $3, fedimintd_size, fedimint_cli_size}' \
+    < "$time_pipe_path"
+}
+
+echo -e "                       total    user     sys   fedimintd    fedimint-cli"
 for profile in dev release ; do
   for command in check build ; do
 
@@ -71,14 +115,14 @@ for profile in dev release ; do
       printf "Full %6s %7s:" "$command" "$profile_human"
       command time --format="$time_fmt" -o "$time_pipe_path" -- \
         cargo $command --profile $profile -q  1>"$cmd_out_path" 2>&1
-      awk 'BEGIN {FS="\t"} {printf "%8.2f%8.2f%8.2f\n", $1, $2, $3}' < "$time_pipe_path"
+      print_result "$command" "$profile"
     fi
 
     printf "Incr %6s %7s:" "$command" "$profile_human"
     find "${BENCH_COMP_TOUCH_DIR:-fedimint-core}" -type f -exec touch {} +
     command time --format="$time_fmt" -o "$time_pipe_path" -- \
       cargo $command --profile $profile -q 1>"$cmd_out_path" 2>&1
-    awk 'BEGIN {FS="\t"} {printf "%8.2f%8.2f%8.2f\n", $1, $2, $3}' < "$time_pipe_path"
+    print_result "$command" "$profile"
 
   done
 done
