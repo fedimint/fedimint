@@ -4901,6 +4901,7 @@ name = "fedimint-walletv2-client"
 version = "0.12.0-alpha"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bitcoin",
  "clap",
