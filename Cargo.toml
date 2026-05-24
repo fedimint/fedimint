@@ -59,7 +59,10 @@ members = [
     "modules/fedimint-dummy-server",
     "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
-    "modules/fedimint-empty-server",
+    "modules/fedimint-empty-server", 
+    "modules/fedimint-escrow-client", 
+    "modules/fedimint-escrow-common", 
+    "modules/fedimint-escrow-server",
     "modules/fedimint-gw-client",
     "modules/fedimint-gwv2-client",
     "modules/fedimint-ln-client",
@@ -219,6 +222,9 @@ fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.
 fedimint-mintv2-client = { path = "./modules/fedimint-mintv2-client", version = "=0.14.0-alpha" }
 fedimint-mintv2-common = { path = "./modules/fedimint-mintv2-common", version = "=0.14.0-alpha" }
 fedimint-mintv2-server = { path = "./modules/fedimint-mintv2-server", version = "=0.14.0-alpha" }
+fedimint-escrow-common = { path = "./modules/fedimint-escrow-common", version = "=0.14.0-alpha" }
+fedimint-escrow-server = { path = "./modules/fedimint-escrow-server", version = "=0.14.0-alpha" }
+fedimint-escrow-client = { path = "./modules/fedimint-escrow-client", version = "=0.14.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.14.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.14.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.14.0-alpha" }

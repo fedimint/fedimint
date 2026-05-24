@@ -1,0 +1,32 @@
+[package]
+name = "fedimint-escrow-client"
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+fedimint-core = { workspace = true }
+fedimint-escrow-common = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+erased-serde = { workspace = true }
+strum_macros = { workspace = true }
+async-stream = { workspace = true }
+fedimint-server-core = { workspace = true }
+fedimint-client-module = { workspace = true }
+fedimint-api-client = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+rand = { workspace = true }
+
+[lints]
+workspace = true
