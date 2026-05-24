@@ -4,9 +4,7 @@
       url = "github:nixos/nixpkgs/nixos-25.11";
     };
     nixpkgs-unstable = {
-      # temporary https://github.com/NixOS/nixpkgs/pull/459738
-      # url = "github:nixos/nixpkgs/nixos-unstable";
-      url = "github:nixos/nixpkgs?rev=d157ecd9b559c9103c4d69904277c37e062344bf";
+      url = "github:nixos/nixpkgs/nixos-unstable";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -15,13 +13,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=d4f37f5d9508b85cd020e3f7d3aa966725457a61";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:dpc/flakebox?rev=34701639bceb5b12e81e2fff913797c0891c919d";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
       inputs.fenix.follows = "fenix";
     };
     wild = {
-      url = "github:davidlattimore/wild";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:davidlattimore/wild/0.9.0";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
     cargo-deluxe = {
       url = "github:rustshop/cargo-deluxe?rev=3e9bb6051a6461dd841d5e415de9c3f315c3be81";
@@ -84,12 +82,22 @@
           inherit system;
           overlays = [
             overlayAll
-            (import inputs.wild)
 
-            (final: prev: {
-              cargo-deluxe = cargo-deluxe.packages.${system}.default;
-              cargo-audit = nixpkgs-unstable.legacyPackages.${system}.cargo-audit;
-            })
+            (
+              final: prev:
+              let
+                unstableWildPkgs = import nixpkgs-unstable {
+                  inherit system;
+                  overlays = [ (import inputs.wild) ];
+                };
+              in
+              {
+                inherit (unstableWildPkgs) wild wild-unwrapped;
+
+                cargo-deluxe = cargo-deluxe.packages.${system}.default;
+                cargo-audit = nixpkgs-unstable.legacyPackages.${system}.cargo-audit;
+              }
+            )
           ];
         };
 
@@ -104,7 +112,7 @@
             github.ci = {
               workflows.flakebox-flakehub-publish.enable = false;
             };
-            linker.wild.enable = false;
+            linker.wild.enable = true;
 
             toolchain.channel = "stable";
 

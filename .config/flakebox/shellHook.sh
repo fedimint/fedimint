@@ -34,4 +34,6 @@ if ! flakebox lint --silent; then
   >&2 echo "ℹ️  Project recommendations detected. Run 'flakebox lint' for more info."
 fi
 
->&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipes"
+if [[ "$-" == *i* ]] && [[ -t 2 ]]; then
+  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipes"
+fi
