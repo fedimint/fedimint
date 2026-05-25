@@ -203,6 +203,62 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn duplicate_blind_nonce_index() -> anyhow::Result<()> {
+    // Give client initial balance
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, sats(1000)).await?;
+
+    // Issue e-cash and duplicate the output bundle to test the duplicate blind nonce panic fix
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let operation_id = OperationId::new_random();
+    let issuance_req = client_mint
+        .create_output(&mut dbtx.to_ref_nc(), operation_id, 1, Amount::from_sats(1))
+        .await;
+    dbtx.commit_tx().await;
+
+    let blind_nonce = issuance_req
+        .outputs()
+        .first()
+        .expect("There should be at least one note in here")
+        .output
+        .ensure_v0_ref()?
+        .blind_nonce;
+
+    assert!(
+        !client_mint.api.check_blind_nonce_used(blind_nonce).await?,
+        "Blind nonce should not be used yet"
+    );
+
+    // Create a duplicate output bundle without state machines to avoid client-side state machine duplicate panic
+    let duplicate_bundle = fedimint_client_module::transaction::ClientOutputBundle::new_no_sm(issuance_req.outputs().to_vec());
+
+    let tx = TransactionBuilder::new()
+        .with_outputs(client_mint.client_ctx.make_dyn(issuance_req))
+        .with_outputs(client_mint.client_ctx.make_dyn(duplicate_bundle));
+
+    let change_range = client_mint
+        .client_ctx
+        .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
+        .await?;
+
+    let await_res = client
+        .transaction_updates(operation_id)
+        .await
+        .await_tx_accepted(change_range.txid())
+        .await;
+
+    assert!(
+        await_res.is_err(),
+        "Transaction with duplicate blind nonce index should not be accepted"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 #[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4508
 async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // Give client1 initial balance
