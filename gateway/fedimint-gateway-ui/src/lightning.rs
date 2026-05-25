@@ -14,7 +14,7 @@ use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
     GatewayBalances, GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload,
     ListTransactionsResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload,
-    PaymentStatus, SendOnchainRequest,
+    PaymentStatus, SendOnchainRequest, SetChannelFeesRequest,
 };
 use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::UiState;
@@ -30,8 +30,8 @@ use tracing::debug;
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_RECEIVE_INVOICE_ROUTE,
     DETECT_PAYMENT_TYPE_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE,
-    PAY_UNIFIED_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, TRANSACTIONS_FRAGMENT_ROUTE,
-    WALLET_FRAGMENT_ROUTE,
+    PAY_UNIFIED_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, SET_CHANNEL_FEES_ROUTE,
+    TRANSACTIONS_FRAGMENT_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -1118,6 +1118,14 @@ where
                             tbody {
                                 @for ch in channels {
                                     @let row_id = format!("close-form-{}", ch.remote_pubkey);
+                                    // Keyed by sanitized funding outpoint so multiple channels
+                                    // with the same peer don't collide on a single collapse id.
+                                    @let fees_row_id = ch.funding_outpoint.as_ref().map(|op| {
+                                        let sanitized: String = op.to_string().chars()
+                                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                                            .collect();
+                                        format!("fees-form-{sanitized}")
+                                    });
                                     // precompute safely (no @let inline arithmetic)
                                     @let size = ch.channel_size_sats.max(1);
                                     @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
@@ -1217,7 +1225,7 @@ where
                                             }
                                         }
 
-                                        td style="width: 110px" {
+                                        td style="width: 150px" {
                                             @let open_row_id = format!("open-form-{}", ch.remote_pubkey);
                                             // + button to open another channel with this peer
                                             button class="btn btn-sm btn-outline-primary me-1"
@@ -1227,6 +1235,19 @@ where
                                                 aria-expanded="false"
                                                 aria-controls=(open_row_id)
                                             { "+" }
+                                            // $ button toggles the fee-edit form (only when we
+                                            // know the funding outpoint, which is required to
+                                            // address the channel on the backend).
+                                            @if let Some(fees_row_id) = &fees_row_id {
+                                                button class="btn btn-sm btn-outline-secondary me-1"
+                                                    type="button"
+                                                    title="Edit routing fees"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target=(format!("#{fees_row_id}"))
+                                                    aria-expanded="false"
+                                                    aria-controls=(fees_row_id)
+                                                { "$" }
+                                            }
                                             // X button toggles a per-row collapse
                                             button class="btn btn-sm btn-outline-danger"
                                                 type="button"
@@ -1235,6 +1256,54 @@ where
                                                 aria-expanded="false"
                                                 aria-controls=(row_id)
                                             { "X" }
+                                        }
+                                    }
+
+                                    // Collapsible edit-fees form (only rendered when funding
+                                    // outpoint is known, so we have a stable channel identifier).
+                                    @if let (Some(funding_outpoint), Some(fees_row_id)) = (ch.funding_outpoint, &fees_row_id) {
+                                        tr class="collapse" id=(fees_row_id) {
+                                            td colspan="10" {
+                                                div class="card card-body" {
+                                                    form
+                                                        hx-post=(SET_CHANNEL_FEES_ROUTE)
+                                                        hx-target="#channels-container"
+                                                        hx-swap="outerHTML"
+                                                    {
+                                                        h6 class="card-title" {
+                                                            "Update Routing Fees"
+                                                        }
+
+                                                        input type="hidden"
+                                                            name="funding_outpoint"
+                                                            value=(funding_outpoint.to_string()) {}
+
+                                                        div class="mb-2" {
+                                                            label class="form-label" { "Base Fee (msat)" }
+                                                            input type="number"
+                                                                name="base_fee_msat"
+                                                                class="form-control"
+                                                                min="0"
+                                                                required
+                                                                value=(ch.base_fee_msat.unwrap_or(0)) {}
+                                                        }
+
+                                                        div class="mb-2" {
+                                                            label class="form-label" { "Fee Rate (ppm)" }
+                                                            input type="number"
+                                                                name="parts_per_million"
+                                                                class="form-control"
+                                                                min="0"
+                                                                required
+                                                                value=(ch.parts_per_million.unwrap_or(0)) {}
+                                                        }
+
+                                                        button type="submit" class="btn btn-success btn-sm" {
+                                                            "Save Fees"
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 
@@ -1492,6 +1561,33 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
             let markup = channels_fragment_markup(
                 channels_result,
                 Some("Successfully initiated channel close".to_string()),
+                None,
+                is_lnd,
+            );
+            Html(markup.into_string())
+        }
+        Err(err) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup =
+                channels_fragment_markup(channels_result, None, Some(err.to_string()), is_lnd);
+            Html(markup.into_string())
+        }
+    }
+}
+
+pub async fn set_channel_fees_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<SetChannelFeesRequest>,
+) -> Html<String> {
+    let is_lnd = matches!(state.api.lightning_mode(), LightningMode::Lnd { .. });
+    let outpoint = payload.funding_outpoint;
+    match state.api.handle_set_channel_fees_msg(payload).await {
+        Ok(()) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(
+                channels_result,
+                Some(format!("Updated routing fees on channel {outpoint}")),
                 None,
                 is_lnd,
             );

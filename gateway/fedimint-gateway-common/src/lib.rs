@@ -51,6 +51,7 @@ pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
 pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
+pub const SET_CHANNEL_FEES_ENDPOINT: &str = "/set_channel_fees";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
@@ -365,6 +366,17 @@ pub struct OpenChannelRequest {
     /// channel. If `None`, the backend's default policy is used.
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub parts_per_million: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetChannelFeesRequest {
+    /// Funding outpoint identifying the channel whose advertised routing fees
+    /// should be updated.
+    pub funding_outpoint: OutPoint,
+    /// New base routing fee in millisatoshis.
+    pub base_fee_msat: u64,
+    /// New proportional routing fee in parts per million.
+    pub parts_per_million: u64,
 }
 
 /// Helper for serde: deserializes missing values and empty form strings as

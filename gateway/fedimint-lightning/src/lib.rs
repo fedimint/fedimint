@@ -19,7 +19,7 @@ use fedimint_core::util::{FmtCompactResult as _, backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
     GetInvoiceResponse, LightningInfo, ListTransactionsResponse, OpenChannelRequest,
-    SendOnchainRequest,
+    SendOnchainRequest, SetChannelFeesRequest,
 };
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
@@ -56,6 +56,8 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to close channel: {failure_reason}")]
     FailedToCloseChannelsWithPeer { failure_reason: String },
+    #[error("Failed to set channel fees: {failure_reason}")]
+    FailedToSetChannelFees { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
     #[error("Failed to list transactions: {failure_reason}")]
@@ -219,6 +221,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 
     /// Lists the lightning node's active channels with all peers.
     async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError>;
+
+    /// Updates the local-side routing fee policy (base fee in msat and
+    /// proportional fee in parts-per-million) advertised on a single channel
+    /// identified by its funding outpoint.
+    async fn set_channel_fees(
+        &self,
+        payload: SetChannelFeesRequest,
+    ) -> Result<(), LightningRpcError>;
 
     /// Returns a summary of the lightning node's balance, including the onchain
     /// wallet, outbound liquidity, and inbound liquidity.
@@ -604,6 +614,17 @@ impl ILnRpcClient for LnRpcTracked {
 
     async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError> {
         tracked_call!(self, "list_channels", self.inner.list_channels().await)
+    }
+
+    async fn set_channel_fees(
+        &self,
+        payload: SetChannelFeesRequest,
+    ) -> Result<(), LightningRpcError> {
+        tracked_call!(
+            self,
+            "set_channel_fees",
+            self.inner.set_channel_fees(payload).await
+        )
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {

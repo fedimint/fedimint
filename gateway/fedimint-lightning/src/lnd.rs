@@ -32,11 +32,12 @@ use tonic_lnd::lnrpc::channel_point::FundingTxid;
 use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
+use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
     FeeReportRequest, GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress,
     ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
-    OpenChannelRequest, SendCoinsRequest, WalletBalanceRequest,
+    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -57,6 +58,7 @@ use crate::{
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
     PayInvoiceResponse, PaymentAction, SendOnchainRequest, SendOnchainResponse,
+    SetChannelFeesRequest,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -1453,6 +1455,155 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to list active channels {e:?}"),
             }),
         }
+    }
+
+    async fn set_channel_fees(
+        &self,
+        payload: SetChannelFeesRequest,
+    ) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        // LND's `PolicyUpdateRequest` applies every field it receives, so we
+        // need the channel's current `time_lock_delta` (and htlc min/max) to
+        // avoid clobbering them when only base + ppm are being changed. To
+        // look those up we first resolve the funding outpoint to LND's
+        // numeric `chan_id`, then call `get_chan_info`.
+        let target = format!(
+            "{}:{}",
+            payload.funding_outpoint.txid, payload.funding_outpoint.vout
+        );
+        let channel = client
+            .lightning()
+            .list_channels(ListChannelsRequest::default())
+            .await
+            .map_err(|e| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("Failed to list channels: {e:?}"),
+            })?
+            .into_inner()
+            .channels
+            .into_iter()
+            .find(|c| c.channel_point == target)
+            .ok_or_else(|| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("No channel found with funding outpoint {target}"),
+            })?;
+
+        let our_pubkey = client
+            .lightning()
+            .get_info(GetInfoRequest {})
+            .await
+            .map_err(|e| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("Failed to get node info: {e:?}"),
+            })?
+            .into_inner()
+            .identity_pubkey;
+
+        let edge = client
+            .lightning()
+            .get_chan_info(ChanInfoRequest {
+                chan_id: channel.chan_id,
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("Failed to get channel info: {e:?}"),
+            })?
+            .into_inner();
+
+        // Pick the policy advertised by our node (the local side); fall back
+        // to node1_policy when neither pubkey matches, which only happens if
+        // the gossip data has not propagated yet.
+        let current_policy = if edge.node1_pub == our_pubkey {
+            edge.node1_policy
+        } else if edge.node2_pub == our_pubkey {
+            edge.node2_policy
+        } else {
+            edge.node1_policy
+        };
+
+        let fee_rate_ppm = u32::try_from(payload.parts_per_million).map_err(|_| {
+            LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!(
+                    "parts_per_million {} does not fit in u32",
+                    payload.parts_per_million,
+                ),
+            }
+        })?;
+
+        let base_fee_msat = i64::try_from(payload.base_fee_msat).map_err(|_| {
+            LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!(
+                    "base_fee_msat {} does not fit in i64",
+                    payload.base_fee_msat,
+                ),
+            }
+        })?;
+
+        // Default time_lock_delta of 40 matches LND's CLI default for
+        // `lncli updatechanpolicy` when the channel's existing CLTV is not
+        // discoverable. max_htlc_msat == 0 means "no max" in LND.
+        let time_lock_delta = current_policy
+            .as_ref()
+            .map(|p| p.time_lock_delta)
+            .unwrap_or(40);
+        let max_htlc_msat = current_policy
+            .as_ref()
+            .map(|p| p.max_htlc_msat)
+            .unwrap_or(0);
+        let min_htlc_msat = current_policy
+            .as_ref()
+            .map(|p| p.min_htlc as u64)
+            .unwrap_or(0);
+
+        let chan_point = ChannelPoint {
+            funding_txid: Some(FundingTxid::FundingTxidBytes(
+                <bitcoin::Txid as AsRef<[u8]>>::as_ref(&payload.funding_outpoint.txid).to_vec(),
+            )),
+            output_index: payload.funding_outpoint.vout,
+        };
+
+        let request = PolicyUpdateRequest {
+            base_fee_msat,
+            fee_rate_ppm,
+            time_lock_delta,
+            max_htlc_msat,
+            min_htlc_msat,
+            min_htlc_msat_specified: false,
+            scope: Some(PolicyUpdateScope::ChanPoint(chan_point)),
+            ..Default::default()
+        };
+
+        let response = client
+            .lightning()
+            .update_channel_policy(request)
+            .await
+            .map_err(|e| LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("update_channel_policy failed: {e:?}"),
+            })?
+            .into_inner();
+
+        if !response.failed_updates.is_empty() {
+            let details = response
+                .failed_updates
+                .iter()
+                .map(|f| {
+                    let outpoint = f
+                        .outpoint
+                        .as_ref()
+                        .map(|op| format!("{}:{}", op.txid_str, op.output_index))
+                        .unwrap_or_else(|| "<unknown outpoint>".to_string());
+                    let reason = UpdateFailure::try_from(f.reason)
+                        .map(|r| r.as_str_name())
+                        .unwrap_or("UPDATE_FAILURE_UNKNOWN");
+                    format!("{outpoint}: {reason} ({})", f.update_error)
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(LightningRpcError::FailedToSetChannelFees {
+                failure_reason: format!("update_channel_policy reported failures: {details}"),
+            });
+        }
+
+        Ok(())
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {

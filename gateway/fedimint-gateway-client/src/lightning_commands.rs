@@ -6,11 +6,12 @@ use fedimint_core::Amount;
 use fedimint_gateway_client::{
     close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
     list_transactions, open_channel, open_channel_with_push, pay_invoice, pay_offer,
+    set_channel_fees,
 };
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
     GetInvoiceRequest, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    PayOfferPayload,
+    PayOfferPayload, SetChannelFeesRequest,
 };
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
@@ -82,6 +83,20 @@ pub enum LightningCommands {
     },
     /// List channels.
     ListChannels,
+    /// Update the local-side routing fees advertised on an existing channel.
+    SetChannelFees {
+        /// Funding outpoint of the channel, in `<txid>:<vout>` form
+        #[clap(long)]
+        funding_outpoint: bitcoin::OutPoint,
+
+        /// New base fee in millisatoshis
+        #[clap(long)]
+        base_fee_msat: u64,
+
+        /// New proportional fee in parts per million
+        #[clap(long)]
+        parts_per_million: u64,
+    },
     /// List the Lightning transactions that the Lightning node has received and
     /// sent
     ListTransactions {
@@ -206,6 +221,23 @@ impl LightningCommands {
             Self::ListChannels => {
                 let response = list_channels(client, base_url).await?;
                 Ok(CliOutput::Channels(response))
+            }
+            Self::SetChannelFees {
+                funding_outpoint,
+                base_fee_msat,
+                parts_per_million,
+            } => {
+                set_channel_fees(
+                    client,
+                    base_url,
+                    SetChannelFeesRequest {
+                        funding_outpoint,
+                        base_fee_msat,
+                        parts_per_million,
+                    },
+                )
+                .await?;
+                Ok(CliOutput::Empty)
             }
             Self::GetInvoice { payment_hash } => {
                 let response =

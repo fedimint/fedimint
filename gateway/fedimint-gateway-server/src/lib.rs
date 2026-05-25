@@ -81,9 +81,9 @@ use fedimint_gateway_common::{
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
-    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
-    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
+    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
+    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
+    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -2327,6 +2327,21 @@ impl IAdminGateway for Gateway {
             .await?;
         info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
         Ok(response)
+    }
+
+    /// Updates the local-side routing fees (base + ppm) on a single channel
+    /// identified by funding outpoint.
+    async fn handle_set_channel_fees_msg(&self, payload: SetChannelFeesRequest) -> AdminResult<()> {
+        info!(
+            target: LOG_GATEWAY,
+            funding_outpoint = %payload.funding_outpoint,
+            base_fee_msat = payload.base_fee_msat,
+            parts_per_million = payload.parts_per_million,
+            "Updating channel fees..."
+        );
+        let context = self.get_lightning_context().await?;
+        context.lnrpc.set_channel_fees(payload).await?;
+        Ok(())
     }
 
     /// Returns the ecash, lightning, and onchain balances for the gateway and

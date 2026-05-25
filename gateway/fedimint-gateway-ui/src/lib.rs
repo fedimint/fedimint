@@ -59,8 +59,8 @@ use crate::lightning::{
     channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
     create_receive_invoice_handler, detect_payment_type_handler, generate_receive_address_handler,
     open_channel_handler, pay_bolt11_invoice_handler, pay_unified_handler,
-    payments_fragment_handler, send_onchain_handler, transactions_fragment_handler,
-    wallet_fragment_handler,
+    payments_fragment_handler, send_onchain_handler, set_channel_fees_handler,
+    transactions_fragment_handler, wallet_fragment_handler,
 };
 use crate::mnemonic::{mnemonic_iframe_handler, mnemonic_reveal_handler};
 use crate::payment_summary::payment_log_fragment_handler;
@@ -69,6 +69,7 @@ pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'st
 
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
 pub(crate) const CLOSE_CHANNEL_ROUTE: &str = "/ui/channels/close";
+pub(crate) const SET_CHANNEL_FEES_ROUTE: &str = "/ui/channels/fees";
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
@@ -166,6 +167,11 @@ pub trait IAdminGateway {
         &self,
         payload: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, Self::Error>;
+
+    async fn handle_set_channel_fees_msg(
+        &self,
+        payload: fedimint_gateway_common::SetChannelFeesRequest,
+    ) -> Result<(), Self::Error>;
 
     async fn handle_get_balances_msg(&self) -> Result<GatewayBalances, Self::Error>;
 
@@ -469,6 +475,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(OPEN_CHANNEL_ROUTE, post(open_channel_handler))
         .route(CLOSE_CHANNEL_ROUTE, post(close_channel_handler))
+        .route(SET_CHANNEL_FEES_ROUTE, post(set_channel_fees_handler))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .route(WALLET_FRAGMENT_ROUTE, get(wallet_fragment_handler))
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))

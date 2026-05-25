@@ -23,10 +23,11 @@ use fedimint_gateway_common::{
     PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
     PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
-    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
-    WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
+    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
+    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
+    SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload,
+    WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -233,6 +234,21 @@ pub async fn list_channels(
 ) -> ServerResult<Vec<ChannelInfo>> {
     client
         .request::<(), Vec<ChannelInfo>>(base_url, Method::GET, LIST_CHANNELS_ENDPOINT, None)
+        .await
+}
+
+pub async fn set_channel_fees(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: SetChannelFeesRequest,
+) -> ServerResult<()> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            SET_CHANNEL_FEES_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
