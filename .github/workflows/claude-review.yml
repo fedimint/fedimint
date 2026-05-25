@@ -168,6 +168,8 @@ jobs:
           fi
 
       - name: Build review prompt
+        env:
+          PR_TITLE: ${{ steps.pr.outputs.title }}
         run: |
           IS_CONSENSUS="${{ steps.changed.outputs.consensus }}"
           TRUNCATED="${{ steps.diff.outputs.truncated }}"
@@ -199,11 +201,12 @@ jobs:
           PROMPT_HEADER
 
           # PR metadata
-          cat >> /tmp/review_prompt.txt <<PROMPT_META
+          cat >> /tmp/review_prompt.txt <<'PROMPT_META'
 
-          PR Title: ${{ steps.pr.outputs.title }}
-          Consensus-critical files changed: ${IS_CONSENSUS}
+          PR metadata:
           PROMPT_META
+          printf 'PR Title: %s\n' "$PR_TITLE" >> /tmp/review_prompt.txt
+          printf 'Consensus-critical files changed: %s\n' "$IS_CONSENSUS" >> /tmp/review_prompt.txt
 
           # Conditional instructions
           if [ "$IS_CONSENSUS" = "true" ]; then
