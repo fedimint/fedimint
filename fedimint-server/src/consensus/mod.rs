@@ -75,6 +75,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    code_version_hash: String,
     dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
@@ -206,6 +207,7 @@ pub async fn run(
         bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
+        code_version_hash,
         task_group: task_group.clone(),
     };
 

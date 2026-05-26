@@ -99,15 +99,27 @@ pub struct SetupApi {
     db: Database,
     /// Triggers the distributed key generation
     sender: Sender<ConfigGenParams>,
+    /// Version of the running fedimintd binary
+    code_version_str: String,
+    /// Git hash of the running fedimintd binary
+    code_version_hash: String,
 }
 
 impl SetupApi {
-    pub fn new(settings: ConfigGenSettings, db: Database, sender: Sender<ConfigGenParams>) -> Self {
+    pub fn new(
+        settings: ConfigGenSettings,
+        db: Database,
+        sender: Sender<ConfigGenParams>,
+        code_version_str: String,
+        code_version_hash: String,
+    ) -> Self {
         Self {
             settings,
             state: Arc::new(Mutex::new(SetupState::default())),
             db,
             sender,
+            code_version_str,
+            code_version_hash,
         }
     }
 
@@ -499,6 +511,14 @@ impl ISetupApi for SetupApi {
             .chain(local_setup_code.iter())
             .find_map(|info| info.enabled_modules.clone())
     }
+
+    async fn fedimintd_version(&self) -> String {
+        self.code_version_str.clone()
+    }
+
+    async fn fedimintd_version_hash(&self) -> Option<String> {
+        fedimint_core::version::non_zero_version_hash(&self.code_version_hash).map(str::to_owned)
+    }
 }
 
 #[async_trait]
@@ -624,6 +644,8 @@ mod tests {
             },
             MemDatabase::new().into_database(),
             sender,
+            String::new(),
+            String::new(),
         )
     }
 

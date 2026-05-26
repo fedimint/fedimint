@@ -62,6 +62,13 @@ pub trait ISetupApi {
     /// Returns the enabled modules, if set by any setup code
     async fn cfg_enabled_modules(&self) -> Option<BTreeSet<ModuleKind>>;
 
+    /// Get the fedimintd version
+    async fn fedimintd_version(&self) -> String;
+
+    /// Get the git hash of the fedimintd binary, or `None` if it is not
+    /// available (e.g. it was built outside a git checkout).
+    async fn fedimintd_version_hash(&self) -> Option<String>;
+
     /// Create a trait object
     fn into_dyn(self) -> DynSetupApi
     where

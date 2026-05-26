@@ -410,6 +410,7 @@ pub async fn run(
     install_crypto_provider().await;
 
     let task_group = root_task_group.clone();
+    let code_version_hash = code_version_hash.to_string();
     root_task_group.spawn_cancellable("main", async move {
         fedimint_server::run(
             server_opts.data_dir,
@@ -417,6 +418,7 @@ pub async fn run(
             settings,
             db,
             code_version_str,
+            code_version_hash,
             module_init_registry,
             task_group,
             dyn_server_bitcoin_rpc,

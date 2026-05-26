@@ -318,7 +318,7 @@ where
                     (err.to_string())
                 }
             };
-            return Html(dashboard_layout(content, &gatewayd_version).into_string())
+            return Html(dashboard_layout(content, &gatewayd_version, None).into_string())
                 .into_response();
         }
     };
@@ -407,7 +407,7 @@ where
         }
     };
 
-    Html(dashboard_layout(content, &gatewayd_version).into_string()).into_response()
+    Html(dashboard_layout(content, &gatewayd_version, None).into_string()).into_response()
 }
 
 async fn stop_gateway_handler<E>(

@@ -21,7 +21,7 @@ use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState,
     connectivity_check_handler, dashboard_layout, login_form, login_submit_response,
-    single_card_layout,
+    single_card_layout_with_version,
 };
 use maud::html;
 use {
@@ -35,8 +35,18 @@ use crate::{
 };
 
 // Dashboard login form handler
-async fn login_form_handler() -> impl IntoResponse {
-    Html(single_card_layout("Enter Password", login_form(None)).into_string())
+async fn login_form_handler(State(state): State<UiState<DynDashboardApi>>) -> impl IntoResponse {
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
+    Html(
+        single_card_layout_with_version(
+            "Enter Password",
+            login_form(None),
+            &version,
+            version_hash.as_deref(),
+        )
+        .into_string(),
+    )
 }
 
 // Dashboard login submit handler
@@ -103,6 +113,15 @@ async fn change_password(
     Form(input): Form<crate::PasswordChangeInput>,
 ) -> impl IntoResponse {
     let api_auth = state.api.auth().await;
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
+    let render = |header: &str, content| {
+        Html(
+            single_card_layout_with_version(header, content, &version, version_hash.as_deref())
+                .into_string(),
+        )
+        .into_response()
+    };
 
     // Verify current password
     if !api_auth.verify(&input.current_password) {
@@ -110,8 +129,7 @@ async fn change_password(
             div class="alert alert-danger" { "Current password is incorrect" }
             a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
         };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
+        return render("Password Change Failed", content);
     }
 
     // Verify new password confirmation
@@ -120,8 +138,7 @@ async fn change_password(
             div class="alert alert-danger" { "New passwords do not match" }
             a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
         };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
+        return render("Password Change Failed", content);
     }
 
     // Check that new password is not empty
@@ -130,8 +147,7 @@ async fn change_password(
             div class="alert alert-danger" { "New password cannot be empty" }
             a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
         };
-        return Html(single_card_layout("Password Change Failed", content).into_string())
-            .into_response();
+        return render("Password Change Failed", content);
     }
 
     // Call the API to change the password
@@ -154,7 +170,7 @@ async fn change_password(
                 }
                 a href="/login" class="btn btn-primary w-100 py-2" { "Go to Login" }
             };
-            Html(single_card_layout("Password Changed", content).into_string()).into_response()
+            render("Password Changed", content)
         }
         Err(err) => {
             let content = html! {
@@ -163,8 +179,7 @@ async fn change_password(
                 }
                 a href="/" class="btn btn-primary w-100 py-2" { "Return to Dashboard" }
             };
-            Html(single_card_layout("Password Change Failed", content).into_string())
-                .into_response()
+            render("Password Change Failed", content)
         }
     }
 }
@@ -178,6 +193,7 @@ async fn dashboard_view(
     let federation_name = state.api.federation_name().await;
     let session_count = state.api.session_count().await;
     let fedimintd_version = state.api.fedimintd_version().await;
+    let fedimintd_version_hash = state.api.fedimintd_version_hash().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;
     let p2p_connection_status = state.api.p2p_connection_status().await;
     let invite_code = state.api.federation_invite_code().await;
@@ -299,7 +315,15 @@ async fn dashboard_view(
         }
     };
 
-    Html(dashboard_layout(content, &fedimintd_version).into_string()).into_response()
+    Html(
+        dashboard_layout(
+            content,
+            &fedimintd_version,
+            fedimintd_version_hash.as_deref(),
+        )
+        .into_string(),
+    )
+    .into_response()
 }
 
 pub fn router(api: DynDashboardApi) -> Router {

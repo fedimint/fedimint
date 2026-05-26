@@ -392,6 +392,7 @@ impl FederationTestBuilder {
                     ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
+                    String::new(),
                     bitcoin_rpc_connection,
                     ui_bind,
                     Box::new(|_| axum::Router::new()),

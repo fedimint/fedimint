@@ -12,3 +12,13 @@ pub fn cargo_pkg() -> &'static str {
 pub fn git_hash() -> &'static str {
     option_env!("FEDIMINT_BUILD_CODE_VERSION").unwrap_or("0000000000000000000000000000000000000001")
 }
+
+/// Returns the version hash if it is meaningful (i.e. not all zeros, which
+/// `fedimint-build` substitutes when no git information is available).
+pub fn non_zero_version_hash(hash: &str) -> Option<&str> {
+    if hash.bytes().all(|b| b == b'0') {
+        None
+    } else {
+        Some(hash)
+    }
+}

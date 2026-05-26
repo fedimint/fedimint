@@ -92,6 +92,7 @@ pub async fn run(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
+    code_version_hash: String,
     module_init_registry: ServerModuleInitRegistry,
     task_group: TaskGroup,
     bitcoin_rpc: DynServerBitcoinRpc,
@@ -146,6 +147,7 @@ pub async fn run(
                 db.clone(),
                 &task_group,
                 code_version_str.clone(),
+                code_version_hash.clone(),
                 force_api_secrets.clone(),
                 setup_ui_router,
                 module_init_registry.clone(),
@@ -189,6 +191,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
+        code_version_hash,
         bitcoin_rpc,
         settings.ui_bind,
         dashboard_ui_router,
@@ -238,6 +241,7 @@ pub async fn run_config_gen(
     db: Database,
     task_group: &TaskGroup,
     code_version_str: String,
+    code_version_hash: String,
     api_secrets: ApiSecrets,
     setup_ui_handler: SetupUiRouter,
     module_init_registry: ServerModuleInitRegistry,
@@ -252,7 +256,13 @@ pub async fn run_config_gen(
 
     let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let setup_api = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
+    let setup_api = SetupApi::new(
+        settings.clone(),
+        db.clone(),
+        cgp_sender,
+        code_version_str.clone(),
+        code_version_hash,
+    );
 
     let mut rpc_module = RpcModule::new(setup_api.clone());
 
