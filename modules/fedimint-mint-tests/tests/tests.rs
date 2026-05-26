@@ -233,12 +233,17 @@ async fn duplicate_blind_nonce_index() -> anyhow::Result<()> {
     );
 
     // Create a duplicate output bundle without state machines to avoid client-side state machine duplicate panic
-    let duplicate_bundle = fedimint_client_module::transaction::ClientOutputBundle::new_no_sm(issuance_req.outputs().to_vec());
+    let outputs_vec = issuance_req.outputs().to_vec();
+    let duplicate_bundle =
+        fedimint_client_module::transaction::ClientOutputBundle::new_no_sm(outputs_vec);
 
     let tx = TransactionBuilder::new()
         .with_outputs(client_mint.client_ctx.make_dyn(issuance_req))
         .with_outputs(client_mint.client_ctx.make_dyn(duplicate_bundle));
 
+    // Since we stripped the state machines from the duplicate bundle, the client
+    // won't panic locally. This submission should succeed client-side and properly
+    // reach the federation, where it will be rejected server-side.
     let change_range = client_mint
         .client_ctx
         .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
