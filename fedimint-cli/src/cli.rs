@@ -393,6 +393,10 @@ Examples:
     /// Show the chain ID (bitcoin block hash at height 1) cached in the client
     /// database
     ChainId,
+    /// Force refresh API versions from the federation, bypassing cached values.
+    /// Queries all peers for their supported API versions and updates the
+    /// cache.
+    RefreshApiVersions,
     /// Trigger a panic to verify backtrace handling
     Panic,
     /// Visualize client internals for debugging

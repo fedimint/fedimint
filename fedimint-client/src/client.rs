@@ -1384,6 +1384,24 @@ impl Client {
         .await
     }
 
+    /// Force refresh API versions from the federation, bypassing the cache.
+    ///
+    /// This queries all peers for their supported API versions and calculates
+    /// the common API version set to use. The result is stored in the database
+    /// cache for future use.
+    pub async fn refresh_api_versions(&self) -> anyhow::Result<ApiVersionSet> {
+        Self::refresh_common_api_version_static(
+            &self.config().await,
+            &self.module_inits,
+            &self.api,
+            &self.db,
+            self.task_group.clone(),
+            &self.client_span,
+            true,
+        )
+        .await
+    }
+
     /// Load the common api versions to use from cache and start a background
     /// process to refresh them.
     ///

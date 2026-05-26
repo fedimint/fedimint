@@ -1374,6 +1374,11 @@ impl FedimintCli {
                 }
                 Ok(CliOutput::Raw(json!({})))
             }
+            Command::Dev(DevCmd::RefreshApiVersions) => {
+                let client = self.client_open(&cli).await?;
+                let versions = client.refresh_api_versions().await.map_err_cli()?;
+                Ok(CliOutput::Raw(json!({ "versions": versions })))
+            }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(
                     std::env::args_os()
