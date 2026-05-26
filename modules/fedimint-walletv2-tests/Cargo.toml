@@ -10,6 +10,10 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [[bin]]
+name = "fedimint-walletv2-frost-test"
+path = "bin/frost-test.rs"
+
+[[bin]]
 name = "fedimint-walletv2-devimint-tests"
 path = "bin/tests.rs"
 
@@ -41,5 +45,9 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "process",
+    "rt-multi-thread",
+] }
 tracing = { workspace = true }
