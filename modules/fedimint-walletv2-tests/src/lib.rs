@@ -1,0 +1,232 @@
+//! Shared helpers for the walletv2 devimint test binaries (`bin/*.rs`).
+//!
+//! These wrap the `fedimint-cli` walletv2 subcommands and the common polling
+//! patterns used across the test binaries so they don't have to be duplicated.
+
+use std::time::Duration;
+
+use anyhow::{Context, ensure};
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::{Address, Txid};
+use devimint::external::Bitcoind;
+use devimint::federation::Client;
+use devimint::version_constants::VERSION_0_12_0_ALPHA;
+use devimint::{cmd, util};
+use fedimint_core::runtime::sleep;
+use fedimint_core::task::sleep_in_test;
+use fedimint_eventlog::EventLogId;
+use serde::Deserialize;
+use tokio::task::JoinHandle;
+use tracing::info;
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub enum FinalSendState {
+    Success(Txid),
+    Aborted,
+    Failure,
+}
+
+/// Spawns a background task that mines a block every 100ms, simulating
+/// continuous block production. This prevents deadlocks where the federation's
+/// pending bitcoin transactions block further progress because no blocks are
+/// being mined to confirm them.
+pub fn spawn_block_miner(bitcoind: Bitcoind) -> JoinHandle<()> {
+    fedimint_core::runtime::spawn("background-block-miner", async move {
+        loop {
+            if let Err(e) = bitcoind.mine_blocks(1).await {
+                tracing::warn!("Background block miner failed to mine block: {e}");
+            }
+
+            sleep(Duration::from_millis(100)).await;
+        }
+    })
+}
+
+/// Returns whether a module of the given `kind` is present in the client's
+/// federation.
+pub async fn module_is_present(client: &Client, kind: &str) -> anyhow::Result<bool> {
+    let modules = cmd!(client, "module").out_json().await?;
+
+    let modules = modules["list"].as_array().expect("module list is an array");
+
+    Ok(modules.iter().any(|m| m["kind"].as_str() == Some(kind)))
+}
+
+/// Polls until the walletv2 consensus block count reaches at least
+/// `block_count`.
+pub async fn await_consensus_block_count(client: &Client, block_count: u64) -> anyhow::Result<()> {
+    loop {
+        let value = cmd!(client, "module", "walletv2", "info", "block-count")
+            .out_json()
+            .await?;
+
+        if block_count <= serde_json::from_value(value)? {
+            return Ok(());
+        }
+
+        sleep_in_test(
+            format!("Waiting for consensus to reach block count {block_count}"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
+/// Ensures the federation's total walletv2 value is at least `min_value`.
+pub async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyhow::Result<()> {
+    let value = cmd!(client, "module", "walletv2", "info", "total-value")
+        .out_json()
+        .await?;
+
+    ensure!(
+        min_value <= serde_json::from_value(value)?,
+        "Total federation total value is below {min_value}"
+    );
+
+    Ok(())
+}
+
+/// Waits for `receives` deposits to be claimed (starting from event log
+/// `position`) and then asserts the client balance reached at least
+/// `min_balance` sats.
+///
+/// On `fedimint-cli` versions without `await-receive` (<= 0.11), falls back to
+/// polling the balance like the test used to.
+pub async fn await_deposits(
+    client: &Client,
+    position: EventLogId,
+    receives: usize,
+    min_balance: u64,
+) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+        let mut position = position;
+
+        for _ in 0..receives {
+            position = await_receive(client, position).await?;
+        }
+
+        ensure_client_balance(client, min_balance).await?;
+    } else {
+        await_client_balance(client, min_balance).await?;
+    }
+
+    Ok(())
+}
+
+/// Waits for the next receive recorded at or after `position` to be claimed,
+/// returning the event log position to use for the following wait.
+pub async fn await_receive(client: &Client, position: EventLogId) -> anyhow::Result<EventLogId> {
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "await-receive",
+        position.to_string()
+    )
+    .out_json()
+    .await?;
+
+    // Walletv2 `await-receive` returns `[final_state, next_position]`.
+    serde_json::from_value(output[1].clone())
+        .context("await-receive should return the next event log position")
+}
+
+/// Asserts the client balance has reached at least `min_balance` sats.
+pub async fn ensure_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
+    let balance = client.balance().await?;
+
+    // Client balance is in msats, min_balance is in sats.
+    ensure!(
+        balance >= min_balance * 1000,
+        "Client balance {balance} is below {min_balance}"
+    );
+
+    Ok(())
+}
+
+/// Legacy fallback for `fedimint-cli` <= 0.11: polls the client balance until
+/// it reaches at least `min_balance` sats.
+pub async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
+    loop {
+        cmd!(client, "dev", "wait", "3").out_json().await?;
+
+        let balance = client.balance().await?;
+
+        // Client balance is in msats, min_balance is in sats.
+        if balance >= min_balance * 1000 {
+            return Ok(());
+        }
+
+        info!("Waiting for client balance {balance} to reach {min_balance}");
+    }
+}
+
+/// Polls until the federation has no pending bitcoin transactions.
+pub async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
+    loop {
+        let value = cmd!(client, "module", "walletv2", "info", "pending-tx-chain")
+            .out_json()
+            .await?;
+
+        let pending: Vec<serde_json::Value> = serde_json::from_value(value)?;
+
+        if pending.is_empty() {
+            return Ok(());
+        }
+
+        sleep_in_test(
+            format!(
+                "Waiting for {} pending transactions to clear",
+                pending.len()
+            ),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
+/// Ensures the federation's walletv2 transaction chain has `expected` entries.
+pub async fn ensure_tx_chain_length(client: &Client, expected: usize) -> anyhow::Result<()> {
+    let value = cmd!(client, "module", "walletv2", "info", "tx-chain")
+        .out_json()
+        .await?;
+
+    let chain: Vec<serde_json::Value> = serde_json::from_value(value)?;
+
+    ensure!(chain.len() == expected);
+
+    Ok(())
+}
+
+/// Requests a fresh walletv2 deposit address from the client, together with the
+/// event log position captured *before* the address was derived so that a later
+/// [`await_receive`] only considers payments received afterwards.
+pub async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, EventLogId)> {
+    if util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+        // Capture the event log position *before* deriving the address so
+        // `await_receive` only considers payments received afterwards.
+        let position =
+            serde_json::from_value(cmd!(client, "dev", "next-event-log-id").out_json().await?)
+                .context("dev next-event-log-id should return an event log position")?;
+
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(
+            cmd!(client, "module", "walletv2", "receive")
+                .out_json()
+                .await?,
+        )?
+        .assume_checked();
+
+        Ok((address, position))
+    } else {
+        // Legacy (<= 0.11): `receive` returns the bare address. The position is
+        // unused on this path as we fall back to polling the balance.
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(
+            cmd!(client, "module", "walletv2", "receive")
+                .out_json()
+                .await?,
+        )?
+        .assume_checked();
+
+        Ok((address, EventLogId::LOG_START))
+    }
+}
