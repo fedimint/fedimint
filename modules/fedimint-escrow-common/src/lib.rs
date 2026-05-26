@@ -160,7 +160,7 @@ pub fn compute_resolution_message(
         Outcome::Release => 0u8,
         Outcome::Refund => 1u8,
     };
-    engine.input(b"resolution_message_v1");
+    engine.input(b"escrow_resolution_message_v1");
     engine.input(&federation_id.0.to_byte_array());
     engine.input(&escrow_id.0);
     engine.input(&[outcome_byte]);
@@ -177,7 +177,7 @@ pub fn compute_contract_hash(
     federation_id:&FederationId
 )->[u8;32]{
     let mut engine=sha256::HashEngine::default();
-    engine.input(b"contract_hash");
+    engine.input(b"escrow_contract_hash");
     engine.input(&buyer_key.serialize());
     engine.input(&seller_key.serialize());
     engine.input(&arbiter_key.serialize());

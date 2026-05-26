@@ -26,7 +26,7 @@ fedimint-client-module = { workspace = true }
 fedimint-api-client = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-rand = { workspace = true }
+ring = { workspace = true }
 
 [lints]
 workspace = true

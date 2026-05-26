@@ -29,19 +29,21 @@ use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1, schnorr};
 use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_escrow_common::EscrowModuleTypes;
 use fedimint_escrow_common::Outcome;
+use fedimint_escrow_common::compute_resolution_message;
 use fedimint_escrow_common::{EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowOutput, KIND, Resolution, compute_contract_hash};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use futures::StreamExt;
 use strum::IntoEnumIterator;
+use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::api::EscrowFederationApi;
 use crate::client_db::{ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord, EscrowOperationMeta};
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
-mod input;
-mod output;
+pub mod input;
+pub mod output;
 mod client_db;
-mod api;
+pub mod api;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EscrowStateMachine{
@@ -242,10 +244,14 @@ impl EscrowClientModule{
             &self.federation_id
         );
 
-        let nonce:[u8;32] = rand::random();
+        let rng=SystemRandom::new();
+        let mut nonce = [0u8; 32];
+        let _= rng.fill(&mut nonce);
+        
         let operation_id=OperationId::new_random();
         let escrow_id:EscrowId= {
             let mut engine = sha256::HashEngine::default();
+            engine.input(b"escrow_id");
             engine.input(&contract_hash);
             engine.input(&nonce);
             EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
@@ -606,4 +612,14 @@ impl EscrowClientModule{
         ))
     }
 
+    pub fn sign_release_message(&self, escrow_id: EscrowId, contract: &EscrowContract) -> schnorr::Signature {
+        let msg_bytes = compute_resolution_message(
+            &contract.federation_id,
+            &escrow_id,
+            &Outcome::Release,
+            &contract.contract_hash,
+        );
+        let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
+        Secp256k1::new().sign_schnorr(&msg, &self.keypair)
+    }
 }

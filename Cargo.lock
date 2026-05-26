@@ -3589,7 +3589,7 @@ dependencies = [
  "fedimint-escrow-common",
  "fedimint-server-core",
  "futures",
- "rand 0.8.5",
+ "ring",
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
