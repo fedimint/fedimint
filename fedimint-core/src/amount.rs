@@ -36,6 +36,7 @@ pub fn sats(amount: u64) -> Amount {
     Decodable,
     Default,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[serde(transparent)]
 pub struct Amount {
     // TODO: rename to `units`, with backward compat for the serialization?

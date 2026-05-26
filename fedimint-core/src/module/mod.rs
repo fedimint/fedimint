@@ -74,6 +74,7 @@ pub struct InputMeta {
     Decodable,
     Default,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct AmountUnit(u64);
 
 impl AmountUnit {
@@ -81,17 +82,26 @@ impl AmountUnit {
     /// So e.g. for a mainnet Federation it's a real Bitcoin (msats), for a
     /// signet one it's a Signet msats, etc.
     pub const BITCOIN: Self = Self(0);
+}
 
-    pub fn is_bitcoin(self) -> bool {
-        self == Self::BITCOIN
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl AmountUnit {
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    pub const fn bitcoin() -> Self {
+        Self::BITCOIN
     }
 
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn new_custom(unit: u64) -> Self {
         Self(unit)
     }
 
-    pub const fn bitcoin() -> Self {
-        Self::BITCOIN
+    pub fn is_bitcoin(&self) -> bool {
+        *self == Self::BITCOIN
+    }
+
+    pub fn unit(&self) -> u64 {
+        self.0
     }
 }
 

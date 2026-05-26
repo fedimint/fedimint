@@ -185,9 +185,33 @@ impl_db_record!(
 
 /// Key used to lookup operation log entries in chronological order
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct ChronologicalOperationLogKey {
     pub creation_time: std::time::SystemTime,
     pub operation_id: OperationId,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl ChronologicalOperationLogKey {
+    #[uniffi::constructor]
+    pub fn new(
+        creation_time: std::time::SystemTime,
+        operation_id: std::sync::Arc<OperationId>,
+    ) -> Self {
+        Self {
+            creation_time,
+            operation_id: *operation_id,
+        }
+    }
+
+    pub fn creation_time(&self) -> std::time::SystemTime {
+        self.creation_time
+    }
+
+    pub fn operation_id(&self) -> std::sync::Arc<OperationId> {
+        std::sync::Arc::new(self.operation_id)
+    }
 }
 
 #[derive(Debug, Encodable)]

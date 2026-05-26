@@ -323,7 +323,48 @@ impl ClientConfig {
     Ord,
     PartialOrd,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct FederationId(pub sha256::Hash);
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum FederationIdError {
+    #[error("Federation id must be exactly 32 bytes")]
+    InvalidLength,
+    #[error("Invalid federation id hex: {msg}")]
+    InvalidHex { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl FederationId {
+    #[uniffi::constructor]
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, FederationIdError> {
+        let bytes = bytes
+            .try_into()
+            .map_err(|_| FederationIdError::InvalidLength)?;
+        Ok(Self::from_byte_array(bytes))
+    }
+
+    #[uniffi::constructor]
+    pub fn from_hex(hex: String) -> Result<Self, FederationIdError> {
+        Self::from_str(&hex).map_err(|err| FederationIdError::InvalidHex {
+            msg: err.to_string(),
+        })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_byte_array().to_vec()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.to_string()
+    }
+
+    pub fn prefix_hex(&self) -> String {
+        self.to_prefix().to_string()
+    }
+}
 
 #[derive(
     Debug,

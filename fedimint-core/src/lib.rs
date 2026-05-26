@@ -38,10 +38,14 @@
 
 extern crate self as fedimint_core;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 use std::fmt::{self, Debug};
 use std::io::Error;
 use std::ops::{self, Range};
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
@@ -135,6 +139,14 @@ mod txid {
     use bitcoin::hashes::hash_newtype;
     use bitcoin::hashes::sha256::Hash as Sha256;
 
+    #[cfg(feature = "uniffi")]
+    hash_newtype!(
+        /// A transaction id for peg-ins, peg-outs and reissuances
+        #[derive(uniffi::Object)]
+        pub struct TransactionId(Sha256);
+    );
+
+    #[cfg(not(feature = "uniffi"))]
     hash_newtype!(
         /// A transaction id for peg-ins, peg-outs and reissuances
         pub struct TransactionId(Sha256);
@@ -152,6 +164,47 @@ impl TransactionId {
 
     pub fn fmt_full(&self) -> TransactionIdFullFmt<'_> {
         TransactionIdFullFmt(self)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Error, uniffi::Error)]
+pub enum TransactionIdError {
+    #[error("Transaction id must be exactly 32 bytes")]
+    InvalidLength,
+    #[error("Invalid transaction id hex: {msg}")]
+    InvalidHex { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl TransactionId {
+    #[uniffi::constructor]
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, TransactionIdError> {
+        let bytes = bytes
+            .try_into()
+            .map_err(|_| TransactionIdError::InvalidLength)?;
+
+        Ok(Self::from_byte_array(bytes))
+    }
+
+    #[uniffi::constructor]
+    pub fn from_hex(hex: String) -> Result<Self, TransactionIdError> {
+        Self::from_str(&hex).map_err(|err| TransactionIdError::InvalidHex {
+            msg: err.to_string(),
+        })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self[..].to_vec()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.fmt_full().to_string()
+    }
+
+    pub fn short_hex(&self) -> String {
+        self.fmt_short().to_string()
     }
 }
 
@@ -182,7 +235,36 @@ impl std::fmt::Display for TransactionIdFullFmt<'_> {
 /// Using a distinct type instead of raw `BlockHash` provides type safety and
 /// makes the intent clearer when passing chain identifiers through APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct ChainId(pub bitcoin::BlockHash);
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Error, uniffi::Error)]
+pub enum ChainIdError {
+    #[error("Invalid chain id block hash: {msg}")]
+    InvalidBlockHash { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl ChainId {
+    #[uniffi::constructor]
+    pub fn from_block_hash(block_hash: String) -> Result<Self, ChainIdError> {
+        bitcoin::BlockHash::from_str(&block_hash)
+            .map(Self)
+            .map_err(|err| ChainIdError::InvalidBlockHash {
+                msg: err.to_string(),
+            })
+    }
+
+    pub fn block_hash_hex(&self) -> String {
+        self.0.to_string()
+    }
+
+    pub fn chain_id_hex(&self) -> String {
+        self.to_string()
+    }
+}
 
 impl ChainId {
     /// Create a new `ChainId` from a `BlockHash`
@@ -382,12 +464,37 @@ impl std::fmt::Display for InPoint {
     Encodable,
     Decodable,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct OutPoint {
     /// The referenced transaction ID
     pub txid: TransactionId,
     /// As a transaction may have multiple outputs, this refers to the index of
     /// the output in a transaction
     pub out_idx: u64,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl OutPoint {
+    #[uniffi::constructor]
+    pub fn new(txid: Arc<TransactionId>, out_idx: u64) -> Self {
+        Self {
+            txid: *txid,
+            out_idx,
+        }
+    }
+
+    pub fn txid(&self) -> Arc<TransactionId> {
+        Arc::new(self.txid)
+    }
+
+    pub fn out_idx(&self) -> u64 {
+        self.out_idx
+    }
+
+    pub fn to_string(&self) -> String {
+        std::string::ToString::to_string(self)
+    }
 }
 
 impl std::fmt::Display for OutPoint {

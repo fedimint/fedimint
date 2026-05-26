@@ -22,6 +22,7 @@ use crate::ClientBuilder;
 /// methods live.
 ///
 /// Put this in an Arc to clone it (see [`ClientHandleArc`]).
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug)]
 pub struct ClientHandle {
     inner: Option<Arc<Client>>,
@@ -40,6 +41,11 @@ impl ClientHandle {
 
     pub(crate) fn as_inner(&self) -> &Arc<Client> {
         self.inner.as_ref().expect("Inner always set")
+    }
+
+    #[cfg(feature = "uniffi")]
+    pub fn inner_arc(&self) -> Option<Arc<Client>> {
+        self.inner.as_ref().cloned()
     }
 
     pub fn start_executor(&self) {

@@ -54,7 +54,53 @@ pub mod backup;
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct OperationId(pub [u8; 32]);
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum OperationIdError {
+    #[error("Operation id must be exactly 32 bytes")]
+    InvalidLength,
+    #[error("Invalid operation id hex: {msg}")]
+    InvalidHex { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl OperationId {
+    #[uniffi::constructor]
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, OperationIdError> {
+        let bytes = bytes
+            .try_into()
+            .map_err(|_| OperationIdError::InvalidLength)?;
+        Ok(Self(bytes))
+    }
+
+    #[uniffi::constructor]
+    pub fn from_hex(hex: String) -> Result<Self, OperationIdError> {
+        Self::from_str(&hex).map_err(|err| OperationIdError::InvalidHex {
+            msg: err.to_string(),
+        })
+    }
+
+    #[uniffi::constructor]
+    pub fn random() -> Self {
+        Self::new_random()
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.fmt_full().to_string()
+    }
+
+    pub fn short_hex(&self) -> String {
+        self.fmt_short().to_string()
+    }
+}
 
 pub struct OperationIdFullFmt<'a>(&'a OperationId);
 pub struct OperationIdShortFmt<'a>(&'a OperationId);
