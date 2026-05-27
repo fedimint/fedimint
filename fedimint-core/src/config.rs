@@ -485,7 +485,7 @@ pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
 /// Legacy module ordering used before alphabetical ordering was introduced.
 /// This ordering was: ln, mint, wallet, lnv2, meta, unknown
-const LEGACY_MODULE_ORDER: &[&str] = &["ln", "mint", "wallet", "lnv2", "meta", "unknown"];
+const LEGACY_MODULE_ORDER: &[&str] = &["ln", "mint", "wallet", "lnv2", "escrow", "meta", "unknown"];
 
 impl<M> ModuleInitRegistry<M> {
     pub fn iter(&self) -> impl Iterator<Item = (&ModuleKind, &M)> {

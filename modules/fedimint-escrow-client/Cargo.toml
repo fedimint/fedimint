@@ -16,6 +16,7 @@ fedimint-core = { workspace = true }
 fedimint-escrow-common = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 erased-serde = { workspace = true }
@@ -27,6 +28,12 @@ fedimint-api-client = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 ring = { workspace = true }
+clap = { workspace = true, optional=true }
+hex = { workspace = true }
 
 [lints]
 workspace = true
+
+[features]
+cli = ["dep:clap"]
+default = []

@@ -45,6 +45,9 @@ pub mod output;
 mod client_db;
 pub mod api;
 
+#[cfg(feature = "cli")]
+pub mod cli;
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EscrowStateMachine{
     Input(EscrowInputStateMachine),
@@ -223,6 +226,14 @@ impl ClientModule for EscrowClientModule {
 
     fn output_fee(&self, _amount: &Amounts, _output: &EscrowOutput) -> Option<Amounts> {
         Some(Amounts::ZERO)
+    }
+
+    #[cfg(feature="cli")]
+    async fn handle_cli_command(
+        &self,
+        args:&[std::ffi::OsString]
+    )->anyhow::Result<serde_json::Value>{
+        cli::handle_cli_command(&self, args).await
     }
 }
 

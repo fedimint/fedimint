@@ -101,9 +101,7 @@ pub async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
 }
 
 use fedimint_core::envs::{
-    FM_DEFAULT_BITCOIN_RPC_KIND_ENV, FM_DEFAULT_BITCOIN_RPC_URL_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
-    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV,
-    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+    FM_DEFAULT_BITCOIN_RPC_KIND_ENV, FM_DEFAULT_BITCOIN_RPC_URL_ENV, FM_ENABLE_MODULE_ESCROW_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_USE_UNKNOWN_MODULE_ENV
 };
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_portalloc::port_alloc;
@@ -340,5 +338,10 @@ declare_vars! {
         // rpc settings over command-line etc. so always will use the right ones.
         FM_FORCE_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{}", globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
         FM_FORCE_BITCOIN_RPC_KIND: String = "bitcoind"; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
+        FM_ENABLE_MODULE_ESCROW: String = std::env::var(
+            FM_ENABLE_MODULE_ESCROW_ENV
+        )
+        .unwrap_or_else(|_| "0".into());
+        env: FM_ENABLE_MODULE_ESCROW_ENV;
     }
 }

@@ -49,6 +49,7 @@ fedimint-mintv2-client = { workspace = true, features = ["cli"] }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fedimint-walletv2-client = { workspace = true, features = ["cli"] }
+fedimint-escrow-client = { workspace = true, features = ["cli"] }
 fs-lock = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
