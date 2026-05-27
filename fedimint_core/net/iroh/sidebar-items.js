@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["build_iroh_endpoint"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_IROH_RELAYS"],"fn":["build_iroh_endpoint","relay_node_from_url"]};
