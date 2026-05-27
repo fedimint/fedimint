@@ -28,7 +28,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
+use bitcoin::hashes::hex::FromHex as _;
 use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 pub use connection_limits::ConnectionLimits;
@@ -51,6 +52,7 @@ use net::api::ApiSecrets;
 use net::p2p::P2PStatusReceivers;
 use net::p2p_connector::IrohConnector;
 use tokio::net::TcpListener;
+use tokio_rustls::rustls;
 use tracing::info;
 
 use crate::config::ConfigGenSettings;
@@ -58,7 +60,7 @@ use crate::config::io::{
     SALT_FILE, finalize_password_change, recover_interrupted_password_change, trim_password,
     write_server_config,
 };
-use crate::config::setup::SetupApi;
+use crate::config::setup::{ConfigGenOutcome, SetupApi};
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
@@ -234,6 +236,89 @@ pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
     Ok(None)
 }
 
+/// Validate restored TCP transport material before building `TlsTcpConnector`.
+///
+/// `ServerConfig::tls_config()` and `TlsTcpConnector::new()` contain invariant
+/// checks that are fine for generated configs but too panic-prone for uploaded
+/// restore data. This preflights the same key/certificate material and returns
+/// a normal restore error before any files are installed.
+fn validate_restored_tcp_config(cfg: &ServerConfig) -> anyhow::Result<()> {
+    let tls_key = cfg
+        .private
+        .tls_key
+        .as_ref()
+        .context("Restored TCP config is missing the TLS private key")?;
+    let tls_key_bytes = Vec::from_hex(tls_key).context("Parsing restored TLS private key")?;
+    rustls::pki_types::PrivateKeyDer::try_from(tls_key_bytes)
+        .map_err(|e| anyhow::format_err!("Parsing restored TLS private key DER: {e}"))?;
+
+    ensure!(
+        cfg.consensus.tls_certs.contains_key(&cfg.local.identity),
+        "Restored TCP config is missing our TLS certificate"
+    );
+    for (peer, cert) in &cfg.consensus.tls_certs {
+        Vec::from_hex(cert)
+            .with_context(|| format!("Parsing restored TLS certificate for peer {peer}"))?;
+    }
+
+    let tls_config = cfg.tls_config();
+    let mut root_cert_store = rustls::RootCertStore::empty();
+    for cert in tls_config.certificates.values() {
+        root_cert_store
+            .add(cert.clone())
+            .context("Adding restored TLS certificate to root store")?;
+    }
+    let verifier = rustls::server::WebPkiClientVerifier::builder(root_cert_store.into())
+        .build()
+        .context("Creating restored TLS client verifier")?;
+    let certificate = tls_config
+        .certificates
+        .get(&cfg.local.identity)
+        .context("Restored TCP config is missing our TLS certificate")?
+        .clone();
+    rustls::ServerConfig::builder()
+        .with_client_cert_verifier(verifier)
+        .with_single_cert(vec![certificate], tls_config.private_key.clone_key())
+        .context("Creating restored TLS server config")?;
+
+    Ok(())
+}
+
+/// Validate restored Iroh transport keys and return the p2p key for connector
+/// setup.
+///
+/// Restore data must contain both API and p2p secret keys, and both must match
+/// this guardian's public keys in the restored consensus endpoints before the
+/// config is installed.
+fn restored_iroh_p2p_key(cfg: &ServerConfig) -> anyhow::Result<iroh::SecretKey> {
+    let iroh_p2p_sk = cfg
+        .private
+        .iroh_p2p_sk
+        .clone()
+        .context("Restored Iroh config is missing the Iroh p2p secret key")?;
+    let local_endpoints = cfg
+        .consensus
+        .iroh_endpoints
+        .get(&cfg.local.identity)
+        .context("Restored Iroh config is missing our Iroh endpoints")?;
+    ensure!(
+        iroh_p2p_sk.public() == local_endpoints.p2p_pk,
+        "Restored Iroh p2p secret key does not match our Iroh endpoint"
+    );
+
+    let iroh_api_sk = cfg
+        .private
+        .iroh_api_sk
+        .clone()
+        .context("Restored Iroh config is missing the Iroh api secret key")?;
+    ensure!(
+        iroh_api_sk.public() == local_endpoints.api_pk,
+        "Restored Iroh api secret key does not match our Iroh endpoint"
+    );
+
+    Ok(iroh_p2p_sk)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_config_gen(
     data_dir: PathBuf,
@@ -259,6 +344,7 @@ pub async fn run_config_gen(
     let setup_api = SetupApi::new(
         settings.clone(),
         db.clone(),
+        data_dir.clone(),
         cgp_sender,
         code_version_str.clone(),
         code_version_hash,
@@ -295,89 +381,218 @@ pub async fn run_config_gen(
 
     info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
 
-    let cg_params = cgp_receiver
-        .recv()
-        .await
-        .expect("Config gen params receiver closed unexpectedly");
+    loop {
+        let config_gen_outcome = cgp_receiver
+            .recv()
+            .await
+            .expect("Config gen params receiver closed unexpectedly");
 
-    // HACK: The `start-dkg` API call needs to have some time to finish
-    // before we shut down api handling. There's no easy and good way to do
-    // that other than just giving it some grace period.
-    sleep(Duration::from_millis(100)).await;
+        match config_gen_outcome {
+            ConfigGenOutcome::Generated(cg_params) => {
+                // HACK: The `start-dkg` API call needs to have some time to finish
+                // before we shut down api handling. There's no easy and good way to do
+                // that other than just giving it some grace period.
+                sleep(Duration::from_millis(100)).await;
 
-    api_handler
-        .stop()
-        .expect("Config api should still be running");
+                api_handler
+                    .stop()
+                    .expect("Config api should still be running");
 
-    api_handler.stopped().await;
+                api_handler.stopped().await;
 
-    ui_task_group
-        .shutdown_join_all(None)
-        .await
-        .context("Failed to shutdown UI server after config gen")?;
+                ui_task_group
+                    .shutdown_join_all(None)
+                    .await
+                    .context("Failed to shutdown UI server after config gen")?;
 
-    let connector = if cg_params.iroh_endpoints().is_empty() {
-        TlsTcpConnector::new(
-            cg_params.tls_config(),
-            settings.p2p_bind,
-            cg_params.p2p_urls(),
-            cg_params.identity,
-        )
-        .await
-        .into_dyn()
-    } else {
-        IrohConnector::new(
-            cg_params.iroh_p2p_sk.clone().unwrap(),
-            settings.p2p_bind,
-            settings.iroh_dns,
-            settings.iroh_relays,
-            cg_params
-                .iroh_endpoints()
-                .iter()
-                .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
-                .collect(),
-        )
-        .await?
-        .into_dyn()
-    };
+                let cg_params = *cg_params;
+                let connector = if cg_params.iroh_endpoints().is_empty() {
+                    TlsTcpConnector::new(
+                        cg_params.tls_config(),
+                        settings.p2p_bind,
+                        cg_params.p2p_urls(),
+                        cg_params.identity,
+                    )
+                    .await
+                    .into_dyn()
+                } else {
+                    IrohConnector::new(
+                        cg_params
+                            .iroh_p2p_sk
+                            .clone()
+                            .expect("Iroh p2p secret key is required for iroh endpoints"),
+                        settings.p2p_bind,
+                        settings.iroh_dns,
+                        settings.iroh_relays,
+                        cg_params
+                            .iroh_endpoints()
+                            .iter()
+                            .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                            .collect(),
+                    )
+                    .await?
+                    .into_dyn()
+                };
 
-    let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+                let (p2p_status_senders, p2p_status_receivers) =
+                    p2p_status_channels(connector.peers());
 
-    let connections = ReconnectP2PConnections::new(
-        cg_params.identity,
-        connector,
-        task_group,
-        p2p_status_senders,
-    )
-    .into_dyn();
+                let connections = ReconnectP2PConnections::new(
+                    cg_params.identity,
+                    connector,
+                    task_group,
+                    p2p_status_senders,
+                )
+                .into_dyn();
 
-    let cfg = ServerConfig::distributed_gen(
-        &cg_params,
-        module_init_registry.clone(),
-        code_version_str.clone(),
-        connections.clone(),
-        p2p_status_receivers.clone(),
-    )
-    .await?;
+                let cfg = ServerConfig::distributed_gen(
+                    &cg_params,
+                    module_init_registry.clone(),
+                    code_version_str.clone(),
+                    connections.clone(),
+                    p2p_status_receivers.clone(),
+                )
+                .await?;
 
-    assert_ne!(
-        cfg.consensus.iroh_endpoints.is_empty(),
-        cfg.consensus.api_endpoints.is_empty(),
-    );
+                assert_ne!(
+                    cfg.consensus.iroh_endpoints.is_empty(),
+                    cfg.consensus.api_endpoints.is_empty(),
+                );
 
-    // TODO: Make writing password optional
-    write_new(
-        data_dir.join(PLAINTEXT_PASSWORD),
-        cfg.private.api_auth.as_str(),
-    )?;
-    write_new(data_dir.join(SALT_FILE), random_salt())?;
-    write_server_config(
-        &cfg,
-        &data_dir,
-        cfg.private.api_auth.as_str(),
-        &module_init_registry,
-        api_secrets.get_active(),
-    )?;
+                // TODO: Make writing password optional
+                write_new(
+                    data_dir.join(PLAINTEXT_PASSWORD),
+                    cfg.private.api_auth.as_str(),
+                )?;
+                write_new(data_dir.join(SALT_FILE), random_salt())?;
+                write_server_config(
+                    &cfg,
+                    &data_dir,
+                    cfg.private.api_auth.as_str(),
+                    &module_init_registry,
+                    api_secrets.get_active(),
+                )?;
 
-    Ok((cfg, connections, p2p_status_receivers))
+                return Ok((cfg, connections, p2p_status_receivers));
+            }
+            ConfigGenOutcome::Restored(restored, restore_result_sender) => {
+                // Process restore outcomes while setup serving is still running. This lets the
+                // HTTP handler wait for a precise success/error acknowledgement and keeps setup
+                // retryable if validation or install fails after unpacking.
+                let result = async {
+                    let restored = *restored;
+                    let cfg = &restored.cfg;
+
+                    if let Err(e) = module_init_registry.decoders_strict(
+                        cfg.consensus
+                            .modules
+                            .iter()
+                            .map(|(id, config)| (*id, &config.kind)),
+                    ) {
+                        restored.cleanup();
+                        return Err(e);
+                    }
+
+                    if let Err(e) = cfg.validate_config(&cfg.local.identity, &module_init_registry)
+                    {
+                        restored.cleanup();
+                        return Err(e);
+                    }
+
+                    if cfg.consensus.iroh_endpoints.is_empty()
+                        && let Err(e) = validate_restored_tcp_config(cfg)
+                    {
+                        restored.cleanup();
+                        return Err(e);
+                    }
+
+                    // Build the connector from the already validated restored config before moving
+                    // the config into its final location, avoiding a redundant config
+                    // re-read after install.
+                    let connector = if cfg.consensus.iroh_endpoints.is_empty() {
+                        TlsTcpConnector::new(
+                            cfg.tls_config(),
+                            settings.p2p_bind,
+                            cfg.local.p2p_endpoints.clone(),
+                            cfg.local.identity,
+                        )
+                        .await
+                        .into_dyn()
+                    } else {
+                        let iroh_p2p_sk = match restored_iroh_p2p_key(cfg) {
+                            Ok(iroh_p2p_sk) => iroh_p2p_sk,
+                            Err(e) => {
+                                restored.cleanup();
+                                return Err(e);
+                            }
+                        };
+
+                        match IrohConnector::new(
+                            iroh_p2p_sk,
+                            settings.p2p_bind,
+                            settings.iroh_dns.clone(),
+                            settings.iroh_relays.clone(),
+                            cfg.consensus
+                                .iroh_endpoints
+                                .iter()
+                                .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                                .collect(),
+                        )
+                        .await
+                        {
+                            Ok(connector) => connector.into_dyn(),
+                            Err(e) => {
+                                restored.cleanup();
+                                return Err(e);
+                            }
+                        }
+                    };
+
+                    let (p2p_status_senders, p2p_status_receivers) =
+                        p2p_status_channels(connector.peers());
+                    let cfg = restored.install(&data_dir)?;
+
+                    Ok((cfg, connector, p2p_status_senders, p2p_status_receivers))
+                }
+                .await;
+
+                let ack = result
+                    .as_ref()
+                    .map(|_| ())
+                    .map_err(std::string::ToString::to_string);
+                let restore_failed = ack.is_err();
+                let _ = restore_result_sender.send(ack);
+
+                if restore_failed {
+                    continue;
+                }
+
+                // Give the restore API call a chance to return the acknowledged outcome before
+                // shutting down setup serving.
+                sleep(Duration::from_millis(100)).await;
+
+                api_handler
+                    .stop()
+                    .expect("Config api should still be running");
+
+                api_handler.stopped().await;
+
+                ui_task_group
+                    .shutdown_join_all(None)
+                    .await
+                    .context("Failed to shutdown UI server after restored config install")?;
+
+                let (cfg, connector, p2p_status_senders, p2p_status_receivers) = result?;
+                let connections = ReconnectP2PConnections::new(
+                    cfg.local.identity,
+                    connector,
+                    task_group,
+                    p2p_status_senders,
+                )
+                .into_dyn();
+
+                return Ok((cfg, connections, p2p_status_receivers));
+            }
+        }
+    }
 }

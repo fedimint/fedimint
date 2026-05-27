@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
 use axum::Router;
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, Multipart, State};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum_extra::extract::Form;
@@ -14,7 +15,7 @@ use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState,
     connectivity_check_handler, copiable_text, login_form, login_submit_response,
-    single_card_layout_with_version,
+    single_card_layout, single_card_layout_with_version,
 };
 use maud::{Markup, PreEscaped, html};
 use qrcode::QrCode;
@@ -25,6 +26,9 @@ pub const FEDERATION_SETUP_ROUTE: &str = "/federation_setup";
 pub const ADD_SETUP_CODE_ROUTE: &str = "/add_setup_code";
 pub const RESET_SETUP_CODES_ROUTE: &str = "/reset_setup_codes";
 pub const START_DKG_ROUTE: &str = "/start_dkg";
+pub const START_FEDERATION_ROUTE: &str = "/start_federation";
+pub const RESTORE_GUARDIAN_ROUTE: &str = "/restore_guardian";
+const RESTORE_BACKUP_UPLOAD_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
@@ -141,6 +145,68 @@ fn setup_error_message(error: &str) -> Markup {
     html! {
         div class="alert alert-danger mb-3" { (error) }
     }
+}
+
+fn setup_choice_content(error: Option<&str>) -> Markup {
+    html! {
+        @if let Some(error) = error {
+            (setup_error_message(error))
+        }
+
+        div class="d-grid gap-3" {
+            a href=(START_FEDERATION_ROUTE) class="btn btn-primary w-100 py-2" {
+                "Start new Federation"
+            }
+
+            a href=(RESTORE_GUARDIAN_ROUTE) class="btn btn-outline-secondary w-100 py-2" {
+                "Restore from backup"
+            }
+        }
+    }
+}
+
+fn restore_form_content(error: Option<&str>) -> Markup {
+    html! {
+        @if let Some(error) = error {
+            (setup_error_message(error))
+        }
+
+        p class="text-muted" {
+            "Upload a guardian backup tar file and enter the guardian password used when the backup was created."
+        }
+
+        form method="post" action=(RESTORE_GUARDIAN_ROUTE) enctype="multipart/form-data" {
+            div class="form-group mb-3" {
+                input type="password" class="form-control" name="password" placeholder="Guardian Password" required;
+            }
+            div class="form-group mb-3" {
+                input type="file" class="form-control" name="backup" accept="application/x-tar,.tar" required;
+            }
+            button type="submit" class="btn btn-primary w-100 py-2" {
+                "Restore Guardian"
+            }
+        }
+
+        div class="text-center mt-3" {
+            a href=(ROOT_ROUTE) class="btn btn-link text-muted text-decoration-none" {
+                "Back"
+            }
+        }
+    }
+}
+
+fn restore_error_response(error: impl AsRef<str>) -> axum::response::Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Html(
+            single_card_layout(
+                "Restore Guardian",
+                restore_form_content(Some(error.as_ref())),
+            )
+            .into_string(),
+        ),
+    )
+        .into_response()
 }
 
 fn setup_form_content(
@@ -298,8 +364,18 @@ fn setup_form_content(
     }
 }
 
-// GET handler for the /setup route (display the setup form)
+// GET handler for the / route (choose setup or restore)
 async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.setup_code().await.is_some() {
+        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
+    }
+
+    Html(single_card_layout("Guardian Setup", setup_choice_content(None)).into_string())
+        .into_response()
+}
+
+// GET handler for starting a new federation
+async fn start_federation_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
@@ -387,6 +463,81 @@ async fn setup_submit(
         )
             .into_response(),
         Err(e) => Html(setup_error_message(&e.to_string()).into_string()).into_response(),
+    }
+}
+
+// GET handler for restoring from backup
+async fn restore_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.setup_code().await.is_some() {
+        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
+    }
+
+    Html(single_card_layout("Restore Guardian", restore_form_content(None)).into_string())
+        .into_response()
+}
+
+async fn restore_submit(
+    State(state): State<UiState<DynSetupApi>>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    let mut password = None;
+    let mut backup = None;
+
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => return restore_error_response(format!("Failed to read upload: {e}")),
+        };
+
+        match field.name() {
+            Some("password") => match field.text().await {
+                Ok(value) => password = Some(value),
+                Err(e) => return restore_error_response(format!("Failed to read password: {e}")),
+            },
+            Some("backup") => match field.bytes().await {
+                // The setup UI is a local guardian-owner interface. We cap the upload size to
+                // catch accidental oversized requests, but treat malicious tar expansion by the
+                // uploading user as out of scope: they already control this guardian instance.
+                Ok(value) => backup = Some(value.to_vec()),
+                Err(e) => return restore_error_response(format!("Failed to read backup: {e}")),
+            },
+            _ => {}
+        }
+    }
+
+    let Some(password) = password else {
+        return restore_error_response("Missing guardian password");
+    };
+    let Some(backup) = backup else {
+        return restore_error_response("Missing guardian backup file");
+    };
+
+    match state.api.restore_from_backup(password, backup).await {
+        Ok(()) => {
+            let content = html! {
+                div class="alert alert-success mb-3" {
+                    "Guardian backup restored. The server is starting consensus."
+                }
+                div class="text-center mt-4" {
+                    div class="spinner-border text-primary" role="status" {
+                        span class="visually-hidden" { "Loading..." }
+                    }
+                    p class="mt-2 text-muted" { "Waiting for dashboard..." }
+                }
+                div
+                    hx-get=(ROOT_ROUTE)
+                    hx-trigger="every 2s"
+                    hx-swap="none"
+                    hx-on--after-request={
+                        "if (event.detail.xhr.status === 200) { window.location.href = '" (ROOT_ROUTE) "'; }"
+                    }
+                    style="display: none;"
+                {}
+            };
+            Html(single_card_layout("Guardian Restored", content).into_string()).into_response()
+        }
+        Err(e) => restore_error_response(e.to_string()),
     }
 }
 
@@ -706,6 +857,13 @@ async fn post_reset_setup_codes(
 pub fn router(api: DynSetupApi) -> Router {
     Router::new()
         .route(ROOT_ROUTE, get(setup_form).post(setup_submit))
+        .route(START_FEDERATION_ROUTE, get(start_federation_form))
+        .route(
+            RESTORE_GUARDIAN_ROUTE,
+            get(restore_form)
+                .post(restore_submit)
+                .layer(DefaultBodyLimit::max(RESTORE_BACKUP_UPLOAD_LIMIT_BYTES)),
+        )
         .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(FEDERATION_SETUP_ROUTE, get(federation_setup))
         .route(ADD_SETUP_CODE_ROUTE, post(post_add_setup_code))
@@ -737,5 +895,23 @@ mod tests {
 
         assert!(content.contains("Invalid federation size"));
         assert!(!content.contains("setup-form"));
+    }
+
+    #[test]
+    fn setup_choice_has_start_and_restore_options() {
+        let content = setup_choice_content(None).into_string();
+
+        assert!(content.contains("Start new Federation"));
+        assert!(content.contains("Restore from backup"));
+        assert!(!content.contains("multipart/form-data"));
+    }
+
+    #[test]
+    fn restore_form_has_upload_fields() {
+        let content = restore_form_content(None).into_string();
+
+        assert!(content.contains("multipart/form-data"));
+        assert!(content.contains("Guardian Password"));
+        assert!(content.contains("Restore Guardian"));
     }
 }
