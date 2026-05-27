@@ -3630,6 +3630,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-escrow-tests"
+version = "0.12.0-alpha"
+dependencies = [
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-server",
+ "fedimint-escrow-client",
+ "fedimint-escrow-common",
+ "fedimint-escrow-server",
+ "fedimint-testing",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "fedimint-eventlog"
 version = "0.14.0-alpha"
 dependencies = [

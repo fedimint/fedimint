@@ -1,5 +1,4 @@
 [package]
-name = "fedimint-escrow-tests"
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
@@ -7,21 +6,22 @@ edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "fedimint-escrow-tests"
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
 
 [dependencies]
-fedimint-escrow-server = { workspace = true }
-fedimint-escrow-client = { workspace = true }
-fedimint-escrow-common = { workspace = true }
-fedimint-testing = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-server = { workspace = true }
-fedimint-core = { workspace = true }
-tokio = { workspace = true }
-fedimint-client= { workspace = true }
+fedimint-escrow-client = { workspace = true }
+fedimint-escrow-common = { workspace = true }
+fedimint-escrow-server = { workspace = true }
+fedimint-testing = { workspace = true }
 rand = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

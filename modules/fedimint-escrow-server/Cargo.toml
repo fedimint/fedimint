@@ -1,5 +1,4 @@
 [package]
-name = "fedimint-escrow-server"
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
@@ -7,26 +6,27 @@ edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "fedimint-escrow-server"
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
 
 [lib]
-name="fedimint_escrow_server"
-path="src/lib.rs"
+name = "fedimint_escrow_server"
+path = "src/lib.rs"
 
 [dependencies]
-fedimint-core = { workspace = true }
-fedimint-escrow-common = { workspace = true }
-futures = { workspace = true }
-serde = { workspace = true }
-strum = { workspace = true }
-thiserror = { workspace = true }
-strum_macros = { workspace = true }
-fedimint-server-core = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 erased-serde = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-escrow-common = { workspace = true }
+fedimint-server-core = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

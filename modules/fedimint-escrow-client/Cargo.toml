@@ -1,5 +1,4 @@
 [package]
-name = "fedimint-escrow-client"
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
@@ -7,33 +6,34 @@ edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "fedimint-escrow-client"
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
 
-[dependencies]
-fedimint-core = { workspace = true }
-fedimint-escrow-common = { workspace = true }
-futures = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-strum = { workspace = true }
-thiserror = { workspace = true }
-erased-serde = { workspace = true }
-strum_macros = { workspace = true }
-async-stream = { workspace = true }
-fedimint-server-core = { workspace = true }
-fedimint-client-module = { workspace = true }
-fedimint-api-client = { workspace = true }
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-ring = { workspace = true }
-clap = { workspace = true, optional=true }
-hex = { workspace = true }
-
-[lints]
-workspace = true
-
 [features]
 cli = ["dep:clap"]
 default = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true, optional = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client-module = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-escrow-common = { workspace = true }
+fedimint-server-core = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+ring = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

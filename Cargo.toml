@@ -59,10 +59,11 @@ members = [
     "modules/fedimint-dummy-server",
     "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
-    "modules/fedimint-empty-server", 
-    "modules/fedimint-escrow-client", 
-    "modules/fedimint-escrow-common", 
+    "modules/fedimint-empty-server",
+    "modules/fedimint-escrow-client",
+    "modules/fedimint-escrow-common",
     "modules/fedimint-escrow-server",
+    "modules/fedimint-escrow-tests",
     "modules/fedimint-gw-client",
     "modules/fedimint-gwv2-client",
     "modules/fedimint-ln-client",
@@ -196,6 +197,10 @@ fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=
 fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.14.0-alpha" }
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.14.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.14.0-alpha" }
+fedimint-escrow-client = { path = "./modules/fedimint-escrow-client", version = "=0.14.0-alpha" }
+fedimint-escrow-common = { path = "./modules/fedimint-escrow-common", version = "=0.14.0-alpha" }
+fedimint-escrow-server = { path = "./modules/fedimint-escrow-server", version = "=0.14.0-alpha" }
+fedimint-escrow-tests = { path = "./modules/fedimint-escrow-integration_tests", version = "=0.14.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.14.0-alpha" }
 fedimint-gateway-common = { package = "fedimint-gateway-common", path = "./gateway/fedimint-gateway-common", version = "=0.14.0-alpha" }
 fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.14.0-alpha" }
