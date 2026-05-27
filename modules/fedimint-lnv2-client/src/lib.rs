@@ -167,8 +167,9 @@ pub enum SendOperationState {
 /// The final state of an operation sending a payment over lightning.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FinalSendOperationState {
-    /// The payment was successful.
-    Success,
+    /// The payment was successful. Carries the payment preimage proving
+    /// the gateway settled the invoice, serialized as a lowercase hex string.
+    Success(#[serde(with = "fedimint_core::hex::serde")] [u8; 32]),
     /// The payment has been refunded.
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
@@ -775,8 +776,8 @@ impl LightningClientModule {
 
         while let Some(state) = stream.next().await {
             match state {
-                SendOperationState::Success(_) => {
-                    final_state = Some(FinalSendOperationState::Success);
+                SendOperationState::Success(preimage) => {
+                    final_state = Some(FinalSendOperationState::Success(preimage));
                 }
                 SendOperationState::Refunded => {
                     final_state = Some(FinalSendOperationState::Refunded);
