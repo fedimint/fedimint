@@ -49,8 +49,13 @@ export -f devimint_env
 # In our dev env we want to use the current aliases from the source code
 export FM_DEVIMINT_STATIC_DATA_DIR="${REPO_ROOT}/devimint/share"
 
+DEVIMINT_COMMAND="dev-fed"
+if [ "${FM_PRE_RESTORE:-}" = "true" ]; then
+  DEVIMINT_COMMAND="dev-fed-pre-restore"
+fi
+
 env RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
-  devimint --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" "$@" dev-fed \
+  devimint --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" "$@" "$DEVIMINT_COMMAND" \
     --exec bash -c devimint_env
 
 >&2 echo "Devimint Env Ended"

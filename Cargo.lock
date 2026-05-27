@@ -2368,6 +2368,7 @@ dependencies = [
  "serde",
  "serde_json",
  "substring",
+ "tar",
  "tokio",
  "tokio-rustls 0.26.4",
  "tower-http",
