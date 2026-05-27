@@ -15,13 +15,13 @@ mod receive_sm;
 mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
-use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::DynModuleApi;
+use db::{DbKeyPrefix, IncomingContractStreamIndexKey};
+use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -56,6 +56,7 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
+use rand::seq::IteratorRandom;
 use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -317,6 +318,12 @@ pub struct LightningClientModule {
     keypair: Keypair,
     lnurl_keypair: Keypair,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    /// In-memory cache mapping gateway api endpoints to their last observed
+    /// `RoutingInfo`. Populated once at startup by a background task that
+    /// probes every gateway registered with the federation. Empty until
+    /// that refresh completes; `select_gateway` falls back to a live probe
+    /// in that case.
+    gateway_cache: Arc<RwLock<BTreeMap<SafeUrl, RoutingInfo>>>,
     #[allow(unused)] // The field is only used by the cli feature
     admin_auth: Option<ApiAuth>,
 }
@@ -394,96 +401,111 @@ impl LightningClientModule {
                 .child_key(ChildId(1))
                 .to_secp_key(SECP256K1),
             gateway_conn,
+            gateway_cache: Arc::new(RwLock::new(BTreeMap::new())),
             admin_auth,
         };
 
         module.spawn_receive_lnurl_task(custom_meta_fn, task_group, client_span);
 
-        module.spawn_gateway_map_update_task(task_group, client_span);
+        module.spawn_refresh_gateways_task(task_group, client_span);
 
         module
     }
 
-    fn spawn_gateway_map_update_task(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
+    fn spawn_refresh_gateways_task(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
         let api = self.module_api.clone();
 
         task_group.spawn_cancellable_with_span(
             client_span.clone(),
-            "gateway_map_update_task",
+            "refresh_gateways_task",
             async move {
                 api.wait_for_initialized_connections().await;
-                module.update_gateway_map().await;
+                if let Err(e) = module.refresh_gateways().await {
+                    warn!(?e, "Failed to fetch the gateway list from the federation");
+                }
             },
         );
     }
 
-    async fn update_gateway_map(&self) {
-        // Update the mapping from lightning node public keys to gateway api
-        // endpoints maintained in the module database. When paying an invoice this
-        // enables the client to select the gateway that has created the invoice,
-        // if possible, such that the payment does not go over lightning, reducing
-        // fees and latency.
+    /// Probes every gateway registered with the federation and populates
+    /// the in-memory `RoutingInfo` cache incrementally as each probe
+    /// completes, so a slow or unresponsive gateway does not delay
+    /// inserting the entries of other gateways. Gateways that fail to
+    /// respond are skipped so that `select_gateway` only picks a
+    /// currently online gateway without further network round-trips.
+    async fn refresh_gateways(&self) -> FederationResult<()> {
+        let gateways = self.module_api.gateways().await?;
 
-        if let Ok(gateways) = self.module_api.gateways().await {
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-            for gateway in gateways {
-                if let Ok(Some(routing_info)) = self
+        let mut probes = gateways
+            .into_iter()
+            .map(|gateway| async move {
+                let routing_info = self
                     .gateway_conn
                     .routing_info(gateway.clone(), &self.federation_id)
-                    .await
-                {
-                    dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
-                        .await;
-                }
-            }
+                    .await;
 
-            if let Err(e) = dbtx.commit_tx_result().await {
-                warn!("Failed to commit the updated gateway mapping to the database: {e}");
+                (gateway, routing_info)
+            })
+            .collect::<futures::stream::FuturesUnordered<_>>();
+
+        while let Some((gateway, routing_info)) = probes.next().await {
+            if let Ok(Some(routing_info)) = routing_info {
+                self.gateway_cache
+                    .write()
+                    .expect("Lock poisoned")
+                    .insert(gateway, routing_info);
             }
         }
+
+        Ok(())
     }
 
-    /// Selects an available gateway by querying the federation's registered
-    /// gateways, checking if one of them match the invoice's payee public
-    /// key, then queries the gateway for `RoutingInfo` to determine if it is
-    /// online.
+    /// Picks an online gateway from the in-memory `RoutingInfo` cache. If
+    /// an invoice is supplied and one of the cached gateways is the payee,
+    /// that gateway is returned so the payment can settle as a direct
+    /// ecash swap without going over lightning; otherwise a cached gateway
+    /// is picked uniformly at random.
+    ///
+    /// On a cold start (empty cache — typically the first call in a
+    /// short-lived `fedimint-cli` process before the background refresh
+    /// task has populated anything) this triggers one inline
+    /// `refresh_gateways` and tries again before giving up.
     pub async fn select_gateway(
         &self,
-        invoice: Option<Bolt11Invoice>,
+        invoice: Option<&Bolt11Invoice>,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
-        let gateways = self
-            .module_api
-            .gateways()
-            .await
-            .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
+        if let Some(selection) = self.select_from_cache(invoice) {
+            return Ok(selection);
+        }
 
-        if gateways.is_empty() {
-            return Err(SelectGatewayError::NoGatewaysAvailable);
+        self.refresh_gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FailedToFetchGateways(e.to_string()))?;
+
+        self.select_from_cache(invoice)
+            .ok_or(SelectGatewayError::NoGatewaysAvailable)
+    }
+
+    fn select_from_cache(&self, invoice: Option<&Bolt11Invoice>) -> Option<(SafeUrl, RoutingInfo)> {
+        let cache = self.gateway_cache.read().expect("Lock poisoned").clone();
+
+        if cache.is_empty() {
+            return None;
         }
 
         if let Some(invoice) = invoice
-            && let Some(gateway) = self
-                .client_ctx
-                .module_db()
-                .begin_transaction_nc()
-                .await
-                .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
-                .await
-                .filter(|gateway| gateways.contains(gateway))
-            && let Ok(Some(routing_info)) = self.routing_info(&gateway).await
+            && let Some((gateway, routing_info)) = cache
+                .iter()
+                .find(|(_, info)| info.lightning_public_key == invoice.recover_payee_pub_key())
         {
-            return Ok((gateway, routing_info));
+            return Some((gateway.clone(), routing_info.clone()));
         }
 
-        for gateway in gateways {
-            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
-                return Ok((gateway, routing_info));
-            }
-        }
-
-        Err(SelectGatewayError::GatewaysUnresponsive)
+        cache
+            .iter()
+            .choose(&mut rand::thread_rng())
+            .map(|(gateway, routing_info)| (gateway.clone(), routing_info.clone()))
     }
 
     /// Sends a request to each peer for their registered gateway list and
@@ -572,7 +594,7 @@ impl LightningClientModule {
                     .ok_or(SendPaymentError::FederationNotSupported)?,
             ),
             None => self
-                .select_gateway(Some(invoice.clone()))
+                .select_gateway(Some(&invoice))
                 .await
                 .map_err(SendPaymentError::SelectGateway)?,
         };
@@ -1066,7 +1088,7 @@ impl LightningClientModule {
     /// to use for testing purposes.
     pub async fn generate_lnurl(
         &self,
-        recurringd: SafeUrl,
+        recurringd: &SafeUrl,
         gateway: Option<SafeUrl>,
     ) -> Result<String, GenerateLnurlError> {
         let gateways = if let Some(gateway) = gateway {
@@ -1076,7 +1098,7 @@ impl LightningClientModule {
                 .module_api
                 .gateways()
                 .await
-                .map_err(|e| GenerateLnurlError::FailedToRequestGateways(e.to_string()))?;
+                .map_err(|e| GenerateLnurlError::FailedToFetchGateways(e.to_string()))?;
 
             if gateways.is_empty() {
                 return Err(GenerateLnurlError::NoGatewaysAvailable);
@@ -1161,12 +1183,10 @@ impl LightningClientModule {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SelectGatewayError {
-    #[error("Failed to request gateways")]
-    FailedToRequestGateways(String),
     #[error("No gateways are available")]
     NoGatewaysAvailable,
-    #[error("All gateways failed to respond")]
-    GatewaysUnresponsive,
+    #[error("Failed to fetch the gateway list from the federation: {0}")]
+    FailedToFetchGateways(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -1222,8 +1242,8 @@ pub enum ReceiveError {
 pub enum GenerateLnurlError {
     #[error("No gateways are available")]
     NoGatewaysAvailable,
-    #[error("Failed to request gateways")]
-    FailedToRequestGateways(String),
+    #[error("Failed to fetch the gateway list from the federation: {0}")]
+    FailedToFetchGateways(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

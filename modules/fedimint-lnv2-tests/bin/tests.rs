@@ -172,10 +172,6 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         )
     );
 
-    cmd!(client, "module", "lnv2", "gateways", "map")
-        .out_json()
-        .await?;
-
     for _ in 0..10 {
         for gateway in &gateways {
             let invoice = common::receive(&client, gateway, 1_000_000).await?.0;
