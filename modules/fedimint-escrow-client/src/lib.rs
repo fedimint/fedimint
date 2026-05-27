@@ -37,7 +37,7 @@ use strum::IntoEnumIterator;
 use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::api::EscrowFederationApi;
-use crate::client_db::{ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord, EscrowOperationMeta};
+use crate::client_db::{ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord, EscrowOperationMeta, EscrowClientStatus};
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
 pub mod input;
@@ -246,8 +246,17 @@ impl EscrowClientModule{
         amount:Amount,
         timeout:Duration
     )->Result<(OperationId,EscrowId),anyhow::Error>{
+        let buyer_key = self.keypair.public_key();
+
+        anyhow::ensure!(buyer_key != seller_key, "buyer and seller keys must differ");
+        anyhow::ensure!(buyer_key != arbiter_key, "buyer and arbiter keys must differ");
+        anyhow::ensure!(seller_key != arbiter_key, "seller and arbiter keys must differ");
+        anyhow::ensure!(amount > Amount::ZERO, "amount must be greater than zero");
+        anyhow::ensure!(arbiter_fee < amount, "arbiter fee must be less than amount");
+        anyhow::ensure!(!timeout.is_zero(), "timeout must be non-zero");
+
         let contract_hash=compute_contract_hash(
-            &self.keypair.public_key(), 
+            &buyer_key, 
             &seller_key, 
             &arbiter_key, 
             &amount, 
@@ -270,7 +279,7 @@ impl EscrowClientModule{
 
         let contract= EscrowContract{
             escrow_id,
-            buyer_key:self.keypair.public_key(),
+            buyer_key,
             seller_key,
             arbiter_key,
             amount,
@@ -287,7 +296,7 @@ impl EscrowClientModule{
                 operation_id,
                 escrow_id,
                 amount,
-                status:client_db::EscrowClientStatus::Creating
+                status:EscrowClientStatus::Creating
             },
         ).await;
 

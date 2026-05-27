@@ -1,11 +1,13 @@
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{State, StateTransition};
 use fedimint_core::core::OperationId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
 use fedimint_escrow_common::EscrowId;
 use serde::{Deserialize, Serialize};
 use crate::EscrowClientContext;
+use crate::client_db::{ClientEscrowKey, EscrowClientRecord, EscrowClientStatus};
 
 // state machines for contract creation (output)
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -57,11 +59,22 @@ impl State for EscrowOutputStateMachine {
                 vec![
                     StateTransition::new(
                         async move { global_context.await_tx_accepted(txid).await },
-                        |_dbtx, result, old_state:EscrowOutputStateMachine| Box::pin(async move{
+                        |dbtx, result, old_state:EscrowOutputStateMachine| Box::pin(async move{
                             EscrowOutputStateMachine {
-                                common: old_state.common,
+                                common: old_state.common.clone(),
                                 state: match result {
-                                    Ok(_)  => EscrowOutputSMState::Active,
+                                    Ok(_)  => {
+                                        let _= dbtx.module_tx().insert_entry(
+                                            &ClientEscrowKey(old_state.common.escrow_id), 
+                                            &EscrowClientRecord {
+                                                escrow_id: old_state.common.escrow_id,
+                                                operation_id: old_state.common.operation_id,
+                                                amount: old_state.common.amount,
+                                                status: EscrowClientStatus::Active,
+                                            }
+                                        ).await;
+                                        EscrowOutputSMState::Active
+                                    }
                                     Err(e) => EscrowOutputSMState::Failed { reason: e },
                                 },
                             }

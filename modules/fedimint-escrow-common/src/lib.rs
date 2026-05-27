@@ -86,7 +86,9 @@ pub enum EscrowInputError {
     #[error("Timeout not reached")]
     TimeoutNotReached,
     #[error("Contract hash not matched")]
-    ContractHashMismatch
+    ContractHashMismatch,
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
@@ -95,6 +97,10 @@ pub enum EscrowOutputError {
     ContractHashMismatch,
     #[error("Contract already exists")]
     AlreadyExists,
+    #[error("Identical input keys found")]
+    InvalidInputs,
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 pub struct EscrowModuleTypes;

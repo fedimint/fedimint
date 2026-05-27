@@ -252,6 +252,7 @@ impl ServerModule for Escrow {
         if !verified {
             return Err(EscrowOutputError::ContractHashMismatch)
         }
+
         if dbtx.get_value(&EscrowContractKey(contract.escrow_id)).await.is_some(){
             return  Err(EscrowOutputError::AlreadyExists);
         }
@@ -274,7 +275,7 @@ impl ServerModule for Escrow {
         dbtx.get_value(&EscrowOutputOutcomeKey(out_point)).await
     }
 
-    // // Every stored contract is a liability as federation owes this amount to buyer or seller
+    // Every stored contract is a liability as federation owes this amount to buyer or seller
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
