@@ -101,6 +101,7 @@ pub struct OutputInfo {
     pub script: ScriptBuf,
     pub value: bitcoin::Amount,
     pub spent: bool,
+    pub outpoint: Option<bitcoin::OutPoint>,
 }
 
 #[derive(Debug)]
