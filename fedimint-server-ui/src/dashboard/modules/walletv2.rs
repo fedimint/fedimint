@@ -19,12 +19,26 @@ pub async fn render(wallet: &fedimint_walletv2_server::Wallet) -> Markup {
         .map(|info| info.fee.to_sat())
         .sum::<u64>();
 
-    let custody_chart_data = if let Some(last) = tx_chain.last() {
-        let mut heights: Vec<u64> = tx_chain.iter().map(|tx| tx.created).collect();
-        let mut values: Vec<f64> = tx_chain.iter().map(|tx| tx.output.to_btc()).collect();
-        heights.push(consensus_block_count);
-        values.push(last.output.to_btc());
-        Some((heights, values))
+    let tx_chart_data = if !tx_chain.is_empty() {
+        let amounts: Vec<f64> = tx_chain
+            .iter()
+            .map(|tx| {
+                if tx.output >= tx.input {
+                    (tx.output - tx.input).to_btc()
+                } else {
+                    (tx.input - tx.output).to_btc()
+                }
+            })
+            .collect();
+        let is_receive: Vec<bool> = tx_chain.iter().map(|tx| tx.output >= tx.input).collect();
+        let fees: Vec<u64> = tx_chain.iter().map(|tx| tx.fee.to_sat()).collect();
+        let vbytes: Vec<u64> = tx_chain.iter().map(|tx| tx.vbytes).collect();
+        let feerates: Vec<u64> = tx_chain.iter().map(|tx| tx.feerate()).collect();
+        let ages: Vec<u64> = tx_chain
+            .iter()
+            .map(|tx| consensus_block_count.saturating_sub(tx.created))
+            .collect();
+        Some((amounts, is_receive, fees, vbytes, feerates, ages))
     } else {
         None
     };
@@ -146,55 +160,121 @@ pub async fn render(wallet: &fedimint_walletv2_server::Wallet) -> Markup {
                         }
 
 
-                        @if let Some((heights, values)) = &custody_chart_data {
+                        @if let Some((amounts, is_receive, fees, vbytes, feerates, ages)) = &tx_chart_data {
                             div class="mb-4" {
-                                h5 { "Value in Custody" }
-                                canvas id="walletv2-custody-chart" {}
+                                div class="d-flex justify-content-between align-items-center mb-2" {
+                                    h5 class="mb-0" { "Transaction History" }
+                                    div class="btn-group btn-group-sm" role="group" {
+                                        button type="button" class="btn btn-primary active" id="walletv2-range-25" onclick="setWalletv2Range(25)" { "25" }
+                                        button type="button" class="btn btn-outline-primary" id="walletv2-range-100" onclick="setWalletv2Range(100)" { "100" }
+                                        button type="button" class="btn btn-outline-primary" id="walletv2-range-250" onclick="setWalletv2Range(250)" { "250" }
+                                        button type="button" class="btn btn-outline-primary" id="walletv2-range-0" onclick="setWalletv2Range(0)" { "All" }
+                                    }
+                                }
+                                canvas id="walletv2-tx-chart" {}
                                 script src="/assets/chart.umd.min.js" {}
                                 (PreEscaped(format!(
                                     r#"<script>
                                     document.addEventListener('DOMContentLoaded', function() {{
-                                        var heights = {heights:?};
-                                        var values = {values:?};
-                                        var data = heights.map(function(h, i) {{ return {{x: h, y: values[i]}}; }});
-                                        new Chart(document.getElementById('walletv2-custody-chart'), {{
-                                            type: 'line',
+                                        var allAmounts = {amounts:?};
+                                        var allIsReceive = {is_receive:?};
+                                        var allFees = {fees:?};
+                                        var allVbytes = {vbytes:?};
+                                        var allFeerates = {feerates:?};
+                                        var allAges = {ages:?};
+                                        var green = 'rgba(40, 167, 69, 0.8)';
+                                        var red = 'rgba(220, 53, 69, 0.8)';
+                                        function makeData(n) {{
+                                            var amounts = n > 0 ? allAmounts.slice(-n) : allAmounts;
+                                            var flags = n > 0 ? allIsReceive.slice(-n) : allIsReceive;
+                                            return {{
+                                                data: amounts.map(function(v, i) {{ return {{x: i, y: v}}; }}),
+                                                colors: flags.map(function(r) {{ return r ? green : red; }})
+                                            }};
+                                        }}
+                                        var init = makeData(25);
+                                        var walletv2Chart = new Chart(document.getElementById('walletv2-tx-chart'), {{
+                                            type: 'bar',
                                             data: {{
                                                 datasets: [{{
-                                                    label: 'Value in Custody (BTC)',
-                                                    data: data,
-                                                    borderWidth: 2,
-                                                    fill: true,
-                                                    stepped: true,
-                                                    pointRadius: 0
+                                                    data: init.data,
+                                                    backgroundColor: init.colors,
+                                                    barPercentage: 1.0,
+                                                    categoryPercentage: 1.0
                                                 }}]
                                             }},
                                             options: {{
                                                 responsive: true,
                                                 plugins: {{
                                                     legend: {{ display: false }},
-                                                    tooltip: {{ enabled: false }}
+                                                    tooltip: {{
+                                                        enabled: true,
+                                                        boxWidth: 0,
+                                                        boxHeight: 0,
+                                                        callbacks: {{
+                                                            title: function(items) {{
+                                                                var idx = items[0].dataIndex;
+                                                                var n = walletv2Chart.data.datasets[0].data.length;
+                                                                var gi = allAmounts.length - n + idx;
+                                                                var type = allIsReceive[gi] ? 'Receive' : 'Send';
+                                                                return type + ': ' + items[0].parsed.y.toFixed(8) + ' BTC';
+                                                            }},
+                                                            label: function(item) {{
+                                                                var idx = item.dataIndex;
+                                                                var n = walletv2Chart.data.datasets[0].data.length;
+                                                                var gi = allAmounts.length - n + idx;
+                                                                return [
+                                                                    'Fee: ' + allFees[gi] + ' sat',
+                                                                    'vBytes: ' + allVbytes[gi],
+                                                                    'Feerate: ' + allFeerates[gi] + ' sat/vB',
+                                                                    'Age: ' + allAges[gi] + ' blocks'
+                                                                ];
+                                                            }}
+                                                        }}
+                                                    }}
                                                 }},
                                                 scales: {{
                                                     x: {{
                                                         type: 'linear',
-                                                        min: heights[0],
-                                                        max: heights[heights.length - 1],
+                                                        min: 0,
+                                                        max: Math.max(9, Math.min(25, allAmounts.length) - 1),
                                                         title: {{
                                                             display: true,
-                                                            text: 'Block Height'
+                                                            text: 'Transaction'
+                                                        }},
+                                                        ticks: {{
+                                                            stepSize: 1
                                                         }}
                                                     }},
                                                     y: {{
-                                                        beginAtZero: true,
+                                                        type: 'logarithmic',
                                                         title: {{
                                                             display: true,
                                                             text: 'BTC'
+                                                        }},
+                                                        afterBuildTicks: function(axis) {{
+                                                            axis.ticks = axis.ticks.filter(function(t) {{
+                                                                var log = Math.log10(t.value);
+                                                                return Math.abs(log - Math.round(log)) < 0.01;
+                                                            }});
                                                         }}
                                                     }}
                                                 }}
                                             }}
                                         }});
+                                        window.setWalletv2Range = function(n) {{
+                                            var buttons = [0, 25, 100, 250];
+                                            buttons.forEach(function(d) {{
+                                                var btn = document.getElementById('walletv2-range-' + d);
+                                                btn.className = (d === n) ? 'btn btn-primary active' : 'btn btn-outline-primary';
+                                            }});
+                                            var d = makeData(n);
+                                            var count = n > 0 ? Math.min(n, allAmounts.length) : allAmounts.length;
+                                            walletv2Chart.options.scales.x.max = Math.max(9, count - 1);
+                                            walletv2Chart.data.datasets[0].data = d.data;
+                                            walletv2Chart.data.datasets[0].backgroundColor = d.colors;
+                                            walletv2Chart.update();
+                                        }};
                                     }});
                                     </script>"#,
                                 )))
