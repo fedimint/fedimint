@@ -1,55 +1,55 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
-use anyhow::Error;
-use anyhow::bail;
+
+use anyhow::{Error, bail};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
-    ClientContext, ClientModule, OutPointRange, PrimaryModuleSupport
+    ClientContext, ClientModule, OutPointRange, PrimaryModuleSupport,
 };
 use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
+    ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped
-};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{
-    Amounts, ApiVersion, ModuleInit, MultiApiVersion,
-};
+use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1, schnorr};
 use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
-use fedimint_escrow_common::EscrowModuleTypes;
-use fedimint_escrow_common::Outcome;
-use fedimint_escrow_common::compute_resolution_message;
-use fedimint_escrow_common::{EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowOutput, KIND, Resolution, compute_contract_hash};
 use fedimint_escrow_common::config::EscrowClientConfig;
+use fedimint_escrow_common::{
+    EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowModuleTypes, EscrowOutput, KIND,
+    Outcome, Resolution, compute_contract_hash, compute_resolution_message,
+};
 use futures::StreamExt;
-use strum::IntoEnumIterator;
 use ring::rand::{SecureRandom, SystemRandom};
+use strum::IntoEnumIterator;
 
 use crate::api::EscrowFederationApi;
-use crate::client_db::{ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord, EscrowOperationMeta, EscrowClientStatus};
+use crate::client_db::{
+    ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord,
+    EscrowClientStatus, EscrowOperationMeta,
+};
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
+pub mod api;
+mod client_db;
 pub mod input;
 pub mod output;
-mod client_db;
-pub mod api;
 
 #[cfg(feature = "cli")]
 pub mod cli;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub enum EscrowStateMachine{
+pub enum EscrowStateMachine {
     Input(EscrowInputStateMachine),
     Output(EscrowOutputStateMachine),
 }
@@ -61,16 +61,15 @@ impl State for EscrowStateMachine {
         &self,
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<StateTransition<Self>>
-    {
+    ) -> Vec<StateTransition<Self>> {
         match self {
-            EscrowStateMachine::Input(sm)=>{
+            EscrowStateMachine::Input(sm) => {
                 sm_enum_variant_translation!(
                     sm.transitions(context, global_context),
                     EscrowStateMachine::Input
                 )
             }
-            EscrowStateMachine::Output(sm)=>{
+            EscrowStateMachine::Output(sm) => {
                 sm_enum_variant_translation!(
                     sm.transitions(context, global_context),
                     EscrowStateMachine::Output
@@ -81,12 +80,8 @@ impl State for EscrowStateMachine {
 
     fn operation_id(&self) -> OperationId {
         match self {
-            EscrowStateMachine::Input(sm)=>{
-                sm.common.operation_id
-            }
-            EscrowStateMachine::Output(sm)=>{
-                sm.common.operation_id
-            }
+            EscrowStateMachine::Input(sm) => sm.common.operation_id,
+            EscrowStateMachine::Output(sm) => sm.common.operation_id,
         }
     }
 }
@@ -100,8 +95,8 @@ impl IntoDynInstance for EscrowStateMachine {
 }
 
 #[derive(Clone)]
-pub struct EscrowClientContext{
-    escrow_decoder:Decoder,
+pub struct EscrowClientContext {
+    escrow_decoder: Decoder,
     client_ctx: ClientContext<EscrowClientModule>,
     notifier: ModuleNotifier<EscrowStateMachine>,
 }
@@ -120,11 +115,11 @@ impl fmt::Debug for EscrowClientContext {
     }
 }
 
-pub struct EscrowClientModule{
+pub struct EscrowClientModule {
     federation_id: FederationId,
-    cfg:EscrowClientConfig,
+    cfg: EscrowClientConfig,
     pub client_ctx: ClientContext<Self>,
-    keypair:Keypair,
+    keypair: Keypair,
     notifier: ModuleNotifier<EscrowStateMachine>,
 }
 
@@ -135,7 +130,7 @@ impl fmt::Debug for EscrowClientModule {
             .field("cfg", &self.cfg)
             .field("notifier", &self.notifier)
             .field("client_ctx", &self.client_ctx)
-            .field("keypair",&self.keypair)
+            .field("keypair", &self.keypair)
             .finish()
     }
 }
@@ -154,8 +149,7 @@ impl ModuleInit for EscrowClientInit {
         let mut contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
             BTreeMap::new();
         let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty()
-                || prefix_names.contains(&f.to_string().to_lowercase())
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
         for table in filtered_prefixes {
@@ -190,12 +184,15 @@ impl ClientModuleInit for EscrowClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(EscrowClientModule{
-            federation_id:args.federation_id,
-            cfg:args.cfg.clone(),
-            client_ctx:args.context.clone(),
-            keypair:args.module_root_secret().clone().to_secp_key(&Secp256k1::new()),
-            notifier:args.notifier().clone()
+        Ok(EscrowClientModule {
+            federation_id: args.federation_id,
+            cfg: args.cfg.clone(),
+            client_ctx: args.context.clone(),
+            keypair: args
+                .module_root_secret()
+                .clone()
+                .to_secp_key(&Secp256k1::new()),
+            notifier: args.notifier().clone(),
         })
     }
 }
@@ -210,9 +207,9 @@ impl ClientModule for EscrowClientModule {
 
     fn context(&self) -> EscrowClientContext {
         EscrowClientContext {
-            escrow_decoder:  <EscrowClientModule as ClientModule>::decoder(),
-            client_ctx:self.client_ctx.clone(),
-            notifier:self.notifier.clone()
+            escrow_decoder: <EscrowClientModule as ClientModule>::decoder(),
+            client_ctx: self.client_ctx.clone(),
+            notifier: self.notifier.clone(),
         }
     }
 
@@ -228,48 +225,54 @@ impl ClientModule for EscrowClientModule {
         Some(Amounts::ZERO)
     }
 
-    #[cfg(feature="cli")]
+    #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
-        args:&[std::ffi::OsString]
-    )->anyhow::Result<serde_json::Value>{
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
         cli::handle_cli_command(&self, args).await
     }
 }
 
-impl EscrowClientModule{
+impl EscrowClientModule {
     pub async fn create_escrow(
         &self,
-        seller_key:PublicKey,
-        arbiter_key:PublicKey,
-        arbiter_fee:Amount,
-        amount:Amount,
-        timeout:Duration
-    )->Result<(OperationId,EscrowId),anyhow::Error>{
+        seller_key: PublicKey,
+        arbiter_key: PublicKey,
+        arbiter_fee: Amount,
+        amount: Amount,
+        timeout: Duration,
+    ) -> Result<(OperationId, EscrowId), anyhow::Error> {
         let buyer_key = self.keypair.public_key();
 
         anyhow::ensure!(buyer_key != seller_key, "buyer and seller keys must differ");
-        anyhow::ensure!(buyer_key != arbiter_key, "buyer and arbiter keys must differ");
-        anyhow::ensure!(seller_key != arbiter_key, "seller and arbiter keys must differ");
+        anyhow::ensure!(
+            buyer_key != arbiter_key,
+            "buyer and arbiter keys must differ"
+        );
+        anyhow::ensure!(
+            seller_key != arbiter_key,
+            "seller and arbiter keys must differ"
+        );
         anyhow::ensure!(amount > Amount::ZERO, "amount must be greater than zero");
         anyhow::ensure!(arbiter_fee < amount, "arbiter fee must be less than amount");
         anyhow::ensure!(!timeout.is_zero(), "timeout must be non-zero");
 
-        let contract_hash=compute_contract_hash(
-            &buyer_key, 
-            &seller_key, 
-            &arbiter_key, 
-            &amount, 
-            &timeout, 
-            &self.federation_id
+        let contract_hash = compute_contract_hash(
+            &buyer_key,
+            &seller_key,
+            &arbiter_key,
+            &amount,
+            &timeout,
+            &self.federation_id,
         );
 
-        let rng=SystemRandom::new();
+        let rng = SystemRandom::new();
         let mut nonce = [0u8; 32];
-        let _= rng.fill(&mut nonce);
-        
-        let operation_id=OperationId::new_random();
-        let escrow_id:EscrowId= {
+        let _ = rng.fill(&mut nonce);
+
+        let operation_id = OperationId::new_random();
+        let escrow_id: EscrowId = {
             let mut engine = sha256::HashEngine::default();
             engine.input(b"escrow_id");
             engine.input(&contract_hash);
@@ -277,7 +280,7 @@ impl EscrowClientModule{
             EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
         };
 
-        let contract= EscrowContract{
+        let contract = EscrowContract {
             escrow_id,
             buyer_key,
             seller_key,
@@ -286,54 +289,55 @@ impl EscrowClientModule{
             arbiter_fee,
             contract_hash,
             timeout,
-            federation_id:self.federation_id
+            federation_id: self.federation_id,
         };
 
-        let mut dbtx=self.client_ctx.module_db().begin_transaction().await;
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         dbtx.insert_entry(
             &ClientEscrowKey(escrow_id),
             &EscrowClientRecord {
                 operation_id,
                 escrow_id,
                 amount,
-                status:EscrowClientStatus::Creating
+                status: EscrowClientStatus::Creating,
             },
-        ).await;
+        )
+        .await;
 
         dbtx.commit_tx().await;
 
-        let output_sm=ClientOutputSM{
-            state_machines:Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range.into_iter().map(|out_point| {
-                    EscrowStateMachine::Output(EscrowOutputStateMachine {
-                        common: EscrowOutputSMCommon {
-                            operation_id,
-                            out_point,
-                            escrow_id,
-                            amount,
-                        },
-                        state: EscrowOutputSMState::Creating,
+        let output_sm = ClientOutputSM {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Output(EscrowOutputStateMachine {
+                            common: EscrowOutputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount,
+                            },
+                            state: EscrowOutputSMState::Creating,
+                        })
                     })
-                }).collect()
+                    .collect()
             }),
         };
 
-        let output=ClientOutput{
-            output:EscrowOutput{
-                contract
-            },
-            amounts:Amounts::new_bitcoin(amount)
+        let output = ClientOutput {
+            output: EscrowOutput { contract },
+            amounts: Amounts::new_bitcoin(amount),
         };
 
-        let tx= TransactionBuilder::new()
-            .with_outputs(
-                self.client_ctx
-                    .make_client_outputs(ClientOutputBundle::new(vec![output], vec![output_sm]))
-            );
+        let tx = TransactionBuilder::new().with_outputs(
+            self.client_ctx
+                .make_client_outputs(ClientOutputBundle::new(vec![output], vec![output_sm])),
+        );
 
-        let operation_meta_gen=move |out_point_range:OutPointRange| {
-            let txid=out_point_range.txid();
-            let out_point_indices=out_point_range
+        let operation_meta_gen = move |out_point_range: OutPointRange| {
+            let txid = out_point_range.txid();
+            let out_point_indices = out_point_range
                 .into_iter()
                 .map(|out_point| out_point.out_idx)
                 .collect();
@@ -341,88 +345,83 @@ impl EscrowClientModule{
             EscrowOperationMeta {
                 escrow_id,
                 amount,
-                action:EscrowAction::Created,
+                action: EscrowAction::Created,
                 txid,
-                out_point_indices
+                out_point_indices,
             }
         };
-        
-        self.client_ctx.finalize_and_submit_transaction(
-            operation_id, 
-            KIND.as_str(), 
-            operation_meta_gen,
-            tx
-        ).await?;
-        
-        Ok((operation_id,escrow_id))
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
+
+        Ok((operation_id, escrow_id))
     }
 
     pub async fn resolve_escrow(
         &self,
-        escrow_id:EscrowId,
-        buyer_signature:schnorr::Signature
-    )->Result<OperationId,anyhow::Error>{
-        let operation_id=OperationId::new_random();
-        let contract= self
+        escrow_id: EscrowId,
+        buyer_signature: schnorr::Signature,
+    ) -> Result<OperationId, anyhow::Error> {
+        let operation_id = OperationId::new_random();
+        let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let input = ClientInput{
-            amounts:Amounts::new_bitcoin(contract.amount),
-            keys:vec![self.keypair],
-            input:EscrowInput{
+        let input = ClientInput {
+            amounts: Amounts::new_bitcoin(contract.amount),
+            keys: vec![self.keypair],
+            input: EscrowInput {
                 escrow_id,
-                resolution:Resolution::BuyerRelease { buyer_signature }
-            }
+                resolution: Resolution::BuyerRelease { buyer_signature },
+            },
         };
 
-        let input_sm=ClientInputSM{
+        let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range.into_iter().map(|out_point| {
-                    EscrowStateMachine::Input(EscrowInputStateMachine {
-                        common: EscrowInputSMCommon {
-                            operation_id,
-                            out_point,
-                            escrow_id,
-                            amount:contract.amount,
-                            resolution: Resolution::BuyerRelease {
-                                buyer_signature,
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Input(EscrowInputStateMachine {
+                            common: EscrowInputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount: contract.amount,
+                                resolution: Resolution::BuyerRelease { buyer_signature },
                             },
-                        },
-                        state: EscrowInputSMState::Pending,
+                            state: EscrowInputSMState::Pending,
+                        })
                     })
-                }).collect()
+                    .collect()
             }),
         };
 
-        let tx=TransactionBuilder::new()
-                .with_inputs(self.client_ctx.make_dyn(
-                ClientInputBundle::new(vec![input], vec![input_sm])
-            ));
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
+        );
 
-        let operation_meta_gen=move |out_point_range:OutPointRange| {
-            let txid=out_point_range.txid();
-            let out_point_indices=out_point_range
+        let operation_meta_gen = move |out_point_range: OutPointRange| {
+            let txid = out_point_range.txid();
+            let out_point_indices = out_point_range
                 .into_iter()
                 .map(|out_point| out_point.out_idx)
                 .collect();
 
             EscrowOperationMeta {
                 escrow_id,
-                amount:contract.amount,
-                action:EscrowAction::Released,
+                amount: contract.amount,
+                action: EscrowAction::Released,
                 txid,
-                out_point_indices
+                out_point_indices,
             }
         };
-        
-        self.client_ctx.finalize_and_submit_transaction(
-            operation_id,
-            KIND.as_str(), 
-            operation_meta_gen,
-            tx
-        ).await?;
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
 
         Ok(operation_id)
     }
@@ -433,95 +432,102 @@ impl EscrowClientModule{
         outcome: Outcome,
         arbiter_signature: schnorr::Signature,
     ) -> anyhow::Result<OperationId> {
-        let operation_id=OperationId::new_random();
-        let contract= self
+        let operation_id = OperationId::new_random();
+        let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let input = ClientInput{
-            amounts:Amounts::new_bitcoin(contract.amount),
-            keys:vec![self.keypair],
-            input:EscrowInput{
+        let input = ClientInput {
+            amounts: Amounts::new_bitcoin(contract.amount),
+            keys: vec![self.keypair],
+            input: EscrowInput {
                 escrow_id,
-                resolution:Resolution::ArbiterOutcome { 
+                resolution: Resolution::ArbiterOutcome {
                     arbiter_signature,
-                    outcome 
-                }
-            }
+                    outcome,
+                },
+            },
         };
 
-        let input_sm=ClientInputSM{
+        let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range.into_iter().map(|out_point| {
-                    EscrowStateMachine::Input(EscrowInputStateMachine {
-                        common: EscrowInputSMCommon {
-                            operation_id,
-                            out_point,
-                            escrow_id,
-                            amount:contract.amount,
-                            resolution: Resolution::ArbiterOutcome { 
-                                arbiter_signature,
-                                outcome 
-                            }
-                        },
-                        state: EscrowInputSMState::Pending,
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Input(EscrowInputStateMachine {
+                            common: EscrowInputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount: contract.amount,
+                                resolution: Resolution::ArbiterOutcome {
+                                    arbiter_signature,
+                                    outcome,
+                                },
+                            },
+                            state: EscrowInputSMState::Pending,
+                        })
                     })
-                }).collect()
+                    .collect()
             }),
         };
 
-        let tx=TransactionBuilder::new()
-                .with_inputs(self.client_ctx.make_dyn(
-                ClientInputBundle::new(vec![input], vec![input_sm])
-            ));
-        
-        let operation_meta_gen=move |out_point_range:OutPointRange| {
-            let txid=out_point_range.txid();
-            let out_point_indices=out_point_range
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
+        );
+
+        let operation_meta_gen = move |out_point_range: OutPointRange| {
+            let txid = out_point_range.txid();
+            let out_point_indices = out_point_range
                 .into_iter()
                 .map(|out_point| out_point.out_idx)
                 .collect();
 
             EscrowOperationMeta {
                 escrow_id,
-                amount:contract.amount,
-                action:match outcome {
-                    Outcome::Release=>EscrowAction::Released,
-                    Outcome::Refund=>EscrowAction::Refunded
+                amount: contract.amount,
+                action: match outcome {
+                    Outcome::Release => EscrowAction::Released,
+                    Outcome::Refund => EscrowAction::Refunded,
                 },
                 txid,
-                out_point_indices
+                out_point_indices,
             }
         };
-        
-        self.client_ctx.finalize_and_submit_transaction(
-            operation_id,
-            KIND.as_str(), 
-            operation_meta_gen,
-            tx
-        ).await?;
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
 
         Ok(operation_id)
     }
 
-    pub async fn get_contract(&self,escrow_id:EscrowId)->Result<Option<EscrowContract>,anyhow::Error>{
-        let contract:Option<EscrowContract>=self.client_ctx.module_api().get_contract(escrow_id).await?;
+    pub async fn get_contract(
+        &self,
+        escrow_id: EscrowId,
+    ) -> Result<Option<EscrowContract>, anyhow::Error> {
+        let contract: Option<EscrowContract> =
+            self.client_ctx.module_api().get_contract(escrow_id).await?;
         Ok(contract)
     }
 
-    async fn escrow_operation(&self,operation_id:OperationId)->Result<OperationLogEntry,Error>{
-        let operation_log=self.client_ctx.get_operation(operation_id).await?;
+    async fn escrow_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<OperationLogEntry, Error> {
+        let operation_log = self.client_ctx.get_operation(operation_id).await?;
         if operation_log.operation_module_kind() != KIND.as_str() {
             bail!("Operation is not an escrow operation");
         }
         Ok(operation_log)
     }
 
-    pub async fn list_escrow_operation(&self)->Vec<EscrowClientRecord>{
-        let mut dbtx=self.client_ctx.module_db().begin_transaction_nc().await;
+    pub async fn list_escrow_operation(&self) -> Vec<EscrowClientRecord> {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
 
-        let records:Vec<EscrowClientRecord>=dbtx
+        let records: Vec<EscrowClientRecord> = dbtx
             .find_by_prefix(&ClientEscrowKeyPrefix)
             .await
             .map(|(_, record)| record)
@@ -535,7 +541,7 @@ impl EscrowClientModule{
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<EscrowOutputSMState>> {
-        let operation:OperationLogEntry = self.escrow_operation(operation_id).await?;
+        let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
         let meta = operation.meta::<EscrowOperationMeta>();
         let txid = meta.txid;
         // let out_points: Vec<OutPoint> = meta
@@ -546,14 +552,13 @@ impl EscrowClientModule{
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(
-            operation,
-            operation_id,
-            move || {
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
                 let client_ctx = client_ctx.clone();
                 async_stream::stream! {
                     yield EscrowOutputSMState::Creating;
-                    
+
                     match client_ctx
                         .transaction_updates(operation_id)
                         .await
@@ -583,24 +588,22 @@ impl EscrowClientModule{
                     //     }
                     // }
                 }
-            },
-        ))
+            }))
     }
 
     pub async fn subscribe_escrow_resolution(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<EscrowInputSMState>> {
-        let operation:OperationLogEntry = self.escrow_operation(operation_id).await?;
+        let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
         let meta = operation.meta::<EscrowOperationMeta>();
         let txid = meta.txid;
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(
-            operation,
-            operation_id,
-            move || {
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
                 let client_ctx = client_ctx.clone();
                 async_stream::stream! {
                     yield EscrowInputSMState::Pending;
@@ -628,11 +631,14 @@ impl EscrowClientModule{
                         }
                     }
                 }
-            },
-        ))
+            }))
     }
 
-    pub fn sign_release_message(&self, escrow_id: EscrowId, contract: &EscrowContract) -> schnorr::Signature {
+    pub fn sign_release_message(
+        &self,
+        escrow_id: EscrowId,
+        contract: &EscrowContract,
+    ) -> schnorr::Signature {
         let msg_bytes = compute_resolution_message(
             &contract.federation_id,
             &escrow_id,

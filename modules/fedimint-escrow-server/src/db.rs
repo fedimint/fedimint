@@ -8,7 +8,7 @@ use strum_macros::EnumIter;
 #[derive(Clone, EnumIter, Debug, strum_macros::Display)]
 pub enum DbKeyPrefix {
     EscrowContract = 0x01,
-    OutputOutcome = 0x04
+    OutputOutcome = 0x04,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]

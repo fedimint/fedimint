@@ -1,9 +1,10 @@
-use fedimint_core::{plugin_types_trait_impl_config};
-use fedimint_core::encoding::{Encodable,Decodable};
-use fedimint_core::core::{ModuleKind};
-
 use std::fmt;
+
+use fedimint_core::core::ModuleKind;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::plugin_types_trait_impl_config;
 use serde::{Deserialize, Serialize};
+
 use crate::EscrowCommonInit;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -28,7 +29,6 @@ plugin_types_trait_impl_config!(
     EscrowConfigConsensus,
     EscrowClientConfig
 );
-
 
 impl std::fmt::Display for EscrowClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

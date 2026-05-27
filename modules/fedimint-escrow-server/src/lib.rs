@@ -8,22 +8,35 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransacti
 use fedimint_core::envs::{FM_ENABLE_MODULE_ESCROW_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint
+    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
+    api_endpoint,
 };
-use fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items, secp256k1};
-use fedimint_escrow_common::config::{EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate};
-use fedimint_escrow_common::{EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError, EscrowOutputOutcome, GET_CONTRACT_ENDPOINT, KIND, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash, compute_resolution_message};
+use fedimint_core::{
+    InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, secp256k1,
+};
+use fedimint_escrow_common::config::{
+    EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
+};
+use fedimint_escrow_common::{
+    EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput, EscrowInputError,
+    EscrowModuleTypes, EscrowOutput, EscrowOutputError, EscrowOutputOutcome, GET_CONTRACT_ENDPOINT,
+    KIND, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
+    compute_resolution_message,
+};
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
-    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
-use fedimint_core::{apply, async_trait_maybe_send};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 
 mod db;
-use crate::db::{DbKeyPrefix, EscrowContractKey, EscrowContractPrefix, EscrowOutputOutcomeKey, EscrowOutputOutcomePrefix};
+use crate::db::{
+    DbKeyPrefix, EscrowContractKey, EscrowContractPrefix, EscrowOutputOutcomeKey,
+    EscrowOutputOutcomePrefix,
+};
 
 #[derive(Debug, Clone)]
 pub struct EscrowInit;
@@ -39,8 +52,7 @@ impl ModuleInit for EscrowInit {
         let mut contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
             BTreeMap::new();
         let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty()
-                || prefix_names.contains(&f.to_string().to_lowercase())
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
         for table in filtered_prefixes {
@@ -75,44 +87,56 @@ impl ModuleInit for EscrowInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for EscrowInit {
     type Module = Escrow;
-    fn versions(&self,_core: CoreConsensusVersion) ->  &[ModuleConsensusVersion] {
+    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
         SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major,CORE_CONSENSUS_VERSION.minor),
-         (MODULE_CONSENSUS_VERSION.major,MODULE_CONSENSUS_VERSION.minor),
-          &[(0,0)])
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            &[(0, 0)],
+        )
     }
 
     fn kind() -> fedimint_core::core::ModuleKind {
         KIND
     }
 
-    async fn init(&self,args:&ServerModuleInitArgs<Self>)-> anyhow::Result<Self::Module> {
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(Escrow {
             cfg: args.cfg().to_typed()?,
         })
     }
-    
+
     fn is_enabled_by_default(&self) -> bool {
         is_env_var_set_opt(FM_ENABLE_MODULE_ESCROW_ENV).unwrap_or(true)
     }
 
-    fn trusted_dealer_gen(&self,peers: &[PeerId],_args: &ConfigGenModuleArgs,) -> BTreeMap<PeerId,ServerModuleConfig> {
-        peers.iter().map(
-            |&peer| {
-                let config=EscrowConfig{
-                    private:EscrowConfigPrivate,
-                    consensus:EscrowConfigConsensus
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        _args: &ConfigGenModuleArgs,
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
+        peers
+            .iter()
+            .map(|&peer| {
+                let config = EscrowConfig {
+                    private: EscrowConfigPrivate,
+                    consensus: EscrowConfigConsensus,
                 };
-                (peer,config.to_erased())
-            }
-        ).collect()
+                (peer, config.to_erased())
+            })
+            .collect()
     }
 
-    fn get_client_config(&self,_config: &ServerModuleConsensusConfig,) -> anyhow::Result<EscrowClientConfig> {
+    fn get_client_config(
+        &self,
+        _config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<EscrowClientConfig> {
         Ok(EscrowClientConfig)
     }
 
@@ -122,9 +146,10 @@ impl ServerModuleInit for EscrowInit {
         _args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
         Ok(EscrowConfig {
-            private:   EscrowConfigPrivate,
+            private: EscrowConfigPrivate,
             consensus: EscrowConfigConsensus,
-        }.to_erased())
+        }
+        .to_erased())
     }
 
     fn validate_config(
@@ -175,37 +200,37 @@ impl ServerModule for Escrow {
         input: &'b EscrowInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, EscrowInputError> {
-        let contract=dbtx
+        let contract = dbtx
             .get_value(&EscrowContractKey(input.escrow_id))
             .await
             .ok_or(EscrowInputError::ContractNotFound)?;
 
-        
-        let verified=verify_contract_hash(&contract.contract_hash,&contract);
+        let verified = verify_contract_hash(&contract.contract_hash, &contract);
         if !verified {
-            return Err(EscrowInputError::ContractHashMismatch)
+            return Err(EscrowInputError::ContractHashMismatch);
         }
 
-        let recipient_key=match &input.resolution {
-            Resolution::BuyerRelease { buyer_signature }=>{
-                let msg_bytes=compute_resolution_message(
+        let recipient_key = match &input.resolution {
+            Resolution::BuyerRelease { buyer_signature } => {
+                let msg_bytes = compute_resolution_message(
                     &contract.federation_id,
                     &contract.escrow_id,
                     &Outcome::Release,
-                    &contract.contract_hash
+                    &contract.contract_hash,
                 );
 
-                let msg=secp256k1::Message::from_digest(msg_bytes);
-                let xonly_public_key=contract.buyer_key.x_only_public_key().0;
-                secp256k1::global::SECP256K1.verify_schnorr(
-                    buyer_signature, 
-                    &msg, 
-                    &xonly_public_key
-                ).map_err(|_| EscrowInputError::InvalidBuyerSignature)?;
+                let msg = secp256k1::Message::from_digest(msg_bytes);
+                let xonly_public_key = contract.buyer_key.x_only_public_key().0;
+                secp256k1::global::SECP256K1
+                    .verify_schnorr(buyer_signature, &msg, &xonly_public_key)
+                    .map_err(|_| EscrowInputError::InvalidBuyerSignature)?;
 
                 contract.seller_key
             }
-            Resolution::ArbiterOutcome { arbiter_signature, outcome }=>{
+            Resolution::ArbiterOutcome {
+                arbiter_signature,
+                outcome,
+            } => {
                 let now = fedimint_core::time::duration_since_epoch().as_secs();
                 if now < contract.timeout.as_secs() {
                     return Err(EscrowInputError::TimeoutNotReached);
@@ -225,18 +250,18 @@ impl ServerModule for Escrow {
 
                 match outcome {
                     Outcome::Release => contract.seller_key,
-                    Outcome::Refund  => contract.buyer_key,
+                    Outcome::Refund => contract.buyer_key,
                 }
             }
         };
 
         dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
-        Ok(InputMeta{
+        Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(contract.amount),
                 fees: Amounts::ZERO,
             },
-            pub_key: recipient_key
+            pub_key: recipient_key,
         })
     }
 
@@ -247,23 +272,29 @@ impl ServerModule for Escrow {
         output: &'a EscrowOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EscrowOutputError> {
-        let contract=&output.contract;
-        let verified=verify_contract_hash(&contract.contract_hash,contract);
+        let contract = &output.contract;
+        let verified = verify_contract_hash(&contract.contract_hash, contract);
         if !verified {
-            return Err(EscrowOutputError::ContractHashMismatch)
+            return Err(EscrowOutputError::ContractHashMismatch);
         }
 
-        if dbtx.get_value(&EscrowContractKey(contract.escrow_id)).await.is_some(){
-            return  Err(EscrowOutputError::AlreadyExists);
+        if dbtx
+            .get_value(&EscrowContractKey(contract.escrow_id))
+            .await
+            .is_some()
+        {
+            return Err(EscrowOutputError::AlreadyExists);
         }
 
-        dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract).await;
+        dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
+            .await;
 
-        dbtx.insert_entry(&EscrowOutputOutcomeKey(out_point), &EscrowOutputOutcome).await;
+        dbtx.insert_entry(&EscrowOutputOutcomeKey(out_point), &EscrowOutputOutcome)
+            .await;
 
-        Ok(TransactionItemAmounts{
-            amounts:Amounts::new_bitcoin(contract.amount),
-            fees:Amounts::ZERO
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(contract.amount),
+            fees: Amounts::ZERO,
         })
     }
 
@@ -275,7 +306,8 @@ impl ServerModule for Escrow {
         dbtx.get_value(&EscrowOutputOutcomeKey(out_point)).await
     }
 
-    // Every stored contract is a liability as federation owes this amount to buyer or seller
+    // Every stored contract is a liability as federation owes this amount to buyer
+    // or seller
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -285,47 +317,42 @@ impl ServerModule for Escrow {
         // contracts are liabilities
         audit
             .add_items(
-                dbtx, 
-                module_instance_id, 
-                &EscrowContractPrefix, 
+                dbtx,
+                module_instance_id,
+                &EscrowContractPrefix,
                 |_, contract: EscrowContract| -(contract.amount.msats as i64),
-            ).await;
+            )
+            .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![
-            api_endpoint! {
-                GET_CONTRACT_ENDPOINT,
-                ApiVersion::new(0, 1),
-                async |_module: &Escrow, context, escrow_id: EscrowId|
-                    -> Option<EscrowContract>
-                {
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(dbtx.get_value(&EscrowContractKey(escrow_id)).await)
-                }
+        vec![api_endpoint! {
+            GET_CONTRACT_ENDPOINT,
+            ApiVersion::new(0, 1),
+            async |_module: &Escrow, context, escrow_id: EscrowId|
+                -> Option<EscrowContract>
+            {
+                let db = context.db();
+                let mut dbtx = db.begin_transaction_nc().await;
+                Ok(dbtx.get_value(&EscrowContractKey(escrow_id)).await)
             }
-        ]
+        }]
     }
 }
 
-fn verify_contract_hash(
-    contract_hash:&[u8;32],
-    contract:&EscrowContract
-)->bool{
+fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> bool {
     compute_contract_hash(
-        &contract.buyer_key, 
-        &contract.seller_key, 
-        &contract.arbiter_key, 
-        &contract.amount, 
-        &contract.timeout, 
-        &contract.federation_id
-    )== *contract_hash
+        &contract.buyer_key,
+        &contract.seller_key,
+        &contract.arbiter_key,
+        &contract.amount,
+        &contract.timeout,
+        &contract.federation_id,
+    ) == *contract_hash
 }
 
 impl Escrow {
-    pub fn new(cfg:EscrowConfig)->Self{
+    pub fn new(cfg: EscrowConfig) -> Self {
         Self { cfg }
     }
 }
-
