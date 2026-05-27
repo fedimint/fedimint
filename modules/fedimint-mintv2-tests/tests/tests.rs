@@ -148,7 +148,7 @@ async fn send_and_receive() -> anyhow::Result<()> {
         let state = client_receive
             .get_first_module::<MintClientModule>()?
             .await_final_receive_operation_state(operation_id)
-            .await;
+            .await?;
 
         assert_eq!(state, FinalReceiveOperationState::Success);
 
@@ -239,7 +239,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
     let state = client_send
         .get_first_module::<MintClientModule>()?
         .await_final_receive_operation_state(operation_id)
-        .await;
+        .await?;
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
@@ -262,7 +262,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
     let state = client_receive
         .get_first_module::<MintClientModule>()?
         .await_final_receive_operation_state(operation_id)
-        .await;
+        .await?;
 
     assert_eq!(state, FinalReceiveOperationState::Rejected);
 
@@ -316,7 +316,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     let state = client
         .get_first_module::<MintClientModule>()?
         .await_final_receive_operation_state(operation_id)
-        .await;
+        .await?;
 
     assert_eq!(state, FinalReceiveOperationState::Rejected);
 
@@ -341,7 +341,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     let state = client
         .get_first_module::<MintClientModule>()?
         .await_final_receive_operation_state(operation_id)
-        .await;
+        .await?;
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
