@@ -950,20 +950,40 @@ impl MintClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> FinalReceiveOperationState {
+    ) -> anyhow::Result<FinalReceiveOperationState> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
-        loop {
-            let Some(MintClientStateMachines::Receive(state)) = stream.next().await else {
-                continue;
-            };
+        let mut stream = self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                async_stream::stream! {
+                    loop {
+                        if let Some(MintClientStateMachines::Receive(state)) = stream.next().await {
+                            match state.state {
+                                ReceiveSMState::Pending => {}
+                                ReceiveSMState::Success => {
+                                    yield FinalReceiveOperationState::Success;
+                                    return;
+                                }
+                                ReceiveSMState::Rejected(..) => {
+                                    yield FinalReceiveOperationState::Rejected;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .into_stream();
 
-            match state.state {
-                ReceiveSMState::Pending => {}
-                ReceiveSMState::Success => return FinalReceiveOperationState::Success,
-                ReceiveSMState::Rejected(..) => return FinalReceiveOperationState::Rejected,
-            }
+        let mut final_state = None;
+
+        while let Some(state) = stream.next().await {
+            final_state = Some(state);
         }
+
+        Ok(final_state.expect("Stream contains one final state"))
     }
 
     async fn remove_spendable_note(

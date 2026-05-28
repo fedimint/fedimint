@@ -1566,7 +1566,13 @@ impl Gateway {
                 })?;
 
             if payload.wait {
-                match mint.await_final_receive_operation_state(operation_id).await {
+                let final_state = mint
+                    .await_final_receive_operation_state(operation_id)
+                    .await
+                    .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                        failure_reason: e.to_string(),
+                    })?;
+                match final_state {
                     fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
                     fedimint_mintv2_client::FinalReceiveOperationState::Rejected => {
                         return Err(PublicGatewayError::ReceiveEcashError {

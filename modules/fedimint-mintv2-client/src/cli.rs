@@ -39,7 +39,9 @@ pub(crate) async fn handle_cli_command(
 
             let operation_id = mint.receive(ecash, Value::Null).await?;
 
-            let state = mint.await_final_receive_operation_state(operation_id).await;
+            let state = mint
+                .await_final_receive_operation_state(operation_id)
+                .await?;
 
             Ok(json(state))
         }
