@@ -66,6 +66,7 @@ pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
     api_bind: SocketAddr,
+    extra_websocket_api_bind: Option<SocketAddr>,
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,
     cfg: ServerConfig,
@@ -218,6 +219,25 @@ pub async fn run(
         api_bind,
     )
     .await;
+
+    let _extra_api_handler = if let Some(extra_api_bind) = extra_websocket_api_bind {
+        info!(
+            target: LOG_NET_API,
+            address = %extra_api_bind,
+            "Starting extra WebSocket API"
+        );
+        Some(
+            start_consensus_api(
+                &cfg.local,
+                consensus_api.clone(),
+                force_api_secrets.clone(),
+                extra_api_bind,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
 
     if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone()
         && let Err(e) = Box::pin(start_iroh_api(

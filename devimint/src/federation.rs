@@ -1128,7 +1128,9 @@ impl Fedimintd {
         let process = process_mgr
             .spawn_daemon(
                 &format!("fedimintd-{fed_name}-{peer_id}"),
-                cmd!(FedimintdCmd).envs(env.vars()),
+                cmd!(FedimintdCmd)
+                    .envs(env.vars())
+                    .envs(vars::per_instance_env_vars(peer_id)),
             )
             .await?;
 
