@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::str::FromStr;
 
 use axum::Router;
 use axum::extract::State;
@@ -7,7 +8,9 @@ use axum::routing::{get, post};
 use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
+use fedimint_core::envs::FM_WALLETV2_DESCRIPTOR_ENV;
 use fedimint_core::module::ApiAuth;
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -143,6 +146,28 @@ fn setup_error_message(error: &str) -> Markup {
     }
 }
 
+/// Resolve the descriptor kind from the env var. Returns `Wsh` if the
+/// var is unset or fails to parse — the leader's submission path will
+/// re-validate and surface a real error if the value is malformed.
+fn descriptor_kind_from_env() -> WalletDescriptorKind {
+    std::env::var(FM_WALLETV2_DESCRIPTOR_ENV)
+        .ok()
+        .and_then(|v| WalletDescriptorKind::from_str(&v).ok())
+        .unwrap_or_default()
+}
+
+/// Maximum federation size offered in the size dropdown. Taproot
+/// descriptors (Tr / Frost) have constant or near-constant per-input
+/// witness cost regardless of `n`, so larger federations are
+/// economically practical; Wsh's witness grows linearly so we keep its
+/// cap conservative.
+fn max_federation_size(kind: WalletDescriptorKind) -> u32 {
+    match kind {
+        WalletDescriptorKind::Wsh => 20,
+        WalletDescriptorKind::Tr | WalletDescriptorKind::Frost => 50,
+    }
+}
+
 fn setup_form_content(
     available_modules: &BTreeSet<ModuleKind>,
     default_modules: &BTreeSet<ModuleKind>,
@@ -187,6 +212,7 @@ fn setup_form_content(
                 #modules-list:has(.form-check-input:not(:checked)) ~ #modules-warning {
                     display: block;
                 }
+
                 "#
             }
 
@@ -219,23 +245,13 @@ fn setup_form_content(
                         select class="form-select" id="federation_size" name="federation_size" {
                             option value="" selected disabled { "Federation Size" }
                             option value="1" { "1 — Testing" }
-                            option value="4" { "4 — Recommended" }
-                            option value="5" { "5" }
-                            option value="6" { "6" }
-                            option value="7" { "7 — Recommended" }
-                            option value="8" { "8" }
-                            option value="9" { "9" }
-                            option value="10" { "10 — Recommended" }
-                            option value="11" { "11" }
-                            option value="12" { "12" }
-                            option value="13" { "13 — Recommended" }
-                            option value="14" { "14" }
-                            option value="15" { "15" }
-                            option value="16" { "16 — Recommended" }
-                            option value="17" { "17" }
-                            option value="18" { "18" }
-                            option value="19" { "19 — Recommended" }
-                            option value="20" { "20" }
+                            @for n in 4..=max_federation_size(descriptor_kind_from_env()) {
+                                @if n == 4 || (n > 4 && (n - 4) % 3 == 0) {
+                                    option value=(n) { (n) " — Recommended" }
+                                } @else {
+                                    option value=(n) { (n) }
+                                }
+                            }
                         }
                     }
 
@@ -420,6 +436,7 @@ async fn federation_setup(
         .await
         .expect("Successful authentication ensures that the local parameters have been set");
 
+    let our_guardian_name = state.api.guardian_name().await;
     let connected_peers = state.api.connected_peers().await;
     let federation_size = state.api.federation_size().await;
     let cfg_federation_name = state.api.cfg_federation_name().await;
@@ -427,6 +444,12 @@ async fn federation_setup(
     let cfg_enabled_modules = state.api.cfg_enabled_modules().await;
 
     let content = html! {
+        @if let Some(name) = &our_guardian_name {
+            div class="alert alert-info mb-3 text-center" {
+                "You are " strong { (name) }
+            }
+        }
+
         p { "Share this with your fellow guardians." }
 
         @let qr_svg = QrCode::new(&our_connection_info)

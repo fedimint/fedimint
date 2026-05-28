@@ -24,6 +24,13 @@ enum Opts {
     },
     /// Return the next unused receive address.
     Receive,
+    /// Wait until a peg-in to `address` is detected and its claim has reached
+    /// its final receive state.
+    AwaitPegIn { address: Address<NetworkUnchecked> },
+    /// Query every guardian for its local FROST finalization stat for `txid`
+    /// and report the median/mean finalization time across the guardians that
+    /// responded. Requires admin auth (`--our-id` + `--password`).
+    FrostFinalizationStats { txid: bitcoin::Txid },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -65,6 +72,8 @@ pub(crate) async fn handle_cli_command(
                 .await,
         ),
         Opts::Receive => json(wallet.receive().await),
+        Opts::AwaitPegIn { address } => json(wallet.await_peg_in(address).await?),
+        Opts::FrostFinalizationStats { txid } => json(wallet.frost_finalization_stats(txid).await?),
     };
 
     Ok(value)

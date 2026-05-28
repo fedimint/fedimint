@@ -177,7 +177,12 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
     await_finality_delay(&client, &bitcoin).await?;
 
-    info!("Wait for deposit to be auto-claimed...");
+    info!("Wait for deposit to be claimed...");
+
+    client
+        .get_first_module::<WalletClientModule>()?
+        .await_peg_in(federation_address.as_unchecked().clone())
+        .await?;
 
     await_federation_total_value(&client, Amount::from_sat(99_000_000)).await?;
 

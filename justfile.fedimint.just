@@ -169,10 +169,7 @@ devimint-env *PARAMS:
 
 # Spawn devimint pre-dkg on fixed port numbers (useful for UI work)
 devimint-env-pre-dkg *PARAMS:
-  @>&2 echo "fedimint-0 UI: http://localhost:2002"
-  @>&2 echo "fedimint-1 UI: http://localhost:2006"
-  @>&2 echo "fedimint-2 UI: http://localhost:2010"
-  @>&2 echo "fedimint-3 UI: http://localhost:2014"
+  @for i in $(seq 0 $((${FM_FED_SIZE:-4} - 1))); do echo "fedimint-$i UI: http://localhost:$((2002 + 4 * i))" >&2; done
   @>&2 echo "gateway LND UI: http://localhost:8183"
   @>&2 echo "gateway LDK UI: http://localhost:8185"
   @>&2 echo "gateway LDK2 UI: http://localhost:8187"
@@ -180,10 +177,7 @@ devimint-env-pre-dkg *PARAMS:
 
 # Spawn devimint post-dkg on fixed port numbers (useful for UI work)
 devimint-env-post-dkg *PARAMS:
-  @>&2 echo "fedimint-0 UI: http://localhost:2002"
-  @>&2 echo "fedimint-1 UI: http://localhost:2006"
-  @>&2 echo "fedimint-2 UI: http://localhost:2010"
-  @>&2 echo "fedimint-3 UI: http://localhost:2014"
+  @for i in $(seq 0 $((${FM_FED_SIZE:-4} - 1))); do echo "fedimint-$i UI: http://localhost:$((2002 + 4 * i))" >&2; done
   @>&2 echo "gateway LND UI: http://localhost:8183"
   @>&2 echo "gateway LDK UI: http://localhost:8185"
   @>&2 echo "gateway LDK2 UI: http://localhost:8187"

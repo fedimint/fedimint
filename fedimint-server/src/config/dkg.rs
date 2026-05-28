@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use bls12_381::{G1Projective, G2Projective, Scalar};
 use fedimint_core::config::P2PMessage;
@@ -69,5 +69,59 @@ impl PeerHandleOps for PeerHandle<'_> {
         }
 
         Ok(peer_data)
+    }
+
+    async fn exchange_directed(
+        &self,
+        mut data: BTreeMap<PeerId, Vec<u8>>,
+    ) -> anyhow::Result<BTreeMap<PeerId, Vec<u8>>> {
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Exchanging directed bytes..."
+        );
+
+        ensure!(
+            !data.contains_key(&self.identity),
+            "exchange_directed: input map must not contain an entry for self ({})",
+            self.identity
+        );
+        for peer in self.num_peers.peer_ids().filter(|p| *p != self.identity) {
+            ensure!(
+                data.contains_key(&peer),
+                "exchange_directed: missing entry for peer {peer}"
+            );
+        }
+
+        for peer in self.num_peers.peer_ids().filter(|p| *p != self.identity) {
+            let bytes = data
+                .remove(&peer)
+                .expect("Validated above that every non-self peer has an entry");
+            self.connections
+                .send(Recipient::Peer(peer), P2PMessage::Encodable(bytes));
+        }
+
+        let mut received: BTreeMap<PeerId, Vec<u8>> = BTreeMap::new();
+        for peer in self.num_peers.peer_ids().filter(|p| *p != self.identity) {
+            let message = self
+                .connections
+                .receive_from_peer(peer)
+                .await
+                .context("Unexpected shutdown of p2p connections")?;
+
+            match message {
+                P2PMessage::Encodable(bytes) => {
+                    received.insert(peer, bytes);
+                }
+                message => {
+                    anyhow::bail!("Invalid message from {peer}: {message:?}");
+                }
+            }
+        }
+
+        Ok(received)
+    }
+
+    fn identity(&self) -> PeerId {
+        self.identity
     }
 }

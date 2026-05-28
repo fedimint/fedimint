@@ -11,6 +11,7 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+mod taproot;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -40,13 +41,17 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set_opt};
+use fedimint_core::envs::{
+    FM_ENABLE_MODULE_WALLETV2_ENV, FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV, is_env_var_set_opt,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
     api_endpoint,
 };
+use fedimint_core::net::auth::check_auth;
+use fedimint_core::setup_code::WalletDescriptorKind;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::sleep;
@@ -63,13 +68,18 @@ use fedimint_server_core::{
 };
 pub use fedimint_walletv2_common as common;
 use fedimint_walletv2_common::config::{
-    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
+    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate, WalletDescriptor,
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    FROST_FINALIZATION_STATS_ENDPOINT, OUTPUT_INFO_SLICE_ENDPOINT,
+    PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
+use fedimint_walletv2_common::taproot::frost::{
+    FrostFinalizationStat, FrostPublicKeyPackage, FrostSignatureShares,
+};
+use fedimint_walletv2_common::taproot::{descriptor_tr, tweak_xonly_public_key};
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
     descriptor, is_potential_receive, tweak_public_key,
@@ -78,14 +88,21 @@ use futures::StreamExt;
 use miniscript::descriptor::Wsh;
 use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, SecretKey};
+use secp256k1::{PublicKey, Scalar, SecretKey, schnorr};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
-    TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    FrostAdvanceVotePrefix, FrostFinalizationStatPrefix, FrostSignatureSharePrefix,
+    FrostSigningAttempt, FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix,
+    FrostSigningNoncesPrefix, FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix,
+    SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix,
+    UnsignedTxKey, UnsignedTxPrefix,
+};
+use crate::taproot::frost::{
+    FrostRuntime, FrostSigningNonces, FrostSigningPackage, spawn_initial_nonce_backfill,
 };
 
 /// Number of confirmations required for a transaction to be considered as
@@ -232,6 +249,16 @@ impl ModuleInit for WalletInit {
                         "Wallet Signatures"
                     );
                 }
+                DbKeyPrefix::SchnorrSignatures => {
+                    push_db_pair_items!(
+                        dbtx,
+                        SchnorrSignaturesPrefix,
+                        SchnorrSignaturesKey,
+                        Vec<schnorr::Signature>,
+                        wallet,
+                        "Wallet Schnorr Signatures"
+                    );
+                }
                 DbKeyPrefix::UnconfirmedTx => {
                     push_db_pair_items!(
                         dbtx,
@@ -250,6 +277,86 @@ impl ModuleInit for WalletInit {
                         FederationWallet,
                         wallet,
                         "Federation Wallet"
+                    );
+                }
+                DbKeyPrefix::FrostSigningCommitments => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostSigningCommitmentsPrefix,
+                        FrostSigningCommitmentsKey,
+                        (),
+                        wallet,
+                        "FROST Signing Commitments"
+                    );
+                }
+                DbKeyPrefix::FrostSigningNonce => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostSigningNoncesPrefix,
+                        FrostSigningNoncesKey,
+                        FrostSigningNonces,
+                        wallet,
+                        "FROST Signing Nonces"
+                    );
+                }
+                DbKeyPrefix::FrostSignatureShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostSignatureSharePrefix,
+                        FrostSignatureShareKey,
+                        FrostSignatureShares,
+                        wallet,
+                        "FROST Signature Shares"
+                    );
+                }
+                DbKeyPrefix::FrostSigningPackages => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostSigningPackagesPrefix,
+                        FrostSigningPackagesKey,
+                        Vec<FrostSigningPackage>,
+                        wallet,
+                        "FROST Signing Packages"
+                    );
+                }
+                DbKeyPrefix::FrostSigningAttempt => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostSigningAttemptPrefix,
+                        FrostSigningAttemptKey,
+                        FrostSigningAttempt,
+                        wallet,
+                        "FROST Signing Attempts"
+                    );
+                }
+                DbKeyPrefix::FrostAdvanceVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostAdvanceVotePrefix,
+                        FrostAdvanceVoteKey,
+                        (),
+                        wallet,
+                        "FROST Advance Votes"
+                    );
+                }
+                DbKeyPrefix::LocalFrostSignatureShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LocalFrostSignatureSharePrefix,
+                        LocalFrostSignatureShareKey,
+                        FrostSignatureShares,
+                        wallet,
+                        "Local FROST Signature Shares"
+                    );
+                }
+                DbKeyPrefix::FrostFinalizationStat => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostFinalizationStatPrefix,
+                        FrostFinalizationStatKey,
+                        FrostFinalizationStat,
+                        wallet,
+                        "FROST Finalization Stats"
                     );
                 }
             }
@@ -283,15 +390,22 @@ impl ServerModuleInit for WalletInit {
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
-        vec![EnvVarDoc {
-            name: FM_ENABLE_MODULE_WALLETV2_ENV,
-            description: "Set to 1/true to enable the WalletV2 module (experimental). Disabled by default.",
-        }]
+        vec![
+            EnvVarDoc {
+                name: FM_ENABLE_MODULE_WALLETV2_ENV,
+                description: "Set to 1/true to enable the WalletV2 module (experimental). Disabled by default.",
+            },
+            EnvVarDoc {
+                name: FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
+                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 64.",
+            },
+        ]
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(Wallet::new(
             args.cfg().to_typed()?,
+            args.our_peer_id(),
             args.db(),
             args.task_group(),
             args.server_bitcoin_rpc_monitor(),
@@ -315,15 +429,42 @@ impl ServerModuleInit for WalletInit {
             .map(|(peer, sk)| (*peer, sk.public_key(secp256k1::SECP256K1)))
             .collect::<BTreeMap<PeerId, PublicKey>>();
 
+        // FROST is only run when (a) the leader picked Frost AND (b)
+        // there's more than one peer. With a single peer, Frost (and Tr)
+        // collapse to a plain key-path schnorr signature — see
+        // `WalletDescriptor::SinglePeer`.
+        let needs_frost =
+            matches!(args.descriptor_kind, WalletDescriptorKind::Frost) && peers.len() > 1;
+        let (frost_key_packages, frost_internal_key, frost_pubkey_package) = if needs_frost {
+            let (key_packages, internal_key, pubkey_package) =
+                taproot::frost::trusted_setup(peers).expect("Could not execute trusted setup");
+            (
+                Some(key_packages),
+                Some(internal_key),
+                Some(FrostPublicKeyPackage(pubkey_package)),
+            )
+        } else {
+            (None, None, None)
+        };
+
         bitcoin_sks
             .into_iter()
             .map(|(peer, bitcoin_sk)| {
+                let frost_key_package = frost_key_packages
+                    .as_ref()
+                    .and_then(|kps| kps.get(&peer).cloned());
                 let config = WalletConfig {
-                    private: WalletConfigPrivate { bitcoin_sk },
+                    private: WalletConfigPrivate {
+                        bitcoin_sk,
+                        frost_key_package,
+                    },
                     consensus: WalletConfigConsensus::new(
                         bitcoin_pks.clone(),
                         fee_consensus.clone(),
                         args.network,
+                        args.descriptor_kind,
+                        frost_internal_key,
+                        frost_pubkey_package.clone(),
                     ),
                 };
 
@@ -347,10 +488,49 @@ impl ServerModuleInit for WalletInit {
             .into_iter()
             .collect();
 
-        let config = WalletConfig {
-            private: WalletConfigPrivate { bitcoin_sk },
-            consensus: WalletConfigConsensus::new(bitcoin_pks, fee_consensus, args.network),
+        // FROST is only run when (a) the leader picked Frost AND (b)
+        // there's more than one peer. With a single peer, Frost (and Tr)
+        // collapse to a plain key-path schnorr signature — see
+        // `WalletDescriptor::SinglePeer`.
+        let needs_frost = matches!(args.descriptor_kind, WalletDescriptorKind::Frost)
+            && peers.num_peers().total() > 1;
+        let (frost_key_package, frost_internal_key, frost_pubkey_package) = if needs_frost {
+            let (key_package, internal_key, pubkey_package) = taproot::frost::dkg(peers).await?;
+            (
+                Some(key_package),
+                Some(internal_key),
+                Some(FrostPublicKeyPackage(pubkey_package)),
+            )
+        } else {
+            (None, None, None)
         };
+
+        let config = WalletConfig {
+            private: WalletConfigPrivate {
+                bitcoin_sk,
+                frost_key_package,
+            },
+            consensus: WalletConfigConsensus::new(
+                bitcoin_pks,
+                fee_consensus,
+                args.network,
+                args.descriptor_kind,
+                frost_internal_key,
+                frost_pubkey_package,
+            ),
+        };
+
+        if let Some(internal_key) = frost_internal_key {
+            let descriptor = descriptor_tr(
+                &config.consensus.bitcoin_pks,
+                &sha256::Hash::all_zeros(),
+                internal_key,
+            );
+            tracing::info!(
+                target: LOG_MODULE_WALLETV2,
+                "DKG finished. Wallet Descriptor: {descriptor}"
+            );
+        }
 
         Ok(config.to_erased())
     }
@@ -409,23 +589,53 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
-        let mut items = dbtx
-            .find_by_prefix(&UnsignedTxPrefix)
-            .await
-            .map(|(key, unsigned_tx)| {
-                let signatures = self.sign_tx(&unsigned_tx);
+        let our_pk = self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1);
 
-                self.verify_signatures(
-                    &unsigned_tx,
-                    &signatures,
-                    self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
-                )
-                .expect("Our signatures failed verification against our private key");
+        let mut items: Vec<WalletConsensusItem> = match self.cfg.consensus.descriptor {
+            WalletDescriptor::Wsh => {
+                dbtx.find_by_prefix(&UnsignedTxPrefix)
+                    .await
+                    .map(|(key, unsigned_tx)| {
+                        let signatures = self.sign_tx(&unsigned_tx);
+                        self.verify_signatures(
+                            &unsigned_tx,
+                            &signatures,
+                            self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
+                        )
+                        .expect("Our signatures failed verification against our private key");
+                        WalletConsensusItem::Signatures(key.0, signatures)
+                    })
+                    .collect()
+                    .await
+            }
+            WalletDescriptor::Tr => {
+                dbtx.find_by_prefix(&UnsignedTxPrefix)
+                    .await
+                    .map(|(key, unsigned_tx)| {
+                        let signatures = self.sign_tx_schnorr(&unsigned_tx);
+                        self.verify_signatures_schnorr(&unsigned_tx, &signatures, our_pk)
+                            .expect("Our signatures failed verification against our private key");
+                        WalletConsensusItem::SchnorrSignatures(key.0, signatures)
+                    })
+                    .collect()
+                    .await
+            }
+            WalletDescriptor::SinglePeer(_) => {
+                dbtx.find_by_prefix(&UnsignedTxPrefix)
+                    .await
+                    .map(|(key, unsigned_tx)| {
+                        let signatures = self.sign_tx_single_peer(&unsigned_tx);
+                        WalletConsensusItem::SchnorrSignatures(key.0, signatures)
+                    })
+                    .collect()
+                    .await
+            }
+            WalletDescriptor::Frost(_) => Vec::new(),
+        };
 
-                WalletConsensusItem::Signatures(key.0, signatures)
-            })
-            .collect::<Vec<WalletConsensusItem>>()
-            .await;
+        if matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)) {
+            items.extend(self.frost_consensus_proposal(dbtx).await);
+        }
 
         if let Some(status) = self.btc_rpc.status() {
             assert_eq!(status.network, self.cfg.consensus.network);
@@ -475,7 +685,38 @@ impl ServerModule for Wallet {
                 Ok(())
             }
             WalletConsensusItem::Signatures(txid, signatures) => {
+                ensure!(
+                    self.cfg.consensus.descriptor == WalletDescriptor::Wsh,
+                    "Received ECDSA signature on a Taproot Federation"
+                );
                 self.process_signatures(dbtx, txid, signatures, peer).await
+            }
+            WalletConsensusItem::SchnorrSignatures(txid, signatures) => {
+                match self.cfg.consensus.descriptor {
+                    WalletDescriptor::Tr => {
+                        self.process_signatures_schnorr(dbtx, txid, signatures, peer)
+                            .await
+                    }
+                    WalletDescriptor::SinglePeer(_) => {
+                        self.process_signatures_single_peer(dbtx, txid, signatures, peer)
+                            .await
+                    }
+                    WalletDescriptor::Wsh | WalletDescriptor::Frost(_) => {
+                        bail!("Received Schnorr Signature on a non-Schnorr Federation")
+                    }
+                }
+            }
+            WalletConsensusItem::FrostSigningCommitments(commitments) => {
+                self.process_frost_commitments(dbtx, peer, *commitments)
+                    .await
+            }
+            WalletConsensusItem::FrostSignatureShare((txid, attempt, signature_shares)) => {
+                self.process_frost_signature_share(dbtx, peer, txid, attempt, signature_shares)
+                    .await
+            }
+            WalletConsensusItem::FrostAdvanceVote((txid, attempt)) => {
+                self.process_frost_advance_vote(dbtx, peer, txid, attempt)
+                    .await
             }
             WalletConsensusItem::Default { variant, .. } => Err(anyhow!(
                 "Received wallet consensus item with unknown variant {variant}"
@@ -504,9 +745,7 @@ impl ServerModule for Wallet {
             .await
             .ok_or(WalletInputError::UnknownOutputIndex)?;
 
-        let tweaked_pubkey = self
-            .descriptor(&input.tweak.consensus_hash())
-            .script_pubkey();
+        let tweaked_pubkey = self.script_pubkey_for(&input.tweak.consensus_hash());
 
         if tracked_output.script_pubkey != tweaked_pubkey {
             return Err(WalletInputError::WrongTweak);
@@ -558,18 +797,17 @@ impl ServerModule for Wallet {
                 ],
                 output: vec![TxOut {
                     value: change_value,
-                    script_pubkey: self.descriptor(&wallet.consensus_hash()).script_pubkey(),
+                    script_pubkey: self.script_pubkey_for(&wallet.consensus_hash()),
                 }],
             };
+
+            let txid = tx.compute_txid();
 
             dbtx.insert_new_entry(
                 &FederationWalletKey,
                 &FederationWallet {
                     value: change_value,
-                    outpoint: bitcoin::OutPoint {
-                        txid: tx.compute_txid(),
-                        vout: 0,
-                    },
+                    outpoint: bitcoin::OutPoint { txid, vout: 0 },
                     tweak: wallet.consensus_hash(),
                 },
             )
@@ -583,7 +821,7 @@ impl ServerModule for Wallet {
                 &TxInfoKey(tx_index),
                 &TxInfo {
                     index: tx_index,
-                    txid: tx.compute_txid(),
+                    txid,
                     input: wallet.value,
                     output: change_value,
                     vbytes: self.cfg.consensus.receive_tx_vbytes,
@@ -593,25 +831,26 @@ impl ServerModule for Wallet {
             )
             .await;
 
-            dbtx.insert_new_entry(
-                &UnsignedTxKey(tx.compute_txid()),
-                &FederationTx {
-                    tx,
-                    spent_tx_outs: vec![
-                        SpentTxOut {
-                            value: wallet.value,
-                            tweak: wallet.tweak,
-                        },
-                        SpentTxOut {
-                            value: tracked_output.value,
-                            tweak: input.tweak.consensus_hash(),
-                        },
-                    ],
-                    vbytes: self.cfg.consensus.receive_tx_vbytes,
-                    fee: input.fee,
-                },
-            )
-            .await;
+            let unsigned = FederationTx {
+                tx,
+                spent_tx_outs: vec![
+                    SpentTxOut {
+                        value: wallet.value,
+                        tweak: wallet.tweak,
+                    },
+                    SpentTxOut {
+                        value: tracked_output.value,
+                        tweak: input.tweak.consensus_hash(),
+                    },
+                ],
+                vbytes: self.cfg.consensus.receive_tx_vbytes,
+                fee: input.fee,
+            };
+
+            dbtx.insert_new_entry(&UnsignedTxKey(txid), &unsigned).await;
+
+            self.start_initial_frost_signing(dbtx, &unsigned, txid, "receive")
+                .await;
         } else {
             dbtx.insert_new_entry(
                 &FederationWalletKey,
@@ -700,7 +939,7 @@ impl ServerModule for Wallet {
             output: vec![
                 TxOut {
                     value: change_value,
-                    script_pubkey: self.descriptor(&wallet.consensus_hash()).script_pubkey(),
+                    script_pubkey: self.script_pubkey_for(&wallet.consensus_hash()),
                 },
                 TxOut {
                     value: output.value,
@@ -709,14 +948,13 @@ impl ServerModule for Wallet {
             ],
         };
 
+        let txid = tx.compute_txid();
+
         dbtx.insert_new_entry(
             &FederationWalletKey,
             &FederationWallet {
                 value: change_value,
-                outpoint: bitcoin::OutPoint {
-                    txid: tx.compute_txid(),
-                    vout: 0,
-                },
+                outpoint: bitcoin::OutPoint { txid, vout: 0 },
                 tweak: wallet.consensus_hash(),
             },
         )
@@ -730,7 +968,7 @@ impl ServerModule for Wallet {
             &TxInfoKey(tx_index),
             &TxInfo {
                 index: tx_index,
-                txid: tx.compute_txid(),
+                txid,
                 input: wallet.value,
                 output: change_value,
                 vbytes: self.cfg.consensus.send_tx_vbytes,
@@ -743,19 +981,20 @@ impl ServerModule for Wallet {
         dbtx.insert_new_entry(&TxInfoIndexKey(outpoint), &tx_index)
             .await;
 
-        dbtx.insert_new_entry(
-            &UnsignedTxKey(tx.compute_txid()),
-            &FederationTx {
-                tx,
-                spent_tx_outs: vec![SpentTxOut {
-                    value: wallet.value,
-                    tweak: wallet.tweak,
-                }],
-                vbytes: self.cfg.consensus.send_tx_vbytes,
-                fee: output.fee,
-            },
-        )
-        .await;
+        let unsigned = FederationTx {
+            tx,
+            spent_tx_outs: vec![SpentTxOut {
+                value: wallet.value,
+                tweak: wallet.tweak,
+            }],
+            vbytes: self.cfg.consensus.send_tx_vbytes,
+            fee: output.fee,
+        };
+
+        dbtx.insert_new_entry(&UnsignedTxKey(txid), &unsigned).await;
+
+        self.start_initial_frost_signing(dbtx, &unsigned, txid, "send")
+            .await;
 
         let amount = output_value
             .to_sat()
@@ -876,6 +1115,16 @@ impl ServerModule for Wallet {
                     Ok(module.tx_chain(&mut dbtx).await)
                 }
             },
+            api_endpoint! {
+                FROST_FINALIZATION_STATS_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, params: Txid| -> Option<FrostFinalizationStat> {
+                    check_auth(context)?;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.finalization_stat(&mut dbtx, params).await)
+                }
+            },
         ]
     }
 }
@@ -883,23 +1132,37 @@ impl ServerModule for Wallet {
 #[derive(Debug)]
 pub struct Wallet {
     cfg: WalletConfig,
+    our_peer_id: PeerId,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
+    frost: FrostRuntime,
 }
 
 impl Wallet {
     fn new(
         cfg: WalletConfig,
+        our_peer_id: PeerId,
         db: &Database,
         task_group: &TaskGroup,
         btc_rpc: ServerBitcoinRpcMonitor,
     ) -> Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
+        if let WalletDescriptor::Frost(_) = cfg.consensus.descriptor {
+            let key_package = cfg
+                .private
+                .frost_key_package
+                .clone()
+                .expect("Frost key not generated");
+            spawn_initial_nonce_backfill(db.clone(), task_group, key_package);
+        }
+
         Wallet {
             cfg,
+            our_peer_id,
             btc_rpc,
             db: db.clone(),
+            frost: FrostRuntime::default(),
         }
     }
 
@@ -1349,7 +1612,13 @@ impl Wallet {
         dbtx.find_by_range(OutputKey(start_index)..OutputKey(end_index))
             .await
             .filter_map(|entry| {
-                std::future::ready(entry.1.1.script_pubkey.is_p2wsh().then(|| OutputInfo {
+                let matches = match self.cfg.consensus.descriptor {
+                    WalletDescriptor::Wsh => entry.1.1.script_pubkey.is_p2wsh(),
+                    WalletDescriptor::Tr
+                    | WalletDescriptor::SinglePeer(_)
+                    | WalletDescriptor::Frost(_) => entry.1.1.script_pubkey.is_p2tr(),
+                };
+                std::future::ready(matches.then(|| OutputInfo {
                     index: entry.0.0,
                     script: entry.1.1.script_pubkey,
                     value: entry.1.1.value,
@@ -1448,7 +1717,17 @@ impl Wallet {
             .consensus
             .bitcoin_pks
             .iter()
-            .map(|(peer, pk)| (*peer, tweak_public_key(pk, &wallet.tweak).to_string()))
+            .map(|(peer, pk)| {
+                let tweaked = match self.cfg.consensus.descriptor {
+                    WalletDescriptor::Wsh => tweak_public_key(pk, &wallet.tweak).to_string(),
+                    WalletDescriptor::Tr
+                    | WalletDescriptor::SinglePeer(_)
+                    | WalletDescriptor::Frost(_) => {
+                        tweak_xonly_public_key(&pk.x_only_public_key().0, &wallet.tweak).to_string()
+                    }
+                };
+                (*peer, tweaked)
+            })
             .collect();
 
         let tweak = &Scalar::from_be_bytes(wallet.tweak.to_byte_array())

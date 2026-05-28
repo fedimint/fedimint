@@ -180,6 +180,20 @@ function walletv2_module() {
 }
 export -f walletv2_module
 
+function walletv2_module_frost() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh --descriptor frost
+}
+export -f walletv2_module_frost
+
+function walletv2_frost_degraded() {
+  # The 7-peer / 2-offline degraded federation runs slower than the default 4/0
+  # baseline, so we bump the outer fm-run-test timeout to match the upgrade test
+  # (FM_TEST_UPGRADE_TIMEOUT - 30 = 770s). FM_EXTRA_LONG_POLL is set inside the
+  # wrapper script.
+  FM_RUN_TEST_TIMEOUT=770 fm-run-test "${FUNCNAME[0]}" ./scripts/tests/walletv2-frost-test.sh --fed-size 7 --offline-nodes 2
+}
+export -f walletv2_frost_degraded
+
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -473,6 +487,8 @@ tests_to_run_in_parallel+=(
   "lnv2_module_lnurl_recovery"
   "lnv1_lnv2_swap"
   "walletv2_module"
+  "walletv2_module_frost"
+  "walletv2_frost_degraded"
   "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"

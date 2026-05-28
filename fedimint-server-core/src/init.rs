@@ -18,6 +18,7 @@ use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
     ModuleInit, SupportedModuleApiVersions,
 };
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
@@ -51,6 +52,10 @@ pub struct ConfigGenModuleArgs {
     pub network: Network,
     /// Whether to disable base fees for this federation
     pub disable_base_fees: bool,
+    /// On-chain wallet descriptor for the walletv2 module. Decided once
+    /// by the lead guardian during federation setup (via the
+    /// `FM_WALLETV2_DESCRIPTOR` env var); other modules ignore it.
+    pub descriptor_kind: WalletDescriptorKind,
 }
 
 /// Interface for Module Generation

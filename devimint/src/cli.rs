@@ -278,7 +278,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         const GW_PEGIN_AMOUNT: u64 = 1_000_000;
                         const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
 
-                        let (operation_id, (), ()) = tokio::try_join!(
+                        let ((client_address, operation_id), (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -291,9 +291,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(address, CLIENT_PEGIN_AMOUNT)
+                                    .send_to(address.clone(), CLIENT_PEGIN_AMOUNT)
                                     .await?;
-                                Ok(operation_id)
+                                Ok::<_, anyhow::Error>((address, operation_id))
                             },
                             async {
                                 let address = dev_fed
@@ -345,7 +345,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             dev_fed
                                 .internal_client()
                                 .await?
-                                .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
+                                .await_walletv2_peg_in(&client_address)
                                 .await?;
                         } else {
                             dev_fed
