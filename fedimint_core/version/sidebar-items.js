@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cargo_pkg","git_hash"]};
+window.SIDEBAR_ITEMS = {"fn":["cargo_pkg","git_hash","non_zero_version_hash"]};

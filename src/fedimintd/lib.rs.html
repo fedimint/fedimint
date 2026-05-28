@@ -410,72 +410,74 @@
 <a href=#410 id=410 data-nosnippet>410</a>    install_crypto_provider().<span class="kw">await</span>;
 <a href=#411 id=411 data-nosnippet>411</a>
 <a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">let </span>task_group = root_task_group.clone();
-<a href=#413 id=413 data-nosnippet>413</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
-<a href=#414 id=414 data-nosnippet>414</a>        fedimint_server::run(
-<a href=#415 id=415 data-nosnippet>415</a>            server_opts.data_dir,
-<a href=#416 id=416 data-nosnippet>416</a>            server_opts.force_api_secrets,
-<a href=#417 id=417 data-nosnippet>417</a>            settings,
-<a href=#418 id=418 data-nosnippet>418</a>            db,
-<a href=#419 id=419 data-nosnippet>419</a>            code_version_str,
-<a href=#420 id=420 data-nosnippet>420</a>            module_init_registry,
-<a href=#421 id=421 data-nosnippet>421</a>            task_group,
-<a href=#422 id=422 data-nosnippet>422</a>            dyn_server_bitcoin_rpc,
-<a href=#423 id=423 data-nosnippet>423</a>            Box::new(fedimint_server_ui::setup::router),
-<a href=#424 id=424 data-nosnippet>424</a>            Box::new(fedimint_server_ui::dashboard::router),
-<a href=#425 id=425 data-nosnippet>425</a>            server_opts.db_checkpoint_retention,
-<a href=#426 id=426 data-nosnippet>426</a>            fedimint_server::ConnectionLimits::new(
-<a href=#427 id=427 data-nosnippet>427</a>                server_opts.iroh_api_max_connections,
-<a href=#428 id=428 data-nosnippet>428</a>                server_opts.iroh_api_max_requests_per_connection,
-<a href=#429 id=429 data-nosnippet>429</a>            ),
-<a href=#430 id=430 data-nosnippet>430</a>        )
-<a href=#431 id=431 data-nosnippet>431</a>        .<span class="kw">await
-<a href=#432 id=432 data-nosnippet>432</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact_anyhow()));
-<a href=#433 id=433 data-nosnippet>433</a>    });
-<a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">let </span>shutdown_future = root_task_group
-<a href=#436 id=436 data-nosnippet>436</a>        .make_handle()
-<a href=#437 id=437 data-nosnippet>437</a>        .make_shutdown_rx()
-<a href=#438 id=438 data-nosnippet>438</a>        .then(|()| <span class="kw">async </span>{
-<a href=#439 id=439 data-nosnippet>439</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
-<a href=#440 id=440 data-nosnippet>440</a>        });
-<a href=#441 id=441 data-nosnippet>441</a>
-<a href=#442 id=442 data-nosnippet>442</a>    shutdown_future.<span class="kw">await</span>;
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="kw">let </span>code_version_hash = code_version_hash.to_string();
+<a href=#414 id=414 data-nosnippet>414</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
+<a href=#415 id=415 data-nosnippet>415</a>        fedimint_server::run(
+<a href=#416 id=416 data-nosnippet>416</a>            server_opts.data_dir,
+<a href=#417 id=417 data-nosnippet>417</a>            server_opts.force_api_secrets,
+<a href=#418 id=418 data-nosnippet>418</a>            settings,
+<a href=#419 id=419 data-nosnippet>419</a>            db,
+<a href=#420 id=420 data-nosnippet>420</a>            code_version_str,
+<a href=#421 id=421 data-nosnippet>421</a>            code_version_hash,
+<a href=#422 id=422 data-nosnippet>422</a>            module_init_registry,
+<a href=#423 id=423 data-nosnippet>423</a>            task_group,
+<a href=#424 id=424 data-nosnippet>424</a>            dyn_server_bitcoin_rpc,
+<a href=#425 id=425 data-nosnippet>425</a>            Box::new(fedimint_server_ui::setup::router),
+<a href=#426 id=426 data-nosnippet>426</a>            Box::new(fedimint_server_ui::dashboard::router),
+<a href=#427 id=427 data-nosnippet>427</a>            server_opts.db_checkpoint_retention,
+<a href=#428 id=428 data-nosnippet>428</a>            fedimint_server::ConnectionLimits::new(
+<a href=#429 id=429 data-nosnippet>429</a>                server_opts.iroh_api_max_connections,
+<a href=#430 id=430 data-nosnippet>430</a>                server_opts.iroh_api_max_requests_per_connection,
+<a href=#431 id=431 data-nosnippet>431</a>            ),
+<a href=#432 id=432 data-nosnippet>432</a>        )
+<a href=#433 id=433 data-nosnippet>433</a>        .<span class="kw">await
+<a href=#434 id=434 data-nosnippet>434</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact_anyhow()));
+<a href=#435 id=435 data-nosnippet>435</a>    });
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>    <span class="kw">let </span>shutdown_future = root_task_group
+<a href=#438 id=438 data-nosnippet>438</a>        .make_handle()
+<a href=#439 id=439 data-nosnippet>439</a>        .make_shutdown_rx()
+<a href=#440 id=440 data-nosnippet>440</a>        .then(|()| <span class="kw">async </span>{
+<a href=#441 id=441 data-nosnippet>441</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
+<a href=#442 id=442 data-nosnippet>442</a>        });
 <a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
+<a href=#444 id=444 data-nosnippet>444</a>    shutdown_future.<span class="kw">await</span>;
 <a href=#445 id=445 data-nosnippet>445</a>
-<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
-<a href=#447 id=447 data-nosnippet>447</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact_anyhow(), <span class="string">"Error while shutting down task group"</span>);
-<a href=#448 id=448 data-nosnippet>448</a>    }
-<a href=#449 id=449 data-nosnippet>449</a>
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact_anyhow(), <span class="string">"Error while shutting down task group"</span>);
+<a href=#450 id=450 data-nosnippet>450</a>    }
 <a href=#451 id=451 data-nosnippet>451</a>
-<a href=#452 id=452 data-nosnippet>452</a>    fedimint_logging::shutdown();
+<a href=#452 id=452 data-nosnippet>452</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
 <a href=#453 id=453 data-nosnippet>453</a>
-<a href=#454 id=454 data-nosnippet>454</a>    drop(timing_total_runtime);
+<a href=#454 id=454 data-nosnippet>454</a>    fedimint_logging::shutdown();
 <a href=#455 id=455 data-nosnippet>455</a>
-<a href=#456 id=456 data-nosnippet>456</a>    std::process::exit(-<span class="number">1</span>);
-<a href=#457 id=457 data-nosnippet>457</a>}
-<a href=#458 id=458 data-nosnippet>458</a>
-<a href=#459 id=459 data-nosnippet>459</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
-<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
-<a href=#461 id=461 data-nosnippet>461</a>
-<a href=#462 id=462 data-nosnippet>462</a>    server_gens.attach(MintInit);
-<a href=#463 id=463 data-nosnippet>463</a>    server_gens.attach(fedimint_mintv2_server::MintInit);
-<a href=#464 id=464 data-nosnippet>464</a>
-<a href=#465 id=465 data-nosnippet>465</a>    server_gens.attach(WalletInit);
-<a href=#466 id=466 data-nosnippet>466</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
-<a href=#467 id=467 data-nosnippet>467</a>
-<a href=#468 id=468 data-nosnippet>468</a>    server_gens.attach(LightningInit);
-<a href=#469 id=469 data-nosnippet>469</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
-<a href=#470 id=470 data-nosnippet>470</a>
-<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-<a href=#472 id=472 data-nosnippet>472</a>        server_gens.attach(MetaInit);
-<a href=#473 id=473 data-nosnippet>473</a>    }
-<a href=#474 id=474 data-nosnippet>474</a>
-<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-<a href=#476 id=476 data-nosnippet>476</a>        server_gens.attach(UnknownInit);
-<a href=#477 id=477 data-nosnippet>477</a>    }
-<a href=#478 id=478 data-nosnippet>478</a>
-<a href=#479 id=479 data-nosnippet>479</a>    server_gens
-<a href=#480 id=480 data-nosnippet>480</a>}
+<a href=#456 id=456 data-nosnippet>456</a>    drop(timing_total_runtime);
+<a href=#457 id=457 data-nosnippet>457</a>
+<a href=#458 id=458 data-nosnippet>458</a>    std::process::exit(-<span class="number">1</span>);
+<a href=#459 id=459 data-nosnippet>459</a>}
+<a href=#460 id=460 data-nosnippet>460</a>
+<a href=#461 id=461 data-nosnippet>461</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>    server_gens.attach(MintInit);
+<a href=#465 id=465 data-nosnippet>465</a>    server_gens.attach(fedimint_mintv2_server::MintInit);
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a>    server_gens.attach(WalletInit);
+<a href=#468 id=468 data-nosnippet>468</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
+<a href=#469 id=469 data-nosnippet>469</a>
+<a href=#470 id=470 data-nosnippet>470</a>    server_gens.attach(LightningInit);
+<a href=#471 id=471 data-nosnippet>471</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+<a href=#474 id=474 data-nosnippet>474</a>        server_gens.attach(MetaInit);
+<a href=#475 id=475 data-nosnippet>475</a>    }
+<a href=#476 id=476 data-nosnippet>476</a>
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+<a href=#478 id=478 data-nosnippet>478</a>        server_gens.attach(UnknownInit);
+<a href=#479 id=479 data-nosnippet>479</a>    }
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a>    server_gens
+<a href=#482 id=482 data-nosnippet>482</a>}
 </code></pre></div></section></main></body></html>

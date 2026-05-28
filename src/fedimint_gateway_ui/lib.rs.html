@@ -318,7 +318,7 @@
 <a href=#318 id=318 data-nosnippet>318</a>                    (err.to_string())
 <a href=#319 id=319 data-nosnippet>319</a>                }
 <a href=#320 id=320 data-nosnippet>320</a>            };
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">return </span>Html(dashboard_layout(content, <span class="kw-2">&amp;</span>gatewayd_version).into_string())
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">return </span>Html(dashboard_layout(content, <span class="kw-2">&amp;</span>gatewayd_version, <span class="prelude-val">None</span>).into_string())
 <a href=#322 id=322 data-nosnippet>322</a>                .into_response();
 <a href=#323 id=323 data-nosnippet>323</a>        }
 <a href=#324 id=324 data-nosnippet>324</a>    };
@@ -407,7 +407,7 @@
 <a href=#407 id=407 data-nosnippet>407</a>        }
 <a href=#408 id=408 data-nosnippet>408</a>    };
 <a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    Html(dashboard_layout(content, <span class="kw-2">&amp;</span>gatewayd_version).into_string()).into_response()
+<a href=#410 id=410 data-nosnippet>410</a>    Html(dashboard_layout(content, <span class="kw-2">&amp;</span>gatewayd_version, <span class="prelude-val">None</span>).into_string()).into_response()
 <a href=#411 id=411 data-nosnippet>411</a>}
 <a href=#412 id=412 data-nosnippet>412</a>
 <a href=#413 id=413 data-nosnippet>413</a><span class="kw">async fn </span>stop_gateway_handler&lt;E&gt;(

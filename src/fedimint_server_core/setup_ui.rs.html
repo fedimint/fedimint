@@ -62,12 +62,19 @@
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// Returns the enabled modules, if set by any setup code
 <a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">async fn </span>cfg_enabled_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;ModuleKind&gt;&gt;;
 <a href=#64 id=64 data-nosnippet>64</a>
-<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Create a trait object
-<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynSetupApi
-<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">where
-<a href=#68 id=68 data-nosnippet>68</a>        </span><span class="self">Self</span>: Sized + Send + Sync + <span class="lifetime">'static</span>,
-<a href=#69 id=69 data-nosnippet>69</a>    {
-<a href=#70 id=70 data-nosnippet>70</a>        Arc::new(<span class="self">self</span>)
-<a href=#71 id=71 data-nosnippet>71</a>    }
-<a href=#72 id=72 data-nosnippet>72</a>}
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// Get the fedimintd version
+<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">async fn </span>fedimintd_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String;
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Get the git hash of the fedimintd binary, or `None` if it is not
+<a href=#69 id=69 data-nosnippet>69</a>    /// available (e.g. it was built outside a git checkout).
+<a href=#70 id=70 data-nosnippet>70</a>    </span><span class="kw">async fn </span>fedimintd_version_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt;;
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// Create a trait object
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynSetupApi
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">where
+<a href=#75 id=75 data-nosnippet>75</a>        </span><span class="self">Self</span>: Sized + Send + Sync + <span class="lifetime">'static</span>,
+<a href=#76 id=76 data-nosnippet>76</a>    {
+<a href=#77 id=77 data-nosnippet>77</a>        Arc::new(<span class="self">self</span>)
+<a href=#78 id=78 data-nosnippet>78</a>    }
+<a href=#79 id=79 data-nosnippet>79</a>}
 </code></pre></div></section></main></body></html>

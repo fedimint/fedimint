@@ -12,4 +12,14 @@
 <a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub fn </span>git_hash() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="macro">option_env!</span>(<span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>).unwrap_or(<span class="string">"0000000000000000000000000000000000000001"</span>)
 <a href=#14 id=14 data-nosnippet>14</a>}
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="doccomment">/// Returns the version hash if it is meaningful (i.e. not all zeros, which
+<a href=#17 id=17 data-nosnippet>17</a>/// `fedimint-build` substitutes when no git information is available).
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub fn </span>non_zero_version_hash(hash: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">if </span>hash.bytes().all(|b| b == <span class="string">b'0'</span>) {
+<a href=#20 id=20 data-nosnippet>20</a>        <span class="prelude-val">None
+<a href=#21 id=21 data-nosnippet>21</a>    </span>} <span class="kw">else </span>{
+<a href=#22 id=22 data-nosnippet>22</a>        <span class="prelude-val">Some</span>(hash)
+<a href=#23 id=23 data-nosnippet>23</a>    }
+<a href=#24 id=24 data-nosnippet>24</a>}
 </code></pre></div></section></main></body></html>
