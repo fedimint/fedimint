@@ -475,12 +475,50 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    /// Attempt fulfill HTLC by buying preimage from the federation
+    /// Attempt fulfill HTLC by buying preimage from the federation.
+    ///
+    /// Idempotent across replays: the `operation_id` is derived
+    /// deterministically from the HTLC's payment hash, so if the gateway's
+    /// LND HTLC interceptor stream reconnects and LND replays a
+    /// still-pending HTLC, this returns the existing `operation_id` instead
+    /// of failing to re-submit the transaction. The original state machine
+    /// remains responsible for resolving the HTLC.
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, amount, client_output, client_output_sm, contract_id) = self
+
+        // Idempotency check FIRST, before
+        // `create_funding_incoming_contract_output_from_htlc` fetches the
+        // federation's offer: the first time we handled this HTLC the offer was
+        // consumed by the funding tx, so a replay would otherwise fail
+        // with "Timed out fetching the offer" instead of being recognised as an
+        // in-flight operation. The operation id is derived deterministically from
+        // the payment hash (kept in sync with the derivation inside
+        // `create_funding_incoming_contract_output_from_htlc`).
+        //
+        // The check + `finalize_and_submit_transaction` are not atomic, but
+        // gatewayd processes intercepted HTLCs serially from a single LND
+        // interceptor task, so two concurrent calls with the same payment hash
+        // cannot race here.
+        let operation_id = OperationId(htlc.payment_hash.to_byte_array());
+        if self.client_ctx.operation_exists(operation_id).await {
+            debug!(
+                ?operation_id,
+                "HTLC already being handled, treating as in-flight (likely an LND stream-reconnect replay)"
+            );
+            return Ok(operation_id);
+        }
+
+        let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
+        // The two derivations MUST stay in sync (`OperationId(htlc.payment_hash
+        // .to_byte_array())` in both places). A divergence in release would
+        // submit a transaction under one id while the caller observes another,
+        // so a hard `assert!` rather than `debug_assert!` is intentional.
+        assert_eq!(
+            op_id_from_funding, operation_id,
+            "operation id derivation must match"
+        );
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
