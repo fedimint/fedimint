@@ -1354,6 +1354,7 @@ impl Wallet {
                     script: entry.1.1.script_pubkey,
                     value: entry.1.1.value,
                     spent: spent.contains(&entry.0.0),
+                    outpoint: Some(entry.1.0),
                 }))
             })
             .collect()

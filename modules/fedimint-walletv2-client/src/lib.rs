@@ -84,6 +84,8 @@ pub struct ReceiveMeta {
     pub change_outpoint_range: OutPointRange,
     pub value: bitcoin::Amount,
     pub fee: bitcoin::Amount,
+    pub address: Option<Address<NetworkUnchecked>>,
+    pub outpoint: Option<bitcoin::OutPoint>,
 }
 
 /// The final state of an operation sending bitcoin onchain.
@@ -495,6 +497,7 @@ impl WalletClientModule {
         value: bitcoin::Amount,
         address_index: u64,
         fee: bitcoin::Amount,
+        outpoint: Option<bitcoin::OutPoint>,
     ) -> (OperationId, TransactionId) {
         let operation_id = OperationId::new_random();
 
@@ -527,6 +530,9 @@ impl WalletClientModule {
             vec![client_input_sm],
         ));
 
+        let address = self.derive_address(address_index).as_unchecked().clone();
+
+        let meta_address = address.clone();
         let range = self
             .client_ctx
             .finalize_and_submit_transaction(
@@ -537,6 +543,8 @@ impl WalletClientModule {
                         change_outpoint_range,
                         value,
                         fee,
+                        address: Some(meta_address.clone()),
+                        outpoint,
                     })
                 },
                 TransactionBuilder::new().with_inputs(client_input_bundle),
@@ -551,9 +559,10 @@ impl WalletClientModule {
                 &mut dbtx,
                 ReceivePaymentEvent {
                     operation_id,
-                    address: self.derive_address(address_index).as_unchecked().clone(),
                     value,
                     fee,
+                    address,
+                    outpoint,
                 },
             )
             .await;
@@ -662,7 +671,13 @@ impl WalletClientModule {
 
                     if output.value > receive_fee {
                         let (operation_id, txid) = self
-                            .receive_output(output.index, output.value, address_index, receive_fee)
+                            .receive_output(
+                                output.index,
+                                output.value,
+                                address_index,
+                                receive_fee,
+                                output.outpoint,
+                            )
                             .await;
 
                         self.client_ctx

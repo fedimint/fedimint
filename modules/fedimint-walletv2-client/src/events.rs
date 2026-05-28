@@ -45,9 +45,10 @@ impl Event for SendPaymentUpdateEvent {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ReceivePaymentEvent {
     pub operation_id: OperationId,
-    pub address: Address<NetworkUnchecked>,
     pub value: bitcoin::Amount,
     pub fee: bitcoin::Amount,
+    pub address: Address<NetworkUnchecked>,
+    pub outpoint: Option<bitcoin::OutPoint>,
 }
 
 impl Event for ReceivePaymentEvent {
