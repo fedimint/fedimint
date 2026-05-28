@@ -62,7 +62,7 @@ pub(crate) async fn handle_cli_command(
         } => json(
             wallet
                 .await_final_send_operation_state(wallet.send(address, value, fee).await?)
-                .await,
+                .await?,
         ),
         Opts::Receive => json(wallet.receive().await),
     };
