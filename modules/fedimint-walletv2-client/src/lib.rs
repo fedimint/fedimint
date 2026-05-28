@@ -442,20 +442,29 @@ impl WalletClientModule {
         Ok(final_state.expect("Stream contains one final state"))
     }
 
-    /// Returns the next unused receive address, polling until the initial
-    /// address derivation has completed.
+    /// Returns the highest valid receive address index that the background
+    /// scanner has derived so far, or `None` if it has not derived one yet.
+    async fn valid_index(&self) -> Option<u64> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+            .map(|entry| entry.0.0)
+    }
+
+    /// Returns the next unused receive address.
+    ///
+    /// If the background scanner has already derived a valid address index this
+    /// returns immediately. Otherwise it blocks, letting the scanner grind
+    /// until it finds the next valid index, and returns once one is
+    /// available.
     pub async fn receive(&self) -> Address {
         loop {
-            if let Some(entry) = self
-                .db
-                .begin_transaction_nc()
-                .await
-                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-            {
-                return self.derive_address(entry.0.0);
+            if let Some(index) = self.valid_index().await {
+                return self.derive_address(index);
             }
 
             sleep(Duration::from_secs(1)).await;
