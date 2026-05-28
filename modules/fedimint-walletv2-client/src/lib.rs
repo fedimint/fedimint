@@ -47,6 +47,7 @@ use fedimint_core::module::{
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
@@ -64,6 +65,9 @@ use tracing::{debug, warn};
 
 /// Number of output info entries to scan per batch.
 const SLICE_SIZE: u64 = 1000;
+
+/// Number of event log entries to read per batch.
+const EVENT_LOG_PAGE_SIZE: u64 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalletOperationMeta {
@@ -482,6 +486,91 @@ impl WalletClientModule {
             }
 
             sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    /// Block until a payment is received to the current receive address, wait
+    /// for the peg-in to succeed, and wait until the next receive address has
+    /// been derived before returning.
+    ///
+    /// A peg-in attempt may be aborted (rejected by the federation), in which
+    /// case the still-unspent output is reprocessed into a new receive
+    /// operation. This keeps waiting across such retries until one succeeds.
+    pub async fn await_receive(&self) -> anyhow::Result<FinalReceiveOperationState> {
+        // Block until the scanner has derived the current receive address index.
+        let index = loop {
+            if let Some(index) = self.valid_index().await {
+                break index;
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        };
+
+        let address = self.derive_address(index).as_unchecked().clone();
+
+        // Each aborted attempt produces a new receive operation for the same
+        // address, so resume the event log scan from where we left off and wait
+        // for the next one until a peg-in succeeds.
+        let mut pos = Some(EventLogId::LOG_START);
+
+        let state = loop {
+            let operation_id = self.await_receive_operation(&address, &mut pos).await;
+
+            let state = self
+                .await_final_receive_operation_state(operation_id)
+                .await?;
+
+            // A successful peg-in is terminal; an aborted one is retried as a
+            // new receive operation, so keep waiting.
+            if state == FinalReceiveOperationState::Success {
+                break state;
+            }
+        };
+
+        // Wait until the scanner has derived the next receive address so that a
+        // fresh unused address is available to the caller on return.
+        loop {
+            if self.valid_index().await.is_some_and(|next| next > index) {
+                break;
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        Ok(state)
+    }
+
+    /// Scan the event log starting from `pos` for a [`ReceivePaymentEvent`] to
+    /// `address`, blocking until one is found, and return the operation id it
+    /// belongs to. `pos` is advanced past the matched event so that subsequent
+    /// calls resume the scan after it.
+    async fn await_receive_operation(
+        &self,
+        address: &Address<NetworkUnchecked>,
+        pos: &mut Option<EventLogId>,
+    ) -> OperationId {
+        loop {
+            let events = self
+                .client_ctx
+                .get_event_log(*pos, EVENT_LOG_PAGE_SIZE)
+                .await;
+
+            for entry in &events {
+                *pos = Some(entry.id().saturating_add(1));
+
+                if entry.module_kind() == Some(&KIND)
+                    && entry.kind == ReceivePaymentEvent::KIND
+                    && let Some(event) = entry.to_event::<ReceivePaymentEvent>()
+                    && &event.address == address
+                {
+                    return event.operation_id;
+                }
+            }
+
+            if events.is_empty() {
+                // Caught up with the log; wait for new events to be written.
+                sleep(Duration::from_secs(1)).await;
+            }
         }
     }
 
