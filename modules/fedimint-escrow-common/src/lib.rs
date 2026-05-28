@@ -1,5 +1,4 @@
 use std::fmt;
-use std::time::Duration;
 
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
@@ -32,7 +31,7 @@ pub struct EscrowContract {
     pub amount: Amount,
     pub arbiter_fee: Amount,
     pub contract_hash: [u8; 32],
-    pub timeout: Duration,
+    pub timeout: u64,
     pub federation_id: FederationId,
 }
 
@@ -177,7 +176,7 @@ pub fn compute_contract_hash(
     seller_key: &PublicKey,
     arbiter_key: &PublicKey,
     amount: &Amount,
-    timeout: &Duration,
+    timeout: &u64,
     federation_id: &FederationId,
 ) -> [u8; 32] {
     let mut engine = sha256::HashEngine::default();
@@ -186,7 +185,7 @@ pub fn compute_contract_hash(
     engine.input(&seller_key.serialize());
     engine.input(&arbiter_key.serialize());
     engine.input(&amount.msats.to_le_bytes());
-    engine.input(&timeout.as_secs().to_le_bytes());
+    engine.input(&timeout.to_le_bytes());
     engine.input(&federation_id.0.to_byte_array());
     sha256::Hash::from_engine(engine).to_byte_array()
 }

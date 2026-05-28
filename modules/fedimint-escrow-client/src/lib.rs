@@ -119,7 +119,7 @@ pub struct EscrowClientModule {
     federation_id: FederationId,
     cfg: EscrowClientConfig,
     pub client_ctx: ClientContext<Self>,
-    keypair: Keypair,
+    pub keypair: Keypair,
     notifier: ModuleNotifier<EscrowStateMachine>,
 }
 
@@ -244,6 +244,8 @@ impl EscrowClientModule {
         timeout: Duration,
     ) -> Result<(OperationId, EscrowId), anyhow::Error> {
         let buyer_key = self.keypair.public_key();
+        let timeout_deadline =
+            fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
 
         anyhow::ensure!(buyer_key != seller_key, "buyer and seller keys must differ");
         anyhow::ensure!(
@@ -263,7 +265,7 @@ impl EscrowClientModule {
             &seller_key,
             &arbiter_key,
             &amount,
-            &timeout,
+            &timeout_deadline,
             &self.federation_id,
         );
 
@@ -288,7 +290,7 @@ impl EscrowClientModule {
             amount,
             arbiter_fee,
             contract_hash,
-            timeout,
+            timeout: timeout_deadline,
             federation_id: self.federation_id,
         };
 

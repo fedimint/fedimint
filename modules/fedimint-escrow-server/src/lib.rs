@@ -232,7 +232,7 @@ impl ServerModule for Escrow {
                 outcome,
             } => {
                 let now = fedimint_core::time::duration_since_epoch().as_secs();
-                if now < contract.timeout.as_secs() {
+                if now < contract.timeout {
                     return Err(EscrowInputError::TimeoutNotReached);
                 }
 
