@@ -7,7 +7,8 @@ use devimint::{cmd, util};
 use fedimint_core::NumPeers;
 use fedimint_walletv2_tests::{
     FinalSendState, await_consensus_block_count, await_no_pending_txs, await_peg_in,
-    ensure_federation_total_value, get_deposit_address, module_is_present, spawn_block_miner,
+    ensure_federation_total_value, get_deposit_address, module_is_present,
+    report_frost_finalization_stats, spawn_block_miner, tx_chain,
 };
 use tokio::try_join;
 use tracing::info;
@@ -138,13 +139,12 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
     // descriptor) and walletv1 disabled. `run_devfed_test` reads the federation
     // size from `FM_FED_SIZE` and the number of guardians to shut down from
     // `FM_OFFLINE_NODES` (applied automatically via `degrade_federation`).
-    // Unlike the `dev-fed` CLI command it does not peg in any funds during
-    // setup, so we deposit manually below.
     unsafe { std::env::set_var("FM_FED_SIZE", fed_size.to_string()) };
     unsafe { std::env::set_var("FM_OFFLINE_NODES", offline_nodes.to_string()) };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
     unsafe { std::env::set_var("FM_WALLETV2_DESCRIPTOR", "frost") };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
+    unsafe { std::env::set_var("FM_WALLETV2_FROST_NONCE_BUFFER_TARGET", "3") };
 
     devimint::run_devfed_test()
         .call(move |dev_fed, _process_mgr| async move {
@@ -191,15 +191,53 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
 
             await_consensus_block_count(&client, 1).await?;
 
-            info!("Deposit funds into the federation...");
+            // The first deposit into an empty wallet is stored directly as the
+            // wallet UTXO, without a FROST-signed transaction (so no finalization
+            // stat). It just seeds the wallet with a UTXO to consolidate against.
+            info!("Seed the federation wallet with an initial deposit...");
 
-            let address = get_deposit_address(&client).await?;
+            let seed_address = get_deposit_address(&client).await?;
 
-            bitcoind.send_to(address.to_string(), 100_000).await?;
+            bitcoind.send_to(seed_address.to_string(), 100_000).await?;
 
-            await_peg_in(&client, &address).await?;
+            await_peg_in(&client, &seed_address).await?;
 
-            ensure_federation_total_value(&client, 90_000).await?;
+            // A deposit into a non-empty wallet sweeps the existing UTXO and the
+            // new deposit into a single consolidation transaction, which IS
+            // FROST-signed — so it produces a finalization stat.
+            info!("Deposit again to trigger a FROST-signed consolidation tx...");
+
+            let consolidation_address = get_deposit_address(&client).await?;
+
+            bitcoind
+                .send_to(consolidation_address.to_string(), 100_000)
+                .await?;
+
+            await_peg_in(&client, &consolidation_address).await?;
+
+            ensure_federation_total_value(&client, 180_000).await?;
+
+            // Once there are no pending transactions, the consolidation tx has
+            // finalized and every online guardian has deterministically recorded
+            // its FROST finalization stat.
+            await_no_pending_txs(&client).await?;
+
+            // The consolidation tx is the only federation tx so far (the peg-out
+            // hasn't happened yet), so it's the last entry in the tx chain.
+            let consolidation_txid = tx_chain(&client)
+                .await?
+                .last()
+                .context("expected a consolidation tx after the second peg-in")?
+                .txid;
+
+            report_frost_finalization_stats(
+                &client,
+                "peg-in (consolidation)",
+                consolidation_txid,
+                fed_size,
+                offline_nodes,
+            )
+            .await?;
 
             info!("Peg funds back out to an on-chain address...");
 
@@ -220,9 +258,14 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
                 panic!("Peg-out send operation failed");
             };
 
-            bitcoind.poll_get_transaction(txid).await?;
-
+            // `await_no_pending_txs` only returns once the peg-out has been
+            // signed, broadcast, and confirmed (it polls the unsigned +
+            // unconfirmed sets), which also guarantees the FROST finalization
+            // stat has been recorded — so no separate on-chain poll is needed.
             await_no_pending_txs(&client).await?;
+
+            report_frost_finalization_stats(&client, "peg-out", txid, fed_size, offline_nodes)
+                .await?;
 
             block_miner.abort();
 

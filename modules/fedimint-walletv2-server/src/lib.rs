@@ -41,13 +41,16 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set_opt};
+use fedimint_core::envs::{
+    FM_ENABLE_MODULE_WALLETV2_ENV, FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV, is_env_var_set_opt,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
     api_endpoint,
 };
+use fedimint_core::net::auth::check_auth;
 use fedimint_core::setup_code::WalletDescriptorKind;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
@@ -69,10 +72,13 @@ use fedimint_walletv2_common::config::{
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    FROST_FINALIZATION_STATS_ENDPOINT, OUTPUT_INFO_SLICE_ENDPOINT,
+    PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
-use fedimint_walletv2_common::taproot::frost::{FrostPublicKeyPackage, FrostSignatureShares};
+use fedimint_walletv2_common::taproot::frost::{
+    FrostFinalizationStat, FrostPublicKeyPackage, FrostSignatureShares,
+};
 use fedimint_walletv2_common::taproot::{descriptor_tr, tweak_xonly_public_key};
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
@@ -89,10 +95,11 @@ use tracing::{debug, info};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix,
-    FrostAdvanceVotePrefix, FrostSignatureSharePrefix, FrostSigningAttempt,
-    FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix, FrostSigningNoncesPrefix,
-    FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix, SchnorrSignaturesPrefix, TxInfoKey,
-    TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+    FrostAdvanceVotePrefix, FrostFinalizationStatPrefix, FrostSignatureSharePrefix,
+    FrostSigningAttempt, FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix,
+    FrostSigningNoncesPrefix, FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix,
+    SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix,
+    UnsignedTxKey, UnsignedTxPrefix,
 };
 use crate::taproot::frost::{
     FrostRuntime, FrostSigningNonces, FrostSigningPackage, spawn_initial_nonce_backfill,
@@ -342,6 +349,16 @@ impl ModuleInit for WalletInit {
                         "Local FROST Signature Shares"
                     );
                 }
+                DbKeyPrefix::FrostFinalizationStat => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostFinalizationStatPrefix,
+                        FrostFinalizationStatKey,
+                        FrostFinalizationStat,
+                        wallet,
+                        "FROST Finalization Stats"
+                    );
+                }
             }
         }
 
@@ -373,10 +390,16 @@ impl ServerModuleInit for WalletInit {
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
-        vec![EnvVarDoc {
-            name: FM_ENABLE_MODULE_WALLETV2_ENV,
-            description: "Set to 1/true to enable the WalletV2 module (experimental). Disabled by default.",
-        }]
+        vec![
+            EnvVarDoc {
+                name: FM_ENABLE_MODULE_WALLETV2_ENV,
+                description: "Set to 1/true to enable the WalletV2 module (experimental). Disabled by default.",
+            },
+            EnvVarDoc {
+                name: FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
+                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 64.",
+            },
+        ]
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
@@ -1090,6 +1113,16 @@ impl ServerModule for Wallet {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(module.tx_chain(&mut dbtx).await)
+                }
+            },
+            api_endpoint! {
+                FROST_FINALIZATION_STATS_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Wallet, context, params: Txid| -> Option<FrostFinalizationStat> {
+                    check_auth(context)?;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.finalization_stat(&mut dbtx, params).await)
                 }
             },
         ]

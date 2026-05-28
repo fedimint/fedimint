@@ -13,6 +13,8 @@ use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
+use fedimint_walletv2_common::TxInfo;
+use fedimint_walletv2_common::taproot::frost::FrostFinalizationStatsSummary;
 use serde::Deserialize;
 use tokio::task::JoinHandle;
 
@@ -138,4 +140,76 @@ pub async fn get_deposit_address(client: &Client) -> anyhow::Result<Address> {
     .assume_checked();
 
     Ok(address)
+}
+
+/// Queries every guardian for its FROST finalization stat for `txid` (via the
+/// authenticated CLI command) and returns the client-computed median/mean
+/// summary. Uses admin auth `--our-id 0 --password pass`; peer 0 is always
+/// online in devimint because `degrade_federation` shuts down the
+/// highest-indexed guardians first.
+pub async fn frost_finalization_stats(
+    client: &Client,
+    txid: Txid,
+) -> anyhow::Result<FrostFinalizationStatsSummary> {
+    let value = cmd!(
+        client,
+        "--our-id",
+        "0",
+        "--password",
+        "pass",
+        "module",
+        "walletv2",
+        "frost-finalization-stats",
+        txid.to_string()
+    )
+    .out_json()
+    .await?;
+
+    Ok(serde_json::from_value(value)?)
+}
+
+/// Returns the federation's chain of bitcoin transactions, oldest first.
+pub async fn tx_chain(client: &Client) -> anyhow::Result<Vec<TxInfo>> {
+    let value = cmd!(client, "module", "walletv2", "info", "tx-chain")
+        .out_json()
+        .await?;
+
+    Ok(serde_json::from_value(value)?)
+}
+
+/// Queries every guardian for its FROST finalization stat for `txid`, asserts
+/// that all online guardians (`fed_size - offline_nodes`) responded, and logs
+/// the median/mean finalization latency plus the (consensus-driven) attempt
+/// count under `label`. Call only once the transaction has finalized (e.g.
+/// after [`await_no_pending_txs`]).
+pub async fn report_frost_finalization_stats(
+    client: &Client,
+    label: &str,
+    txid: Txid,
+    fed_size: usize,
+    offline_nodes: usize,
+) -> anyhow::Result<()> {
+    let expected_online = fed_size - offline_nodes;
+    let summary = frost_finalization_stats(client, txid).await?;
+
+    ensure!(
+        summary.responses == expected_online,
+        "Expected FROST finalization stats for {label} from all {expected_online} online \
+         guardians, but only {} responded",
+        summary.responses,
+    );
+
+    tracing::info!(
+        label,
+        txid = %txid,
+        fed_size,
+        offline_nodes,
+        guardians_reporting = summary.responses,
+        attempts = ?summary.attempts,
+        median_ms = ?summary.median_duration_millis,
+        mean_ms = ?summary.mean_duration_millis,
+        "FROST finalization latency"
+    );
+
+    Ok(())
 }

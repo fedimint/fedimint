@@ -19,10 +19,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, ScriptBuf};
+use bitcoin::{Address, ScriptBuf, Txid};
 use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
@@ -43,13 +43,15 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, block_in_place, sleep};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::{WalletClientConfig, WalletDescriptor};
+use fedimint_walletv2_common::taproot::frost::FrostFinalizationStatsSummary;
 use fedimint_walletv2_common::{
     KIND, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes,
     WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
@@ -119,6 +121,10 @@ pub struct WalletClientModule {
     db: Database,
     module_api: DynModuleApi,
     scanner_running: Arc<AtomicBool>,
+    /// Guardian admin credentials, present only when the client was opened with
+    /// admin auth (`--our-id` + `--password`). Required by the authenticated
+    /// FROST finalization-stats query.
+    admin_auth: Option<ApiAuth>,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +212,7 @@ impl ClientModuleInit for WalletClientInit {
             db: args.db().clone(),
             module_api: args.module_api().clone(),
             scanner_running: Arc::new(AtomicBool::new(false)),
+            admin_auth: args.admin_auth().cloned(),
         };
 
         Ok(module)
@@ -218,6 +225,21 @@ impl ClientModuleInit for WalletClientInit {
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
         Some(db::DbKeyPrefix::iter().map(|p| p as u8).collect())
     }
+}
+
+/// Median of an already-sorted slice of millisecond durations. Returns `None`
+/// for an empty slice; for an even count, averages the two middle values.
+fn median(sorted: &[u64]) -> Option<u64> {
+    if sorted.is_empty() {
+        return None;
+    }
+
+    let mid = sorted.len() / 2;
+    Some(if sorted.len() % 2 == 1 {
+        sorted[mid]
+    } else {
+        u64::midpoint(sorted[mid - 1], sorted[mid])
+    })
 }
 
 impl WalletClientModule {
@@ -252,6 +274,44 @@ impl WalletClientModule {
     /// Display log of bitcoin transactions.
     async fn tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
         self.module_api.tx_chain().await
+    }
+
+    /// Query every guardian for its local FROST finalization stat for `txid`
+    /// and summarize the finalization latency (median and mean
+    /// `duration_millis`) across the guardians that responded. Requires the
+    /// client to have been opened with admin auth (`--our-id` +
+    /// `--password`).
+    pub async fn frost_finalization_stats(
+        &self,
+        txid: Txid,
+    ) -> anyhow::Result<FrostFinalizationStatsSummary> {
+        let auth = self
+            .admin_auth
+            .clone()
+            .context("Admin auth not set; pass --our-id and --password")?;
+
+        let per_guardian = self.module_api.frost_finalization_stats(auth, txid).await;
+
+        let mut durations: Vec<u64> = per_guardian
+            .values()
+            .map(|stat| stat.duration_millis)
+            .collect();
+        durations.sort_unstable();
+
+        let responses = durations.len();
+        let mean_duration_millis =
+            (!durations.is_empty()).then(|| durations.iter().sum::<u64>() / durations.len() as u64);
+
+        Ok(FrostFinalizationStatsSummary {
+            txid,
+            responses,
+            // Consensus-driven, so identical across guardians; any responder's
+            // value is representative.
+            attempts: per_guardian.values().next().map(|stat| stat.attempts),
+            median_duration_millis: median(&durations),
+            mean_duration_millis,
+            per_guardian,
+        })
     }
 
     /// Fetch the current fee required to send an onchain payment.
