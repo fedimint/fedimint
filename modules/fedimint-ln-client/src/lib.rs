@@ -31,7 +31,8 @@ use async_stream::{stream, try_stream};
 use bitcoin::Network;
 use bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
 use db::{
-    DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
+    DbKeyPrefix, ExpiredReceiveRecoveryCompletedKey, ExpiredReceiveRecoveryCompletedKeyPrefix,
+    LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
 use fedimint_api_client::api::{DynModuleApi, ServerError};
@@ -65,7 +66,9 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
-use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
+use fedimint_ln_common::contracts::incoming::{
+    IncomingContract, IncomingContractAccount, IncomingContractOffer,
+};
 use fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
 };
@@ -96,7 +99,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::Notify;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -268,6 +271,16 @@ pub struct LightningOperationMeta {
     pub extra_meta: serde_json::Value,
 }
 
+/// Result entry for [`LightningClientModule::recover_expired_receives`],
+/// describing a single LN receive whose stuck funds were claimed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveredReceive {
+    pub original_operation_id: OperationId,
+    pub recovery_operation_id: OperationId,
+    pub amount: Amount,
+    pub payment_hash: sha256::Hash,
+}
+
 pub use deprecated_variant_hack::LightningOperationMetaVariant;
 
 /// This is a hack to allow us to use the deprecated variant in the database
@@ -354,6 +367,16 @@ impl ModuleInit for LightningClientInit {
                         RecurringPaymentCodeEntry,
                         ln_client_items,
                         "Recurring Payment Code"
+                    );
+                }
+                DbKeyPrefix::ExpiredReceiveRecoveryCompleted => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ExpiredReceiveRecoveryCompletedKeyPrefix,
+                        ExpiredReceiveRecoveryCompletedKey,
+                        (),
+                        ln_client_items,
+                        "Expired Receive Recovery Completed"
                     );
                 }
                 DbKeyPrefix::ExternalReservedStart
@@ -725,6 +748,11 @@ impl LightningClientModule {
                 args.context(),
                 new_recurring_payment_code.clone(),
             ),
+        );
+
+        args.spawn_cancellable(
+            "Recover expired LN receives",
+            Self::recover_expired_receives_if_needed(args.context()),
         );
 
         Self {
@@ -1704,7 +1732,6 @@ impl LightningClientModule {
     /// Claim the funded, unspent incoming contract by submitting a transaction
     /// to the federation and awaiting the primary module's outputs
     #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
-    #[allow(deprecated)]
     pub async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
         &self,
         key_pair: Keypair,
@@ -1716,18 +1743,249 @@ impl LightningClientModule {
             .ok_or(anyhow!("No contract account found"))
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
-        let input = incoming_contract_account.claim();
+        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        Self::submit_incoming_contract_claim(
+            &self.client_ctx,
+            incoming_contract_account,
+            key_pair,
+            extra_meta,
+        )
+        .await
+    }
+
+    /// Recover funds for past `LNv1` receives that terminated with
+    /// [`LightningReceiveError::Timeout`] but were nevertheless funded by a
+    /// payer after the invoice expired.
+    ///
+    /// Pre-#8348 the federation, gateway and paying client all skipped
+    /// invoice-expiry validation. If a receiver's state machine timed out
+    /// before the payer's contract-funding transaction landed, the contract
+    /// was created but never claimed and the funds were stuck. This method
+    /// scans the local state machine history for such timed-out receives,
+    /// probes the federation for a still-claimable contract, and submits a
+    /// claim transaction. It is naturally idempotent: once claimed, the
+    /// contract no longer exists on the server and subsequent runs skip it.
+    ///
+    /// Only [`ReceivingKey::Personal`] receives are recoverable here, since
+    /// the secret key for `External` receives is held by another client.
+    pub async fn recover_expired_receives(&self) -> anyhow::Result<Vec<RecoveredReceive>> {
+        Self::recover_expired_receives_with_ctx(&self.client_ctx).await
+    }
+
+    /// Auto-spawned task that runs the recovery sweep at most once per wallet
+    /// lifetime, gated by [`ExpiredReceiveRecoveryCompletedKey`]. Repeated
+    /// federation probes on every restart would leak the count and timing of
+    /// historical expired receives, hence the one-shot design.
+    async fn recover_expired_receives_if_needed(client_ctx: ClientContext<Self>) {
+        let already_completed = client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&ExpiredReceiveRecoveryCompletedKey)
+            .await
+            .is_some();
+        if already_completed {
+            return;
+        }
+
+        // The recovery sweep reads from the SM executor and submits
+        // transactions, both of which need the [`fedimint_client::Client`] to
+        // be fully constructed. This task is spawned from
+        // [`LightningClientModule::new`] which runs before the builder calls
+        // `FinalClientIface::set`, so wait until the client is wired up.
+        client_ctx.wait_for_client_ready().await;
+
+        let recovered = match retry(
+            "recover_expired_receives",
+            backoff_util::background_backoff(),
+            || async {
+                Self::recover_expired_receives_with_ctx(&client_ctx)
+                    .await
+                    .inspect_err(|err| {
+                        debug!(
+                            target: LOG_CLIENT_MODULE_LN,
+                            err = %err.fmt_compact_anyhow(),
+                            "Expired-receive recovery sweep failed, will retry"
+                        );
+                    })
+            },
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LN,
+                    err = %err.fmt_compact_anyhow(),
+                    "Expired-receive recovery exhausted retries; will try again on next startup"
+                );
+                return;
+            }
+        };
+
+        if !recovered.is_empty() {
+            info!(
+                target: LOG_CLIENT_MODULE_LN,
+                count = recovered.len(),
+                "Expired-receive recovery sweep claimed funds for previously stuck receives"
+            );
+        }
+
+        let mut dbtx = client_ctx.module_db().begin_transaction().await;
+        dbtx.insert_new_entry(&ExpiredReceiveRecoveryCompletedKey, &())
+            .await;
+        dbtx.commit_tx().await;
+    }
+
+    async fn recover_expired_receives_with_ctx(
+        client_ctx: &ClientContext<Self>,
+    ) -> anyhow::Result<Vec<RecoveredReceive>> {
+        let inactive = client_ctx.get_own_inactive_states().await;
+
+        // Bucket inactive states by operation_id. For each operation_id we want
+        // both the terminal state (to check it's `Canceled(Timeout)`) and the
+        // prior state that carries the receiving key.
+        let mut by_op: BTreeMap<OperationId, Vec<LightningReceiveStateMachine>> = BTreeMap::new();
+        for (state, _meta) in inactive {
+            if let LightningClientStateMachines::Receive(sm) = state {
+                by_op.entry(sm.operation_id).or_default().push(sm);
+            }
+        }
+
+        let module_api = client_ctx.module_api();
+        let mut recovered = Vec::new();
+        for (operation_id, states) in by_op {
+            let timed_out = states.iter().any(|sm| {
+                matches!(
+                    sm.state,
+                    LightningReceiveStates::Canceled(LightningReceiveError::Timeout)
+                )
+            });
+            if !timed_out {
+                continue;
+            }
+
+            let Some((invoice, keypair)) = states.iter().find_map(|sm| match &sm.state {
+                LightningReceiveStates::ConfirmedInvoice(c) => match c.receiving_key {
+                    ReceivingKey::Personal(kp) => Some((c.invoice.clone(), kp)),
+                    ReceivingKey::External(_) => None,
+                },
+                LightningReceiveStates::SubmittedOffer(s) => match s.receiving_key {
+                    ReceivingKey::Personal(kp) => Some((s.invoice.clone(), kp)),
+                    ReceivingKey::External(_) => None,
+                },
+                _ => None,
+            }) else {
+                // Either an `External` receive (someone else's key) or the
+                // state machine record is missing the offer/invoice state for
+                // some unexpected reason. Either way, nothing to do here.
+                continue;
+            };
+
+            let payment_hash = *invoice.payment_hash();
+            let contract_id = payment_hash.into();
+            let contract = match get_incoming_contract(module_api.clone(), contract_id).await {
+                Ok(Some(c)) => c,
+                Ok(None) => continue,
+                Err(err) => {
+                    return Err(anyhow::anyhow!(
+                        "Failed to fetch contract {contract_id} during expired-receive recovery: {err}"
+                    ));
+                }
+            };
+
+            // After a prior claim the contract entry still exists but is
+            // empty; skip rather than submitting a no-op claim tx.
+            if contract.amount == Amount::ZERO {
+                continue;
+            }
+
+            match contract.contract.decrypted_preimage {
+                DecryptedPreimage::Some(_) => {}
+                DecryptedPreimage::Pending => {
+                    debug!(
+                        target: LOG_CLIENT_MODULE_LN,
+                        %contract_id,
+                        "Skipping expired-receive recovery: preimage still pending"
+                    );
+                    continue;
+                }
+                DecryptedPreimage::Invalid => {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LN,
+                        %contract_id,
+                        "Skipping expired-receive recovery: decrypted preimage invalid"
+                    );
+                    continue;
+                }
+            }
+
+            let amount = contract.amount;
+            let recovery_operation_id = match Self::submit_incoming_contract_claim(
+                client_ctx,
+                contract,
+                keypair,
+                serde_json::Value::Null,
+            )
+            .await
+            {
+                Ok(op) => op,
+                Err(err) => {
+                    // Most likely the contract was just claimed by a parallel
+                    // sweep (manual + auto), making the input already-spent.
+                    // Log and continue with other candidates rather than
+                    // aborting the whole sweep.
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LN,
+                        operation_id = %operation_id.fmt_short(),
+                        %contract_id,
+                        err = %err.fmt_compact_anyhow(),
+                        "Failed to submit claim for expired receive; skipping"
+                    );
+                    continue;
+                }
+            };
+
+            info!(
+                target: LOG_CLIENT_MODULE_LN,
+                original_operation_id = %operation_id.fmt_short(),
+                recovery_operation_id = %recovery_operation_id.fmt_short(),
+                %amount,
+                "Recovered funds from previously timed-out LN receive"
+            );
+
+            recovered.push(RecoveredReceive {
+                original_operation_id: operation_id,
+                recovery_operation_id,
+                amount,
+                payment_hash,
+            });
+        }
+
+        Ok(recovered)
+    }
+
+    /// Submit a claim transaction for an already-fetched funded incoming
+    /// contract, returning the new operation id under which the claim is
+    /// tracked (a fresh random id, since the original receive state machine —
+    /// if any — has already terminated and cannot be revived).
+    #[allow(deprecated)]
+    async fn submit_incoming_contract_claim(
+        client_ctx: &ClientContext<Self>,
+        contract: IncomingContractAccount,
+        key_pair: Keypair,
+        extra_meta: serde_json::Value,
+    ) -> anyhow::Result<OperationId> {
+        let input = contract.claim();
         let client_input = ClientInput::<LightningInput> {
             input,
-            amounts: Amounts::new_bitcoin(incoming_contract_account.amount),
+            amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![key_pair],
         };
 
         let tx = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
+            client_ctx.make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
-        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim {
                 out_points: change_range.into_iter().collect(),
@@ -1735,7 +1993,7 @@ impl LightningClientModule {
             extra_meta: extra_meta.clone(),
         };
         let operation_id = OperationId::new_random();
-        self.client_ctx
+        client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),

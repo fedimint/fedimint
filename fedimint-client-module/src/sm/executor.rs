@@ -127,6 +127,8 @@ pub struct InactiveStateMeta {
 pub trait IExecutor {
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)>;
 
+    async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)>;
+
     async fn add_state_machines_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,

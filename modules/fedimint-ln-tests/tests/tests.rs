@@ -11,16 +11,24 @@ use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
-use fedimint_core::{Amount, sats, secp256k1};
+use fedimint_core::{Amount, TransactionId, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
-use fedimint_ln_client::{
-    InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+use fedimint_ln_client::db::ExpiredReceiveRecoveryCompletedKey;
+use fedimint_ln_client::receive::{
+    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
+    LightningReceiveSubmittedOffer,
 };
-use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
-use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
-use fedimint_ln_common::{LightningCommonInit, LightningOutput};
+use fedimint_ln_client::{
+    InternalPayState, LightningClientInit, LightningClientModule, LightningClientStateMachines,
+    LightningOperationMeta, LnPayState, LnReceiveState, MockGatewayConnection,
+    OutgoingLightningPayment, PayType, ReceivingKey,
+};
+use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
+use fedimint_ln_common::contracts::{
+    Contract, ContractId, DecryptedPreimage, EncryptedPreimage, PreimageKey,
+};
+use fedimint_ln_common::{ContractOutput, LightningCommonInit, LightningOutput};
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::Gateway;
 use fedimint_testing::federation::FederationTest;
@@ -32,6 +40,22 @@ use lightning_invoice::{
 };
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
+
+async fn await_tx_accepted_helper(
+    tx_updates: BoxStream<'static, TxSubmissionStatesSM>,
+) -> Result<(), String> {
+    tx_updates
+        .filter_map(|tx_update| {
+            std::future::ready(match tx_update.state {
+                TxSubmissionStates::Accepted(_) => Some(Ok(())),
+                TxSubmissionStates::Rejected(_, submit_error) => Some(Err(submit_error)),
+                _ => None,
+            })
+        })
+        .next()
+        .await
+        .expect("Tx either accepted or rejected")
+}
 
 pub async fn ln_operation(
     client: &ClientHandleArc,
@@ -832,6 +856,239 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Reproduce the stuck-funds scenario behind #8455 and verify that
+/// [`LightningClientModule::recover_expired_receives`] claims them.
+///
+/// We bypass the natural state-machine timeout (which requires waiting ~60s
+/// for `CLOCK_SKEW_TOLERANCE` in `receive.rs`) by:
+///   1. Submitting an `IncomingContractOffer` directly, then a contract funding
+///      output that funds it — this exercises the real pre-#8348 server
+///      behavior (no expiry validation in `process_output`).
+///   2. Injecting a `Canceled(Timeout)` plus `SubmittedOffer` inactive state
+///      machine record into the receiver's DB to mimic what would naturally be
+///      persisted by the receive SM after a timeout.
+///   3. Calling `recover_expired_receives()` and asserting the claim succeeds.
+#[tokio::test(flavor = "multi_thread")]
+async fn recovers_expired_timed_out_receives() -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    use fedimint_client::sm::executor::InactiveStateKeyDb;
+    use fedimint_client_module::sm::executor::{InactiveStateKey, InactiveStateMeta};
+    use fedimint_core::core::IntoDynInstance;
+    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+    use fedimint_core::time::{duration_since_epoch, now};
+    use fedimint_ln_client::api::LnFederationApi;
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (receiver, payer) = fed.two_clients().await;
+
+    // Give the payer enough primary-module balance to fund a contract.
+    payer
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    let receiver_ln = receiver.get_first_module::<LightningClientModule>()?;
+    let payer_ln = payer.get_first_module::<LightningClientModule>()?;
+    let threshold_pub_key = receiver_ln.cfg.threshold_pub_key;
+    let ln_module_id = receiver_ln.id;
+
+    // 1. Derive the receiver's keypair, preimage and payment hash. These mirror
+    // the relations enforced by `IncomingContract::contract_id()`.
+    let secp = secp256k1::Secp256k1::new();
+    let receiver_kp = Keypair::new(&secp, &mut OsRng);
+    let preimage_bytes: [u8; 32] =
+        sha256::Hash::hash(&receiver_kp.public_key().serialize()).to_byte_array();
+    let payment_hash = sha256::Hash::hash(&preimage_bytes);
+    let contract_id: ContractId = payment_hash.into();
+    let operation_id = OperationId(payment_hash.to_byte_array());
+
+    // 2. Craft a Bolt11Invoice for that payment hash that is "old" enough that
+    // the receive state machine would consider it past the clock-skew tolerance.
+    // The actual receive SM never runs in this test; this invoice lives in the
+    // injected inactive state purely so `recover_expired_receives` can extract
+    // the payment hash and keypair.
+    let invoice_sk = secp256k1::SecretKey::new(&mut OsRng);
+    let now_secs = duration_since_epoch().as_secs();
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(payment_hash)
+        .duration_since_epoch(Duration::from_secs(now_secs - 600))
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(250_000)
+        .expiry_time(Duration::from_secs(1))
+        .build_signed(|m| secp.sign_ecdsa_recoverable(m, &invoice_sk))?;
+    let amount = sats(250);
+
+    // 3. Receiver publishes the offer for this payment hash. We submit
+    // `LightningOutput::Offer` directly to match what `create_bolt11_invoice`
+    // would have done, without running the receive state machine.
+    let encrypted_preimage = EncryptedPreimage::new(
+        &PreimageKey(receiver_kp.public_key().serialize()),
+        &threshold_pub_key,
+    );
+    let offer = IncomingContractOffer {
+        amount,
+        hash: payment_hash,
+        encrypted_preimage: encrypted_preimage.clone(),
+        expiry_time: Some(now_secs.saturating_sub(60)),
+    };
+    let offer_tx = TransactionBuilder::new().with_outputs(
+        ClientOutputBundle::new_no_sm(vec![ClientOutput {
+            output: LightningOutput::new_v0_offer(offer),
+            amounts: Amounts::ZERO,
+        }])
+        .into_dyn(ln_module_id),
+    );
+    let offer_op = OperationId::new_random();
+    receiver
+        .finalize_and_submit_transaction(offer_op, "", |_| (), offer_tx)
+        .await?;
+    await_tx_accepted_helper(receiver.transaction_updates(offer_op).await.update_stream)
+        .await
+        .expect("Offer tx should be accepted");
+
+    // 4. Payer funds the contract for this offer. By submitting the
+    // `ContractOutput` directly we bypass `pay_bolt11_invoice`'s post-#8348
+    // expiry guard, reproducing the pre-#8348 path that left funds stuck.
+    let contract = IncomingContract {
+        hash: payment_hash,
+        encrypted_preimage,
+        decrypted_preimage: DecryptedPreimage::Pending,
+        gateway_key: secp256k1::PublicKey::from_keypair(&receiver_kp),
+    };
+    let contract_tx = TransactionBuilder::new().with_outputs(
+        ClientOutputBundle::new_no_sm(vec![ClientOutput {
+            output: LightningOutput::new_v0_contract(ContractOutput {
+                amount,
+                contract: Contract::Incoming(contract),
+            }),
+            amounts: Amounts::new_bitcoin(amount),
+        }])
+        .into_dyn(payer_ln.id),
+    );
+    let contract_op = OperationId::new_random();
+    payer
+        .finalize_and_submit_transaction(contract_op, "", |_| (), contract_tx)
+        .await?;
+    await_tx_accepted_helper(payer.transaction_updates(contract_op).await.update_stream)
+        .await
+        .expect("Contract tx should be accepted");
+
+    // 5. Wait for the federation to decrypt the preimage. Once decrypted the
+    // contract is claimable.
+    let module_api = receiver.api_clone().with_module(ln_module_id);
+    let (_account, _preimage) = module_api.wait_preimage_decrypted(contract_id).await?;
+
+    // 6. Inject the inactive state machine records that would have been
+    // persisted by a real receive SM that timed out before the funding tx
+    // landed.
+    let submitted_offer_sm = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+        operation_id,
+        state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
+            offer_txid: TransactionId::all_zeros(),
+            invoice: invoice.clone(),
+            receiving_key: ReceivingKey::Personal(receiver_kp),
+        }),
+    });
+    let canceled_sm = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+        operation_id,
+        state: LightningReceiveStates::Canceled(LightningReceiveError::Timeout),
+    });
+    let meta = InactiveStateMeta {
+        created_at: now(),
+        exited_at: now(),
+    };
+    let mut dbtx = receiver.db().begin_transaction().await;
+    for sm in [submitted_offer_sm, canceled_sm] {
+        let dyn_state = sm.into_dyn(ln_module_id);
+        dbtx.insert_new_entry(
+            &InactiveStateKeyDb(InactiveStateKey {
+                operation_id,
+                state: dyn_state,
+            }),
+            &meta,
+        )
+        .await;
+    }
+    dbtx.commit_tx().await;
+
+    // 7. Run recovery. Expect one recovered entry matching the stuck contract.
+    let recovered = receiver_ln.recover_expired_receives().await?;
+    assert_eq!(
+        recovered.len(),
+        1,
+        "should recover exactly one stuck receive"
+    );
+    let entry = &recovered[0];
+    assert_eq!(entry.original_operation_id, operation_id);
+    assert_eq!(entry.payment_hash, payment_hash);
+    assert_eq!(entry.amount, amount);
+
+    // 8. Wait for the claim tx itself to be accepted by the federation. The
+    // primary-module finalization that mints e-cash for the recovered amount
+    // is exercised end-to-end by the SM executor; we just need to confirm the
+    // claim made it onto the federation log.
+    await_tx_accepted_helper(
+        receiver
+            .transaction_updates(entry.recovery_operation_id)
+            .await
+            .update_stream,
+    )
+    .await
+    .expect("Claim tx should be accepted");
+
+    // 9. Second invocation is a no-op: the contract is spent.
+    let again = receiver_ln.recover_expired_receives().await?;
+    assert!(again.is_empty(), "recovery is idempotent once claimed");
+
+    Ok(())
+}
+
+/// Verify that the auto-spawned recovery sweep records the
+/// [`ExpiredReceiveRecoveryCompletedKey`] flag once it completes, so future
+/// client restarts don't re-probe the federation (preserves privacy).
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_recovery_sets_one_shot_flag() -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+    let module_db = client.db().with_prefix_module_id(ln_module.id).0;
+
+    // The auto-spawn runs in background. Wait briefly for it to complete on a
+    // wallet with no candidates (the sweep is a no-op trip through the
+    // operation log).
+    let deadline = fedimint_core::time::now() + Duration::from_secs(10);
+    loop {
+        let is_set = module_db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ExpiredReceiveRecoveryCompletedKey)
+            .await
+            .is_some();
+        if is_set {
+            break;
+        }
+        if fedimint_core::time::now() > deadline {
+            panic!("Auto recovery never set the one-shot completion flag");
+        }
+        fedimint_core::task::sleep_in_test(
+            "Waiting for auto recovery flag",
+            Duration::from_millis(100),
+        )
+        .await;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
@@ -1562,6 +1819,10 @@ mod fedimint_migration_tests {
                             );
 
                             info!("Validated RecurringPaymentCodes");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::ExpiredReceiveRecoveryCompleted => {
+                            // New in 0.12 — old migration snapshots predate it,
+                            // so the flag is correctly absent.
                         }
                         fedimint_ln_client::db::DbKeyPrefix::CoreInternalReservedStart
                         | fedimint_ln_client::db::DbKeyPrefix::ExternalReservedStart

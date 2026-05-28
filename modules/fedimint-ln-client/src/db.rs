@@ -32,6 +32,7 @@ pub enum DbKeyPrefix {
     MetaOverridesDeprecated = 0x30,
     LightningGateway = 0x45,
     RecurringPaymentKey = 0x46,
+    ExpiredReceiveRecoveryCompleted = 0x47,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -120,6 +121,28 @@ impl_db_record!(
 impl_db_lookup!(
     key = RecurringPaymentCodeKey,
     query_prefix = RecurringPaymentCodeKeyPrefix
+);
+
+/// Marker that the one-shot auto-recovery sweep for past timed-out LN receives
+/// (see <https://github.com/fedimint/fedimint/issues/8455>) has run to completion.
+/// Absent on existing wallets so the sweep runs once after upgrade; present
+/// afterwards to avoid re-probing the federation on every restart, which would
+/// leak the count and timing of historical expired receives.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ExpiredReceiveRecoveryCompletedKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ExpiredReceiveRecoveryCompletedKeyPrefix;
+
+impl_db_record!(
+    key = ExpiredReceiveRecoveryCompletedKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ExpiredReceiveRecoveryCompleted,
+);
+
+impl_db_lookup!(
+    key = ExpiredReceiveRecoveryCompletedKey,
+    query_prefix = ExpiredReceiveRecoveryCompletedKeyPrefix
 );
 
 /// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to
