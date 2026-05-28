@@ -251,6 +251,10 @@ impl GatewayLndClient {
 
         let self_copy = self.clone();
         let hold_group = task_group.make_subgroup();
+        // See the matching comment in `spawn_lnv1_htlc_interceptor`: if this
+        // task exits unexpectedly we shut down the payment-stream subgroup so
+        // the gateway transitions to `Disconnected` and reconnects.
+        let subgroup = task_group.clone();
         task_group.spawn("LND Invoice Subscription", move |handle| async move {
             let future_stream = client.lightning().subscribe_invoices(InvoiceSubscription {
                 add_index,
@@ -262,6 +266,7 @@ impl GatewayLndClient {
                         Ok(stream) => stream.into_inner(),
                         Err(err) => {
                             warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to all invoice updates");
+                            subgroup.shutdown();
                             return;
                         }
                     }
@@ -324,6 +329,11 @@ impl GatewayLndClient {
                     }
                 }
             }
+
+            if !handle.is_shutting_down() {
+                warn!(target: LOG_LIGHTNING, "LND Invoice Subscription exited unexpectedly, shutting down payment-stream subgroup to trigger gateway reconnect");
+                subgroup.shutdown();
+            }
         });
 
         Ok(())
@@ -351,6 +361,12 @@ impl GatewayLndClient {
                 failure_reason: format!("Failed to get node info {status:?}"),
             })?;
 
+        // If the HTLC interceptor exits unexpectedly we shut down the
+        // payment-stream subgroup. That cascades to the lnv2 invoice
+        // subscription (and its hold-invoice subtasks), which drop their
+        // `gateway_sender` clones, closing the gateway's HTLC stream and
+        // driving the gateway back to `Disconnected` so it reconnects.
+        let subgroup = task_group.clone();
         task_group.spawn("LND HTLC Subscription", |handle| async move {
                 let future_stream = client
                     .router()
@@ -361,6 +377,7 @@ impl GatewayLndClient {
                             Ok(stream) => stream.into_inner(),
                             Err(e) => {
                                 crit!(target: LOG_LIGHTNING, err = %e.fmt_compact(), "Failed to establish htlc stream");
+                                subgroup.shutdown();
                                 return;
                             }
                         }
@@ -424,6 +441,13 @@ impl GatewayLndClient {
                                 });
                         }
                     }
+                }
+
+                // Loop exited because of an HTLC stream error or end-of-stream
+                // (the expected-shutdown case is handled above).
+                if !handle.is_shutting_down() {
+                    warn!(target: LOG_LIGHTNING, "LND HTLC Subscription exited unexpectedly, shutting down payment-stream subgroup to trigger gateway reconnect");
+                    subgroup.shutdown();
                 }
             });
 
