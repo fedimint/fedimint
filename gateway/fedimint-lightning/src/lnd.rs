@@ -49,8 +49,8 @@ use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, MAX_LIGHTNING_RETRIES,
-    RouteHtlcStream,
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
+    MAX_LIGHTNING_RETRIES, RouteHtlcStream,
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -73,6 +73,12 @@ pub struct GatewayLndClient {
     macaroon: String,
     time_pref: f64,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
+    /// Predicate used to distinguish HOLD invoices the gateway created
+    /// (federation-bound) from unrelated HOLD invoices on the same LND node.
+    /// Without this, every HOLD invoice on a shared LND would be intercepted
+    /// as if it were federation-bound, producing invalid LNv1 responses that
+    /// crash LND's htlc_interceptor stream.
+    lnv2_filter: Lnv2HoldInvoiceFilter,
 }
 
 impl GatewayLndClient {
@@ -82,6 +88,7 @@ impl GatewayLndClient {
         macaroon: String,
         time_pref: f64,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
+        lnv2_filter: Lnv2HoldInvoiceFilter,
     ) -> Self {
         info!(
             target: LOG_LIGHTNING,
@@ -97,6 +104,7 @@ impl GatewayLndClient {
             macaroon,
             time_pref,
             lnd_sender,
+            lnv2_filter,
         }
     }
 
@@ -187,6 +195,25 @@ impl GatewayLndClient {
                 );
 
                 if hold.state() == InvoiceState::Accepted {
+                    // Only forward HOLD invoices that the gateway created on
+                    // behalf of a federation. We check here (rather than at
+                    // the new-invoice add-event) because the contract is
+                    // saved to gateway_db *after* the HOLD invoice is created
+                    // on LND, so the add-event races registration. By the
+                    // time `Accepted` fires the HTLC has arrived, which means
+                    // the BOLT11 invoice was published and the contract is
+                    // committed.
+                    let hash = sha256::Hash::from_slice(&hold.r_hash)
+                        .expect("LND payment hashes are 32 bytes");
+                    if !(self_copy.lnv2_filter)(hash).await {
+                        trace!(
+                            target: LOG_LIGHTNING,
+                            payment_hash = %PrettyPaymentHash(&hold.r_hash),
+                            "Ignoring HOLD invoice not created by this gateway",
+                        );
+                        continue;
+                    }
+
                     let intercept = InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&hold.r_hash.clone())
                             .expect("Failed to convert to Hash"),
@@ -994,6 +1021,7 @@ impl ILnRpcClient for GatewayLndClient {
             macaroon: self.macaroon.clone(),
             time_pref: self.time_pref,
             lnd_sender: Some(lnd_sender.clone()),
+            lnv2_filter: self.lnv2_filter.clone(),
         });
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }

@@ -100,8 +100,8 @@ use fedimint_gwv2_client::{
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
-    InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, PayInvoiceResponse,
-    PaymentAction, RouteHtlcStream, ldk,
+    InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, Lnv2HoldInvoiceFilter,
+    PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::LightningCommonInit;
@@ -1885,13 +1885,33 @@ impl Gateway {
                 lnd_tls_cert,
                 lnd_macaroon,
                 lnd_time_pref,
-            } => Box::new(GatewayLndClient::new(
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-                lnd_time_pref,
-                None,
-            )),
+            } => {
+                // The LND backend uses this to ignore HOLD invoices on the
+                // shared LND node that aren't federation-bound. Returns true
+                // iff there is a registered LNv2 incoming contract for the
+                // given payment hash.
+                let gateway_db = self.gateway_db.clone();
+                let lnv2_filter: Lnv2HoldInvoiceFilter = Arc::new(move |hash| {
+                    let gateway_db = gateway_db.clone();
+                    Box::pin(async move {
+                        gateway_db
+                            .begin_transaction_nc()
+                            .await
+                            .load_registered_incoming_contract(PaymentImage::Hash(hash))
+                            .await
+                            .is_some()
+                    })
+                });
+
+                Box::new(GatewayLndClient::new(
+                    lnd_rpc_addr,
+                    lnd_tls_cert,
+                    lnd_macaroon,
+                    lnd_time_pref,
+                    None,
+                    lnv2_filter,
+                ))
+            }
             LightningMode::Ldk {
                 lightning_port,
                 alias,
