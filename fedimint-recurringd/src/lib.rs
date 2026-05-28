@@ -72,7 +72,9 @@ impl RecurringInvoiceServer {
                     fedimint_client::RootSecret::StandardDoubleDerive(Self::default_secret()),
                 )
                 .await?;
-            clients.insert(federation_id, Arc::new(client));
+            let client = Arc::new(client);
+            spawn_gateway_cache_refresh(&client);
+            clients.insert(federation_id, client);
         }
 
         let slf = Self {
@@ -123,6 +125,7 @@ impl RecurringInvoiceServer {
                 try_add_federation_database(&self.db, federation_id, client_db_prefix)
                     .await
                     .expect("We hold a global lock, no parallel joining can happen");
+                spawn_gateway_cache_refresh(&client);
                 clients.insert(federation_id, client);
                 Ok(federation_id)
             }
@@ -318,10 +321,13 @@ impl RecurringInvoiceServer {
                         // This is where the main part starts: generate the invoice and save it to
                         // the DB
                         let federation_client_ln_module = federation_client.get_ln_module()?;
+                        // Prefer an online, vetted gateway (cheapest first) rather than
+                        // picking one at random. The gateway cache is kept fresh by the
+                        // task spawned in `spawn_gateway_cache_refresh`.
                         let gateway = federation_client_ln_module
-                            .get_gateway(None, false)
-                            .await?
-                            .ok_or(RecurringPaymentError::NoGatewayFound)?;
+                            .select_available_gateway(None, None)
+                            .await
+                            .map_err(|_| RecurringPaymentError::NoGatewayFound)?;
 
                         let lnurl_meta = match payment_code.variant {
                             PaymentCodeVariant::Lnurl { meta } => meta,
@@ -670,4 +676,28 @@ impl LnClientContextExt for ClientHandleArc {
                 RecurringPaymentError::NoLightningModuleFound
             })
     }
+}
+
+/// Spawn a background task on the client's task group that keeps the lightning
+/// gateway cache fresh.
+///
+/// `select_available_gateway` (used when generating invoices) reads from the
+/// local gateway cache without refreshing it, so without this task the cache
+/// would go stale and invoice generation would fail with `NoGatewayFound`.
+fn spawn_gateway_cache_refresh(client: &ClientHandleArc) {
+    let client = client.clone();
+    client
+        .task_group()
+        .clone()
+        .spawn_cancellable("recurringd-gateway-cache-refresh", async move {
+            let Ok(ln_module) = client.get_ln_module() else {
+                warn!("No lightning module found, not refreshing gateway cache");
+                return;
+            };
+            // We consider all gateways for expiry so the cache is refreshed
+            // before any of them expire.
+            ln_module
+                .update_gateway_cache_continuously(|gateways| async move { gateways })
+                .await
+        });
 }
