@@ -136,8 +136,9 @@ pub async fn consensus_explorer_view(
     };
 
     let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
 
-    Html(dashboard_layout(content, &version).into_string()).into_response()
+    Html(dashboard_layout(content, &version, version_hash.as_deref()).into_string()).into_response()
 }
 
 /// Format the type of consensus item for display

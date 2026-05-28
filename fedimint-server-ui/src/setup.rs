@@ -14,7 +14,7 @@ use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState,
     connectivity_check_handler, copiable_text, login_form, login_submit_response,
-    single_card_layout,
+    single_card_layout_with_version,
 };
 use maud::{Markup, PreEscaped, html};
 use qrcode::QrCode;
@@ -307,8 +307,19 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
     let available_modules = state.api.available_modules();
     let default_modules = state.api.default_modules();
     let content = setup_form_content(&available_modules, &default_modules);
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
 
-    Html(single_card_layout("Guardian Setup", content).into_string()).into_response()
+    Html(
+        single_card_layout_with_version(
+            "Guardian Setup",
+            content,
+            &version,
+            version_hash.as_deref(),
+        )
+        .into_string(),
+    )
+    .into_response()
 }
 
 // POST handler for the /setup route (process the setup form)
@@ -385,7 +396,18 @@ async fn login_form_handler(State(state): State<UiState<DynSetupApi>>) -> impl I
         return Redirect::to(ROOT_ROUTE).into_response();
     }
 
-    Html(single_card_layout("Enter Password", login_form(None)).into_string()).into_response()
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
+    Html(
+        single_card_layout_with_version(
+            "Enter Password",
+            login_form(None),
+            &version,
+            version_hash.as_deref(),
+        )
+        .into_string(),
+    )
+    .into_response()
 }
 
 // POST handler for the /login route (authenticate and set session cookie)
@@ -420,6 +442,8 @@ async fn federation_setup(
         .await
         .expect("Successful authentication ensures that the local parameters have been set");
 
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
     let connected_peers = state.api.connected_peers().await;
     let federation_size = state.api.federation_size().await;
     let cfg_federation_name = state.api.cfg_federation_name().await;
@@ -550,7 +574,16 @@ async fn federation_setup(
         }
     };
 
-    Html(single_card_layout("Federation Setup", content).into_string()).into_response()
+    Html(
+        single_card_layout_with_version(
+            "Federation Setup",
+            content,
+            &version,
+            version_hash.as_deref(),
+        )
+        .into_string(),
+    )
+    .into_response()
 }
 
 // POST handler for adding peer connection info
@@ -587,6 +620,8 @@ async fn post_start_dkg(
     _auth: UserAuth,
 ) -> impl IntoResponse {
     let our_connection_info = state.api.setup_code().await;
+    let version = state.api.fedimintd_version().await;
+    let version_hash = state.api.fedimintd_version_hash().await;
 
     match state.api.start_dkg().await {
         Ok(()) => {
@@ -623,7 +658,15 @@ async fn post_start_dkg(
 
             (
                 [("HX-Retarget", "body"), ("HX-Reswap", "innerHTML")],
-                Html(single_card_layout("DKG Started", content).into_string()),
+                Html(
+                    single_card_layout_with_version(
+                        "DKG Started",
+                        content,
+                        &version,
+                        version_hash.as_deref(),
+                    )
+                    .into_string(),
+                ),
             )
                 .into_response()
         }

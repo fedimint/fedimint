@@ -91,6 +91,10 @@ pub trait IDashboardApi {
     /// Get the fedimintd version
     async fn fedimintd_version(&self) -> String;
 
+    /// Get the git hash of the fedimintd binary, or `None` if it is not
+    /// available (e.g. it was built outside a git checkout).
+    async fn fedimintd_version_hash(&self) -> Option<String>;
+
     /// Change the guardian password
     async fn change_password(
         &self,

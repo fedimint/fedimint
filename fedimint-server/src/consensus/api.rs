@@ -56,6 +56,7 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
+use fedimint_core::version::non_zero_version_hash;
 use fedimint_core::{ChainId, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -103,6 +104,7 @@ pub struct ConsensusApi {
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
+    pub code_version_hash: String,
     pub task_group: TaskGroup,
 }
 
@@ -810,6 +812,10 @@ impl IDashboardApi for ConsensusApi {
 
     async fn fedimintd_version(&self) -> String {
         self.code_version_str.clone()
+    }
+
+    async fn fedimintd_version_hash(&self) -> Option<String> {
+        non_zero_version_hash(&self.code_version_hash).map(str::to_owned)
     }
 
     async fn change_password(
