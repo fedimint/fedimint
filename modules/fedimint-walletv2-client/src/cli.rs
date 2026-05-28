@@ -24,6 +24,8 @@ enum Opts {
     },
     /// Return the next unused receive address.
     Receive,
+    /// Block until a payment is received to the next unused receive address.
+    AwaitReceive,
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -65,6 +67,7 @@ pub(crate) async fn handle_cli_command(
                 .await?,
         ),
         Opts::Receive => json(wallet.receive().await),
+        Opts::AwaitReceive => json(wallet.await_receive().await?),
     };
 
     Ok(value)
