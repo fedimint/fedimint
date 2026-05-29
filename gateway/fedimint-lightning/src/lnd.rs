@@ -142,6 +142,7 @@ impl GatewayLndClient {
     async fn spawn_lnv2_hold_invoice_subscription(
         &self,
         task_group: &TaskGroup,
+        payment_stream_group: TaskGroup,
         gateway_sender: HtlcSubscriptionSender,
         payment_hash: Vec<u8>,
     ) -> Result<(), LightningRpcError> {
@@ -162,7 +163,8 @@ impl GatewayLndClient {
                     match stream {
                         Ok(stream) => stream.into_inner(),
                         Err(err) => {
-                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to hold invoice updates");
+                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to hold invoice updates, shutting down payment-stream subgroup to trigger gateway reconnect");
+                            payment_stream_group.shutdown();
                             return;
                         }
                     }
@@ -173,20 +175,30 @@ impl GatewayLndClient {
                 }
             };
 
-            while let Some(hold) = tokio::select! {
-                () = handle.make_shutdown_rx() => {
-                    None
-                }
-                hold_update = hold_stream.message() => {
-                    match hold_update {
-                        Ok(hold) => hold,
-                        Err(err) => {
-                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Error received over hold invoice update stream");
-                            None
+            loop {
+                let hold = tokio::select! {
+                    () = handle.make_shutdown_rx() => {
+                        info!(target: LOG_LIGHTNING, "LND HOLD Invoice Subscription received shutdown signal");
+                        break;
+                    }
+                    hold_update = hold_stream.message() => {
+                        match hold_update {
+                            Ok(Some(hold)) => hold,
+                            Ok(None) => {
+                                // LND closed the stream because the invoice
+                                // reached a terminal state (settled, canceled,
+                                // or expired).
+                                break;
+                            }
+                            Err(err) => {
+                                crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Error received over hold invoice update stream, shutting down payment-stream subgroup to trigger gateway reconnect");
+                                payment_stream_group.shutdown();
+                                break;
+                            }
                         }
                     }
-                }
-            } {
+                };
+
                 debug!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&r_hash),
@@ -342,17 +354,24 @@ impl GatewayLndClient {
                     if let Err(err) = self_copy
                         .spawn_lnv2_hold_invoice_subscription(
                             &hold_group,
+                            subgroup.clone(),
                             gateway_sender.clone(),
                             payment_hash.clone(),
                         )
                         .await
                     {
+                        // Spawning failed because `connect()` exhausted its
+                        // retries, a strong signal that LND is unreachable. We
+                        // can no longer observe this invoice's `Accepted`
+                        // update, so shut down the payment-stream subgroup to
+                        // force a gateway reconnect.
                         warn!(
                             target: LOG_LIGHTNING,
                             err = %err.fmt_compact(),
                             payment_hash = %PrettyPaymentHash(&payment_hash),
-                            "Failed to spawn HOLD invoice subscription task",
+                            "Failed to spawn HOLD invoice subscription task, shutting down payment-stream subgroup to trigger gateway reconnect",
                         );
+                        subgroup.shutdown();
                     }
                 }
             }
