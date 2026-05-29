@@ -38,7 +38,7 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
-use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
+use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
 use crate::{poll_almost_equal, poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -218,6 +218,25 @@ impl Client {
             .unwrap())
     }
 
+    /// Waits for the client balance to reach at least `min_balance_msat`.
+    pub async fn await_balance(&self, min_balance_msat: u64) -> Result<()> {
+        loop {
+            cmd!(self, "dev", "wait", "3").out_json().await?;
+
+            let balance = self.balance().await?;
+            if balance >= min_balance_msat {
+                return Ok(());
+            }
+
+            info!(
+                target: LOG_DEVIMINT,
+                balance,
+                min_balance_msat,
+                "Waiting for client balance to reach minimum"
+            );
+        }
+    }
+
     /// Waits for the next walletv2 receive recorded at or after `position` (as
     /// returned by [`Self::get_deposit_addr`] or a prior `await_receive`) to be
     /// claimed, and returns the event log position to use for the following
@@ -236,13 +255,21 @@ impl Client {
             let output = cmd!(self, "module", "walletv2", "receive")
                 .out_json()
                 .await?;
-            // Walletv2 `receive` returns `[address, event_log_position]`. The
-            // position is passed to `await_receive` to wait for the deposit;
-            // there is no operation id as deposits are auto-claimed.
-            Ok((
-                output[0].as_str().unwrap().to_string(),
-                output[1].to_string(),
-            ))
+
+            if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+                // Walletv2 `receive` returns `[address, event_log_position]`.
+                // The position is passed to `await_receive` to wait for the
+                // deposit; there is no operation id as deposits are auto-claimed.
+                Ok((
+                    output[0].as_str().unwrap().to_string(),
+                    output[1].to_string(),
+                ))
+            } else {
+                // Legacy walletv2 (<= 0.11): `receive` returns the bare address
+                // and deposits are auto-claimed, so there is no position or
+                // operation id to wait on.
+                Ok((output.as_str().unwrap().to_string(), String::new()))
+            }
         } else {
             let deposit = cmd!(self, "deposit-address").out_json().await?;
             Ok((
@@ -715,12 +742,29 @@ impl Federation {
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
+        let walletv2_await_receive = crate::util::supports_wallet_v2()
+            && crate::util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA;
+
+        // Legacy walletv2 (<= 0.11) auto-claims deposits with no way to wait on
+        // them directly, so capture the balance before the deposit to wait for
+        // it to increase.
+        let initial_balance = if crate::util::supports_wallet_v2() && !walletv2_await_receive {
+            Some(client.balance().await?)
+        } else {
+            None
+        };
+
         let handle = self.pegin_client_no_wait(amount, client).await?;
 
-        if crate::util::supports_wallet_v2() {
-            // Walletv2 auto-claims deposits; `handle` is the event log position
-            // from which to wait for the receive.
+        if walletv2_await_receive {
+            // `handle` is the event log position from which to wait for the
+            // receive.
             client.await_receive(&handle).await?;
+        } else if let Some(initial) = initial_balance {
+            // Wait for the balance to increase. We expect slightly less than
+            // `amount` due to mint module fees when creating ecash notes.
+            let expected_balance = initial + (amount * 1000 * 9 / 10);
+            client.await_balance(expected_balance).await?;
         } else {
             client.await_deposit(&handle).await?;
         }
