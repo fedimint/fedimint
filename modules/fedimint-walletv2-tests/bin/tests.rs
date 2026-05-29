@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::ensure;
+use anyhow::{Context, ensure};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use devimint::external::Bitcoind;
@@ -76,19 +76,36 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
     Ok(())
 }
 
-async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
-    loop {
-        cmd!(client, "dev", "wait", "3").out_json().await?;
+/// Waits for the next receive recorded at or after `position` to be claimed,
+/// returning the event log position to use for the following wait.
+async fn await_receive(client: &Client, position: u64) -> anyhow::Result<u64> {
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "await-receive",
+        position.to_string()
+    )
+    .out_json()
+    .await?;
 
-        let balance = client.balance().await?;
+    // Walletv2 `await-receive` returns `[final_state, next_position]`.
+    output[1]
+        .as_u64()
+        .context("await-receive should return the next event log position")
+}
 
-        // Client balance is in msats, min_balance is in sats
-        if balance >= min_balance * 1000 {
-            return Ok(());
-        }
+/// Asserts the client balance has reached at least `min_balance` sats.
+async fn ensure_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
+    let balance = client.balance().await?;
 
-        info!("Waiting for client balance {balance} to reach {min_balance}");
-    }
+    // Client balance is in msats, min_balance is in sats.
+    ensure!(
+        balance >= min_balance * 1000,
+        "Client balance {balance} is below {min_balance}"
+    );
+
+    Ok(())
 }
 
 async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
@@ -126,15 +143,20 @@ async fn ensure_tx_chain_length(client: &Client, expected: usize) -> anyhow::Res
     Ok(())
 }
 
-async fn get_deposit_address(client: &Client) -> anyhow::Result<Address> {
-    let address = serde_json::from_value::<Address<NetworkUnchecked>>(
-        cmd!(client, "module", "walletv2", "receive")
-            .out_json()
-            .await?,
-    )?
-    .assume_checked();
+async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, u64)> {
+    let output = cmd!(client, "module", "walletv2", "receive")
+        .out_json()
+        .await?;
 
-    Ok(address)
+    // Walletv2 `receive` returns `[address, event_log_position]`.
+    let address =
+        serde_json::from_value::<Address<NetworkUnchecked>>(output[0].clone())?.assume_checked();
+
+    let position = output[1]
+        .as_u64()
+        .context("receive should return an event log position")?;
+
+    Ok((address, position))
 }
 
 #[tokio::main]
@@ -191,7 +213,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Deposit funds into the federation...");
 
-            let federation_address_1 = get_deposit_address(&client).await?;
+            let (federation_address_1, position) = get_deposit_address(&client).await?;
 
             fed.bitcoind
                 .send_to(federation_address_1.to_string(), 100_000)
@@ -203,11 +225,16 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 290_000).await?;
+            // Two UTXOs were sent to the same address; wait for each receive in
+            // turn, threading the event log position forward.
+            let position = await_receive(&client, position).await?;
+            await_receive(&client, position).await?;
+
+            ensure_client_balance(&client, 290_000).await?;
 
             ensure_federation_total_value(&client, 290_000).await?;
 
-            let federation_address_2 = get_deposit_address(&client).await?;
+            let (federation_address_2, position) = get_deposit_address(&client).await?;
 
             assert_ne!(federation_address_1, federation_address_2);
 
@@ -221,11 +248,14 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            await_client_balance(&client, 980_000).await?;
+            let position = await_receive(&client, position).await?;
+            await_receive(&client, position).await?;
+
+            ensure_client_balance(&client, 980_000).await?;
 
             ensure_federation_total_value(&client, 980_000).await?;
 
-            let federation_address_3 = get_deposit_address(&client).await?;
+            let (federation_address_3, _) = get_deposit_address(&client).await?;
 
             assert_ne!(federation_address_2, federation_address_3);
 
@@ -294,7 +324,7 @@ async fn main() -> anyhow::Result<()> {
                 .new_joined_client("walletv2-test-circular-deposit-client")
                 .await?;
 
-            let circular_address = get_deposit_address(&client_two).await?;
+            let (circular_address, position) = get_deposit_address(&client_two).await?;
 
             let value = cmd!(
                 client,
@@ -313,7 +343,9 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_client_balance(&client_two, 99_000).await?;
+            await_receive(&client_two, position).await?;
+
+            ensure_client_balance(&client_two, 99_000).await?;
 
             await_no_pending_txs(&client).await?;
 
