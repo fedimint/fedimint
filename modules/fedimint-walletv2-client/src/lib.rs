@@ -459,48 +459,49 @@ impl WalletClientModule {
             .map(|entry| entry.0.0)
     }
 
-    /// Returns the next unused receive address.
+    /// Returns the next unused receive address, along with the event log
+    /// position at the time it was handed out.
+    ///
+    /// Pass the returned position to [`Self::await_receive`] so it only
+    /// considers payments received after this address was derived, making the
+    /// wait race-free regardless of when `await_receive` is invoked.
     ///
     /// If the background scanner has already derived a valid address index this
     /// returns immediately. Otherwise it blocks, letting the scanner grind
     /// until it finds the next valid index, and returns once one is
     /// available.
-    pub async fn receive(&self) -> Address {
+    pub async fn receive(&self) -> (Address, EventLogId) {
         loop {
             if let Some(index) = self.valid_index().await {
-                return self.derive_address(index);
+                let position = self.client_ctx.get_next_event_log_id().await;
+
+                return (self.derive_address(index), position);
             }
 
             sleep(Duration::from_secs(1)).await;
         }
     }
 
-    /// Block until a payment is received to the current receive address, wait
-    /// for the peg-in to succeed, and wait until the next receive address has
-    /// been derived before returning.
+    /// Block until the next on-chain payment recorded at or after `position` is
+    /// received and successfully claimed by the federation.
+    ///
+    /// Returns the peg-in's final state together with the event log position
+    /// just past it, so that a subsequent call can resume from there to wait
+    /// for the following receive.
     ///
     /// A peg-in attempt may be aborted (rejected by the federation), in which
     /// case the still-unspent output is reprocessed into a new receive
-    /// operation. This keeps waiting across such retries until one succeeds.
-    pub async fn await_receive(&self) -> anyhow::Result<FinalReceiveOperationState> {
-        // Block until the scanner has derived the current receive address index.
-        let index = loop {
-            if let Some(index) = self.valid_index().await {
-                break index;
-            }
+    /// operation; this keeps waiting until one succeeds.
+    pub async fn await_receive(
+        &self,
+        position: EventLogId,
+    ) -> anyhow::Result<(FinalReceiveOperationState, EventLogId)> {
+        let mut position = position;
 
-            sleep(Duration::from_secs(1)).await;
-        };
+        loop {
+            let (operation_id, next_position) = self.next_receive_operation(position).await;
 
-        let address = self.derive_address(index).as_unchecked().clone();
-
-        // Each aborted attempt produces a new receive operation for the same
-        // address, so resume the event log scan from where we left off and wait
-        // for the next one until a peg-in succeeds.
-        let mut pos = Some(EventLogId::LOG_START);
-
-        let state = loop {
-            let operation_id = self.await_receive_operation(&address, &mut pos).await;
+            position = next_position;
 
             let state = self
                 .await_final_receive_operation_state(operation_id)
@@ -509,47 +510,31 @@ impl WalletClientModule {
             // A successful peg-in is terminal; an aborted one is retried as a
             // new receive operation, so keep waiting.
             if state == FinalReceiveOperationState::Success {
-                break state;
+                return Ok((state, position));
             }
-        };
-
-        // Wait until the scanner has derived the next receive address so that a
-        // fresh unused address is available to the caller on return.
-        loop {
-            if self.valid_index().await.is_some_and(|next| next > index) {
-                break;
-            }
-
-            sleep(Duration::from_secs(1)).await;
         }
-
-        Ok(state)
     }
 
-    /// Scan the event log starting from `pos` for a [`ReceivePaymentEvent`] to
-    /// `address`, blocking until one is found, and return the operation id it
-    /// belongs to. `pos` is advanced past the matched event so that subsequent
-    /// calls resume the scan after it.
-    async fn await_receive_operation(
-        &self,
-        address: &Address<NetworkUnchecked>,
-        pos: &mut Option<EventLogId>,
-    ) -> OperationId {
+    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`],
+    /// blocking until one is found, and return its operation id together with
+    /// the event log position just past it.
+    async fn next_receive_operation(&self, position: EventLogId) -> (OperationId, EventLogId) {
+        let mut position = position;
+
         loop {
             let events = self
                 .client_ctx
-                .get_event_log(*pos, EVENT_LOG_PAGE_SIZE)
+                .get_event_log(Some(position), EVENT_LOG_PAGE_SIZE)
                 .await;
 
             for entry in &events {
-                *pos = Some(entry.id().saturating_add(1));
+                position = entry.id().saturating_add(1);
 
                 if entry.module_kind() == Some(&KIND)
                     && entry.kind == ReceivePaymentEvent::KIND
                     && let Some(event) = entry.to_event::<ReceivePaymentEvent>()
-                    && &event.address == address
                 {
-                    return event.operation_id;
+                    return (event.operation_id, position);
                 }
             }
 
