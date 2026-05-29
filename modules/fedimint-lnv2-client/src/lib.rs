@@ -467,21 +467,21 @@ impl LightningClientModule {
     /// ecash swap without going over lightning; otherwise a cached gateway
     /// is picked uniformly at random.
     ///
-    /// On a cold start (empty cache — typically the first call in a
-    /// short-lived `fedimint-cli` process before the background refresh
-    /// task has populated anything) this triggers one inline
-    /// `refresh_gateways` and tries again before giving up.
+    /// If `refresh` is `true` the cache is first re-populated via
+    /// `refresh_gateways`. Set it for short-lived clients (e.g.
+    /// `fedimint-cli`) whose background refresh task may not have run yet,
+    /// and leave it `false` for long-lived clients that rely on the
+    /// background task to keep the cache warm.
     pub async fn select_gateway(
         &self,
         invoice: Option<&Bolt11Invoice>,
+        refresh: bool,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
-        if let Some(selection) = self.select_from_cache(invoice) {
-            return Ok(selection);
+        if refresh {
+            self.refresh_gateways()
+                .await
+                .map_err(|e| SelectGatewayError::FailedToFetchGateways(e.to_string()))?;
         }
-
-        self.refresh_gateways()
-            .await
-            .map_err(|e| SelectGatewayError::FailedToFetchGateways(e.to_string()))?;
 
         self.select_from_cache(invoice)
             .ok_or(SelectGatewayError::NoGatewaysAvailable)
@@ -489,10 +489,6 @@ impl LightningClientModule {
 
     fn select_from_cache(&self, invoice: Option<&Bolt11Invoice>) -> Option<(SafeUrl, RoutingInfo)> {
         let cache = self.gateway_cache.read().expect("Lock poisoned").clone();
-
-        if cache.is_empty() {
-            return None;
-        }
 
         if let Some(invoice) = invoice
             && let Some((gateway, routing_info)) = cache
@@ -594,7 +590,7 @@ impl LightningClientModule {
                     .ok_or(SendPaymentError::FederationNotSupported)?,
             ),
             None => self
-                .select_gateway(Some(&invoice))
+                .select_gateway(Some(&invoice), false)
                 .await
                 .map_err(SendPaymentError::SelectGateway)?,
         };
@@ -887,7 +883,7 @@ impl LightningClientModule {
                     .ok_or(ReceiveError::FederationNotSupported)?,
             ),
             None => self
-                .select_gateway(None)
+                .select_gateway(None, false)
                 .await
                 .map_err(ReceiveError::SelectGateway)?,
         };

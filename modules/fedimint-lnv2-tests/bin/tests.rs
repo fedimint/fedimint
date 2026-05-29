@@ -804,10 +804,33 @@ async fn test_iroh_payment(
 
     let invoice = gw_ldk.client().create_invoice(5_000_000).await?;
 
+    let send_gateway = cmd!(
+        client,
+        "module",
+        "lnv2",
+        "gateways",
+        "select",
+        "--invoice",
+        invoice.to_string()
+    )
+    .out_json()
+    .await?
+    .as_str()
+    .expect("JSON Value is not a string")
+    .to_string();
+
     let send_op = serde_json::from_value::<OperationId>(
-        cmd!(client, "module", "lnv2", "send", invoice,)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "send",
+            invoice,
+            "--gateway",
+            send_gateway
+        )
+        .out_json()
+        .await?,
     )?;
 
     assert_eq!(
@@ -823,10 +846,25 @@ async fn test_iroh_payment(
         serde_json::to_value(FinalSendOperationState::Success).expect("JSON serialization failed"),
     );
 
+    let receive_gateway = cmd!(client, "module", "lnv2", "gateways", "select")
+        .out_json()
+        .await?
+        .as_str()
+        .expect("JSON Value is not a string")
+        .to_string();
+
     let (invoice, receive_op) = serde_json::from_value::<(Bolt11Invoice, OperationId)>(
-        cmd!(client, "module", "lnv2", "receive", "5000000",)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            "5000000",
+            "--gateway",
+            receive_gateway
+        )
+        .out_json()
+        .await?,
     )?;
 
     gw_ldk.client().pay_invoice(invoice).await?;
