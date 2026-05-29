@@ -25,7 +25,7 @@ enum Opts {
         timeout: u64,
     },
 
-    /// Get the contract for the escrow_id
+    /// Get the created contract for the escrow_id
     GetContract {
         #[clap(long)]
         escrow_id: String,

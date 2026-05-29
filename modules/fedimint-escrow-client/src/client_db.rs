@@ -1,26 +1,25 @@
 use fedimint_client_module::OperationId;
+use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, TransactionId, impl_db_lookup, impl_db_record};
 use fedimint_escrow_common::EscrowId;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
+use crate::backup::EscrowRecovery;
+
 #[repr(u8)]
 #[derive(Debug, Clone, EnumIter, strum_macros::Display)]
 pub enum DbKeyPrefix {
     ClientEscrows = 0x04,
-    /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
-    /// historical and future external use
+    RecoveryState = 0x08,
+    RecoveryFinalized = 0x09,
     ExternalReservedStart = 0xb0,
-    /// Prefixes between 0xd0..=0xff shall all be considered allocated for
-    /// historical and future internal use
     CoreInternalReservedStart = 0xd0,
-    /// Prefixes between 0xd0..=0xff shall all be considered allocated for
-    /// historical and future internal use
     CoreInternalReservedEnd = 0xff,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
 pub struct EscrowClientRecord {
     pub escrow_id: EscrowId,
     pub operation_id: OperationId,
@@ -44,7 +43,7 @@ pub enum EscrowAction {
     Created,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
 pub enum EscrowClientStatus {
     Creating,
     Active,
@@ -66,3 +65,21 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ClientEscrowKey, query_prefix = ClientEscrowKeyPrefix);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct EscrowRecoveryStateKey;
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct EscrowRecoveryFinalizedKey;
+
+impl_db_record!(
+    key = EscrowRecoveryStateKey,
+    value = (EscrowRecovery, RecoveryFromHistoryCommon),
+    db_prefix = crate::client_db::DbKeyPrefix::RecoveryState,
+);
+
+impl_db_record!(
+    key = EscrowRecoveryFinalizedKey,
+    value = bool,
+    db_prefix = crate::client_db::DbKeyPrefix::RecoveryFinalized,
+);

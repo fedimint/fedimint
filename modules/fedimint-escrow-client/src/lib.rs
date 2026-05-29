@@ -4,8 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, bail};
-use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::init::{
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+};
 use fedimint_client_module::module::{
     ClientContext, ClientModule, OutPointRange, PrimaryModuleSupport,
 };
@@ -34,6 +35,7 @@ use ring::rand::{SecureRandom, SystemRandom};
 use strum::IntoEnumIterator;
 
 use crate::api::EscrowFederationApi;
+use crate::backup::{EscrowBackup, EscrowRecovery};
 use crate::client_db::{
     ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord,
     EscrowClientStatus, EscrowOperationMeta,
@@ -41,6 +43,7 @@ use crate::client_db::{
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
 pub mod api;
+pub mod backup;
 mod client_db;
 pub mod input;
 pub mod output;
@@ -165,6 +168,8 @@ impl ModuleInit for EscrowClientInit {
                     );
                 }
                 DbKeyPrefix::ExternalReservedStart
+                | DbKeyPrefix::RecoveryState
+                | DbKeyPrefix::RecoveryFinalized
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
@@ -195,13 +200,22 @@ impl ClientModuleInit for EscrowClientInit {
             notifier: args.notifier().clone(),
         })
     }
+
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        snapshot: Option<&EscrowBackup>,
+    ) -> anyhow::Result<()> {
+        args.recover_from_history::<EscrowRecovery>(&self, snapshot)
+            .await
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for EscrowClientModule {
     type Init = EscrowClientInit;
     type Common = EscrowModuleTypes;
-    type Backup = NoModuleBackup;
+    type Backup = EscrowBackup;
     type ModuleStateMachineContext = EscrowClientContext;
     type States = EscrowStateMachine;
 
@@ -215,6 +229,20 @@ impl ClientModule for EscrowClientModule {
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
         PrimaryModuleSupport::None
+    }
+
+    fn supports_backup(&self) -> bool {
+        true
+    }
+
+    async fn backup(&self) -> anyhow::Result<EscrowBackup> {
+        let session_count = self.client_ctx.global_api().session_count().await?;
+
+        let contracts = self.list_escrow_operation().await;
+        Ok(EscrowBackup {
+            session_count,
+            records: contracts,
+        })
     }
 
     fn input_fee(&self, _amount: &Amounts, _input: &EscrowInput) -> Option<Amounts> {
