@@ -261,6 +261,14 @@ impl WalletClientModule {
             .ok_or(SendError::NoConsensusFeerateAvailable)
     }
 
+    /// Fetch the current fee required to claim an onchain deposit (peg-in).
+    pub async fn receive_fee(&self) -> anyhow::Result<bitcoin::Amount> {
+        self.module_api
+            .receive_fee()
+            .await?
+            .ok_or_else(|| anyhow!("No consensus feerate is available"))
+    }
+
     /// Send an onchain payment with the given fee.
     pub async fn send(
         &self,
