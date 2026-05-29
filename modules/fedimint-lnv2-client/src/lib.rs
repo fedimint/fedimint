@@ -41,7 +41,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -422,7 +422,7 @@ impl LightningClientModule {
             async move {
                 api.wait_for_initialized_connections().await;
                 if let Err(e) = module.refresh_gateways().await {
-                    warn!(?e, "Failed to fetch the gateway list from the federation");
+                    warn!(err = %e.fmt_compact(), "Failed to fetch the gateway list from the federation");
                 }
             },
         );
