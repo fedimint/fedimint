@@ -16,7 +16,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::task::timeout;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{Amount, BitcoinHash};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_ln_client::recurring::{
@@ -316,12 +316,33 @@ impl RecurringInvoiceServer {
                         // the DB
                         let federation_client_ln_module = federation_client.get_ln_module()?;
                         // Prefer an online, vetted gateway (cheapest first) rather than
-                        // picking one at random. The gateway cache is kept fresh by the
-                        // task spawned in `spawn_gateway_cache_refresh`.
-                        let gateway = federation_client_ln_module
+                        // picking one at random. `select_available_gateway` only reads the
+                        // local cache, which is normally kept fresh by the background task
+                        // spawned in `spawn_gateway_cache_refresh`. If selection fails, refresh once on
+                        // demand and retry before giving up.
+                        let gateway = match federation_client_ln_module
                             .select_available_gateway(None, None)
                             .await
-                            .map_err(|_| RecurringPaymentError::NoGatewayFound)?;
+                        {
+                            Ok(gateway) => gateway,
+                            Err(err) => {
+                                warn!(err = %err.fmt_compact_anyhow(), "No gateway available, refreshing cache and retrying");
+                                federation_client_ln_module
+                                    .update_gateway_cache()
+                                    .await
+                                    .map_err(|err| {
+                                        warn!(err = %err.fmt_compact_anyhow(), "Failed to refresh gateway cache");
+                                        RecurringPaymentError::NoGatewayFound
+                                    })?;
+                                federation_client_ln_module
+                                    .select_available_gateway(None, None)
+                                    .await
+                                    .map_err(|err| {
+                                        warn!(err = %err.fmt_compact_anyhow(), "Failed to select an available gateway");
+                                        RecurringPaymentError::NoGatewayFound
+                                    })?
+                            }
+                        };
 
                         let lnurl_meta = match payment_code.variant {
                             PaymentCodeVariant::Lnurl { meta } => meta,
@@ -672,12 +693,7 @@ impl LnClientContextExt for ClientHandleArc {
     }
 }
 
-/// Spawn a background task on the client's task group that keeps the lightning
-/// gateway cache fresh.
-///
-/// `select_available_gateway` (used when generating invoices) reads from the
-/// local gateway cache without refreshing it, so without this task the cache
-/// would go stale and invoice generation would fail with `NoGatewayFound`.
+/// Spawn a background task that keeps the gateway cache fresh between invoices.
 fn spawn_gateway_cache_refresh(client: &ClientHandleArc) {
     let client = client.clone();
     client
