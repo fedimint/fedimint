@@ -166,7 +166,7 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
     info!("Deposit funds into the federation...");
 
-    let federation_address = client
+    let (federation_address, _position) = client
         .get_first_module::<WalletClientModule>()?
         .receive()
         .await;
