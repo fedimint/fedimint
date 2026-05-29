@@ -5,7 +5,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_11_0_ALPHA;
+use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
 use devimint::{cmd, util};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
@@ -76,6 +76,33 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
     Ok(())
 }
 
+/// Waits for `receives` deposits to be claimed (starting from event log
+/// `position`) and then asserts the client balance reached at least
+/// `min_balance` sats.
+///
+/// On `fedimint-cli` versions without `await-receive` (<= 0.11), falls back to
+/// polling the balance like the test used to.
+async fn await_deposits(
+    client: &Client,
+    position: u64,
+    receives: usize,
+    min_balance: u64,
+) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+        let mut position = position;
+
+        for _ in 0..receives {
+            position = await_receive(client, position).await?;
+        }
+
+        ensure_client_balance(client, min_balance).await?;
+    } else {
+        await_client_balance(client, min_balance).await?;
+    }
+
+    Ok(())
+}
+
 /// Waits for the next receive recorded at or after `position` to be claimed,
 /// returning the event log position to use for the following wait.
 async fn await_receive(client: &Client, position: u64) -> anyhow::Result<u64> {
@@ -106,6 +133,23 @@ async fn ensure_client_balance(client: &Client, min_balance: u64) -> anyhow::Res
     );
 
     Ok(())
+}
+
+/// Legacy fallback for `fedimint-cli` <= 0.11: polls the client balance until
+/// it reaches at least `min_balance` sats.
+async fn await_client_balance(client: &Client, min_balance: u64) -> anyhow::Result<()> {
+    loop {
+        cmd!(client, "dev", "wait", "3").out_json().await?;
+
+        let balance = client.balance().await?;
+
+        // Client balance is in msats, min_balance is in sats.
+        if balance >= min_balance * 1000 {
+            return Ok(());
+        }
+
+        info!("Waiting for client balance {balance} to reach {min_balance}");
+    }
 }
 
 async fn await_no_pending_txs(client: &Client) -> anyhow::Result<()> {
@@ -148,15 +192,23 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, u64)> 
         .out_json()
         .await?;
 
-    // Walletv2 `receive` returns `[address, event_log_position]`.
-    let address =
-        serde_json::from_value::<Address<NetworkUnchecked>>(output[0].clone())?.assume_checked();
+    if util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+        // Walletv2 `receive` returns `[address, event_log_position]`.
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(output[0].clone())?
+            .assume_checked();
 
-    let position = output[1]
-        .as_u64()
-        .context("receive should return an event log position")?;
+        let position = output[1]
+            .as_u64()
+            .context("receive should return an event log position")?;
 
-    Ok((address, position))
+        Ok((address, position))
+    } else {
+        // Legacy (<= 0.11): `receive` returns the bare address. The position is
+        // unused on this path as we fall back to polling the balance.
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(output)?.assume_checked();
+
+        Ok((address, 0))
+    }
 }
 
 #[tokio::main]
@@ -225,12 +277,8 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            // Two UTXOs were sent to the same address; wait for each receive in
-            // turn, threading the event log position forward.
-            let position = await_receive(&client, position).await?;
-            await_receive(&client, position).await?;
-
-            ensure_client_balance(&client, 290_000).await?;
+            // Two UTXOs were sent to the same address; wait for both receives.
+            await_deposits(&client, position, 2, 290_000).await?;
 
             ensure_federation_total_value(&client, 290_000).await?;
 
@@ -248,10 +296,7 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Wait for deposits to be claimed...");
 
-            let position = await_receive(&client, position).await?;
-            await_receive(&client, position).await?;
-
-            ensure_client_balance(&client, 980_000).await?;
+            await_deposits(&client, position, 2, 980_000).await?;
 
             ensure_federation_total_value(&client, 980_000).await?;
 
@@ -343,9 +388,7 @@ async fn main() -> anyhow::Result<()> {
 
             bitcoind.poll_get_transaction(txid).await?;
 
-            await_receive(&client_two, position).await?;
-
-            ensure_client_balance(&client_two, 99_000).await?;
+            await_deposits(&client_two, position, 1, 99_000).await?;
 
             await_no_pending_txs(&client).await?;
 

@@ -362,11 +362,24 @@ async fn handle_dev_fed_command(
 
                 dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
                 if crate::util::supports_wallet_v2() {
-                    dev_fed
-                        .internal_client()
-                        .await?
-                        .await_receive(&handle)
-                        .await?;
+                    if crate::util::FedimintCli::version_or_default().await
+                        >= *crate::version_constants::VERSION_0_12_0_ALPHA
+                    {
+                        // `handle` is the event log position to wait from.
+                        dev_fed
+                            .internal_client()
+                            .await?
+                            .await_receive(&handle)
+                            .await?;
+                    } else {
+                        // Legacy walletv2 (<= 0.11) auto-claims deposits;
+                        // wait for the balance to reflect the pegin.
+                        dev_fed
+                            .internal_client()
+                            .await?
+                            .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
+                            .await?;
+                    }
                 } else {
                     dev_fed
                         .internal_client()
