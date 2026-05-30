@@ -5,9 +5,11 @@ use anyhow::Ok;
 use clap::Parser;
 use fedimint_core::{Amount, secp256k1};
 use fedimint_escrow_common::EscrowId;
+use futures::StreamExt;
 use serde::Serialize;
 
 use crate::EscrowClientModule;
+use crate::output::EscrowOutputSMState;
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -58,6 +60,23 @@ pub(crate) async fn handle_cli_command(
                     Duration::from_secs(timeout),
                 )
                 .await?;
+
+            let mut stream = client
+                .subscribe_escrow_creation(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(state) = stream.next().await {
+                match &state {
+                    EscrowOutputSMState::Active => {
+                        break;
+                    }
+                    EscrowOutputSMState::Failed { reason } => {
+                        return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
+                    }
+                    EscrowOutputSMState::Creating => {}
+                }
+            }
 
             Ok(serde_json::json!({
                 "operation_id": operation_id,

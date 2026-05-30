@@ -24,6 +24,7 @@ use fedimint_escrow_common::{
     KIND, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
     compute_resolution_message,
 };
+use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
@@ -31,6 +32,7 @@ use fedimint_server_core::{
 };
 use futures::StreamExt;
 use strum::IntoEnumIterator;
+use tracing::{debug, info};
 
 mod db;
 use crate::db::{
@@ -205,10 +207,14 @@ impl ServerModule for Escrow {
             .await
             .ok_or(EscrowInputError::ContractNotFound)?;
 
+        debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
+
         let verified = verify_contract_hash(&contract.contract_hash, &contract);
         if !verified {
             return Err(EscrowInputError::ContractHashMismatch);
         }
+
+        info!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
 
         let recipient_key = match &input.resolution {
             Resolution::BuyerRelease { buyer_signature } => {
@@ -218,6 +224,7 @@ impl ServerModule for Escrow {
                     &Outcome::Release,
                     &contract.contract_hash,
                 );
+                info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
 
                 let msg = secp256k1::Message::from_digest(msg_bytes);
                 let xonly_public_key = contract.buyer_key.x_only_public_key().0;
@@ -256,6 +263,8 @@ impl ServerModule for Escrow {
         };
 
         dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
+
+        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(contract.amount),
@@ -286,11 +295,15 @@ impl ServerModule for Escrow {
             return Err(EscrowOutputError::AlreadyExists);
         }
 
+        info!(target: LOG_MODULE_ESCROW, "Creating escrow contract: escrow_id={:?}",contract.escrow_id);
+
         dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
             .await;
 
         dbtx.insert_entry(&EscrowOutputOutcomeKey(out_point), &EscrowOutputOutcome)
             .await;
+
+        debug!(target: LOG_MODULE_ESCROW, "Escrow contract stored successfully for escrow_id: {:?}",contract.escrow_id);
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(contract.amount),

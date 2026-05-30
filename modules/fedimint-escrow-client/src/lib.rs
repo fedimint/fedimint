@@ -30,9 +30,11 @@ use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowModuleTypes, EscrowOutput, KIND,
     Outcome, Resolution, compute_contract_hash, compute_resolution_message,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_ESCROW;
 use futures::StreamExt;
 use ring::rand::{SecureRandom, SystemRandom};
 use strum::IntoEnumIterator;
+use tracing::info;
 
 use crate::api::EscrowFederationApi;
 use crate::backup::{EscrowBackup, EscrowRecovery};
@@ -321,6 +323,8 @@ impl EscrowClientModule {
             timeout: timeout_deadline,
             federation_id: self.federation_id,
         };
+
+        info!(target: LOG_CLIENT_MODULE_ESCROW, "Created escrow contract locally");
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         dbtx.insert_entry(

@@ -21,12 +21,14 @@ async-trait = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-escrow-common = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true
