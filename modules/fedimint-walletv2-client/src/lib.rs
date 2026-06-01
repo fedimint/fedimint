@@ -151,6 +151,18 @@ impl ClientModule for WalletClientModule {
             .map(|a| Amounts::new_bitcoin(self.cfg.fee_consensus.fee(*a)))
     }
 
+    async fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amounts> {
+        let input_v0 = input.maybe_v0_ref()?;
+        let amount = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&db::PegInAmountKey(input_v0.output_index))
+            .await?;
+        Some(Amounts::new_bitcoin(amount))
+    }
+
     fn output_fee(
         &self,
         amount: &Amounts,
@@ -159,6 +171,18 @@ impl ClientModule for WalletClientModule {
         amount
             .get(&AmountUnit::BITCOIN)
             .map(|a| Amounts::new_bitcoin(self.cfg.fee_consensus.fee(*a)))
+    }
+
+    async fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> Option<Amounts> {
+        let output_v0 = output.maybe_v0_ref()?;
+        let total = output_v0
+            .value
+            .checked_add(output_v0.fee)
+            .expect("Output value + fee should not overflow");
+        Some(Amounts::new_bitcoin(Amount::from_sats(total.to_sat())))
     }
 
     #[cfg(feature = "cli")]
@@ -694,6 +718,14 @@ impl WalletClientModule {
                             .await_tx_accepted(txid)
                             .await
                             .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+
+                        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+                        dbtx.insert_new_entry(
+                            &db::PegInAmountKey(output.index),
+                            &Amount::from_sats((output.value - receive_fee).to_sat()),
+                        )
+                        .await;
+                        dbtx.commit_tx().await;
                     }
                 }
             }

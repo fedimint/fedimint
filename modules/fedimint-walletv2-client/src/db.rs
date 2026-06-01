@@ -8,6 +8,7 @@ use strum_macros::EnumIter;
 pub enum DbKeyPrefix {
     NextOutputIndex = 0x31,
     ValidAddressIndex = 0x32,
+    PegInAmount = 0x33,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -40,4 +41,15 @@ pub struct ValidAddressIndexPrefix;
 impl_db_lookup!(
     key = ValidAddressIndexKey,
     query_prefix = ValidAddressIndexPrefix
+);
+
+/// Caches the peg-in input amount (value minus mining fee) keyed by the
+/// federation output index so that `input_amount` can look it up later.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct PegInAmountKey(pub u64);
+
+impl_db_record!(
+    key = PegInAmountKey,
+    value = fedimint_core::Amount,
+    db_prefix = DbKeyPrefix::PegInAmount
 );

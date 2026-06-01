@@ -153,6 +153,115 @@ async fn await_federation_total_value(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn peg_in_operation_fees() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    info!("Deposit funds into the federation...");
+
+    let federation_address = client
+        .get_first_module::<WalletClientModule>()?
+        .receive()
+        .await;
+
+    bitcoin
+        .send_and_mine_block(&federation_address, Amount::from_sat(100_000))
+        .await;
+
+    await_finality_delay(&client, &bitcoin).await?;
+
+    info!("Wait for deposit to be auto-claimed...");
+
+    await_federation_total_value(&client, Amount::from_sat(99_000)).await?;
+
+    let mut events = pin!(wallet_event_stream(&client));
+
+    let Some(WalletEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+
+    let Some(WalletEvent::ReceiveStatus(_)) = events.next().await else {
+        panic!("Expected ReceiveStatus event");
+    };
+
+    let operation_fees = client
+        .get_operation_fees(receive.operation_id)
+        .await
+        .expect("Fee calculation should succeed for peg-in operations");
+
+    assert!(
+        operation_fees.is_final,
+        "Peg-in operation should be final after receiving ReceiveStatus"
+    );
+    assert!(
+        operation_fees.amount.get_bitcoin().msats > 0,
+        "Peg-in fees should be non-zero"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_out_operation_fees() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    info!("Deposit funds into the federation...");
+
+    let federation_address = client
+        .get_first_module::<WalletClientModule>()?
+        .receive()
+        .await;
+
+    bitcoin
+        .send_and_mine_block(&federation_address, Amount::from_sat(1_000_000))
+        .await;
+
+    await_finality_delay(&client, &bitcoin).await?;
+    await_federation_total_value(&client, Amount::from_sat(99_000)).await?;
+
+    info!("Send funds out of the federation...");
+
+    let address = bitcoin.get_new_address().await.as_unchecked().clone();
+
+    let send_op = client
+        .get_first_module::<WalletClientModule>()?
+        .send(address, Amount::from_sat(50_000), None)
+        .await?;
+
+    let state = client
+        .get_first_module::<WalletClientModule>()?
+        .await_final_send_operation_state(send_op)
+        .await;
+
+    assert!(matches!(state, FinalSendOperationState::Success(_)));
+
+    let operation_fees = client
+        .get_operation_fees(send_op)
+        .await
+        .expect("Fee calculation should succeed for peg-out operations");
+
+    assert!(
+        operation_fees.is_final,
+        "Peg-out operation should be final after success"
+    );
+    assert!(
+        operation_fees.amount.get_bitcoin().msats > 0,
+        "Peg-out fees should be non-zero"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     let fixtures = fixtures();
 

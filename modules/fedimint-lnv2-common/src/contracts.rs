@@ -187,6 +187,23 @@ fn verify_preimage(payment_image: &PaymentImage, preimage: &[u8; 32]) -> bool {
     }
 }
 
+/// Contract data stored per outpoint for looking up input amounts
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[allow(clippy::large_enum_variant)] // Not on any hot path, not worth the boxing
+pub enum LightningContract {
+    Incoming(IncomingContract),
+    Outgoing(OutgoingContract),
+}
+
+impl LightningContract {
+    pub fn amount(&self) -> Amount {
+        match self {
+            LightningContract::Incoming(c) => c.commitment.amount,
+            LightningContract::Outgoing(c) => c.amount,
+        }
+    }
+}
+
 #[test]
 fn test_verify_preimage() {
     use bitcoin::hashes::Hash;
