@@ -18,15 +18,15 @@ use fedimint_core::envs::{
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self};
 use fedimint_core::time::now;
-use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::util::backoff_util::custom_backoff;
+use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV,
@@ -166,18 +166,19 @@ impl ProcessManager {
         Self { globals }
     }
 
-    /// Logs to $FM_LOGS_DIR/{name}.{out,err}
+    /// Logs to $FM_LOGS_DIR/{name}.log
     pub async fn spawn_daemon(&self, name: &str, mut cmd: Command) -> Result<ProcessHandle> {
         // Reap any recently killed processes so their resources
         // (ports, file locks) are fully released before we bind new ones.
         process_reaper::reap_killed_processes();
         debug!(target: LOG_DEVIMINT, %name, "Spawning daemon");
         let logs_dir = env::var(FM_LOGS_DIR_ENV)?;
-        let path = format!("{logs_dir}/{name}.log");
+        let log_path = format!("{logs_dir}/{name}.log");
+
         let log = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)
+            .open(&log_path)
             .await?
             .into_std()
             .await;
@@ -188,6 +189,18 @@ impl ProcessManager {
             .cmd
             .spawn()
             .with_context(|| format!("Could not spawn: {name}"))?;
+
+        let pid = child.id().expect("pid available immediately after spawn");
+        let cmd_str = cmd.command_pasteable();
+
+        println!("# Started {name} (pid {pid})\n{cmd_str}");
+        info!(target: LOG_DEVIMINT, %name, pid, cmd = %cmd_str, "Spawned daemon");
+
+        let pid_path = format!("{logs_dir}/{name}.pid");
+        write_overwrite_async(&pid_path, pid.to_string())
+            .await
+            .with_context(|| format!("Could not write PID file for: {name}"))?;
+
         let handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
@@ -199,6 +212,7 @@ impl ProcessManager {
 pub struct Command {
     pub cmd: tokio::process::Command,
     pub args_debug: Vec<String>,
+    pub env_debug: Vec<(String, String)>,
 }
 
 impl Command {
@@ -221,6 +235,10 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
+        self.env_debug.push((
+            key.as_ref().to_string_lossy().into_owned(),
+            val.as_ref().to_string_lossy().into_owned(),
+        ));
         self.cmd.env(key, val);
         self
     }
@@ -231,7 +249,14 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
-        self.cmd.envs(env);
+        let pairs: Vec<(K, V)> = env.into_iter().collect();
+        for (k, v) in &pairs {
+            self.env_debug.push((
+                k.as_ref().to_string_lossy().into_owned(),
+                v.as_ref().to_string_lossy().into_owned(),
+            ));
+        }
+        self.cmd.envs(pairs);
         self
     }
 
@@ -251,6 +276,31 @@ impl Command {
             .map(|x| x.replace(' ', "␣"))
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    /// Format the command as a bash-pasteable string with env vars and
+    /// single-quoted args so it can be copied and run directly in a shell.
+    pub fn command_pasteable(&self) -> String {
+        fn single_quote(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+        let env_part = self
+            .env_debug
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, single_quote(v)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let args_part = self
+            .args_debug
+            .iter()
+            .map(|a| single_quote(a))
+            .collect::<Vec<_>>()
+            .join(" ");
+        if env_part.is_empty() {
+            args_part
+        } else {
+            format!("{env_part} {args_part}")
+        }
     }
 
     /// Run the command and get its output as string.
@@ -539,6 +589,7 @@ impl ToCmdExt for &'_ str {
         Command {
             cmd: tokio::process::Command::new(self),
             args_debug: vec![self.to_owned()],
+            env_debug: vec![],
         }
     }
 }
@@ -987,6 +1038,7 @@ fn to_command(cli: Vec<String>) -> Command {
     Command {
         cmd,
         args_debug: cli,
+        env_debug: vec![],
     }
 }
 

@@ -128,6 +128,11 @@ pub enum Cmd {
 pub enum RpcCmd {
     Wait,
     Env,
+    /// Send SIGTERM to a named daemon using its PID file.
+    Kill {
+        /// Process name, e.g. "fedimintd-default-0", "bitcoind", "gatewayd-lnd"
+        name: String,
+    },
 }
 
 pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
@@ -500,6 +505,23 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 write_overwrite_async(env_file, env_string).await?;
             }
 
+            Ok(())
+        }
+        RpcCmd::Kill { name } => {
+            let pid_file = common.test_dir().join("logs").join(format!("{name}.pid"));
+            let pid_str = fs::read_to_string(&pid_file)
+                .await
+                .with_context(|| format!("No PID file for '{name}' — is it running?"))?;
+            let pid: i32 = pid_str
+                .trim()
+                .parse()
+                .with_context(|| format!("Invalid PID in file for '{name}'"))?;
+            nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid),
+                nix::sys::signal::Signal::SIGTERM,
+            )
+            .with_context(|| format!("Failed to send SIGTERM to '{name}' (pid {pid})"))?;
+            println!("Sent SIGTERM to '{name}' (pid {pid})");
             Ok(())
         }
     }
