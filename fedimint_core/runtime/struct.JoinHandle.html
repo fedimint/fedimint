@@ -11,6 +11,9 @@ means that there is no longer any handle to the task, and no way to <code>join</
 on it.</p>
 <p>This <code>struct</code> is created by the <a href="crate::task::spawn()"><code>task::spawn</code></a> and <a href="crate::task::spawn_blocking"><code>task::spawn_blocking</code></a>
 functions.</p>
+<p>It is guaranteed that the destructor of the spawned task has finished
+before task completion is observed via <code>JoinHandle</code> <code>await</code>,
+<a href="struct.JoinHandle.html#method.is_finished" title="method fedimint_core::runtime::JoinHandle::is_finished"><code>JoinHandle::is_finished</code></a> or [<code>AbortHandle::is_finished</code>].</p>
 <h2 id="cancel-safety"><a class="doc-anchor" href="#cancel-safety">§</a>Cancel safety</h2>
 <p>The <code>&amp;mut JoinHandle&lt;T&gt;</code> type is cancel safe. If it is used as the event
 in a <code>tokio::select!</code> statement and some other branch completes first,
