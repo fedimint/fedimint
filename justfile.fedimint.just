@@ -178,6 +178,19 @@ devimint-env-pre-dkg *PARAMS:
   @>&2 echo "gateway LDK2 UI: http://localhost:8187"
   env FM_FEDERATIONS_BASE_PORT=2000 FM_GATEWAY_BASE_PORT=8180 FM_PRE_DKG=true ./scripts/dev/devimint-env.sh {{PARAMS}}
 
+# Spawn devimint with fedimint-0 wiped after backup (useful for restore UI work)
+devimint-env-pre-restore *PARAMS:
+  @>&2 echo "fedimint-0 UI: http://localhost:2002"
+  @>&2 echo "fedimint-1 UI: http://localhost:2006"
+  @>&2 echo "fedimint-2 UI: http://localhost:2010"
+  @>&2 echo "fedimint-3 UI: http://localhost:2014"
+  @>&2 echo "guardian backup: ${CARGO_BUILD_TARGET_DIR:-target}/devimint/fedimintd-backups/fedimint-0-guardian-backup.tar"
+  @>&2 echo "guardian password: pass"
+  @>&2 echo "gateway LND UI: http://localhost:8183"
+  @>&2 echo "gateway LDK UI: http://localhost:8185"
+  @>&2 echo "gateway LDK2 UI: http://localhost:8187"
+  env FM_FEDERATIONS_BASE_PORT=2000 FM_GATEWAY_BASE_PORT=8180 FM_PRE_RESTORE=true ./scripts/dev/devimint-env.sh {{PARAMS}}
+
 # Spawn devimint post-dkg on fixed port numbers (useful for UI work)
 devimint-env-post-dkg *PARAMS:
   @>&2 echo "fedimint-0 UI: http://localhost:2002"

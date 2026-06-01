@@ -54,6 +54,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 substring = { workspace = true }
+tar = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 tonic_lnd = { workspace = true }

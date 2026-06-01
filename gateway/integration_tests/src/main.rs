@@ -219,6 +219,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     bitcoind.clone(),
                     false,
                     false,
+                    false,
                     1,
                     "config-test".to_string(),
                 )
