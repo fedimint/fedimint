@@ -44,9 +44,10 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, block_in_place, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
@@ -64,6 +65,9 @@ use tracing::{debug, warn};
 
 /// Number of output info entries to scan per batch.
 const SLICE_SIZE: u64 = 1000;
+
+/// Number of event log entries to read per batch.
+const EVENT_LOG_PAGE_SIZE: u64 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalletOperationMeta {
@@ -452,23 +456,102 @@ impl WalletClientModule {
         Ok(final_state.expect("Stream contains one final state"))
     }
 
-    /// Returns the next unused receive address, polling until the initial
-    /// address derivation has completed.
-    pub async fn receive(&self) -> Address {
+    /// Returns the highest valid receive address index that the background
+    /// scanner has derived so far, or `None` if it has not derived one yet.
+    async fn valid_index(&self) -> Option<u64> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .await
+            .next()
+            .await
+            .map(|entry| entry.0.0)
+    }
+
+    /// Returns the next unused receive address, along with the event log
+    /// position at the time it was handed out.
+    ///
+    /// Pass the returned position to [`Self::await_receive`] so it only
+    /// considers payments received after this address was derived, making the
+    /// wait race-free regardless of when `await_receive` is invoked.
+    ///
+    /// If the background scanner has already derived a valid address index this
+    /// returns immediately. Otherwise it blocks, letting the scanner grind
+    /// until it finds the next valid index, and returns once one is
+    /// available.
+    pub async fn receive(&self) -> (Address, EventLogId) {
         loop {
-            if let Some(entry) = self
-                .db
-                .begin_transaction_nc()
-                .await
-                .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-            {
-                return self.derive_address(entry.0.0);
+            if let Some(index) = self.valid_index().await {
+                let position = self.client_ctx.get_next_event_log_id().await;
+
+                return (self.derive_address(index), position);
             }
 
             sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    /// Block until the next on-chain payment recorded at or after `position` is
+    /// received and successfully claimed by the federation.
+    ///
+    /// Returns the peg-in's final state together with the event log position
+    /// just past it, so that a subsequent call can resume from there to wait
+    /// for the following receive.
+    ///
+    /// A peg-in attempt may be aborted (rejected by the federation), in which
+    /// case the still-unspent output is reprocessed into a new receive
+    /// operation; this keeps waiting until one succeeds.
+    pub async fn await_receive(
+        &self,
+        position: EventLogId,
+    ) -> anyhow::Result<(FinalReceiveOperationState, EventLogId)> {
+        let mut position = position;
+
+        loop {
+            let (operation_id, next_position) = self.next_receive_operation(position).await;
+
+            position = next_position;
+
+            let state = self
+                .await_final_receive_operation_state(operation_id)
+                .await?;
+
+            // A successful peg-in is terminal; an aborted one is retried as a
+            // new receive operation, so keep waiting.
+            if state == FinalReceiveOperationState::Success {
+                return Ok((state, position));
+            }
+        }
+    }
+
+    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`],
+    /// blocking until one is found, and return its operation id together with
+    /// the event log position just past it.
+    async fn next_receive_operation(&self, position: EventLogId) -> (OperationId, EventLogId) {
+        let mut position = position;
+
+        loop {
+            let events = self
+                .client_ctx
+                .get_event_log(Some(position), EVENT_LOG_PAGE_SIZE)
+                .await;
+
+            for entry in &events {
+                position = entry.id().saturating_add(1);
+
+                if entry.module_kind() == Some(&KIND)
+                    && entry.kind == ReceivePaymentEvent::KIND
+                    && let Some(event) = entry.to_event::<ReceivePaymentEvent>()
+                {
+                    return (event.operation_id, position);
+                }
+            }
+
+            if events.is_empty() {
+                // Caught up with the log; wait for new events to be written.
+                sleep(Duration::from_secs(1)).await;
+            }
         }
     }
 
@@ -487,14 +570,19 @@ impl WalletClientModule {
     }
 
     /// Find the next valid index starting from (and including) `start_index`.
+    ///
+    /// Only ~1/65536 indices are valid, so the search is CPU-bound and may scan
+    /// many indices before finding one. To avoid blocking client shutdown, the
+    /// search stops and returns `None` once the task group begins shutting
+    /// down.
     #[allow(clippy::maybe_infinite_iter)]
-    fn next_valid_index(&self, start_index: u64) -> u64 {
+    fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
         let pks_hash = self.cfg.bitcoin_pks.consensus_hash();
 
         block_in_place(|| {
             (start_index..)
+                .take_while(|_| !handle.is_shutting_down())
                 .find(|i| is_potential_receive(&self.derive_address(*i).script_pubkey(), &pks_hash))
-                .expect("Will always find a valid index")
         })
     }
 
@@ -582,6 +670,7 @@ impl WalletClientModule {
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
+        let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
             let mut dbtx = module.db.begin_transaction().await;
@@ -593,14 +682,18 @@ impl WalletClientModule {
                 .await
                 .is_none()
             {
-                dbtx.insert_new_entry(&ValidAddressIndexKey(module.next_valid_index(0)), &())
+                let Some(index) = module.next_valid_index(0, &handle) else {
+                    return;
+                };
+
+                dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
                     .await;
             }
 
             dbtx.commit_tx().await;
 
             loop {
-                match module.check_outputs().await {
+                match module.check_outputs(&handle).await {
                     Ok(skip_wait) => {
                         if skip_wait {
                             continue;
@@ -616,7 +709,7 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self) -> anyhow::Result<bool> {
+    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
         let mut dbtx = self.db.begin_transaction_nc().await;
 
         let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
@@ -651,7 +744,9 @@ impl WalletClientModule {
 
                 // If we used the highest valid index, add the next valid one
                 if address_index == next_address_index {
-                    let index = self.next_valid_index(next_address_index + 1);
+                    let Some(index) = self.next_valid_index(next_address_index + 1, handle) else {
+                        return Ok(false);
+                    };
 
                     let mut dbtx = self.db.begin_transaction().await;
 

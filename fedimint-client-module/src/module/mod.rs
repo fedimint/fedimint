@@ -24,7 +24,9 @@ use fedimint_core::{
     Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
     maybe_add_send_sync,
 };
-use fedimint_eventlog::{Event, EventKind, EventPersistence};
+use fedimint_eventlog::{
+    DBTransactionEventLogExt, Event, EventKind, EventLogId, EventPersistence, PersistedLogEntry,
+};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::Serialize;
@@ -459,6 +461,30 @@ where
             .ensure_isolated()
             .expect("module_db must always return isolated db");
         &self.module_db
+    }
+
+    /// Read a portion of the client's event log, starting at `pos` (or the
+    /// beginning of the log if `None`) and returning up to `limit` entries.
+    pub async fn get_event_log(
+        &self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry> {
+        self.global_db()
+            .begin_transaction_nc()
+            .await
+            .get_event_log(pos, limit)
+            .await
+    }
+
+    /// Returns the id that the next entry appended to the event log will be
+    /// assigned, i.e. the position just past the current end of the log.
+    pub async fn get_next_event_log_id(&self) -> EventLogId {
+        self.global_db()
+            .begin_transaction_nc()
+            .await
+            .get_next_event_log_id()
+            .await
     }
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {

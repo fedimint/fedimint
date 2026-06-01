@@ -1359,7 +1359,9 @@ impl Gateway {
             .value()
             .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
         {
-            Ok(wallet_module.receive().await)
+            // Walletv2 `receive` also returns the event log position, which the
+            // gateway does not need here.
+            Ok(wallet_module.receive().await.0)
         } else {
             Err(AdminGatewayError::Unexpected(anyhow!(
                 "No wallet module found"
