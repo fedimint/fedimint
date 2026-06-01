@@ -530,16 +530,18 @@ if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; t
   parallel_args+=(--eta)
 fi
 
+default_parallel_jobs=$(($(nproc) / 3 + 1))
+
 if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
-  parallel_args+=(--jobs $(($(nproc) / 2 + 1)))
+  # Devimint tests are process-heavy; stay below the machine becoming too overloaded to reliably run tests.
+  parallel_args+=(--jobs "${default_parallel_jobs}")
 else
-  # on dev computers default to `num_cpus / 2 + 1` max parallel jobs
-  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 2 + 1))}")
+  # on dev computers default to `num_cpus / 3 + 1` max parallel jobs
+  parallel_args+=(--jobs "${default_parallel_jobs}")
 fi
-
 parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-360}")
 
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc)))}")
