@@ -26,6 +26,7 @@ pub use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_logging::LOG_LIGHTNING;
 use fedimint_metrics::HistogramExt as _;
+use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,14 @@ use tracing::{info, trace, warn};
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
 pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;
+
+/// Returns `true` if the given payment hash corresponds to a HOLD invoice that
+/// the gateway created on behalf of a federation. Used by the LND backend to
+/// ignore unrelated HOLD invoices on a shared LND node, which would otherwise
+/// be mistaken for federation-bound payments and produce invalid responses on
+/// LND's HTLC interceptor wire.
+pub type Lnv2HoldInvoiceFilter =
+    Arc<dyn Fn(sha256::Hash) -> BoxFuture<'static, bool> + Send + Sync + 'static>;
 
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,

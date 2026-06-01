@@ -49,8 +49,8 @@ use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, MAX_LIGHTNING_RETRIES,
-    RouteHtlcStream,
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
+    MAX_LIGHTNING_RETRIES, RouteHtlcStream,
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -73,6 +73,12 @@ pub struct GatewayLndClient {
     macaroon: String,
     time_pref: f64,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
+    /// Predicate used to distinguish HOLD invoices the gateway created
+    /// (federation-bound) from unrelated HOLD invoices on the same LND node.
+    /// Without this, every HOLD invoice on a shared LND would be intercepted
+    /// as if it were federation-bound, producing invalid LNv1 responses that
+    /// crash LND's htlc_interceptor stream.
+    lnv2_filter: Lnv2HoldInvoiceFilter,
 }
 
 impl GatewayLndClient {
@@ -82,6 +88,7 @@ impl GatewayLndClient {
         macaroon: String,
         time_pref: f64,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
+        lnv2_filter: Lnv2HoldInvoiceFilter,
     ) -> Self {
         info!(
             target: LOG_LIGHTNING,
@@ -97,6 +104,7 @@ impl GatewayLndClient {
             macaroon,
             time_pref,
             lnd_sender,
+            lnv2_filter,
         }
     }
 
@@ -134,6 +142,7 @@ impl GatewayLndClient {
     async fn spawn_lnv2_hold_invoice_subscription(
         &self,
         task_group: &TaskGroup,
+        payment_stream_group: TaskGroup,
         gateway_sender: HtlcSubscriptionSender,
         payment_hash: Vec<u8>,
     ) -> Result<(), LightningRpcError> {
@@ -154,7 +163,8 @@ impl GatewayLndClient {
                     match stream {
                         Ok(stream) => stream.into_inner(),
                         Err(err) => {
-                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to hold invoice updates");
+                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to hold invoice updates, shutting down payment-stream subgroup to trigger gateway reconnect");
+                            payment_stream_group.shutdown();
                             return;
                         }
                     }
@@ -165,20 +175,30 @@ impl GatewayLndClient {
                 }
             };
 
-            while let Some(hold) = tokio::select! {
-                () = handle.make_shutdown_rx() => {
-                    None
-                }
-                hold_update = hold_stream.message() => {
-                    match hold_update {
-                        Ok(hold) => hold,
-                        Err(err) => {
-                            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Error received over hold invoice update stream");
-                            None
+            loop {
+                let hold = tokio::select! {
+                    () = handle.make_shutdown_rx() => {
+                        info!(target: LOG_LIGHTNING, "LND HOLD Invoice Subscription received shutdown signal");
+                        break;
+                    }
+                    hold_update = hold_stream.message() => {
+                        match hold_update {
+                            Ok(Some(hold)) => hold,
+                            Ok(None) => {
+                                // LND closed the stream because the invoice
+                                // reached a terminal state (settled, canceled,
+                                // or expired).
+                                break;
+                            }
+                            Err(err) => {
+                                crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Error received over hold invoice update stream, shutting down payment-stream subgroup to trigger gateway reconnect");
+                                payment_stream_group.shutdown();
+                                break;
+                            }
                         }
                     }
-                }
-            } {
+                };
+
                 debug!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&r_hash),
@@ -187,6 +207,25 @@ impl GatewayLndClient {
                 );
 
                 if hold.state() == InvoiceState::Accepted {
+                    // Only forward HOLD invoices that the gateway created on
+                    // behalf of a federation. We check here (rather than at
+                    // the new-invoice add-event) because the contract is
+                    // saved to gateway_db *after* the HOLD invoice is created
+                    // on LND, so the add-event races registration. By the
+                    // time `Accepted` fires the HTLC has arrived, which means
+                    // the BOLT11 invoice was published and the contract is
+                    // committed.
+                    let hash = sha256::Hash::from_slice(&hold.r_hash)
+                        .expect("LND payment hashes are 32 bytes");
+                    if !(self_copy.lnv2_filter)(hash).await {
+                        trace!(
+                            target: LOG_LIGHTNING,
+                            payment_hash = %PrettyPaymentHash(&hold.r_hash),
+                            "Ignoring HOLD invoice not created by this gateway",
+                        );
+                        continue;
+                    }
+
                     let intercept = InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&hold.r_hash.clone())
                             .expect("Failed to convert to Hash"),
@@ -251,6 +290,10 @@ impl GatewayLndClient {
 
         let self_copy = self.clone();
         let hold_group = task_group.make_subgroup();
+        // See the matching comment in `spawn_lnv1_htlc_interceptor`: if this
+        // task exits unexpectedly we shut down the payment-stream subgroup so
+        // the gateway transitions to `Disconnected` and reconnects.
+        let subgroup = task_group.clone();
         task_group.spawn("LND Invoice Subscription", move |handle| async move {
             let future_stream = client.lightning().subscribe_invoices(InvoiceSubscription {
                 add_index,
@@ -262,6 +305,7 @@ impl GatewayLndClient {
                         Ok(stream) => stream.into_inner(),
                         Err(err) => {
                             warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to subscribe to all invoice updates");
+                            subgroup.shutdown();
                             return;
                         }
                     }
@@ -310,19 +354,31 @@ impl GatewayLndClient {
                     if let Err(err) = self_copy
                         .spawn_lnv2_hold_invoice_subscription(
                             &hold_group,
+                            subgroup.clone(),
                             gateway_sender.clone(),
                             payment_hash.clone(),
                         )
                         .await
                     {
+                        // Spawning failed because `connect()` exhausted its
+                        // retries, a strong signal that LND is unreachable. We
+                        // can no longer observe this invoice's `Accepted`
+                        // update, so shut down the payment-stream subgroup to
+                        // force a gateway reconnect.
                         warn!(
                             target: LOG_LIGHTNING,
                             err = %err.fmt_compact(),
                             payment_hash = %PrettyPaymentHash(&payment_hash),
-                            "Failed to spawn HOLD invoice subscription task",
+                            "Failed to spawn HOLD invoice subscription task, shutting down payment-stream subgroup to trigger gateway reconnect",
                         );
+                        subgroup.shutdown();
                     }
                 }
+            }
+
+            if !handle.is_shutting_down() {
+                warn!(target: LOG_LIGHTNING, "LND Invoice Subscription exited unexpectedly, shutting down payment-stream subgroup to trigger gateway reconnect");
+                subgroup.shutdown();
             }
         });
 
@@ -351,6 +407,12 @@ impl GatewayLndClient {
                 failure_reason: format!("Failed to get node info {status:?}"),
             })?;
 
+        // If the HTLC interceptor exits unexpectedly we shut down the
+        // payment-stream subgroup. That cascades to the lnv2 invoice
+        // subscription (and its hold-invoice subtasks), which drop their
+        // `gateway_sender` clones, closing the gateway's HTLC stream and
+        // driving the gateway back to `Disconnected` so it reconnects.
+        let subgroup = task_group.clone();
         task_group.spawn("LND HTLC Subscription", |handle| async move {
                 let future_stream = client
                     .router()
@@ -361,6 +423,7 @@ impl GatewayLndClient {
                             Ok(stream) => stream.into_inner(),
                             Err(e) => {
                                 crit!(target: LOG_LIGHTNING, err = %e.fmt_compact(), "Failed to establish htlc stream");
+                                subgroup.shutdown();
                                 return;
                             }
                         }
@@ -449,6 +512,13 @@ impl GatewayLndClient {
                                 });
                         }
                     }
+                }
+
+                // Loop exited because of an HTLC stream error or end-of-stream
+                // (the expected-shutdown case is handled above).
+                if !handle.is_shutting_down() {
+                    warn!(target: LOG_LIGHTNING, "LND HTLC Subscription exited unexpectedly, shutting down payment-stream subgroup to trigger gateway reconnect");
+                    subgroup.shutdown();
                 }
             });
 
@@ -995,6 +1065,7 @@ impl ILnRpcClient for GatewayLndClient {
             macaroon: self.macaroon.clone(),
             time_pref: self.time_pref,
             lnd_sender: Some(lnd_sender.clone()),
+            lnv2_filter: self.lnv2_filter.clone(),
         });
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
