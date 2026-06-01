@@ -36,6 +36,7 @@ use fedimint_core::time::now;
 use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -300,12 +301,21 @@ impl GatewayClientModuleV2 {
             "Contract Id returned by the federation does not match contract in request"
         );
 
-        let (payment_hash, amount) = match &payload.invoice {
+        let (payment_hash, amount, destination, route_hints) = match &payload.invoice {
             LightningInvoice::Bolt11(invoice) => (
                 invoice.payment_hash(),
                 invoice
                     .amount_milli_satoshis()
                     .ok_or(anyhow!("Invoice is missing amount"))?,
+                invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+                invoice
+                    .route_hints()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>(),
             ),
         };
 
@@ -353,6 +363,8 @@ impl GatewayClientModuleV2 {
                     min_contract_amount,
                     invoice_amount: Amount::from_msats(amount),
                     max_delay: expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2),
+                    destination: Some(destination),
+                    route_hints: Some(route_hints),
                 },
             )
             .await;
@@ -574,6 +586,42 @@ impl GatewayClientModuleV2 {
                 }
             }
         }
+    }
+
+    /// Return the destination LN node pubkey and route hints for an outgoing
+    /// payment operation. Looks for the `Send` state machine in the
+    /// operation's active or inactive state machines and reads both off the
+    /// invoice at once. Returns `None` if no matching state is found (e.g.,
+    /// the operation does not exist or its state has been pruned).
+    pub async fn outgoing_payment_route_info(
+        &self,
+        operation_id: OperationId,
+    ) -> Option<(secp256k1::PublicKey, Vec<RouteHint>)> {
+        let active = self
+            .client_ctx
+            .get_own_active_states_for_operation(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let inactive = self
+            .client_ctx
+            .get_own_inactive_states_for_operation(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let LightningInvoice::Bolt11(invoice) = active.chain(inactive).next()?;
+        let destination = invoice
+            .payee_pub_key()
+            .copied()
+            .unwrap_or_else(|| invoice.recover_payee_pub_key());
+        let route_hints = invoice.route_hints().into_iter().map(Into::into).collect();
+        Some((destination, route_hints))
     }
 
     /// For the given `OperationId`, this function will wait until the Complete

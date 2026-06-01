@@ -646,6 +646,8 @@ impl GatewayClientModule {
                             contract_id: payload.contract_id,
                             invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
                             operation_id,
+                            destination: Some(payload.payment_data.destination()),
+                            route_hints: Some(payload.payment_data.route_hints()),
                         }).await;
 
                         let state_machines =
@@ -760,6 +762,42 @@ impl GatewayClientModule {
                 }
             }
         }))
+    }
+
+    /// Return the destination LN node pubkey and route hints for an outgoing
+    /// payment operation. Looks for the initial `PayInvoice` state in the
+    /// operation's active or inactive state machines and reads both off the
+    /// invoice payload at once. Returns `None` if no matching state is found
+    /// (e.g., the operation does not exist or its state has been pruned).
+    pub async fn outgoing_payment_route_info(
+        &self,
+        operation_id: OperationId,
+    ) -> Option<(secp256k1::PublicKey, Vec<RouteHint>)> {
+        let active = self
+            .client_ctx
+            .get_own_active_states_for_operation(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachines::Pay(sm) => Some(sm.state),
+                _ => None,
+            });
+        let inactive = self
+            .client_ctx
+            .get_own_inactive_states_for_operation(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachines::Pay(sm) => Some(sm.state),
+                _ => None,
+            });
+        active.chain(inactive).find_map(|state| match state {
+            GatewayPayStates::PayInvoice(invoice) => {
+                let data = invoice.pay_invoice_payload.payment_data;
+                Some((data.destination(), data.route_hints()))
+            }
+            _ => None,
+        })
     }
 }
 

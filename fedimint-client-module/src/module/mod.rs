@@ -490,6 +490,64 @@ where
             .collect()
     }
 
+    /// Returns the active state machine states for this module that belong to
+    /// the given operation. Filtered at the DB level — prefer this over
+    /// [`Self::get_own_active_states`] when querying a single operation.
+    pub async fn get_own_active_states_for_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> Vec<(M::States, ActiveStateMeta)> {
+        use futures::StreamExt;
+
+        let client_strong = self.client.get();
+        let mut dbtx = client_strong.db().begin_transaction_nc().await;
+        client_strong
+            .read_operation_active_states(operation_id, self.module_instance_id, &mut dbtx)
+            .await
+            .map(|(key, meta)| {
+                (
+                    Clone::clone(
+                        key.state
+                            .as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("state downcast failed: wrong module instance"),
+                    ),
+                    meta,
+                )
+            })
+            .collect()
+            .await
+    }
+
+    /// Returns the inactive state machine states for this module that belong
+    /// to the given operation. Useful for inspecting state machines that have
+    /// already transitioned (or completed).
+    pub async fn get_own_inactive_states_for_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> Vec<(M::States, InactiveStateMeta)> {
+        use futures::StreamExt;
+
+        let client_strong = self.client.get();
+        let mut dbtx = client_strong.db().begin_transaction_nc().await;
+        client_strong
+            .read_operation_inactive_states(operation_id, self.module_instance_id, &mut dbtx)
+            .await
+            .map(|(key, meta)| {
+                (
+                    Clone::clone(
+                        key.state
+                            .as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("state downcast failed: wrong module instance"),
+                    ),
+                    meta,
+                )
+            })
+            .collect()
+            .await
+    }
+
     pub async fn get_config(&self) -> ClientConfig {
         self.client.get().config().await
     }

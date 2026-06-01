@@ -108,6 +108,7 @@ use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -1705,6 +1706,32 @@ impl Gateway {
             .ok_or(FederationNotConnected {
                 federation_id_prefix: federation_id.to_prefix(),
             })
+    }
+
+    /// Look up the destination LN node pubkey and invoice route hints for an
+    /// outgoing payment by `(federation_id, operation_id)`. Reads the
+    /// operation's active and inactive state machines, so it works for
+    /// in-flight as well as completed payments until the corresponding
+    /// states are pruned from the client DB.
+    pub async fn outgoing_payment_route_info(
+        &self,
+        federation_id: FederationId,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<(PublicKey, Vec<RouteHint>)>> {
+        let client = self.select_client(federation_id).await?;
+        let client = client.value();
+
+        if let Ok(module) = client.get_first_module::<GatewayClientModuleV2>()
+            && let Some(info) = module.outgoing_payment_route_info(operation_id).await
+        {
+            return Ok(Some(info));
+        }
+
+        if let Ok(module) = client.get_first_module::<GatewayClientModule>() {
+            return Ok(module.outgoing_payment_route_info(operation_id).await);
+        }
+
+        Ok(None)
     }
 
     async fn load_mnemonic(gateway_db: &Database) -> Option<Mnemonic> {
