@@ -1,12 +1,14 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
-use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::util::SafeUrl;
 use strum::EnumIter;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
+    // DEPRECATED: was the (PublicKey -> SafeUrl) gateway cache prefix; the
+    // cache moved in-memory and is no longer persisted. Do not reuse 0x41
+    // for a new variant unless old client databases have been migrated.
+    #[allow(dead_code)]
     Gateway = 0x41,
     IncomingContractStreamIndex = 0x42,
     #[allow(dead_code)]
@@ -20,15 +22,6 @@ pub enum DbKeyPrefix {
     #[allow(dead_code)]
     CoreInternalReservedEnd = 0xff,
 }
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct GatewayKey(pub PublicKey);
-
-impl_db_record!(
-    key = GatewayKey,
-    value = SafeUrl,
-    db_prefix = DbKeyPrefix::Gateway,
-);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct IncomingContractStreamIndexKey;

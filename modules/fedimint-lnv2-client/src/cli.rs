@@ -13,22 +13,19 @@ use crate::{Bolt11InvoiceDescription, LightningClientModule};
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Pay an invoice. For  testing  you can optionally specify a gateway to
-    /// route with, otherwise a gateway will be selected automatically.
+    /// Pay an invoice via the specified gateway.
     Send {
         invoice: Bolt11Invoice,
         #[arg(long)]
-        gateway: Option<SafeUrl>,
+        gateway: SafeUrl,
     },
     /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
-    /// Request an invoice. For testing you can optionally specify a gateway to
-    /// generate the invoice, otherwise a gateway will be selected
-    /// automatically.
+    /// Request an invoice from the specified gateway.
     Receive {
         amount: Amount,
         #[arg(long)]
-        gateway: Option<SafeUrl>,
+        gateway: SafeUrl,
     },
     /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
@@ -42,21 +39,20 @@ enum Opts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum LnurlOpts {
-    /// Generate a new lnurl.
+    /// Generate a new lnurl pinned to the specified gateway.
     Generate {
         recurringd: SafeUrl,
         #[arg(long)]
-        gateway: Option<SafeUrl>,
+        gateway: SafeUrl,
     },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewaysOpts {
-    /// Update the mapping from lightning node public keys to gateway api
-    /// endpoints maintained in the module database to optimise gateway
-    /// selection for a given invoice; this command is intended for testing.
-    Map,
-    /// Select an online vetted gateway; this command is intended for testing.
+    /// Refresh the gateway cache and pick an online vetted gateway. If
+    /// `--invoice` is set and one of the cached gateways is the payee,
+    /// that gateway is returned so a subsequent `send` can settle as a
+    /// direct ecash swap.
     Select {
         #[arg(long)]
         invoice: Option<Bolt11Invoice>,
@@ -80,7 +76,7 @@ pub(crate) async fn handle_cli_command(
 
     let value = match opts {
         Opts::Send { gateway, invoice } => {
-            json(lightning.send(invoice, gateway, Value::Null).await?)
+            json(lightning.send(invoice, Some(gateway), Value::Null).await?)
         }
         Opts::AwaitSend { operation_id } => json(
             lightning
@@ -93,7 +89,7 @@ pub(crate) async fn handle_cli_command(
                     amount,
                     3600,
                     Bolt11InvoiceDescription::Direct(String::new()),
-                    gateway,
+                    Some(gateway),
                     Value::Null,
                 )
                 .await?,
@@ -107,12 +103,12 @@ pub(crate) async fn handle_cli_command(
             LnurlOpts::Generate {
                 recurringd,
                 gateway,
-            } => json(lightning.generate_lnurl(recurringd, gateway).await?),
+            } => json(lightning.generate_lnurl(&recurringd, Some(gateway)).await?),
         },
         Opts::Gateways(gateway_opts) => match gateway_opts {
-            #[allow(clippy::unit_arg)]
-            GatewaysOpts::Map => json(lightning.update_gateway_map().await),
-            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
+            GatewaysOpts::Select { invoice } => {
+                json(lightning.select_gateway(invoice.as_ref(), true).await?.0)
+            }
             GatewaysOpts::List { peer } => json(lightning.list_gateways(peer).await?),
             GatewaysOpts::Add { gateway } => {
                 let auth = lightning

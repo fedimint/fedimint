@@ -171,10 +171,6 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         )
     );
 
-    cmd!(client, "module", "lnv2", "gateways", "map")
-        .out_json()
-        .await?;
-
     for _ in 0..10 {
         for gateway in &gateways {
             let invoice = common::receive(&client, gateway, 1_000_000).await?.0;
@@ -783,10 +779,33 @@ async fn test_iroh_payment(
 
     let invoice = gw_ldk.client().create_invoice(5_000_000).await?;
 
+    let send_gateway = cmd!(
+        client,
+        "module",
+        "lnv2",
+        "gateways",
+        "select",
+        "--invoice",
+        invoice.to_string()
+    )
+    .out_json()
+    .await?
+    .as_str()
+    .expect("JSON Value is not a string")
+    .to_string();
+
     let send_op = serde_json::from_value::<OperationId>(
-        cmd!(client, "module", "lnv2", "send", invoice,)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "send",
+            invoice,
+            "--gateway",
+            send_gateway
+        )
+        .out_json()
+        .await?,
     )?;
 
     let send_state = common::await_send(client, send_op).await?;
@@ -795,10 +814,25 @@ async fn test_iroh_payment(
         "unexpected send state: {send_state:?}"
     );
 
+    let receive_gateway = cmd!(client, "module", "lnv2", "gateways", "select")
+        .out_json()
+        .await?
+        .as_str()
+        .expect("JSON Value is not a string")
+        .to_string();
+
     let (invoice, receive_op) = serde_json::from_value::<(Bolt11Invoice, OperationId)>(
-        cmd!(client, "module", "lnv2", "receive", "5000000",)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            "5000000",
+            "--gateway",
+            receive_gateway
+        )
+        .out_json()
+        .await?,
     )?;
 
     gw_ldk.client().pay_invoice(invoice).await?;
