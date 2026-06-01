@@ -212,7 +212,7 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
         let state = client
             .get_first_module::<WalletClientModule>()?
             .await_final_send_operation_state(send_op)
-            .await;
+            .await?;
 
         assert!(matches!(state, FinalSendOperationState::Success(_)));
 

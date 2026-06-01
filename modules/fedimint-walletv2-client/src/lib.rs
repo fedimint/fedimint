@@ -97,6 +97,15 @@ pub enum FinalSendOperationState {
     Failure,
 }
 
+/// The final state of an operation receiving bitcoin onchain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FinalReceiveOperationState {
+    /// The federation accepted the claiming transaction.
+    Success,
+    /// The federation rejected the claiming transaction.
+    Aborted,
+}
+
 #[derive(Debug, Clone)]
 pub struct WalletClientModule {
     root_secret: DerivableSecret,
@@ -353,21 +362,84 @@ impl WalletClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> FinalSendOperationState {
+    ) -> anyhow::Result<FinalSendOperationState> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
-        loop {
-            let Some(WalletClientStateMachines::Send(state)) = stream.next().await else {
-                panic!("stream must produce a terminal send state");
-            };
+        let mut stream = self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                async_stream::stream! {
+                    loop {
+                        if let Some(WalletClientStateMachines::Send(state)) = stream.next().await {
+                            match state.state {
+                                SendSMState::Funding => {}
+                                SendSMState::Success(txid) => {
+                                    yield FinalSendOperationState::Success(txid);
+                                    return;
+                                }
+                                SendSMState::Aborted(..) => {
+                                    yield FinalSendOperationState::Aborted;
+                                    return;
+                                }
+                                SendSMState::Failure => {
+                                    yield FinalSendOperationState::Failure;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .into_stream();
 
-            match state.state {
-                SendSMState::Funding => {}
-                SendSMState::Success(txid) => return FinalSendOperationState::Success(txid),
-                SendSMState::Aborted(..) => return FinalSendOperationState::Aborted,
-                SendSMState::Failure => return FinalSendOperationState::Failure,
-            }
+        let mut final_state = None;
+
+        while let Some(state) = stream.next().await {
+            final_state = Some(state);
         }
+
+        Ok(final_state.expect("Stream contains one final state"))
+    }
+
+    /// Await the final state of the receive operation.
+    pub async fn await_final_receive_operation_state(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<FinalReceiveOperationState> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let mut stream = self.notifier.subscribe(operation_id).await;
+
+        let mut stream = self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                async_stream::stream! {
+                    loop {
+                        if let Some(WalletClientStateMachines::Receive(state)) = stream.next().await {
+                            match state.state {
+                                ReceiveSMState::Funding => {}
+                                ReceiveSMState::Success => {
+                                    yield FinalReceiveOperationState::Success;
+                                    return;
+                                }
+                                ReceiveSMState::Aborted(..) => {
+                                    yield FinalReceiveOperationState::Aborted;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .into_stream();
+
+        let mut final_state = None;
+
+        while let Some(state) = stream.next().await {
+            final_state = Some(state);
+        }
+
+        Ok(final_state.expect("Stream contains one final state"))
     }
 
     /// Returns the next unused receive address, polling until the initial
