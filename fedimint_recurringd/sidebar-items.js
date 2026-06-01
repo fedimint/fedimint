@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PaymentCodeInvoice","PaymentStatus"],"fn":["await_invoice_confirmed","operation_id_from_user_key"],"mod":["db"],"struct":["InvoiceStatus","LNURLPayInvoice","RecurringInvoiceServer"],"trait":["LnClientContextExt"]};
+window.SIDEBAR_ITEMS = {"enum":["PaymentCodeInvoice","PaymentStatus"],"fn":["await_invoice_confirmed","operation_id_from_user_key","spawn_gateway_cache_refresh"],"mod":["db"],"struct":["InvoiceStatus","LNURLPayInvoice","RecurringInvoiceServer"],"trait":["LnClientContextExt"]};
