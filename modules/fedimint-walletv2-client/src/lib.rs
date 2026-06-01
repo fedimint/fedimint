@@ -243,12 +243,12 @@ impl WalletClientModule {
     }
 
     /// Fetch information on the chain of pending bitcoin transactions.
-    async fn pending_tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
+    pub async fn pending_tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
         self.module_api.pending_tx_chain().await
     }
 
     /// Display log of bitcoin transactions.
-    async fn tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
+    pub async fn tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
         self.module_api.tx_chain().await
     }
 
