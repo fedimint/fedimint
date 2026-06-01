@@ -259,8 +259,11 @@ imbl = "5.0.0"
 impl-tools = "0.10.3"
 iroh = { version = "=0.35.0", default-features = false }
 iroh-base = { version = "=0.35.0", default-features = false }
-iroh-next = { version = "=0.96.1", default-features = false, package = "iroh" }
-iroh-next-base = { version = "=0.96.1", default-features = false, package = "iroh-base" }
+iroh-mainline-address-lookup = "0.3.0"
+iroh-next = { version = "=1.0.0-rc.1", default-features = false, features = [
+    "tls-ring",
+], package = "iroh" }
+iroh-next-base = { version = "=1.0.0-rc.1", default-features = false, package = "iroh-base" }
 iroh-relay = { version = "=0.35.0", default-features = false }
 itertools = "0.14.0"
 jaq-core = "2.1.1"

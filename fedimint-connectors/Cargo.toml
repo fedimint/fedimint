@@ -55,9 +55,8 @@ curve25519-dalek = { workspace = true, optional = true }
 iroh = { workspace = true, default-features = false, features = [
     "discovery-pkarr-dht",
 ] }
-iroh-next = { workspace = true, default-features = false, features = [
-    "address-lookup-pkarr-dht",
-] }
+iroh-mainline-address-lookup = { workspace = true }
+iroh-next = { workspace = true, default-features = false }
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
 rustls-pki-types = { workspace = true }
 strum = { workspace = true, optional = true }
