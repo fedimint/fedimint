@@ -1642,20 +1642,42 @@ async fn lnv2_send(client: &Client, gateway: &String, invoice: &String) -> anyho
         .await?,
     )?;
 
-    assert_eq!(
-        cmd!(
-            client,
-            "module",
-            "lnv2",
-            "await-send",
-            serde_json::to_string(&send_op)?.substring(1, 65)
-        )
-        .out_json()
-        .await?,
-        serde_json::to_value(FinalSendOperationState::Success).expect("JSON serialization failed"),
+    let send_state = lnv2_await_send(client, send_op).await?;
+    assert!(
+        matches!(send_state, FinalSendOperationState::Success(_)),
+        "unexpected send state: {send_state:?}"
     );
 
     Ok(())
+}
+
+/// Run `await-send` and parse the JSON, tolerating the pre-0.12 CLI output
+/// shape so this works across the backwards-compatibility test matrix.
+///
+/// Pre-0.12 binaries serialize `FinalSendOperationState::Success` as the bare
+/// string `"Success"` (unit variant); 0.12+ serializes it as `{"Success":
+/// "<hex preimage>"}` (tuple variant carrying the preimage). Coerce the old
+/// shape to a synthetic `Success(zero-preimage)` so callers can match
+/// uniformly regardless of which CLI produced the output.
+async fn lnv2_await_send(
+    client: &Client,
+    send_op: OperationId,
+) -> anyhow::Result<FinalSendOperationState> {
+    let raw = cmd!(
+        client,
+        "module",
+        "lnv2",
+        "await-send",
+        serde_json::to_string(&send_op)?.substring(1, 65)
+    )
+    .out_json()
+    .await?;
+
+    Ok(if raw.as_str() == Some("Success") {
+        FinalSendOperationState::Success([0; 32])
+    } else {
+        serde_json::from_value(raw)?
+    })
 }
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {

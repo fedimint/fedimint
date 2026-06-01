@@ -38,13 +38,8 @@ async fn main() -> anyhow::Result<()> {
 
             info!("Testing LNv2 client can pay LNv1 invoice...");
             let (invoice, receive_op) = receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
-            common::send(
-                &client,
-                &gw_lnd.addr,
-                &invoice.to_string(),
-                FinalSendOperationState::Success,
-            )
-            .await?;
+            let state = common::send(&client, &gw_lnd.addr, &invoice.to_string()).await?;
+            assert!(matches!(state, FinalSendOperationState::Success(_)));
             await_receive_lnv1(&client, receive_op).await?;
 
             info!("LNv1 <-> LNv2 swap tests complete!");

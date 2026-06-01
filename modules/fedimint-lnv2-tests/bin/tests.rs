@@ -14,7 +14,6 @@ use fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 use fedimint_lnv2_client::FinalSendOperationState;
 use lightning_invoice::Bolt11Invoice;
 use serde::Deserialize;
-use substring::Substring;
 use tokio::try_join;
 use tracing::info;
 
@@ -269,13 +268,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             .await?
             .0;
 
-        common::send(
-            &client,
-            &gw_send.addr,
-            &invoice.to_string(),
-            FinalSendOperationState::Refunded,
-        )
-        .await?;
+        let state = common::send(&client, &gw_send.addr, &invoice.to_string()).await?;
+        assert!(matches!(state, FinalSendOperationState::Refunded));
     }
 
     pegin_gateways(dev_fed).await?;
@@ -291,13 +285,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let (invoice, receive_op) = common::receive(&client, &gw_receive.addr, 1_000_000).await?;
 
-        common::send(
-            &client,
-            &gw_send.addr,
-            &invoice.to_string(),
-            FinalSendOperationState::Success,
-        )
-        .await?;
+        let state = common::send(&client, &gw_send.addr, &invoice.to_string()).await?;
+        assert!(matches!(state, FinalSendOperationState::Success(_)));
 
         common::await_receive_claimed(&client, receive_op).await?;
     }
@@ -313,13 +302,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let invoice = gw_receive.client().create_invoice(1_000_000).await?;
 
-        common::send(
-            &client,
-            &gw_send.addr,
-            &invoice.to_string(),
-            FinalSendOperationState::Success,
-        )
-        .await?;
+        let state = common::send(&client, &gw_send.addr, &invoice.to_string()).await?;
+        assert!(matches!(state, FinalSendOperationState::Success(_)));
     }
 
     info!("Testing payments from gateways to client...");
@@ -351,15 +335,11 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     info!("Testing Client can pay LND HOLD invoice via LDK Gateway...");
 
-    try_join!(
-        common::send(
-            &client,
-            &gw_ldk.addr,
-            &hold_invoice,
-            FinalSendOperationState::Success
-        ),
+    let (state, _) = try_join!(
+        common::send(&client, &gw_ldk.addr, &hold_invoice),
         lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
     )?;
+    assert!(matches!(state, FinalSendOperationState::Success(_)));
 
     info!("Testing LNv2 lightning fees...");
 
@@ -423,13 +403,8 @@ async fn test_fees(
 
     let (invoice, receive_op) = common::receive(client, &gw_ldk.addr, 1_000_000).await?;
 
-    common::send(
-        client,
-        &gw_lnd.addr,
-        &invoice.to_string(),
-        FinalSendOperationState::Success,
-    )
-    .await?;
+    let state = common::send(client, &gw_lnd.addr, &invoice.to_string()).await?;
+    assert!(matches!(state, FinalSendOperationState::Success(_)));
 
     common::await_receive_claimed(client, receive_op).await?;
 
@@ -814,17 +789,10 @@ async fn test_iroh_payment(
             .await?,
     )?;
 
-    assert_eq!(
-        cmd!(
-            client,
-            "module",
-            "lnv2",
-            "await-send",
-            serde_json::to_string(&send_op)?.substring(1, 65)
-        )
-        .out_json()
-        .await?,
-        serde_json::to_value(FinalSendOperationState::Success).expect("JSON serialization failed"),
+    let send_state = common::await_send(client, send_op).await?;
+    assert!(
+        matches!(send_state, FinalSendOperationState::Success(_)),
+        "unexpected send state: {send_state:?}"
     );
 
     let (invoice, receive_op) = serde_json::from_value::<(Bolt11Invoice, OperationId)>(
