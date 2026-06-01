@@ -19,6 +19,8 @@ mod input;
 mod oob;
 /// State machines for mint outputs
 pub mod output;
+/// State machines for spending notes with exact denominations
+pub mod spend_exact;
 
 pub mod events;
 
@@ -115,6 +117,7 @@ use crate::oob::{MintOOBStateMachine, MintOOBStates};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, NoteIssuanceRequest,
 };
+use crate::spend_exact::SpendExactStateMachine;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
@@ -523,6 +526,18 @@ pub enum SpendOOBState {
     Refunded,
 }
 
+/// The high-level state of a spend exact operation started with
+/// [`MintClientModule::spend_notes_with_exact_denominations`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum SpendExactState {
+    /// We need to reissue notes to get the exact denominations
+    Reissuing,
+    /// We have exact notes available and the operation completed immediately
+    Success(TieredMulti<SpendableNote>),
+    /// Some error happened and the operation failed
+    Failed(String),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintOperationMeta {
     pub variant: MintOperationMetaVariant,
@@ -550,6 +565,10 @@ pub enum MintOperationMetaVariant {
     SpendOOB {
         requested_amount: Amount,
         oob_notes: OOBNotes,
+    },
+    SpendExact {
+        requested_denominations: TieredCounts,
+        change_outpoints: Option<OutPointRange>,
     },
 }
 
@@ -1180,6 +1199,14 @@ impl ClientModule for MintClientModule {
                     let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
                     yield serde_json::to_value(note_counts)?;
                 }
+                "spend_notes_with_exact_denominations" => {
+                    let req: SpendNotesWithExactDenominationsRequest =
+                        serde_json::from_value(request)?;
+                    let stream = self.spend_exact_notes_stream(req).await?;
+                    for await value in stream {
+                        yield serde_json::to_value(value?)?;
+                    }
+                }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {method}"))?;
                     unreachable!()
@@ -1234,6 +1261,14 @@ struct SubscribeSpendNotesRequest {
 }
 
 #[derive(Deserialize)]
+struct SpendNotesWithExactDenominationsRequest {
+    denominations_msat: Vec<u64>,
+    include_invite: bool,
+    try_cancel_after: Duration,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Deserialize)]
 struct AwaitSpendOobRefundRequest {
     operation_id: OperationId,
 }
@@ -1260,7 +1295,7 @@ impl MintClientModule {
             dbtx,
             &SelectNotesWithAtleastAmount,
             min_amount,
-            self.cfg.fee_consensus.clone(),
+            self.cfg.fee_consensus,
         )
         .await?;
 
@@ -1673,6 +1708,63 @@ impl MintClientModule {
             .collect::<anyhow::Result<TieredMulti<_>>>()
     }
 
+    async fn spend_exact_notes_stream(
+        &self,
+        req: SpendNotesWithExactDenominationsRequest,
+    ) -> anyhow::Result<impl futures::Stream<Item = anyhow::Result<String>> + '_> {
+        let mut tiered_counts = TieredCounts::default();
+        for msat in &req.denominations_msat {
+            tiered_counts.inc(Amount::from_msats(*msat), 1);
+        }
+
+        let operation_id = self
+            .spend_notes_with_exact_denominations(
+                tiered_counts,
+                req.try_cancel_after,
+                req.extra_meta,
+            )
+            .await?;
+
+        let sub = self
+            .subscribe_spend_notes_with_exact_denominations(operation_id)
+            .await?;
+
+        let federation_id_prefix = self.federation_id.to_prefix();
+        let invite_code = if req.include_invite {
+            Some(self.client_ctx.get_invite_code().await)
+        } else {
+            None
+        };
+
+        Ok(async_stream::try_stream! {
+            let mut stream = sub.into_stream();
+            while let Some(state) = stream.next().await {
+                match state {
+                    SpendExactState::Success(notes) => {
+                        let token = match &invite_code {
+                            Some(ic) => OOBNotes::new_with_invite(notes, ic).to_string(),
+                            None => OOBNotes::new(federation_id_prefix, notes).to_string(),
+                        };
+
+                        yield token;
+                        return;
+                    }
+                    SpendExactState::Failed(e) => {
+                        Err(anyhow::anyhow!("spend_exact failed: {e}"))?;
+                        unreachable!()
+                    }
+                    SpendExactState::Reissuing => {
+                        // Reissuance in progress
+                    }
+                }
+            }
+            Err(anyhow::anyhow!(
+                "spend_exact stream ended without terminal state"
+            ))?;
+            unreachable!()
+        })
+    }
+
     async fn get_all_spendable_notes(
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> TieredMulti<SpendableNoteUndecoded> {
@@ -1866,7 +1958,8 @@ impl MintClientModule {
 
                 (txid, out_points)
             }
-            MintOperationMetaVariant::SpendOOB { .. } => bail!("Operation is not a reissuance"),
+            MintOperationMetaVariant::SpendOOB { .. }
+            | MintOperationMetaVariant::SpendExact { .. } => bail!("Operation is not a reissuance"),
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2670,6 +2763,7 @@ pub enum MintClientStateMachines {
     OOB(MintOOBStateMachine),
     // Removed in https://github.com/fedimint/fedimint/pull/4035 , now ignored
     Restore(MintRestoreStateMachine),
+    SpendExact(SpendExactStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -2707,6 +2801,12 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::OOB
                 )
             }
+            MintClientStateMachines::SpendExact(spend_exact_state) => {
+                sm_enum_variant_translation!(
+                    spend_exact_state.transitions(context, global_context),
+                    MintClientStateMachines::SpendExact
+                )
+            }
             MintClientStateMachines::Restore(_) => {
                 sm_enum_variant_translation!(vec![], MintClientStateMachines::Restore)
             }
@@ -2718,6 +2818,9 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
+            MintClientStateMachines::SpendExact(spend_exact_state) => {
+                spend_exact_state.operation_id()
+            }
             MintClientStateMachines::Restore(r) => r.operation_id,
         }
     }
@@ -2727,6 +2830,7 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Output(s) => s.fmt_visualization(f, indent),
             MintClientStateMachines::Input(s) => s.fmt_visualization(f, indent),
             MintClientStateMachines::OOB(s) => s.fmt_visualization(f, indent),
+            MintClientStateMachines::SpendExact(s) => s.fmt_visualization(f, indent),
             MintClientStateMachines::Restore(_) => write!(f, "{indent}{self:?}"),
         }
     }
