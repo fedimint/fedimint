@@ -7,13 +7,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, anyhow, bail, format_err};
-use async_stream::try_stream;
+#[cfg(feature = "uniffi")]
 use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
-use bitcoin::secp256k1::{self, PublicKey};
+use bitcoin::secp256k1::{self, PublicKey as SecpPublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, IGlobalFederationApi,
 };
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
@@ -30,8 +30,8 @@ use fedimint_client_module::transaction::{
     TxSubmissionStatesSM,
 };
 use fedimint_client_module::{
-    AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
-    ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
+    AddStateMachinesResult, ClientModuleInstance, ModuleGlobalContextGen, ModuleRecoveryCompleted,
+    TransactionUpdates, TxCreatedEvent,
 };
 use fedimint_connectors::{ConnectorRegistry, PeerStatus};
 use fedimint_core::config::{
@@ -74,7 +74,6 @@ use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
-use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, oneshot, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{Span, debug, info, warn};
@@ -84,11 +83,11 @@ use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
-    ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
-    ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
-    get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey, ClientConfigKey,
+    ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState, EncodedClientSecretKey,
+    OperationLogKey, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
+    PendingClientConfigKey, apply_migrations_core_client_dbtx, get_decoded_client_secret,
+    verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -102,6 +101,8 @@ pub(crate) mod builder;
 pub(crate) mod event_log;
 pub(crate) mod global_ctx;
 pub(crate) mod handle;
+#[cfg(feature = "uniffi")]
+use handle::ClientHandle;
 
 /// List of core api versions supported by the implementation.
 /// Notably `major` version is the one being supported, and corresponding
@@ -182,32 +183,6 @@ pub struct Client {
     /// Modules can call this with a URL from their config to get an RPC client.
     pub(crate) user_bitcoind_rpc_no_chain_id:
         Option<fedimint_client_module::module::init::BitcoindRpcNoChainIdFactory>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ListOperationsParams {
-    limit: Option<usize>,
-    last_seen: Option<ChronologicalOperationLogKey>,
-}
-
-const DEFAULT_EVENT_LOG_PAGE_SIZE: u64 = 100;
-const MAX_EVENT_LOG_PAGE_SIZE: u64 = 10_000;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct GetEventLogRequest {
-    pos: Option<EventLogId>,
-    limit: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetOperationIdRequest {
-    operation_id: OperationId,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetBalanceChangesRequest {
-    #[serde(default = "AmountUnit::bitcoin")]
-    unit: AmountUnit,
 }
 
 impl Client {
@@ -589,7 +564,7 @@ impl Client {
         (in_amounts, out_amounts)
     }
 
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(SecpPublicKey, u64)> {
         Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
     }
 
@@ -1902,7 +1877,7 @@ impl Client {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         config: ClientConfig,
-    ) -> BTreeMap<PeerId, PublicKey> {
+    ) -> BTreeMap<PeerId, SecpPublicKey> {
         match config.global.broadcast_public_keys {
             Some(guardian_pub_keys) => guardian_pub_keys,
             _ => {
@@ -1915,14 +1890,10 @@ impl Client {
         }
     }
 
-    async fn fetch_session_count(&self) -> FederationResult<u64> {
-        self.api.session_count().await
-    }
-
     async fn fetch_and_update_config(
         &self,
         config: ClientConfig,
-    ) -> (BTreeMap<PeerId, PublicKey>, ClientConfig) {
+    ) -> (BTreeMap<PeerId, SecpPublicKey>, ClientConfig) {
         let fetched_config = retry(
             "Fetching guardian public keys",
             backoff_util::background_backoff(),
@@ -1956,102 +1927,6 @@ impl Client {
             modules: config.modules,
         };
         (guardian_pub_keys, new_config)
-    }
-
-    pub fn handle_global_rpc(
-        &self,
-        method: String,
-        params: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
-            match method.as_str() {
-                "get_balance" => {
-                    let balance = self.get_balance_for_btc().await.unwrap_or_default();
-                    yield serde_json::to_value(balance)?;
-                }
-                "subscribe_balance_changes" => {
-                    let req: GetBalanceChangesRequest= serde_json::from_value(params)?;
-                    let mut stream = self.subscribe_balance_changes(req.unit).await;
-                    while let Some(balance) = stream.next().await {
-                        yield serde_json::to_value(balance)?;
-                    }
-                }
-                "get_config" => {
-                    let config = self.config().await;
-                    yield serde_json::to_value(config)?;
-                }
-                "get_federation_id" => {
-                    let federation_id = self.federation_id();
-                    yield serde_json::to_value(federation_id)?;
-                }
-                "get_invite_code" => {
-                    let req: GetInviteCodeRequest = serde_json::from_value(params)?;
-                    let invite_code = self.invite_code(req.peer).await;
-                    yield serde_json::to_value(invite_code)?;
-                }
-                "get_operation" => {
-                    let req: GetOperationIdRequest = serde_json::from_value(params)?;
-                    let operation = self.operation_log().get_operation(req.operation_id).await;
-                    yield serde_json::to_value(operation)?;
-                }
-                "list_operations" => {
-                    let req: ListOperationsParams = serde_json::from_value(params)?;
-                    let limit = if req.limit.is_none() && req.last_seen.is_none() {
-                        usize::MAX
-                    } else {
-                        req.limit.unwrap_or(usize::MAX)
-                    };
-                    let operations = self.operation_log()
-                        .paginate_operations_rev(limit, req.last_seen)
-                        .await;
-                    yield serde_json::to_value(operations)?;
-                }
-                "get_event_log" => {
-                    let req: GetEventLogRequest = serde_json::from_value(params)?;
-                    let limit = req
-                        .limit
-                        .unwrap_or(DEFAULT_EVENT_LOG_PAGE_SIZE)
-                        .min(MAX_EVENT_LOG_PAGE_SIZE);
-                    let events = self.get_event_log(req.pos, limit).await;
-                    yield serde_json::to_value(events)?;
-                }
-                "session_count" => {
-                    let count = self.fetch_session_count().await?;
-                    yield serde_json::to_value(count)?;
-                }
-                "has_pending_recoveries" => {
-                    let has_pending = self.has_pending_recoveries();
-                    yield serde_json::to_value(has_pending)?;
-                }
-                "wait_for_all_recoveries" => {
-                    self.wait_for_all_recoveries().await?;
-                    yield serde_json::Value::Null;
-                }
-                "subscribe_to_recovery_progress" => {
-                    let mut stream = self.subscribe_to_recovery_progress();
-                    while let Some((module_id, progress)) = stream.next().await {
-                        yield serde_json::json!({
-                            "module_id": module_id,
-                            "progress": progress
-                        });
-                    }
-                }
-                #[allow(deprecated)]
-                "backup_to_federation" => {
-                    let metadata = if params.is_null() {
-                        Metadata::from_json_serialized(serde_json::json!({}))
-                    } else {
-                        Metadata::from_json_serialized(params)
-                    };
-                    self.backup_to_federation(metadata).await?;
-                    yield serde_json::Value::Null;
-                }
-                _ => {
-                    Err(anyhow::format_err!("Unknown method: {}", method))?;
-                    unreachable!()
-                },
-            }
-        })
     }
 
     pub async fn log_event<E>(&self, module_id: Option<ModuleInstanceId>, event: E)
@@ -2404,7 +2279,7 @@ impl ClientContextIface for Client {
         Client::invite_code(self, peer).await
     }
 
-    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    fn get_internal_payment_markers(&self) -> anyhow::Result<(SecpPublicKey, u64)> {
         Client::get_internal_payment_markers(self)
     }
 
@@ -2490,4 +2365,906 @@ pub fn client_decoders<'a>(
         );
     }
     ModuleDecoderRegistry::from(modules)
+}
+
+#[cfg(feature = "uniffi")]
+const DEFAULT_EVENT_LOG_PAGE_SIZE: u64 = 100;
+#[cfg(feature = "uniffi")]
+const MAX_EVENT_LOG_PAGE_SIZE: u64 = 10_000;
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct PublicKey(SecpPublicKey);
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum PublicKeyError {
+    #[error("Invalid public key: {msg}")]
+    Invalid { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PublicKey {
+    #[uniffi::constructor]
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, PublicKeyError> {
+        SecpPublicKey::from_slice(&bytes)
+            .map(Self)
+            .map_err(|err| PublicKeyError::Invalid {
+                msg: err.to_string(),
+            })
+    }
+
+    #[uniffi::constructor]
+    pub fn from_hex(hex: String) -> Result<Self, PublicKeyError> {
+        hex.parse()
+            .map(Self)
+            .map_err(|err: secp256k1::Error| PublicKeyError::Invalid {
+                msg: err.to_string(),
+            })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.serialize().to_vec()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SecpPublicKey> for PublicKey {
+    fn from(public_key: SecpPublicKey) -> Self {
+        Self(public_key)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct InternalPaymentMarkers {
+    public_key: Arc<PublicKey>,
+    short_channel_id: u64,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl InternalPaymentMarkers {
+    pub fn public_key(&self) -> Arc<PublicKey> {
+        self.public_key.clone()
+    }
+
+    pub fn short_channel_id(&self) -> u64 {
+        self.short_channel_id
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct PeerConnectionStatus {
+    peer: u16,
+    connected: bool,
+    connectivity: Option<String>,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PeerConnectionStatus {
+    pub fn peer(&self) -> u16 {
+        self.peer
+    }
+
+    pub fn connected(&self) -> bool {
+        self.connected
+    }
+
+    pub fn connectivity(&self) -> Option<String> {
+        self.connectivity.clone()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct PeerUrl {
+    peer: u16,
+    url: String,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PeerUrl {
+    pub fn peer(&self) -> u16 {
+        self.peer
+    }
+
+    pub fn url(&self) -> String {
+        self.url.clone()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct PeerPublicKey {
+    peer: u16,
+    public_key: Arc<PublicKey>,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PeerPublicKey {
+    pub fn peer(&self) -> u16 {
+        self.peer
+    }
+
+    pub fn public_key(&self) -> Arc<PublicKey> {
+        self.public_key.clone()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct PeerJson {
+    peer: u16,
+    json: String,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PeerJson {
+    pub fn peer(&self) -> u16 {
+        self.peer
+    }
+
+    pub fn json(&self) -> String {
+        self.json.clone()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Object)]
+pub struct TransactionState(TxSubmissionStatesSM);
+
+#[cfg(feature = "uniffi")]
+impl From<TxSubmissionStatesSM> for TransactionState {
+    fn from(update: TxSubmissionStatesSM) -> Self {
+        Self(update)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl TransactionState {
+    pub fn operation_id(&self) -> Arc<OperationId> {
+        Arc::new(self.0.operation_id)
+    }
+
+    pub fn state(&self) -> String {
+        match &self.0.state {
+            TxSubmissionStates::Created(_) => "created",
+            TxSubmissionStates::Accepted(_) => "accepted",
+            TxSubmissionStates::Rejected(_, _) => "rejected",
+            TxSubmissionStates::NonRetryableError(_) => "non_retryable_error",
+        }
+        .to_owned()
+    }
+
+    pub fn txid(&self) -> Option<String> {
+        match &self.0.state {
+            TxSubmissionStates::Created(transaction) => Some(transaction.tx_hash().to_string()),
+            TxSubmissionStates::Accepted(txid) | TxSubmissionStates::Rejected(txid, _) => {
+                Some(txid.to_string())
+            }
+            TxSubmissionStates::NonRetryableError(_) => None,
+        }
+    }
+
+    pub fn error(&self) -> Option<String> {
+        match &self.0.state {
+            TxSubmissionStates::Rejected(_, error)
+            | TxSubmissionStates::NonRetryableError(error) => Some(error.clone()),
+            TxSubmissionStates::Created(_) | TxSubmissionStates::Accepted(_) => None,
+        }
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct JsonClientConfigRecord {
+    pub json: String,
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, uniffi::Object)]
+pub struct OperationLogEntry(fedimint_client_module::oplog::OperationLogEntry);
+
+#[cfg(feature = "uniffi")]
+impl From<fedimint_client_module::oplog::OperationLogEntry> for OperationLogEntry {
+    fn from(entry: fedimint_client_module::oplog::OperationLogEntry) -> Self {
+        Self(entry)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl OperationLogEntry {
+    pub fn operation_module_kind(&self) -> String {
+        self.0.operation_module_kind().to_owned()
+    }
+
+    pub fn meta_json(&self) -> Result<String, ClientError> {
+        let meta = self
+            .0
+            .try_meta::<serde_json::Value>()
+            .map_err(|err| client_error(err.to_string()))?;
+
+        serde_json::to_string(&meta).map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn outcome_json(&self) -> Result<Option<String>, ClientError> {
+        let outcome = self
+            .0
+            .try_outcome::<serde_json::Value>()
+            .map_err(|err| client_error(err.to_string()))?;
+
+        outcome
+            .map(|outcome| serde_json::to_string(&outcome))
+            .transpose()
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn outcome_time(&self) -> Option<SystemTime> {
+        self.0.outcome_time()
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OperationRecord {
+    pub key: Arc<crate::db::ChronologicalOperationLogKey>,
+    pub entry: Arc<OperationLogEntry>,
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct RecoveryProgressRecord {
+    pub module_id: u16,
+    pub complete: u32,
+    pub total: u32,
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum ClientError {
+    #[error("{msg}")]
+    General { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+fn client_error(msg: impl Into<String>) -> ClientError {
+    ClientError::General { msg: msg.into() }
+}
+
+#[cfg(feature = "uniffi")]
+fn client_for_handle(handle: &ClientHandle) -> Result<Arc<Client>, ClientError> {
+    handle
+        .inner_arc()
+        .ok_or_else(|| client_error("Client handle is already shut down"))
+}
+
+#[cfg(feature = "uniffi")]
+fn amount_unit_from_option(unit: Option<Arc<AmountUnit>>) -> AmountUnit {
+    unit.map(|unit| *unit).unwrap_or_else(AmountUnit::bitcoin)
+}
+
+#[cfg(feature = "uniffi")]
+fn event_log_trimable_id_from_position(id: u64) -> EventLogTrimableId {
+    EventLogTrimableId::from(id)
+}
+
+#[cfg(feature = "uniffi")]
+fn peer_connection_status_records(
+    statuses: BTreeMap<PeerId, PeerStatus>,
+) -> Vec<Arc<PeerConnectionStatus>> {
+    statuses
+        .into_iter()
+        .map(|(peer, status)| match status {
+            PeerStatus::Disconnected => PeerConnectionStatus {
+                peer: peer.into(),
+                connected: false,
+                connectivity: None,
+            },
+            PeerStatus::Connected(connectivity) => PeerConnectionStatus {
+                peer: peer.into(),
+                connected: true,
+                connectivity: Some(format!("{connectivity:?}")),
+            },
+        })
+        .map(Arc::new)
+        .collect()
+}
+
+#[cfg(feature = "uniffi")]
+fn event_persistence_from_record(persist: String) -> Result<EventPersistence, ClientError> {
+    match persist.as_str() {
+        "transient" => Ok(EventPersistence::Transient),
+        "trimable" => Ok(EventPersistence::Trimable),
+        "persistent" => Ok(EventPersistence::Persistent),
+        other => Err(client_error(format!(
+            "Invalid event persistence: {other}. Expected transient, trimable, or persistent"
+        ))),
+    }
+}
+
+#[cfg(feature = "uniffi")]
+fn system_time_to_usecs(time: SystemTime) -> Result<u64, ClientError> {
+    let micros = time
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| client_error(err.to_string()))?
+        .as_micros();
+
+    u64::try_from(micros).map_err(|_| client_error("Timestamp exceeds u64 microsecond range"))
+}
+
+#[cfg(feature = "uniffi")]
+fn event_log_id_from_position(id: u64) -> Result<EventLogId, ClientError> {
+    id.to_string()
+        .parse::<EventLogId>()
+        .map_err(|err| client_error(format!("Invalid event log id: {err}")))
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait BalanceChangeCallback: Send + Sync {
+    fn on_balance_change(&self, balance: Amount);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait ConnectionStatusCallback: Send + Sync {
+    fn on_connection_status(&self, peers: Vec<Arc<PeerConnectionStatus>>);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait TransactionUpdateCallback: Send + Sync {
+    fn on_transaction_update(&self, update: Arc<TransactionState>);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait EventLogCallback: Send + Sync {
+    fn on_event(&self, event: Arc<PersistedLogEntry>);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait TransientEventCallback: Send + Sync {
+    fn on_event(&self, event: Arc<EventLogEntry>);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait EventLogUpdateCallback: Send + Sync {
+    fn on_update(&self);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait RecoveryProgressCallback: Send + Sync {
+    fn on_recovery_progress(&self, progress: RecoveryProgressRecord);
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+impl ClientHandle {
+    pub fn get_metrics(&self) -> Result<String, ClientError> {
+        Client::get_metrics().map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn connection_status_stream(
+        &self,
+        callback: Box<dyn ConnectionStatusCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let task_client = client.clone();
+        let _ = client.spawn_cancellable("uniffi-connection-status-stream", async move {
+            let stream = task_client.connection_status_stream();
+            futures::pin_mut!(stream);
+            while let Some(statuses) = stream.next().await {
+                callback.on_connection_status(peer_connection_status_records(statuses));
+            }
+        });
+
+        Ok(())
+    }
+
+    pub fn federation_reconnect(&self) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client.federation_reconnect();
+        Ok(())
+    }
+
+    pub fn spawn_federation_reconnect(&self) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client.spawn_federation_reconnect();
+        Ok(())
+    }
+
+    pub async fn get_balance(&self) -> Result<Amount, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .get_balance_for_btc()
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub async fn get_balance_for_unit(&self, unit: Arc<AmountUnit>) -> Result<Amount, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .get_balance_for_unit(*unit)
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn subscribe_balance_changes(
+        &self,
+        unit: Option<Arc<AmountUnit>>,
+        callback: Box<dyn BalanceChangeCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let unit = amount_unit_from_option(unit);
+        let task_client = client.clone();
+        let _ = client.spawn_cancellable("uniffi-subscribe-balance-changes", async move {
+            let mut stream = task_client.subscribe_balance_changes(unit).await;
+            while let Some(balance) = stream.next().await {
+                callback.on_balance_change(balance);
+            }
+        });
+
+        Ok(())
+    }
+
+    pub async fn get_config(&self) -> Result<JsonClientConfigRecord, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(JsonClientConfigRecord {
+            json: serde_json::to_string(&client.get_config_json().await)
+                .map_err(|err| client_error(err.to_string()))?,
+        })
+    }
+
+    pub fn get_federation_id(&self) -> Result<FederationId, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.federation_id())
+    }
+
+    pub fn api_secret(&self) -> Result<Option<String>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.api_secret().clone())
+    }
+
+    pub async fn core_api_version(&self) -> Result<ApiVersion, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.core_api_version().await)
+    }
+
+    pub async fn chain_id(&self) -> Result<ChainId, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .chain_id()
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn has_module(&self, instance: u16) -> Result<bool, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.has_module(instance))
+    }
+
+    pub fn get_internal_payment_markers(&self) -> Result<Arc<InternalPaymentMarkers>, ClientError> {
+        let client = client_for_handle(self)?;
+        let (public_key, short_channel_id) = client
+            .get_internal_payment_markers()
+            .map_err(|err| client_error(err.to_string()))?;
+
+        Ok(Arc::new(InternalPaymentMarkers {
+            public_key: Arc::new(public_key.into()),
+            short_channel_id,
+        }))
+    }
+
+    pub fn get_config_meta(&self, key: String) -> Result<Option<String>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.get_config_meta(&key))
+    }
+
+    pub async fn get_meta_expiration_timestamp(&self) -> Result<Option<u64>, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .get_meta_expiration_timestamp()
+            .await
+            .map(system_time_to_usecs)
+            .transpose()
+    }
+
+    pub async fn get_active_operations(&self) -> Result<Vec<Arc<OperationId>>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .get_active_operations()
+            .await
+            .into_iter()
+            .map(Arc::new)
+            .collect())
+    }
+
+    pub async fn operation_exists(
+        &self,
+        operation_id: Arc<OperationId>,
+    ) -> Result<bool, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.operation_exists(*operation_id).await)
+    }
+
+    pub async fn has_active_states(
+        &self,
+        operation_id: Arc<OperationId>,
+    ) -> Result<bool, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.has_active_states(*operation_id).await)
+    }
+
+    pub async fn transaction_updates(
+        &self,
+        operation_id: Arc<OperationId>,
+        callback: Box<dyn TransactionUpdateCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let operation_id = *operation_id;
+        let task_client = client.clone();
+        let _ = client.spawn_cancellable("uniffi-transaction-updates", async move {
+            let mut updates = task_client
+                .transaction_updates(operation_id)
+                .await
+                .update_stream;
+            while let Some(update) = updates.next().await {
+                callback.on_transaction_update(Arc::new(TransactionState::from(update)));
+            }
+        });
+
+        Ok(())
+    }
+
+    pub fn get_first_instance(&self, module_kind: String) -> Result<Option<u16>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.get_first_instance(&ModuleKind::clone_from_str(&module_kind)))
+    }
+
+    pub fn primary_module_for_unit(
+        &self,
+        unit: Arc<AmountUnit>,
+    ) -> Result<Option<u16>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .primary_module_for_unit(*unit)
+            .map(|(module_id, _module)| module_id))
+    }
+
+    pub fn primary_module_for_btc(&self) -> Result<Option<u16>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .primary_module_for_unit(AmountUnit::BITCOIN)
+            .map(|(module_id, _module)| module_id))
+    }
+
+    pub async fn get_invite_code(&self, peer: u16) -> Result<Option<Arc<InviteCode>>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.invite_code(PeerId::from(peer)).await.map(Arc::new))
+    }
+
+    pub async fn get_operation(
+        &self,
+        operation_id: Arc<OperationId>,
+    ) -> Result<Option<Arc<OperationLogEntry>>, ClientError> {
+        let client = client_for_handle(self)?;
+        let operation_id = *operation_id;
+
+        Ok(client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .map(OperationLogEntry::from)
+            .map(Arc::new))
+    }
+
+    pub async fn list_operations(
+        &self,
+        limit: Option<u64>,
+        last_seen: Option<Arc<crate::db::ChronologicalOperationLogKey>>,
+    ) -> Result<Vec<OperationRecord>, ClientError> {
+        let client = client_for_handle(self)?;
+        let last_seen = last_seen.map(|key| *key);
+        let limit = if limit.is_none() && last_seen.is_none() {
+            usize::MAX
+        } else {
+            usize::try_from(limit.unwrap_or(usize::MAX as u64))
+                .map_err(|_| client_error("Operation limit exceeds usize range"))?
+        };
+        let operations = client
+            .operation_log()
+            .paginate_operations_rev(limit, last_seen)
+            .await;
+
+        Ok(operations
+            .into_iter()
+            .map(|(key, entry)| OperationRecord {
+                key: Arc::new(key),
+                entry: Arc::new(OperationLogEntry::from(entry)),
+            })
+            .collect())
+    }
+
+    pub async fn get_event_log(
+        &self,
+        pos: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<Vec<Arc<PersistedLogEntry>>, ClientError> {
+        let client = client_for_handle(self)?;
+        let pos = pos.map(event_log_id_from_position).transpose()?;
+        let limit = limit
+            .unwrap_or(DEFAULT_EVENT_LOG_PAGE_SIZE)
+            .min(MAX_EVENT_LOG_PAGE_SIZE);
+        let events = client.get_event_log(pos, limit).await;
+
+        Ok(events.into_iter().map(Arc::new).collect())
+    }
+
+    pub async fn get_event_log_trimable(
+        &self,
+        pos: Option<u64>,
+        limit: Option<u64>,
+    ) -> Result<Vec<Arc<PersistedLogEntry>>, ClientError> {
+        let client = client_for_handle(self)?;
+        let pos = pos.map(event_log_trimable_id_from_position);
+        let limit = limit
+            .unwrap_or(DEFAULT_EVENT_LOG_PAGE_SIZE)
+            .min(MAX_EVENT_LOG_PAGE_SIZE);
+        let events = client.get_event_log_trimable(pos, limit).await;
+
+        Ok(events.into_iter().map(Arc::new).collect())
+    }
+
+    pub fn get_event_log_transient_receiver(
+        &self,
+        callback: Box<dyn TransientEventCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let mut receiver = client.get_event_log_transient_receiver();
+        let _ = client.spawn_cancellable("uniffi-transient-event-log", async move {
+            while let Ok(event) = receiver.recv().await {
+                callback.on_event(Arc::new(event));
+            }
+        });
+
+        Ok(())
+    }
+
+    pub fn log_event_added_rx(
+        &self,
+        callback: Box<dyn EventLogUpdateCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let mut receiver = client.log_event_added_rx();
+        let _ = client.spawn_cancellable("uniffi-event-log-updates", async move {
+            while receiver.changed().await.is_ok() {
+                callback.on_update();
+            }
+        });
+
+        Ok(())
+    }
+
+    pub async fn log_event_raw(
+        &self,
+        kind: String,
+        module_kind: Option<String>,
+        module_id: Option<u16>,
+        payload: Vec<u8>,
+        persist: String,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let module = module_kind.map(|kind| {
+            (
+                ModuleKind::clone_from_str(&kind),
+                module_id.unwrap_or_default(),
+            )
+        });
+        let persist = event_persistence_from_record(persist)?;
+        let mut dbtx = client.db.begin_transaction().await;
+        client
+            .log_event_raw_dbtx(&mut dbtx, EventKind::from(kind), module, payload, persist)
+            .await;
+        dbtx.commit_tx().await;
+
+        Ok(())
+    }
+
+    pub async fn session_count(&self) -> Result<u64, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .api
+            .session_count()
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn has_pending_recoveries(&self) -> Result<bool, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.has_pending_recoveries())
+    }
+
+    pub async fn wait_for_all_recoveries(&self) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .wait_for_all_recoveries()
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub async fn wait_for_module_kind_recovery(
+        &self,
+        module_kind: String,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .wait_for_module_kind_recovery(ModuleKind::clone_from_str(&module_kind))
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub async fn wait_for_all_active_state_machines(&self) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .wait_for_all_active_state_machines()
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub fn subscribe_to_recovery_progress(
+        &self,
+        callback: Box<dyn RecoveryProgressCallback>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let task_client = client.clone();
+        let _ = client.spawn_cancellable("uniffi-subscribe-recovery-progress", async move {
+            let mut stream = task_client.subscribe_to_recovery_progress();
+            while let Some((module_id, progress)) = stream.next().await {
+                callback.on_recovery_progress(RecoveryProgressRecord {
+                    module_id,
+                    complete: progress.complete,
+                    total: progress.total,
+                });
+            }
+        });
+
+        Ok(())
+    }
+
+    pub async fn get_metadata(&self) -> Result<Arc<Metadata>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(Arc::new(client.get_metadata().await))
+    }
+
+    pub async fn set_metadata(&self, metadata: Arc<Metadata>) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client.set_metadata(metadata.as_ref()).await;
+        Ok(())
+    }
+
+    pub async fn await_primary_bitcoin_module_output(
+        &self,
+        operation_id: Arc<OperationId>,
+        out_point: Arc<OutPoint>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .await_primary_bitcoin_module_output(*operation_id, *out_point)
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub async fn await_primary_bitcoin_module_outputs(
+        &self,
+        operation_id: Arc<OperationId>,
+        outputs: Vec<Arc<OutPoint>>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let outputs = outputs.into_iter().map(|out_point| *out_point).collect();
+        client
+            .await_primary_bitcoin_module_outputs(*operation_id, outputs)
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
+
+    pub async fn get_peer_url_announcements(&self) -> Result<Vec<Arc<PeerUrl>>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .get_peer_url_announcements()
+            .await
+            .into_iter()
+            .map(|(peer, announcement)| {
+                Arc::new(PeerUrl {
+                    peer: peer.into(),
+                    url: announcement.api_announcement.api_url.to_string(),
+                })
+            })
+            .collect())
+    }
+
+    pub async fn get_guardian_metadata(&self) -> Result<Vec<Arc<PeerJson>>, ClientError> {
+        let client = client_for_handle(self)?;
+        client
+            .get_guardian_metadata()
+            .await
+            .into_iter()
+            .map(|(peer, metadata)| {
+                Ok(Arc::new(PeerJson {
+                    peer: peer.into(),
+                    json: serde_json::to_string(&metadata)
+                        .map_err(|err| client_error(err.to_string()))?,
+                }))
+            })
+            .collect()
+    }
+
+    pub async fn get_peer_urls(&self) -> Result<Vec<Arc<PeerUrl>>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .get_peer_urls()
+            .await
+            .into_iter()
+            .map(|(peer, url)| {
+                Arc::new(PeerUrl {
+                    peer: peer.into(),
+                    url: url.to_string(),
+                })
+            })
+            .collect())
+    }
+
+    pub async fn get_guardian_public_keys_blocking(
+        &self,
+    ) -> Result<Vec<Arc<PeerPublicKey>>, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client
+            .get_guardian_public_keys_blocking()
+            .await
+            .into_iter()
+            .map(|(peer, public_key)| {
+                Arc::new(PeerPublicKey {
+                    peer: peer.into(),
+                    public_key: Arc::new(public_key.into()),
+                })
+            })
+            .collect())
+    }
+
+    pub fn iroh_enable_dht(&self) -> Result<bool, ClientError> {
+        let client = client_for_handle(self)?;
+        Ok(client.iroh_enable_dht())
+    }
+
+    #[allow(deprecated)]
+    pub async fn backup_to_federation(
+        &self,
+        metadata: Option<Arc<Metadata>>,
+    ) -> Result<(), ClientError> {
+        let client = client_for_handle(self)?;
+        let metadata = metadata
+            .map(|metadata| metadata.as_ref().clone())
+            .unwrap_or_else(Metadata::empty);
+
+        client
+            .backup_to_federation(metadata)
+            .await
+            .map_err(|err| client_error(err.to_string()))
+    }
 }

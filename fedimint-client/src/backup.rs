@@ -30,6 +30,7 @@ use crate::secret::DeriveableSecretClientExt;
 /// A backup can have a blob of extra data encoded in it. We provide methods to
 /// use json encoding, but clients are free to use their own encoding.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Metadata(Vec<u8>);
 
 impl Metadata {
@@ -64,6 +65,46 @@ impl Metadata {
     /// Attempt to deserialize metadata as untyped json (`serde_json::Value`)
     pub fn to_json_value(&self) -> Result<serde_json::Value> {
         Ok(serde_json::from_slice(&self.0)?)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum MetadataError {
+    #[error("Invalid metadata json: {msg}")]
+    InvalidJson { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl Metadata {
+    #[uniffi::constructor]
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self::from_raw(bytes)
+    }
+
+    #[uniffi::constructor]
+    pub fn from_json(json: String) -> std::result::Result<Self, MetadataError> {
+        let value: serde_json::Value =
+            serde_json::from_str(&json).map_err(|err| MetadataError::InvalidJson {
+                msg: err.to_string(),
+            })?;
+        Ok(Self::from_json_serialized(value))
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+
+    pub fn json(&self) -> Option<String> {
+        self.to_json_value()
+            .ok()
+            .and_then(|value| serde_json::to_string(&value).ok())
+    }
+
+    #[uniffi::method(name = "is_empty")]
+    pub fn is_empty_uniffi(&self) -> bool {
+        self.is_empty()
     }
 }
 

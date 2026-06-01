@@ -30,6 +30,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 /// DB prefixes hardcoded for use of the event log
 /// `fedimint-eventlog` was extracted from `fedimint-client` to help
 /// include/re-use in other part of the code. But fundamentally its role
@@ -221,6 +224,7 @@ impl UnorderedEventLogEntry {
 }
 
 #[derive(Debug, Encodable, Decodable, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct EventLogEntry {
     /// Type/kind of the event
     ///
@@ -265,8 +269,41 @@ impl EventLogEntry {
     }
 }
 
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl EventLogEntry {
+    pub fn kind(&self) -> String {
+        self.kind.to_string()
+    }
+
+    #[uniffi::method(name = "module_kind")]
+    pub fn module_kind_uniffi(&self) -> Option<String> {
+        self.module_kind().map(ToString::to_string)
+    }
+
+    #[uniffi::method(name = "module_id")]
+    pub fn module_id_uniffi(&self) -> Option<ModuleInstanceId> {
+        self.module_id()
+    }
+
+    pub fn timestamp_usecs(&self) -> u64 {
+        self.ts_usecs
+    }
+
+    pub fn payload(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    pub fn payload_json(&self) -> Option<String> {
+        serde_json::from_slice::<serde_json::Value>(&self.payload)
+            .ok()
+            .and_then(|value| serde_json::to_string(&value).ok())
+    }
+}
+
 /// An `EventLogEntry` that was already persisted (so has an id)
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct PersistedLogEntry {
     id: EventLogId,
     inner: EventLogEntry,
@@ -396,6 +433,23 @@ impl PersistedLogEntry {
 
     pub fn as_raw(&self) -> &EventLogEntry {
         &self.inner
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl PersistedLogEntry {
+    #[uniffi::method(name = "id")]
+    pub fn id_uniffi(&self) -> u64 {
+        u64::from(self.id)
+    }
+
+    pub fn entry(&self) -> std::sync::Arc<EventLogEntry> {
+        std::sync::Arc::new(self.inner.clone())
+    }
+
+    pub fn json(&self) -> String {
+        serde_json::to_string(self).expect("Persisted log entry JSON serialization should not fail")
     }
 }
 

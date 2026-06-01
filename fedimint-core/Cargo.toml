@@ -12,6 +12,7 @@ version = { workspace = true }
 development = ["tokio-test"]
 
 [features]
+uniffi = ["dep:uniffi"]
 
 [lib]
 name = "fedimint_core"
@@ -64,6 +65,7 @@ subtle = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
 url = { workspace = true, features = ["serde"] }
 z32 = { workspace = true }
 

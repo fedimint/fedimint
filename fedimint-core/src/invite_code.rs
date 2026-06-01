@@ -25,7 +25,52 @@ use crate::{NumPeersExt, PeerId};
 ///   * At least one Api entry is present
 ///   * At least one Federation ID is present
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct InviteCode(Vec<InviteCodePart>);
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum InviteCodeError {
+    #[error("Invalid invite code: {msg}")]
+    Invalid { msg: String },
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export]
+impl InviteCode {
+    #[uniffi::constructor]
+    pub fn parse(code: String) -> Result<Self, InviteCodeError> {
+        code.parse()
+            .map_err(|err: anyhow::Error| InviteCodeError::Invalid {
+                msg: err.to_string(),
+            })
+    }
+
+    #[uniffi::method(name = "code")]
+    pub fn code_uniffi(&self) -> String {
+        self.to_string()
+    }
+
+    #[uniffi::method(name = "url")]
+    pub fn url_uniffi(&self) -> String {
+        self.url().to_string()
+    }
+
+    #[uniffi::method(name = "api_secret")]
+    pub fn api_secret_uniffi(&self) -> Option<String> {
+        self.api_secret()
+    }
+
+    #[uniffi::method(name = "peer")]
+    pub fn peer_uniffi(&self) -> u16 {
+        self.peer().into()
+    }
+
+    #[uniffi::method(name = "federation_id")]
+    pub fn federation_id_uniffi(&self) -> FederationId {
+        self.federation_id()
+    }
+}
 
 impl Decodable for InviteCode {
     fn consensus_decode_partial<R: Read>(
