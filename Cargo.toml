@@ -135,14 +135,14 @@ async-lock = "3.4"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.88"
-axum = "0.8.8"
+axum = "0.8.9"
 axum-auth = "0.8.1"
-axum-extra = "0.12.5"
+axum-extra = "0.12.6"
 backon = { version = "1.5.1", default-features = false }
 backtrace = "0.3.76"
 base64 = "0.22.1"
 base64-url = "3.0.0"
-bcrypt = "0.19.0"
+bcrypt = "0.19.1"
 bdk_esplora = { version = "0.22.1", default-features = false }
 bdk_wallet = "2.3.0"
 bech32 = "0.11.1"
@@ -291,7 +291,7 @@ opentelemetry = "0.28.0"
 opentelemetry-otlp = { version = "0.28.0", features = ["trace", "grpc-tonic"] }
 opentelemetry_sdk = { version = "0.28.0", features = ["rt-tokio"] }
 parity-scale-codec = "3.7.5"
-pin-project = "1.1.11"
+pin-project = "1.1.13"
 pkarr = { version = "3.10.0", default-features = false }
 proc-macro2 = "1.0"
 prometheus = "0.14.0"
@@ -316,11 +316,11 @@ rocksdb = { version = "0.24.0" }
 rustls-pki-types = { version = "1.12.0" }
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
-semver = "1.0.27"
+semver = "1.0.28"
 send_wrapper = "0.6.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde-big-array = "0.5.1"
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 serde_millis = "0.1.1"
 serde_with = { version = "3", features = ["hex"] }
 serdect = "0.2.0"
@@ -331,7 +331,7 @@ strum_macros = "0.27"
 substring = "1.4.5"
 subtle = "2.6.1"
 syn = "2.0"
-tar = "0.4.45"
+tar = "0.4.46"
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.12.0-alpha" }
 tempfile = "3.20.0"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
@@ -344,24 +344,24 @@ tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.18"
 tokio-test = "0.4.5"
 tokio-util = "0.7.18"
-tonic = "0.14.5"
+tonic = "0.14.6"
 tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }
 tower = { version = "0.4.13", default-features = false }
-tower-http = { version = "0.6.8", features = ["cors"] }
+tower-http = { version = "0.6.11", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.12.0-alpha" }
 tracing = "0.1.44"
 tracing-opentelemetry = "0.29.0"
-tracing-subscriber = "0.3.22"
+tracing-subscriber = "0.3.23"
 tracing-test = "0.2.6"
 url = "2.5.4"
 wasm-bindgen = "=0.2.106" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.56"
 wasm-bindgen-test = "0.3.56"
 web-sys = "0.3.83"
-webpki-roots = "1.0.6"
+webpki-roots = "1.0.7"
 z32 = "1"
 
 [workspace.lints.clippy]
