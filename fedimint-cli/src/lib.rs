@@ -17,9 +17,10 @@ mod utils;
 mod visualize;
 
 use core::fmt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::io::{IsTerminal, Read, Write};
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
@@ -36,6 +37,7 @@ use cli::{
 use envs::SALT_FILE;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
+use fedimint_api_client::download_from_invite_code;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ApiSecretKey;
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
@@ -43,7 +45,7 @@ use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
-use fedimint_connectors::ConnectorRegistry;
+use fedimint_connectors::{Connectivity, ConnectorRegistry};
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::ModuleInstanceId;
@@ -64,10 +66,10 @@ use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
-use futures::future::pending;
+use futures::future::{join_all, pending};
 use itertools::Itertools;
 use rand::thread_rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -133,6 +135,75 @@ impl fmt::Display for CliOutput {
         )
     }
 }
+
+#[derive(Debug, Serialize)]
+struct FederationPrivacyReport {
+    federation_id: FederationId,
+    guardians: BTreeMap<String, GuardianPrivacyReport>,
+    summary: FederationPrivacySummary,
+}
+
+#[derive(Debug, Serialize)]
+struct GuardianPrivacyReport {
+    name: String,
+    api_url: SafeUrl,
+    addresses: BTreeMap<String, IpInfoReport>,
+    iroh: Option<IrohConnectionReport>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct IrohConnectionReport {
+    node_id: String,
+    connectivity: &'static str,
+    direct_addr: Option<String>,
+    relay_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+struct IpInfoReport {
+    address_type: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    asn: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    as_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    org: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FederationPrivacySummary {
+    guardian_count: usize,
+    iroh_guardian_count: usize,
+    resolved_guardian_count: usize,
+    iroh_direct_guardian_count: usize,
+    iroh_relayed_guardian_count: usize,
+    public_ip_count: usize,
+    countries: BTreeMap<String, usize>,
+    autonomous_systems: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IpWhoResponse {
+    success: Option<bool>,
+    message: Option<String>,
+    country_code: Option<String>,
+    country: Option<String>,
+    connection: Option<IpWhoConnection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IpWhoConnection {
+    asn: Option<u64>,
+    org: Option<String>,
+    isp: Option<String>,
+}
+
+const IP_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// `Result` with `CliError` as `Error`
 type CliResult<E> = Result<E, CliError>;
@@ -372,6 +443,360 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
     )
 }
 
+async fn query_guardian_addresses(
+    connectors: &ConnectorRegistry,
+    endpoints: &BTreeMap<PeerId, fedimint_core::config::PeerUrl>,
+    path_timeout: Duration,
+) -> Vec<(PeerId, GuardianPrivacyReport)> {
+    join_all(endpoints.iter().map(|(peer_id, peer_url)| async move {
+        let mut report = GuardianPrivacyReport {
+            name: peer_url.name.clone(),
+            api_url: peer_url.url.clone(),
+            addresses: BTreeMap::new(),
+            iroh: None,
+            error: None,
+        };
+
+        if peer_url.url.scheme() == "iroh" {
+            match connectors.iroh_peer_info(&peer_url.url, path_timeout).await {
+                Ok(Some(iroh_info)) => {
+                    let direct_addr = iroh_info.direct_addr;
+                    let known_direct_addrs = iroh_info.known_direct_addrs;
+                    let known_direct_ips = known_direct_addrs
+                        .iter()
+                        .chain(direct_addr.iter())
+                        .map(std::net::SocketAddr::ip)
+                        .collect::<BTreeSet<_>>();
+
+                    report.addresses = ip_info_map_from_ips(known_direct_ips);
+                    report.iroh = Some(IrohConnectionReport {
+                        node_id: iroh_info.node_id,
+                        connectivity: connectivity_name(iroh_info.connectivity),
+                        direct_addr: direct_addr.map(|addr| addr.to_string()),
+                        relay_url: iroh_info.relay_url,
+                    });
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    report.error = Some(error.to_string());
+                }
+            }
+        } else {
+            match resolve_endpoint_ips(&peer_url.url).await {
+                Ok(ips) => {
+                    report.addresses = ip_info_map_from_ips(ips);
+                }
+                Err(error) => {
+                    report.error = Some(error.to_string());
+                }
+            }
+        }
+
+        (*peer_id, report)
+    }))
+    .await
+}
+
+fn ip_info_map_from_ips(ips: BTreeSet<IpAddr>) -> BTreeMap<String, IpInfoReport> {
+    ips.into_iter()
+        .map(|ip| {
+            (
+                ip.to_string(),
+                IpInfoReport {
+                    address_type: ip_address_type(ip),
+                    ..IpInfoReport::default()
+                },
+            )
+        })
+        .collect()
+}
+
+async fn resolve_endpoint_ips(url: &SafeUrl) -> anyhow::Result<BTreeSet<IpAddr>> {
+    let host = url
+        .host_str()
+        .context("endpoint URL does not contain a host")?;
+    if let Ok(ip) = IpAddr::from_str(host) {
+        return Ok(BTreeSet::from([ip]));
+    }
+
+    let port = endpoint_resolution_port(url).ok_or_else(|| {
+        format_err!(
+            "endpoint URL scheme {} does not have a known resolution port",
+            url.scheme()
+        )
+    })?;
+
+    let addresses = tokio::net::lookup_host((host, port))
+        .await
+        .with_context(|| format!("failed to resolve endpoint host {host}"))?
+        .map(|addr| addr.ip())
+        .collect();
+
+    Ok(addresses)
+}
+
+fn endpoint_resolution_port(url: &SafeUrl) -> Option<u16> {
+    url.port_or_known_default().or(match url.scheme() {
+        "http" | "ws" => Some(80),
+        "https" | "wss" => Some(443),
+        _ => None,
+    })
+}
+
+fn all_iroh_guardians_direct(reports: &[(PeerId, GuardianPrivacyReport)]) -> bool {
+    reports
+        .iter()
+        .filter(|(_, report)| report.api_url.scheme() == "iroh")
+        .all(|(_, report)| {
+            report
+                .iroh
+                .as_ref()
+                .is_some_and(|iroh| matches!(iroh.connectivity, "direct" | "mixed"))
+        })
+}
+
+async fn enrich_guardian_ip_info(reports: &mut [(PeerId, GuardianPrivacyReport)]) {
+    let http_client = reqwest::Client::builder()
+        .timeout(IP_LOOKUP_TIMEOUT)
+        .build()
+        .expect("IP lookup HTTP client config is valid");
+    let unique_ips = reports
+        .iter()
+        .flat_map(|(_, report)| {
+            report
+                .addresses
+                .iter()
+                .filter(|(_, ip_info)| ip_info.address_type == "public")
+                .filter_map(|(ip, _)| IpAddr::from_str(ip).ok())
+        })
+        .collect::<BTreeSet<_>>();
+
+    let lookup_cache = join_all(unique_ips.into_iter().map(|ip| {
+        let http_client = http_client.clone();
+        async move { (ip.to_string(), lookup_ip_info(&http_client, ip).await) }
+    }))
+    .await
+    .into_iter()
+    .collect::<BTreeMap<_, _>>();
+
+    for (_, report) in reports {
+        for (ip, ip_info) in &mut report.addresses {
+            if let Some(lookup) = lookup_cache.get(ip) {
+                *ip_info = IpInfoReport {
+                    address_type: ip_info.address_type,
+                    ..lookup.clone()
+                };
+            }
+        }
+    }
+}
+
+async fn lookup_ip_info(http_client: &reqwest::Client, ip: IpAddr) -> IpInfoReport {
+    let url = format!("https://ipwho.is/{ip}");
+    let response = http_client
+        .get(url)
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status);
+
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            return IpInfoReport {
+                address_type: "public",
+                country: None,
+                asn: None,
+                as_name: None,
+                org: None,
+                error: Some(error.to_string()),
+            };
+        }
+    };
+
+    match response.json::<IpWhoResponse>().await {
+        Ok(body) if body.success.unwrap_or(true) => {
+            let connection = body.connection;
+            let asn = connection
+                .as_ref()
+                .and_then(|connection| connection.asn)
+                .map(|asn| format!("AS{asn}"));
+            let org = connection
+                .as_ref()
+                .and_then(|connection| connection.org.clone());
+            let as_name = org
+                .clone()
+                .or_else(|| connection.and_then(|connection| connection.isp));
+
+            IpInfoReport {
+                address_type: "public",
+                country: body.country_code.or(body.country),
+                asn,
+                as_name,
+                org,
+                error: None,
+            }
+        }
+        Ok(body) => IpInfoReport {
+            address_type: "public",
+            country: None,
+            asn: None,
+            as_name: None,
+            org: None,
+            error: Some(
+                body.message
+                    .unwrap_or_else(|| "IP lookup service returned an error".to_owned()),
+            ),
+        },
+        Err(error) => IpInfoReport {
+            address_type: "public",
+            country: None,
+            asn: None,
+            as_name: None,
+            org: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
+fn summarize_privacy_report<'a>(
+    reports: impl IntoIterator<Item = &'a GuardianPrivacyReport>,
+) -> FederationPrivacySummary {
+    let mut countries = BTreeMap::new();
+    let mut autonomous_systems = BTreeMap::new();
+    let mut unique_public_ips = BTreeSet::new();
+    let reports = reports.into_iter().collect::<Vec<_>>();
+
+    for report in &reports {
+        let mut guardian_countries = BTreeSet::new();
+        let mut guardian_autonomous_systems = BTreeSet::new();
+
+        unique_public_ips.extend(
+            report
+                .addresses
+                .iter()
+                .filter(|(_, ip_info)| ip_info.address_type == "public")
+                .map(|(ip, _)| ip.clone()),
+        );
+
+        for ip_info in report
+            .addresses
+            .values()
+            .filter(|ip_info| ip_info.address_type == "public")
+        {
+            if let Some(country) = &ip_info.country {
+                guardian_countries.insert(country.clone());
+            }
+            let as_label = match (&ip_info.asn, &ip_info.as_name) {
+                (Some(asn), Some(as_name)) => Some(format!("{asn} {as_name}")),
+                (Some(asn), None) => Some(asn.clone()),
+                (None, Some(as_name)) => Some(as_name.clone()),
+                (None, None) => None,
+            };
+            if let Some(as_label) = as_label {
+                guardian_autonomous_systems.insert(as_label);
+            }
+        }
+
+        for country in guardian_countries {
+            *countries.entry(country).or_insert(0) += 1;
+        }
+        for autonomous_system in guardian_autonomous_systems {
+            *autonomous_systems.entry(autonomous_system).or_insert(0) += 1;
+        }
+    }
+
+    FederationPrivacySummary {
+        guardian_count: reports.len(),
+        iroh_guardian_count: reports
+            .iter()
+            .filter(|report| report.api_url.scheme() == "iroh")
+            .count(),
+        resolved_guardian_count: reports
+            .iter()
+            .filter(|report| !report.addresses.is_empty())
+            .count(),
+        iroh_direct_guardian_count: reports
+            .iter()
+            .filter(|report| {
+                report
+                    .iroh
+                    .as_ref()
+                    .is_some_and(|iroh| matches!(iroh.connectivity, "direct" | "mixed"))
+            })
+            .count(),
+        iroh_relayed_guardian_count: reports
+            .iter()
+            .filter(|report| {
+                report
+                    .iroh
+                    .as_ref()
+                    .is_some_and(|iroh| iroh.connectivity == "relay")
+            })
+            .count(),
+        public_ip_count: unique_public_ips.len(),
+        countries,
+        autonomous_systems,
+    }
+}
+
+fn connectivity_name(connectivity: Connectivity) -> &'static str {
+    match connectivity {
+        Connectivity::Direct => "direct",
+        Connectivity::Relay => "relay",
+        Connectivity::Mixed => "mixed",
+        Connectivity::Tor => "tor",
+        Connectivity::Unknown => "unknown",
+    }
+}
+
+fn ip_address_type(ip: IpAddr) -> &'static str {
+    match ip {
+        IpAddr::V4(ip) => {
+            if ip.is_private() {
+                "private"
+            } else if ip.is_loopback() {
+                "loopback"
+            } else if ip.is_link_local() {
+                "link_local"
+            } else if ip.is_broadcast() {
+                "broadcast"
+            } else if matches!(
+                ip.octets(),
+                [192, 0, 2, _] | [198, 51, 100, _] | [203, 0, 113, _]
+            ) {
+                "documentation"
+            } else if matches!(ip.octets(), [100, second, _, _] if (64..=127).contains(&second)) {
+                "shared"
+            } else if matches!(ip.octets(), [198, 18 | 19, _, _]) {
+                "benchmark"
+            } else if ip.is_multicast() {
+                "multicast"
+            } else if ip.is_unspecified() {
+                "unspecified"
+            } else {
+                "public"
+            }
+        }
+        IpAddr::V6(ip) => {
+            if ip.is_loopback() {
+                "loopback"
+            } else if ip.is_unspecified() {
+                "unspecified"
+            } else if ip.is_unique_local() {
+                "unique_local"
+            } else if ip.is_unicast_link_local() {
+                "link_local"
+            } else if ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8 {
+                "documentation"
+            } else if ip.is_multicast() {
+                "multicast"
+            } else {
+                "public"
+            }
+        }
+    }
+}
+
 pub struct FedimintCli {
     module_inits: ClientModuleInitRegistry,
     cli_args: Opts,
@@ -522,6 +947,81 @@ impl FedimintCli {
         log_expiration_notice(&client).await;
 
         Ok(client)
+    }
+
+    async fn federation_ip_query(
+        &self,
+        cli: &Opts,
+        invite_code: &InviteCode,
+        path_timeout: Duration,
+        require_direct: bool,
+    ) -> CliResult<FederationPrivacyReport> {
+        let connectors = cli.make_endpoints().await.map_err_cli()?;
+        let (config, _api) = download_from_invite_code(&connectors, invite_code)
+            .await
+            .map_err_cli_msg("failed to download federation config from invite code")?;
+
+        let federation_id = config.calculate_federation_id();
+        let endpoints = config.global.api_endpoints;
+        if require_direct
+            && !endpoints
+                .values()
+                .any(|peer_url| peer_url.url.scheme() == "iroh")
+        {
+            return Err(CliError {
+                error: "--require-direct requires at least one iroh guardian endpoint".to_owned(),
+            });
+        }
+        let report_timeout = if require_direct {
+            Duration::ZERO
+        } else {
+            path_timeout
+        };
+        let mut guardian_reports =
+            query_guardian_addresses(&connectors, &endpoints, report_timeout).await;
+
+        if require_direct {
+            let deadline = fedimint_core::time::now() + path_timeout;
+            while !all_iroh_guardians_direct(&guardian_reports)
+                && fedimint_core::time::now() < deadline
+            {
+                runtime::sleep(Duration::from_millis(250)).await;
+                guardian_reports =
+                    query_guardian_addresses(&connectors, &endpoints, Duration::ZERO).await;
+            }
+
+            if !all_iroh_guardians_direct(&guardian_reports) {
+                let not_direct = guardian_reports
+                    .iter()
+                    .filter(|(_, report)| {
+                        report.api_url.scheme() == "iroh"
+                            && !report
+                                .iroh
+                                .as_ref()
+                                .is_some_and(|iroh| matches!(iroh.connectivity, "direct" | "mixed"))
+                    })
+                    .map(|(peer_id, _)| peer_id.to_string())
+                    .join(", ");
+                return Err(CliError {
+                    error: format!(
+                        "not all iroh guardians reached a direct path within {path_timeout:?}; pending peers: {not_direct}"
+                    ),
+                });
+            }
+        }
+
+        enrich_guardian_ip_info(&mut guardian_reports).await;
+        let summary = summarize_privacy_report(guardian_reports.iter().map(|(_, report)| report));
+        let guardians = guardian_reports
+            .into_iter()
+            .map(|(peer_id, report)| (peer_id.to_string(), report))
+            .collect();
+
+        Ok(FederationPrivacyReport {
+            federation_id,
+            guardians,
+            summary,
+        })
     }
 
     async fn client_recover(
@@ -1124,6 +1624,23 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
                 let count = client.api().session_count().await?;
                 Ok(CliOutput::EpochCount { count })
+            }
+            Command::Dev(DevCmd::QueryFederationIps {
+                invite_code,
+                path_timeout_seconds,
+                require_direct,
+            }) => {
+                let report = self
+                    .federation_ip_query(
+                        &cli,
+                        &invite_code,
+                        Duration::from_secs(path_timeout_seconds),
+                        require_direct,
+                    )
+                    .await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(report).expect("privacy report is serializable"),
+                ))
             }
             Command::Dev(DevCmd::Config) => {
                 let client = self.client_open(&cli).await?;

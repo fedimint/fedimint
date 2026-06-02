@@ -316,6 +316,22 @@ Examples:
     /// Gets the current fedimint AlephBFT block count
     SessionCount,
 
+    /// Show public guardian IPs and iroh connection paths from an invite code
+    #[command(
+        name = "query-federation-ips",
+        visible_aliases = ["federation-ip-query", "iroh-ip-query"]
+    )]
+    QueryFederationIps {
+        invite_code: InviteCode,
+        /// Time to wait for iroh to discover a direct path to each guardian
+        #[arg(long, default_value = "5")]
+        path_timeout_seconds: u64,
+        /// Fail unless every iroh guardian reaches a direct or mixed path
+        /// before timeout
+        #[arg(long)]
+        require_direct: bool,
+    },
+
     /// Returns the client config
     Config,
 
