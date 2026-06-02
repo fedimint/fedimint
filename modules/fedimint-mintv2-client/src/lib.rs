@@ -852,7 +852,8 @@ impl MintClientModule {
             self.remove_spendable_note(dbtx, spendable_note).await;
         }
 
-        let ecash = ECash::new(self.federation_id, notes);
+        let invite = self.client_ctx.get_invite_code().await;
+        let ecash = ECash::new_with_invite(notes, &invite);
         let amount = ecash.amount();
         let operation_id = OperationId::new_random();
 

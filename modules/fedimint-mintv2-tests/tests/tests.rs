@@ -140,6 +140,15 @@ async fn send_and_receive() -> anyhow::Result<()> {
 
         let ecash: ECash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash).unwrap();
 
+        // The sender embeds the federation invite code so a recipient can join
+        // the issuing federation directly from the received ecash.
+        assert_eq!(
+            ecash
+                .federation_invite()
+                .map(|invite| invite.federation_id()),
+            Some(client_send.federation_id()),
+        );
+
         let operation_id = client_receive
             .get_first_module::<MintClientModule>()?
             .receive(ecash, Value::Null)
