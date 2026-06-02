@@ -865,6 +865,21 @@ mod tests {
         },
     }
 
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    struct DerivedTestStruct {
+        vec: Vec<u8>,
+        num: u32,
+    }
+
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    struct DerivedTestTupleStruct(Vec<u8>, u32);
+
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    enum DerivedTestEnum {
+        Foo(Option<u64>),
+        Bar { bazz: Vec<u8> },
+    }
+
     #[test_log::test]
     fn test_derive_enum_no_default_roundtrip_success() {
         let enums = [
@@ -925,13 +940,7 @@ mod tests {
 
     #[test_log::test]
     fn test_derive_struct() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        struct TestStruct {
-            vec: Vec<u8>,
-            num: u32,
-        }
-
-        let reference = TestStruct {
+        let reference = DerivedTestStruct {
             vec: vec![1, 2, 3],
             num: 42,
         };
@@ -942,10 +951,7 @@ mod tests {
 
     #[test_log::test]
     fn test_derive_tuple_struct() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        struct TestStruct(Vec<u8>, u32);
-
-        let reference = TestStruct(vec![1, 2, 3], 42);
+        let reference = DerivedTestTupleStruct(vec![1, 2, 3], 42);
         let bytes = [3, 1, 2, 3, 42];
 
         test_roundtrip_expected(&reference, &bytes);
@@ -953,17 +959,11 @@ mod tests {
 
     #[test_log::test]
     fn test_derive_enum() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        enum TestEnum {
-            Foo(Option<u64>),
-            Bar { bazz: Vec<u8> },
-        }
-
         let test_cases = [
-            (TestEnum::Foo(Some(42)), vec![0, 2, 1, 42]),
-            (TestEnum::Foo(None), vec![0, 1, 0]),
+            (DerivedTestEnum::Foo(Some(42)), vec![0, 2, 1, 42]),
+            (DerivedTestEnum::Foo(None), vec![0, 1, 0]),
             (
-                TestEnum::Bar {
+                DerivedTestEnum::Bar {
                     bazz: vec![1, 2, 3],
                 },
                 vec![1, 4, 3, 1, 2, 3],
