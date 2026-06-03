@@ -13,8 +13,8 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_mintv2_client::{
-    ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, ReceivePaymentEvent,
-    ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendPaymentEvent,
+    ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, MintOperationMeta,
+    ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendPaymentEvent,
 };
 use fedimint_mintv2_common::KIND;
 use fedimint_mintv2_server::MintInit;
@@ -168,6 +168,84 @@ async fn send_and_receive() -> anyhow::Result<()> {
     }
 
     ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client_send = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+    let client_receive = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&RECEIVE_SK))
+        .await;
+
+    issue_ecash(&client_send, Amount::from_sats(11_000)).await?;
+
+    // Receive several times so the receiver's note inventory — and therefore the
+    // rebalance-driven fee — differs between iterations (first into an empty
+    // wallet, then into a progressively more populated one).
+    for i in 0..5 {
+        let ecash = client_send
+            .get_first_module::<MintClientModule>()?
+            .send(Amount::from_sats(1_000), Value::Null)
+            .await?;
+        let ecash: ECash = base32::decode_prefixed(
+            FEDIMINT_PREFIX,
+            &base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
+        )
+        .unwrap();
+
+        let mint = client_receive.get_first_module::<MintClientModule>()?;
+        let ecash_value = ecash.amount();
+
+        let quote = mint.receive_fee_quote(&ecash).await?;
+        let before = client_receive.get_balance_for_btc().await?;
+
+        let operation_id = mint.receive(ecash, Value::Null).await?;
+        let state = mint
+            .await_final_receive_operation_state(operation_id)
+            .await?;
+        ensure!(state == FinalReceiveOperationState::Success);
+
+        // The receive state machine reports `Success` once the tx is accepted,
+        // but the reissued (change) notes are credited by the output state
+        // machines. Wait for those before reading the settled balance.
+        let MintOperationMeta::Receive {
+            change_outpoint_range,
+            ..
+        } = client_receive
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .expect("operation exists")
+            .meta::<MintOperationMeta>()
+        else {
+            panic!("expected a receive operation");
+        };
+        client_receive
+            .await_primary_bitcoin_module_outputs(
+                operation_id,
+                change_outpoint_range.into_iter().collect(),
+            )
+            .await?;
+
+        let after = client_receive.get_balance_for_btc().await?;
+        let actual_fee = ecash_value - (after - before);
+
+        ensure!(
+            quote.total == actual_fee,
+            "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
+        );
+        ensure!(
+            quote.total == quote.input + quote.output + quote.dust,
+            "iteration {i}: breakdown {quote:?} does not sum to total"
+        );
+    }
 
     Ok(())
 }
