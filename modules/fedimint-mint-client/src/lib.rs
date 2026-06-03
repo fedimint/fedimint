@@ -1246,6 +1246,22 @@ pub enum ReissueExternalNotesError {
     AlreadyReissued,
 }
 
+/// Breakdown of the fee reissuing external notes would incur, as computed by
+/// [`MintClientModule::reissue_fee_quote`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReissueFeeQuote {
+    /// Total fee: everything the reissued value does not become a net wallet
+    /// gain.
+    pub total: Amount,
+    /// Fees charged on the spent (input) notes — both the external notes and
+    /// any of the wallet's own notes pulled in by consolidation.
+    pub input: Amount,
+    /// Fees charged on the newly minted (output) notes.
+    pub output: Amount,
+    /// Sub-denomination remainder that cannot form a note and is lost.
+    pub dust: Amount,
+}
+
 impl MintClientModule {
     async fn create_sufficient_input(
         &self,
@@ -1747,6 +1763,82 @@ impl MintClientModule {
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, &secret)
+    }
+
+    /// Computes the exact fee `reissue_external_notes(oob_notes)` would incur
+    /// given the wallet's current note inventory, without submitting anything.
+    ///
+    /// Runs the same change generation the real reissue does
+    /// (`create_final_inputs_and_outputs`, including note consolidation)
+    /// against a non-committable transaction that is dropped rather than
+    /// committed, so the wallet's notes are read but left untouched. The
+    /// quote is point-in-time: it depends on the current inventory and can
+    /// move as notes change.
+    pub async fn reissue_fee_quote(&self, oob_notes: &OOBNotes) -> anyhow::Result<ReissueFeeQuote> {
+        let input_amount = oob_notes.total_amount();
+        // The reissue's explicit inputs are the external notes; the federation's
+        // fees on those are the starting `output_amount` for change generation.
+        let external_input_fees: Amount = oob_notes
+            .notes()
+            .iter_items()
+            .map(|(amount, _)| self.cfg.fee_consensus.fee(amount))
+            .sum();
+
+        // Non-committable: writes are discarded on drop, so this is a pure
+        // dry-run over the real inventory.
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        // Disambiguate from the blanket `IClientModule` method of the same name.
+        let (inputs, outputs) = ClientModule::create_final_inputs_and_outputs(
+            self,
+            &mut dbtx.to_ref_nc(),
+            OperationId::new_random(),
+            AmountUnit::BITCOIN,
+            input_amount,
+            external_input_fees,
+        )
+        .await?;
+        // This is a dry-run: the change generation writes to `dbtx` (e.g.
+        // removing consolidated notes), but we intentionally drop it without
+        // committing. Mark it so the commit tracker doesn't warn on drop.
+        dbtx.ignore_uncommitted();
+
+        // Consolidation may pull additional wallet notes in as inputs and mint
+        // additional outputs; all outputs become the user's new notes.
+        let consolidation_input: Amount = inputs
+            .inputs()
+            .iter()
+            .map(|i| i.amounts.get_bitcoin())
+            .sum();
+        let output_value: Amount = outputs
+            .outputs()
+            .iter()
+            .map(|o| o.amounts.get_bitcoin())
+            .sum();
+
+        let consolidation_input_fees: Amount = inputs
+            .inputs()
+            .iter()
+            .map(|i| self.cfg.fee_consensus.fee(i.amounts.get_bitcoin()))
+            .sum();
+        let output_fees: Amount = outputs
+            .outputs()
+            .iter()
+            .map(|o| self.cfg.fee_consensus.fee(o.amounts.get_bitcoin()))
+            .sum();
+
+        // Net wallet gain = minted outputs − wallet notes consumed. The total
+        // fee is everything the reissued value did not become a net gain;
+        // whatever is left after the explicit input/output fees is dust.
+        let total = (input_amount + consolidation_input).saturating_sub(output_value);
+        let input = external_input_fees + consolidation_input_fees;
+        let dust = total.saturating_sub(input + output_fees);
+
+        Ok(ReissueFeeQuote {
+            total,
+            input,
+            output: output_fees,
+            dust,
+        })
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them

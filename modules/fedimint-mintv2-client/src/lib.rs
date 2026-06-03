@@ -992,6 +992,10 @@ impl MintClientModule {
                 ecash_input_fees,
             )
             .await?;
+        // This is a dry-run: the change generation writes to `dbtx` (e.g.
+        // removing rebalanced notes), but we intentionally drop it without
+        // committing. Mark it so the commit tracker doesn't warn on drop.
+        dbtx.ignore_uncommitted();
 
         let unit = self.cfg.amount_unit;
         let amount_of = |amounts: &Amounts| amounts.get(&unit).copied().unwrap_or_default();
