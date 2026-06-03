@@ -43,7 +43,7 @@ use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule,
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -53,8 +53,8 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::module::{
-    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion,
-    ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon,
+    ModuleConsensusVersion, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
@@ -830,6 +830,35 @@ impl WalletClientModule {
             address,
             tweak_idx,
         }
+    }
+
+    /// Computes the federation fee claiming an on-chain deposit (peg-in) of
+    /// `amount` would incur, without submitting anything.
+    ///
+    /// When a deposit is claimed, the client submits a transaction with a
+    /// single wallet input worth the deposit value; the primary module
+    /// balances it by minting the ecash credited to the wallet. This quotes
+    /// the fee of that transaction — the wallet (peg-in) input fee, the
+    /// mint output fees, and any sub-denomination dust — via the shared,
+    /// module-agnostic fee quote.
+    ///
+    /// This is the *federation* transaction fee only; the on-chain Bitcoin
+    /// miner fee paid to confirm the deposit is separate and not included
+    /// here.
+    pub async fn receive_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+        let amount = fedimint_core::Amount::from_sats(amount.to_sat());
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: AmountUnit::BITCOIN,
+                    input_amount: amount,
+                    output_amount: fedimint_core::Amount::ZERO,
+                    input_fee: self.cfg().fee_consensus.peg_in_abs,
+                    output_fee: fedimint_core::Amount::ZERO,
+                },
+            )
+            .await
     }
 
     /// Fetches the fees that would need to be paid to make the withdraw request
