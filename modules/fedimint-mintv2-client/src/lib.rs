@@ -33,7 +33,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
@@ -126,21 +126,6 @@ pub enum MintOperationMeta {
         ecash: String,
         custom_meta: Value,
     },
-}
-
-/// Breakdown of the fee a `receive` would incur, as computed by
-/// [`MintClientModule::receive_fee_quote`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReceiveFeeQuote {
-    /// Total fee: everything the ecash value does not become a net wallet gain.
-    pub total: Amount,
-    /// Fees charged on the spent (input) notes — both the ecash and any notes
-    /// pulled in by rebalancing.
-    pub input: Amount,
-    /// Fees charged on the newly minted (output) notes.
-    pub output: Amount,
-    /// Sub-denomination remainder that cannot form a note and is lost.
-    pub dust: Amount,
 }
 
 #[derive(Debug, Clone)]
@@ -992,69 +977,20 @@ impl MintClientModule {
     /// rather than committed, so the client's notes are read but left
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<ReceiveFeeQuote> {
-        let notes = ecash.notes();
-        let input_amount: Amount = notes.iter().map(SpendableNote::amount).sum();
-        // The receive's explicit inputs are the ecash notes; the federation's
-        // fees on those are the starting `output_amount` for change generation.
-        let ecash_input_fees: Amount = notes
-            .iter()
-            .map(|note| self.cfg.fee_consensus.fee(note.amount()))
-            .sum();
+    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+        // Build the same partial transaction `receive` would submit — the ecash
+        // notes as explicit inputs — and let the shared, module-agnostic fee
+        // quote run the primary-module balancing (rebalancing + minting change)
+        // as a dry-run over the real inventory.
+        let operation_id = OperationId::new_random();
+        let input =
+            Self::create_input_bundle(operation_id, ecash.notes(), true, self.cfg.amount_unit);
+        let input = self.client_ctx.make_client_inputs(input);
+        let tx_builder = TransactionBuilder::new().with_inputs(input);
 
-        // Non-committable: writes (remove_spendable_note, ...) are discarded on
-        // drop, so this is a pure dry-run over the real inventory.
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
-        let (inputs, outputs) = self
-            .create_final_inputs_and_outputs(
-                &mut dbtx.to_ref_nc(),
-                OperationId::new_random(),
-                self.cfg.amount_unit,
-                input_amount,
-                ecash_input_fees,
-            )
-            .await?;
-        // This is a dry-run: the change generation writes to `dbtx` (e.g.
-        // removing rebalanced notes), but we intentionally drop it without
-        // committing. Mark it so the commit tracker doesn't warn on drop.
-        dbtx.ignore_uncommitted();
-
-        let unit = self.cfg.amount_unit;
-        let amount_of = |amounts: &Amounts| amounts.get(&unit).copied().unwrap_or_default();
-
-        // Rebalancing may pull additional existing notes in as inputs and mint
-        // additional outputs; all outputs become the user's new notes.
-        let rebalance_input: Amount = inputs.inputs().iter().map(|i| amount_of(&i.amounts)).sum();
-        let output_value: Amount = outputs
-            .outputs()
-            .iter()
-            .map(|o| amount_of(&o.amounts))
-            .sum();
-
-        let rebalance_input_fees: Amount = inputs
-            .inputs()
-            .iter()
-            .map(|i| self.cfg.fee_consensus.fee(amount_of(&i.amounts)))
-            .sum();
-        let output_fees: Amount = outputs
-            .outputs()
-            .iter()
-            .map(|o| self.cfg.fee_consensus.fee(amount_of(&o.amounts)))
-            .sum();
-
-        // Net wallet gain = minted outputs − existing notes consumed. The total
-        // fee is everything the ecash value did not become a net gain; whatever
-        // is left after the explicit input/output fees is sub-denomination dust.
-        let total = (input_amount + rebalance_input).saturating_sub(output_value);
-        let input = ecash_input_fees + rebalance_input_fees;
-        let dust = total.saturating_sub(input + output_fees);
-
-        Ok(ReceiveFeeQuote {
-            total,
-            input,
-            output: output_fees,
-            dust,
-        })
+        self.client_ctx
+            .fee_quote(operation_id, self.cfg.amount_unit, &tx_builder)
+            .await
     }
 
     /// Await the final state of the receive operation.

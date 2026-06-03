@@ -38,7 +38,7 @@ use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, InactiveStateMeta, State};
-use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
+use crate::transaction::{ClientInputBundle, ClientOutputBundle, FeeQuote, TransactionBuilder};
 use crate::{AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates, oplog};
 
 pub mod init;
@@ -83,6 +83,15 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange>;
+
+    /// Computes the fee finalizing and submitting `tx_builder` would incur for
+    /// `unit`, without submitting anything. See `Client::fee_quote`.
+    async fn fee_quote(
+        &self,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        tx_builder: &TransactionBuilder,
+    ) -> anyhow::Result<FeeQuote>;
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
 
@@ -405,6 +414,25 @@ where
                 }),
                 tx_builder,
             )
+            .await
+    }
+
+    /// Computes the fee that finalizing and submitting `tx_builder` would incur
+    /// for `unit`, as a dry-run over the client's current funds, without
+    /// submitting anything. See `Client::fee_quote`.
+    ///
+    /// Build the partial transaction the operation would submit (its explicit
+    /// inputs/outputs), then pass it here to get the fee breakdown the primary
+    /// module's balancing would produce.
+    pub async fn fee_quote(
+        &self,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        tx_builder: &TransactionBuilder,
+    ) -> anyhow::Result<FeeQuote> {
+        self.client
+            .get()
+            .fee_quote(operation_id, unit, tx_builder)
             .await
     }
 
