@@ -26,6 +26,8 @@ pub struct PeerSetupCode {
     pub federation_size: Option<u32>,
     /// Bitcoin network configured locally by the guardian
     pub network: Network,
+    /// Fedimint `x.y.z` cargo release version running on this peer
+    pub fedimint_version: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]

@@ -72,6 +72,8 @@ pub struct LocalParams {
     federation_size: Option<u32>,
     /// Bitcoin network configured locally
     network: bitcoin::Network,
+    /// Fedimint `x.y.z` cargo release version configured locally
+    fedimint_version: String,
 }
 
 impl LocalParams {
@@ -84,8 +86,24 @@ impl LocalParams {
             enabled_modules: self.enabled_modules.clone(),
             federation_size: self.federation_size,
             network: self.network,
+            fedimint_version: self.fedimint_version.clone(),
         }
     }
+}
+
+fn ensure_fedimint_version_matches(
+    peer_setup_code: &PeerSetupCode,
+    local_fedimint_version: &str,
+) -> anyhow::Result<()> {
+    let peer_fedimint_version =
+        fedimint_core::version::release_version(&peer_setup_code.fedimint_version);
+
+    ensure!(
+        peer_fedimint_version == local_fedimint_version,
+        "Guardian uses Fedimint version {peer_fedimint_version} but we use {local_fedimint_version}",
+    );
+
+    Ok(())
 }
 
 /// Serves the config gen API endpoints
@@ -270,6 +288,8 @@ impl ISetupApi for SetupApi {
                 enabled_modules,
                 federation_size,
                 network: self.settings.network,
+                fedimint_version: fedimint_core::version::release_version(&self.code_version_str)
+                    .to_owned(),
             }
         } else {
             let (tls_cert, tls_key) =
@@ -300,6 +320,8 @@ impl ISetupApi for SetupApi {
                 enabled_modules,
                 federation_size,
                 network: self.settings.network,
+                fedimint_version: fedimint_core::version::release_version(&self.code_version_str)
+                    .to_owned(),
             }
         };
 
@@ -331,6 +353,8 @@ impl ISetupApi for SetupApi {
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
         );
+
+        ensure_fedimint_version_matches(&info, &local_params.fedimint_version)?;
 
         ensure!(
             info.network == local_params.network,
@@ -403,6 +427,10 @@ impl ISetupApi for SetupApi {
         let our_setup_code = local_params.setup_code();
 
         state.setup_codes.insert(our_setup_code.clone());
+
+        for setup_code in &state.setup_codes {
+            ensure_fedimint_version_matches(setup_code, &local_params.fedimint_version)?;
+        }
 
         ensure!(
             state.setup_codes.len() == 1 || 4 <= state.setup_codes.len(),
@@ -625,6 +653,10 @@ mod tests {
     use super::*;
 
     fn setup_api(network: Network) -> SetupApi {
+        setup_api_with_version(network, "1.2.3-alpha")
+    }
+
+    fn setup_api_with_version(network: Network, version: &str) -> SetupApi {
         let (sender, _receiver) = mpsc::channel(1);
         let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
 
@@ -644,7 +676,7 @@ mod tests {
             },
             MemDatabase::new().into_database(),
             sender,
-            String::new(),
+            version.to_owned(),
             String::new(),
         )
     }
@@ -694,6 +726,64 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("Guardian uses Bitcoin network signet but we use regtest")
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_peer_setup_code_with_different_fedimint_version() {
+        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
+        let peer_api = setup_api_with_version(Network::Regtest, "1.2.4-beta");
+
+        setup_code(&api, "local").await;
+        let peer_code = setup_code(&peer_api, "peer").await;
+
+        let err = api
+            .add_peer_setup_code(peer_code)
+            .await
+            .expect_err("peer setup code with different Fedimint version should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("Guardian uses Fedimint version 1.2.4 but we use 1.2.3")
+        );
+    }
+
+    #[tokio::test]
+    async fn accepts_peer_setup_code_with_same_release_fedimint_version() {
+        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
+        let peer_api = setup_api_with_version(Network::Regtest, "1.2.3-beta");
+
+        setup_code(&api, "local").await;
+        let peer_code = setup_code(&peer_api, "peer").await;
+
+        let added_peer = api
+            .add_peer_setup_code(peer_code)
+            .await
+            .expect("peer setup code with same Fedimint release version should be accepted");
+
+        assert_eq!(added_peer, "peer");
+    }
+
+    #[tokio::test]
+    async fn rejects_wrong_fedimint_version_during_dkg() {
+        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
+        let peer_api = setup_api_with_version(Network::Regtest, "1.2.4-beta");
+
+        setup_code(&api, "local").await;
+        let peer_code = setup_code(&peer_api, "peer").await;
+        let peer_code = base32::decode_prefixed(FEDIMINT_PREFIX, &peer_code)
+            .expect("peer setup code should decode");
+
+        api.state.lock().await.setup_codes.insert(peer_code);
+
+        let err = api
+            .start_dkg()
+            .await
+            .expect_err("DKG should reject peer setup code with different Fedimint version");
+
+        assert!(
+            err.to_string()
+                .contains("Guardian uses Fedimint version 1.2.4 but we use 1.2.3")
         );
     }
 }
