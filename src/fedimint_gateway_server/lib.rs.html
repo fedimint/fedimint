@@ -2526,7 +2526,7 @@
 <a href=#2526 id=2526 data-nosnippet>2526</a>            })
 <a href=#2527 id=2527 data-nosnippet>2527</a>        } <span class="kw">else if let </span><span class="prelude-val">Ok</span>(mint_module) = client.get_first_module::&lt;MintV2ClientModule&gt;() {
 <a href=#2528 id=2528 data-nosnippet>2528</a>            <span class="kw">let </span>ecash = mint_module
-<a href=#2529 id=2529 data-nosnippet>2529</a>                .send(payload.amount, serde_json::Value::Null)
+<a href=#2529 id=2529 data-nosnippet>2529</a>                .send(payload.amount, serde_json::Value::Null, <span class="bool-val">true</span>)
 <a href=#2530 id=2530 data-nosnippet>2530</a>                .<span class="kw">await
 <a href=#2531 id=2531 data-nosnippet>2531</a>                </span>.map_err(|e| AdminGatewayError::Unexpected(e.into()))<span class="question-mark">?</span>;
 <a href=#2532 id=2532 data-nosnippet>2532</a>
