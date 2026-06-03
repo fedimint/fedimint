@@ -249,15 +249,16 @@ async fn duplicate_blind_nonce_index() -> anyhow::Result<()> {
         .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
         .await?;
 
-    let await_res = client
+    client
         .transaction_updates(operation_id)
         .await
         .await_tx_accepted(change_range.txid())
-        .await;
+        .await
+        .expect("Transaction with duplicate blind nonce should be accepted (money burned)");
 
     assert!(
-        await_res.is_err(),
-        "Transaction with duplicate blind nonce index should not be accepted"
+        client_mint.api.check_blind_nonce_used(blind_nonce).await?,
+        "Blind nonce should be marked as used after being processed"
     );
 
     Ok(())
@@ -1219,6 +1220,81 @@ async fn test_send_oob_notes() -> anyhow::Result<()> {
             .send_oob_notes(Amount::from_sats(100), ())
             .await?;
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_migrate_db_v2_duplicate_blind_nonce() -> anyhow::Result<()> {
+    use fedimint_core::OutPoint;
+    use fedimint_core::core::ModuleInstanceId;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::{Database, DatabaseTransaction};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::transaction::TransactionId;
+    use fedimint_core::util::BoxStream;
+    use fedimint_mint_common::{BlindNonce, MintOutput, MintOutputV0};
+    use fedimint_mint_server::MintInit;
+    use fedimint_server_core::ServerModuleInit;
+    use fedimint_server_core::migration::{
+        DynModuleHistoryItem, IServerDbMigrationContext, apply_migrations_server,
+    };
+    use std::sync::Arc;
+    use tbs::{BlindingKey, Message, blind_message};
+
+    struct MockServerDbMigrationContext {
+        history: Vec<DynModuleHistoryItem>,
+    }
+
+    #[async_trait::async_trait]
+    impl IServerDbMigrationContext for MockServerDbMigrationContext {
+        async fn get_module_history_stream<'s, 'tx>(
+            &'s self,
+            _module_id: ModuleInstanceId,
+            _dbtx: &'s mut DatabaseTransaction<'tx>,
+        ) -> BoxStream<'s, DynModuleHistoryItem> {
+            Box::pin(futures::stream::iter(self.history.clone()))
+        }
+    }
+
+    let blinding_key = BlindingKey::random();
+    let message = Message::from_bytes(&[0; 8]);
+    let blinded_message = blind_message(message, blinding_key);
+    let blind_nonce = BlindNonce(blinded_message);
+
+    let output1 = MintOutput::V0(MintOutputV0 {
+        amount: fedimint_core::Amount::from_sats(1),
+        blind_nonce,
+    });
+    let output2 = MintOutput::V0(MintOutputV0 {
+        amount: fedimint_core::Amount::from_sats(2),
+        blind_nonce,
+    });
+
+    let txid = TransactionId::from_slice(&[0; 32]).unwrap();
+
+    let history = vec![
+        DynModuleHistoryItem::Output(
+            fedimint_core::core::DynOutput::from_typed(0, output1),
+            OutPoint { txid, out_idx: 0 },
+        ),
+        DynModuleHistoryItem::Output(
+            fedimint_core::core::DynOutput::from_typed(0, output2),
+            OutPoint { txid, out_idx: 1 },
+        ),
+    ];
+
+    let ctx = Arc::new(MockServerDbMigrationContext { history })
+        as Arc<dyn IServerDbMigrationContext + Send + Sync>;
+    let decoders = ModuleDecoderRegistry::from_iter([(0, MintInit::kind(), MintInit.decoder())]);
+    let db = Database::new(MemDatabase::new(), decoders);
+
+    let migrations = MintInit.get_database_migrations();
+
+    // Applying migrations up to v2, which should run migrate_db_v2.
+    // If the panic is not fixed, this will panic because the duplicate
+    // blind nonce will trigger `insert_new_entry` failure.
+    apply_migrations_server(ctx, &db, "mint".to_string(), migrations).await?;
 
     Ok(())
 }
