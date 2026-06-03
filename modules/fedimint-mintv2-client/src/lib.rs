@@ -33,7 +33,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, FeeQuote, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
@@ -978,18 +978,27 @@ impl MintClientModule {
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
     pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
-        // Build the same partial transaction `receive` would submit — the ecash
-        // notes as explicit inputs — and let the shared, module-agnostic fee
-        // quote run the primary-module balancing (rebalancing + minting change)
-        // as a dry-run over the real inventory.
-        let operation_id = OperationId::new_random();
-        let input =
-            Self::create_input_bundle(operation_id, ecash.notes(), true, self.cfg.amount_unit);
-        let input = self.client_ctx.make_client_inputs(input);
-        let tx_builder = TransactionBuilder::new().with_inputs(input);
+        // A receive submits the ecash notes as explicit inputs and no explicit
+        // outputs; the shared, module-agnostic fee quote runs the primary-module
+        // balancing (rebalancing + minting change) over the real inventory.
+        let notes = ecash.notes();
+        let input_amount: Amount = notes.iter().map(SpendableNote::amount).sum();
+        let input_fee: Amount = notes
+            .iter()
+            .map(|note| self.cfg.fee_consensus.fee(note.amount()))
+            .sum();
 
         self.client_ctx
-            .fee_quote(operation_id, self.cfg.amount_unit, &tx_builder)
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: self.cfg.amount_unit,
+                    input_amount,
+                    output_amount: Amount::ZERO,
+                    input_fee,
+                    output_fee: Amount::ZERO,
+                },
+            )
             .await
     }
 

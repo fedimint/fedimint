@@ -63,7 +63,7 @@ use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, FeeQuote, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
@@ -1759,19 +1759,28 @@ impl MintClientModule {
     /// quote is point-in-time: it depends on the current inventory and can
     /// move as notes change.
     pub async fn reissue_fee_quote(&self, oob_notes: &OOBNotes) -> anyhow::Result<FeeQuote> {
-        // Build the same partial transaction `reissue_external_notes` would
-        // submit — the external notes as explicit inputs — and let the shared,
-        // module-agnostic fee quote run the primary-module balancing (note
-        // consolidation + minting change) as a dry-run over the real inventory.
-        let operation_id = OperationId::new_random();
-        let mint_inputs = self.create_input_from_notes(oob_notes.notes().clone())?;
-        let tx_builder = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
-        );
+        // A reissue submits the external notes as explicit inputs and no explicit
+        // outputs; the shared, module-agnostic fee quote runs the primary-module
+        // balancing (note consolidation + minting change) over the real
+        // inventory.
+        let input_amount = oob_notes.total_amount();
+        let input_fee: Amount = oob_notes
+            .notes()
+            .iter_items()
+            .map(|(amount, _)| self.cfg.fee_consensus.fee(amount))
+            .sum();
 
         self.client_ctx
-            .fee_quote(operation_id, AmountUnit::BITCOIN, &tx_builder)
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: AmountUnit::BITCOIN,
+                    input_amount,
+                    output_amount: Amount::ZERO,
+                    input_fee,
+                    output_fee: Amount::ZERO,
+                },
+            )
             .await
     }
 

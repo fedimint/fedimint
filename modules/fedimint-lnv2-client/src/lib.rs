@@ -28,7 +28,7 @@ use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange}
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -36,7 +36,8 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, Operati
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
@@ -834,6 +835,35 @@ impl LightningClientModule {
             .expect("The contract has been generated with our public key");
 
         Ok((invoice, operation_id))
+    }
+
+    /// Computes the federation fee a `receive` of `amount` would incur, without
+    /// submitting anything.
+    ///
+    /// When the incoming contract is claimed, the client submits a transaction
+    /// with a single Lightning input worth the contract amount; the primary
+    /// module balances it by minting the change credited to the wallet. This
+    /// quotes the fee of that transaction — the Lightning input fee, the mint
+    /// output fees, and any sub-denomination dust — via the shared,
+    /// module-agnostic fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: this is
+    /// only the fee of the on-federation transaction. For that reason the quote
+    /// is taken on `amount` directly (rather than the gateway-reduced contract
+    /// amount), and no gateway round-trip is needed.
+    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: AmountUnit::bitcoin(),
+                    input_amount: amount,
+                    output_amount: Amount::ZERO,
+                    input_fee: self.cfg.fee_consensus.fee(amount),
+                    output_fee: Amount::ZERO,
+                },
+            )
+            .await
     }
 
     /// Create an incoming contract locked to a public key derived from the
