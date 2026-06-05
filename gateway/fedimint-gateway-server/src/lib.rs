@@ -425,7 +425,12 @@ async fn withdraw_v2(
     };
 
     let operation_id = wallet_module
-        .send(address.as_unchecked().clone(), withdraw_amount, Some(fee))
+        .send(
+            address.as_unchecked().clone(),
+            withdraw_amount,
+            Some(fee),
+            serde_json::Value::Null,
+        )
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
             failure_reason: e.to_string(),

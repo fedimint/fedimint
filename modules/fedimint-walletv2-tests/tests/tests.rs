@@ -206,7 +206,12 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
         let send_op = client
             .get_first_module::<WalletClientModule>()?
-            .send(address.clone(), Amount::from_sat(10_000), None)
+            .send(
+                address.clone(),
+                Amount::from_sat(10_000),
+                None,
+                serde_json::Value::Null,
+            )
             .await?;
 
         let state = client
