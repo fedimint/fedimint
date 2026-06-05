@@ -28,7 +28,7 @@ use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
+    ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -274,36 +274,6 @@ impl WalletClientModule {
             .await
             .map_err(|e| ReceiveError::FederationError(e.to_string()))?
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)
-    }
-
-    /// Computes the federation fee claiming an on-chain deposit (peg-in) of
-    /// `amount` would incur, without submitting anything.
-    ///
-    /// When a deposit is claimed, the client submits a transaction with a
-    /// single wallet input worth the deposit value (net of the on-chain
-    /// fee); the primary module balances it by minting the ecash credited
-    /// to the wallet. This quotes the fee of that transaction — the wallet
-    /// (peg-in) input fee, the mint output fees, and any sub-denomination
-    /// dust — via the shared, module-agnostic fee quote.
-    ///
-    /// This is the *federation* transaction fee only; the on-chain Bitcoin
-    /// miner fee (see [`Self::receive_fee`]) is separate and not included
-    /// here. For that reason `amount` is the value claimed into the
-    /// federation, i.e. the deposit value already net of the on-chain fee.
-    pub async fn receive_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
-        let amount = Amount::from_sats(amount.to_sat());
-        self.client_ctx
-            .fee_quote(
-                OperationId::new_random(),
-                FeeQuoteRequest {
-                    unit: AmountUnit::BITCOIN,
-                    input_amount: amount,
-                    output_amount: Amount::ZERO,
-                    input_fee: self.cfg.fee_consensus.fee(amount),
-                    output_fee: Amount::ZERO,
-                },
-            )
-            .await
     }
 
     /// Send an onchain payment with the given fee.

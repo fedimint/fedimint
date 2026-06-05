@@ -1794,6 +1794,35 @@ impl LightningClientModule {
             .await
     }
 
+    /// Computes the federation fee a `pay` funding an outgoing contract worth
+    /// `amount` would incur, without submitting anything.
+    ///
+    /// When a payment is sent, the client submits a transaction with a single
+    /// Lightning output (the outgoing contract) worth `amount`; the primary
+    /// module balances it by spending ecash to fund the contract and minting
+    /// any change. This quotes the fee of that transaction — the Lightning
+    /// output fee, the mint input fees on the funding notes, any mint change
+    /// output fees, and sub-denomination dust — via the shared, module-agnostic
+    /// fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: it is
+    /// part of the contract `amount` the gateway claims, not the on-federation
+    /// transaction fee. So `amount` is the full outgoing contract value.
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: AmountUnit::bitcoin(),
+                    input_amount: Amount::ZERO,
+                    output_amount: amount,
+                    input_fee: Amount::ZERO,
+                    output_fee: self.cfg.fee_consensus.contract_output,
+                },
+            )
+            .await
+    }
+
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
