@@ -28,7 +28,7 @@ use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowModuleTypes, EscrowOutput, KIND,
-    Outcome, PendingArbiterFee, Resolution, compute_contract_hash, compute_resolution_message,
+    Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_ESCROW;
 use futures::StreamExt;
@@ -769,20 +769,5 @@ impl EscrowClientModule {
                     }
                 }
             }))
-    }
-
-    pub fn sign_release_message(
-        &self,
-        escrow_id: EscrowId,
-        contract: &EscrowContract,
-    ) -> schnorr::Signature {
-        let msg_bytes = compute_resolution_message(
-            &contract.federation_id,
-            &escrow_id,
-            &Outcome::Release,
-            &contract.contract_hash,
-        );
-        let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
-        Secp256k1::new().sign_schnorr(&msg, &self.keypair)
     }
 }

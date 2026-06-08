@@ -16,6 +16,7 @@ name = "fedimint_escrow_common"
 path = "src/lib.rs"
 
 [dependencies]
+clap = { workspace = true }
 fedimint-core = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

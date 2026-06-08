@@ -1,5 +1,6 @@
 use std::fmt;
 
+use clap::ValueEnum;
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -62,7 +63,9 @@ pub struct EscrowInput {
     pub resolution: Resolution,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable, ValueEnum,
+)]
 pub enum Outcome {
     Release = 0,
     Refund = 1,

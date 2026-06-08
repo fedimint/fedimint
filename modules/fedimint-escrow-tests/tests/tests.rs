@@ -118,7 +118,14 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
     .await?;
 
     let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
-    let buyer_sig = buyer_escrow.sign_release_message(escrow_id, &contract);
+    let msg_bytes = compute_resolution_message(
+        &contract.federation_id,
+        &escrow_id,
+        &Outcome::Release,
+        &contract.contract_hash,
+    );
+    let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
+    let buyer_sig = Secp256k1::new().sign_schnorr(&msg, &buyer_escrow.keypair);
 
     let resolve_op = seller_escrow.resolve_escrow(escrow_id, buyer_sig).await?;
 
