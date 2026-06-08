@@ -153,6 +153,9 @@ impl RecoveryFromHistory for EscrowRecovery {
                     Outcome::Release => EscrowClientStatus::Released,
                     Outcome::Refund => EscrowClientStatus::Refunded,
                 },
+                Resolution::ArbiterFeeClaim {
+                    arbiter_signature: _,
+                } => EscrowClientStatus::FeeClaimed,
             };
         }
         Ok(())

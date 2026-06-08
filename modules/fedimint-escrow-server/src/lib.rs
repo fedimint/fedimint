@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
+use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseValue, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::envs::{FM_ENABLE_MODULE_ESCROW_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -21,8 +24,8 @@ use fedimint_escrow_common::config::{
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput, EscrowInputError,
     EscrowModuleTypes, EscrowOutput, EscrowOutputError, EscrowOutputOutcome, GET_CONTRACT_ENDPOINT,
-    KIND, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
-    compute_resolution_message,
+    GET_PENDING_ARBITER_FEE_ENDPOINT, KIND, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
+    Resolution, compute_contract_hash, compute_resolution_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -37,7 +40,7 @@ use tracing::{debug, info};
 mod db;
 use crate::db::{
     DbKeyPrefix, EscrowContractKey, EscrowContractPrefix, EscrowOutputOutcomeKey,
-    EscrowOutputOutcomePrefix,
+    EscrowOutputOutcomePrefix, PendingArbiterFeeKey, PendingArbiterFeePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -67,6 +70,16 @@ impl ModuleInit for EscrowInit {
                         EscrowContract,
                         contracts,
                         "Escrow Contracts"
+                    );
+                }
+                DbKeyPrefix::PendingArbiterFee => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PendingArbiterFeePrefix,
+                        PendingArbiterFeeKey,
+                        PendingArbiterFee,
+                        contracts,
+                        "Pending Arbiter Fee Claim"
                     );
                 }
                 DbKeyPrefix::OutputOutcome => {
@@ -202,22 +215,21 @@ impl ServerModule for Escrow {
         input: &'b EscrowInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, EscrowInputError> {
-        let contract = dbtx
-            .get_value(&EscrowContractKey(input.escrow_id))
-            .await
-            .ok_or(EscrowInputError::ContractNotFound)?;
-
-        debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
-
-        let verified = verify_contract_hash(&contract.contract_hash, &contract);
-        if !verified {
-            return Err(EscrowInputError::ContractHashMismatch);
-        }
-
         info!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
 
-        let recipient_key = match &input.resolution {
+        match &input.resolution {
             Resolution::BuyerRelease { buyer_signature } => {
+                let contract = dbtx
+                    .get_value(&EscrowContractKey(input.escrow_id))
+                    .await
+                    .ok_or(EscrowInputError::ContractNotFound)?;
+
+                debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
+
+                let verified = verify_contract_hash(&contract.contract_hash, &contract);
+                if !verified {
+                    return Err(EscrowInputError::ContractHashMismatch);
+                }
                 let msg_bytes = compute_resolution_message(
                     &contract.federation_id,
                     &contract.escrow_id,
@@ -232,16 +244,45 @@ impl ServerModule for Escrow {
                     .verify_schnorr(buyer_signature, &msg, &xonly_public_key)
                     .map_err(|_| EscrowInputError::InvalidBuyerSignature)?;
 
-                contract.seller_key
+                dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
+
+                info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
+                Ok(InputMeta {
+                    amount: TransactionItemAmounts {
+                        amounts: Amounts::new_bitcoin(contract.amount),
+                        fees: Amounts::ZERO,
+                    },
+                    pub_key: contract.seller_key,
+                })
             }
             Resolution::ArbiterOutcome {
                 arbiter_signature,
                 outcome,
             } => {
+                let contract = dbtx
+                    .get_value(&EscrowContractKey(input.escrow_id))
+                    .await
+                    .ok_or(EscrowInputError::ContractNotFound)?;
+
+                debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
+
+                let verified = verify_contract_hash(&contract.contract_hash, &contract);
+                if !verified {
+                    return Err(EscrowInputError::ContractHashMismatch);
+                }
                 let now = fedimint_core::time::duration_since_epoch().as_secs();
                 if now < contract.timeout {
                     return Err(EscrowInputError::TimeoutNotReached);
                 }
+
+                let payout_amount = contract
+                    .amount
+                    .checked_sub(contract.arbiter_fee)
+                    .ok_or_else(|| {
+                        EscrowInputError::InternalError(
+                            "arbiter fee exceeds contract amount".into(),
+                        )
+                    })?;
 
                 let msg_bytes = compute_resolution_message(
                     &contract.federation_id,
@@ -255,23 +296,61 @@ impl ServerModule for Escrow {
                     .verify_schnorr(arbiter_signature, &msg, &xonly)
                     .map_err(|_| EscrowInputError::InvalidArbiterSignature)?;
 
-                match outcome {
+                let recipient_key = match outcome {
                     Outcome::Release => contract.seller_key,
                     Outcome::Refund => contract.buyer_key,
-                }
+                };
+
+                dbtx.insert_entry(
+                    &PendingArbiterFeeKey(input.escrow_id),
+                    &PendingArbiterFee {
+                        escrow_id: input.escrow_id,
+                        arbiter_key: contract.arbiter_key,
+                        fee_amount: contract.arbiter_fee,
+                    },
+                )
+                .await;
+
+                dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
+
+                info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
+                Ok(InputMeta {
+                    amount: TransactionItemAmounts {
+                        amounts: Amounts::new_bitcoin(payout_amount),
+                        fees: Amounts::ZERO,
+                    },
+                    pub_key: recipient_key,
+                })
             }
-        };
+            Resolution::ArbiterFeeClaim { arbiter_signature } => {
+                let pending = dbtx
+                    .get_value(&PendingArbiterFeeKey(input.escrow_id))
+                    .await
+                    .ok_or(EscrowInputError::ContractNotFound)?;
 
-        dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
+                let mut engine = sha256::HashEngine::default();
+                engine.input(b"arbiter_fee_claim");
+                engine.input(&input.escrow_id.0);
+                engine.input(&pending.fee_amount.to_bytes());
+                let msg_bytes = sha256::Hash::from_engine(engine).to_byte_array();
+                let msg = secp256k1::Message::from_digest(msg_bytes);
+                let xonly = pending.arbiter_key.x_only_public_key().0;
+                secp256k1::global::SECP256K1
+                    .verify_schnorr(arbiter_signature, &msg, &xonly)
+                    .map_err(|_| EscrowInputError::InvalidArbiterSignature)?;
 
-        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
-        Ok(InputMeta {
-            amount: TransactionItemAmounts {
-                amounts: Amounts::new_bitcoin(contract.amount),
-                fees: Amounts::ZERO,
-            },
-            pub_key: recipient_key,
-        })
+                dbtx.remove_entry(&PendingArbiterFeeKey(input.escrow_id))
+                    .await;
+
+                Ok(InputMeta {
+                    amount: TransactionItemAmounts {
+                        amounts: Amounts::new_bitcoin(pending.fee_amount),
+                        fees: Amounts::ZERO,
+                    },
+                    pub_key: pending.arbiter_key,
+                })
+            }
+        }
     }
 
     // Contract creation
@@ -339,17 +418,30 @@ impl ServerModule for Escrow {
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![api_endpoint! {
-            GET_CONTRACT_ENDPOINT,
-            ApiVersion::new(0, 1),
-            async |_module: &Escrow, context, escrow_id: EscrowId|
-                -> Option<EscrowContract>
-            {
-                let db = context.db();
-                let mut dbtx = db.begin_transaction_nc().await;
-                Ok(dbtx.get_value(&EscrowContractKey(escrow_id)).await)
-            }
-        }]
+        vec![
+            api_endpoint! {
+                GET_CONTRACT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Escrow, context, escrow_id: EscrowId|
+                    -> Option<EscrowContract>
+                {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(dbtx.get_value(&EscrowContractKey(escrow_id)).await)
+                }
+            },
+            api_endpoint! {
+                GET_PENDING_ARBITER_FEE_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Escrow, context, escrow_id: EscrowId|
+                    -> Option<PendingArbiterFee>
+                {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(dbtx.get_value(&PendingArbiterFeeKey(escrow_id)).await)
+                }
+            },
+        ]
     }
 }
 

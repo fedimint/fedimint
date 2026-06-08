@@ -2,11 +2,18 @@ use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFedera
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_escrow_common::{EscrowContract, EscrowId, GET_CONTRACT_ENDPOINT};
+use fedimint_escrow_common::{
+    EscrowContract, EscrowId, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT,
+    PendingArbiterFee,
+};
 
 #[apply(async_trait_maybe_send!)]
 pub trait EscrowFederationApi {
     async fn get_contract(&self, escrow_id: EscrowId) -> FederationResult<Option<EscrowContract>>;
+    async fn get_pending_arbiter_fee(
+        &self,
+        escrow_id: EscrowId,
+    ) -> FederationResult<Option<PendingArbiterFee>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -17,6 +24,17 @@ where
     async fn get_contract(&self, escrow_id: EscrowId) -> FederationResult<Option<EscrowContract>> {
         self.request_current_consensus(
             GET_CONTRACT_ENDPOINT.to_string(),
+            ApiRequestErased::new(escrow_id),
+        )
+        .await
+    }
+
+    async fn get_pending_arbiter_fee(
+        &self,
+        escrow_id: EscrowId,
+    ) -> FederationResult<Option<PendingArbiterFee>> {
+        self.request_current_consensus(
+            GET_PENDING_ARBITER_FEE_ENDPOINT.to_string(),
             ApiRequestErased::new(escrow_id),
         )
         .await

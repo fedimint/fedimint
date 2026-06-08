@@ -31,6 +31,8 @@ pub enum EscrowInputSMState {
     Refunded,
     Released,
     Pending,
+    FeeClaimed,
+    FeeClaiming,
     Failed { reason: String },
 }
 
@@ -68,6 +70,9 @@ impl State for EscrowInputStateMachine {
                                         Outcome::Release => EscrowInputSMState::Released,
                                         Outcome::Refund => EscrowInputSMState::Refunded,
                                     },
+                                    Resolution::ArbiterFeeClaim {
+                                        arbiter_signature: _,
+                                    } => EscrowInputSMState::FeeClaimed,
                                 },
                                 Err(e) => EscrowInputSMState::Failed { reason: e },
                             };
@@ -98,6 +103,39 @@ impl State for EscrowInputStateMachine {
                             EscrowInputStateMachine {
                                 common: old_state.common.clone(),
                                 state: new_state,
+                            }
+                        })
+                    },
+                )]
+            }
+            EscrowInputSMState::FeeClaiming => {
+                let txid = self.common.out_point.txid;
+                let global_context = global.clone();
+
+                vec![StateTransition::new(
+                    async move { global_context.await_tx_accepted(txid).await },
+                    |dbtx, result, old_state: EscrowInputStateMachine| {
+                        Box::pin(async move {
+                            EscrowInputStateMachine {
+                                common: old_state.common.clone(),
+                                state: match result {
+                                    Ok(_) => {
+                                        let _ = dbtx
+                                            .module_tx()
+                                            .insert_entry(
+                                                &ClientEscrowKey(old_state.common.escrow_id),
+                                                &EscrowClientRecord {
+                                                    escrow_id: old_state.common.escrow_id,
+                                                    operation_id: old_state.common.operation_id,
+                                                    amount: old_state.common.amount,
+                                                    status: EscrowClientStatus::FeeClaimed,
+                                                },
+                                            )
+                                            .await;
+                                        EscrowInputSMState::FeeClaimed
+                                    }
+                                    Err(e) => EscrowInputSMState::Failed { reason: e },
+                                },
                             }
                         })
                     },

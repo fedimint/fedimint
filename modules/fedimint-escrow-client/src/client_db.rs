@@ -41,6 +41,7 @@ pub enum EscrowAction {
     Refunded,
     Released,
     Created,
+    ArbiterFeeClaimed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
@@ -50,6 +51,7 @@ pub enum EscrowClientStatus {
     Released,
     Refunded,
     Failed { reason: String },
+    FeeClaimed,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]

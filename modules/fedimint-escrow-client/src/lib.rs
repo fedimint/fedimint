@@ -28,7 +28,7 @@ use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowModuleTypes, EscrowOutput, KIND,
-    Outcome, Resolution, compute_contract_hash, compute_resolution_message,
+    Outcome, PendingArbiterFee, Resolution, compute_contract_hash, compute_resolution_message,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_ESCROW;
 use futures::StreamExt;
@@ -472,8 +472,13 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
+        let payout_amount = contract
+            .amount
+            .checked_sub(contract.arbiter_fee)
+            .ok_or_else(|| anyhow::anyhow!("arbiter fee exceeds contract amount"))?;
+
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(contract.amount),
+            amounts: Amounts::new_bitcoin(payout_amount),
             keys: vec![self.keypair],
             input: EscrowInput {
                 escrow_id,
@@ -536,6 +541,103 @@ impl EscrowClientModule {
             .await?;
 
         Ok(operation_id)
+    }
+
+    pub async fn claim_arbiter_fee(
+        &self,
+        escrow_id: EscrowId,
+        arbiter_signature: schnorr::Signature,
+    ) -> anyhow::Result<OperationId> {
+        let operation_id = OperationId::new_random();
+
+        let pending: PendingArbiterFee = self
+            .client_ctx
+            .module_api()
+            .get_pending_arbiter_fee(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No pending arbiter fee for escrow"))?;
+
+        let input = ClientInput {
+            amounts: Amounts::new_bitcoin(pending.fee_amount),
+            keys: vec![self.keypair],
+            input: EscrowInput {
+                escrow_id,
+                resolution: Resolution::ArbiterFeeClaim { arbiter_signature },
+            },
+        };
+
+        let input_sm = ClientInputSM {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Input(EscrowInputStateMachine {
+                            common: EscrowInputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount: pending.fee_amount,
+                                resolution: Resolution::ArbiterFeeClaim { arbiter_signature },
+                            },
+                            state: EscrowInputSMState::FeeClaiming,
+                        })
+                    })
+                    .collect()
+            }),
+        };
+
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
+        );
+
+        let operation_meta_gen = move |out_point_range: OutPointRange| EscrowOperationMeta {
+            escrow_id,
+            amount: pending.fee_amount,
+            action: EscrowAction::ArbiterFeeClaimed,
+            txid: out_point_range.txid(),
+            out_point_indices: out_point_range.into_iter().map(|op| op.out_idx).collect(),
+        };
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    pub async fn subscribe_fee_claim(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<EscrowInputSMState>> {
+        let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
+        let meta = operation.meta::<EscrowOperationMeta>();
+        let txid = meta.txid;
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                let client_ctx = client_ctx.clone();
+                async_stream::stream! {
+                    yield EscrowInputSMState::FeeClaiming;
+
+                    match client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(txid)
+                        .await
+                    {
+                        Ok(()) => {
+                            yield EscrowInputSMState::FeeClaimed;
+                        }
+                        Err(e) => {
+                            yield EscrowInputSMState::Failed { reason: e.to_string() };
+                        }
+                    }
+                }
+            }))
     }
 
     pub async fn get_contract(
@@ -658,6 +760,7 @@ impl EscrowClientModule {
                                         reason: "unexpected error in resolution".to_string()
                                     };
                                 }
+                                EscrowAction::ArbiterFeeClaimed => yield EscrowInputSMState::FeeClaimed,
                             }
                         }
                         Err(e) => {
