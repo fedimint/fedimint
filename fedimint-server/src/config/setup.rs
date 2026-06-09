@@ -922,6 +922,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+    use base64::Engine as _;
     use bitcoin::Network;
     use fedimint_core::db::IRawDatabaseExt;
     use fedimint_core::db::mem_impl::MemDatabase;
@@ -956,8 +957,8 @@ mod tests {
         )
     }
 
-    const INVALID_RESTORE_BACKUP_FIXTURE: &[u8] =
-        include_bytes!("../test_fixtures/guardian-backup-invalid-config.tar");
+    const INVALID_RESTORE_BACKUP_FIXTURE_B64: &str =
+        include_str!("../test_fixtures/guardian-backup-invalid-config.tar.b64");
 
     async fn setup_code(api: &SetupApi, name: &str) -> String {
         api.set_local_parameters(
@@ -992,9 +993,10 @@ mod tests {
     fn checked_in_backup_fixture_reaches_config_validation() {
         let tempdir = tempfile::tempdir().expect("creating temp dir should succeed");
 
-        let Err(err) =
-            restore_backup_to_dir(INVALID_RESTORE_BACKUP_FIXTURE, "pass", tempdir.path())
-        else {
+        let backup = base64::prelude::BASE64_STANDARD
+            .decode(INVALID_RESTORE_BACKUP_FIXTURE_B64.trim())
+            .expect("checked-in backup fixture base64 should decode");
+        let Err(err) = restore_backup_to_dir(&backup, "pass", tempdir.path()) else {
             panic!("invalid checked-in backup fixture should not restore");
         };
 
