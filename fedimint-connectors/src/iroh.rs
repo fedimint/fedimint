@@ -16,6 +16,7 @@ use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
     IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
 };
+use fedimint_core::net::iroh::{IROH_IDLE_TIMEOUT, IROH_KEEP_ALIVE_INTERVAL};
 
 /// The maximum number of bytes we are willing to buffer when reading an API
 /// response from an iroh QUIC stream. This must be large enough to accommodate
@@ -195,7 +196,10 @@ impl IrohConnector {
                     }
                 }
 
-                let endpoint = builder.bind().await?;
+                let endpoint = builder
+                    .transport_config(quic_transport_config())
+                    .bind()
+                    .await?;
                 debug!(
                     target: LOG_NET_IROH,
                     node_id = %endpoint.node_id(),
@@ -239,7 +243,10 @@ impl IrohConnector {
                 }
             }
 
-            let endpoint = builder.bind().await?;
+            let endpoint = builder
+                .transport_config(quic_transport_config_next())
+                .bind()
+                .await?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.id(),
@@ -515,6 +522,32 @@ impl IrohConnector {
 
         Ok(conn)
     }
+}
+
+/// QUIC transport config with explicit idle timeout and keep-alive
+/// for the stable iroh endpoint.
+fn quic_transport_config() -> iroh::endpoint::TransportConfig {
+    let mut config = iroh::endpoint::TransportConfig::default();
+    config.max_idle_timeout(Some(
+        IROH_IDLE_TIMEOUT
+            .try_into()
+            .expect("idle timeout fits in IdleTimeout"),
+    ));
+    config.keep_alive_interval(Some(IROH_KEEP_ALIVE_INTERVAL));
+    config
+}
+
+/// QUIC transport config with explicit idle timeout and keep-alive
+/// for the next iroh endpoint.
+fn quic_transport_config_next() -> iroh_next::endpoint::QuicTransportConfig {
+    iroh_next::endpoint::QuicTransportConfig::builder()
+        .max_idle_timeout(Some(
+            IROH_IDLE_TIMEOUT
+                .try_into()
+                .expect("idle timeout fits in IdleTimeout"),
+        ))
+        .keep_alive_interval(IROH_KEEP_ALIVE_INTERVAL)
+        .build()
 }
 
 fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::EndpointAddr {
