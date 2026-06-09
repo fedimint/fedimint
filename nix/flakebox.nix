@@ -102,6 +102,7 @@ let
         ".*/clippy\\.toml"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
+        "fedimint-server/src/test_fixtures/.*"
         "docs/.*\\.md"
         "fedimint-ui-common/assets/.*"
       ]
@@ -118,6 +119,7 @@ let
         ".*/proto/.*"
         "db/migrations/.*"
         "devimint/src/cfg/.*"
+        "fedimint-server/src/test_fixtures/.*"
         "scripts/.*"
         "docs/.*\\.md"
         "fedimint-ui-common/assets/.*"
