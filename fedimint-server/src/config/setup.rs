@@ -286,6 +286,11 @@ fn unpack_backup_to_restore_dir(
             path.display()
         );
         ensure!(
+            entry.header().entry_type().is_file(),
+            "Backup archive contains non-file entry {}",
+            path.display()
+        );
+        ensure!(
             restored_paths.insert(path.clone()),
             "Backup archive contains duplicate file {}",
             path.display()
@@ -951,6 +956,9 @@ mod tests {
         )
     }
 
+    const INVALID_RESTORE_BACKUP_FIXTURE: &[u8] =
+        include_bytes!("../test_fixtures/guardian-backup-invalid-config.tar");
+
     async fn setup_code(api: &SetupApi, name: &str) -> String {
         api.set_local_parameters(
             ApiAuth::new(format!("{name}-password")),
@@ -978,6 +986,56 @@ mod tests {
             .expect("peer setup code with matching network should be accepted");
 
         assert_eq!(added_peer, "peer");
+    }
+
+    #[test]
+    fn checked_in_backup_fixture_reaches_config_validation() {
+        let tempdir = tempfile::tempdir().expect("creating temp dir should succeed");
+
+        let Err(err) =
+            restore_backup_to_dir(INVALID_RESTORE_BACKUP_FIXTURE, "pass", tempdir.path())
+        else {
+            panic!("invalid checked-in backup fixture should not restore");
+        };
+
+        assert!(
+            err.to_string().contains("Reading restored config"),
+            "unexpected restore error: {err:#}"
+        );
+        assert!(
+            !tempdir.path().join("restore.tmp").exists(),
+            "failed restore should clean up staging dir"
+        );
+    }
+
+    #[test]
+    fn backup_restore_rejects_non_file_entries() {
+        let tempdir = tempfile::tempdir().expect("creating temp dir should succeed");
+        let mut backup = Vec::new();
+        {
+            let mut archive = tar::Builder::new(&mut backup);
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Directory);
+            header.set_size(0);
+            header.set_cksum();
+            archive
+                .append_data(
+                    &mut header,
+                    PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+                    std::io::empty(),
+                )
+                .expect("writing tar entry should succeed");
+            archive.finish().expect("finishing tar should succeed");
+        }
+
+        let Err(err) = restore_backup_to_dir(&backup, "pass", tempdir.path()) else {
+            panic!("non-file backup entries should be rejected");
+        };
+
+        assert!(
+            err.to_string().contains("non-file entry"),
+            "unexpected restore error: {err:#}"
+        );
     }
 
     #[tokio::test]

@@ -242,6 +242,10 @@ pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
 /// checks that are fine for generated configs but too panic-prone for uploaded
 /// restore data. This preflights the same key/certificate material and returns
 /// a normal restore error before any files are installed.
+///
+/// Keep this in sync with the panic points in `ServerConfig::tls_config()`:
+/// missing `private.tls_key`, malformed TLS private-key hex, malformed TLS
+/// certificate hex, and malformed TLS private-key DER.
 fn validate_restored_tcp_config(cfg: &ServerConfig) -> anyhow::Result<()> {
     let tls_key = cfg
         .private

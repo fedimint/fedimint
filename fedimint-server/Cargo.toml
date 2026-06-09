@@ -74,6 +74,7 @@ url = { workspace = true }
 z32 = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 test-log = { workspace = true }
 
 [build-dependencies]
