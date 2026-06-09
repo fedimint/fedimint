@@ -477,36 +477,20 @@ impl GatewayClientModule {
 
     /// Attempt fulfill HTLC by buying preimage from the federation.
     ///
-    /// Idempotent across replays: the `operation_id` is derived
-    /// deterministically from the HTLC's payment hash, so if the gateway's
-    /// LND HTLC interceptor stream reconnects and LND replays a
-    /// still-pending HTLC, this returns the existing `operation_id` instead
-    /// of failing to re-submit the transaction, leaving the in-flight
-    /// completion state machine responsible for resolving the HTLC.
+    /// LND can replay a still-pending HTLC after interceptor reconnect or
+    /// gatewayd restart. Since the operation id is deterministic from the
+    /// payment hash, the replay must not re-fetch the consumed federation offer
+    /// or submit the same funding transaction again.
     ///
-    /// The short-circuit fires only while an active *completion* state machine
-    /// (`GatewayCompleteStateMachine`) is handling this exact HTLC circuit
-    /// (matching `operation_id` plus `incoming_chan_id`/`htlc_id`), not merely
-    /// when the operation exists or has any active state. Cases that fall
-    /// through and are failed back via the unmatched-HTLC path instead of being
-    /// left pending until timeout:
-    ///
-    /// - a replay whose original operation already reached a terminal state
-    /// - a payment hash whose active operation is a direct swap (no completion
-    ///   SM)
-    /// - a different circuit for the same payment hash (an MPP part or sender
-    ///   retry), which the existing completion SM would not resolve
-    ///
-    /// Re-emitting a terminal operation's original outcome (settling a success
-    /// on the new circuit instead of cancelling) is a follow-up.
+    /// We only short-circuit if an active `GatewayCompleteStateMachine` is
+    /// handling the exact same LND circuit. Terminal operations, direct swaps
+    /// with the same payment hash, and different circuits fall through to the
+    /// normal failure/cancel path.
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
-        // Check this BEFORE `create_funding_incoming_contract_output_from_htlc`:
-        // the first handling consumes the federation offer, so a replay that
-        // re-fetches it fails with "Timed out fetching the offer" otherwise. We
-        // match the full circuit key, not just `operation_id`; see the doc
-        // comment above for why narrower predicates are wrong.
+        // Check before the funding helper: the first handling consumes the
+        // federation offer. Match the full circuit key, not just `operation_id`.
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
         let replay_of_active_circuit = self
             .client_ctx
@@ -535,13 +519,8 @@ impl GatewayClientModule {
         let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
-        // The two derivations MUST stay in sync (`OperationId(htlc.payment_hash
-        // .to_byte_array())` in both places); a divergence would submit the
-        // transaction under one id while the caller observes another. Nothing has
-        // been submitted yet at this point, so we `ensure!` (propagates an error
-        // that the caller turns into a clean cancel/fail-back) rather than
-        // `assert!`, which would panic this spawned HTLC task and strand the HTLC
-        // until LND times it out.
+        // Keep the direct derivation above in sync with the funding helper. Return
+        // an error instead of panicking so the caller can fail back the HTLC cleanly.
         anyhow::ensure!(
             op_id_from_funding == operation_id,
             "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
@@ -556,17 +535,9 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
-        // The replay check above is a best-effort fast path, not the correctness
-        // boundary: gatewayd handles HTLCs concurrently (one task per HTLC), so
-        // this atomic operation-exists guard is what actually prevents
-        // double-funding.
-        //
-        // Pre-existing limitation, narrowed (not closed) by the fast path: if the
-        // SAME circuit is replayed while the original handler is still between its
-        // scan and this commit, both miss the fast path, the loser fails here, and
-        // the caller cancels that circuit, racing the winner's settle on the same
-        // circuit. Fully closing it (treat a duplicate-operation error for this
-        // circuit as a replay, or serialize per payment hash) is a follow-up.
+        // The replay check above is only a fast path. Concurrent duplicate
+        // submissions are rejected here; avoiding the resulting cancel/settle race
+        // for the same circuit is a follow-up.
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
