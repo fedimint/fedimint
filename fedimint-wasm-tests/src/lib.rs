@@ -275,7 +275,6 @@ mod tests {
                 &SelectNotesWithAtleastAmount,
                 Amount::from_sats(11),
                 Duration::from_secs(10000),
-                false,
                 (),
             )
             .await?;
@@ -310,7 +309,6 @@ mod tests {
                     &SelectNotesWithAtleastAmount,
                     amount,
                     Duration::from_secs(10000),
-                    false,
                     (),
                 )
                 .await?;

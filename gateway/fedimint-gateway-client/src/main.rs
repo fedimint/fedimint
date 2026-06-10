@@ -15,7 +15,6 @@ use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_connectors::error::ServerError;
-use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
@@ -47,7 +46,7 @@ pub enum CliOutput {
     Mnemonic(MnemonicResponse),
     PaymentLog(PaymentLogResponse),
     PaymentSummary(PaymentSummaryResponse),
-    InviteCodes(BTreeMap<FederationId, BTreeMap<PeerId, (String, InviteCode)>>),
+    InviteCodes(BTreeMap<FederationId, InviteCode>),
     PasswordHash(String),
 
     // Lightning commands

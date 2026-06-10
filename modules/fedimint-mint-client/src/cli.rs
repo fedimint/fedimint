@@ -31,10 +31,6 @@ enum Opts {
         /// hasn't been redeemed by the recipient. Defaults to one week.
         #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
         timeout: u64,
-        /// If the necessary information to join the federation the e-cash
-        /// belongs to should be included in the serialized notes
-        #[clap(long)]
-        include_invite: bool,
     },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
@@ -61,7 +57,6 @@ async fn spend(
     amount: Amount,
     allow_overpay: bool,
     timeout: u64,
-    include_invite: bool,
 ) -> anyhow::Result<serde_json::Value> {
     warn!(
         "The client will try to double-spend these notes after the timeout to reclaim \
@@ -71,13 +66,7 @@ async fn spend(
     let timeout = Duration::from_secs(timeout);
     let (operation, notes) = if allow_overpay {
         let (operation, notes) = mint
-            .spend_notes_with_selector(
-                &SelectNotesWithAtleastAmount,
-                amount,
-                timeout,
-                include_invite,
-                (),
-            )
+            .spend_notes_with_selector(&SelectNotesWithAtleastAmount, amount, timeout, ())
             .await?;
 
         let overspend_amount = notes.total_amount().saturating_sub(amount);
@@ -87,14 +76,8 @@ async fn spend(
 
         (operation, notes)
     } else {
-        mint.spend_notes_with_selector(
-            &SelectNotesWithExactAmount,
-            amount,
-            timeout,
-            include_invite,
-            (),
-        )
-        .await?
+        mint.spend_notes_with_selector(&SelectNotesWithExactAmount, amount, timeout, ())
+            .await?
     };
     info!("Spend e-cash operation: {}", operation.fmt_short());
 
@@ -177,8 +160,7 @@ pub(crate) async fn handle_cli_command(
             amount,
             allow_overpay,
             timeout,
-            include_invite,
-        } => spend(mint, amount, allow_overpay, timeout, include_invite).await,
+        } => spend(mint, amount, allow_overpay, timeout).await,
         Opts::Split { oob_notes } => Ok(split(&oob_notes)),
         Opts::Combine { oob_notes } => combine(&oob_notes),
         Opts::Validate { oob_notes, online } => {

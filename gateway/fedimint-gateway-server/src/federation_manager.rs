@@ -5,11 +5,10 @@ use std::time::SystemTime;
 
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::TieredCounts;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
-use fedimint_core::{PeerId, TieredCounts};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
 use fedimint_gw_client::GatewayClientModule;
@@ -343,28 +342,6 @@ impl FederationManager {
                 info!(federation_id = %federation_id, "Successfully backed up federation");
             }
         }
-    }
-
-    pub async fn all_invite_codes(
-        &self,
-    ) -> BTreeMap<FederationId, BTreeMap<PeerId, (String, InviteCode)>> {
-        let mut invite_codes = BTreeMap::new();
-
-        for (federation_id, client) in &self.clients {
-            let config = client.value().config().await;
-            let api_endpoints = &config.global.api_endpoints;
-
-            let mut fed_invite_codes = BTreeMap::new();
-            for (peer_id, peer_url) in api_endpoints {
-                if let Some(code) = client.value().invite_code(*peer_id).await {
-                    fed_invite_codes.insert(*peer_id, (peer_url.name.clone(), code));
-                }
-            }
-
-            invite_codes.insert(*federation_id, fed_invite_codes);
-        }
-
-        invite_codes
     }
 
     pub async fn get_note_summary(

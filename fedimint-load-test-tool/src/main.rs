@@ -41,9 +41,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
-use crate::common::{
-    build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
-};
+use crate::common::{build_client, do_spend_notes, remint_denomination, try_get_notes_cli};
 pub mod common;
 
 #[derive(Parser, Clone)]
@@ -329,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
             test_download_config(&connectors, &invite_code, opts.users, &event_sender.clone())
         }
         Command::LoadTest(args) => {
-            let invite_code = invite_code_or_fallback(args.invite_code).await;
+            let invite_code = invite_code_or_fallback(args.invite_code);
 
             let gateway_id = if let Some(gateway_id) = args.gateway_id {
                 Some(gateway_id)
@@ -376,7 +374,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
         Command::LnCircularLoadTest(args) => {
-            let invite_code = invite_code_or_fallback(args.invite_code).await;
+            let invite_code = invite_code_or_fallback(args.invite_code);
             run_ln_circular_load_test(
                 opts.archive_dir,
                 opts.users,
@@ -411,21 +409,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<InviteCode> {
-    if let Some(invite_code) = invite_code {
-        Some(invite_code)
-    } else {
-        // Try to get an invite code through cli in a best effort basis
-        match get_invite_code_cli(0.into()).await {
-            Ok(invite_code) => Some(invite_code),
-            Err(e) => {
-                info!(
-                    "No invite code provided and failed to get one with '{e}' error, will try to proceed without one..."
-                );
-                None
-            }
-        }
+fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<InviteCode> {
+    if invite_code.is_none() {
+        info!("No invite code provided, will try to proceed without one...");
     }
+
+    invite_code
 }
 
 #[allow(clippy::too_many_arguments)]

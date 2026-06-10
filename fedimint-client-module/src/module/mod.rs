@@ -15,13 +15,12 @@ use fedimint_core::core::{
     OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
+    Amount, OutPoint, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
     maybe_add_send_sync,
 };
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
@@ -102,8 +101,6 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     fn db(&self) -> &Database;
 
     fn executor(&self) -> &(maybe_add_send_sync!(dyn IExecutor + 'static));
-
-    async fn invite_code(&self, peer: PeerId) -> Option<InviteCode>;
 
     fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
 
@@ -492,22 +489,6 @@ where
 
     pub async fn get_config(&self) -> ClientConfig {
         self.client.get().config().await
-    }
-
-    /// Returns an invite code for the federation that points to an arbitrary
-    /// guardian server for fetching the config
-    pub async fn get_invite_code(&self) -> InviteCode {
-        let cfg = self.get_config().await.global;
-        self.client
-            .get()
-            .invite_code(
-                *cfg.api_endpoints
-                    .keys()
-                    .next()
-                    .expect("A federation always has at least one guardian"),
-            )
-            .await
-            .expect("The guardian we requested an invite code for exists")
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {

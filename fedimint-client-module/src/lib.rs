@@ -442,11 +442,6 @@ where
         self.module
     }
 }
-#[derive(Deserialize)]
-pub struct GetInviteCodeRequest {
-    pub peer: PeerId,
-}
-
 pub struct TransactionUpdates {
     pub update_stream: BoxStream<'static, TxSubmissionStatesSM>,
 }

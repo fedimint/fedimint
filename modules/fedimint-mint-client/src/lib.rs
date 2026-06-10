@@ -1137,7 +1137,6 @@ impl ClientModule for MintClientModule {
                         &SelectNotesWithExactAmount,
                         req.amount,
                         req.try_cancel_after,
-                        req.include_invite,
                         req.extra_meta
                     ).await?;
                     yield serde_json::to_value(result)?;
@@ -1148,7 +1147,6 @@ impl ClientModule for MintClientModule {
                         &SelectNotesWithAtleastAmount,
                         req.min_amount,
                         req.try_cancel_after,
-                        req.include_invite,
                         req.extra_meta
                     ).await?;
                     yield serde_json::to_value(result)?;
@@ -1206,7 +1204,6 @@ struct SubscribeReissueExternalNotesRequest {
 struct SpendNotesExpertRequest {
     min_amount: Amount,
     try_cancel_after: Duration,
-    include_invite: bool,
     extra_meta: serde_json::Value,
 }
 
@@ -1214,7 +1211,6 @@ struct SpendNotesExpertRequest {
 struct SpendNotesRequest {
     amount: Amount,
     try_cancel_after: Duration,
-    include_invite: bool,
     extra_meta: serde_json::Value,
 }
 
@@ -1920,14 +1916,12 @@ impl MintClientModule {
         &self,
         min_amount: Amount,
         try_cancel_after: Duration,
-        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
         self.spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             min_amount,
             try_cancel_after,
-            include_invite,
             extra_meta,
         )
         .await
@@ -1953,7 +1947,6 @@ impl MintClientModule {
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         try_cancel_after: Duration,
-        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
         let federation_id_prefix = self.federation_id.to_prefix();
@@ -1975,14 +1968,7 @@ impl MintClientModule {
                             )
                             .await?;
 
-                        let oob_notes = if include_invite {
-                            OOBNotes::new_with_invite(
-                                notes,
-                                &self.client_ctx.get_invite_code().await,
-                            )
-                        } else {
-                            OOBNotes::new(federation_id_prefix, notes)
-                        };
+                        let oob_notes = OOBNotes::new(federation_id_prefix, notes);
 
                         self.client_ctx
                             .add_state_machines_dbtx(
@@ -2012,7 +1998,6 @@ impl MintClientModule {
                                     requested_amount,
                                     spent_amount: oob_notes.total_amount(),
                                     timeout: try_cancel_after,
-                                    include_invite,
                                 },
                             )
                             .await;

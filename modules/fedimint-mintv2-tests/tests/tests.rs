@@ -127,12 +127,9 @@ async fn send_and_receive() -> anyhow::Result<()> {
     for i in 0..10 {
         tracing::info!("Sending ecash payment {i} of 10");
 
-        // Exercise both with and without the optional invite code.
-        let include_invite = i % 2 == 0;
-
         let ecash = client_send
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null, include_invite)
+            .send(Amount::from_sats(1_000), Value::Null)
             .await?;
 
         let Some(MintEvent::Send(_)) = send_events.next().await else {
@@ -143,15 +140,8 @@ async fn send_and_receive() -> anyhow::Result<()> {
 
         let ecash: ECash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash).unwrap();
 
-        // When requested, the sender embeds the federation invite code so a
-        // recipient can join the issuing federation directly from the received
-        // ecash. Otherwise no invite is present.
-        assert_eq!(
-            ecash
-                .federation_invite()
-                .map(|invite| invite.federation_id()),
-            include_invite.then(|| client_send.federation_id()),
-        );
+        // Clients cannot mint invite codes, hence no invite is embedded.
+        assert!(ecash.federation_invite().is_none());
 
         let operation_id = client_receive
             .get_first_module::<MintClientModule>()?
@@ -237,7 +227,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 
     let ecash = client_send
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(Amount::from_sats(1_000), Value::Null)
         .await?;
 
     let Some(MintEvent::Send(_)) = send_events.next().await else {
@@ -306,7 +296,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
     let ecash = client
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(Amount::from_sats(1_000), Value::Null)
         .await?;
 
     let Some(MintEvent::Send(_)) = events.next().await else {

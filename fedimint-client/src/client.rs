@@ -30,8 +30,8 @@ use fedimint_client_module::transaction::{
     TxSubmissionStatesSM,
 };
 use fedimint_client_module::{
-    AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
-    ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
+    AddStateMachinesResult, ClientModuleInstance, ModuleGlobalContextGen, ModuleRecoveryCompleted,
+    TransactionUpdates, TxCreatedEvent,
 };
 use fedimint_connectors::{ConnectorRegistry, PeerStatus};
 use fedimint_core::config::{
@@ -45,7 +45,6 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiRequestErased, ApiVersion, MultiApiVersion,
@@ -1856,23 +1855,6 @@ impl Client {
         get_api_urls(&self.db, &self.config().await).await
     }
 
-    /// Create an invite code with the api endpoint of the given peer which can
-    /// be used to download this client config
-    pub async fn invite_code(&self, peer: PeerId) -> Option<InviteCode> {
-        self.get_peer_urls()
-            .await
-            .into_iter()
-            .find_map(|(peer_id, url)| (peer == peer_id).then_some(url))
-            .map(|peer_url| {
-                InviteCode::new(
-                    peer_url.clone(),
-                    peer,
-                    self.federation_id(),
-                    self.api_secret.clone(),
-                )
-            })
-    }
-
     /// Blocks till the client has synced the guardian public key set
     /// (introduced in version 0.4) and returns it. Once it has been fetched
     /// once this function is guaranteed to return immediately.
@@ -1983,11 +1965,6 @@ impl Client {
                 "get_federation_id" => {
                     let federation_id = self.federation_id();
                     yield serde_json::to_value(federation_id)?;
-                }
-                "get_invite_code" => {
-                    let req: GetInviteCodeRequest = serde_json::from_value(params)?;
-                    let invite_code = self.invite_code(req.peer).await;
-                    yield serde_json::to_value(invite_code)?;
                 }
                 "get_operation" => {
                     let req: GetOperationIdRequest = serde_json::from_value(params)?;
@@ -2398,10 +2375,6 @@ impl ClientContextIface for Client {
 
     fn executor(&self) -> &(maybe_add_send_sync!(dyn IExecutor + 'static)) {
         Client::executor(self)
-    }
-
-    async fn invite_code(&self, peer: PeerId) -> Option<InviteCode> {
-        Client::invite_code(self, peer).await
     }
 
     fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {

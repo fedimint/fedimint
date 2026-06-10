@@ -67,7 +67,7 @@ use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::backoff_util::fibonacci_max_one_hour;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry};
 use fedimint_core::{
-    Amount, BitcoinAmountOrAll, PeerId, TieredCounts, crit, fedimint_build_code_version_env,
+    Amount, BitcoinAmountOrAll, TieredCounts, crit, fedimint_build_code_version_env,
     get_network_for_address,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
@@ -2526,7 +2526,7 @@ impl IAdminGateway for Gateway {
             })
         } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
             let ecash = mint_module
-                .send(payload.amount, serde_json::Value::Null, true)
+                .send(payload.amount, serde_json::Value::Null)
                 .await
                 .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
 
@@ -2892,12 +2892,15 @@ impl IAdminGateway for Gateway {
     }
 
     /// Returns a `BTreeMap` that is keyed by the `FederationId` and contains
-    /// all the invite codes (with peer names) for the federation.
-    async fn handle_export_invite_codes(
-        &self,
-    ) -> BTreeMap<FederationId, BTreeMap<PeerId, (String, InviteCode)>> {
-        let fed_manager = self.federation_manager.read().await;
-        fed_manager.all_invite_codes().await
+    /// the invite code the gateway used to join the federation.
+    async fn handle_export_invite_codes(&self) -> BTreeMap<FederationId, InviteCode> {
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+
+        dbtx.load_federation_configs()
+            .await
+            .into_iter()
+            .map(|(federation_id, config)| (federation_id, config.invite_code))
+            .collect()
     }
 
     /// Returns `TieredCounts` which describes the breakdown of notes in the
