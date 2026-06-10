@@ -9,12 +9,12 @@ use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
 
+use crate::PeerId;
 use crate::base32::FEDIMINT_PREFIX;
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
-use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
 ///
@@ -73,50 +73,6 @@ impl InviteCode {
         }
 
         s
-    }
-
-    pub fn from_map(
-        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
-        federation_id: FederationId,
-        api_secret: Option<String>,
-    ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
-        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
-            .iter()
-            .take(max_size)
-            .map(|(peer, url)| InviteCodePart::Api {
-                url: url.clone(),
-                peer: *peer,
-            })
-            .collect();
-
-        code_vec.push(InviteCodePart::FederationId(federation_id));
-
-        if let Some(api_secret) = api_secret {
-            code_vec.push(InviteCodePart::ApiSecret(api_secret));
-        }
-
-        Self(code_vec)
-    }
-
-    /// Constructs an [`InviteCode`] which contains as many guardian URLs as
-    /// needed to always be able to join a working federation
-    pub fn new_with_essential_num_guardians(
-        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
-        federation_id: FederationId,
-    ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
-        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
-            .iter()
-            .take(max_size)
-            .map(|(peer, url)| InviteCodePart::Api {
-                url: url.clone(),
-                peer: *peer,
-            })
-            .collect();
-        code_vec.push(InviteCodePart::FederationId(federation_id));
-
-        Self(code_vec)
     }
 
     /// Returns the API URL of one of the guardians.

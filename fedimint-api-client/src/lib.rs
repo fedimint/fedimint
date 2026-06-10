@@ -8,14 +8,12 @@
 use anyhow::{Context as _, bail};
 use api::{DynGlobalApi, FederationApiExt as _};
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_connectors::error::ServerError;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::backoff_util;
 use fedimint_logging::LOG_CLIENT_NET;
-use query::FilterMap;
 use tracing::debug;
 
 pub mod api;
@@ -32,7 +30,6 @@ pub async fn download_from_invite_code(
     debug!(
         target: LOG_CLIENT_NET,
         %invite,
-        peers = ?invite.peers(),
         "Downloading client config via invite code"
     );
 
@@ -44,6 +41,7 @@ pub async fn download_from_invite_code(
     )?;
     let api_secret = invite.api_secret();
     let invite_id = invite.invite_id();
+    let peer = invite.peer();
 
     fedimint_core::util::retry(
         "Downloading client config",
@@ -55,6 +53,7 @@ pub async fn download_from_invite_code(
                 federation_id,
                 api_secret.clone(),
                 invite_id,
+                peer,
             )
         },
     )
@@ -69,31 +68,28 @@ pub async fn try_download_client_config(
     federation_id: FederationId,
     api_secret: Option<String>,
     invite_id: Option<[u8; 16]>,
+    peer: fedimint_core::PeerId,
 ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
-    debug!(target: LOG_CLIENT_NET, "Downloading client config from peer");
-    // TODO: use new download approach based on guardian PKs
-    let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
-        if federation_id != cfg.global.calculate_federation_id() {
-            return Err(ServerError::ConditionFailed(anyhow::anyhow!(
-                "FederationId in invite code does not match client config"
-            )));
-        }
+    debug!(target: LOG_CLIENT_NET, "Downloading client config from the guardian in the invite code");
 
-        Ok(cfg.global.api_endpoints)
-    });
-
-    // The invite id is only sent to the guardians in the invite code; its
-    // issuer counts the download towards the invite code's user limit
-    let api_endpoints = api_from_invite
-        .request_with_strategy(
-            query_strategy,
+    // The invite id is sent only to the guardian in the invite code; as its
+    // issuer it counts the download towards the invite code's user limit
+    let config = api_from_invite
+        .request_single_peer::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::new(invite_id),
+            peer,
         )
         .await?;
 
+    if config.global.calculate_federation_id() != federation_id {
+        bail!("FederationId in invite code does not match client config");
+    }
+
     // now we can build an api for all guardians and download the client config
-    let api_endpoints = api_endpoints
+    let api_endpoints = config
+        .global
+        .api_endpoints
         .into_iter()
         .map(|(peer, url)| (peer, url.url))
         .collect();
