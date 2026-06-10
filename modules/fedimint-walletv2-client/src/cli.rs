@@ -61,7 +61,11 @@ pub(crate) async fn handle_cli_command(
             fee,
         } => json(
             wallet
-                .await_final_send_operation_state(wallet.send(address, value, fee).await?)
+                .await_final_send_operation_state(
+                    wallet
+                        .send(address, value, fee, serde_json::Value::Null)
+                        .await?,
+                )
                 .await?,
         ),
         Opts::Receive => json(wallet.receive().await),

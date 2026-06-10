@@ -77,6 +77,8 @@ pub struct SendMeta {
     pub address: Address<NetworkUnchecked>,
     pub value: bitcoin::Amount,
     pub fee: bitcoin::Amount,
+    #[serde(default)]
+    pub custom_meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,6 +277,7 @@ impl WalletClientModule {
         address: Address<NetworkUnchecked>,
         value: bitcoin::Amount,
         fee: Option<bitcoin::Amount>,
+        custom_meta: serde_json::Value,
     ) -> Result<OperationId, SendError> {
         if !address.is_valid_for_network(self.cfg.network) {
             return Err(SendError::WrongNetwork);
@@ -342,6 +345,7 @@ impl WalletClientModule {
                         address: address_clone.clone(),
                         value,
                         fee,
+                        custom_meta: custom_meta.clone(),
                     })
                 },
                 TransactionBuilder::new().with_outputs(client_output_bundle),
