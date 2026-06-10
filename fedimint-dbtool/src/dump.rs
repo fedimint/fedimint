@@ -341,6 +341,26 @@ impl DatabaseDump {
                     "Guardian Metadata"
                 );
             }
+            server_db::DbKeyPrefix::InviteId => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    server_db::InviteIdKeyPrefix,
+                    server_db::InviteIdKey,
+                    fedimint_server::db::InviteIdMeta,
+                    consensus,
+                    "Invite Ids"
+                );
+            }
+            server_db::DbKeyPrefix::InviteUserCount => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    server_db::InviteUserCountKeyPrefix,
+                    server_db::InviteUserCountKey,
+                    u64,
+                    consensus,
+                    "Invite User Counts"
+                );
+            }
         }
     }
     async fn write_serialized_client_operation_log(

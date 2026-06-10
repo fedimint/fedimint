@@ -76,6 +76,7 @@ use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
+use crate::db::{InviteIdKey, InviteIdMeta, InviteUserCountKey};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix, get_api_urls};
@@ -681,6 +682,39 @@ impl ConsensusApi {
             api_secret,
         )
     }
+
+    /// Checks the expiration date and user limit of the invite code with this
+    /// invite id and counts the download towards its user limit.
+    async fn register_config_download(&self, invite_id: [u8; 16]) -> Result<(), ApiError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        let meta = dbtx
+            .get_value(&InviteIdKey(invite_id))
+            .await
+            .ok_or_else(|| ApiError::bad_request("Unknown invite id".to_string()))?;
+
+        if meta.expires_at <= fedimint_core::time::duration_since_epoch().as_secs() {
+            return Err(ApiError::bad_request("Invite code is expired".to_string()));
+        }
+
+        let users = dbtx
+            .get_value(&InviteUserCountKey(invite_id))
+            .await
+            .unwrap_or(0);
+
+        if users >= meta.user_limit {
+            return Err(ApiError::bad_request(
+                "Invite code has reached its user limit".to_string(),
+            ));
+        }
+
+        dbtx.insert_entry(&InviteUserCountKey(invite_id), &(users + 1))
+            .await;
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|_| ApiError::server_error("Failed to count config download".to_string()))
+    }
 }
 
 #[async_trait]
@@ -773,6 +807,24 @@ impl IDashboardApi for ConsensusApi {
     async fn federation_invite_code(&self) -> String {
         self.get_invite_code(self.get_active_api_secret())
             .await
+            .to_string()
+    }
+
+    async fn create_invite_code(&self, expires_at: u64, user_limit: u64) -> String {
+        let invite_id = rand::random::<[u8; 16]>();
+
+        let meta = InviteIdMeta {
+            expires_at,
+            user_limit,
+        };
+
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_new_entry(&InviteIdKey(invite_id), &meta).await;
+        dbtx.commit_tx().await;
+
+        self.get_invite_code(self.get_active_api_secret())
+            .await
+            .with_invite_id(invite_id)
             .to_string()
     }
 
@@ -905,7 +957,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             CLIENT_CONFIG_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> ClientConfig {
+            // The invite id is optional only to remain compatible with
+            // clients that do not send one yet; once those are sufficiently
+            // deployed it becomes required so every invite code's expiration
+            // date and user limit are enforced
+            async |fedimint: &ConsensusApi, _context, invite_id: Option<[u8; 16]>| -> ClientConfig {
+                if let Some(invite_id) = invite_id {
+                    fedimint.register_config_download(invite_id).await?;
+                }
+
                 Ok(fedimint.client_cfg.clone())
             }
         },

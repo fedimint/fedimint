@@ -196,7 +196,6 @@ async fn dashboard_view(
     let fedimintd_version_hash = state.api.fedimintd_version_hash().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;
     let p2p_connection_status = state.api.p2p_connection_status().await;
-    let invite_code = state.api.federation_invite_code().await;
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
@@ -208,7 +207,7 @@ async fn dashboard_view(
             }
 
             div class="col-md-6" {
-                (invite::render(&invite_code, session_count))
+                (invite::render(session_count))
             }
         }
 
@@ -334,6 +333,10 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
         .route(CHANGE_PASSWORD_ROUTE, post(change_password))
+        .route(
+            invite::INVITE_CREATE_ROUTE,
+            post(invite::post_create_invite),
+        )
         .route(METRICS_ROUTE, get(metrics_handler))
         .route(
             CONNECTIVITY_CHECK_ROUTE,

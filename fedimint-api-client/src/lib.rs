@@ -43,6 +43,7 @@ pub async fn download_from_invite_code(
         invite.api_secret().as_deref(),
     )?;
     let api_secret = invite.api_secret();
+    let invite_id = invite.invite_id();
 
     fedimint_core::util::retry(
         "Downloading client config",
@@ -53,6 +54,7 @@ pub async fn download_from_invite_code(
                 &api_from_invite,
                 federation_id,
                 api_secret.clone(),
+                invite_id,
             )
         },
     )
@@ -66,6 +68,7 @@ pub async fn try_download_client_config(
     api_from_invite: &DynGlobalApi,
     federation_id: FederationId,
     api_secret: Option<String>,
+    invite_id: Option<[u8; 16]>,
 ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
     debug!(target: LOG_CLIENT_NET, "Downloading client config from peer");
     // TODO: use new download approach based on guardian PKs
@@ -79,11 +82,13 @@ pub async fn try_download_client_config(
         Ok(cfg.global.api_endpoints)
     });
 
+    // The invite id is only sent to the guardians in the invite code; its
+    // issuer counts the download towards the invite code's user limit
     let api_endpoints = api_from_invite
         .request_with_strategy(
             query_strategy,
             CLIENT_CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
+            ApiRequestErased::new(invite_id),
         )
         .await?;
 

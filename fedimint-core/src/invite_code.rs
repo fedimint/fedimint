@@ -171,6 +171,23 @@ impl InviteCode {
             })
             .expect("Ensured by constructor")
     }
+
+    /// Opaque id identifying this invite code to the issuing guardian, if one
+    /// was set.
+    pub fn invite_id(&self) -> Option<[u8; 16]> {
+        self.0.iter().find_map(|data| match data {
+            InviteCodePart::InviteId(invite_id) => Some(*invite_id),
+            _ => None,
+        })
+    }
+
+    /// Sets the invite id, replacing any previously set one.
+    pub fn with_invite_id(mut self, invite_id: [u8; 16]) -> Self {
+        self.0
+            .retain(|data| !matches!(data, InviteCodePart::InviteId(_)));
+        self.0.push(InviteCodePart::InviteId(invite_id));
+        self
+    }
 }
 
 /// For extendability [`InviteCode`] consists of parts, where client can ignore
@@ -196,6 +213,11 @@ enum InviteCodePart {
 
     /// Api secret to use
     ApiSecret(String),
+
+    /// Opaque id identifying this invite code to the issuing guardian, which
+    /// tracks metadata such as the expiration date and user limit for it in
+    /// its local database
+    InviteId([u8; 16]),
 
     /// Unknown invite code fields to be defined in the future
     #[encodable_default]

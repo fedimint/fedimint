@@ -69,6 +69,10 @@ pub trait IDashboardApi {
     /// Get the federation invite code to share with users
     async fn federation_invite_code(&self) -> String;
 
+    /// Create an invite code with an expiration date and user limit,
+    /// registering its invite id in the guardian's local database
+    async fn create_invite_code(&self, expires_at: u64, user_limit: u64) -> String;
+
     /// Get the federation audit summary
     async fn federation_audit(&self) -> AuditSummary;
 
