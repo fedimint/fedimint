@@ -3,6 +3,7 @@ pub mod events;
 pub mod pay;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -33,6 +34,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
+use tokio::sync::Mutex as TokioMutex;
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
@@ -64,6 +66,7 @@ use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
@@ -161,6 +164,7 @@ impl ClientModuleInit for GatewayClientInit {
             client_ctx: args.context(),
             lightning_manager: self.lightning_manager.clone(),
             connector_registry: args.connector_registry.clone(),
+            per_circuit_locks: Arc::new(TokioMutex::new(HashMap::new())),
         })
     }
 }
@@ -208,6 +212,13 @@ pub struct GatewayClientModule {
     client_ctx: ClientContext<Self>,
     pub lightning_manager: Arc<dyn IGatewayClientV1>,
     connector_registry: ConnectorRegistry,
+    /// Per-(incoming_chan_id, htlc_id) mutex map used to serialise concurrent
+    /// handlers for the same LN circuit. This prevents a replayed HTLC that
+    /// arrives while the original handler is still between its active-state
+    /// scan and `finalize_and_submit_transaction` from racing through and
+    /// emitting a spurious Cancel for a circuit that the first handler is
+    /// about to Settle.
+    per_circuit_locks: Arc<TokioMutex<HashMap<(u64, u64), Arc<TokioMutex<()>>>>>,
 }
 
 impl ClientModule for GatewayClientModule {
@@ -478,6 +489,22 @@ impl GatewayClientModule {
     /// Attempt fulfill HTLC by buying preimage from the federation
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
+
+        // --- Per-circuit serialisation -----------------------------------------
+        // Acquire (or create) a per-(incoming_chan_id, htlc_id) mutex before doing
+        // anything async.  This ensures that if the LN node replays the exact same
+        // HTLC circuit while the original handler is still between the active-state
+        // scan and `finalize_and_submit_transaction`, the two tasks do not race:
+        // the second one simply waits for the first to finish and then either finds
+        // the committed operation (treating it as a replay) or proceeds normally.
+        let circuit_key = (htlc.incoming_chan_id, htlc.htlc_id);
+        let circuit_mutex = {
+            let mut map = self.per_circuit_locks.lock().await;
+            Arc::clone(map.entry(circuit_key).or_insert_with(|| Arc::new(TokioMutex::new(()))))
+        };
+        let _circuit_guard = circuit_mutex.lock().await;
+        // -----------------------------------------------------------------------
+
         let (operation_id, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
@@ -491,9 +518,34 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
-        self.client_ctx
+        match self
+            .client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                // Check whether the error is a duplicate-operation error for the
+                // same operation_id.  Because we hold the per-circuit mutex, if
+                // the operation already exists it was committed by the same circuit
+                // key in a previous (or the current) invocation — this is a safe
+                // replay.  Return the existing operation_id instead of propagating
+                // the error, which would otherwise cause a spurious Cancel to be
+                // sent for a circuit that the prior GatewayCompleteStateMachine is
+                // already working to Settle.
+                let err_str = format!("{e:?}");
+                if err_str.contains("There already exists an operation with id") {
+                    debug!(
+                        ?operation_id,
+                        incoming_chan_id = htlc.incoming_chan_id,
+                        htlc_id = htlc.htlc_id,
+                        "Detected duplicate operation for HTLC circuit — treating as replay",
+                    );
+                    return Ok(operation_id);
+                }
+                return Err(e);
+            }
+        }
         debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         self.client_ctx
