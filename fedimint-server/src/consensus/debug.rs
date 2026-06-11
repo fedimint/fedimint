@@ -45,6 +45,9 @@ impl fmt::Debug for DebugConsensusItem<'_> {
             ConsensusItem::CoreConsensusVersion(version) => {
                 f.write_fmt(format_args!("Core consensus version vote: {version}"))?;
             }
+            ConsensusItem::CoreUnixTime(time) => {
+                f.write_fmt(format_args!("Core unix time vote: {}", time.0))?;
+            }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
             }
@@ -107,6 +110,9 @@ impl fmt::Display for DebugConsensusItemCompact<'_> {
             }
             ConsensusItem::CoreConsensusVersion(version) => {
                 f.write_fmt(format_args!("core_version_vote={version}; "))?;
+            }
+            ConsensusItem::CoreUnixTime(time) => {
+                f.write_fmt(format_args!("core_unix_time_vote={}; ", time.0))?;
             }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("unknown variant={variant}"))?;

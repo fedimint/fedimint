@@ -16,7 +16,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -49,8 +49,10 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    CoreConsensusVersionVoteKey, ModuleConsensusVersionVoteKey, SignedSessionOutcomeKey,
-    SignedSessionOutcomePrefix, active_core_consensus_version, active_module_consensus_version,
+    ConsensusUnixTimeKey, CoreConsensusVersionVoteKey, CoreUnixTimeVoteKey,
+    ModuleConsensusVersionVoteKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    active_core_consensus_version, active_module_consensus_version, consensus_unix_time,
+    consensus_unix_time_from_votes,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -148,6 +150,16 @@ impl ConsensusEngine {
         for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
     {
         active_core_consensus_version(dbtx, self.num_peers(), self.cfg.consensus.version).await
+    }
+
+    pub async fn consensus_unix_time<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+    ) -> ConsensusUnixTime
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        consensus_unix_time(dbtx).await
     }
 
     #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
@@ -1159,6 +1171,28 @@ impl ConsensusEngine {
                     self.active_core_consensus_version(dbtx).await <= CORE_CONSENSUS_VERSION,
                     "This peer does not support the new core consensus version, please upgrade fedimintd"
                 );
+
+                Ok(())
+            }
+            ConsensusItem::CoreUnixTime(vote) => {
+                let current_vote = dbtx
+                    .get_value(&CoreUnixTimeVoteKey(peer_id))
+                    .await
+                    .unwrap_or_default();
+
+                if vote <= current_vote {
+                    bail!("Core unix time vote is redundant");
+                }
+
+                dbtx.insert_entry(&CoreUnixTimeVoteKey(peer_id), &vote)
+                    .await;
+
+                let current_time = consensus_unix_time(dbtx).await;
+                let new_time = consensus_unix_time_from_votes(dbtx, self.num_peers()).await;
+
+                if current_time < new_time {
+                    dbtx.insert_entry(&ConsensusUnixTimeKey, &new_time).await;
+                }
 
                 Ok(())
             }

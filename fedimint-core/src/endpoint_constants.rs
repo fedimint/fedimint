@@ -46,3 +46,4 @@ pub const ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "activate_module_co
 pub const ACTIVE_CORE_CONSENSUS_VERSION_ENDPOINT: &str = "active_core_consensus_version";
 pub const SUPPORTED_CORE_CONSENSUS_VERSION_ENDPOINT: &str = "supported_core_consensus_version";
 pub const ACTIVATE_CORE_CONSENSUS_VERSION_ENDPOINT: &str = "activate_core_consensus_version";
+pub const CONSENSUS_UNIX_TIME_ENDPOINT: &str = "consensus_unix_time";
