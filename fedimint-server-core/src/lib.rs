@@ -21,12 +21,14 @@ use fedimint_core::core::{
     DynOutputOutcome, ModuleInstanceId, ModuleKind,
 };
 use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
     ModuleConsensusVersion, ModuleInit, TransactionItemAmounts,
 };
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
 
@@ -35,6 +37,8 @@ pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
     type Init: ServerModuleInit;
+
+    type FeeConsensus: Clone + Debug + Encodable + Decodable + MaybeSend + MaybeSync + 'static;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
@@ -53,6 +57,12 @@ pub trait ServerModule: Debug + Sized {
     fn decoder() -> Decoder {
         Self::Common::decoder_builder().build()
     }
+
+    /// Returns the config-derived initial fee consensus schedule.
+    ///
+    /// TODO: Remove this together with the legacy fee floor when the 0.16
+    /// tightening consensus-version bump no longer accepts old-client fees.
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus;
 
     /// This module's contribution to the next consensus proposal. This method
     /// is only guaranteed to be called once every few seconds. Consensus items
@@ -217,6 +227,10 @@ pub trait IServerModule: Debug {
 
     fn supported_consensus_version(&self) -> ModuleConsensusVersion;
 
+    fn initial_fee_consensus(&self) -> Vec<u8>;
+
+    fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()>;
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
@@ -345,6 +359,18 @@ where
 
     fn supported_consensus_version(&self) -> ModuleConsensusVersion {
         <<T::Init as ModuleInit>::Common as CommonModuleInit>::CONSENSUS_VERSION
+    }
+
+    fn initial_fee_consensus(&self) -> Vec<u8> {
+        <Self as ServerModule>::initial_fee_consensus(self).consensus_encode_to_vec()
+    }
+
+    fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()> {
+        <Self as ServerModule>::FeeConsensus::consensus_decode_whole(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        )?;
+        Ok(())
     }
 
     /// This module's contribution to the next consensus proposal

@@ -26,6 +26,9 @@ pub enum DbKeyPrefix {
     CoreConsensusVersionVotingActivation = 0x11,
     CoreUnixTimeVote = 0x0b,
     ConsensusUnixTime = 0x0c,
+    ModuleFeeConsensusVote = 0x0d,
+    ModuleFeeConsensusDesired = 0x0e,
+    ModuleFeeConsensusSchedule = 0x0f,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,

@@ -81,7 +81,9 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{FeeConfig, WalletClientConfig, WalletConfig};
+use fedimint_wallet_common::config::{
+    FeeConfig, FeeConsensus as WalletFeeConsensus, WalletClientConfig, WalletConfig,
+};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
@@ -508,7 +510,13 @@ impl ServerModuleInit for WalletInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
     type Common = WalletModuleTypes;
+    type FeeConsensus = WalletFeeConsensus;
     type Init = WalletInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        WalletFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal<'a>(
         &'a self,

@@ -272,7 +272,10 @@ impl Meta {
 impl ServerModule for Meta {
     /// Define the consensus types
     type Common = MetaModuleTypes;
+    type FeeConsensus = ();
     type Init = MetaInit;
+
+    fn initial_fee_consensus(&self) {}
 
     /// Check the difference between what's desired vs submitted and consensus.
     ///

@@ -35,7 +35,8 @@ use fedimint_core::{
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConfig, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    FeeConfig, FeeConsensus as MintFeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus,
+    MintConfigPrivate,
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
@@ -549,7 +550,13 @@ pub struct Mint {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
+    type FeeConsensus = MintFeeConsensus;
     type Init = MintInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        MintFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal(
         &self,

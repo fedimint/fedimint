@@ -31,8 +31,8 @@ use fedimint_core::{
     async_trait_maybe_send, push_db_key_items, push_db_pair_items,
 };
 use fedimint_mintv2_common::config::{
-    FeeConfig, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
-    consensus_denominations,
+    FeeConfig, FeeConsensus as MintFeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus,
+    MintConfigPrivate, consensus_denominations,
 };
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
@@ -361,7 +361,13 @@ impl Mint {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
+    type FeeConsensus = MintFeeConsensus;
     type Init = MintInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        MintFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal(
         &self,

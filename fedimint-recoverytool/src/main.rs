@@ -243,6 +243,7 @@ async fn process_and_print_tweak_source(
                                 | ConsensusItem::ModuleConsensusVersion(_)
                                 | ConsensusItem::CoreConsensusVersion(_)
                                 | ConsensusItem::CoreUnixTime(_)
+                                | ConsensusItem::ModuleFeeConsensus(_)
                                 | ConsensusItem::Default { .. } => None,
                             })
                             .collect();

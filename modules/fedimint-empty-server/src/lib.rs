@@ -171,7 +171,10 @@ pub struct Empty {
 impl ServerModule for Empty {
     /// Define the consensus types
     type Common = EmptyModuleTypes;
+    type FeeConsensus = ();
     type Init = EmptyInit;
+
+    fn initial_fee_consensus(&self) {}
 
     async fn consensus_proposal(
         &self,

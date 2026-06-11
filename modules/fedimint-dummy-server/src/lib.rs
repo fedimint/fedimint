@@ -181,7 +181,10 @@ pub struct Dummy {
 impl ServerModule for Dummy {
     /// Define the consensus types
     type Common = DummyModuleTypes;
+    type FeeConsensus = ();
     type Init = DummyInit;
+
+    fn initial_fee_consensus(&self) {}
 
     async fn consensus_proposal(
         &self,
