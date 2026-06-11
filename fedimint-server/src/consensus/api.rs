@@ -150,11 +150,25 @@ impl ConsensusApi {
     where
         for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
     {
+        let initial_version = self.initial_module_consensus_version(module_instance_id)?;
+        let legacy_consensus_version_votes = {
+            let module = self
+                .modules
+                .get(module_instance_id)
+                .with_context(|| format!("Unknown module instance id {module_instance_id}"))?;
+            let module_dbtx = &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc();
+            module.legacy_consensus_version_votes(module_dbtx).await
+        };
+
         Ok(active_module_consensus_version(
             dbtx,
             module_instance_id,
             self.cfg.consensus.broadcast_public_keys.to_num_peers(),
-            self.initial_module_consensus_version(module_instance_id)?,
+            initial_version,
+            legacy_consensus_version_votes,
         )
         .await)
     }

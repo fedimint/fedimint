@@ -33,7 +33,9 @@ use fedimint_client::transaction::{
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
-use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModule, OutPointRange, decode_current_fee_consensus,
+};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::sm_enum_variant_translation;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -41,15 +43,18 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiVersion, CommonModuleInit, FeePriority, ModuleCommon, ModuleInit,
+    MultiApiVersion, TransactionItemFees,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
-use fedimint_walletv2_common::config::WalletClientConfig;
+use fedimint_walletv2_common::config::{FeeConsensus as WalletFeeConsensus, WalletClientConfig};
 use fedimint_walletv2_common::{
     KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
     WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
@@ -65,6 +70,7 @@ use tracing::{debug, warn};
 
 /// Number of output info entries to scan per batch.
 const SLICE_SIZE: u64 = 1000;
+const WALLET_FEE_PRIORITY: FeePriority = FeePriority(2);
 
 /// Number of event log entries to read per batch.
 const EVENT_LOG_PAGE_SIZE: u64 = 1000;
@@ -157,6 +163,31 @@ impl ClientModule for WalletClientModule {
             .map(|a| Amounts::new_bitcoin(self.cfg.fee_consensus.fee(*a)))
     }
 
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::input_fee(self, amount, input)?.get_bitcoin();
+        let amount = amount.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<WalletFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.peg_in],
+            amount,
+            WALLET_FEE_PRIORITY,
+            legacy_fee,
+        ))
+    }
+
     fn output_fee(
         &self,
         amount: &Amounts,
@@ -165,6 +196,31 @@ impl ClientModule for WalletClientModule {
         amount
             .get(&AmountUnit::BITCOIN)
             .map(|a| Amounts::new_bitcoin(self.cfg.fee_consensus.fee(*a)))
+    }
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::output_fee(self, amount, output)?.get_bitcoin();
+        let amount = amount.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<WalletFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.peg_out],
+            amount,
+            WALLET_FEE_PRIORITY,
+            legacy_fee,
+        ))
     }
 
     #[cfg(feature = "cli")]

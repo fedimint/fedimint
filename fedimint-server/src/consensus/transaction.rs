@@ -288,16 +288,10 @@ impl FundingVerifier {
     }
 
     fn required_fees(
-        version: CoreConsensusVersion,
+        _version: CoreConsensusVersion,
         dynamic_fees: Amounts,
         legacy_floor_fees: Amounts,
     ) -> Amounts {
-        const DYNAMIC_FEES_MIN_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 2);
-
-        if version < DYNAMIC_FEES_MIN_VERSION {
-            return legacy_floor_fees;
-        }
-
         // TODO: When preparing the 0.16 release, bump the relevant consensus
         // version again, return `dynamic_fees` for that version and remove the
         // legacy fee-floor acceptance path.

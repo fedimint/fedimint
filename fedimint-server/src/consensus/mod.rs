@@ -32,8 +32,8 @@ use fedimint_core::epoch::{
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN,
-    IrohApiRequest, ModuleConsensusVersion,
+    ApiAuth, ApiEndpoint, ApiError, ApiMethod, ApiRequestErased,
+    DYNAMIC_FEES_CORE_CONSENSUS_VERSION, FEDIMINT_API_ALPN, IrohApiRequest, ModuleConsensusVersion,
 };
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
@@ -277,6 +277,7 @@ pub async fn run(
         task_group,
         db.clone(),
         cfg.local.identity,
+        cfg.consensus.version,
         submission_sender.clone(),
     );
 
@@ -298,6 +299,7 @@ pub async fn run(
             kind.clone(),
             module.clone(),
             initial_module_consensus_version,
+            cfg.consensus.version,
             submission_sender.clone(),
         );
     }
@@ -408,6 +410,7 @@ fn submit_core_ci_proposals(
     task_group: &TaskGroup,
     db: Database,
     our_peer_id: PeerId,
+    core_consensus_version: fedimint_core::module::CoreConsensusVersion,
     submission_sender: Sender<ConsensusItem>,
 ) {
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
@@ -418,6 +421,11 @@ fn submit_core_ci_proposals(
 
     task_group.spawn("core_citem_proposals", move |task_handle| async move {
         while !task_handle.is_shutting_down() {
+            if core_consensus_version < DYNAMIC_FEES_CORE_CONSENSUS_VERSION {
+                interval.tick().await;
+                continue;
+            }
+
             let vote = ConsensusUnixTime(
                 CORE_UNIX_TIME_GRANULARITY_SECS
                     * (duration_since_epoch().as_secs() / CORE_UNIX_TIME_GRANULARITY_SECS),
@@ -456,6 +464,7 @@ fn submit_module_ci_proposals(
     kind: ModuleKind,
     module: DynServerModule,
     initial_module_consensus_version: ModuleConsensusVersion,
+    core_consensus_version: fedimint_core::module::CoreConsensusVersion,
     submission_sender: Sender<ConsensusItem>,
 ) {
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
@@ -476,11 +485,16 @@ fn submit_module_ci_proposals(
             let mut last_automatic_vote_check = None;
             while !task_handle.is_shutting_down() {
                 let mut dbtx = db.begin_transaction_nc().await;
+                let legacy_consensus_version_votes = {
+                    let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(module_id).0.into_nc();
+                    module.legacy_consensus_version_votes(module_dbtx).await
+                };
                 let active_module_consensus_version = active_module_consensus_version(
                     &mut dbtx,
                     module_id,
                     num_peers,
                     initial_module_consensus_version,
+                    legacy_consensus_version_votes,
                 )
                 .await;
                 drop(dbtx);
@@ -521,8 +535,9 @@ fn submit_module_ci_proposals(
                     }
                 }
 
-                if let Some(fee_consensus) =
-                    module_fee_consensus_vote(&db, module_id, &module).await
+                if core_consensus_version >= DYNAMIC_FEES_CORE_CONSENSUS_VERSION
+                    && let Some(fee_consensus) =
+                        module_fee_consensus_vote(&db, module_id, &module).await
                 {
                     let item = ConsensusItem::ModuleFeeConsensus(ModuleFeeConsensusVote {
                         module_instance_id: module_id,

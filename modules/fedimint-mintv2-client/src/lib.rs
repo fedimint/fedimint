@@ -42,6 +42,7 @@ use fedimint_client_module::module::init::{
 use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{
     ClientContext, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
+    decode_current_fee_consensus,
 };
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
@@ -50,15 +51,20 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiVersion, CommonModuleInit, FeePriority, ModuleCommon, ModuleInit,
+    MultiApiVersion, TransactionItemFees,
 };
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_mintv2_common::config::{FeeConfig, MintClientConfig, client_denominations};
+use fedimint_mintv2_common::config::{
+    FeeConfig, FeeConsensus as MintFeeConsensus, MintClientConfig, client_denominations,
+};
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
 };
@@ -358,6 +364,8 @@ impl Context for MintClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
+const MINT_FEE_PRIORITY: FeePriority = FeePriority(0);
+
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
     type Init = MintClientInit;
@@ -387,6 +395,33 @@ impl ClientModule for MintClientModule {
         Some(Amounts::new_custom(unit, fee))
     }
 
+    fn input_fees(
+        &self,
+        amounts: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let unit = self.cfg.amount_unit;
+        let amount = amounts.get(&unit).copied().unwrap_or_default();
+        let legacy_fee = self.input_fee(amounts, input)?.get(&unit).copied()?;
+        let Some(fee_consensus) = decode_current_fee_consensus::<MintFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_custom(unit, legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_rate(
+            unit,
+            [fee_consensus.input],
+            amount,
+            MINT_FEE_PRIORITY,
+            legacy_fee,
+        ))
+    }
+
     fn output_fee(
         &self,
         amounts: &Amounts,
@@ -397,6 +432,33 @@ impl ClientModule for MintClientModule {
         let fee = self.cfg.fee_consensus.fee(amount);
 
         Some(Amounts::new_custom(unit, fee))
+    }
+
+    fn output_fees(
+        &self,
+        amounts: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let unit = self.cfg.amount_unit;
+        let amount = amounts.get(&unit).copied().unwrap_or_default();
+        let legacy_fee = self.output_fee(amounts, output)?.get(&unit).copied()?;
+        let Some(fee_consensus) = decode_current_fee_consensus::<MintFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_custom(unit, legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_rate(
+            unit,
+            [fee_consensus.output],
+            amount,
+            MINT_FEE_PRIORITY,
+            legacy_fee,
+        ))
     }
 
     #[cfg(feature = "cli")]

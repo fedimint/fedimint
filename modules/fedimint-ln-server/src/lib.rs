@@ -389,12 +389,7 @@ fn contract_item_fees(
     direction: ContractDirection,
     side: ContractFeeSide,
 ) -> TransactionItemFees {
-    let base_fee = FeeRate::min_base_fee(
-        fee_consensus
-            .iter()
-            .map(|schedule| contract_fee_rate(&schedule.fee_consensus, direction, side)),
-    );
-    let proportional_fee = FeeRate::min_proportional_fee(
+    let fee_rate = FeeRate::min_total_fee_rate(
         fee_consensus
             .iter()
             .map(|schedule| contract_fee_rate(&schedule.fee_consensus, direction, side)),
@@ -402,9 +397,12 @@ fn contract_item_fees(
     );
 
     let mut dynamic = Vec::new();
-    dynamic.extend(bitcoin_fee_component(base_fee, FeeCharge::Always));
     dynamic.extend(bitcoin_fee_component(
-        proportional_fee,
+        fee_rate.base_fee(),
+        FeeCharge::Always,
+    ));
+    dynamic.extend(bitcoin_fee_component(
+        fee_rate.proportional_fee(amount),
         FeeCharge::IfMaxPriority(LN_FEE_PRIORITY),
     ));
 

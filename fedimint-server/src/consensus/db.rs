@@ -143,16 +143,45 @@ pub async fn active_module_consensus_version<Cap>(
     module_instance_id: ModuleInstanceId,
     num_peers: NumPeers,
     initial_version: ModuleConsensusVersion,
+    legacy_consensus_version_votes: BTreeMap<PeerId, ModuleConsensusVersion>,
 ) -> ModuleConsensusVersion
 where
     for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
 {
-    let mut versions = dbtx
+    let core_consensus_version_votes = dbtx
         .find_by_prefix(&ModuleConsensusVersionVotePrefix { module_instance_id })
         .await
-        .map(|entry| entry.1)
-        .collect::<Vec<ModuleConsensusVersion>>()
+        .map(|(key, version)| (key.peer_id, version))
+        .collect::<BTreeMap<PeerId, ModuleConsensusVersion>>()
         .await;
+
+    active_module_consensus_version_from_votes(
+        num_peers,
+        initial_version,
+        legacy_consensus_version_votes,
+        core_consensus_version_votes,
+    )
+}
+
+fn active_module_consensus_version_from_votes(
+    num_peers: NumPeers,
+    initial_version: ModuleConsensusVersion,
+    mut legacy_consensus_version_votes: BTreeMap<PeerId, ModuleConsensusVersion>,
+    core_consensus_version_votes: BTreeMap<PeerId, ModuleConsensusVersion>,
+) -> ModuleConsensusVersion {
+    for (peer_id, version) in core_consensus_version_votes {
+        legacy_consensus_version_votes.insert(peer_id, version);
+    }
+
+    let mut versions = legacy_consensus_version_votes
+        .values()
+        .copied()
+        .collect::<Vec<ModuleConsensusVersion>>();
+
+    assert!(
+        versions.len() <= num_peers.total(),
+        "module consensus version votes exceed peer count"
+    );
 
     while versions.len() < num_peers.total() {
         versions.push(initial_version);
@@ -165,6 +194,33 @@ where
     assert!(versions.first() <= versions.last());
 
     versions[num_peers.max_evil()]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use fedimint_core::module::ModuleConsensusVersion;
+    use fedimint_core::{NumPeers, PeerId};
+
+    use super::active_module_consensus_version_from_votes;
+
+    #[test]
+    fn active_module_consensus_version_merges_legacy_and_core_votes() {
+        let initial = ModuleConsensusVersion::new(1, 0);
+        let legacy = BTreeMap::from([
+            (PeerId::from(0), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(1), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(2), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(3), ModuleConsensusVersion::new(1, 0)),
+        ]);
+        let core = BTreeMap::from([(PeerId::from(3), ModuleConsensusVersion::new(2, 0))]);
+
+        assert_eq!(
+            active_module_consensus_version_from_votes(NumPeers::from(4), initial, legacy, core),
+            ModuleConsensusVersion::new(2, 0)
+        );
+    }
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
