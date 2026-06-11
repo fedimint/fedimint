@@ -47,8 +47,10 @@ use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     ConsensusUnixTimeKey, CoreUnixTimeVoteKey, ModuleConsensusVersionVoteKey,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix, active_module_consensus_version,
-    consensus_unix_time, consensus_unix_time_from_votes,
+    ModuleFeeConsensusScheduleKey, ModuleFeeConsensusSchedulePrefix, ModuleFeeConsensusVoteKey,
+    ModuleFeeConsensusVotePrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    active_module_consensus_version, consensus_unix_time, consensus_unix_time_from_votes,
+    current_module_fee_consensus,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -1155,6 +1157,74 @@ impl ConsensusEngine {
 
                 if current_time < new_time {
                     dbtx.insert_entry(&ConsensusUnixTimeKey, &new_time).await;
+                }
+
+                Ok(())
+            }
+            ConsensusItem::ModuleFeeConsensus(vote) => {
+                let module_instance_id = vote.module_instance_id;
+                let module = self
+                    .modules
+                    .get(module_instance_id)
+                    .with_context(|| format!("Unknown module instance id {module_instance_id}"))?;
+                module.decode_fee_consensus(&vote.fee_consensus)?;
+
+                let current_fee_consensus = current_module_fee_consensus(
+                    dbtx,
+                    module_instance_id,
+                    module.initial_fee_consensus(),
+                )
+                .await;
+
+                if vote.fee_consensus == current_fee_consensus.fee_consensus {
+                    bail!("Module fee consensus vote is redundant");
+                }
+
+                dbtx.insert_entry(
+                    &ModuleFeeConsensusVoteKey {
+                        module_instance_id,
+                        peer_id,
+                    },
+                    &vote.fee_consensus,
+                )
+                .await;
+
+                let matching_votes = dbtx
+                    .find_by_prefix(&ModuleFeeConsensusVotePrefix { module_instance_id })
+                    .await
+                    .filter(|(_, fee_consensus)| {
+                        std::future::ready(*fee_consensus == vote.fee_consensus)
+                    })
+                    .count()
+                    .await;
+
+                let threshold = self.num_peers().threshold();
+                if threshold <= matching_votes {
+                    let active_since = consensus_unix_time(dbtx).await;
+                    let sequence = dbtx
+                        .find_by_prefix(&ModuleFeeConsensusSchedulePrefix { module_instance_id })
+                        .await
+                        .fold(None::<u64>, |max_sequence, (key, _)| async move {
+                            Some(max_sequence.map_or(key.sequence, |max_sequence| {
+                                max_sequence.max(key.sequence)
+                            }))
+                        })
+                        .await
+                        .map_or(0, |sequence| {
+                            sequence
+                                .checked_add(1)
+                                .expect("fee consensus schedule sequence overflow")
+                        });
+
+                    dbtx.insert_entry(
+                        &ModuleFeeConsensusScheduleKey {
+                            module_instance_id,
+                            active_since,
+                            sequence,
+                        },
+                        &vote.fee_consensus,
+                    )
+                    .await;
                 }
 
                 Ok(())

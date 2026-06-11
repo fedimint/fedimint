@@ -29,18 +29,19 @@ use fedimint_core::endpoint_constants::{
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
     CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    CONSENSUS_ORD_LATENCY_ENDPOINT, CONSENSUS_UNIX_TIME_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
-    INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, CONSENSUS_UNIX_TIME_ENDPOINT,
+    CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
+    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SET_MODULE_FEE_CONSENSUS_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
     SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::{
-    ActivateModuleConsensusVersionRequest, ConsensusItem, ConsensusUnixTime,
-    ModuleConsensusVersionRequest,
+    ActivateModuleConsensusVersionRequest, ConsensusItem, ConsensusUnixTime, CurrentFeeConsensus,
+    ModuleConsensusVersionRequest, ModuleFeeConsensusRequest, SetModuleFeeConsensusRequest,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -80,7 +81,8 @@ use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, ModuleConsensusVersionVotingActivationKey,
-    SignedSessionOutcomeKey, active_module_consensus_version, consensus_unix_time,
+    ModuleFeeConsensusDesiredKey, SignedSessionOutcomeKey, active_module_consensus_version,
+    consensus_unix_time, current_module_fee_consensus,
 };
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -185,6 +187,24 @@ impl ConsensusApi {
         for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
     {
         consensus_unix_time(dbtx).await
+    }
+
+    async fn current_module_fee_consensus<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<CurrentFeeConsensus>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        let module = self.modules.get(module_instance_id).ok_or_else(|| {
+            anyhow::format_err!("Unknown module instance id {module_instance_id}")
+        })?;
+
+        Ok(
+            current_module_fee_consensus(dbtx, module_instance_id, module.initial_fee_consensus())
+                .await,
+        )
     }
 
     // we want to return an error if and only if the submitted transaction is
@@ -953,6 +973,46 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ConsensusUnixTime {
                 let mut dbtx = fedimint.db.begin_transaction_nc().await;
                 Ok(fedimint.consensus_unix_time(&mut dbtx).await)
+            }
+        },
+        api_endpoint! {
+            CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, _context, request: ModuleFeeConsensusRequest| -> CurrentFeeConsensus {
+                let mut dbtx = fedimint.db.begin_transaction_nc().await;
+                fedimint
+                    .current_module_fee_consensus(&mut dbtx, request.module_instance_id)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))
+            }
+        },
+        api_endpoint! {
+            SET_MODULE_FEE_CONSENSUS_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, context, request: SetModuleFeeConsensusRequest| -> () {
+                check_auth(context)?;
+
+                let module = fedimint.modules.get(request.module_instance_id).ok_or_else(|| {
+                    ApiError::bad_request(format!(
+                        "Unknown module instance id {}",
+                        request.module_instance_id
+                    ))
+                })?;
+                module
+                    .decode_fee_consensus(&request.fee_consensus)
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                let mut dbtx = fedimint.db.begin_transaction().await;
+                dbtx.insert_entry(
+                    &ModuleFeeConsensusDesiredKey {
+                        module_instance_id: request.module_instance_id,
+                    },
+                    &request.fee_consensus,
+                )
+                .await;
+                dbtx.commit_tx_result().await?;
+
+                Ok(())
             }
         },
         api_endpoint! {

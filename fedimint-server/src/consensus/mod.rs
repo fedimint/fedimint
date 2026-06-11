@@ -28,6 +28,7 @@ use fedimint_core::envs::{
 };
 use fedimint_core::epoch::{
     ConsensusItem, ConsensusUnixTime, ModuleConsensusVersionRequest, ModuleConsensusVersionVote,
+    ModuleFeeConsensusVote,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
@@ -60,7 +61,8 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::db::{
-    CoreUnixTimeVoteKey, ModuleConsensusVersionVotingActivationKey, active_module_consensus_version,
+    CoreUnixTimeVoteKey, ModuleConsensusVersionVotingActivationKey, ModuleFeeConsensusDesiredKey,
+    active_module_consensus_version, current_module_fee_consensus,
 };
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
@@ -519,6 +521,23 @@ fn submit_module_ci_proposals(
                     }
                 }
 
+                if let Some(fee_consensus) =
+                    module_fee_consensus_vote(&db, module_id, &module).await
+                {
+                    let item = ConsensusItem::ModuleFeeConsensus(ModuleFeeConsensusVote {
+                        module_instance_id: module_id,
+                        fee_consensus,
+                    });
+
+                    if submission_sender.send(item).await.is_err() {
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            module_id,
+                            "Unable to submit module fee consensus vote proposal via channel"
+                        );
+                    }
+                }
+
                 let module_consensus_items = tokio::time::timeout(
                     CONSENSUS_PROPOSAL_TIMEOUT,
                     module.consensus_proposal(
@@ -564,6 +583,23 @@ fn submit_module_ci_proposals(
             }
         },
     );
+}
+
+async fn module_fee_consensus_vote(
+    db: &Database,
+    module_id: ModuleInstanceId,
+    module: &DynServerModule,
+) -> Option<Vec<u8>> {
+    let mut dbtx = db.begin_transaction_nc().await;
+    let desired_vote = dbtx
+        .get_value(&ModuleFeeConsensusDesiredKey {
+            module_instance_id: module_id,
+        })
+        .await?;
+    let current_fee_consensus =
+        current_module_fee_consensus(&mut dbtx, module_id, module.initial_fee_consensus()).await;
+
+    (desired_vote != current_fee_consensus.fee_consensus).then_some(desired_vote)
 }
 
 async fn module_consensus_version_vote(

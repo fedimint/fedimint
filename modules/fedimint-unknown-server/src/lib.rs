@@ -150,7 +150,10 @@ pub struct Unknown {
 impl ServerModule for Unknown {
     /// Define the consensus types
     type Common = UnknownModuleTypes;
+    type FeeConsensus = ();
     type Init = UnknownInit;
+
+    fn initial_fee_consensus(&self) {}
 
     async fn consensus_proposal(
         &self,

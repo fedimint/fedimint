@@ -16,6 +16,8 @@ pub enum ConsensusItem {
     ModuleConsensusVersion(ModuleConsensusVersionVote),
     /// A peer vote for core consensus unix time.
     CoreUnixTime(ConsensusUnixTime),
+    /// A peer vote for a module fee consensus schedule.
+    ModuleFeeConsensus(ModuleFeeConsensusVote),
     /// Allows us to add new items in the future without crashing old clients
     /// that try to interpret the session log.
     #[encodable_default]
@@ -55,3 +57,26 @@ pub struct ActivateModuleConsensusVersionRequest {
     Decodable,
 )]
 pub struct ConsensusUnixTime(pub u64);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct ModuleFeeConsensusVote {
+    pub module_instance_id: ModuleInstanceId,
+    pub fee_consensus: Vec<u8>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ModuleFeeConsensusRequest {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct SetModuleFeeConsensusRequest {
+    pub module_instance_id: ModuleInstanceId,
+    pub fee_consensus: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct CurrentFeeConsensus {
+    pub fee_consensus: Vec<u8>,
+    pub active_since: ConsensusUnixTime,
+}

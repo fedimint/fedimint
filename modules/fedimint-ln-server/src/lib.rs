@@ -34,8 +34,8 @@ use fedimint_core::{
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
-    FeeConfig, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigPrivate,
+    FeeConfig, FeeConsensus as LightningFeeConsensus, LightningClientConfig, LightningConfig,
+    LightningConfigConsensus, LightningConfigPrivate,
 };
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
@@ -350,7 +350,13 @@ pub struct Lightning {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Lightning {
     type Common = LightningModuleTypes;
+    type FeeConsensus = LightningFeeConsensus;
     type Init = LightningInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        LightningFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal(
         &self,

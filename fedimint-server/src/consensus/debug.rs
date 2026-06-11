@@ -45,6 +45,13 @@ impl fmt::Debug for DebugConsensusItem<'_> {
             ConsensusItem::CoreUnixTime(time) => {
                 f.write_fmt(format_args!("Core unix time vote: {}", time.0))?;
             }
+            ConsensusItem::ModuleFeeConsensus(vote) => {
+                f.write_fmt(format_args!(
+                    "Module fee consensus vote: module={} len={}",
+                    vote.module_instance_id,
+                    vote.fee_consensus.len()
+                ))?;
+            }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
             }
@@ -107,6 +114,13 @@ impl fmt::Display for DebugConsensusItemCompact<'_> {
             }
             ConsensusItem::CoreUnixTime(time) => {
                 f.write_fmt(format_args!("core_unix_time_vote={}; ", time.0))?;
+            }
+            ConsensusItem::ModuleFeeConsensus(vote) => {
+                f.write_fmt(format_args!(
+                    "module_fee_vote={}:{}; ",
+                    vote.module_instance_id,
+                    vote.fee_consensus.len()
+                ))?;
             }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("unknown variant={variant}"))?;

@@ -352,6 +352,36 @@ impl DatabaseDump {
                     "Consensus Unix Time"
                 );
             }
+            server_db::DbKeyPrefix::ModuleFeeConsensusVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusVoteFullPrefix,
+                    consensus_db::ModuleFeeConsensusVoteKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleFeeConsensusDesired => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusDesiredPrefix,
+                    consensus_db::ModuleFeeConsensusDesiredKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Desired Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleFeeConsensusSchedule => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusScheduleFullPrefix,
+                    consensus_db::ModuleFeeConsensusScheduleKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Schedules"
+                );
+            }
             // Module is a global prefix for all module data
             server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo

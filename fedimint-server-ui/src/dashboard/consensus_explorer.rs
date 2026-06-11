@@ -148,6 +148,7 @@ fn format_item_type(item: &ConsensusItem) -> String {
         ConsensusItem::Module(_) => "Module".to_string(),
         ConsensusItem::ModuleConsensusVersion(_) => "Module Consensus Version".to_string(),
         ConsensusItem::CoreUnixTime(_) => "Core Unix Time".to_string(),
+        ConsensusItem::ModuleFeeConsensus(_) => "Module Fee Consensus".to_string(),
         ConsensusItem::Default { variant, .. } => format!("Unknown ({variant})"),
     }
 }
@@ -282,6 +283,18 @@ fn format_item_details(item: &AcceptedItem) -> Markup {
                 div class="consensus-item-details" {
                     div class="mb-2" {
                         "Unix Time: " code { (time.0) }
+                    }
+                }
+            }
+        }
+        ConsensusItem::ModuleFeeConsensus(vote) => {
+            html! {
+                div class="consensus-item-details" {
+                    div class="mb-2" {
+                        "Module Instance ID: " code { (vote.module_instance_id) }
+                    }
+                    div class="mb-2" {
+                        "Fee Consensus Size: " code { (vote.fee_consensus.len()) " bytes" }
                     }
                 }
             }

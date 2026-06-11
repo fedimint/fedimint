@@ -44,3 +44,5 @@ pub const ACTIVE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "active_module_consen
 pub const SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "supported_module_consensus_version";
 pub const ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "activate_module_consensus_version";
 pub const CONSENSUS_UNIX_TIME_ENDPOINT: &str = "consensus_unix_time";
+pub const CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT: &str = "current_module_fee_consensus";
+pub const SET_MODULE_FEE_CONSENSUS_ENDPOINT: &str = "set_module_fee_consensus";

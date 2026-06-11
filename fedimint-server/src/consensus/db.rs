@@ -7,7 +7,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime};
+use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime, CurrentFeeConsensus};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
@@ -235,6 +235,113 @@ where
         .unwrap_or_default()
 }
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusVoteKey {
+    pub module_instance_id: ModuleInstanceId,
+    pub peer_id: PeerId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusVotePrefix {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusVoteFullPrefix;
+
+impl_db_record!(
+    key = ModuleFeeConsensusVoteKey,
+    value = Vec<u8>,
+    db_prefix = DbKeyPrefix::ModuleFeeConsensusVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleFeeConsensusVoteKey,
+    query_prefix = ModuleFeeConsensusVotePrefix
+);
+
+impl_db_lookup!(
+    key = ModuleFeeConsensusVoteKey,
+    query_prefix = ModuleFeeConsensusVoteFullPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusDesiredKey {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusDesiredPrefix;
+
+impl_db_record!(
+    key = ModuleFeeConsensusDesiredKey,
+    value = Vec<u8>,
+    db_prefix = DbKeyPrefix::ModuleFeeConsensusDesired,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleFeeConsensusDesiredKey,
+    query_prefix = ModuleFeeConsensusDesiredPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusScheduleKey {
+    pub module_instance_id: ModuleInstanceId,
+    pub active_since: ConsensusUnixTime,
+    pub sequence: u64,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusSchedulePrefix {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleFeeConsensusScheduleFullPrefix;
+
+impl_db_record!(
+    key = ModuleFeeConsensusScheduleKey,
+    value = Vec<u8>,
+    db_prefix = DbKeyPrefix::ModuleFeeConsensusSchedule,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleFeeConsensusScheduleKey,
+    query_prefix = ModuleFeeConsensusSchedulePrefix
+);
+
+impl_db_lookup!(
+    key = ModuleFeeConsensusScheduleKey,
+    query_prefix = ModuleFeeConsensusScheduleFullPrefix
+);
+
+pub async fn current_module_fee_consensus<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    module_instance_id: ModuleInstanceId,
+    initial_fee_consensus: Vec<u8>,
+) -> CurrentFeeConsensus
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    dbtx.find_by_prefix(&ModuleFeeConsensusSchedulePrefix { module_instance_id })
+        .await
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .max_by_key(|(key, _)| (key.active_since, key.sequence))
+        .map(|(key, fee_consensus)| CurrentFeeConsensus {
+            active_since: key.active_since,
+            fee_consensus,
+        })
+        .unwrap_or(CurrentFeeConsensus {
+            active_since: ConsensusUnixTime::default(),
+            fee_consensus: initial_fee_consensus,
+        })
+}
+
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
     BTreeMap::new()
 }
@@ -305,7 +412,8 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
                                 }
                             }
                             ConsensusItem::ModuleConsensusVersion(_)
-                            | ConsensusItem::CoreUnixTime(_) => vec![],
+                            | ConsensusItem::CoreUnixTime(_)
+                            | ConsensusItem::ModuleFeeConsensus(_) => vec![],
                             ConsensusItem::Default { .. } => {
                                 unreachable!("We never save unknown CIs on the server side")
                             }
