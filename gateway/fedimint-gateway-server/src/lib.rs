@@ -880,6 +880,16 @@ impl Gateway {
                         Ok((stream, ln_client)) => (stream, ln_client),
                         Err(err) => {
                             warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to open lightning payment stream");
+                            // `route_htlcs` may have already spawned tasks into the
+                            // subgroup before failing (e.g. the LNv1 interceptor is
+                            // spawned before LNv2 setup, which can fail). Tear the
+                            // subgroup down so no stale task keeps owning the LND HTLC
+                            // stream, which would prevent the retry from taking over and
+                            // could cause it to cancel real HTLCs after `gateway_receiver`
+                            // is dropped.
+                            if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
+                                crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
+                            }
                             sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                             continue
                         }
