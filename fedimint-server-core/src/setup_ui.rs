@@ -49,6 +49,9 @@ pub trait ISetupApi {
     /// Start the distributed key generation process
     async fn start_dkg(&self) -> Result<()>;
 
+    /// Restore this guardian from a config backup archive
+    async fn restore_from_backup(&self, password: String, backup: Vec<u8>) -> Result<()>;
+
     /// Returns the expected federation size if any setup code (ours or a
     /// peer's) has set it
     async fn federation_size(&self) -> Option<u32>;

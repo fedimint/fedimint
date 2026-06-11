@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::io::Read as _;
 use std::iter::once;
 use std::mem::discriminant;
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 use std::sync::Arc;
 
@@ -24,17 +27,121 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::setup_code::PeerEndpoints;
-use fedimint_core::{PeerId, base32};
+use fedimint_core::util::{FmtCompact as _, write_new};
+use fedimint_core::{PeerId, base32, runtime};
+use fedimint_logging::LOG_CONSENSUS;
 use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex, oneshot};
 use tokio_rustls::rustls;
+use tracing::warn;
 
-use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode};
+use crate::config::io::{
+    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD, PRIVATE_CONFIG,
+    SALT_FILE, read_server_config,
+};
+use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode, ServerConfig};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
+
+/// Restored guardian configuration staged in a temporary directory.
+///
+/// Restore is intentionally split into two phases. First the uploaded backup is
+/// unpacked into `restore_dir` and parsed into `cfg` without touching the live
+/// config files. Later, after the caller performs cross-checks that need the
+/// full server context, [`RestoredGuardianConfig::install`] moves the staged
+/// files into the real data directory.
+pub struct RestoredGuardianConfig {
+    /// Parsed server config read from the staged files.
+    pub cfg: ServerConfig,
+    /// Temporary directory holding the exact files that will be installed.
+    restore_dir: PathBuf,
+}
+
+impl RestoredGuardianConfig {
+    /// Best-effort cleanup of the staged restore directory.
+    ///
+    /// This is used on validation and handoff failures before the staged files
+    /// become live config. Cleanup failures are only logged because callers are
+    /// already handling another restore error.
+    pub fn cleanup(&self) {
+        if let Err(e) = fs::remove_dir_all(&self.restore_dir) {
+            warn!(
+                target: LOG_CONSENSUS,
+                path = %self.restore_dir.display(),
+                err = %e.fmt_compact(),
+                "Failed to clean up restore directory"
+            );
+        }
+    }
+
+    /// Install the staged restored config into `data_dir`.
+    ///
+    /// This consumes `self` because after install there must be no separate
+    /// staged restore state. The method refuses to overwrite existing live
+    /// files, moves each expected file from `restore_dir` into `data_dir`,
+    /// and tries to roll back already moved files if a later move fails. On
+    /// success the temp directory is removed and the parsed
+    /// [`ServerConfig`] is returned for consensus startup.
+    pub fn install(self, data_dir: &Path) -> anyhow::Result<ServerConfig> {
+        let install_paths = [
+            PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+            PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
+            PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
+            PathBuf::from(SALT_FILE),
+            PathBuf::from(PLAINTEXT_PASSWORD),
+        ];
+
+        for path in &install_paths {
+            let destination = data_dir.join(path);
+            if destination.exists() {
+                self.cleanup();
+                anyhow::bail!("Refusing to overwrite existing {}", path.display());
+            }
+        }
+
+        let mut installed_paths: Vec<PathBuf> = Vec::new();
+        for path in &install_paths {
+            let destination = data_dir.join(path);
+            if let Err(e) = fs::rename(self.restore_dir.join(path), &destination) {
+                for installed_path in installed_paths.iter().rev() {
+                    if let Err(rollback_err) = fs::rename(
+                        data_dir.join(installed_path),
+                        self.restore_dir.join(installed_path),
+                    ) {
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            path = %installed_path.display(),
+                            err = %rollback_err.fmt_compact(),
+                            "Failed to roll back installed path during restore failure"
+                        );
+                    }
+                }
+                self.cleanup();
+                return Err(e).with_context(|| format!("Installing restored {}", path.display()));
+            }
+            installed_paths.push(path.clone());
+        }
+
+        fs::remove_dir_all(&self.restore_dir).context("Removing restore directory")?;
+        Ok(self.cfg)
+    }
+}
+
+/// Result sent from the setup API task to the main setup driver.
+///
+/// Normal DKG sends generated params directly. Restore sends staged config plus
+/// a oneshot acknowledgement so the HTTP handler can report success only after
+/// the main setup driver validates and installs the restored files.
+pub enum ConfigGenOutcome {
+    Generated(Box<ConfigGenParams>),
+    Restored(
+        Box<RestoredGuardianConfig>,
+        oneshot::Sender<Result<(), String>>,
+    ),
+}
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]
@@ -43,6 +150,8 @@ pub struct SetupState {
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
     setup_codes: BTreeSet<PeerSetupCode>,
+    /// Set while a backup restore is being processed
+    restore_in_progress: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -97,8 +206,10 @@ pub struct SetupApi {
     state: Arc<Mutex<SetupState>>,
     /// DB not really used
     db: Database,
-    /// Triggers the distributed key generation
-    sender: Sender<ConfigGenParams>,
+    /// Directory containing guardian config files
+    data_dir: PathBuf,
+    /// Triggers config generation or config restore
+    sender: Sender<ConfigGenOutcome>,
     /// Version of the running fedimintd binary
     code_version_str: String,
     /// Git hash of the running fedimintd binary
@@ -109,7 +220,8 @@ impl SetupApi {
     pub fn new(
         settings: ConfigGenSettings,
         db: Database,
-        sender: Sender<ConfigGenParams>,
+        data_dir: PathBuf,
+        sender: Sender<ConfigGenOutcome>,
         code_version_str: String,
         code_version_hash: String,
     ) -> Self {
@@ -117,6 +229,7 @@ impl SetupApi {
             settings,
             state: Arc::new(Mutex::new(SetupState::default())),
             db,
+            data_dir,
             sender,
             code_version_str,
             code_version_hash,
@@ -129,6 +242,126 @@ impl SetupApi {
             None => SetupStatus::AwaitingLocalParams,
         }
     }
+}
+
+fn is_expected_backup_path(path: &Path) -> bool {
+    let expected_paths = [
+        PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+        PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
+        PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
+        PathBuf::from(SALT_FILE),
+    ];
+
+    expected_paths.iter().any(|expected| expected == path)
+}
+
+/// Unpack a guardian backup tar into `restore_dir` and parse it.
+///
+/// This function only stages files. It validates archive paths, rejects missing
+/// or duplicate required files, verifies the password against the restored API
+/// auth, and writes the plaintext password file into the staged directory. The
+/// live data directory is not modified here.
+fn unpack_backup_to_restore_dir(
+    backup: &[u8],
+    password: &str,
+    restore_dir: &Path,
+) -> anyhow::Result<RestoredGuardianConfig> {
+    let mut archive = tar::Archive::new(backup);
+    let mut restored_paths = BTreeSet::new();
+
+    for entry in archive.entries().context("Reading backup archive")? {
+        let mut entry = entry.context("Reading backup archive entry")?;
+        let path = entry
+            .path()
+            .context("Reading backup archive entry path")?
+            .into_owned();
+        ensure!(
+            path.components()
+                .all(|component| matches!(component, Component::Normal(_))),
+            "Backup archive contains an invalid path"
+        );
+        ensure!(
+            is_expected_backup_path(&path),
+            "Backup archive contains unexpected file {}",
+            path.display()
+        );
+        ensure!(
+            entry.header().entry_type().is_file(),
+            "Backup archive contains non-file entry {}",
+            path.display()
+        );
+        ensure!(
+            restored_paths.insert(path.clone()),
+            "Backup archive contains duplicate file {}",
+            path.display()
+        );
+
+        let mut bytes = Vec::new();
+        entry
+            .read_to_end(&mut bytes)
+            .context("Reading backup archive entry contents")?;
+        write_new(restore_dir.join(&path), bytes).context("Writing restored config file")?;
+    }
+
+    for path in [
+        PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+        PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
+        PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
+        PathBuf::from(SALT_FILE),
+    ] {
+        ensure!(
+            restored_paths.contains(&path),
+            "Backup archive is missing {}",
+            path.display()
+        );
+    }
+
+    let cfg = read_server_config(password, restore_dir).context("Reading restored config")?;
+    ensure!(
+        cfg.private.api_auth.verify(password),
+        "The backup password does not match the restored guardian auth"
+    );
+    write_new(restore_dir.join(PLAINTEXT_PASSWORD), password)
+        .context("Writing restored password file")?;
+
+    Ok(RestoredGuardianConfig {
+        cfg,
+        restore_dir: restore_dir.to_path_buf(),
+    })
+}
+
+/// Create a fresh restore staging directory under `data_dir` and unpack into
+/// it.
+///
+/// On success the caller receives a [`RestoredGuardianConfig`] whose files are
+/// still staged in `restore.tmp`. On failure the staging directory is removed
+/// so a later restore attempt can retry cleanly.
+fn restore_backup_to_dir(
+    backup: &[u8],
+    password: &str,
+    data_dir: &Path,
+) -> anyhow::Result<RestoredGuardianConfig> {
+    let restore_dir = data_dir.join("restore.tmp");
+    if restore_dir.exists() {
+        fs::remove_dir_all(&restore_dir).context("Removing stale restore directory")?;
+    }
+    fs::create_dir(&restore_dir).context("Creating restore directory")?;
+
+    let restore_result = unpack_backup_to_restore_dir(backup, password, &restore_dir);
+
+    if restore_result.is_err()
+        && restore_dir.exists()
+        && let Err(e) = fs::remove_dir_all(&restore_dir)
+    {
+        warn!(
+            target: LOG_CONSENSUS,
+            path = %restore_dir.display(),
+            err = %e.fmt_compact(),
+            "Failed to clean up restore directory after restore failure"
+        );
+    }
+
+    restore_result
 }
 
 #[async_trait]
@@ -240,6 +473,11 @@ impl ISetupApi for SetupApi {
             "Local parameters have already been set"
         );
 
+        ensure!(
+            !state.restore_in_progress,
+            "A restore is already in progress"
+        );
+
         let lp = if self.settings.enable_iroh {
             let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
                 SecretKey::from_str(&var)
@@ -316,6 +554,11 @@ impl ISetupApi for SetupApi {
         if state.setup_codes.contains(&info) {
             return Ok(info.name.clone());
         }
+
+        ensure!(
+            !state.restore_in_progress,
+            "A restore is already in progress"
+        );
 
         let local_params = state
             .local_params
@@ -395,6 +638,11 @@ impl ISetupApi for SetupApi {
     async fn start_dkg(&self) -> anyhow::Result<()> {
         let mut state = self.state.lock().await.clone();
 
+        ensure!(
+            !state.restore_in_progress,
+            "A restore is already in progress"
+        );
+
         let local_params = state
             .local_params
             .clone()
@@ -465,11 +713,69 @@ impl ISetupApi for SetupApi {
         };
 
         self.sender
-            .send(params)
+            .send(ConfigGenOutcome::Generated(Box::new(params)))
             .await
             .context("Failed to send config gen params")?;
 
         Ok(())
+    }
+
+    async fn restore_from_backup(&self, password: String, backup: Vec<u8>) -> anyhow::Result<()> {
+        ensure!(!password.is_empty(), "The password is empty");
+        ensure!(
+            password.trim() == password,
+            "The password contains leading/trailing whitespace",
+        );
+        {
+            let mut state = self.state.lock().await;
+            ensure!(
+                state.local_params.is_none(),
+                "Local parameters have already been set"
+            );
+            ensure!(
+                !state.restore_in_progress,
+                "A restore is already in progress"
+            );
+            state.restore_in_progress = true;
+        }
+
+        let state = self.state.clone();
+        let sender = self.sender.clone();
+        let data_dir = self.data_dir.clone();
+        runtime::spawn("restore guardian backup", async move {
+            let result = async {
+                let cfg = tokio::task::spawn_blocking(move || {
+                    restore_backup_to_dir(&backup, &password, &data_dir)
+                })
+                .await
+                .context("Restore backup task panicked")??;
+                let (restore_result_sender, restore_result_receiver) = oneshot::channel();
+                let restored = ConfigGenOutcome::Restored(Box::new(cfg), restore_result_sender);
+                if let Err(e) = sender.send(restored).await {
+                    if let ConfigGenOutcome::Restored(restored, _) = e.0 {
+                        restored.cleanup();
+                    }
+                    return Err(anyhow::format_err!("Failed to send restored config"));
+                }
+                restore_result_receiver
+                    .await
+                    .context("Restore result sender dropped")?
+                    .map_err(anyhow::Error::msg)?;
+                Ok(())
+            }
+            .await;
+
+            if result.is_err() {
+                state.lock().await.restore_in_progress = false;
+            }
+            // On success, the setup task consumes the restored config and exits setup mode,
+            // so there is no setup API left that could observe or reset
+            // `restore_in_progress`.
+
+            result
+        })
+        .await
+        .context("Restore task panicked")?
     }
 
     async fn federation_size(&self) -> Option<u32> {
@@ -616,6 +922,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+    use base64::Engine as _;
     use bitcoin::Network;
     use fedimint_core::db::IRawDatabaseExt;
     use fedimint_core::db::mem_impl::MemDatabase;
@@ -643,11 +950,15 @@ mod tests {
                 default_modules: BTreeSet::new(),
             },
             MemDatabase::new().into_database(),
+            std::env::temp_dir(),
             sender,
             String::new(),
             String::new(),
         )
     }
+
+    const INVALID_RESTORE_BACKUP_FIXTURE_B64: &str =
+        include_str!("../test_fixtures/guardian-backup-invalid-config.tar.b64");
 
     async fn setup_code(api: &SetupApi, name: &str) -> String {
         api.set_local_parameters(
@@ -676,6 +987,57 @@ mod tests {
             .expect("peer setup code with matching network should be accepted");
 
         assert_eq!(added_peer, "peer");
+    }
+
+    #[test]
+    fn checked_in_backup_fixture_reaches_config_validation() {
+        let tempdir = tempfile::tempdir().expect("creating temp dir should succeed");
+
+        let backup = base64::prelude::BASE64_STANDARD
+            .decode(INVALID_RESTORE_BACKUP_FIXTURE_B64.trim())
+            .expect("checked-in backup fixture base64 should decode");
+        let Err(err) = restore_backup_to_dir(&backup, "pass", tempdir.path()) else {
+            panic!("invalid checked-in backup fixture should not restore");
+        };
+
+        assert!(
+            err.to_string().contains("Reading restored config"),
+            "unexpected restore error: {err:#}"
+        );
+        assert!(
+            !tempdir.path().join("restore.tmp").exists(),
+            "failed restore should clean up staging dir"
+        );
+    }
+
+    #[test]
+    fn backup_restore_rejects_non_file_entries() {
+        let tempdir = tempfile::tempdir().expect("creating temp dir should succeed");
+        let mut backup = Vec::new();
+        {
+            let mut archive = tar::Builder::new(&mut backup);
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Directory);
+            header.set_size(0);
+            header.set_cksum();
+            archive
+                .append_data(
+                    &mut header,
+                    PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+                    std::io::empty(),
+                )
+                .expect("writing tar entry should succeed");
+            archive.finish().expect("finishing tar should succeed");
+        }
+
+        let Err(err) = restore_backup_to_dir(&backup, "pass", tempdir.path()) else {
+            panic!("non-file backup entries should be rejected");
+        };
+
+        assert!(
+            err.to_string().contains("non-file entry"),
+            "unexpected restore error: {err:#}"
+        );
     }
 
     #[tokio::test]

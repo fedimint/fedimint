@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{env, fs};
@@ -23,6 +23,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
+use fedimint_server::config::io::{
+    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
+};
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
@@ -322,6 +325,7 @@ impl Federation {
         bitcoind: Bitcoind,
         skip_setup: bool,
         pre_dkg: bool,
+        pre_restore: bool,
         // Which of the pre-allocated federations to use (most tests just use single `0` one)
         fed_index: usize,
         federation_name: String,
@@ -424,6 +428,16 @@ impl Federation {
             }
 
             debug!("Moved invite-code files to client data directory");
+
+            if pre_restore {
+                Self::restart_guardian_for_manual_restore(
+                    process_mgr,
+                    &mut members,
+                    &peer_to_env_vars_map,
+                    &bitcoind,
+                )
+                .await?;
+            }
         }
 
         let client = JitTryAnyhow::new_try({
@@ -444,6 +458,85 @@ impl Federation {
             client,
             connectors,
         })
+    }
+
+    async fn restart_guardian_for_manual_restore(
+        process_mgr: &ProcessManager,
+        members: &mut BTreeMap<usize, Fedimintd>,
+        peer_to_env_vars_map: &BTreeMap<usize, vars::Fedimintd>,
+        bitcoind: &Bitcoind,
+    ) -> Result<()> {
+        const RESTORE_PEER: usize = 0;
+
+        let peer_env_vars = &peer_to_env_vars_map[&RESTORE_PEER];
+        let backup_dir = process_mgr.globals.FM_TEST_DIR.join("fedimintd-backups");
+        tokio::fs::create_dir_all(&backup_dir)
+            .await
+            .context("Creating fedimintd backup directory")?;
+        let backup_path = backup_dir.join("fedimint-0-guardian-backup.tar");
+
+        Self::write_guardian_backup_tar(&peer_env_vars.FM_DATA_DIR, &backup_path).await?;
+        info!(
+            target: LOG_DEVIMINT,
+            path = %backup_path.display(),
+            "Wrote guardian backup for manual restore"
+        );
+
+        let fedimintd = members
+            .remove(&RESTORE_PEER)
+            .context("Missing fedimint-0 process")?;
+        fedimintd.terminate().await?;
+        tokio::fs::remove_dir_all(&peer_env_vars.FM_DATA_DIR)
+            .await
+            .with_context(|| format!("Removing {}", peer_env_vars.FM_DATA_DIR.display()))?;
+        tokio::fs::create_dir_all(&peer_env_vars.FM_DATA_DIR)
+            .await
+            .with_context(|| format!("Creating {}", peer_env_vars.FM_DATA_DIR.display()))?;
+
+        let fedimintd = Fedimintd::new(
+            process_mgr,
+            bitcoind.clone(),
+            RESTORE_PEER,
+            peer_env_vars,
+            "default".to_string(),
+        )
+        .await?;
+        members.insert(RESTORE_PEER, fedimintd);
+
+        info!(
+            target: LOG_DEVIMINT,
+            ui = %peer_env_vars.FM_BIND_UI,
+            backup = %backup_path.display(),
+            "fedimint-0 restarted in setup mode for manual restore"
+        );
+
+        Ok(())
+    }
+
+    async fn write_guardian_backup_tar(data_dir: &Path, backup_path: &Path) -> Result<()> {
+        let data_dir = data_dir.to_path_buf();
+        let backup_path = backup_path.to_path_buf();
+        spawn_blocking(move || {
+            let file = fs::File::options()
+                .write(true)
+                .create_new(true)
+                .open(&backup_path)
+                .with_context(|| format!("Creating {}", backup_path.display()))?;
+            let mut archive = tar::Builder::new(file);
+            for path in [
+                PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+                PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
+                PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
+                PathBuf::from(SALT_FILE),
+            ] {
+                archive
+                    .append_path_with_name(data_dir.join(&path), &path)
+                    .with_context(|| format!("Adding {} to backup", path.display()))?;
+            }
+            archive.finish().context("Finishing guardian backup tar")?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await?
     }
 
     pub fn client_config(&self) -> Result<ClientConfig> {

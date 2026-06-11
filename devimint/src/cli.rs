@@ -118,6 +118,12 @@ pub enum Cmd {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
     },
+    /// Spins up a dev federation, backs up fedimint-0, wipes it, and restarts
+    /// it in setup mode for manual guardian restore UI testing.
+    DevFedPreRestore {
+        #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
+        exec: Option<Vec<ffi::OsString>>,
+    },
     /// Rpc commands to the long running devimint instance. Could be entry point
     /// for devimint as a cli
     #[clap(flatten)]
@@ -260,147 +266,160 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             }
             task_group.make_handle().make_shutdown_rx().await;
         }
-        Cmd::DevFed { exec } => {
-            trace!(target: LOG_DEVIMINT, "Starting dev fed");
-            let start_time = Instant::now();
-            let skip_setup = common_args.skip_setup;
-            let pre_dkg = common_args.pre_dkg;
-            let (process_mgr, task_group) = setup(common_args).await?;
-            let main = {
-                let task_group = task_group.clone();
-                async move {
-                    let dev_fed = DevJitFed::new(&process_mgr, skip_setup, pre_dkg)?;
-
-                    let pegin_start_time = Instant::now();
-                    debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
-
-                    if !skip_setup && !pre_dkg {
-                        const GW_PEGIN_AMOUNT: u64 = 1_000_000;
-                        const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
-
-                        let (operation_id, (), ()) = tokio::try_join!(
-                            async {
-                                let (address, operation_id) =
-                                    dev_fed.internal_client().await?.get_deposit_addr().await?;
-                                debug!(
-                                    target: LOG_DEVIMINT,
-                                    %address,
-                                    %operation_id,
-                                    "Sending funds to client deposit addr"
-                                );
-                                dev_fed
-                                    .bitcoind()
-                                    .await?
-                                    .send_to(address, CLIENT_PEGIN_AMOUNT)
-                                    .await?;
-                                Ok(operation_id)
-                            },
-                            async {
-                                let address = dev_fed
-                                    .gw_lnd_registered()
-                                    .await?
-                                    .client()
-                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
-                                    .await?;
-                                debug!(
-                                    target: LOG_DEVIMINT,
-                                    %address,
-                                    "Sending funds to LND deposit addr"
-                                );
-                                dev_fed
-                                    .bitcoind()
-                                    .await?
-                                    .send_to(address, GW_PEGIN_AMOUNT)
-                                    .await
-                                    .map(|_| ())
-                            },
-                            async {
-                                if crate::util::supports_lnv2() {
-                                    let gw_ldk = dev_fed.gw_ldk_connected().await?;
-                                    let address = gw_ldk
-                                        .client()
-                                        .get_pegin_addr(
-                                            &dev_fed.fed().await?.calculate_federation_id(),
-                                        )
-                                        .await?;
-                                    debug!(
-                                        target: LOG_DEVIMINT,
-                                        %address,
-                                        "Sending funds to LDK deposit addr"
-                                    );
-                                    dev_fed
-                                        .bitcoind()
-                                        .await?
-                                        .send_to(address, GW_PEGIN_AMOUNT)
-                                        .await
-                                        .map(|_| ())
-                                } else {
-                                    Ok(())
-                                }
-                            },
-                        )?;
-
-                        dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
-                        if crate::util::supports_wallet_v2() {
-                            dev_fed
-                                .internal_client()
-                                .await?
-                                .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
-                                .await?;
-                        } else {
-                            dev_fed
-                                .internal_client()
-                                .await?
-                                .await_deposit(&operation_id)
-                                .await?;
-                        }
-
-                        info!(
-                            target: LOG_DEVIMINT,
-                            elapsed_ms = %pegin_start_time.elapsed().as_millis(),
-                            "Pegins completed"
-                        );
-                    }
-
-                    if !pre_dkg {
-                        // TODO: Audit that the environment access only happens in single-threaded
-                        // code.
-                        unsafe {
-                            std::env::set_var(
-                                FM_INVITE_CODE_ENV,
-                                dev_fed.fed().await?.invite_code()?,
-                            );
-                        };
-                    }
-
-                    dev_fed.finalize(&process_mgr).await?;
-
-                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-
-                    info!(
-                        target: LOG_DEVIMINT,
-                        elapsed_ms = %start_time.elapsed().as_millis(),
-                        path = %process_mgr.globals.FM_DATA_DIR.display(),
-                        "Devfed ready"
-                    );
-                    if let Some(exec) = exec {
-                        debug!(target: LOG_DEVIMINT, "Starting exec command");
-                        exec_user_command(exec).await?;
-                        task_group.shutdown();
-                    }
-
-                    debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
-                    task_group.make_handle().make_shutdown_rx().await;
-
-                    Ok::<_, anyhow::Error>(daemons)
-                }
-            };
-            if let Some(fed) = cleanup_on_exit(main, task_group).await? {
-                fed.fast_terminate().await;
-            }
-        }
+        Cmd::DevFed { exec } => handle_dev_fed_command(common_args, exec, false).await?,
+        Cmd::DevFedPreRestore { exec } => handle_dev_fed_command(common_args, exec, true).await?,
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
     }
+    Ok(())
+}
+
+async fn handle_dev_fed_command(
+    common_args: CommonArgs,
+    exec: Option<Vec<ffi::OsString>>,
+    pre_restore: bool,
+) -> Result<()> {
+    trace!(target: LOG_DEVIMINT, "Starting dev fed");
+    let start_time = Instant::now();
+    let skip_setup = common_args.skip_setup;
+    let pre_dkg = common_args.pre_dkg;
+    ensure!(
+        !pre_restore || (!skip_setup && !pre_dkg),
+        "dev-fed-pre-restore cannot be combined with skip-setup or pre-dkg"
+    );
+    let (process_mgr, task_group) = setup(common_args).await?;
+    let main = {
+        let task_group = task_group.clone();
+        async move {
+            let dev_fed =
+                DevJitFed::new_with_pre_restore(&process_mgr, skip_setup, pre_dkg, pre_restore)?;
+
+            let pegin_start_time = Instant::now();
+            debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
+
+            if !skip_setup && !pre_dkg && !pre_restore {
+                const GW_PEGIN_AMOUNT: u64 = 1_000_000;
+                const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
+
+                let (operation_id, (), ()) = tokio::try_join!(
+                    async {
+                        let (address, operation_id) =
+                            dev_fed.internal_client().await?.get_deposit_addr().await?;
+                        debug!(
+                            target: LOG_DEVIMINT,
+                            %address,
+                            %operation_id,
+                            "Sending funds to client deposit addr"
+                        );
+                        dev_fed
+                            .bitcoind()
+                            .await?
+                            .send_to(address, CLIENT_PEGIN_AMOUNT)
+                            .await?;
+                        Ok(operation_id)
+                    },
+                    async {
+                        let address = dev_fed
+                            .gw_lnd_registered()
+                            .await?
+                            .client()
+                            .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
+                            .await?;
+                        debug!(
+                            target: LOG_DEVIMINT,
+                            %address,
+                            "Sending funds to LND deposit addr"
+                        );
+                        dev_fed
+                            .bitcoind()
+                            .await?
+                            .send_to(address, GW_PEGIN_AMOUNT)
+                            .await
+                            .map(|_| ())
+                    },
+                    async {
+                        if crate::util::supports_lnv2() {
+                            let gw_ldk = dev_fed.gw_ldk_connected().await?;
+                            let address = gw_ldk
+                                .client()
+                                .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
+                                .await?;
+                            debug!(
+                                target: LOG_DEVIMINT,
+                                %address,
+                                "Sending funds to LDK deposit addr"
+                            );
+                            dev_fed
+                                .bitcoind()
+                                .await?
+                                .send_to(address, GW_PEGIN_AMOUNT)
+                                .await
+                                .map(|_| ())
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )?;
+
+                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                if crate::util::supports_wallet_v2() {
+                    dev_fed
+                        .internal_client()
+                        .await?
+                        .await_balance(CLIENT_PEGIN_AMOUNT * 1000 * 9 / 10)
+                        .await?;
+                } else {
+                    dev_fed
+                        .internal_client()
+                        .await?
+                        .await_deposit(&operation_id)
+                        .await?;
+                }
+
+                info!(
+                    target: LOG_DEVIMINT,
+                    elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+                    "Pegins completed"
+                );
+            }
+
+            if !pre_dkg && !pre_restore {
+                // TODO: Audit that the environment access only happens in single-threaded
+                // code.
+                unsafe {
+                    std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
+                };
+            }
+
+            if pre_restore {
+                let _ = dev_fed.fed().await?;
+            } else {
+                dev_fed.finalize(&process_mgr).await?;
+            }
+
+            let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+
+            info!(
+                target: LOG_DEVIMINT,
+                elapsed_ms = %start_time.elapsed().as_millis(),
+                path = %process_mgr.globals.FM_DATA_DIR.display(),
+                "Devfed ready"
+            );
+            if let Some(exec) = exec {
+                debug!(target: LOG_DEVIMINT, "Starting exec command");
+                exec_user_command(exec).await?;
+                task_group.shutdown();
+            }
+
+            debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+            task_group.make_handle().make_shutdown_rx().await;
+
+            Ok::<_, anyhow::Error>(daemons)
+        }
+    };
+    if let Some(fed) = cleanup_on_exit(main, task_group).await? {
+        fed.fast_terminate().await;
+    }
+
     Ok(())
 }
 
