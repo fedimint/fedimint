@@ -332,6 +332,26 @@ impl DatabaseDump {
                     "Module Consensus Version Voting Activations"
                 );
             }
+            server_db::DbKeyPrefix::CoreUnixTimeVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::CoreUnixTimeVotePrefix,
+                    consensus_db::CoreUnixTimeVoteKey,
+                    fedimint_core::epoch::ConsensusUnixTime,
+                    consensus,
+                    "Core Unix Time Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ConsensusUnixTime => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ConsensusUnixTimePrefix,
+                    consensus_db::ConsensusUnixTimeKey,
+                    fedimint_core::epoch::ConsensusUnixTime,
+                    consensus,
+                    "Consensus Unix Time"
+                );
+            }
             // Module is a global prefix for all module data
             server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo

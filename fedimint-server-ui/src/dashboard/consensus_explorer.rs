@@ -147,6 +147,7 @@ fn format_item_type(item: &ConsensusItem) -> String {
         ConsensusItem::Transaction(_) => "Transaction".to_string(),
         ConsensusItem::Module(_) => "Module".to_string(),
         ConsensusItem::ModuleConsensusVersion(_) => "Module Consensus Version".to_string(),
+        ConsensusItem::CoreUnixTime(_) => "Core Unix Time".to_string(),
         ConsensusItem::Default { variant, .. } => format!("Unknown ({variant})"),
     }
 }
@@ -272,6 +273,15 @@ fn format_item_details(item: &AcceptedItem) -> Markup {
                     }
                     div class="mb-2" {
                         "Consensus Version: " code { (vote.version) }
+                    }
+                }
+            }
+        }
+        ConsensusItem::CoreUnixTime(time) => {
+            html! {
+                div class="consensus-item-details" {
+                    div class="mb-2" {
+                        "Unix Time: " code { (time.0) }
                     }
                 }
             }

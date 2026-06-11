@@ -241,6 +241,7 @@ async fn process_and_print_tweak_source(
                                 ConsensusItem::Transaction(tx) => Some(tx),
                                 ConsensusItem::Module(_)
                                 | ConsensusItem::ModuleConsensusVersion(_)
+                                | ConsensusItem::CoreUnixTime(_)
                                 | ConsensusItem::Default { .. } => None,
                             })
                             .collect();

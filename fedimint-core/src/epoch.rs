@@ -14,6 +14,8 @@ pub enum ConsensusItem {
     Module(ModuleConsensusItem),
     /// A peer vote to activate a newer consensus version for a module.
     ModuleConsensusVersion(ModuleConsensusVersionVote),
+    /// A peer vote for core consensus unix time.
+    CoreUnixTime(ConsensusUnixTime),
     /// Allows us to add new items in the future without crashing old clients
     /// that try to interpret the session log.
     #[encodable_default]
@@ -36,3 +38,20 @@ pub struct ActivateModuleConsensusVersionRequest {
     pub module_instance_id: ModuleInstanceId,
     pub version: Option<ModuleConsensusVersion>,
 }
+
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct ConsensusUnixTime(pub u64);

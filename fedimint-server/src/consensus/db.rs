@@ -7,7 +7,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
@@ -165,6 +165,76 @@ where
     versions[num_peers.max_evil()]
 }
 
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct CoreUnixTimeVoteKey(pub PeerId);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CoreUnixTimeVotePrefix;
+
+impl_db_record!(
+    key = CoreUnixTimeVoteKey,
+    value = ConsensusUnixTime,
+    db_prefix = DbKeyPrefix::CoreUnixTimeVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = CoreUnixTimeVoteKey,
+    query_prefix = CoreUnixTimeVotePrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ConsensusUnixTimeKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ConsensusUnixTimePrefix;
+
+impl_db_record!(
+    key = ConsensusUnixTimeKey,
+    value = ConsensusUnixTime,
+    db_prefix = DbKeyPrefix::ConsensusUnixTime,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ConsensusUnixTimeKey,
+    query_prefix = ConsensusUnixTimePrefix
+);
+
+pub async fn consensus_unix_time<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> ConsensusUnixTime
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    dbtx.get_value(&ConsensusUnixTimeKey)
+        .await
+        .unwrap_or_default()
+}
+
+pub async fn consensus_unix_time_from_votes<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    num_peers: NumPeers,
+) -> ConsensusUnixTime
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    let mut times = dbtx
+        .find_by_prefix(&CoreUnixTimeVotePrefix)
+        .await
+        .map(|entry| entry.1)
+        .collect::<Vec<ConsensusUnixTime>>()
+        .await;
+
+    times.sort_unstable();
+    times.reverse();
+
+    assert!(times.last() <= times.first());
+
+    times
+        .get(num_peers.threshold() - 1)
+        .copied()
+        .unwrap_or_default()
+}
+
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
     BTreeMap::new()
 }
@@ -234,7 +304,8 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
                                     vec![]
                                 }
                             }
-                            ConsensusItem::ModuleConsensusVersion(_) => vec![],
+                            ConsensusItem::ModuleConsensusVersion(_)
+                            | ConsensusItem::CoreUnixTime(_) => vec![],
                             ConsensusItem::Default { .. } => {
                                 unreachable!("We never save unknown CIs on the server side")
                             }

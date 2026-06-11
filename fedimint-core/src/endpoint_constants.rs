@@ -43,3 +43,4 @@ pub const CHAIN_ID_ENDPOINT: &str = "chain_id";
 pub const ACTIVE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "active_module_consensus_version";
 pub const SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "supported_module_consensus_version";
 pub const ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "activate_module_consensus_version";
+pub const CONSENSUS_UNIX_TIME_ENDPOINT: &str = "consensus_unix_time";

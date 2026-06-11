@@ -27,7 +27,7 @@ use fedimint_core::envs::{
     is_core_automatic_consensus_version_voting_disabled, is_running_in_test_env,
 };
 use fedimint_core::epoch::{
-    ConsensusItem, ModuleConsensusVersionRequest, ModuleConsensusVersionVote,
+    ConsensusItem, ConsensusUnixTime, ModuleConsensusVersionRequest, ModuleConsensusVersionVote,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
@@ -37,6 +37,7 @@ use fedimint_core::module::{
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{NumPeers, NumPeersExt, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
@@ -59,7 +60,7 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::db::{
-    ModuleConsensusVersionVotingActivationKey, active_module_consensus_version,
+    CoreUnixTimeVoteKey, ModuleConsensusVersionVotingActivationKey, active_module_consensus_version,
 };
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
@@ -270,6 +271,13 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
+    submit_core_ci_proposals(
+        task_group,
+        db.clone(),
+        cfg.local.identity,
+        submission_sender.clone(),
+    );
+
     for (module_id, kind, module) in module_registry.iter_modules() {
         let initial_module_consensus_version = cfg
             .consensus
@@ -392,6 +400,49 @@ async fn start_consensus_api(
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
 const CONSENSUS_VERSION_VOTE_CHECK_INTERVAL: Duration = Duration::from_secs(600);
 const TEST_CONSENSUS_VERSION_VOTE_CHECK_INTERVAL: Duration = Duration::from_secs(5);
+const CORE_UNIX_TIME_GRANULARITY_SECS: u64 = 60;
+
+fn submit_core_ci_proposals(
+    task_group: &TaskGroup,
+    db: Database,
+    our_peer_id: PeerId,
+    submission_sender: Sender<ConsensusItem>,
+) {
+    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(1)
+    });
+
+    task_group.spawn("core_citem_proposals", move |task_handle| async move {
+        while !task_handle.is_shutting_down() {
+            let vote = ConsensusUnixTime(
+                CORE_UNIX_TIME_GRANULARITY_SECS
+                    * (duration_since_epoch().as_secs() / CORE_UNIX_TIME_GRANULARITY_SECS),
+            );
+            let current_vote = db
+                .begin_transaction_nc()
+                .await
+                .get_value(&CoreUnixTimeVoteKey(our_peer_id))
+                .await
+                .unwrap_or_default();
+
+            if current_vote < vote
+                && submission_sender
+                    .send(ConsensusItem::CoreUnixTime(vote))
+                    .await
+                    .is_err()
+            {
+                warn!(
+                    target: LOG_CONSENSUS,
+                    "Unable to submit core unix time vote proposal via channel"
+                );
+            }
+
+            interval.tick().await;
+        }
+    });
+}
 
 fn submit_module_ci_proposals(
     task_group: &TaskGroup,

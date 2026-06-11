@@ -29,17 +29,18 @@ use fedimint_core::endpoint_constants::{
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
     CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
-    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, CONSENSUS_UNIX_TIME_ENDPOINT, FEDERATION_ID_ENDPOINT,
+    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
+    INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::{
-    ActivateModuleConsensusVersionRequest, ConsensusItem, ModuleConsensusVersionRequest,
+    ActivateModuleConsensusVersionRequest, ConsensusItem, ConsensusUnixTime,
+    ModuleConsensusVersionRequest,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -79,7 +80,7 @@ use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, ModuleConsensusVersionVotingActivationKey,
-    SignedSessionOutcomeKey, active_module_consensus_version,
+    SignedSessionOutcomeKey, active_module_consensus_version, consensus_unix_time,
 };
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -174,6 +175,16 @@ impl ConsensusApi {
         }
 
         Ok(versions)
+    }
+
+    async fn consensus_unix_time<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+    ) -> ConsensusUnixTime
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        consensus_unix_time(dbtx).await
     }
 
     // we want to return an error if and only if the submitted transaction is
@@ -934,6 +945,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 dbtx.commit_tx_result().await?;
 
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            CONSENSUS_UNIX_TIME_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> ConsensusUnixTime {
+                let mut dbtx = fedimint.db.begin_transaction_nc().await;
+                Ok(fedimint.consensus_unix_time(&mut dbtx).await)
             }
         },
         api_endpoint! {
