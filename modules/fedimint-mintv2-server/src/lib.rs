@@ -31,7 +31,7 @@ use fedimint_core::{
     async_trait_maybe_send, push_db_key_items, push_db_pair_items,
 };
 use fedimint_mintv2_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    FeeConfig, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
     consensus_denominations,
 };
 use fedimint_mintv2_common::endpoint_constants::{
@@ -175,9 +175,9 @@ impl ServerModuleInit for MintInit {
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let fee_consensus = if args.disable_base_fees {
-            FeeConsensus::zero()
+            FeeConfig::zero()
         } else {
-            FeeConsensus::new(0).expect("Relative fee is within range")
+            FeeConfig::new(0).expect("Relative fee is within range")
         };
 
         let tbs_agg_pks = consensus_denominations()
@@ -233,9 +233,9 @@ impl ServerModuleInit for MintInit {
         args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
         let fee_consensus = if args.disable_base_fees {
-            FeeConsensus::zero()
+            FeeConfig::zero()
         } else {
-            FeeConsensus::new(0).expect("Relative fee is within range")
+            FeeConfig::new(0).expect("Relative fee is within range")
         };
 
         let mut tbs_sks = BTreeMap::new();

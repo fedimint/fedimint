@@ -45,7 +45,7 @@ pub struct WalletConfigConsensus {
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
 }
@@ -76,7 +76,7 @@ impl WalletConfigConsensus {
     /// | 20        | 565  | 991     |
     pub fn new(
         bitcoin_pks: BTreeMap<PeerId, PublicKey>,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
         network: Network,
     ) -> Self {
         let tx_overhead_weight = 4 * 4 // nVersion
@@ -133,12 +133,12 @@ impl WalletConfigConsensus {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub base: Amount,
     pub parts_per_million: u64,
 }
 
-impl FeeConsensus {
+impl FeeConfig {
     /// The wallet module will charge a non-configurable base fee of one hundred
     /// satoshis per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -176,7 +176,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(10_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(10_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(99)),
@@ -227,7 +227,7 @@ pub struct WalletClientConfig {
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
 }

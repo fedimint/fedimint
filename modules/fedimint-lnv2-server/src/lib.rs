@@ -37,7 +37,7 @@ use fedimint_core::{
     push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
+    FeeConfig, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigPrivate,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
@@ -272,9 +272,9 @@ impl ServerModuleInit for LightningInit {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
                         fee_consensus: if args.disable_base_fees {
-                            FeeConsensus::zero()
+                            FeeConfig::zero()
                         } else {
-                            FeeConsensus::new(0).expect("Relative fee is within range")
+                            FeeConfig::new(0).expect("Relative fee is within range")
                         },
                         network: args.network,
                     },
@@ -304,9 +304,9 @@ impl ServerModuleInit for LightningInit {
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
                 fee_consensus: if args.disable_base_fees {
-                    FeeConsensus::zero()
+                    FeeConfig::zero()
                 } else {
-                    FeeConsensus::new(0).expect("Relative fee is within range")
+                    FeeConfig::new(0).expect("Relative fee is within range")
                 },
                 network: args.network,
             },

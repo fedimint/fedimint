@@ -65,7 +65,7 @@ use fedimint_server_core::{
 };
 pub use fedimint_walletv2_common as common;
 use fedimint_walletv2_common::config::{
-    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
+    FeeConfig, WalletClientConfig, WalletConfig, WalletConfigPrivate,
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
@@ -309,7 +309,7 @@ impl ServerModuleInit for WalletInit {
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let fee_consensus = FeeConsensus::new(0).expect("Relative fee is within range");
+        let fee_consensus = FeeConfig::new(0).expect("Relative fee is within range");
 
         let bitcoin_sks = peers
             .iter()
@@ -343,7 +343,7 @@ impl ServerModuleInit for WalletInit {
         peers: &(dyn PeerHandleOps + Send + Sync),
         args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let fee_consensus = FeeConsensus::new(0).expect("Relative fee is within range");
+        let fee_consensus = FeeConfig::new(0).expect("Relative fee is within range");
 
         let (bitcoin_sk, bitcoin_pk) = secp256k1::generate_keypair(&mut OsRng);
 

@@ -51,7 +51,7 @@ pub struct WalletConfigConsensus {
     /// this
     pub default_fee: Feerate,
     /// Fees for bitcoin transactions
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Points to a Bitcoin API that the client can use to interact with the
     /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
     /// become configurable locally and this should merely be a suggested
@@ -70,7 +70,7 @@ pub struct WalletClientConfig {
     pub network: NetworkLegacyEncodingWrapper,
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Points to a Bitcoin API that the client can use to interact with the
     /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
     /// become configurable locally and this should merely be a suggested
@@ -89,12 +89,12 @@ impl std::fmt::Display for WalletClientConfig {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub peg_in_abs: fedimint_core::Amount,
     pub peg_out_abs: fedimint_core::Amount,
 }
 
-impl Default for FeeConsensus {
+impl Default for FeeConfig {
     fn default() -> Self {
         Self {
             peg_in_abs: fedimint_core::Amount::from_sats(DEFAULT_DEPOSIT_FEE_SATS),
@@ -112,7 +112,7 @@ impl WalletConfig {
         network: Network,
         finality_delay: u32,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
     ) -> Self {
         let peg_in_descriptor = if pubkeys.len() == 1 {
             PegInDescriptor::Wpkh(

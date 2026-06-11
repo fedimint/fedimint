@@ -5,7 +5,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
-use fedimint_mint_common::config::FeeConsensus;
+use fedimint_mint_common::config::FeeConfig;
 use fedimint_mint_common::{MODULE_CONSENSUS_VERSION, MintInput, Nonce, Note};
 use fedimint_server_core::{ConfigGenModuleArgs, ServerModule, ServerModuleInit};
 use tbs::blind_message;
@@ -47,7 +47,7 @@ fn test_new_panic_without_own_pub_key() {
                 .unwrap()
                 .consensus
                 .peer_tbs_pks,
-            fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
+            fee_consensus: FeeConfig::new(1000).expect("Relative fee is within range"),
             max_notes_per_denomination: 0,
         },
         private: MintConfigPrivate {
