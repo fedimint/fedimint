@@ -4682,6 +4682,7 @@ dependencies = [
  "futures",
  "group",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]

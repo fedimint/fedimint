@@ -2,6 +2,7 @@ use fedimint_core::core::{DynModuleConsensusItem as ModuleConsensusItem, ModuleI
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::transaction::Transaction;
 
@@ -75,8 +76,20 @@ pub struct SetModuleFeeConsensusRequest {
     pub fee_consensus: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SetModuleFeeConsensusJsonRequest {
+    pub module_instance_id: ModuleInstanceId,
+    pub fee_consensus: Value,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct CurrentFeeConsensus {
     pub fee_consensus: Vec<u8>,
+    pub active_since: ConsensusUnixTime,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CurrentFeeConsensusJson {
+    pub fee_consensus: Value,
     pub active_since: ConsensusUnixTime,
 }

@@ -28,20 +28,22 @@ use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
-    CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    CONSENSUS_ORD_LATENCY_ENDPOINT, CONSENSUS_UNIX_TIME_ENDPOINT,
-    CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT,
+    CONSENSUS_UNIX_TIME_ENDPOINT, CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT,
+    CURRENT_MODULE_FEE_CONSENSUS_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
     P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SET_MODULE_FEE_CONSENSUS_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
+    SET_MODULE_FEE_CONSENSUS_ENDPOINT, SET_MODULE_FEE_CONSENSUS_JSON_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::{
     ActivateModuleConsensusVersionRequest, ConsensusItem, ConsensusUnixTime, CurrentFeeConsensus,
-    ModuleConsensusVersionRequest, ModuleFeeConsensusRequest, SetModuleFeeConsensusRequest,
+    CurrentFeeConsensusJson, ModuleConsensusVersionRequest, ModuleFeeConsensusRequest,
+    SetModuleFeeConsensusJsonRequest, SetModuleFeeConsensusRequest,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -70,7 +72,7 @@ use fedimint_core::{
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::dashboard_ui::{
-    IDashboardApi, P2PConnectionStatus, ServerBitcoinRpcStatus,
+    DashboardModuleFeeConsensus, IDashboardApi, P2PConnectionStatus, ServerBitcoinRpcStatus,
 };
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -219,6 +221,89 @@ impl ConsensusApi {
             current_module_fee_consensus(dbtx, module_instance_id, module.initial_fee_consensus())
                 .await,
         )
+    }
+
+    async fn current_module_fee_consensus_json<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<CurrentFeeConsensusJson>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        let module = self.modules.get(module_instance_id).ok_or_else(|| {
+            anyhow::format_err!("Unknown module instance id {module_instance_id}")
+        })?;
+        let current = self
+            .current_module_fee_consensus(dbtx, module_instance_id)
+            .await?;
+
+        Ok(CurrentFeeConsensusJson {
+            fee_consensus: module.fee_consensus_to_json(&current.fee_consensus)?,
+            active_since: current.active_since,
+        })
+    }
+
+    async fn set_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        fee_consensus: serde_json::Value,
+    ) -> Result<()> {
+        let module = self.modules.get(module_instance_id).ok_or_else(|| {
+            anyhow::format_err!("Unknown module instance id {module_instance_id}")
+        })?;
+        let fee_consensus = module.fee_consensus_from_json(fee_consensus)?;
+
+        let mut dbtx = self.db.begin_transaction().await;
+        let current_fee_consensus = current_module_fee_consensus(
+            &mut dbtx,
+            module_instance_id,
+            module.initial_fee_consensus(),
+        )
+        .await;
+
+        if fee_consensus == current_fee_consensus.fee_consensus {
+            dbtx.remove_entry(&ModuleFeeConsensusDesiredKey { module_instance_id })
+                .await;
+        } else {
+            dbtx.insert_entry(
+                &ModuleFeeConsensusDesiredKey { module_instance_id },
+                &fee_consensus,
+            )
+            .await;
+        }
+
+        dbtx.commit_tx_result().await?;
+
+        Ok(())
+    }
+
+    async fn dashboard_module_fee_consensus(&self) -> Result<Vec<DashboardModuleFeeConsensus>> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut fees = Vec::new();
+
+        for (module_instance_id, module_kind, module) in self.modules.iter_modules() {
+            let current = self
+                .current_module_fee_consensus(&mut dbtx, module_instance_id)
+                .await?;
+            let current_json = module.fee_consensus_to_json(&current.fee_consensus)?;
+            let desired = dbtx
+                .get_value(&ModuleFeeConsensusDesiredKey { module_instance_id })
+                .await
+                .filter(|desired| desired != &current.fee_consensus)
+                .map(|desired| module.fee_consensus_to_json(&desired))
+                .transpose()?;
+
+            fees.push(DashboardModuleFeeConsensus {
+                module_instance_id,
+                module_kind: module_kind.clone(),
+                current: current_json,
+                desired,
+                active_since: current.active_since,
+            });
+        }
+
+        Ok(fees)
     }
 
     // we want to return an error if and only if the submitted transaction is
@@ -896,6 +981,22 @@ impl IDashboardApi for ConsensusApi {
             })
     }
 
+    async fn module_fee_consensus(&self) -> Result<Vec<DashboardModuleFeeConsensus>, String> {
+        self.dashboard_module_fee_consensus()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn set_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        fee_consensus: serde_json::Value,
+    ) -> Result<(), String> {
+        self.set_module_fee_consensus_json(module_instance_id, fee_consensus)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn fedimintd_version(&self) -> String {
         self.code_version_str.clone()
     }
@@ -1001,6 +1102,17 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            CURRENT_MODULE_FEE_CONSENSUS_JSON_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, _context, request: ModuleFeeConsensusRequest| -> CurrentFeeConsensusJson {
+                let mut dbtx = fedimint.db.begin_transaction_nc().await;
+                fedimint
+                    .current_module_fee_consensus_json(&mut dbtx, request.module_instance_id)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))
+            }
+        },
+        api_endpoint! {
             SET_MODULE_FEE_CONSENSUS_ENDPOINT,
             ApiVersion::new(0, 10),
             async |fedimint: &ConsensusApi, context, request: SetModuleFeeConsensusRequest| -> () {
@@ -1027,6 +1139,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 dbtx.commit_tx_result().await?;
 
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            SET_MODULE_FEE_CONSENSUS_JSON_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, context, request: SetModuleFeeConsensusJsonRequest| -> () {
+                check_auth(context)?;
+
+                fedimint
+                    .set_module_fee_consensus_json(
+                        request.module_instance_id,
+                        request.fee_consensus,
+                    )
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))
             }
         },
         api_endpoint! {
