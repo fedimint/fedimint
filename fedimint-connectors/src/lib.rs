@@ -182,6 +182,13 @@ impl ConnectorRegistryBuilder {
         }
     }
 
+    pub fn http(self, enable: bool) -> Self {
+        Self {
+            http_enable: enable,
+            ..self
+        }
+    }
+
     pub fn set_iroh_dns(self, url: SafeUrl) -> Self {
         Self {
             iroh_dns: Some(url),

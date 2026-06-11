@@ -1,9 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use fedimint_client::meta::MetaService;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
+use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -13,12 +15,13 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::secp256k1::hashes::sha256;
+use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::task::timeout;
-use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
-use fedimint_core::{Amount, BitcoinHash};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::{Amount, BitcoinHash, runtime};
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_ln_client::common::{LightningGateway, LightningGatewayAnnouncement};
 use fedimint_ln_client::recurring::{
     PaymentCodeId, PaymentCodeRootKey, RecurringPaymentError, RecurringPaymentProtocol,
 };
@@ -27,12 +30,13 @@ use fedimint_ln_client::{
     LightningOperationMetaVariant, LnReceiveState, tweak_user_key,
 };
 use fedimint_lnurl::{PayResponse, encode_lnurl, pay_request_tag};
+use fedimint_meta_client::MetaModuleMetaSourceWithFallback;
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Sha256};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Notify, RwLock};
-use tracing::{info, warn};
+use tokio::sync::{Notify, RwLock, watch};
+use tracing::{debug, info, warn};
 
 use crate::db::{
     FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey,
@@ -47,8 +51,15 @@ pub struct RecurringInvoiceServer {
     db: Database,
     connectors: ConnectorRegistry,
     clients: Arc<RwLock<HashMap<FederationId, ClientHandleArc>>>,
+    gateway_cache: Arc<RwLock<HashMap<FederationId, watch::Receiver<Vec<CachedGateway>>>>>,
     invoice_generated: Arc<Notify>,
     base_url: SafeUrl,
+}
+
+#[derive(Clone)]
+struct CachedGateway {
+    gateway: LightningGateway,
+    vetted: bool,
 }
 
 impl RecurringInvoiceServer {
@@ -60,9 +71,11 @@ impl RecurringInvoiceServer {
         let db = Database::new(db, Default::default());
 
         let mut clients = HashMap::<_, ClientHandleArc>::new();
+        let mut gateway_cache = HashMap::<FederationId, watch::Receiver<Vec<CachedGateway>>>::new();
 
         for (federation_id, db) in load_federation_client_databases(&db).await {
             let mut client_builder = Client::builder().await?;
+            client_builder.with_meta_service(recurringd_meta_service());
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
             let client = client_builder
@@ -73,13 +86,17 @@ impl RecurringInvoiceServer {
                 )
                 .await?;
             let client = Arc::new(client);
-            spawn_gateway_cache_refresh(&client);
+            gateway_cache.insert(
+                federation_id,
+                spawn_gateway_cache_refresh(federation_id, &client),
+            );
             clients.insert(federation_id, client);
         }
 
         let slf = Self {
             db: db.clone(),
             clients: Arc::new(RwLock::new(clients)),
+            gateway_cache: Arc::new(RwLock::new(gateway_cache)),
             invoice_generated: Arc::new(Default::default()),
             base_url,
             connectors,
@@ -125,7 +142,10 @@ impl RecurringInvoiceServer {
                 try_add_federation_database(&self.db, federation_id, client_db_prefix)
                     .await
                     .expect("We hold a global lock, no parallel joining can happen");
-                spawn_gateway_cache_refresh(&client);
+                self.gateway_cache.write().await.insert(
+                    federation_id,
+                    spawn_gateway_cache_refresh(federation_id, &client),
+                );
                 clients.insert(federation_id, client);
                 Ok(federation_id)
             }
@@ -145,6 +165,7 @@ impl RecurringInvoiceServer {
             .await
             .map_err(RecurringPaymentError::JoiningFederationFailed)?;
 
+        client_builder.with_meta_service(recurringd_meta_service());
         client_builder.with_module(LightningClientInit::default());
         client_builder.with_module(MintClientInit);
 
@@ -274,12 +295,17 @@ impl RecurringInvoiceServer {
             .get_federation_client(payment_code.federation_id)
             .await?;
 
+        let gateway = self
+            .get_cached_gateway(payment_code.federation_id, amount)
+            .await?;
+
         let (operation_id, invoice) = self
             .db
             .autocommit(
                 |dbtx, _| {
                     let federation_client = federation_client.clone();
                     let payment_code = payment_code.clone();
+                    let gateway = gateway.clone();
                     Box::pin(async move {
                         let invoice_index = self
                             .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
@@ -315,34 +341,6 @@ impl RecurringInvoiceServer {
                         // This is where the main part starts: generate the invoice and save it to
                         // the DB
                         let federation_client_ln_module = federation_client.get_ln_module()?;
-                        // Prefer an online, vetted gateway (cheapest first) rather than
-                        // picking one at random. `select_available_gateway` only reads the
-                        // local cache, which is normally kept fresh by the background task
-                        // spawned in `spawn_gateway_cache_refresh`. If selection fails, refresh once on
-                        // demand and retry before giving up.
-                        let gateway = match federation_client_ln_module
-                            .select_available_gateway(None, None)
-                            .await
-                        {
-                            Ok(gateway) => gateway,
-                            Err(err) => {
-                                warn!(err = %err.fmt_compact_anyhow(), "No gateway available, refreshing cache and retrying");
-                                federation_client_ln_module
-                                    .update_gateway_cache()
-                                    .await
-                                    .map_err(|err| {
-                                        warn!(err = %err.fmt_compact_anyhow(), "Failed to refresh gateway cache");
-                                        RecurringPaymentError::NoGatewayFound
-                                    })?;
-                                federation_client_ln_module
-                                    .select_available_gateway(None, None)
-                                    .await
-                                    .map_err(|err| {
-                                        warn!(err = %err.fmt_compact_anyhow(), "Failed to select an available gateway");
-                                        RecurringPaymentError::NoGatewayFound
-                                    })?
-                            }
-                        };
 
                         let lnurl_meta = match payment_code.variant {
                             PaymentCodeVariant::Lnurl { meta } => meta,
@@ -448,6 +446,43 @@ impl RecurringInvoiceServer {
             .get(&federation_id)
             .cloned()
             .ok_or(RecurringPaymentError::UnknownFederationId(federation_id))
+    }
+
+    async fn get_cached_gateway(
+        &self,
+        federation_id: FederationId,
+        amount: Amount,
+    ) -> Result<LightningGateway, RecurringPaymentError> {
+        const EMPTY_GATEWAY_CACHE_WAIT: Duration = Duration::from_secs(60);
+
+        let mut gateway_cache = self
+            .gateway_cache
+            .read()
+            .await
+            .get(&federation_id)
+            .cloned()
+            .ok_or(RecurringPaymentError::NoGatewayFound)?;
+
+        if let Some(gateway) = select_preferred_gateway(&gateway_cache.borrow(), amount) {
+            return Ok(gateway);
+        }
+
+        timeout(EMPTY_GATEWAY_CACHE_WAIT, async {
+            loop {
+                gateway_cache
+                    .changed()
+                    .await
+                    .map_err(|_| RecurringPaymentError::NoGatewayFound)?;
+
+                if let Some(gateway) =
+                    select_preferred_gateway(&gateway_cache.borrow_and_update(), amount)
+                {
+                    break Ok(gateway);
+                }
+            }
+        })
+        .await
+        .map_err(|_| RecurringPaymentError::NoGatewayFound)?
     }
 
     pub async fn await_invoice_index_generated(
@@ -693,21 +728,167 @@ impl LnClientContextExt for ClientHandleArc {
     }
 }
 
-/// Spawn a background task that keeps the gateway cache fresh between invoices.
-fn spawn_gateway_cache_refresh(client: &ClientHandleArc) {
+fn recurringd_meta_service() -> Arc<MetaService> {
+    MetaService::new(MetaModuleMetaSourceWithFallback::<LegacyMetaSource>::default())
+}
+
+fn spawn_gateway_cache_refresh(
+    federation_id: FederationId,
+    client: &ClientHandleArc,
+) -> watch::Receiver<Vec<CachedGateway>> {
+    const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+
+    let (gateway_cache_sender, gateway_cache_receiver) = watch::channel(Vec::new());
+    let task_group = client.task_group().clone();
     let client = client.clone();
-    client
-        .task_group()
-        .clone()
-        .spawn_cancellable("recurringd-gateway-cache-refresh", async move {
-            let Ok(ln_module) = client.get_ln_module() else {
-                warn!("No lightning module found, not refreshing gateway cache");
-                return;
-            };
-            // We consider all gateways for expiry so the cache is refreshed
-            // before any of them expire.
-            ln_module
-                .update_gateway_cache_continuously(|gateways| async move { gateways })
-                .await
-        });
+    task_group.spawn_cancellable("recurringd-gateway-cache-refresh", async move {
+        loop {
+            match select_available_gateways(&client).await {
+                Ok(gateways) => {
+                    gateway_cache_sender.send_replace(gateways);
+                }
+                Err(err) => {
+                    warn!(
+                        federation_id = %federation_id,
+                        err = %err.fmt_compact(),
+                        "Failed to refresh recurringd gateway cache"
+                    );
+                }
+            }
+
+            runtime::sleep(REFRESH_INTERVAL).await;
+        }
+    });
+
+    gateway_cache_receiver
+}
+
+async fn select_available_gateways(
+    client: &ClientHandleArc,
+) -> Result<Vec<CachedGateway>, RecurringPaymentError> {
+    let ln_module = client.get_ln_module()?;
+    ln_module.update_gateway_cache().await.map_err(|err| {
+        warn!(
+            err = %err.fmt_compact_anyhow(),
+            "Failed to refresh gateway announcements"
+        );
+        RecurringPaymentError::NoGatewayFound
+    })?;
+
+    let mut gateways = ln_module.list_gateways().await;
+    if gateways.is_empty() {
+        return Err(RecurringPaymentError::NoGatewayFound);
+    }
+
+    let vetted_gateway_ids = fetch_vetted_gateway_ids(client).await;
+    sort_gateways_by_preference(&mut gateways, &vetted_gateway_ids);
+
+    let mut available_gateways = Vec::new();
+    for gateway in gateways {
+        let gateway_id = gateway.info.gateway_id;
+        let vetted = gateway.vetted || vetted_gateway_ids.contains(&gateway_id);
+        match ln_module
+            .select_available_gateway(Some(gateway.info), None)
+            .await
+        {
+            Ok(gateway) => available_gateways.push(CachedGateway { gateway, vetted }),
+            Err(err) => {
+                debug!(
+                    gateway_id = %gateway_id,
+                    err = %err.fmt_compact_anyhow(),
+                    "Gateway failed availability check"
+                );
+            }
+        }
+    }
+
+    if available_gateways.is_empty() {
+        return Err(RecurringPaymentError::NoGatewayFound);
+    }
+
+    Ok(available_gateways)
+}
+
+fn select_preferred_gateway(
+    gateways: &[CachedGateway],
+    amount: Amount,
+) -> Option<LightningGateway> {
+    gateways
+        .iter()
+        .min_by_key(|gateway| {
+            (
+                !gateway.vetted,
+                gateway_fee_msat(&gateway.gateway, amount),
+                gateway.gateway.gateway_id.serialize(),
+            )
+        })
+        .map(|gateway| gateway.gateway.clone())
+}
+
+fn gateway_fee_msat(gateway: &LightningGateway, amount: Amount) -> u64 {
+    let proportional_fee =
+        (u128::from(amount.msats) * u128::from(gateway.fees.proportional_millionths)) / 1_000_000;
+
+    u64::from(gateway.fees.base_msat)
+        .saturating_add(u64::try_from(proportional_fee).unwrap_or(u64::MAX))
+}
+
+fn sort_gateways_by_preference(
+    gateways: &mut [LightningGatewayAnnouncement],
+    vetted_gateway_ids: &HashSet<PublicKey>,
+) {
+    gateways.sort_by_cached_key(|gateway| {
+        let vetted = gateway.vetted || vetted_gateway_ids.contains(&gateway.info.gateway_id);
+        (
+            !vetted,
+            u64::from(gateway.info.fees.base_msat),
+            gateway.info.gateway_id.serialize(),
+        )
+    });
+}
+
+async fn fetch_vetted_gateway_ids(client: &ClientHandleArc) -> HashSet<PublicKey> {
+    let Some(vetted_gateways) = client
+        .meta_service()
+        .entries(client.db())
+        .await
+        .and_then(|entries| entries.get("vetted_gateways").cloned())
+        .and_then(|value| parse_vetted_gateway_ids(&value))
+    else {
+        debug!("No vetted gateways configured in federation metadata");
+        return HashSet::new();
+    };
+
+    vetted_gateways
+        .into_iter()
+        .filter_map(|gateway_id| match gateway_id.parse::<PublicKey>() {
+            Ok(gateway_id) => Some(gateway_id),
+            Err(err) => {
+                warn!(
+                    %gateway_id,
+                    err = %err.fmt_compact(),
+                    "Failed to parse vetted gateway ID"
+                );
+                None
+            }
+        })
+        .collect()
+}
+
+fn parse_vetted_gateway_ids(value: &serde_json::Value) -> Option<Vec<String>> {
+    if let Ok(gateway_ids) = serde_json::from_value::<Vec<String>>(value.clone()) {
+        return Some(gateway_ids);
+    }
+
+    let value = value.as_str()?;
+
+    // The canonical metadata format is a JSON array of gateway ID strings. Older
+    // configs may have stored that JSON array as a string.
+    match serde_json::from_str::<Vec<String>>(value) {
+        Ok(gateway_ids) => {
+            warn!("vetted_gateways metadata should be configured as a JSON array, not a string");
+            Some(gateway_ids)
+        }
+        Err(_) => None,
+    }
 }
