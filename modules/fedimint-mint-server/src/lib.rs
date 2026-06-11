@@ -554,6 +554,7 @@ impl ServerModule for Mint {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
@@ -563,11 +564,16 @@ impl ServerModule for Mint {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         bail!("Mint does not process consensus items");
     }
 
-    fn verify_input(&self, input: &MintInput) -> Result<(), MintInputError> {
+    fn verify_input(
+        &self,
+        input: &MintInput,
+        _module_consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), MintInputError> {
         let input = input.ensure_v0_ref()?;
 
         let amount_key = self
@@ -587,6 +593,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b MintInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, MintInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -634,6 +641,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -715,6 +723,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -734,6 +743,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         let mut redemptions = Amount::from_sats(0);
         let mut issuances = Amount::from_sats(0);

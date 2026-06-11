@@ -414,6 +414,7 @@ impl ServerModule for Wallet {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&UnsignedTxPrefix)
@@ -474,6 +475,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
         peer: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
@@ -500,6 +502,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, WalletInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -656,6 +659,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -794,6 +798,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(

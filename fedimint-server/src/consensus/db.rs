@@ -2,13 +2,18 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    OutPoint, TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record,
+    NumPeers, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, impl_db_lookup,
+    impl_db_record,
 };
 use fedimint_server_core::migration::{
     DynModuleHistoryItem, DynServerDbMigrationFn, IServerDbMigrationContext,
@@ -80,6 +85,288 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVoteKey {
+    pub module_instance_id: ModuleInstanceId,
+    pub peer_id: PeerId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotePrefix {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVoteFullPrefix;
+
+impl_db_record!(
+    key = ModuleConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ModuleConsensusVersionVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVotePrefix
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVoteFullPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotingActivationKey {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotingActivationPrefix;
+
+impl_db_record!(
+    key = ModuleConsensusVersionVotingActivationKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ModuleConsensusVersionVotingActivation,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVotingActivationKey,
+    query_prefix = ModuleConsensusVersionVotingActivationPrefix
+);
+
+pub async fn active_module_consensus_version<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    module_instance_id: ModuleInstanceId,
+    num_peers: NumPeers,
+    initial_version: ModuleConsensusVersion,
+) -> ModuleConsensusVersion
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    let mut versions = dbtx
+        .find_by_prefix(&ModuleConsensusVersionVotePrefix { module_instance_id })
+        .await
+        .map(|entry| entry.1)
+        .collect::<Vec<ModuleConsensusVersion>>()
+        .await;
+
+    while versions.len() < num_peers.total() {
+        versions.push(initial_version);
+    }
+
+    assert_eq!(versions.len(), num_peers.total());
+
+    versions.sort_unstable();
+
+    assert!(versions.first() <= versions.last());
+
+    versions[num_peers.max_evil()]
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct CoreConsensusVersionVoteKey(pub PeerId);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CoreConsensusVersionVotePrefix;
+
+impl_db_record!(
+    key = CoreConsensusVersionVoteKey,
+    value = CoreConsensusVersion,
+    db_prefix = DbKeyPrefix::CoreConsensusVersionVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = CoreConsensusVersionVoteKey,
+    query_prefix = CoreConsensusVersionVotePrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CoreConsensusVersionVotingActivationKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CoreConsensusVersionVotingActivationPrefix;
+
+impl_db_record!(
+    key = CoreConsensusVersionVotingActivationKey,
+    value = CoreConsensusVersion,
+    db_prefix = DbKeyPrefix::CoreConsensusVersionVotingActivation,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = CoreConsensusVersionVotingActivationKey,
+    query_prefix = CoreConsensusVersionVotingActivationPrefix
+);
+
+/// The core consensus version currently active for the federation.
+///
+/// This is the version agreed on at DKG time, raised by the highest version a
+/// threshold of peers has voted for.
+pub async fn active_core_consensus_version<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    num_peers: NumPeers,
+    initial_version: CoreConsensusVersion,
+) -> CoreConsensusVersion
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    let votes = dbtx
+        .find_by_prefix(&CoreConsensusVersionVotePrefix)
+        .await
+        .map(|(key, version)| (key.0, version))
+        .collect::<BTreeMap<PeerId, CoreConsensusVersion>>()
+        .await;
+
+    active_core_consensus_version_from_votes(num_peers, initial_version, votes)
+}
+
+/// Aggregates per-peer core consensus version votes with the same threshold
+/// rule [`active_module_consensus_version_from_votes`] uses for modules: peers
+/// which have not voted count as voting for `initial_version`, and the active
+/// version is the highest version at least `num_peers.threshold()` peers vote
+/// for or above.
+///
+/// The result is monotonic. Per-peer votes may only ever increase (enforced
+/// when the vote consensus item is processed) and `initial_version` is applied
+/// as a hard floor here, so a vote can never lower the active version.
+fn active_core_consensus_version_from_votes(
+    num_peers: NumPeers,
+    initial_version: CoreConsensusVersion,
+    votes: BTreeMap<PeerId, CoreConsensusVersion>,
+) -> CoreConsensusVersion {
+    let mut versions = votes
+        .values()
+        .copied()
+        .collect::<Vec<CoreConsensusVersion>>();
+
+    assert!(
+        versions.len() <= num_peers.total(),
+        "core consensus version votes exceed peer count"
+    );
+
+    while versions.len() < num_peers.total() {
+        versions.push(initial_version);
+    }
+
+    versions.sort_unstable();
+
+    let threshold_version = *versions
+        .get(num_peers.max_evil())
+        .expect("versions has exactly one entry per peer");
+
+    threshold_version.max(initial_version)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use fedimint_core::module::CoreConsensusVersion;
+    use fedimint_core::{NumPeers, PeerId};
+
+    use super::active_core_consensus_version_from_votes;
+
+    #[test]
+    fn active_core_consensus_version_defaults_to_config_version() {
+        assert_eq!(
+            active_core_consensus_version_from_votes(
+                NumPeers::from(4),
+                CoreConsensusVersion::new(2, 1),
+                BTreeMap::new(),
+            ),
+            CoreConsensusVersion::new(2, 1)
+        );
+    }
+
+    #[test]
+    fn active_core_consensus_version_requires_threshold() {
+        let initial = CoreConsensusVersion::new(2, 1);
+
+        // Two out of four peers is below the threshold of three.
+        assert_eq!(
+            active_core_consensus_version_from_votes(
+                NumPeers::from(4),
+                initial,
+                BTreeMap::from([
+                    (PeerId::from(0), CoreConsensusVersion::new(2, 2)),
+                    (PeerId::from(1), CoreConsensusVersion::new(2, 2)),
+                ]),
+            ),
+            initial
+        );
+
+        // Three out of four peers reach the threshold.
+        assert_eq!(
+            active_core_consensus_version_from_votes(
+                NumPeers::from(4),
+                initial,
+                BTreeMap::from([
+                    (PeerId::from(0), CoreConsensusVersion::new(2, 2)),
+                    (PeerId::from(1), CoreConsensusVersion::new(2, 2)),
+                    (PeerId::from(2), CoreConsensusVersion::new(2, 2)),
+                ]),
+            ),
+            CoreConsensusVersion::new(2, 2)
+        );
+
+        // A threshold only counts for the highest version all of them agree on.
+        assert_eq!(
+            active_core_consensus_version_from_votes(
+                NumPeers::from(4),
+                initial,
+                BTreeMap::from([
+                    (PeerId::from(0), CoreConsensusVersion::new(3, 0)),
+                    (PeerId::from(1), CoreConsensusVersion::new(2, 2)),
+                    (PeerId::from(2), CoreConsensusVersion::new(2, 2)),
+                    (PeerId::from(3), CoreConsensusVersion::new(2, 2)),
+                ]),
+            ),
+            CoreConsensusVersion::new(2, 2)
+        );
+    }
+
+    #[test]
+    fn active_core_consensus_version_never_decreases() {
+        let initial = CoreConsensusVersion::new(2, 2);
+
+        // Votes below the config version must not lower the active version.
+        assert_eq!(
+            active_core_consensus_version_from_votes(
+                NumPeers::from(4),
+                initial,
+                BTreeMap::from([
+                    (PeerId::from(0), CoreConsensusVersion::new(2, 0)),
+                    (PeerId::from(1), CoreConsensusVersion::new(2, 0)),
+                    (PeerId::from(2), CoreConsensusVersion::new(2, 0)),
+                    (PeerId::from(3), CoreConsensusVersion::new(2, 0)),
+                ]),
+            ),
+            initial
+        );
+
+        // Neither may they lower a version that has already been voted active.
+        let mut votes = BTreeMap::from([
+            (PeerId::from(0), CoreConsensusVersion::new(2, 3)),
+            (PeerId::from(1), CoreConsensusVersion::new(2, 3)),
+            (PeerId::from(2), CoreConsensusVersion::new(2, 3)),
+        ]);
+
+        assert_eq!(
+            active_core_consensus_version_from_votes(NumPeers::from(4), initial, votes.clone()),
+            CoreConsensusVersion::new(2, 3)
+        );
+
+        votes.insert(PeerId::from(3), CoreConsensusVersion::new(2, 0));
+
+        assert_eq!(
+            active_core_consensus_version_from_votes(NumPeers::from(4), initial, votes),
+            CoreConsensusVersion::new(2, 3)
+        );
+    }
+}
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
     BTreeMap::new()
 }
@@ -149,6 +436,8 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
                                     vec![]
                                 }
                             }
+                            ConsensusItem::ModuleConsensusVersion(_)
+                            | ConsensusItem::CoreConsensusVersion(_) => vec![],
                             ConsensusItem::Default { .. } => {
                                 unreachable!("We never save unknown CIs on the server side")
                             }

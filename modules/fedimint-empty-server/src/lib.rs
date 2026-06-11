@@ -176,6 +176,7 @@ impl ServerModule for Empty {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<EmptyConsensusItem> {
         Vec::new()
     }
@@ -185,6 +186,7 @@ impl ServerModule for Empty {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: EmptyConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         // WARNING: `process_consensus_item` should return an `Err` for items that do
         // not change any internal consensus state. Failure to do so, will result in an
@@ -199,6 +201,7 @@ impl ServerModule for Empty {
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b EmptyInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, EmptyInputError> {
         Err(EmptyInputError::NotSupported)
     }
@@ -208,6 +211,7 @@ impl ServerModule for Empty {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a EmptyOutput,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, EmptyOutputError> {
         Err(EmptyOutputError::NotSupported)
     }
@@ -225,6 +229,7 @@ impl ServerModule for Empty {
         _dbtx: &mut DatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
     }
 

@@ -24,7 +24,8 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AlephUnitsKey, AlephUnitsPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
+    AlephUnitsKey, AlephUnitsPrefix, CoreConsensusVersionVotePrefix,
+    CoreConsensusVersionVotingActivationPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
     SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
@@ -224,6 +225,24 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // Guardian metadata is optional, just verify we can query it
                         let _metadata = dbtx
                             .find_by_prefix(&GuardianMetadataPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::CoreConsensusVersionVote => {
+                        // Core consensus version votes are optional, just verify we can query
+                        // them.
+                        let _votes = dbtx
+                            .find_by_prefix(&CoreConsensusVersionVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::CoreConsensusVersionVotingActivation => {
+                        // Core consensus version voting activations are optional, just verify we
+                        // can query them.
+                        let _activations = dbtx
+                            .find_by_prefix(&CoreConsensusVersionVotingActivationPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

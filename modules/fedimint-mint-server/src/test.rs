@@ -6,7 +6,7 @@ use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
-use fedimint_mint_common::{MintInput, Nonce, Note};
+use fedimint_mint_common::{MODULE_CONSENSUS_VERSION, MintInput, Nonce, Note};
 use fedimint_server_core::{ConfigGenModuleArgs, ServerModule, ServerModuleInit};
 use tbs::blind_message;
 
@@ -116,6 +116,7 @@ async fn test_detect_double_spends() {
             txid: TransactionId::all_zeros(),
             in_idx: 0,
         },
+        MODULE_CONSENSUS_VERSION,
     )
     .await
     .expect("Spend of valid e-cash works");
@@ -127,6 +128,7 @@ async fn test_detect_double_spends() {
                 txid: TransactionId::all_zeros(),
                 in_idx: 0
             },
+            MODULE_CONSENSUS_VERSION,
         )
         .await,
         Err(_)

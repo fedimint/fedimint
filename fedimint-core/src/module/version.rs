@@ -69,7 +69,18 @@ use crate::encoding::{Decodable, Encodable};
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
 #[derive(
-    Debug, Copy, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq,
+    Debug,
+    Copy,
+    Clone,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+    PartialEq,
+    Eq,
 )]
 pub struct CoreConsensusVersion {
     pub major: u32,

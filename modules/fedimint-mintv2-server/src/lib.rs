@@ -366,6 +366,7 @@ impl ServerModule for Mint {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
@@ -375,6 +376,7 @@ impl ServerModule for Mint {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         bail!("Mint does not process consensus items");
     }
@@ -384,6 +386,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b MintInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, MintInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -443,6 +446,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -506,6 +510,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(dbtx, module_instance_id, &IssuanceCounterPrefix, |k, v| {

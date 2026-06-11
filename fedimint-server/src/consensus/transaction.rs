@@ -1,5 +1,10 @@
+use std::collections::BTreeMap;
+
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::{Amounts, CoreConsensusVersion, TransactionItemAmounts};
+use fedimint_core::module::{
+    Amounts, CoreConsensusVersion, ModuleConsensusVersion, TransactionItemAmounts,
+};
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
@@ -18,6 +23,7 @@ pub async fn process_transaction_with_dbtx(
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
     version: CoreConsensusVersion,
+    module_consensus_versions: &BTreeMap<ModuleInstanceId, ModuleConsensusVersion>,
     mode: TxProcessingMode,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
@@ -37,9 +43,13 @@ pub async fn process_transaction_with_dbtx(
         .clone()
         .into_par_iter()
         .try_for_each(|input| {
-            modules
-                .get_expect(input.module_instance_id())
-                .verify_input(&input)
+            let module_instance_id = input.module_instance_id();
+            let module = modules.get_expect(module_instance_id);
+            let module_consensus_version = *module_consensus_versions
+                .get(&module_instance_id)
+                .expect("Module consensus versions were precomputed");
+
+            module.verify_input(&input, module_consensus_version)
         })
         .map_err(|_| TransactionError::InvalidWitnessLength)?;
 
@@ -49,28 +59,31 @@ pub async fn process_transaction_with_dbtx(
     let txid = transaction.tx_hash();
 
     for (input, in_idx) in transaction.inputs.iter().zip(0u64..) {
+        let module_instance_id = input.module_instance_id();
+        let module_consensus_version = *module_consensus_versions
+            .get(&module_instance_id)
+            .expect("Module consensus versions were precomputed");
+
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
         if mode == TxProcessingMode::Submission {
             modules
-                .get_expect(input.module_instance_id())
+                .get_expect(module_instance_id)
                 .verify_input_submission(
-                    &mut dbtx
-                        .to_ref_with_prefix_module_id(input.module_instance_id())
-                        .0,
+                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                     input,
+                    module_consensus_version,
                 )
                 .await
                 .map_err(TransactionError::Input)?;
         }
         let meta = modules
-            .get_expect(input.module_instance_id())
+            .get_expect(module_instance_id)
             .process_input(
-                &mut dbtx
-                    .to_ref_with_prefix_module_id(input.module_instance_id())
-                    .0,
+                &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                 input,
                 InPoint { txid, in_idx },
+                module_consensus_version,
             )
             .await
             .map_err(TransactionError::Input)?;
@@ -82,30 +95,33 @@ pub async fn process_transaction_with_dbtx(
     transaction.validate_signatures(&public_keys)?;
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
+        let module_instance_id = output.module_instance_id();
+        let module_consensus_version = *module_consensus_versions
+            .get(&module_instance_id)
+            .expect("Module consensus versions were precomputed");
+
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
         if mode == TxProcessingMode::Submission {
             modules
-                .get_expect(output.module_instance_id())
+                .get_expect(module_instance_id)
                 .verify_output_submission(
-                    &mut dbtx
-                        .to_ref_with_prefix_module_id(output.module_instance_id())
-                        .0,
+                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                     output,
                     OutPoint { txid, out_idx },
+                    module_consensus_version,
                 )
                 .await
                 .map_err(TransactionError::Output)?;
         }
 
         let amount = modules
-            .get_expect(output.module_instance_id())
+            .get_expect(module_instance_id)
             .process_output(
-                &mut dbtx
-                    .to_ref_with_prefix_module_id(output.module_instance_id())
-                    .0,
+                &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                 output,
                 OutPoint { txid, out_idx },
+                module_consensus_version,
             )
             .await
             .map_err(TransactionError::Output)?;

@@ -355,6 +355,7 @@ impl ServerModule for Lightning {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<LightningConsensusItem> {
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -378,6 +379,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         let span = info_span!("process decryption share", %peer_id);
         let _guard = span.enter();
@@ -535,6 +537,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, LightningInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -620,6 +623,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
         out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, LightningOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -829,6 +833,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(
@@ -1279,7 +1284,9 @@ mod tests {
         DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
         PreimageKey,
     };
-    use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
+    use fedimint_ln_common::{
+        ContractAccount, LightningInput, LightningOutput, MODULE_CONSENSUS_VERSION,
+    };
     use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
     use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
@@ -1408,6 +1415,7 @@ mod tests {
                 &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
                 &output,
                 out_point,
+                MODULE_CONSENSUS_VERSION,
             )
             .await
             .expect("First time works");
@@ -1430,7 +1438,8 @@ mod tests {
                 .process_output(
                     &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
                     &output2,
-                    out_point2
+                    out_point2,
+                    MODULE_CONSENSUS_VERSION
                 )
                 .await,
             Err(_)
@@ -1495,6 +1504,7 @@ mod tests {
                     txid: TransactionId::all_zeros(),
                     in_idx: 0,
                 },
+                MODULE_CONSENSUS_VERSION,
             )
             .await
             .expect("should process valid incoming contract");
@@ -1565,6 +1575,7 @@ mod tests {
                     txid: TransactionId::all_zeros(),
                     in_idx: 0,
                 },
+                MODULE_CONSENSUS_VERSION,
             )
             .await
             .expect("should process valid outgoing contract");
