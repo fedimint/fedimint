@@ -4,12 +4,14 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{
     Amounts, CoreConsensusVersion, ModuleConsensusVersion, TransactionItemAmounts,
+    TransactionItemAmountsWithFees, TransactionItemFees,
 };
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+use crate::consensus::db::{consensus_unix_time, module_fee_consensus_schedules};
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -57,12 +59,28 @@ pub async fn process_transaction_with_dbtx(
     let mut public_keys = Vec::new();
 
     let txid = transaction.tx_hash();
+    let current_time = consensus_unix_time(dbtx).await;
+    let mut fee_consensus_schedules = BTreeMap::new();
 
     for (input, in_idx) in transaction.inputs.iter().zip(0u64..) {
         let module_instance_id = input.module_instance_id();
         let module_consensus_version = *module_consensus_versions
             .get(&module_instance_id)
             .expect("Module consensus versions were precomputed");
+        if !fee_consensus_schedules.contains_key(&module_instance_id) {
+            let module = modules.get_expect(module_instance_id);
+            let schedules = module_fee_consensus_schedules(
+                dbtx,
+                module_instance_id,
+                current_time,
+                module.initial_fee_consensus(),
+            )
+            .await;
+            fee_consensus_schedules.insert(module_instance_id, schedules);
+        }
+        let module_fee_consensus = fee_consensus_schedules
+            .get(&module_instance_id)
+            .expect("fee consensus schedules were inserted above");
 
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
@@ -79,16 +97,17 @@ pub async fn process_transaction_with_dbtx(
         }
         let meta = modules
             .get_expect(module_instance_id)
-            .process_input(
+            .process_input_with_fees(
                 &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                 input,
                 InPoint { txid, in_idx },
                 module_consensus_version,
+                module_fee_consensus,
             )
             .await
             .map_err(TransactionError::Input)?;
 
-        funding_verifier.add_input(meta.amount)?;
+        funding_verifier.add_input_with_fees(meta.amount)?;
         public_keys.push(meta.pub_key);
     }
 
@@ -99,6 +118,20 @@ pub async fn process_transaction_with_dbtx(
         let module_consensus_version = *module_consensus_versions
             .get(&module_instance_id)
             .expect("Module consensus versions were precomputed");
+        if !fee_consensus_schedules.contains_key(&module_instance_id) {
+            let module = modules.get_expect(module_instance_id);
+            let schedules = module_fee_consensus_schedules(
+                dbtx,
+                module_instance_id,
+                current_time,
+                module.initial_fee_consensus(),
+            )
+            .await;
+            fee_consensus_schedules.insert(module_instance_id, schedules);
+        }
+        let module_fee_consensus = fee_consensus_schedules
+            .get(&module_instance_id)
+            .expect("fee consensus schedules were inserted above");
 
         // somewhat unfortunately, we need to do the extra checks berofe `process_x`
         // does the changes in the dbtx
@@ -117,16 +150,17 @@ pub async fn process_transaction_with_dbtx(
 
         let amount = modules
             .get_expect(module_instance_id)
-            .process_output(
+            .process_output_with_fees(
                 &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                 output,
                 OutPoint { txid, out_idx },
                 module_consensus_version,
+                module_fee_consensus,
             )
             .await
             .map_err(TransactionError::Output)?;
 
-        funding_verifier.add_output(amount)?;
+        funding_verifier.add_output_with_fees(amount)?;
     }
 
     funding_verifier.verify_funding(version)?;
@@ -138,7 +172,7 @@ pub async fn process_transaction_with_dbtx(
 pub struct FundingVerifier {
     inputs: Amounts,
     outputs: Amounts,
-    fees: Amounts,
+    fees: Vec<TransactionItemFees>,
 }
 
 impl FundingVerifier {
@@ -146,12 +180,17 @@ impl FundingVerifier {
         &mut self,
         input: TransactionItemAmounts,
     ) -> Result<&mut Self, TransactionError> {
+        self.add_input_with_fees(input.into())
+    }
+
+    pub fn add_input_with_fees(
+        &mut self,
+        input: TransactionItemAmountsWithFees,
+    ) -> Result<&mut Self, TransactionError> {
         self.inputs
             .checked_add_mut(&input.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
-        self.fees
-            .checked_add_mut(&input.fees)
-            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+        self.fees.push(input.fees);
 
         Ok(self)
     }
@@ -160,12 +199,17 @@ impl FundingVerifier {
         &mut self,
         output_amounts: TransactionItemAmounts,
     ) -> Result<&mut Self, TransactionError> {
+        self.add_output_with_fees(output_amounts.into())
+    }
+
+    pub fn add_output_with_fees(
+        &mut self,
+        output_amounts: TransactionItemAmountsWithFees,
+    ) -> Result<&mut Self, TransactionError> {
         self.outputs
             .checked_add_mut(&output_amounts.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
-        self.fees
-            .checked_add_mut(&output_amounts.fees)
-            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+        self.fees.push(output_amounts.fees);
 
         Ok(self)
     }
@@ -174,10 +218,13 @@ impl FundingVerifier {
         // In early versions we did not allow any overpaying
         const OVERPAY_MIN_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 1);
 
+        let (dynamic_fees, legacy_floor_fees) = self.fee_totals()?;
+        let fees = Self::required_fees(version, dynamic_fees, legacy_floor_fees);
+
         let outputs_and_fees = self
             .outputs
             .clone()
-            .checked_add(&self.fees)
+            .checked_add(&fees)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
         for (out_unit, out_amount) in outputs_and_fees {
@@ -190,7 +237,7 @@ impl FundingVerifier {
                 return Err(TransactionError::UnbalancedTransaction {
                     inputs: input_amount,
                     outputs: self.outputs.get(&out_unit).copied().unwrap_or_default(),
-                    fee: self.fees.get(&out_unit).copied().unwrap_or_default(),
+                    fee: fees.get(&out_unit).copied().unwrap_or_default(),
                 });
             }
 
@@ -204,11 +251,58 @@ impl FundingVerifier {
             return Err(TransactionError::UnbalancedTransaction {
                 inputs: inputs_amount,
                 outputs: self.outputs.get(&inputs_unit).copied().unwrap_or_default(),
-                fee: self.fees.get(&inputs_unit).copied().unwrap_or_default(),
+                fee: fees.get(&inputs_unit).copied().unwrap_or_default(),
             });
         }
 
         Ok(())
+    }
+
+    fn fee_totals(&self) -> Result<(Amounts, Amounts), TransactionError> {
+        let max_priority = self
+            .fees
+            .iter()
+            .map(TransactionItemFees::max_priority)
+            .max()
+            .unwrap_or_default();
+
+        let dynamic_fees = self
+            .fees
+            .iter()
+            .try_fold(Amounts::ZERO, |mut total, fees| {
+                total.checked_add_mut(&fees.try_dynamic_fee(max_priority)?)?;
+                Some(total)
+            })
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
+        let legacy_floor_fees = self
+            .fees
+            .iter()
+            .try_fold(Amounts::ZERO, |mut total, fees| {
+                total.checked_add_mut(&fees.try_legacy_floor_fee(max_priority)?)?;
+                Some(total)
+            })
+            .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
+
+        Ok((dynamic_fees, legacy_floor_fees))
+    }
+
+    fn required_fees(
+        version: CoreConsensusVersion,
+        dynamic_fees: Amounts,
+        legacy_floor_fees: Amounts,
+    ) -> Amounts {
+        const DYNAMIC_FEES_MIN_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 2);
+
+        if version < DYNAMIC_FEES_MIN_VERSION {
+            return legacy_floor_fees;
+        }
+
+        // TODO: When preparing the 0.16 release, bump the relevant consensus
+        // version again, return `dynamic_fees` for that version and remove the
+        // legacy fee-floor acceptance path.
+        let _ = dynamic_fees;
+        legacy_floor_fees
     }
 }
 
@@ -217,7 +311,7 @@ impl Default for FundingVerifier {
         FundingVerifier {
             inputs: Amounts::ZERO,
             outputs: Amounts::ZERO,
-            fees: Amounts::ZERO,
+            fees: Vec::new(),
         }
     }
 }
