@@ -16,6 +16,7 @@ use fedimint_core::db::{
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{Amounts, SupportedApiVersionsSummary};
 use fedimint_core::{ChainId, PeerId, TransactionId, impl_db_lookup, impl_db_record};
@@ -62,6 +63,7 @@ pub enum DbKeyPrefix {
     ClientModuleRecovery = 0x40,
     GuardianMetadata = 0x42,
     TransactionFees = 0x43,
+    CachedModuleFeeConsensus = 0x44,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -155,6 +157,31 @@ impl_db_record!(
 pub struct OperationLogKeyPrefix;
 
 impl_db_lookup!(key = OperationLogKey, query_prefix = OperationLogKeyPrefix);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CachedModuleFeeConsensusKey {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CachedModuleFeeConsensusKeyPrefix;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CachedModuleFeeConsensus {
+    pub current: CurrentFeeConsensus,
+    pub last_updated: SystemTime,
+}
+
+impl_db_record!(
+    key = CachedModuleFeeConsensusKey,
+    value = CachedModuleFeeConsensus,
+    db_prefix = DbKeyPrefix::CachedModuleFeeConsensus
+);
+
+impl_db_lookup!(
+    key = CachedModuleFeeConsensusKey,
+    query_prefix = CachedModuleFeeConsensusKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OperationLogKeyV0 {
