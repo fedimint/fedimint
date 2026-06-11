@@ -617,6 +617,7 @@ impl ClientBuilder {
         }
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+        let (fee_consensus_sync_tx, _) = watch::channel(Default::default());
 
         let decoders = self.decoders(config);
         let config = Self::config_decoded(config, &decoders)?;
@@ -647,6 +648,7 @@ impl ClientBuilder {
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
         self.migrate_module_dbs(&db, &config).await?;
+        fee_consensus_sync_tx.send_replace(Client::load_fee_consensus_sync_state(&db).await);
 
         let init_state = Self::load_init_state(&db).await;
 
@@ -1029,6 +1031,7 @@ impl ClientBuilder {
             log_ordering_wakeup_tx,
             log_event_added_rx,
             log_event_added_transient_tx: log_event_added_transient_tx.clone(),
+            fee_consensus_sync_tx,
             request_hook,
             executor,
             api,
@@ -1072,6 +1075,17 @@ impl ClientBuilder {
                     .wait_for_initialized_connections()
                     .await;
                 run_guardian_metadata_refresh_task(client_inner.clone()).await
+            }
+        });
+
+        client_inner.spawn_cancellable("fee consensus refresh task", {
+            let client_inner = client_inner.clone();
+            async move {
+                client_inner
+                    .connectors
+                    .wait_for_initialized_connections()
+                    .await;
+                client_inner.run_fee_consensus_refresh_task().await;
             }
         });
 
