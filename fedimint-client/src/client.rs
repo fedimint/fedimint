@@ -732,7 +732,7 @@ impl Client {
     /// explicit items described by `request` would incur, without submitting
     /// anything.
     ///
-    /// This is the read-only twin of [`Self::finalize_transaction`]: it runs
+    /// This is the read-only twin of `Self::finalize_transaction`: it runs
     /// the exact same primary-module balancing
     /// (`create_final_inputs_and_outputs`, including funding selection /
     /// consolidation / rebalancing) against a non-committable transaction

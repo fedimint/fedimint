@@ -206,7 +206,7 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     for i in 0..5 {
         let ecash = client_send
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null)
+            .send(Amount::from_sats(1_000), Value::Null, false)
             .await?;
         let ecash: ECash = base32::decode_prefixed(
             FEDIMINT_PREFIX,

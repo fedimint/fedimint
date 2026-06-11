@@ -28,7 +28,7 @@ use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -265,6 +265,36 @@ impl WalletClientModule {
             .await
             .map_err(|e| SendError::FederationError(e.to_string()))?
             .ok_or(SendError::NoConsensusFeerateAvailable)
+    }
+
+    /// Computes the federation fee an onchain send of an output worth `amount`
+    /// (the payment amount plus the on-chain miner fee) would incur, without
+    /// submitting anything.
+    ///
+    /// A send submits a single wallet output worth `amount`; the primary module
+    /// balances it by spending ecash to fund the output and minting any change.
+    /// This quotes the fee of that transaction — the wallet output fee, the
+    /// mint input fees on the funding notes, any mint change output fees,
+    /// and sub-denomination dust — via the shared, module-agnostic fee
+    /// quote.
+    ///
+    /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
+    /// the output `amount` (see [`Self::send_fee`]), not the on-federation
+    /// transaction fee.
+    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+        let amount = Amount::from_sats(amount.to_sat());
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    unit: AmountUnit::BITCOIN,
+                    input_amount: Amount::ZERO,
+                    output_amount: amount,
+                    input_fee: Amount::ZERO,
+                    output_fee: self.cfg.fee_consensus.fee(amount),
+                },
+            )
+            .await
     }
 
     /// Fetch the current fee required to claim an onchain deposit (peg-in).
