@@ -90,7 +90,7 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
-use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
+use fedimint_mint_common::config::{FeeConfig, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
 use futures::{StreamExt, pin_mut};
@@ -1658,7 +1658,7 @@ impl MintClientModule {
         );
 
         let selected_notes =
-            Self::select_notes(dbtx, notes_selector, amount, FeeConsensus::zero()).await?;
+            Self::select_notes(dbtx, notes_selector, amount, FeeConfig::zero()).await?;
 
         let operation_id = spendable_notes_to_operation_id(&selected_notes);
 
@@ -1744,7 +1744,7 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
     ) -> anyhow::Result<TieredMulti<SpendableNote>> {
         let note_stream = dbtx
             .find_by_prefix_sorted_descending(&NoteKeyPrefix)
@@ -2389,14 +2389,10 @@ impl MintClientModule {
         federation_id: FederationId,
         extra_meta: serde_json::Value,
     ) -> Option<OOBNotes> {
-        let selected_notes = Self::select_notes(
-            dbtx,
-            &SelectNotesWithExactAmount,
-            amount,
-            FeeConsensus::zero(),
-        )
-        .await
-        .ok()?;
+        let selected_notes =
+            Self::select_notes(dbtx, &SelectNotesWithExactAmount, amount, FeeConfig::zero())
+                .await
+                .ok()?;
 
         // Remove notes from our database
         for (note_amount, note) in selected_notes.iter_items() {
@@ -2690,7 +2686,7 @@ pub trait NotesSelector<Note = SpendableNoteUndecoded>: Send + Sync {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
     ) -> anyhow::Result<TieredMulti<Note>>;
 }
 
@@ -2708,7 +2704,7 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
     ) -> anyhow::Result<TieredMulti<Note>> {
         Ok(select_notes_from_stream(stream, requested_amount, fee_consensus).await?)
     }
@@ -2726,7 +2722,7 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
     ) -> anyhow::Result<TieredMulti<Note>> {
         let notes = select_notes_from_stream(stream, requested_amount, fee_consensus).await?;
 
@@ -2750,7 +2746,7 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
 async fn select_notes_from_stream<Note>(
     stream: impl futures::Stream<Item = (Amount, Note)>,
     requested_amount: Amount,
-    fee_consensus: FeeConsensus,
+    fee_consensus: FeeConfig,
 ) -> Result<TieredMulti<Note>, InsufficientBalanceError> {
     if requested_amount == Amount::ZERO {
         return Ok(TieredMulti::default());
@@ -3124,7 +3120,7 @@ pub fn represent_amount<K>(
     current_denominations: &TieredCounts,
     tiers: &Tiered<K>,
     denomination_sets: u16,
-    fee_consensus: &FeeConsensus,
+    fee_consensus: &FeeConfig,
 ) -> TieredCounts {
     let mut remaining_amount = amount;
     let mut denominations = TieredCounts::default();
@@ -3209,7 +3205,7 @@ mod tests {
     use fedimint_core::{
         Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
-    use fedimint_mint_common::config::FeeConsensus;
+    use fedimint_mint_common::config::FeeConfig;
     use itertools::Itertools;
     use serde_json::json;
 
@@ -3246,7 +3242,7 @@ mod tests {
                 &starting,
                 &tiers,
                 3,
-                &FeeConsensus::zero()
+                &FeeConfig::zero()
             ),
             denominations(vec![(Amount::from_sats(1), 3), (Amount::from_sats(3), 1),])
         );
@@ -3258,7 +3254,7 @@ mod tests {
                 &starting,
                 &tiers,
                 2,
-                &FeeConsensus::zero()
+                &FeeConfig::zero()
             ),
             denominations(vec![(Amount::from_sats(1), 2), (Amount::from_sats(4), 1)])
         );
@@ -3273,7 +3269,7 @@ mod tests {
             &TieredCounts::default(),
             &tiers,
             3,
-            &FeeConsensus::zero(),
+            &FeeConfig::zero(),
         );
 
         let mut total_notes = 0;
@@ -3282,7 +3278,7 @@ mod tests {
             let select = select_notes_from_stream(
                 stream,
                 Amount::from_sats(multiplier * 1000),
-                FeeConsensus::zero(),
+                FeeConfig::zero(),
             )
             .await;
             total_notes += select.unwrap().into_iter_items().count();
@@ -3300,13 +3296,13 @@ mod tests {
             ])
         };
         assert_eq!(
-            select_notes_from_stream(f(), Amount::from_sats(7), FeeConsensus::zero())
+            select_notes_from_stream(f(), Amount::from_sats(7), FeeConfig::zero())
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(1), 2), (Amount::from_sats(5), 1)])
         );
         assert_eq!(
-            select_notes_from_stream(f(), Amount::from_sats(20), FeeConsensus::zero())
+            select_notes_from_stream(f(), Amount::from_sats(20), FeeConfig::zero())
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(20), 1)])
@@ -3321,7 +3317,7 @@ mod tests {
             (Amount::from_sats(20), 5),
         ]);
         assert_eq!(
-            select_notes_from_stream(stream, Amount::from_sats(7), FeeConsensus::zero())
+            select_notes_from_stream(stream, Amount::from_sats(7), FeeConfig::zero())
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(5), 2)])
@@ -3336,7 +3332,7 @@ mod tests {
             (Amount::from_sats(20), 2),
         ]);
         assert_eq!(
-            select_notes_from_stream(stream, Amount::from_sats(39), FeeConsensus::zero())
+            select_notes_from_stream(stream, Amount::from_sats(39), FeeConfig::zero())
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(20), 2)])
@@ -3346,7 +3342,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn select_notes_returns_error_if_amount_is_too_large() {
         let stream = reverse_sorted_note_stream(vec![(Amount::from_sats(10), 1)]);
-        let error = select_notes_from_stream(stream, Amount::from_sats(100), FeeConsensus::zero())
+        let error = select_notes_from_stream(stream, Amount::from_sats(100), FeeConfig::zero())
             .await
             .unwrap_err();
         assert_eq!(error.total_amount, Amount::from_sats(10));

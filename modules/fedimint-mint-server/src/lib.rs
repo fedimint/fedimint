@@ -35,7 +35,7 @@ use fedimint_core::{
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    FeeConfig, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
@@ -238,9 +238,9 @@ impl ServerModuleInit for MintInit {
                             })
                             .collect(),
                         fee_consensus: if args.disable_base_fees {
-                            FeeConsensus::zero()
+                            FeeConfig::zero()
                         } else {
-                            FeeConsensus::new(0).expect("Relative fee is within range")
+                            FeeConfig::new(0).expect("Relative fee is within range")
                         },
                         max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
@@ -297,9 +297,9 @@ impl ServerModuleInit for MintInit {
                     })
                     .collect(),
                 fee_consensus: if args.disable_base_fees {
-                    FeeConsensus::zero()
+                    FeeConfig::zero()
                 } else {
-                    FeeConsensus::new(0).expect("Relative fee is within range")
+                    FeeConfig::new(0).expect("Relative fee is within range")
                 },
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },

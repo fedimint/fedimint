@@ -58,7 +58,7 @@ use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
+use fedimint_mintv2_common::config::{FeeConfig, MintClientConfig, client_denominations};
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
 };
@@ -588,7 +588,7 @@ impl MintClientModule {
     async fn rebalance(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        fee: &FeeConsensus,
+        fee: &FeeConfig,
         mut excess_input: Amount,
     ) -> (Vec<SpendableNote>, Vec<Denomination>) {
         let n_denominations = self.get_count_by_denomination_dbtx(dbtx).await;
@@ -1300,7 +1300,7 @@ fn round_to_multiple(amount: Amount, min_denomiation: Amount) -> Amount {
 
 fn represent_amount_with_fees(
     mut remaining_amount: Amount,
-    fee_consensus: &FeeConsensus,
+    fee_consensus: &FeeConfig,
 ) -> Vec<Denomination> {
     let mut denominations = Vec::new();
 

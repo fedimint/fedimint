@@ -81,7 +81,7 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig, WalletConfig};
+use fedimint_wallet_common::config::{FeeConfig, WalletClientConfig, WalletConfig};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
@@ -409,7 +409,7 @@ impl ServerModuleInit for WalletInit {
                     args.network,
                     finality_delay,
                     client_default_bitcoin_rpc.clone(),
-                    FeeConsensus::default(),
+                    FeeConfig::default(),
                 );
                 (*id, cfg)
             })
@@ -446,7 +446,7 @@ impl ServerModuleInit for WalletInit {
             args.network,
             finality_delay,
             client_default_bitcoin_rpc,
-            FeeConsensus::default(),
+            FeeConfig::default(),
         );
 
         Ok(wallet_cfg.to_erased())

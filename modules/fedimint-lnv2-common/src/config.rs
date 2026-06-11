@@ -26,7 +26,7 @@ pub struct LightningConfigLocal {
 pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: Network,
 }
 
@@ -39,7 +39,7 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: Network,
 }
 
@@ -59,12 +59,12 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub base: Amount,
     pub parts_per_million: u64,
 }
 
-impl FeeConsensus {
+impl FeeConfig {
     /// The lightning module will charge a non-configurable base fee of one
     /// satoshi per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -109,7 +109,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(1_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(1_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(999)),
@@ -159,7 +159,7 @@ fn migrate_config_consensus(
                 )
             })
             .collect(),
-        fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
+        fee_consensus: FeeConfig::new(1000).expect("Relative fee is within range"),
         network: config.network.0,
     }
 }

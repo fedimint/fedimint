@@ -24,7 +24,7 @@ pub struct MintConfigConsensus {
     /// denominations
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     /// Fees charged for ecash transactions
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// The maximum amount of change a client can request
     pub max_notes_per_denomination: u16,
 }
@@ -38,7 +38,7 @@ pub struct MintConfigPrivate {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub max_notes_per_denomination: u16,
 }
@@ -63,12 +63,12 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     base: Amount,
     parts_per_million: u64,
 }
 
-impl FeeConsensus {
+impl FeeConfig {
     /// The mint module will charge a non-configurable base fee of one hundred
     /// millisatoshis per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -131,7 +131,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(1_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(1_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(999)),

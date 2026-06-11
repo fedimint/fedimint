@@ -34,7 +34,7 @@ use fedimint_core::{
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
+    FeeConfig, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigPrivate,
 };
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
@@ -256,7 +256,7 @@ impl ServerModuleInit for LightningInit {
                     LightningConfig {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
-                            fee_consensus: FeeConsensus::default(),
+                            fee_consensus: FeeConfig::default(),
                             network: NetworkLegacyEncodingWrapper(args.network),
                         },
                         private: LightningConfigPrivate {
@@ -279,7 +279,7 @@ impl ServerModuleInit for LightningInit {
         let server = LightningConfig {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
-                fee_consensus: FeeConsensus::default(),
+                fee_consensus: FeeConfig::default(),
                 network: NetworkLegacyEncodingWrapper(args.network),
             },
             private: LightningConfigPrivate {
