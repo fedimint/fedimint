@@ -22,11 +22,13 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, FeeConsensusSchedule,
+    InputMeta, InputMetaWithFees, ModuleCommon, ModuleConsensusVersion, ModuleInit,
+    TransactionItemAmounts, TransactionItemAmountsWithFees,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
@@ -122,6 +124,25 @@ pub trait ServerModule: Debug + Sized {
         module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
+    /// Structured-fee variant of [`Self::process_input`].
+    ///
+    /// The default preserves the legacy fee behavior. Modules with dynamic fee
+    /// components should override this method and keep `process_input` as a
+    /// compatibility wrapper until the legacy fee floor is removed.
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b <Self::Common as ModuleCommon>::Input,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, <Self::Common as ModuleCommon>::InputError> {
+        let _ = fee_consensus;
+        self.process_input(dbtx, input, in_point, module_consensus_version)
+            .await
+            .map(Into::into)
+    }
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -137,6 +158,25 @@ pub trait ServerModule: Debug + Sized {
         out_point: OutPoint,
         module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, <Self::Common as ModuleCommon>::OutputError>;
+
+    /// Structured-fee variant of [`Self::process_output`].
+    ///
+    /// The default preserves the legacy fee behavior. Modules with dynamic fee
+    /// components should override this method and keep `process_output` as a
+    /// compatibility wrapper until the legacy fee floor is removed.
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a <Self::Common as ModuleCommon>::Output,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, <Self::Common as ModuleCommon>::OutputError> {
+        let _ = fee_consensus;
+        self.process_output(dbtx, output, out_point, module_consensus_version)
+            .await
+            .map(Into::into)
+    }
 
     /// **Deprecated**: Modules should not be using it. Instead, they should
     /// implement their own custom endpoints with semantics, versioning,
@@ -271,6 +311,16 @@ pub trait IServerModule: Debug {
         module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError>;
 
+    /// See [`ServerModule::process_input_with_fees`]
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<InputMetaWithFees, DynInputError>;
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -286,6 +336,16 @@ pub trait IServerModule: Debug {
         out_point: OutPoint,
         module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DynOutputError>;
+
+    /// See [`ServerModule::process_output_with_fees`]
+    async fn process_output_with_fees<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<TransactionItemAmountsWithFees, DynOutputError>;
 
     /// See [`ServerModule::verify_input_submission`]
     #[doc(hidden)]
@@ -339,6 +399,25 @@ dyn_newtype_define!(
     #[derive(Clone)]
     pub DynServerModule(Arc<IServerModule>)
 );
+
+fn decode_fee_consensus_schedules<T>(
+    fee_consensus: &[CurrentFeeConsensus],
+) -> Vec<FeeConsensusSchedule<T::FeeConsensus>>
+where
+    T: ServerModule,
+{
+    fee_consensus
+        .iter()
+        .map(|schedule| FeeConsensusSchedule {
+            fee_consensus: T::FeeConsensus::consensus_decode_whole(
+                &schedule.fee_consensus,
+                &ModuleDecoderRegistry::default(),
+            )
+            .expect("stored fee consensus must decode as module fee consensus"),
+            active_since: schedule.active_since,
+        })
+        .collect()
+}
 
 #[apply(async_trait_maybe_send!)]
 impl<T> IServerModule for T
@@ -455,6 +534,31 @@ where
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<InputMetaWithFees, DynInputError> {
+        let fee_consensus = decode_fee_consensus_schedules::<Self>(fee_consensus);
+
+        <Self as ServerModule>::process_input_with_fees(
+            self,
+            dbtx,
+            input
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
+                .expect("incorrect input type passed to module plugin"),
+            in_point,
+            module_consensus_version,
+            &fee_consensus,
+        )
+        .await
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
+    }
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -479,6 +583,31 @@ where
                 .expect("incorrect output type passed to module plugin"),
             out_point,
             module_consensus_version,
+        )
+        .await
+        .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
+    }
+
+    async fn process_output_with_fees<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<TransactionItemAmountsWithFees, DynOutputError> {
+        let fee_consensus = decode_fee_consensus_schedules::<Self>(fee_consensus);
+
+        <Self as ServerModule>::process_output_with_fees(
+            self,
+            dbtx,
+            output
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
+                .expect("incorrect output type passed to module plugin"),
+            out_point,
+            module_consensus_version,
+            &fee_consensus,
         )
         .await
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))

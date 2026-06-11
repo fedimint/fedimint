@@ -24,9 +24,11 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_MINT_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SerdeModuleEncodingBase64,
-    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, FeeCharge, FeeComponent, FeeConsensusSchedule, FeePriority, FeeRate,
+    InputMeta, InputMetaWithFees, ModuleConsensusVersion, ModuleInit, SerdeModuleEncodingBase64,
+    SupportedModuleApiVersions, TransactionItemAmounts, TransactionItemAmountsWithFees,
+    TransactionItemFees, api_endpoint,
 };
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
@@ -80,6 +82,8 @@ use crate::db::{
     RecoveryBlindNonceOutpointKey, RecoveryBlindNonceOutpointKeyPrefix, RecoveryItemKey,
     RecoveryItemKeyPrefix,
 };
+
+const MINT_FEE_PRIORITY: FeePriority = FeePriority(0);
 
 #[derive(Debug, Clone)]
 pub struct MintInit;
@@ -540,6 +544,58 @@ fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
         .expect("We have at least one coefficient")
 }
 
+fn minimum_mint_fee_rate(
+    fee_consensus: &[FeeConsensusSchedule<MintFeeConsensus>],
+    select_fee_rate: impl Fn(&MintFeeConsensus) -> FeeRate,
+) -> FeeRate {
+    let Some(first_fee_rate) = fee_consensus
+        .first()
+        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
+    else {
+        return FeeRate::zero();
+    };
+
+    fee_consensus
+        .iter()
+        .skip(1)
+        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
+        .fold(first_fee_rate, |min_fee_rate, fee_rate| {
+            FeeRate::new(
+                min_fee_rate.base_fee().min(fee_rate.base_fee()),
+                min_fee_rate
+                    .parts_per_million()
+                    .min(fee_rate.parts_per_million()),
+            )
+            .expect("minimum of valid fee rates must remain valid")
+        })
+}
+
+fn mint_transaction_item_fees(
+    amount: Amount,
+    legacy_fee: Amounts,
+    fee_consensus: &[FeeConsensusSchedule<MintFeeConsensus>],
+    select_fee_rate: impl Fn(&MintFeeConsensus) -> FeeRate,
+) -> TransactionItemFees {
+    let fee_rate = minimum_mint_fee_rate(fee_consensus, select_fee_rate);
+
+    TransactionItemFees {
+        dynamic: vec![
+            FeeComponent {
+                fees: Amounts::new_bitcoin(fee_rate.base_fee()),
+                charge: FeeCharge::Always,
+            },
+            FeeComponent {
+                fees: Amounts::new_bitcoin(fee_rate.proportional_fee(amount)),
+                charge: FeeCharge::IfMaxPriority(MINT_FEE_PRIORITY),
+            },
+        ],
+        legacy_floor: vec![FeeComponent {
+            fees: legacy_fee,
+            charge: FeeCharge::Always,
+        }],
+    }
+}
+
 /// Federated mint member mint
 #[derive(Debug)]
 pub struct Mint {
@@ -643,6 +699,39 @@ impl ServerModule for Mint {
         })
     }
 
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b MintInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, MintInputError> {
+        let processed = self
+            .process_input(dbtx, input, in_point, module_consensus_version)
+            .await?;
+        let amount = processed
+            .amount
+            .amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        let fees = mint_transaction_item_fees(
+            amount,
+            processed.amount.fees,
+            fee_consensus,
+            |fee_consensus| fee_consensus.input,
+        );
+
+        Ok(InputMetaWithFees {
+            amount: TransactionItemAmountsWithFees {
+                amounts: processed.amount.amounts,
+                fees,
+            },
+            pub_key: processed.pub_key,
+        })
+    }
+
     async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
@@ -713,6 +802,33 @@ impl ServerModule for Mint {
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
             fees: Amounts::new_bitcoin(fee),
+        })
+    }
+
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a MintOutput,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, MintOutputError> {
+        let processed = self
+            .process_output(dbtx, output, out_point, module_consensus_version)
+            .await?;
+        let amount = processed
+            .amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        let fees =
+            mint_transaction_item_fees(amount, processed.fees, fee_consensus, |fee_consensus| {
+                fee_consensus.output
+            });
+
+        Ok(TransactionItemAmountsWithFees {
+            amounts: processed.amounts,
+            fees,
         })
     }
 

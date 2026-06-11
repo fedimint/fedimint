@@ -23,6 +23,8 @@ use serde::Serialize;
 
 use crate::db::DbKeyPrefix;
 
+pub const MODULE_FEE_CONSENSUS_LOOKBACK_SECS: u64 = 4 * 7 * 24 * 60 * 60;
+
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct AcceptedItemKey(pub u64);
 
@@ -340,6 +342,56 @@ where
             active_since: ConsensusUnixTime::default(),
             fee_consensus: initial_fee_consensus,
         })
+}
+
+pub async fn module_fee_consensus_schedules<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    module_instance_id: ModuleInstanceId,
+    current_time: ConsensusUnixTime,
+    initial_fee_consensus: Vec<u8>,
+) -> Vec<CurrentFeeConsensus>
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    let cutoff = ConsensusUnixTime(
+        current_time
+            .0
+            .saturating_sub(MODULE_FEE_CONSENSUS_LOOKBACK_SECS),
+    );
+    let mut stored_schedules = dbtx
+        .find_by_prefix(&ModuleFeeConsensusSchedulePrefix { module_instance_id })
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    stored_schedules.sort_by_key(|(key, _)| (key.active_since, key.sequence));
+
+    let previous_schedule = stored_schedules
+        .iter()
+        .rev()
+        .find(|(key, _)| key.active_since < cutoff)
+        .map(|(key, fee_consensus)| CurrentFeeConsensus {
+            fee_consensus: fee_consensus.clone(),
+            active_since: key.active_since,
+        })
+        .unwrap_or(CurrentFeeConsensus {
+            fee_consensus: initial_fee_consensus,
+            active_since: ConsensusUnixTime::default(),
+        });
+
+    let mut schedules = vec![previous_schedule];
+    schedules.extend(
+        stored_schedules
+            .into_iter()
+            .filter_map(|(key, fee_consensus)| {
+                (cutoff <= key.active_since).then_some(CurrentFeeConsensus {
+                    fee_consensus,
+                    active_since: key.active_since,
+                })
+            }),
+    );
+
+    schedules
 }
 
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
