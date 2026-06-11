@@ -4,6 +4,7 @@ use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::FeeRate;
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vbytes};
 use secp256k1::{PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -136,6 +137,31 @@ impl WalletConfigConsensus {
 pub struct FeeConfig {
     pub base: Amount,
     pub parts_per_million: u64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub peg_in: FeeRate,
+    pub peg_out: FeeRate,
+}
+
+impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        let fee_rate = FeeRate::new(config.base, config.parts_per_million)?;
+
+        Ok(Self {
+            peg_in: fee_rate,
+            peg_out: fee_rate,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
 }
 
 impl FeeConfig {

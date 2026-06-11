@@ -32,7 +32,7 @@ use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use registry::ModuleRegistry;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use tracing::Instrument;
 
 // TODO: Make this module public and remove theDkgPeerMessage`pub use` below
@@ -237,6 +237,160 @@ impl IntoIterator for Amounts {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct FeeRate {
+    pub base: Amount,
+    parts_per_million: u64,
+}
+
+impl FeeRate {
+    pub const MAX_PARTS_PER_MILLION: u64 = 210_000;
+
+    pub fn new(base: Amount, parts_per_million: u64) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            parts_per_million <= Self::MAX_PARTS_PER_MILLION,
+            "Fee rate exceeds maximum of {} parts per million",
+            Self::MAX_PARTS_PER_MILLION
+        );
+
+        Ok(Self {
+            base,
+            parts_per_million,
+        })
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            base: Amount::ZERO,
+            parts_per_million: 0,
+        }
+    }
+
+    pub fn base_fee(&self) -> Amount {
+        self.base
+    }
+
+    pub fn parts_per_million(&self) -> u64 {
+        self.parts_per_million
+    }
+
+    pub fn proportional_fee(&self, amount: Amount) -> Amount {
+        let fee_msats = amount
+            .msats
+            .saturating_mul(self.parts_per_million)
+            .saturating_add(1_000_000 - 1)
+            / 1_000_000;
+        Amount::from_msats(fee_msats)
+    }
+
+    pub fn total_fee(&self, amount: Amount) -> Amount {
+        self.base
+            .checked_add(self.proportional_fee(amount))
+            .unwrap_or(Amount::from_msats(u64::MAX))
+    }
+}
+
+impl<'de> Deserialize<'de> for FeeRate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct FeeRateUnchecked {
+            base: Amount,
+            parts_per_million: u64,
+        }
+
+        let fee_rate = FeeRateUnchecked::deserialize(deserializer)?;
+        Self::new(fee_rate.base, fee_rate.parts_per_million).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Encodable for FeeRate {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.base.consensus_encode(writer)?;
+        self.parts_per_million.consensus_encode(writer)
+    }
+}
+
+impl Decodable for FeeRate {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let base = Amount::consensus_decode_partial(d, modules)?;
+        let parts_per_million = u64::consensus_decode_partial(d, modules)?;
+        Self::new(base, parts_per_million).map_err(DecodeError::from)
+    }
+}
+
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct FeePriority(pub u16);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum FeeCharge {
+    Always,
+    IfMaxPriority(FeePriority),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct FeeComponent {
+    pub fees: Amounts,
+    pub charge: FeeCharge,
+}
+
+impl FeeComponent {
+    pub fn fee(&self, max_priority: FeePriority) -> Amounts {
+        match self.charge {
+            FeeCharge::Always => self.fees.clone(),
+            FeeCharge::IfMaxPriority(priority) if priority == max_priority => self.fees.clone(),
+            FeeCharge::IfMaxPriority(_) => Amounts::ZERO,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TransactionItemFees {
+    pub dynamic: Vec<FeeComponent>,
+    pub legacy_floor: Vec<FeeComponent>,
+}
+
+impl TransactionItemFees {
+    pub const ZERO: Self = Self {
+        dynamic: Vec::new(),
+        legacy_floor: Vec::new(),
+    };
+
+    pub fn from_legacy_amounts(fees: Amounts) -> Self {
+        if fees == Amounts::ZERO {
+            Self::ZERO
+        } else {
+            let component = FeeComponent {
+                fees,
+                charge: FeeCharge::Always,
+            };
+            Self {
+                dynamic: vec![component.clone()],
+                legacy_floor: vec![component],
+            }
+        }
     }
 }
 

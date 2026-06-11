@@ -6,8 +6,8 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::module::serde_json;
-use fedimint_core::{Feerate, PeerId, plugin_types_trait_impl_config};
+use fedimint_core::module::{FeeRate, serde_json};
+use fedimint_core::{Amount, Feerate, PeerId, plugin_types_trait_impl_config};
 use miniscript::descriptor::{Wpkh, Wsh};
 use serde::{Deserialize, Serialize};
 
@@ -90,15 +90,38 @@ impl std::fmt::Display for WalletClientConfig {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConfig {
-    pub peg_in_abs: fedimint_core::Amount,
-    pub peg_out_abs: fedimint_core::Amount,
+    pub peg_in_abs: Amount,
+    pub peg_out_abs: Amount,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub peg_in: FeeRate,
+    pub peg_out: FeeRate,
+}
+
+impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        Ok(Self {
+            peg_in: FeeRate::new(config.peg_in_abs, 0)?,
+            peg_out: FeeRate::new(config.peg_out_abs, 0)?,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
 }
 
 impl Default for FeeConfig {
     fn default() -> Self {
         Self {
-            peg_in_abs: fedimint_core::Amount::from_sats(DEFAULT_DEPOSIT_FEE_SATS),
-            peg_out_abs: fedimint_core::Amount::ZERO,
+            peg_in_abs: Amount::from_sats(DEFAULT_DEPOSIT_FEE_SATS),
+            peg_out_abs: Amount::ZERO,
         }
     }
 }
