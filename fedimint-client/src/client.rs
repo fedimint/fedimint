@@ -53,6 +53,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiRequestErased, ApiVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
+    TransactionItemFees,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::runtime::sleep;
@@ -711,33 +712,77 @@ impl Client {
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_get_balance(&self, builder: &TransactionBuilder) -> (Amounts, Amounts) {
+    async fn cached_fee_consensus(&self) -> BTreeMap<ModuleInstanceId, Vec<CurrentFeeConsensus>> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+
+        dbtx.find_by_prefix(&CachedModuleFeeConsensusKeyPrefix)
+            .await
+            .map(|(key, cached)| (key.module_instance_id, vec![cached.current]))
+            .collect()
+            .await
+    }
+
+    fn transaction_builder_get_balance(
+        &self,
+        builder: &TransactionBuilder,
+        fee_consensus: &BTreeMap<ModuleInstanceId, Vec<CurrentFeeConsensus>>,
+    ) -> (Amounts, Amounts) {
         // FIXME: prevent overflows, currently not suitable for untrusted input
         let mut in_amounts = Amounts::ZERO;
         let mut out_amounts = Amounts::ZERO;
-        let mut fee_amounts = Amounts::ZERO;
+        let mut fees = Vec::new();
 
         for input in builder.inputs() {
-            let module = self.get_module(input.input.module_instance_id());
+            let module_instance_id = input.input.module_instance_id();
+            let module = self.get_module(module_instance_id);
 
-            let item_fees = module.input_fee(&input.amounts, &input.input).expect(
+            let item_fees = module.input_fees(
+                &input.amounts,
+                &input.input,
+                fee_consensus
+                    .get(&module_instance_id)
+                    .map_or(&[], Vec::as_slice),
+            ).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 
             in_amounts.checked_add_mut(&input.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            fees.push(item_fees);
         }
 
         for output in builder.outputs() {
-            let module = self.get_module(output.output.module_instance_id());
+            let module_instance_id = output.output.module_instance_id();
+            let module = self.get_module(module_instance_id);
 
-            let item_fees = module.output_fee(&output.amounts, &output.output).expect(
+            let item_fees = module.output_fees(
+                &output.amounts,
+                &output.output,
+                fee_consensus
+                    .get(&module_instance_id)
+                    .map_or(&[], Vec::as_slice),
+            ).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
             out_amounts.checked_add_mut(&output.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            fees.push(item_fees);
         }
+
+        let max_priority = fees
+            .iter()
+            .map(TransactionItemFees::max_priority)
+            .max()
+            .unwrap_or_default();
+        let fee_amounts = fees.into_iter().fold(Amounts::ZERO, |mut total, fees| {
+            total
+                .checked_add_mut(
+                    &fees
+                        .try_dynamic_fee(max_priority)
+                        .expect("client transaction fee total overflow"),
+                )
+                .expect("client transaction fee total overflow");
+            total
+        });
 
         out_amounts.checked_add_mut(&fee_amounts);
         (in_amounts, out_amounts)
@@ -808,7 +853,9 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<FinalizedTransaction> {
-        let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
+        let fee_consensus = self.cached_fee_consensus().await;
+        let (in_amounts, out_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction, &fee_consensus);
 
         let mut added_inputs_bundles = vec![];
         let mut added_outputs_bundles = vec![];
@@ -870,7 +917,7 @@ impl Client {
         }
 
         let (input_amounts, output_amounts) =
-            self.transaction_builder_get_balance(&partial_transaction);
+            self.transaction_builder_get_balance(&partial_transaction, &fee_consensus);
 
         for (unit, output_amount) in output_amounts {
             let input_amount = input_amounts.get(&unit).copied().unwrap_or_default();
@@ -1143,6 +1190,8 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
+        self.await_current_fee_consensus().await?;
+
         let FinalizedTransaction {
             transaction,
             mut states,
@@ -2709,6 +2758,10 @@ impl ClientContextIface for Client {
     }
     fn decoders(&self) -> &ModuleDecoderRegistry {
         Client::decoders(self)
+    }
+
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
+        Client::await_current_fee_consensus(self).await
     }
 
     async fn finalize_and_submit_transaction(

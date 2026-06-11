@@ -314,20 +314,11 @@ impl FeeRate {
             .unwrap_or(Amount::from_msats(u64::MAX))
     }
 
-    pub fn min_base_fee(rates: impl IntoIterator<Item = Self>) -> Amount {
+    pub fn min_total_fee_rate(rates: impl IntoIterator<Item = Self>, amount: Amount) -> Self {
         rates
             .into_iter()
-            .map(|fee_rate| fee_rate.base_fee())
-            .min()
-            .unwrap_or(Amount::ZERO)
-    }
-
-    pub fn min_proportional_fee(rates: impl IntoIterator<Item = Self>, amount: Amount) -> Amount {
-        rates
-            .into_iter()
-            .map(|fee_rate| fee_rate.proportional_fee(amount))
-            .min()
-            .unwrap_or(Amount::ZERO)
+            .min_by_key(|fee_rate| fee_rate.total_fee(amount))
+            .unwrap_or_else(Self::zero)
     }
 }
 
@@ -448,19 +439,20 @@ impl TransactionItemFees {
 
     pub fn from_rate(
         unit: AmountUnit,
-        rates: impl IntoIterator<Item = FeeRate> + Clone,
+        rates: impl IntoIterator<Item = FeeRate>,
         amount: Amount,
         priority: FeePriority,
         legacy_floor: Amount,
     ) -> Self {
+        let fee_rate = FeeRate::min_total_fee_rate(rates, amount);
         Self::with_legacy_floor(
             vec![
                 FeeComponent {
-                    fees: Amounts::new_custom(unit, FeeRate::min_base_fee(rates.clone())),
+                    fees: Amounts::new_custom(unit, fee_rate.base_fee()),
                     charge: FeeCharge::Always,
                 },
                 FeeComponent {
-                    fees: Amounts::new_custom(unit, FeeRate::min_proportional_fee(rates, amount)),
+                    fees: Amounts::new_custom(unit, fee_rate.proportional_fee(amount)),
                     charge: FeeCharge::IfMaxPriority(priority),
                 },
             ],
@@ -469,7 +461,7 @@ impl TransactionItemFees {
     }
 
     pub fn from_bitcoin_rate(
-        rates: impl IntoIterator<Item = FeeRate> + Clone,
+        rates: impl IntoIterator<Item = FeeRate>,
         amount: Amount,
         priority: FeePriority,
         legacy_floor: Amount,

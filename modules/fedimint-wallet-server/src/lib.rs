@@ -41,7 +41,7 @@ use db::{
     RecoveryItemKeyPrefix,
 };
 use envs::get_feerate_multiplier;
-use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -53,24 +53,19 @@ use fedimint_core::db::{
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_WALLET_ENV,
-    FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
-    is_automatic_consensus_version_voting_disabled, is_env_var_set_opt, is_rbf_withdrawal_enabled,
-    is_running_in_test_env,
+    BitcoinRpcConfig, FM_ENABLE_MODULE_WALLET_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
+    is_env_var_set_opt, is_rbf_withdrawal_enabled, is_running_in_test_env,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion,
-    CORE_CONSENSUS_VERSION, CoreConsensusVersion, FeeCharge, FeeComponent, FeeConsensusSchedule,
-    FeePriority, FeeRate, InputMeta, InputMetaWithFees, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmounts, TransactionItemAmountsWithFees,
-    TransactionItemFees, api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, FeeCharge, FeeComponent, FeeConsensusSchedule, FeePriority, FeeRate,
+    InputMeta, InputMetaWithFees, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees, api_endpoint,
 };
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::TaskGroup;
-#[cfg(not(target_family = "wasm"))]
-use fedimint_core::task::sleep;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     get_network_for_address, push_db_key_items, push_db_pair_items,
@@ -99,9 +94,7 @@ use fedimint_wallet_common::{
     MODULE_CONSENSUS_VERSION, Rbf, RecoveryItem, UnknownWalletInputVariantError, WalletInputError,
     WalletOutputError, WalletOutputV0,
 };
-use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
-use itertools::Itertools;
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -111,18 +104,18 @@ use miniscript::{Descriptor, TranslatePk, translate_hash_fail};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
-use tokio::sync::{Notify, watch};
+use tokio::sync::Notify;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
     ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
-    ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
-    ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
-    PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
-    PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
-    UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2,
+    ConsensusVersionVotePrefix, ConsensusVersionVotingActivationPrefix, DbKeyPrefix,
+    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey, UnspentTxOutKey, UnspentTxOutPrefix, migrate_to_v1,
+    migrate_to_v2,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -132,28 +125,15 @@ const WALLET_FEE_PRIORITY: FeePriority = FeePriority(2);
 
 fn minimum_wallet_fee_rate(
     fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
+    amount: fedimint_core::Amount,
     select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
 ) -> FeeRate {
-    let Some(first_fee_rate) = fee_consensus
-        .first()
-        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
-    else {
-        return FeeRate::zero();
-    };
-
-    fee_consensus
-        .iter()
-        .skip(1)
-        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
-        .fold(first_fee_rate, |min_fee_rate, fee_rate| {
-            FeeRate::new(
-                min_fee_rate.base_fee().min(fee_rate.base_fee()),
-                min_fee_rate
-                    .parts_per_million()
-                    .min(fee_rate.parts_per_million()),
-            )
-            .expect("minimum of valid fee rates must remain valid")
-        })
+    FeeRate::min_total_fee_rate(
+        fee_consensus
+            .iter()
+            .map(|schedule| select_fee_rate(&schedule.fee_consensus)),
+        amount,
+    )
 }
 
 fn wallet_transaction_item_fees(
@@ -162,7 +142,7 @@ fn wallet_transaction_item_fees(
     fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
     select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
 ) -> TransactionItemFees {
-    let fee_rate = minimum_wallet_fee_rate(fee_consensus, select_fee_rate);
+    let fee_rate = minimum_wallet_fee_rate(fee_consensus, amount, select_fee_rate);
 
     TransactionItemFees {
         dynamic: vec![
@@ -400,10 +380,6 @@ impl ServerModuleInit for WalletInit {
                 description: "Set to 0/false to disable the wallet (on-chain Bitcoin) module. Enabled by default.",
             },
             EnvVarDoc {
-                name: FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV,
-                description: "Set to 1/true to disable automatic consensus version voting. Useful for testing and development.",
-            },
-            EnvVarDoc {
                 name: envs::FM_WALLET_FEERATE_MULTIPLIER_ENV,
                 description: "Multiplier applied to fee rate estimates (float, clamped 1.0–32.0). Defaults to 1.0.",
             },
@@ -574,6 +550,17 @@ impl ServerModule for Wallet {
             .expect("config fee consensus must be valid")
     }
 
+    async fn legacy_consensus_version_votes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion> {
+        dbtx.find_by_prefix(&ConsensusVersionVotePrefix)
+            .await
+            .map(|(key, version)| (key.0, version))
+            .collect()
+            .await
+    }
+
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -647,36 +634,6 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
-        // Consensus upgrade activation voting
-        let manual_vote = dbtx
-            .get_value(&ConsensusVersionVotingActivationKey)
-            .await
-            .map(|()| {
-                // TODO: allow voting on any version between the currently active and max
-                // supported one in case we support a too high one already
-                MODULE_CONSENSUS_VERSION
-            });
-
-        let active_consensus_version = self.consensus_module_consensus_version(dbtx).await;
-        let automatic_vote = if is_automatic_consensus_version_voting_disabled() {
-            None
-        } else {
-            self.peer_supported_consensus_version
-                .borrow()
-                .and_then(|supported_consensus_version| {
-                    // Only automatically vote if the commonly supported version is higher than the
-                    // currently active one
-                    (active_consensus_version < supported_consensus_version)
-                        .then_some(supported_consensus_version)
-                })
-        };
-
-        // Prioritizing automatic vote for now since the manual vote never resets. Once
-        // that is fixed this should be switched around.
-        if let Some(vote_version) = automatic_vote.or(manual_vote) {
-            items.push(WalletConsensusItem::ModuleConsensusVersion(vote_version));
-        }
-
         items
     }
 
@@ -685,7 +642,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
         peer: PeerId,
-        _module_consensus_version: ModuleConsensusVersion,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_WALLET, ?consensus_item, "Processing consensus item proposal");
 
@@ -728,6 +685,7 @@ impl ServerModule for Wallet {
                             dbtx,
                             old_consensus_block_count,
                             new_consensus_block_count,
+                            module_consensus_version,
                         )
                         .await;
                     } else {
@@ -779,24 +737,18 @@ impl ServerModule for Wallet {
                     });
                 }
             }
-            WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
+            WalletConsensusItem::ModuleConsensusVersion(version) => {
                 let current_vote = dbtx
                     .get_value(&ConsensusVersionVoteKey(peer))
                     .await
-                    .unwrap_or(ModuleConsensusVersion::new(2, 0));
+                    .unwrap_or(self.cfg.consensus.version());
 
-                ensure!(
-                    module_consensus_version > current_vote,
-                    "Module consensus version vote is redundant"
-                );
+                if version <= current_vote {
+                    return Ok(());
+                }
 
-                dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &module_consensus_version)
+                dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &version)
                     .await;
-
-                assert!(
-                    self.consensus_module_consensus_version(dbtx).await <= MODULE_CONSENSUS_VERSION,
-                    "Wallet module does not support new consensus version, please upgrade the module"
-                );
             }
             WalletConsensusItem::Default { variant, .. } => {
                 panic!("Received wallet consensus item with unknown variant {variant}");
@@ -1189,10 +1141,8 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
-                async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.consensus_module_consensus_version(&mut dbtx).await)
+                async |_module: &Wallet, _context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(MODULE_CONSENSUS_VERSION)
                 }
             },
             api_endpoint! {
@@ -1207,11 +1157,6 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 2),
                 async |_module: &Wallet, context, _params: ()| -> () {
                     check_auth(context)?;
-
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction().await;
-                    dbtx.to_ref().insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
-                    dbtx.commit_tx_result().await?;
                     Ok(())
                 }
             },
@@ -1309,10 +1254,6 @@ pub struct Wallet {
     /// Broadcasting pending txes can be triggered immediately with this
     broadcast_pending: Arc<Notify>,
     task_group: TaskGroup,
-    /// Maximum consensus version supported by *all* our peers. Used to
-    /// automatically activate new consensus versions as soon as everyone
-    /// upgrades.
-    peer_supported_consensus_version: watch::Receiver<Option<ModuleConsensusVersion>>,
 }
 
 impl Wallet {
@@ -1332,8 +1273,7 @@ impl Wallet {
             broadcast_pending.clone(),
         );
 
-        let peer_supported_consensus_version =
-            Self::spawn_peer_supported_consensus_version_task(module_api, task_group, our_peer_id);
+        let _ = module_api;
 
         let status = retry("verify network", backoff_util::aggressive_backoff(), || {
             std::future::ready(
@@ -1353,7 +1293,6 @@ impl Wallet {
             btc_rpc: server_bitcoin_rpc_monitor,
             our_peer_id,
             task_group: task_group.clone(),
-            peer_supported_consensus_version,
             broadcast_pending,
         };
 
@@ -1531,32 +1470,6 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
-    async fn consensus_module_consensus_version(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> ModuleConsensusVersion {
-        let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
-
-        let mut versions = dbtx
-            .find_by_prefix(&ConsensusVersionVotePrefix)
-            .await
-            .map(|entry| entry.1)
-            .collect::<Vec<ModuleConsensusVersion>>()
-            .await;
-
-        while versions.len() < num_peers.total() {
-            versions.push(ModuleConsensusVersion::new(2, 0));
-        }
-
-        assert_eq!(versions.len(), num_peers.total());
-
-        versions.sort_unstable();
-
-        assert!(versions.first() <= versions.last());
-
-        versions[num_peers.max_evil()]
-    }
-
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
         let nonce_idx = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
         dbtx.insert_entry(&PegOutNonceKey, &(nonce_idx + 1)).await;
@@ -1569,6 +1482,7 @@ impl Wallet {
         dbtx: &mut DatabaseTransaction<'_>,
         old_count: u32,
         new_count: u32,
+        module_consensus_version: ModuleConsensusVersion,
     ) {
         let sync_start = fedimint_core::time::now();
         info!(
@@ -1625,9 +1539,7 @@ impl Wallet {
                 }
             }
 
-            if self.consensus_module_consensus_version(dbtx).await
-                >= ModuleConsensusVersion::new(2, 2)
-            {
+            if module_consensus_version >= ModuleConsensusVersion::new(2, 2) {
                 for transaction in &block.txdata {
                     // We maintain the subset of unspent P2WSH transaction outputs created
                     // since the module was running on the new consensus version, which might be
@@ -2031,99 +1943,6 @@ impl Wallet {
         {
             self.graceful_shutdown().await;
         }
-    }
-
-    fn spawn_peer_supported_consensus_version_task(
-        api_client: DynModuleApi,
-        task_group: &TaskGroup,
-        our_peer_id: PeerId,
-    ) -> watch::Receiver<Option<ModuleConsensusVersion>> {
-        let (sender, receiver) = watch::channel(None);
-        task_group.spawn_cancellable("fetch-peer-consensus-versions", async move {
-            loop {
-                let request_futures = api_client.all_peers().iter().filter_map(|&peer| {
-                    if peer == our_peer_id {
-                        return None;
-                    }
-
-                    let api_client_inner = api_client.clone();
-                    Some(async move {
-                        api_client_inner
-                            .request_single_peer::<ModuleConsensusVersion>(
-                                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
-                                ApiRequestErased::default(),
-                                peer,
-                            )
-                            .await
-                            .inspect(|res| debug!(
-                                target: LOG_MODULE_WALLET,
-                                %peer,
-                                %our_peer_id,
-                                ?res,
-                                "Fetched supported module consensus version from peer"
-                            ))
-                            .inspect_err(|err| warn!(
-                                target: LOG_MODULE_WALLET,
-                                 %peer,
-                                 err=%err.fmt_compact(),
-                                "Failed to fetch consensus version from peer"
-                            ))
-                            .ok()
-                    })
-                });
-
-                let peer_consensus_versions = join_all(request_futures)
-                    .await
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-
-                let sorted_consensus_versions = peer_consensus_versions
-                    .into_iter()
-                    .chain(std::iter::once(MODULE_CONSENSUS_VERSION))
-                    .sorted()
-                    .collect::<Vec<_>>();
-                let all_peers_supported_version =
-                    if sorted_consensus_versions.len() == api_client.all_peers().len() {
-                        let min_supported_version = *sorted_consensus_versions
-                            .first()
-                            .expect("at least one element");
-
-                        debug!(
-                            target: LOG_MODULE_WALLET,
-                            ?sorted_consensus_versions,
-                            "Fetched supported consensus versions from peers"
-                        );
-
-                        Some(min_supported_version)
-                    } else {
-                        assert!(
-                            sorted_consensus_versions.len() <= api_client.all_peers().len(),
-                            "Too many peer responses",
-                        );
-                        trace!(
-                            target: LOG_MODULE_WALLET,
-                            ?sorted_consensus_versions,
-                            "Not all peers have reported their consensus version yet"
-                        );
-                        None
-                    };
-
-                #[allow(clippy::disallowed_methods)]
-                if sender.send(all_peers_supported_version).is_err() {
-                    warn!(target: LOG_MODULE_WALLET, "Failed to send consensus version to watch channel, stopping task");
-                    break;
-                }
-
-                if is_running_in_test_env() {
-                    // Even in tests we don't want to spam the federation with requests about it
-                    sleep(Duration::from_secs(5)).await;
-                } else {
-                    sleep(Duration::from_mins(10)).await;
-                }
-            }
-        });
-        receiver
     }
 }
 
@@ -2597,7 +2416,6 @@ mod tests {
     use bitcoin::{Address, Amount, OutPoint, Txid, secp256k1};
     use fedimint_core::Feerate;
     use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-    use fedimint_core::envs::is_automatic_consensus_version_voting_disabled;
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
 
@@ -2716,24 +2534,5 @@ mod tests {
             fees: PegOutFees::new(sats_per_kvb, total_weight),
             txid: Txid::all_zeros(),
         })
-    }
-
-    #[test]
-    fn automatic_vote_suppressed_when_env_set() {
-        unsafe {
-            std::env::set_var("FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING", "1");
-        }
-        assert!(is_automatic_consensus_version_voting_disabled());
-        unsafe {
-            std::env::remove_var("FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING");
-        }
-    }
-
-    #[test]
-    fn automatic_vote_active_when_env_unset() {
-        unsafe {
-            std::env::remove_var("FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING");
-        }
-        assert!(!is_automatic_consensus_version_voting_disabled());
     }
 }

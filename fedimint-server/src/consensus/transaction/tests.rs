@@ -1,6 +1,6 @@
 use fedimint_core::Amount;
 use fedimint_core::module::{
-    AmountUnit, Amounts, CoreConsensusVersion, FeeCharge, FeeComponent, FeePriority,
+    AmountUnit, Amounts, CoreConsensusVersion, FeeCharge, FeeComponent, FeePriority, FeeRate,
     TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees,
 };
 
@@ -173,5 +173,27 @@ fn funding_verifier_accepts_legacy_floor_during_dynamic_fee_transition() {
     assert!(
         v.verify_funding(CoreConsensusVersion::new(2, 2)).is_ok(),
         "legacy fee floor should be accepted until the tightening consensus version"
+    );
+}
+
+#[test]
+fn dynamic_fee_minimum_uses_a_real_schedule() {
+    let priority = FeePriority(1);
+    let amount = Amount::from_msats(1_000);
+    let fees = TransactionItemFees::from_bitcoin_rate(
+        [
+            FeeRate::new(Amount::from_msats(10), 10_000).expect("fee rate is below sanity limit"),
+            FeeRate::new(Amount::from_msats(1), 100_000).expect("fee rate is below sanity limit"),
+        ],
+        amount,
+        priority,
+        Amount::ZERO,
+    );
+
+    assert_eq!(
+        fees.try_dynamic_fee(priority)
+            .expect("fee calculation should not overflow"),
+        Amounts::new_bitcoin_msats(20),
+        "minimum must be picked from a complete voted schedule"
     );
 }

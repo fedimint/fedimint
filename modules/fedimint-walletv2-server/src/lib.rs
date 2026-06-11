@@ -113,28 +113,15 @@ const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
 
 fn minimum_wallet_fee_rate(
     fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
+    amount: fedimint_core::Amount,
     select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
 ) -> FeeRate {
-    let Some(first_fee_rate) = fee_consensus
-        .first()
-        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
-    else {
-        return FeeRate::zero();
-    };
-
-    fee_consensus
-        .iter()
-        .skip(1)
-        .map(|schedule| select_fee_rate(&schedule.fee_consensus))
-        .fold(first_fee_rate, |min_fee_rate, fee_rate| {
-            FeeRate::new(
-                min_fee_rate.base_fee().min(fee_rate.base_fee()),
-                min_fee_rate
-                    .parts_per_million()
-                    .min(fee_rate.parts_per_million()),
-            )
-            .expect("minimum of valid fee rates must remain valid")
-        })
+    FeeRate::min_total_fee_rate(
+        fee_consensus
+            .iter()
+            .map(|schedule| select_fee_rate(&schedule.fee_consensus)),
+        amount,
+    )
 }
 
 fn wallet_transaction_item_fees(
@@ -143,7 +130,7 @@ fn wallet_transaction_item_fees(
     fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
     select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
 ) -> TransactionItemFees {
-    let fee_rate = minimum_wallet_fee_rate(fee_consensus, select_fee_rate);
+    let fee_rate = minimum_wallet_fee_rate(fee_consensus, amount, select_fee_rate);
 
     TransactionItemFees {
         dynamic: vec![

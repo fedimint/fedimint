@@ -175,6 +175,10 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
 
     fn decoders(&self) -> &ModuleDecoderRegistry;
 
+    /// Wait until the client has fresh fee consensus data or knows that the
+    /// federation does not support dynamic fee consensus.
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()>;
+
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_inputs`].
     /// Returns transaction id of the funding transaction and an optional
@@ -232,6 +236,10 @@ impl IGlobalClientContext for () {
     }
 
     fn decoders(&self) -> &ModuleDecoderRegistry {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -316,6 +324,7 @@ impl DynGlobalClientContext {
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
     {
+        self.await_current_fee_consensus().await?;
         self.claim_inputs_dyn(dbtx, inputs.into_instanceless())
             .await
     }
@@ -337,6 +346,7 @@ impl DynGlobalClientContext {
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
     {
+        self.await_current_fee_consensus().await?;
         self.fund_output_dyn(dbtx, outputs.into_instanceless())
             .await
     }

@@ -13,6 +13,7 @@ pub mod migration;
 pub mod setup_ui;
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -65,6 +66,18 @@ pub trait ServerModule: Debug + Sized {
     /// TODO: Remove this together with the legacy fee floor when the 0.16
     /// tightening consensus-version bump no longer accepts old-client fees.
     fn initial_fee_consensus(&self) -> Self::FeeConsensus;
+
+    /// Returns module-local consensus-version votes that predate core-level
+    /// module consensus-version voting.
+    ///
+    /// This is a compatibility hook for modules that used to maintain their own
+    /// version voting state. New modules should leave the default empty.
+    async fn legacy_consensus_version_votes(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion> {
+        BTreeMap::new()
+    }
 
     /// This module's contribution to the next consensus proposal. This method
     /// is only guaranteed to be called once every few seconds. Consensus items
@@ -271,6 +284,12 @@ pub trait IServerModule: Debug {
 
     fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()>;
 
+    /// See [`ServerModule::legacy_consensus_version_votes`]
+    async fn legacy_consensus_version_votes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion>;
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
@@ -450,6 +469,13 @@ where
             &ModuleDecoderRegistry::default(),
         )?;
         Ok(())
+    }
+
+    async fn legacy_consensus_version_votes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion> {
+        <Self as ServerModule>::legacy_consensus_version_votes(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal

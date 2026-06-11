@@ -57,7 +57,7 @@ use fedimint_client_module::module::init::{
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContext, ClientModule, IClientModule, OutPointRange, PrimaryModulePriority,
-    PrimaryModuleSupport,
+    PrimaryModuleSupport, decode_current_fee_consensus,
 };
 use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -74,10 +74,12 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiVersion, CommonModuleInit, FeePriority, ModuleCommon, ModuleInit,
+    MultiApiVersion, TransactionItemFees,
 };
 use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
 use fedimint_core::secp256k1::rand::thread_rng;
@@ -90,7 +92,7 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
-use fedimint_mint_common::config::{FeeConfig, MintClientConfig};
+use fedimint_mint_common::config::{FeeConfig, FeeConsensus as MintFeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
 use futures::{StreamExt, pin_mut};
@@ -937,6 +939,8 @@ impl Context for MintClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
+const MINT_FEE_PRIORITY: FeePriority = FeePriority(0);
+
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
     type Init = MintClientInit;
@@ -968,6 +972,30 @@ impl ClientModule for MintClientModule {
         ))
     }
 
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::input_fee(self, amount, input)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<MintFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.input],
+            amount.get_bitcoin(),
+            MINT_FEE_PRIORITY,
+            legacy_fee,
+        ))
+    }
+
     fn output_fee(
         &self,
         amount: &Amounts,
@@ -975,6 +1003,30 @@ impl ClientModule for MintClientModule {
     ) -> Option<Amounts> {
         Some(Amounts::new_bitcoin(
             self.cfg.fee_consensus.fee(amount.get_bitcoin()),
+        ))
+    }
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::output_fee(self, amount, output)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<MintFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.output],
+            amount.get_bitcoin(),
+            MINT_FEE_PRIORITY,
+            legacy_fee,
         ))
     }
 
@@ -1385,7 +1437,7 @@ impl MintClientModule {
             &TieredCounts::default(),
             &self.cfg.tbs_pks,
             0,
-            &FeeConsensus::zero(),
+            &FeeConfig::zero(),
         )
     }
 
@@ -1894,7 +1946,7 @@ impl MintClientModule {
             &mut dbtx,
             &SelectNotesWithExactAmount,
             amount,
-            FeeConsensus::zero(),
+            FeeConfig::zero(),
         )
         .await
         .is_ok()

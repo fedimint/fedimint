@@ -39,7 +39,9 @@ use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
-use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModule, IClientModule, OutPointRange, decode_current_fee_consensus,
+};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
@@ -52,9 +54,10 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::module::{
-    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion,
-    ModuleInit, MultiApiVersion,
+    Amounts, ApiAuth, ApiVersion, CommonModuleInit, FeePriority, ModuleCommon,
+    ModuleConsensusVersion, ModuleInit, MultiApiVersion, TransactionItemFees,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
@@ -66,7 +69,9 @@ use fedimint_core::{
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{FeeConfig, WalletClientConfig};
+use fedimint_wallet_common::config::{
+    FeeConfig, FeeConsensus as WalletFeeConsensus, WalletClientConfig,
+};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
@@ -556,6 +561,8 @@ pub struct WalletClientModule {
     admin_auth: Option<ApiAuth>,
 }
 
+const WALLET_FEE_PRIORITY: FeePriority = FeePriority(2);
+
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for WalletClientModule {
     type Init = WalletClientInit;
@@ -647,12 +654,60 @@ impl ClientModule for WalletClientModule {
         Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_in_abs))
     }
 
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::input_fee(self, amount, input)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<WalletFeeConsensus>(
+            fee_consensus,
+            &fedimint_core::module::registry::ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.peg_in],
+            amount.get_bitcoin(),
+            WALLET_FEE_PRIORITY,
+            legacy_fee,
+        ))
+    }
+
     fn output_fee(
         &self,
         _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
         Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs))
+    }
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::output_fee(self, amount, output)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<WalletFeeConsensus>(
+            fee_consensus,
+            &fedimint_core::module::registry::ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_consensus.peg_out],
+            amount.get_bitcoin(),
+            WALLET_FEE_PRIORITY,
+            legacy_fee,
+        ))
     }
 
     async fn handle_rpc(

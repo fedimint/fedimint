@@ -41,6 +41,10 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.decoders()
     }
 
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
+        self.client.await_current_fee_consensus().await
+    }
+
     async fn client_config(&self) -> ClientConfig {
         self.client.config().await
     }
@@ -50,6 +54,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
     ) -> anyhow::Result<OutPointRange> {
+        self.client.await_current_fee_consensus().await?;
+
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
@@ -67,6 +73,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
     ) -> anyhow::Result<OutPointRange> {
+        self.client.await_current_fee_consensus().await?;
+
         let tx_builder =
             TransactionBuilder::new().with_outputs(outputs.into_dyn(self.module_instance_id));
 

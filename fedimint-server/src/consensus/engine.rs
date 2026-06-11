@@ -20,8 +20,8 @@ use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiRequestErased, CORE_CONSENSUS_VERSION, CoreConsensusVersion, ModuleConsensusVersion,
-    SerdeModuleEncoding,
+    ApiRequestErased, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    DYNAMIC_FEES_CORE_CONSENSUS_VERSION, ModuleConsensusVersion, SerdeModuleEncoding,
 };
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::runtime::spawn;
@@ -114,11 +114,25 @@ impl ConsensusEngine {
     where
         for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
     {
+        let initial_version = self.initial_module_consensus_version(module_instance_id)?;
+        let legacy_consensus_version_votes = {
+            let module = self
+                .modules
+                .get(module_instance_id)
+                .with_context(|| format!("Unknown module instance id {module_instance_id}"))?;
+            let module_dbtx = &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc();
+            module.legacy_consensus_version_votes(module_dbtx).await
+        };
+
         Ok(active_module_consensus_version(
             dbtx,
             module_instance_id,
             self.num_peers(),
-            self.initial_module_consensus_version(module_instance_id)?,
+            initial_version,
+            legacy_consensus_version_votes,
         )
         .await)
     }
@@ -1176,6 +1190,12 @@ impl ConsensusEngine {
                 Ok(())
             }
             ConsensusItem::CoreUnixTime(vote) => {
+                if self.active_core_consensus_version(dbtx).await
+                    < DYNAMIC_FEES_CORE_CONSENSUS_VERSION
+                {
+                    bail!("Core unix time is not active for this core consensus version");
+                }
+
                 let current_vote = dbtx
                     .get_value(&CoreUnixTimeVoteKey(peer_id))
                     .await
@@ -1198,6 +1218,12 @@ impl ConsensusEngine {
                 Ok(())
             }
             ConsensusItem::ModuleFeeConsensus(vote) => {
+                if self.active_core_consensus_version(dbtx).await
+                    < DYNAMIC_FEES_CORE_CONSENSUS_VERSION
+                {
+                    bail!("Module fee consensus is not active for this core consensus version");
+                }
+
                 let module_instance_id = vote.module_instance_id;
                 let module = self
                     .modules
@@ -1212,10 +1238,6 @@ impl ConsensusEngine {
                 )
                 .await;
 
-                if vote.fee_consensus == current_fee_consensus.fee_consensus {
-                    bail!("Module fee consensus vote is redundant");
-                }
-
                 dbtx.insert_entry(
                     &ModuleFeeConsensusVoteKey {
                         module_instance_id,
@@ -1224,6 +1246,10 @@ impl ConsensusEngine {
                     &vote.fee_consensus,
                 )
                 .await;
+
+                if vote.fee_consensus == current_fee_consensus.fee_consensus {
+                    return Ok(());
+                }
 
                 let matching_votes = dbtx
                     .find_by_prefix(&ModuleFeeConsensusVotePrefix { module_instance_id })
