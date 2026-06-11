@@ -60,7 +60,10 @@ async fn main() -> anyhow::Result<()> {
 
     let db = RocksDb::build(cli_opts.data_dir).open().await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(
-        ConnectorRegistry::build_from_server_env()?.bind().await?,
+        ConnectorRegistry::build_from_server_env()?
+            .http(true)
+            .bind()
+            .await?,
         db,
         cli_opts.api_address.clone(),
     )
