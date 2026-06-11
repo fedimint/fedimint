@@ -966,8 +966,12 @@ impl Wallet {
             "Processed block count vote"
         );
 
-        // We do not sync blocks that predate the federation itself.
-        if old_consensus_block_count == 0 {
+        // Outside regtest, do not sync blocks that predate the federation itself.
+        // Regtest starts from scratch, so scan from genesis to avoid races where
+        // test deposits are mined before the first walletv2 block count
+        // transition is processed.
+        let scan_from_genesis = self.cfg.consensus.network == bitcoin::Network::Regtest;
+        if old_consensus_block_count == 0 && !scan_from_genesis {
             return Ok(());
         }
 
