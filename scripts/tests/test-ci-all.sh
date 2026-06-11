@@ -542,7 +542,10 @@ else
   # on dev computers default to `num_cpus / 3 + 1` max parallel jobs
   parallel_args+=(--jobs "${default_parallel_jobs}")
 fi
-parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-360}")
+# Some integration suites can approach 6 minutes on busy CI runners, especially when
+# competing for resources with merge queue builds. Keep the per-test timeout above
+# the normal slow-path runtime, while still bounding genuine hangs.
+parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-600}")
 
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc)))}")
 
