@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use fedimint_core::core::{
     Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome, ModuleInstanceId, ModuleKind,
@@ -34,6 +35,9 @@ use fedimint_core::module::{
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModule: Debug + Sized {
@@ -41,7 +45,15 @@ pub trait ServerModule: Debug + Sized {
 
     type Init: ServerModuleInit;
 
-    type FeeConsensus: Clone + Debug + Encodable + Decodable + MaybeSend + MaybeSync + 'static;
+    type FeeConsensus: Clone
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Encodable
+        + Decodable
+        + MaybeSend
+        + MaybeSync
+        + 'static;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
@@ -284,6 +296,10 @@ pub trait IServerModule: Debug {
 
     fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()>;
 
+    fn fee_consensus_to_json(&self, fee_consensus: &[u8]) -> anyhow::Result<Value>;
+
+    fn fee_consensus_from_json(&self, fee_consensus: Value) -> anyhow::Result<Vec<u8>>;
+
     /// See [`ServerModule::legacy_consensus_version_votes`]
     async fn legacy_consensus_version_votes(
         &self,
@@ -469,6 +485,20 @@ where
             &ModuleDecoderRegistry::default(),
         )?;
         Ok(())
+    }
+
+    fn fee_consensus_to_json(&self, fee_consensus: &[u8]) -> anyhow::Result<Value> {
+        let fee_consensus = <Self as ServerModule>::FeeConsensus::consensus_decode_whole(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        )?;
+        serde_json::to_value(fee_consensus).context("failed to encode fee consensus as JSON")
+    }
+
+    fn fee_consensus_from_json(&self, fee_consensus: Value) -> anyhow::Result<Vec<u8>> {
+        let fee_consensus: <Self as ServerModule>::FeeConsensus =
+            serde_json::from_value(fee_consensus).context("failed to decode fee consensus JSON")?;
+        Ok(fee_consensus.consensus_encode_to_vec())
     }
 
     async fn legacy_consensus_version_votes(

@@ -29,7 +29,7 @@ use {
     fedimint_walletv2_server,
 };
 
-use crate::dashboard::modules::{lnv2, meta, mintv2, wallet, walletv2};
+use crate::dashboard::modules::{fees, lnv2, meta, mintv2, wallet, walletv2};
 use crate::{DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, METRICS_ROUTE};
 
 // Dashboard login form handler
@@ -123,6 +123,7 @@ async fn dashboard_view(
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
+    let fee_consensus = state.api.module_fee_consensus().await;
 
     let content = html! {
         div class="row gy-4" {
@@ -148,6 +149,21 @@ async fn dashboard_view(
         div class="row gy-4 mt-2" {
             div class="col-12" {
                 (bitcoin::render(bitcoin_rpc_url, &bitcoin_rpc_status))
+            }
+        }
+
+        @match &fee_consensus {
+            Ok(fee_consensus) => {
+                (fees::render(fee_consensus))
+            }
+            Err(error) => {
+                div class="row gy-4 mt-2" {
+                    div class="col-12" {
+                        div class="alert alert-danger" {
+                            "Failed to load fee configuration: " (error)
+                        }
+                    }
+                }
             }
         }
 
@@ -230,6 +246,8 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
         .route(METRICS_ROUTE, get(metrics_handler))
+        .route(fees::FEES_SIMPLE_ROUTE, post(fees::post_simple))
+        .route(fees::FEES_EXPERT_ROUTE, post(fees::post_expert))
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynDashboardApi>),

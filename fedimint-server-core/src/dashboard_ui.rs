@@ -5,7 +5,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::admin_client::GuardianConfigBackup;
 use fedimint_core::bitcoin::Network;
-use fedimint_core::core::ModuleKind;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::epoch::ConsensusUnixTime;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::net::auth::GuardianAuthToken;
@@ -13,6 +14,7 @@ use fedimint_core::session_outcome::SessionStatusV2;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{DynServerModule, ServerModule};
 
@@ -88,6 +90,16 @@ pub trait IDashboardApi {
     /// Get reference to a server module instance by module kind
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule>;
 
+    /// Get current and desired dynamic fee schedules for all modules.
+    async fn module_fee_consensus(&self) -> Result<Vec<DashboardModuleFeeConsensus>, String>;
+
+    /// Set desired dynamic fee schedule for one module from typed JSON.
+    async fn set_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        fee_consensus: Value,
+    ) -> Result<(), String>;
+
     /// Get the fedimintd version
     async fn fedimintd_version(&self) -> String;
 
@@ -124,4 +136,13 @@ pub struct ServerBitcoinRpcStatus {
     pub block_count: u64,
     pub fee_rate: Feerate,
     pub sync_progress: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardModuleFeeConsensus {
+    pub module_instance_id: ModuleInstanceId,
+    pub module_kind: ModuleKind,
+    pub current: Value,
+    pub desired: Option<Value>,
+    pub active_since: ConsensusUnixTime,
 }

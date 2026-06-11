@@ -13,14 +13,18 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::endpoint_constants::{
     ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
-    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT,
-    START_DKG_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT, CURRENT_MODULE_FEE_CONSENSUS_JSON_ENDPOINT,
+    FEDIMINTD_VERSION_ENDPOINT, GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
+    RESET_PEER_SETUP_CODES_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    SET_MODULE_FEE_CONSENSUS_JSON_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, START_DKG_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT,
+};
+use fedimint_core::epoch::{
+    CurrentFeeConsensusJson, ModuleFeeConsensusRequest, SetModuleFeeConsensusJsonRequest,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
@@ -640,5 +644,41 @@ where
     async fn chain_id(&self) -> FederationResult<ChainId> {
         self.request_current_consensus(CHAIN_ID_ENDPOINT.to_owned(), ApiRequestErased::default())
             .await
+    }
+
+    async fn current_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> FederationResult<CurrentFeeConsensusJson> {
+        let method = CURRENT_MODULE_FEE_CONSENSUS_JSON_ENDPOINT.to_owned();
+        let params = ApiRequestErased::new(ModuleFeeConsensusRequest { module_instance_id });
+        let Some(peer_id) = self.self_peer() else {
+            return Err(FederationError::general(
+                method,
+                params,
+                anyhow!("Admin peer id is required to query module fee consensus JSON"),
+            ));
+        };
+
+        self.request_single_peer(method.clone(), params.clone(), peer_id)
+            .await
+            .map_err(|error| FederationError::new_one_peer(peer_id, method, params, error))
+    }
+
+    async fn set_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        fee_consensus: Value,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            SET_MODULE_FEE_CONSENSUS_JSON_ENDPOINT,
+            ApiRequestErased::new(SetModuleFeeConsensusJsonRequest {
+                module_instance_id,
+                fee_consensus,
+            }),
+            auth,
+        )
+        .await
     }
 }
