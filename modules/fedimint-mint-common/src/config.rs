@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::serde_json;
+use fedimint_core::module::{FeeRate, serde_json};
 use fedimint_core::{Amount, PeerId, Tiered, plugin_types_trait_impl_config};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
@@ -66,6 +66,31 @@ plugin_types_trait_impl_config!(
 pub struct FeeConfig {
     base: Amount,
     parts_per_million: u64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub input: FeeRate,
+    pub output: FeeRate,
+}
+
+impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        let fee_rate = FeeRate::new(config.base, config.parts_per_million)?;
+
+        Ok(Self {
+            input: fee_rate,
+            output: fee_rate,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
 }
 
 impl FeeConfig {
