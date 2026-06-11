@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["LocalParams","SetupApi","SetupState"]};
+window.SIDEBAR_ITEMS = {"enum":["ConfigGenOutcome"],"fn":["is_expected_backup_path","restore_backup_to_dir","server_endpoints","unpack_backup_to_restore_dir"],"struct":["LocalParams","RestoredGuardianConfig","SetupApi","SetupState"]};
