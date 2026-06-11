@@ -1,23 +1,25 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context as _, anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
-use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{ApiRequestErased, ModuleConsensusVersion, SerdeModuleEncoding};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::secp256k1::schnorr;
@@ -44,7 +46,8 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    ModuleConsensusVersionVoteKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    active_module_consensus_version,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -82,6 +85,56 @@ impl ConsensusEngine {
 
     fn identity(&self) -> PeerId {
         self.cfg.local.identity
+    }
+
+    fn initial_module_consensus_version(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<ModuleConsensusVersion> {
+        Ok(self
+            .cfg
+            .consensus
+            .modules
+            .get(&module_instance_id)
+            .with_context(|| format!("Unknown module instance id {module_instance_id}"))?
+            .version)
+    }
+
+    async fn active_module_consensus_version<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<ModuleConsensusVersion>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        Ok(active_module_consensus_version(
+            dbtx,
+            module_instance_id,
+            self.num_peers(),
+            self.initial_module_consensus_version(module_instance_id)?,
+        )
+        .await)
+    }
+
+    async fn active_module_consensus_versions<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_ids: impl IntoIterator<Item = ModuleInstanceId>,
+    ) -> anyhow::Result<BTreeMap<ModuleInstanceId, ModuleConsensusVersion>>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        let mut versions = BTreeMap::new();
+        for module_instance_id in module_instance_ids.into_iter().collect::<BTreeSet<_>>() {
+            versions.insert(
+                module_instance_id,
+                self.active_module_consensus_version(dbtx, module_instance_id)
+                    .await?,
+            );
+        }
+
+        Ok(versions)
     }
 
     #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
@@ -960,6 +1013,9 @@ impl ConsensusEngine {
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
             let _module_audit_timing =
                 TimeReporter::new(format!("audit module {module_instance_id}")).level(Level::TRACE);
+            let module_consensus_version = self
+                .active_module_consensus_version(&mut dbtx, module_instance_id)
+                .await?;
 
             let timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
                 .with_label_values(&[
@@ -976,6 +1032,7 @@ impl ConsensusEngine {
                         .into_nc(),
                     &mut audit,
                     module_instance_id,
+                    module_consensus_version,
                 )
                 .await;
 
@@ -1017,13 +1074,57 @@ impl ConsensusEngine {
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
+                let module_consensus_version = self
+                    .active_module_consensus_version(dbtx, instance_id)
+                    .await?;
 
                 let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id).0;
 
-                self.modules
-                    .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                let module = self.modules.get_expect(instance_id);
+                module
+                    .process_consensus_item(
+                        module_dbtx,
+                        &module_item,
+                        peer_id,
+                        module_consensus_version,
+                    )
                     .await
+            }
+            ConsensusItem::ModuleConsensusVersion(module_consensus_version_vote) => {
+                let module_instance_id = module_consensus_version_vote.module_instance_id;
+                let module = self
+                    .modules
+                    .get(module_instance_id)
+                    .with_context(|| format!("Unknown module instance id {module_instance_id}"))?;
+                let current_vote = dbtx
+                    .get_value(&ModuleConsensusVersionVoteKey {
+                        module_instance_id,
+                        peer_id,
+                    })
+                    .await
+                    .unwrap_or(self.initial_module_consensus_version(module_instance_id)?);
+
+                if module_consensus_version_vote.version <= current_vote {
+                    bail!("Module consensus version vote is redundant");
+                }
+
+                dbtx.insert_entry(
+                    &ModuleConsensusVersionVoteKey {
+                        module_instance_id,
+                        peer_id,
+                    },
+                    &module_consensus_version_vote.version,
+                )
+                .await;
+
+                assert!(
+                    self.active_module_consensus_version(dbtx, module_instance_id)
+                        .await?
+                        <= module.supported_consensus_version(),
+                    "Module {module_instance_id} does not support new consensus version, please upgrade the module"
+                );
+
+                Ok(())
             }
             ConsensusItem::Transaction(transaction) => {
                 let txid = transaction.tx_hash();
@@ -1045,12 +1146,28 @@ impl ConsensusEngine {
                     .iter()
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
+                let active_module_consensus_versions = self
+                    .active_module_consensus_versions(
+                        dbtx,
+                        transaction
+                            .inputs
+                            .iter()
+                            .map(|input| input.module_instance_id())
+                            .chain(
+                                transaction
+                                    .outputs
+                                    .iter()
+                                    .map(|output| output.module_instance_id()),
+                            ),
+                    )
+                    .await?;
 
                 process_transaction_with_dbtx(
                     self.modules.clone(),
                     dbtx,
                     &transaction,
                     self.cfg.consensus.version,
+                    &active_module_consensus_versions,
                     TxProcessingMode::Consensus,
                 )
                 .await

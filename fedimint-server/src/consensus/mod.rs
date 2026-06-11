@@ -9,33 +9,43 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::bail;
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
-use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::db::{
+    Database, IDatabaseTransactionOpsCoreTyped, apply_migrations_dbtx,
+    verify_module_db_integrity_dbtx,
+};
+use fedimint_core::endpoint_constants::SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT;
+use fedimint_core::envs::{
+    is_core_automatic_consensus_version_voting_disabled, is_running_in_test_env,
+};
+use fedimint_core::epoch::{
+    ConsensusItem, ModuleConsensusVersionRequest, ModuleConsensusVersionVote,
+};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest,
+    ApiAuth, ApiEndpoint, ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN,
+    IrohApiRequest, ModuleConsensusVersion,
 };
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::{NumPeers, NumPeersExt, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
+use futures::future::join_all;
 use iroh::Endpoint;
 use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
 use jsonrpsee::RpcModule;
@@ -43,11 +53,14 @@ use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, watch};
-use tracing::{info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
+use crate::consensus::db::{
+    ModuleConsensusVersionVotingActivationKey, active_module_consensus_version,
+};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::metrics::{
@@ -258,12 +271,23 @@ pub async fn run(
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
     for (module_id, kind, module) in module_registry.iter_modules() {
+        let initial_module_consensus_version = cfg
+            .consensus
+            .modules
+            .get(&module_id)
+            .expect("Module registry only contains configured modules")
+            .version;
+
         submit_module_ci_proposals(
             task_group,
             db.clone(),
+            global_api.clone(),
+            cfg.local.identity,
+            cfg.consensus.broadcast_public_keys.to_num_peers(),
             module_id,
             kind.clone(),
             module.clone(),
+            initial_module_consensus_version,
             submission_sender.clone(),
         );
     }
@@ -366,13 +390,19 @@ async fn start_consensus_api(
 }
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
+const CONSENSUS_VERSION_VOTE_CHECK_INTERVAL: Duration = Duration::from_secs(600);
+const TEST_CONSENSUS_VERSION_VOTE_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
 fn submit_module_ci_proposals(
     task_group: &TaskGroup,
     db: Database,
+    federation_api: DynGlobalApi,
+    our_peer_id: PeerId,
+    num_peers: NumPeers,
     module_id: ModuleInstanceId,
     kind: ModuleKind,
     module: DynServerModule,
+    initial_module_consensus_version: ModuleConsensusVersion,
     submission_sender: Sender<ConsensusItem>,
 ) {
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
@@ -380,11 +410,64 @@ fn submit_module_ci_proposals(
     } else {
         Duration::from_secs(1)
     });
+    let automatic_vote_check_interval = if is_running_in_test_env() {
+        TEST_CONSENSUS_VERSION_VOTE_CHECK_INTERVAL
+    } else {
+        CONSENSUS_VERSION_VOTE_CHECK_INTERVAL
+    };
+    let automatic_voting_disabled = is_core_automatic_consensus_version_voting_disabled();
 
     task_group.spawn(
         format!("citem_proposals_{module_id}"),
         move |task_handle| async move {
+            let mut last_automatic_vote_check = None;
             while !task_handle.is_shutting_down() {
+                let mut dbtx = db.begin_transaction_nc().await;
+                let active_module_consensus_version = active_module_consensus_version(
+                    &mut dbtx,
+                    module_id,
+                    num_peers,
+                    initial_module_consensus_version,
+                )
+                .await;
+                drop(dbtx);
+
+                let check_automatic_vote = if automatic_voting_disabled {
+                    false
+                } else {
+                    last_automatic_vote_check
+                        .map(|last: Instant| last.elapsed() >= automatic_vote_check_interval)
+                        .unwrap_or(true)
+                };
+                if check_automatic_vote {
+                    last_automatic_vote_check = Some(Instant::now());
+                }
+
+                if let Some(vote_version) = module_consensus_version_vote(
+                    &db,
+                    &federation_api,
+                    our_peer_id,
+                    module_id,
+                    &module,
+                    active_module_consensus_version,
+                    check_automatic_vote,
+                )
+                .await
+                {
+                    let item = ConsensusItem::ModuleConsensusVersion(ModuleConsensusVersionVote {
+                        module_instance_id: module_id,
+                        version: vote_version,
+                    });
+
+                    if submission_sender.send(item).await.is_err() {
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            module_id,
+                            "Unable to submit module consensus version vote proposal via channel"
+                        );
+                    }
+                }
+
                 let module_consensus_items = tokio::time::timeout(
                     CONSENSUS_PROPOSAL_TIMEOUT,
                     module.consensus_proposal(
@@ -395,6 +478,7 @@ fn submit_module_ci_proposals(
                             .0
                             .into_nc(),
                         module_id,
+                        active_module_consensus_version,
                     ),
                 )
                 .await;
@@ -429,6 +513,111 @@ fn submit_module_ci_proposals(
             }
         },
     );
+}
+
+async fn module_consensus_version_vote(
+    db: &Database,
+    federation_api: &DynGlobalApi,
+    our_peer_id: PeerId,
+    module_id: ModuleInstanceId,
+    module: &DynServerModule,
+    active_version: ModuleConsensusVersion,
+    check_automatic_vote: bool,
+) -> Option<ModuleConsensusVersion> {
+    let mut dbtx = db.begin_transaction_nc().await;
+    let manual_vote = dbtx
+        .get_value(&ModuleConsensusVersionVotingActivationKey {
+            module_instance_id: module_id,
+        })
+        .await
+        .filter(|version| active_version < *version);
+    drop(dbtx);
+
+    let supported_version = module.supported_consensus_version();
+    let automatic_vote = if check_automatic_vote && active_version < supported_version {
+        automatic_module_consensus_version_vote(
+            federation_api,
+            our_peer_id,
+            module_id,
+            supported_version,
+            active_version,
+        )
+        .await
+    } else {
+        None
+    };
+
+    automatic_vote.or(manual_vote)
+}
+
+async fn automatic_module_consensus_version_vote(
+    federation_api: &DynGlobalApi,
+    our_peer_id: PeerId,
+    module_id: ModuleInstanceId,
+    supported_version: ModuleConsensusVersion,
+    active_version: ModuleConsensusVersion,
+) -> Option<ModuleConsensusVersion> {
+    let request = ModuleConsensusVersionRequest {
+        module_instance_id: module_id,
+    };
+    let request_futures = federation_api.all_peers().iter().filter_map(|&peer| {
+        if peer == our_peer_id {
+            return None;
+        }
+
+        let federation_api = federation_api.clone();
+        Some(async move {
+            federation_api
+                .request_single_peer::<ModuleConsensusVersion>(
+                    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(request),
+                    peer,
+                )
+                .await
+                .inspect_err(|err| {
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        peer = %peer,
+                        module_id,
+                        err = %err.fmt_compact(),
+                        "Failed to fetch supported module consensus version from peer"
+                    );
+                })
+                .ok()
+        })
+    });
+
+    let mut supported_versions = join_all(request_futures)
+        .await
+        .into_iter()
+        .flatten()
+        .chain(std::iter::once(supported_version))
+        .collect::<Vec<_>>();
+
+    if supported_versions.len() != federation_api.all_peers().len() {
+        trace!(
+            target: LOG_CONSENSUS,
+            module_id,
+            supported_versions = ?supported_versions,
+            "Not all peers have reported their supported module consensus version yet"
+        );
+        return None;
+    }
+
+    supported_versions.sort_unstable();
+    let all_peers_supported_version = *supported_versions
+        .first()
+        .expect("local supported version is always included");
+
+    debug!(
+        target: LOG_CONSENSUS,
+        module_id,
+        active_version = %active_version,
+        all_peers_supported_version = %all_peers_supported_version,
+        "Fetched supported module consensus versions from peers"
+    );
+
+    (active_version < all_peers_supported_version).then_some(all_peers_supported_version)
 }
 
 async fn start_iroh_api(

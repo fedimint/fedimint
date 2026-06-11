@@ -2,13 +2,18 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    OutPoint, TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record,
+    NumPeers, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, impl_db_lookup,
+    impl_db_record,
 };
 use fedimint_server_core::migration::{
     DynModuleHistoryItem, DynServerDbMigrationFn, IServerDbMigrationContext,
@@ -80,6 +85,86 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVoteKey {
+    pub module_instance_id: ModuleInstanceId,
+    pub peer_id: PeerId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotePrefix {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVoteFullPrefix;
+
+impl_db_record!(
+    key = ModuleConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ModuleConsensusVersionVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVotePrefix
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVoteFullPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotingActivationKey {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotingActivationPrefix;
+
+impl_db_record!(
+    key = ModuleConsensusVersionVotingActivationKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ModuleConsensusVersionVotingActivation,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVotingActivationKey,
+    query_prefix = ModuleConsensusVersionVotingActivationPrefix
+);
+
+pub async fn active_module_consensus_version<Cap>(
+    dbtx: &mut DatabaseTransaction<'_, Cap>,
+    module_instance_id: ModuleInstanceId,
+    num_peers: NumPeers,
+    initial_version: ModuleConsensusVersion,
+) -> ModuleConsensusVersion
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    let mut versions = dbtx
+        .find_by_prefix(&ModuleConsensusVersionVotePrefix { module_instance_id })
+        .await
+        .map(|entry| entry.1)
+        .collect::<Vec<ModuleConsensusVersion>>()
+        .await;
+
+    while versions.len() < num_peers.total() {
+        versions.push(initial_version);
+    }
+
+    assert_eq!(versions.len(), num_peers.total());
+
+    versions.sort_unstable();
+
+    assert!(versions.first() <= versions.last());
+
+    versions[num_peers.max_evil()]
+}
+
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
     BTreeMap::new()
 }
@@ -149,6 +234,7 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
                                     vec![]
                                 }
                             }
+                            ConsensusItem::ModuleConsensusVersion(_) => vec![],
                             ConsensusItem::Default { .. } => {
                                 unreachable!("We never save unknown CIs on the server side")
                             }

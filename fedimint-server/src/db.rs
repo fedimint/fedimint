@@ -20,6 +20,8 @@ pub enum DbKeyPrefix {
     ApiAnnouncements = 0x06,
     ServerInfo = 0x07,
     GuardianMetadata = 0x08,
+    ModuleConsensusVersionVote = 0x09,
+    ModuleConsensusVersionVotingActivation = 0x0a,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,

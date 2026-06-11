@@ -1,6 +1,6 @@
 //! Implements the client API through which users interact with the federation
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -18,29 +18,35 @@ use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
+    ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT, ACTIVE_MODULE_CONSENSUS_VERSION_ENDPOINT,
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT,
-    FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
+    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, VERSION_ENDPOINT,
 };
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{
+    ActivateModuleConsensusVersionRequest, ConsensusItem, ModuleConsensusVersionRequest,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
-    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
+    ModuleConsensusVersion, SerdeModuleEncoding, SerdeModuleEncodingBase64,
+    SupportedApiVersionsSummary, api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -56,7 +62,9 @@ use fedimint_core::transaction::{
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::version::non_zero_version_hash;
-use fedimint_core::{ChainId, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
+use fedimint_core::{
+    ChainId, NumPeersExt as _, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1,
+};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::dashboard_ui::{
@@ -69,7 +77,10 @@ use tracing::{debug, info, warn};
 
 use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
-use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
+use crate::consensus::db::{
+    AcceptedItemPrefix, AcceptedTransactionKey, ModuleConsensusVersionVotingActivationKey,
+    SignedSessionOutcomeKey, active_module_consensus_version,
+};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -115,6 +126,56 @@ impl ConsensusApi {
         self.force_api_secret.clone()
     }
 
+    fn initial_module_consensus_version(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<ModuleConsensusVersion> {
+        Ok(self
+            .cfg
+            .consensus
+            .modules
+            .get(&module_instance_id)
+            .with_context(|| format!("Unknown module instance id {module_instance_id}"))?
+            .version)
+    }
+
+    async fn active_module_consensus_version<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<ModuleConsensusVersion>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        Ok(active_module_consensus_version(
+            dbtx,
+            module_instance_id,
+            self.cfg.consensus.broadcast_public_keys.to_num_peers(),
+            self.initial_module_consensus_version(module_instance_id)?,
+        )
+        .await)
+    }
+
+    async fn active_module_consensus_versions<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        module_instance_ids: impl IntoIterator<Item = ModuleInstanceId>,
+    ) -> Result<BTreeMap<ModuleInstanceId, ModuleConsensusVersion>>
+    where
+        for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+    {
+        let mut versions = BTreeMap::new();
+        for module_instance_id in module_instance_ids.into_iter().collect::<BTreeSet<_>>() {
+            versions.insert(
+                module_instance_id,
+                self.active_module_consensus_version(dbtx, module_instance_id)
+                    .await?,
+            );
+        }
+
+        Ok(versions)
+    }
+
     // we want to return an error if and only if the submitted transaction is
     // invalid and will be rejected if we were to submit it to consensus
     pub async fn submit_transaction(
@@ -140,11 +201,29 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
+        let active_module_consensus_versions = self
+            .active_module_consensus_versions(
+                &mut dbtx,
+                transaction
+                    .inputs
+                    .iter()
+                    .map(|input| input.module_instance_id())
+                    .chain(
+                        transaction
+                            .outputs
+                            .iter()
+                            .map(|output| output.module_instance_id()),
+                    ),
+            )
+            .await
+            .expect("Submitted transactions only contain configured modules");
+
         process_transaction_with_dbtx(
             self.modules.clone(),
             &mut dbtx,
             &transaction,
             self.cfg.consensus.version,
+            &active_module_consensus_versions,
             TxProcessingMode::Submission,
         )
         .await
@@ -326,11 +405,16 @@ impl ConsensusApi {
         let mut module_instance_id_to_kind = BTreeMap::new();
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
+            let module_consensus_version = self
+                .active_module_consensus_version(&mut dbtx, module_instance_id)
+                .await
+                .map_err(|e| ApiError::bad_request(e.to_string()))?;
             module
                 .audit(
                     &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
                     &mut audit,
                     module_instance_id,
+                    module_consensus_version,
                 )
                 .await;
         }
@@ -783,6 +867,73 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
                 Ok(fedimint.api_versions_summary().to_owned())
+            }
+        },
+        api_endpoint! {
+            ACTIVE_MODULE_CONSENSUS_VERSION_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, _context, request: ModuleConsensusVersionRequest| -> ModuleConsensusVersion {
+                if fedimint.modules.get(request.module_instance_id).is_none() {
+                    return Err(ApiError::bad_request(format!(
+                        "Unknown module instance id {}",
+                        request.module_instance_id
+                    )));
+                }
+
+                let mut dbtx = fedimint.db.begin_transaction_nc().await;
+                Ok(fedimint
+                    .active_module_consensus_version(&mut dbtx, request.module_instance_id)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?)
+            }
+        },
+        api_endpoint! {
+            SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, _context, request: ModuleConsensusVersionRequest| -> ModuleConsensusVersion {
+                let module = fedimint.modules.get(request.module_instance_id).ok_or_else(|| {
+                    ApiError::bad_request(format!(
+                        "Unknown module instance id {}",
+                        request.module_instance_id
+                    ))
+                })?;
+
+                Ok(module.supported_consensus_version())
+            }
+        },
+        api_endpoint! {
+            ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, context, request: ActivateModuleConsensusVersionRequest| -> () {
+                check_auth(context)?;
+
+                let module = fedimint.modules.get(request.module_instance_id).ok_or_else(|| {
+                    ApiError::bad_request(format!(
+                        "Unknown module instance id {}",
+                        request.module_instance_id
+                    ))
+                })?;
+                let version = request.version.unwrap_or_else(|| module.supported_consensus_version());
+
+                if version > module.supported_consensus_version() {
+                    return Err(ApiError::bad_request(format!(
+                        "Module {} only supports consensus version {}",
+                        request.module_instance_id,
+                        module.supported_consensus_version()
+                    )));
+                }
+
+                let mut dbtx = fedimint.db.begin_transaction().await;
+                dbtx.insert_entry(
+                    &ModuleConsensusVersionVotingActivationKey {
+                        module_instance_id: request.module_instance_id,
+                    },
+                    &version,
+                )
+                .await;
+                dbtx.commit_tx_result().await?;
+
+                Ok(())
             }
         },
         api_endpoint! {

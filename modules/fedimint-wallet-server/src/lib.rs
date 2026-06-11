@@ -513,6 +513,7 @@ impl ServerModule for Wallet {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
@@ -620,6 +621,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
         peer: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_WALLET, ?consensus_item, "Processing consensus item proposal");
 
@@ -745,6 +747,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, WalletInputError> {
         let (outpoint, tx_out, pub_key) = match input {
             WalletInput::V0(input) => {
@@ -839,6 +842,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
         out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -940,6 +944,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(dbtx, module_instance_id, &UTXOPrefixKey, |_, v| {

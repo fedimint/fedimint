@@ -410,6 +410,7 @@ impl ServerModule for Lightning {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<LightningConsensusItem> {
         // We reduce the time granularity to deduplicate votes more often and not save
         // one consensus item every second.
@@ -430,6 +431,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
 
@@ -465,6 +467,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, LightningInputError> {
         let (pub_key, amount) = match input.ensure_v0_ref()? {
             LightningInputV0::Outgoing(outpoint, outgoing_witness) => {
@@ -547,6 +550,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, LightningOutputError> {
         let amount = match output.ensure_v0_ref()? {
             LightningOutputV0::Outgoing(contract) => {
@@ -615,6 +619,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         // Both incoming and outgoing contracts represent liabilities to the federation
         // since they are obligations to issue notes.

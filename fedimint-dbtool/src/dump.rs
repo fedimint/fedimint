@@ -312,6 +312,26 @@ impl DatabaseDump {
                     "Aleph Units"
                 );
             }
+            server_db::DbKeyPrefix::ModuleConsensusVersionVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleConsensusVersionVoteFullPrefix,
+                    consensus_db::ModuleConsensusVersionVoteKey,
+                    fedimint_core::module::ModuleConsensusVersion,
+                    consensus,
+                    "Module Consensus Version Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleConsensusVersionVotingActivation => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleConsensusVersionVotingActivationPrefix,
+                    consensus_db::ModuleConsensusVersionVotingActivationKey,
+                    fedimint_core::module::ModuleConsensusVersion,
+                    consensus,
+                    "Module Consensus Version Voting Activations"
+                );
+            }
             // Module is a global prefix for all module data
             server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo

@@ -36,6 +36,12 @@ impl fmt::Debug for DebugConsensusItem<'_> {
                     f.write_fmt(format_args!("\n    Output: {output}")).unwrap();
                 }
             }
+            ConsensusItem::ModuleConsensusVersion(vote) => {
+                f.write_fmt(format_args!(
+                    "Module consensus version vote: module={} version={}",
+                    vote.module_instance_id, vote.version
+                ))?;
+            }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
             }
@@ -88,6 +94,12 @@ impl fmt::Display for DebugConsensusItemCompact<'_> {
                 f.write_fmt(format_args!(
                     "citem={}; ",
                     module_citem.module_instance_id()
+                ))?;
+            }
+            ConsensusItem::ModuleConsensusVersion(vote) => {
+                f.write_fmt(format_args!(
+                    "module_version_vote={}:{}; ",
+                    vote.module_instance_id, vote.version
                 ))?;
             }
             ConsensusItem::Default { variant, .. } => {

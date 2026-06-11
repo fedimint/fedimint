@@ -40,3 +40,6 @@ pub const SUBMIT_GUARDIAN_METADATA_ENDPOINT: &str = "submit_guardian_metadata";
 pub const SIGN_GUARDIAN_METADATA_ENDPOINT: &str = "sign_guardian_metadata";
 pub const FEDIMINTD_VERSION_ENDPOINT: &str = "fedimintd_version";
 pub const CHAIN_ID_ENDPOINT: &str = "chain_id";
+pub const ACTIVE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "active_module_consensus_version";
+pub const SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "supported_module_consensus_version";
+pub const ACTIVATE_MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "activate_module_consensus_version";

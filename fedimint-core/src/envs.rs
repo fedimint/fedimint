@@ -20,6 +20,8 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 /// environments
 pub const FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV: &str =
     "FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING";
+pub const FM_CORE_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV: &str =
+    "FM_CORE_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING";
 
 pub const FM_ENABLE_MODULE_LNV1_ENV: &str = "FM_ENABLE_MODULE_LNV1";
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
@@ -92,6 +94,12 @@ pub fn is_rbf_withdrawal_enabled() -> bool {
 /// development environments
 pub fn is_automatic_consensus_version_voting_disabled() -> bool {
     is_env_var_set(FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV)
+}
+
+/// Use to disable automatic core consensus version voting for testing and
+/// development environments.
+pub fn is_core_automatic_consensus_version_voting_disabled() -> bool {
+    is_env_var_set(FM_CORE_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV)
 }
 
 /// Get value of `FEDIMINT_BUILD_CODE_VERSION` at compile time

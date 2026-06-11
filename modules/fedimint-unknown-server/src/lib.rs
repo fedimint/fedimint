@@ -155,6 +155,7 @@ impl ServerModule for Unknown {
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<UnknownConsensusItem> {
         Vec::new()
     }
@@ -164,6 +165,7 @@ impl ServerModule for Unknown {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: UnknownConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         // WARNING: `process_consensus_item` should return an `Err` for items that do
         // not change any internal consensus state. Failure to do so, will result in an
@@ -178,6 +180,7 @@ impl ServerModule for Unknown {
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b UnknownInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, UnknownInputError> {
         unreachable!();
     }
@@ -187,6 +190,7 @@ impl ServerModule for Unknown {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a UnknownOutput,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, UnknownOutputError> {
         unreachable!();
     }
@@ -204,6 +208,7 @@ impl ServerModule for Unknown {
         _dbtx: &mut DatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
     }
 

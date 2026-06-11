@@ -25,7 +25,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-    ModuleInit, TransactionItemAmounts,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
@@ -71,6 +71,7 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -85,6 +86,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()>;
 
     // Use this function to parallelise stateless cryptographic verification of
@@ -93,6 +95,7 @@ pub trait ServerModule: Debug + Sized {
     fn verify_input(
         &self,
         _input: &<Self::Common as ModuleCommon>::Input,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
         Ok(())
     }
@@ -106,6 +109,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -121,6 +125,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, <Self::Common as ModuleCommon>::OutputError>;
 
     /// **Deprecated**: Modules should not be using it. Instead, they should
@@ -159,6 +164,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b <Self::Common as ModuleCommon>::Input,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
         Ok(())
     }
@@ -172,6 +178,7 @@ pub trait ServerModule: Debug + Sized {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a <Self::Common as ModuleCommon>::Output,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
         Ok(())
     }
@@ -186,6 +193,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     );
 
     /// Returns a list of custom API endpoints defined by the module. These are
@@ -207,11 +215,14 @@ pub trait IServerModule: Debug {
 
     fn module_kind(&self) -> ModuleKind;
 
+    fn supported_consensus_version(&self) -> ModuleConsensusVersion;
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<DynModuleConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -222,12 +233,17 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()>;
 
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError>;
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError>;
 
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
@@ -238,6 +254,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -253,6 +270,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DynOutputError>;
 
     /// See [`ServerModule::verify_input_submission`]
@@ -261,6 +279,7 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynInputError>;
 
     /// See [`ServerModule::verify_output_submission`]
@@ -270,6 +289,7 @@ pub trait IServerModule: Debug {
         _dbtx: &mut DatabaseTransaction<'a>,
         _output: &DynOutput,
         _out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynOutputError>;
 
     /// See [`ServerModule::output_status`]
@@ -291,6 +311,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     );
 
     /// Returns a list of custom API endpoints defined by the module. These are
@@ -322,13 +343,18 @@ where
         <Self as ServerModule>::module_kind()
     }
 
+    fn supported_consensus_version(&self) -> ModuleConsensusVersion {
+        <<T::Init as ModuleInit>::Common as CommonModuleInit>::CONSENSUS_VERSION
+    }
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<DynModuleConsensusItem> {
-        <Self as ServerModule>::consensus_proposal(self, dbtx)
+        <Self as ServerModule>::consensus_proposal(self, dbtx, module_consensus_version)
             .await
             .into_iter()
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
@@ -343,6 +369,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         <Self as ServerModule>::process_consensus_item(
             self,
@@ -352,7 +379,8 @@ where
                     .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::ConsensusItem>()
                     .expect("incorrect consensus item type passed to module plugin"),
             ),
-            peer_id
+            peer_id,
+            module_consensus_version,
         )
         .await
     }
@@ -360,13 +388,18 @@ where
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError> {
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input(
             self,
             input
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
+            module_consensus_version,
         )
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
@@ -380,6 +413,7 @@ where
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
@@ -389,6 +423,7 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             in_point,
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
@@ -407,6 +442,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,
@@ -416,6 +452,7 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
@@ -425,6 +462,7 @@ where
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input_submission(
             self,
@@ -433,6 +471,7 @@ where
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
@@ -443,6 +482,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynOutputError> {
         <Self as ServerModule>::verify_output_submission(
             self,
@@ -452,6 +492,7 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
@@ -480,8 +521,16 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) {
-        <Self as ServerModule>::audit(self, dbtx, audit, module_instance_id).await;
+        <Self as ServerModule>::audit(
+            self,
+            dbtx,
+            audit,
+            module_instance_id,
+            module_consensus_version,
+        )
+        .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {
