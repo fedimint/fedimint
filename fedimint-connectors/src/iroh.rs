@@ -170,10 +170,7 @@ impl IrohConnector {
                 // installs a publisher.
                 {
                     if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
-                        #[cfg(target_family = "wasm")]
-                        {
-                            builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
-                        }
+                        builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
                     } else {
                         warn!(
                             target: LOG_NET_IROH,
@@ -229,12 +226,9 @@ impl IrohConnector {
             // Add only resolver services here; the iroh preset convenience also
             // installs a publisher.
             {
-                // Resolve using HTTPS requests to our DNS server's /pkarr path in browsers
-                #[cfg(target_family = "wasm")]
-                {
-                    builder =
-                        builder.address_lookup(iroh_next::address_lookup::PkarrResolver::n0_dns());
-                }
+                // Resolve using HTTPS requests to our DNS server's /pkarr path.
+                builder =
+                    builder.address_lookup(iroh_next::address_lookup::PkarrResolver::n0_dns());
                 // Resolve using DNS queries outside browsers.
                 #[cfg(not(target_family = "wasm"))]
                 {
