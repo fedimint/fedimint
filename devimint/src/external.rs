@@ -44,12 +44,15 @@ impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager, skip_setup: bool) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
 
+        let esplora_pid_file_path = processmgr.globals.FM_TEST_DIR.join("esplora.pid");
+        let esplora_pid_file = utf8(&esplora_pid_file_path);
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+            esplora_pid_file = esplora_pid_file,
             tx_index = "0",
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
@@ -849,6 +852,13 @@ impl Esplora {
 
         Self::wait_for_ready(process_mgr).await?;
         debug!(target: LOG_DEVIMINT, "Esplora ready");
+        if let Some(pid) = process.id().await {
+            write_overwrite_async(
+                process_mgr.globals.FM_TEST_DIR.join("esplora.pid"),
+                pid.to_string(),
+            )
+            .await?;
+        }
 
         Ok(Self {
             _bitcoind: bitcoind,
