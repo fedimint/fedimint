@@ -345,6 +345,268 @@ pub async fn latency_tests(
     Ok(())
 }
 
+pub async fn lnurl_recovery_test(dev_fed: DevFed) -> Result<()> {
+    let DevFed {
+        fed,
+        gw_lnd,
+        recurringd,
+        ..
+    } = dev_fed;
+
+    const LNURL_AMOUNT: Amount = Amount::from_msats(500_000);
+    const PRE_RECOVERY_RECEIVES: u64 = 3;
+    const POST_RECOVERY_RECEIVES: u64 = 2;
+
+    let receiver = fed.new_joined_client("lnurl-recovery-receiver").await?;
+    if !client_has_module(&receiver, "ln").await? {
+        info!("ln module is not present, skipping LNv1 LNURL recovery test");
+        return Ok(());
+    }
+
+    let payer = fed.new_joined_client("lnurl-recovery-payer").await?;
+    fed.pegin_client(100_000, &payer).await?;
+    fed.pegin_gateways(100_000, vec![&gw_lnd]).await?;
+
+    let lnurl = register_lnv1_lnurl(&receiver, recurringd.api_url().as_str()).await?;
+
+    for invoice_idx in 1..=PRE_RECOVERY_RECEIVES {
+        pay_lnv1_lnurl(&payer, &lnurl, LNURL_AMOUNT, &gw_lnd.gateway_id).await?;
+        let operation_id = await_lnv1_lnurl_invoice(&receiver, invoice_idx).await?;
+        await_lnv1_lnurl_invoice_paid(&receiver, operation_id).await?;
+    }
+
+    let pre_recovery_balance = receiver.balance().await?;
+    let mnemonic = cmd!(receiver, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .context("secret must be a string")?
+        .to_owned();
+
+    let restored = Client::create("lnurl-recovery-restored").await?;
+    restored
+        .restore_federation(fed.invite_code()?, mnemonic)
+        .await?;
+
+    poll(
+        "waiting for LNURL recovery client balance to be restored",
+        || async {
+            let restored_balance = restored.balance().await.map_err(ControlFlow::Break)?;
+            if almost_equal(restored_balance, pre_recovery_balance, 2_000).is_ok() {
+                return Ok(());
+            }
+
+            info!("Waiting for LNURL recovery client balance to be restored");
+            cmd!(restored, "dev", "wait", "1")
+                .out_json()
+                .await
+                .map_err(ControlFlow::Break)?;
+
+            Err(ControlFlow::Continue(anyhow!(
+                "LNURL recovery client balance is not restored yet"
+            )))
+        },
+    )
+    .await?;
+
+    assert!(
+        list_lnv1_lnurl_codes(&restored)
+            .await?
+            .as_object()
+            .context("codes must be an object")?
+            .is_empty(),
+        "LN module recovery should not restore recurring payment code registrations"
+    );
+
+    let restored_lnurl = register_lnv1_lnurl(&restored, recurringd.api_url().as_str()).await?;
+    assert_eq!(
+        restored_lnurl, lnurl,
+        "LNURL registration should be idempotent for a recovered deterministic root key"
+    );
+
+    let mut old_operation_ids = Vec::with_capacity(PRE_RECOVERY_RECEIVES as usize);
+    for invoice_idx in 1..=PRE_RECOVERY_RECEIVES {
+        old_operation_ids.push(await_lnv1_lnurl_invoice(&restored, invoice_idx).await?);
+    }
+
+    for operation_id in &old_operation_ids {
+        assert_lnv1_operation_has_no_outcome(&restored, *operation_id).await?;
+    }
+
+    let post_recovery_balance = restored.balance().await?;
+    let mut post_recovery_operation_ids = Vec::with_capacity(POST_RECOVERY_RECEIVES as usize);
+    for invoice_idx in PRE_RECOVERY_RECEIVES + 1..=PRE_RECOVERY_RECEIVES + POST_RECOVERY_RECEIVES {
+        pay_lnv1_lnurl(&payer, &restored_lnurl, LNURL_AMOUNT, &gw_lnd.gateway_id).await?;
+        let operation_id = await_lnv1_lnurl_invoice(&restored, invoice_idx).await?;
+        await_lnv1_lnurl_invoice_paid(&restored, operation_id).await?;
+        post_recovery_operation_ids.push(operation_id);
+    }
+
+    let expected_final_balance =
+        post_recovery_balance + LNURL_AMOUNT.msats * POST_RECOVERY_RECEIVES;
+    let final_balance = restored.balance().await?;
+    almost_equal(final_balance, expected_final_balance, 2_000).map_err(|error| {
+        anyhow!(
+            "restored client balance {final_balance} did not include post-recovery LNURL receives: {error}"
+        )
+    })?;
+
+    for operation_id in post_recovery_operation_ids {
+        assert_lnv1_recurring_receive_operation_logged(&restored, operation_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn client_has_module(client: &Client, kind: &str) -> Result<bool> {
+    let modules = cmd!(client, "module").out_json().await?;
+    let modules = modules["list"]
+        .as_array()
+        .context("module list must be an array")?;
+
+    Ok(modules
+        .iter()
+        .any(|module| module["kind"].as_str() == Some(kind)))
+}
+
+async fn register_lnv1_lnurl(client: &Client, recurringd_api: &str) -> Result<String> {
+    cmd!(client, "module", "ln", "lnurl", "register", recurringd_api)
+        .out_json()
+        .await?["lnurl"]
+        .as_str()
+        .context("lnurl must be a string")
+        .map(ToOwned::to_owned)
+}
+
+async fn list_lnv1_lnurl_codes(client: &Client) -> Result<serde_json::Value> {
+    Ok(cmd!(client, "module", "ln", "lnurl", "list")
+        .out_json()
+        .await?["codes"]
+        .clone())
+}
+
+async fn pay_lnv1_lnurl(
+    client: &Client,
+    lnurl: &str,
+    amount: Amount,
+    gateway_id: &str,
+) -> Result<()> {
+    let value = cmd!(
+        client,
+        "module",
+        "ln",
+        "pay",
+        lnurl,
+        "--amount",
+        amount.msats,
+        "--gateway-id",
+        gateway_id,
+    )
+    .out_json()
+    .await?;
+    let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
+        .context("could not deserialize Lightning payment outcome")?;
+    match outcome {
+        LightningPaymentOutcome::Success { .. } => Ok(()),
+        LightningPaymentOutcome::Failure { error_message } => {
+            Err(anyhow!("failed to pay LNURL invoice: {error_message}"))
+        }
+    }
+}
+
+async fn await_lnv1_lnurl_invoice(client: &Client, invoice_idx: u64) -> Result<OperationId> {
+    poll("waiting for LNv1 LNURL invoice operation", || async {
+        cmd!(client, "dev", "wait", "1")
+            .out_json()
+            .await
+            .map_err(ControlFlow::Break)?;
+
+        let invoices = cmd!(client, "module", "ln", "lnurl", "invoices", "0")
+            .out_json()
+            .await
+            .map_err(ControlFlow::Break)?;
+        let Some(operation_id) = invoices["invoices"][invoice_idx.to_string()]["operation_id"]
+            .as_str()
+            .map(ToOwned::to_owned)
+        else {
+            return Err(ControlFlow::Continue(anyhow!(
+                "LNURL invoice index {invoice_idx} not found"
+            )));
+        };
+
+        serde_json::from_value::<OperationId>(json!(operation_id))
+            .map_err(anyhow::Error::from)
+            .map_err(ControlFlow::Break)
+    })
+    .await
+}
+
+async fn await_lnv1_lnurl_invoice_paid(client: &Client, operation_id: OperationId) -> Result<()> {
+    cmd!(
+        client,
+        "module",
+        "ln",
+        "lnurl",
+        "await-invoice-paid",
+        operation_id.fmt_full()
+    )
+    .run()
+    .await
+}
+
+async fn assert_lnv1_operation_has_no_outcome(
+    client: &Client,
+    operation_id: OperationId,
+) -> Result<()> {
+    let operation = get_lnv1_operation_from_log(client, operation_id).await?;
+
+    assert_eq!(
+        operation["operation_kind"].as_str(),
+        Some("ln"),
+        "replayed LNURL invoice operation must be an ln operation"
+    );
+    assert!(
+        operation.get("outcome").is_none(),
+        "replayed pre-recovery LNURL invoice operation should not have a terminal outcome"
+    );
+
+    Ok(())
+}
+
+async fn assert_lnv1_recurring_receive_operation_logged(
+    client: &Client,
+    operation_id: OperationId,
+) -> Result<()> {
+    let operation = get_lnv1_operation_from_log(client, operation_id).await?;
+
+    assert_eq!(
+        operation["operation_kind"].as_str(),
+        Some("ln"),
+        "post-recovery LNURL invoice operation must be an ln operation"
+    );
+    assert!(
+        operation["operation_meta"]["variant"]["recurring_payment_receive"].is_object(),
+        "post-recovery LNURL receive must be logged as recurring_payment_receive"
+    );
+
+    Ok(())
+}
+
+async fn get_lnv1_operation_from_log(
+    client: &Client,
+    operation_id: OperationId,
+) -> Result<serde_json::Value> {
+    let operation_id = operation_id.fmt_full().to_string();
+    let operations = cmd!(client, "list-operations", "--limit", "100")
+        .out_json()
+        .await?;
+    operations["operations"]
+        .as_array()
+        .context("operations must be an array")?
+        .iter()
+        .find(|operation| operation["id"].as_str() == Some(operation_id.as_str()))
+        .cloned()
+        .with_context(|| format!("operation {operation_id} not found"))
+}
+
 #[allow(clippy::struct_field_names)]
 /// Clients reused for upgrade tests
 pub struct UpgradeClients {
@@ -2617,6 +2879,8 @@ pub enum TestCmd {
     GatewayRebootTest,
     /// `devfed` then tests if the recovery tool is able to do a basic recovery
     RecoverytoolTests,
+    /// `devfed` then tests LNv1 LNURL receive behavior after client recovery
+    LnurlRecoveryTest,
     /// `devfed` then spawns faucet for wasm tests
     WasmTestSetup {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
@@ -2735,6 +2999,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             recoverytool_test(dev_fed).await?;
+        }
+        TestCmd::LnurlRecoveryTest => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            lnurl_recovery_test(dev_fed).await?;
         }
         TestCmd::GuardianBackup => {
             let (process_mgr, _) = setup(common_args).await?;
