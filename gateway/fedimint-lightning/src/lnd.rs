@@ -269,7 +269,7 @@ impl GatewayLndClient {
         let mut client = self.connect().await?;
 
         // Compute the minimum `add_index` that we need to subscribe to updates for.
-        let add_index = client
+        let first_index_offset = client
             .lightning()
             .list_invoices(ListInvoiceRequest {
                 pending_only: true,
@@ -287,6 +287,14 @@ impl GatewayLndClient {
             })?
             .into_inner()
             .first_index_offset;
+
+        // `SubscribeInvoices` only replays invoices with an `add_index` strictly
+        // greater than `add_index`, so subscribing from `first_index_offset`
+        // directly would skip the add event of the oldest pending invoice and we
+        // would never spawn a monitor for it. Subtract one so that oldest pending
+        // invoice is replayed. `saturating_sub` keeps this correct in the
+        // empty-list case where `first_index_offset` is 0.
+        let add_index = first_index_offset.saturating_sub(1);
 
         let self_copy = self.clone();
         let hold_group = task_group.make_subgroup();
