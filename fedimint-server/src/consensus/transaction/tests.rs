@@ -85,3 +85,21 @@ fn sanity_test_funding_verifier_2() {
     assert!(v.clone().verify_funding(VERIFIER_OLD).is_err());
     assert!(v.clone().verify_funding(VERIFIER_NEW).is_ok());
 }
+
+#[test]
+fn funding_verifier_rejects_output_plus_fee_overflow() {
+    let mut v = super::FundingVerifier::default();
+
+    v.add_input(TransactionItemAmounts {
+        amounts: Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+        fees: Amounts::ZERO,
+    })
+    .unwrap()
+    .add_output(TransactionItemAmounts {
+        amounts: Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+        fees: Amounts::new_bitcoin_msats(1),
+    })
+    .unwrap();
+
+    assert!(v.verify_funding(VERIFIER_NEW).is_err());
+}

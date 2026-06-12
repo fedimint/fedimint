@@ -144,7 +144,7 @@ impl Amounts {
     }
 
     pub fn checked_add(mut self, rhs: &Self) -> Option<Self> {
-        self.checked_add_mut(rhs);
+        self.checked_add_mut(rhs)?;
 
         Some(self)
     }
