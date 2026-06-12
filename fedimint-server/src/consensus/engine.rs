@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
-use anyhow::{anyhow, bail};
+use anyhow::{Context, anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
@@ -72,6 +72,7 @@ pub struct ConsensusEngine {
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
+    pub session_timeout: Duration,
 }
 
 impl ConsensusEngine {
@@ -173,11 +174,19 @@ impl ConsensusEngine {
                 "Starting consensus session"
             );
 
-            if self
-                .run_session(self.connections.clone(), session_index)
-                .await
-                .is_none()
-            {
+            // If a session gets stuck for an extended period of time we exit
+            // the process such that our supervisor restarts fedimintd, which
+            // has been observed to resolve stuck sessions. Since AlephBFT
+            // persists its units to the database this is equivalent to a crash
+            // and therefore safe.
+            let session = tokio::time::timeout(
+                self.session_timeout,
+                self.run_session(self.connections.clone(), session_index),
+            )
+            .await
+            .context("Consensus session timed out, exiting...")?;
+
+            if session.is_none() {
                 return Ok(());
             }
 

@@ -80,6 +80,7 @@ pub async fn run(
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
+    session_timeout: Duration,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
@@ -311,6 +312,7 @@ pub async fn run(
         task_group: task_group.clone(),
         data_dir,
         db_checkpoint_retention,
+        session_timeout,
     }
     .run()
     .await?;
