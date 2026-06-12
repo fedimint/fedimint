@@ -20,6 +20,7 @@ function run_tests() {
   TEST_ARGS="${TEST_ARGS:-}"
   TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS --test-threads=1}"
   TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS --test-threads=$(($(nproc) * 2))}"
+  TEST_ARGS_ESPLORA="${TEST_ARGS:-$TEST_ARGS --test-threads=${FM_ESPLORA_TEST_THREADS:-2}}"
 
 
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
@@ -95,7 +96,7 @@ function run_tests() {
     >&2 echo "### Testing against esplora"
     cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_SERIALIZED} \
+      ${TEST_ARGS_ESPLORA} \
       -E 'package(fedimint-wallet-tests)'
     >&2 echo "### Testing against esplora - complete"
   fi

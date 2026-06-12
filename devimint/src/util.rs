@@ -87,6 +87,10 @@ impl ProcessHandle {
     pub async fn is_running(&self) -> bool {
         self.0.lock().await.child.is_some()
     }
+
+    pub async fn id(&self) -> Option<u32> {
+        self.0.lock().await.child.as_ref().and_then(Child::id)
+    }
 }
 
 #[derive(Debug)]
