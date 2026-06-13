@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_logging::LOG_NET_IROH;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>iroh::defaults::DEFAULT_STUN_PORT;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>iroh::endpoint::TransportConfig;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>iroh::endpoint::{Builder, TransportConfig};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>iroh_relay::RelayQuicConfig;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>tracing::{debug, info, warn};
@@ -102,69 +102,90 @@
 <a href=#102 id=102 data-nosnippet>102</a>        </span>);
 <a href=#103 id=103 data-nosnippet>103</a>    }
 <a href=#104 id=104 data-nosnippet>104</a>
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">if </span>is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(<span class="bool-val">true</span>) {
-<a href=#106 id=106 data-nosnippet>106</a>        builder = builder.discovery_n0();
-<a href=#107 id=107 data-nosnippet>107</a>    } <span class="kw">else </span>{
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="macro">warn!</span>(
-<a href=#109 id=109 data-nosnippet>109</a>            target: LOG_NET_IROH,
-<a href=#110 id=110 data-nosnippet>110</a>            <span class="string">"Iroh n0 discovery is disabled"
-<a href=#111 id=111 data-nosnippet>111</a>        </span>);
-<a href=#112 id=112 data-nosnippet>112</a>    }
-<a href=#113 id=113 data-nosnippet>113</a>
-<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">let </span><span class="kw-2">mut </span>transport_config = TransportConfig::default();
-<a href=#115 id=115 data-nosnippet>115</a>    transport_config.max_idle_timeout(<span class="prelude-val">Some</span>(
-<a href=#116 id=116 data-nosnippet>116</a>        IROH_IDLE_TIMEOUT
-<a href=#117 id=117 data-nosnippet>117</a>            .try_into()
-<a href=#118 id=118 data-nosnippet>118</a>            .expect(<span class="string">"idle timeout fits in IdleTimeout"</span>),
-<a href=#119 id=119 data-nosnippet>119</a>    ));
-<a href=#120 id=120 data-nosnippet>120</a>    <span class="comment">// Iroh's default builder sets keep_alive_interval to 1s, but since we're
-<a href=#121 id=121 data-nosnippet>121</a>    // providing a custom TransportConfig we need to set it explicitly.
-<a href=#122 id=122 data-nosnippet>122</a>    </span>transport_config.keep_alive_interval(<span class="prelude-val">Some</span>(IROH_KEEP_ALIVE_INTERVAL));
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span>builder = builder
-<a href=#125 id=125 data-nosnippet>125</a>        .relay_mode(relay_mode)
-<a href=#126 id=126 data-nosnippet>126</a>        .secret_key(secret_key)
-<a href=#127 id=127 data-nosnippet>127</a>        .alpns(<span class="macro">vec!</span>[alpn.to_vec()])
-<a href=#128 id=128 data-nosnippet>128</a>        .transport_config(transport_config);
-<a href=#129 id=129 data-nosnippet>129</a>
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>builder = <span class="kw">match </span>bind_addr {
-<a href=#131 id=131 data-nosnippet>131</a>        SocketAddr::V4(addr_v4) =&gt; builder.bind_addr_v4(addr_v4),
-<a href=#132 id=132 data-nosnippet>132</a>        SocketAddr::V6(addr_v6) =&gt; builder.bind_addr_v6(addr_v6),
-<a href=#133 id=133 data-nosnippet>133</a>    };
-<a href=#134 id=134 data-nosnippet>134</a>
-<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">let </span>endpoint = Box::pin(builder.bind())
-<a href=#136 id=136 data-nosnippet>136</a>        .<span class="kw">await
-<a href=#137 id=137 data-nosnippet>137</a>        </span>.context(<span class="string">"Failed to bind Iroh endpoint"</span>)<span class="question-mark">?</span>;
-<a href=#138 id=138 data-nosnippet>138</a>
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="macro">info!</span>(
-<a href=#140 id=140 data-nosnippet>140</a>        target: LOG_NET_IROH,
-<a href=#141 id=141 data-nosnippet>141</a>        %bind_addr,
-<a href=#142 id=142 data-nosnippet>142</a>        node_id = %endpoint.node_id(),
-<a href=#143 id=143 data-nosnippet>143</a>        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-<a href=#144 id=144 data-nosnippet>144</a>        <span class="string">"Iroh p2p server endpoint"
-<a href=#145 id=145 data-nosnippet>145</a>    </span>);
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>    <span class="prelude-val">Ok</span>(endpoint)
-<a href=#148 id=148 data-nosnippet>148</a>}
-<a href=#149 id=149 data-nosnippet>149</a>
-<a href=#150 id=150 data-nosnippet>150</a><span class="kw">fn </span>relay_node_from_url(url: Url) -&gt; RelayNode {
-<a href=#151 id=151 data-nosnippet>151</a>    RelayNode {
-<a href=#152 id=152 data-nosnippet>152</a>        url: RelayUrl::from(url),
-<a href=#153 id=153 data-nosnippet>153</a>        stun_only: <span class="bool-val">false</span>,
-<a href=#154 id=154 data-nosnippet>154</a>        stun_port: DEFAULT_STUN_PORT,
-<a href=#155 id=155 data-nosnippet>155</a>        quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
-<a href=#156 id=156 data-nosnippet>156</a>    }
-<a href=#157 id=157 data-nosnippet>157</a>}
-<a href=#158 id=158 data-nosnippet>158</a>
-<a href=#159 id=159 data-nosnippet>159</a><span class="attr">#[cfg(test)]
-<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">mod </span>tests {
-<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#162 id=162 data-nosnippet>162</a>
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="attr">#[test]
-<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">fn </span>default_iroh_relays_are_valid_urls() {
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">for </span>relay <span class="kw">in </span>DEFAULT_IROH_RELAYS {
-<a href=#166 id=166 data-nosnippet>166</a>            Url::parse(relay).expect(<span class="string">"default Iroh relay URL is valid"</span>);
-<a href=#167 id=167 data-nosnippet>167</a>        }
-<a href=#168 id=168 data-nosnippet>168</a>    }
-<a href=#169 id=169 data-nosnippet>169</a>}
+<a href=#105 id=105 data-nosnippet>105</a>    builder = add_n0_discovery(builder);
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">let </span><span class="kw-2">mut </span>transport_config = TransportConfig::default();
+<a href=#108 id=108 data-nosnippet>108</a>    transport_config.max_idle_timeout(<span class="prelude-val">Some</span>(
+<a href=#109 id=109 data-nosnippet>109</a>        IROH_IDLE_TIMEOUT
+<a href=#110 id=110 data-nosnippet>110</a>            .try_into()
+<a href=#111 id=111 data-nosnippet>111</a>            .expect(<span class="string">"idle timeout fits in IdleTimeout"</span>),
+<a href=#112 id=112 data-nosnippet>112</a>    ));
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="comment">// Iroh's default builder sets keep_alive_interval to 1s, but since we're
+<a href=#114 id=114 data-nosnippet>114</a>    // providing a custom TransportConfig we need to set it explicitly.
+<a href=#115 id=115 data-nosnippet>115</a>    </span>transport_config.keep_alive_interval(<span class="prelude-val">Some</span>(IROH_KEEP_ALIVE_INTERVAL));
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">let </span>builder = builder
+<a href=#118 id=118 data-nosnippet>118</a>        .relay_mode(relay_mode)
+<a href=#119 id=119 data-nosnippet>119</a>        .secret_key(secret_key)
+<a href=#120 id=120 data-nosnippet>120</a>        .alpns(<span class="macro">vec!</span>[alpn.to_vec()])
+<a href=#121 id=121 data-nosnippet>121</a>        .transport_config(transport_config);
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">let </span>builder = <span class="kw">match </span>bind_addr {
+<a href=#124 id=124 data-nosnippet>124</a>        SocketAddr::V4(addr_v4) =&gt; builder.bind_addr_v4(addr_v4),
+<a href=#125 id=125 data-nosnippet>125</a>        SocketAddr::V6(addr_v6) =&gt; builder.bind_addr_v6(addr_v6),
+<a href=#126 id=126 data-nosnippet>126</a>    };
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span>endpoint = Box::pin(builder.bind())
+<a href=#129 id=129 data-nosnippet>129</a>        .<span class="kw">await
+<a href=#130 id=130 data-nosnippet>130</a>        </span>.context(<span class="string">"Failed to bind Iroh endpoint"</span>)<span class="question-mark">?</span>;
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="macro">info!</span>(
+<a href=#133 id=133 data-nosnippet>133</a>        target: LOG_NET_IROH,
+<a href=#134 id=134 data-nosnippet>134</a>        %bind_addr,
+<a href=#135 id=135 data-nosnippet>135</a>        node_id = %endpoint.node_id(),
+<a href=#136 id=136 data-nosnippet>136</a>        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="string">"Iroh p2p server endpoint"
+<a href=#138 id=138 data-nosnippet>138</a>    </span>);
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="prelude-val">Ok</span>(endpoint)
+<a href=#141 id=141 data-nosnippet>141</a>}
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a><span class="kw">fn </span>relay_node_from_url(url: Url) -&gt; RelayNode {
+<a href=#144 id=144 data-nosnippet>144</a>    RelayNode {
+<a href=#145 id=145 data-nosnippet>145</a>        url: RelayUrl::from(url),
+<a href=#146 id=146 data-nosnippet>146</a>        stun_only: <span class="bool-val">false</span>,
+<a href=#147 id=147 data-nosnippet>147</a>        stun_port: DEFAULT_STUN_PORT,
+<a href=#148 id=148 data-nosnippet>148</a>        quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
+<a href=#149 id=149 data-nosnippet>149</a>    }
+<a href=#150 id=150 data-nosnippet>150</a>}
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a><span class="kw">fn </span>add_n0_discovery(builder: Builder) -&gt; Builder {
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">if </span>is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(<span class="bool-val">true</span>) {
+<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">return </span>add_n0_pkarr_resolver(builder.discovery_n0());
+<a href=#155 id=155 data-nosnippet>155</a>    }
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="macro">warn!</span>(target: LOG_NET_IROH, <span class="string">"Iroh n0 discovery is disabled"</span>);
+<a href=#158 id=158 data-nosnippet>158</a>    builder
+<a href=#159 id=159 data-nosnippet>159</a>}
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">fn </span>add_n0_pkarr_resolver(builder: Builder) -&gt; Builder {
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="comment">// Native discovery_n0 only uses DNS TXT; add HTTPS pkarr fallback.
+<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">if </span>is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(<span class="bool-val">true</span>) {
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">return </span>builder.add_discovery(|<span class="kw">_</span>| <span class="prelude-val">Some</span>(PkarrResolver::n0_dns()));
+<a href=#166 id=166 data-nosnippet>166</a>    }
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="macro">warn!</span>(
+<a href=#169 id=169 data-nosnippet>169</a>        target: LOG_NET_IROH,
+<a href=#170 id=170 data-nosnippet>170</a>        <span class="string">"Iroh pkarr resolver is disabled"
+<a href=#171 id=171 data-nosnippet>171</a>    </span>);
+<a href=#172 id=172 data-nosnippet>172</a>    builder
+<a href=#173 id=173 data-nosnippet>173</a>}
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">fn </span>add_n0_pkarr_resolver(builder: Builder) -&gt; Builder {
+<a href=#177 id=177 data-nosnippet>177</a>    builder
+<a href=#178 id=178 data-nosnippet>178</a>}
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a><span class="attr">#[cfg(test)]
+<a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">mod </span>tests {
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="attr">#[test]
+<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="kw">fn </span>default_iroh_relays_are_valid_urls() {
+<a href=#186 id=186 data-nosnippet>186</a>        <span class="kw">for </span>relay <span class="kw">in </span>DEFAULT_IROH_RELAYS {
+<a href=#187 id=187 data-nosnippet>187</a>            Url::parse(relay).expect(<span class="string">"default Iroh relay URL is valid"</span>);
+<a href=#188 id=188 data-nosnippet>188</a>        }
+<a href=#189 id=189 data-nosnippet>189</a>    }
+<a href=#190 id=190 data-nosnippet>190</a>}
 </code></pre></div></section></main></body></html>
