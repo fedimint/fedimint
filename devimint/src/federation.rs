@@ -901,6 +901,7 @@ impl Federation {
             }
         }
 
+        let mut gateway_deposit_addrs = Vec::new();
         for gw in gateways.clone() {
             let pegin_addr = gw.client().get_pegin_addr(&fed_id).await?;
             debug!(
@@ -912,8 +913,9 @@ impl Federation {
                 "Sending gateway pegin"
             );
             self.bitcoind
-                .send_to(pegin_addr, amount + deposit_fees)
+                .send_to(pegin_addr.clone(), amount + deposit_fees)
                 .await?;
+            gateway_deposit_addrs.push(pegin_addr);
         }
 
         let pegin_start = Instant::now();
@@ -933,11 +935,16 @@ impl Federation {
             };
             let gateway_name = gw.gw_name.clone();
             let gateway_ln = gw.ln.ln_type().to_string();
+            let gateway_id = gw.gateway_id.clone();
+            let gateway_index = gw.gateway_index;
+            let deposit_address = gateway_deposit_addrs[i].clone();
             let fed_id = fed_id.clone();
             poll("gateway pegin", move || {
                 let fed_id = fed_id.clone();
                 let gateway_name = gateway_name.clone();
                 let gateway_ln = gateway_ln.clone();
+                let gateway_id = gateway_id.clone();
+                let deposit_address = deposit_address.clone();
                 async move {
                     let gw_info = gw
                         .client()
@@ -965,7 +972,7 @@ impl Federation {
                             "Waiting for gateway pegin block sync"
                         );
                         return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
-                            "gateway block height is not synced"
+                            "Gateway {gateway_name} ({gateway_id}, index {gateway_index}) block height {block_height} has not reached bitcoind block height {bitcoind_block_height}"
                         )));
                     }
 
@@ -993,7 +1000,7 @@ impl Federation {
                             Ok(())
                         } else {
                             Err(ControlFlow::Continue(anyhow::anyhow!(
-                                "Gateway balance {gateway_balance} has not reached expected {expected} (initial: {initial_balance})"
+                                "Gateway {gateway_name} ({gateway_id}, index {gateway_index}) balance {gateway_balance} has not reached expected {expected} for deposit address {deposit_address} (initial: {initial_balance})"
                             )))
                         }
                     } else {
