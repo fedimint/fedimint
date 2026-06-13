@@ -1,0 +1,79 @@
+name: "Codex Agent Review Comment Receiver"
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.comment.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  receive:
+    name: Receive review-comment mention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      github.actor != 'fedimint-bot' &&
+      github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Capture sanitized event
+        id: capture
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          body=$(jq -r '.comment.body // ""' "${EVENT_PATH}")
+
+          if [[ "${body}" != *"@fedimint-bot"* ]]; then
+            echo "upload=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: comment does not mention @fedimint-bot"
+            exit 0
+          fi
+
+          mkdir -p "${RUNNER_TEMP}/codex-agent-review-comment"
+          # This workflow intentionally has no secrets on fork PRs. It only
+          # carries enough context for the default-branch workflow_run handler
+          # to re-fetch and re-validate the live comment before using secrets.
+          jq '{
+            action,
+            comment: {
+              id: .comment.id,
+              node_id: .comment.node_id,
+              body: .comment.body,
+              html_url: .comment.html_url,
+              pull_request_url: .comment.pull_request_url,
+              user: { login: .comment.user.login },
+              author_association: .comment.author_association
+            },
+            pull_request: {
+              number: .pull_request.number,
+              html_url: .pull_request.html_url,
+              url: .pull_request.url,
+              base: {
+                ref: .pull_request.base.ref,
+                sha: .pull_request.base.sha,
+                repo: { full_name: .pull_request.base.repo.full_name }
+              },
+              head: {
+                ref: .pull_request.head.ref,
+                sha: .pull_request.head.sha,
+                repo: { full_name: .pull_request.head.repo.full_name }
+              }
+            },
+            sender: { login: .sender.login }
+          }' "${EVENT_PATH}" > "${RUNNER_TEMP}/codex-agent-review-comment/event.json"
+          echo "upload=true" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.capture.outputs.upload == 'true'
+        with:
+          name: codex-agent-review-comment-event
+          path: ${{ runner.temp }}/codex-agent-review-comment/event.json
+          retention-days: 1
+          if-no-files-found: error

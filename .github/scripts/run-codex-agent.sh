@@ -19,6 +19,14 @@ require_env PPQ_KEY
 require_env RUNNER_TEMP
 
 PPQ_MODEL="${PPQ_MODEL:-openai/gpt-5.5}"
+agent_event_name="${CODEX_AGENT_EVENT_NAME:-${GITHUB_EVENT_NAME}}"
+agent_event_path="${CODEX_AGENT_EVENT_PATH:-${GITHUB_EVENT_PATH}}"
+agent_actor="${CODEX_AGENT_ACTOR:-${GITHUB_ACTOR}}"
+
+if [ ! -s "${agent_event_path}" ]; then
+  echo "Codex agent event payload does not exist or is empty: ${agent_event_path}" >&2
+  exit 1
+fi
 
 agent_root="${RUNNER_TEMP}/codex-agent"
 agent_home="${agent_root}/home"
@@ -126,13 +134,16 @@ EOF
 jq '{
   action,
   repository: env.GITHUB_REPOSITORY,
-  event_name: env.GITHUB_EVENT_NAME,
-  actor: env.GITHUB_ACTOR,
+  event_name: $event_name,
+  actor: $actor,
   comment: .comment,
   issue: .issue,
   pull_request: .pull_request,
   review: .review
-}' "${GITHUB_EVENT_PATH}" > "${context_dir}/event.json"
+}' \
+  --arg event_name "${agent_event_name}" \
+  --arg actor "${agent_actor}" \
+  "${agent_event_path}" > "${context_dir}/event.json"
 
 cat > "${context_dir}/prompt.md" <<'EOF'
 You are fedimint-bot, an automation agent for the Fedimint GitHub repository.
@@ -169,8 +180,10 @@ Repository conventions:
 Operational rules:
 - The GitHub event payload is at `$RUNNER_TEMP/codex-agent/context/event.json`.
 - The checked out repository is at `$GITHUB_WORKSPACE`.
-- First inspect the event payload to understand whether this is an issue
-  comment, PR comment, or inline PR review comment.
+- First inspect the normalized `event_name` field in the event payload to
+  understand whether this is an issue comment, PR comment, or inline PR review
+  comment. Inline PR review comments may arrive through a privileged follow-up
+  workflow, but the payload is normalized to `pull_request_review_comment`.
 - Use `gh` to fetch additional context as needed.
 - For inline PR review comments, get the pull request number from the event
   payload and use `gh api
