@@ -458,6 +458,58 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyho
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
+// Keep this below the 310s `fm-run-test` timeout so LNURL flakes fail with
+// useful balance diagnostics instead of a generic test timeout.
+const LNURL_BALANCE_WAIT_ATTEMPTS: u64 = 120;
+
+async fn wait_for_lnurl_balance(
+    client: &Client,
+    client_name: &str,
+    expected_msats: u64,
+) -> anyhow::Result<()> {
+    let mut last_balance_msats = client.balance().await?;
+
+    for attempt in 1..=LNURL_BALANCE_WAIT_ATTEMPTS {
+        if last_balance_msats < expected_msats {
+            info!(
+                client_name,
+                balance_msats = last_balance_msats,
+                expected_msats,
+                attempt,
+                "Waiting for {client_name} to receive funds via LNURL"
+            );
+            cmd!(client, "dev", "wait", "1").out_json().await?;
+            last_balance_msats = client.balance().await?;
+        } else {
+            info!(
+                client_name,
+                balance_msats = last_balance_msats,
+                expected_msats,
+                attempt,
+                "{client_name} successfully received funds via LNURL"
+            );
+            return Ok(());
+        }
+    }
+
+    if last_balance_msats < expected_msats {
+        anyhow::bail!(
+            "timed out waiting for {client_name} to receive funds via LNURL after {} attempts; last balance: {last_balance_msats} msats; expected balance: {expected_msats} msats",
+            LNURL_BALANCE_WAIT_ATTEMPTS
+        );
+    }
+
+    info!(
+        client_name,
+        balance_msats = last_balance_msats,
+        expected_msats,
+        attempt = LNURL_BALANCE_WAIT_ATTEMPTS,
+        "{client_name} successfully received funds via LNURL"
+    );
+
+    Ok(())
+}
+
 async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     if util::FedimintCli::version_or_default().await < *VERSION_0_11_0_ALPHA {
         return Ok(());
@@ -533,21 +585,8 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         assert_eq!(verify_task_b.await??, response_b);
     }
 
-    while client_a.balance().await? < 950 * 1000 {
-        info!("Waiting for client A to receive funds via LNURL...");
-
-        cmd!(client_a, "dev", "wait", "1").out_json().await?;
-    }
-
-    info!("Client A successfully received funds via LNURL!");
-
-    while client_b.balance().await? < 950 * 1000 {
-        info!("Waiting for client B to receive funds via LNURL...");
-
-        cmd!(client_b, "dev", "wait", "1").out_json().await?;
-    }
-
-    info!("Client B successfully received funds via LNURL!");
+    wait_for_lnurl_balance(&client_a, "client A", 950 * 1000).await?;
+    wait_for_lnurl_balance(&client_b, "client B", 950 * 1000).await?;
 
     Ok(())
 }
