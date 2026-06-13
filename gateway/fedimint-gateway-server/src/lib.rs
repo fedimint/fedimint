@@ -433,7 +433,10 @@ async fn withdraw_v2(
 
     let result = wallet_module
         .await_final_send_operation_state(operation_id)
-        .await;
+        .await
+        .map_err(|e| AdminGatewayError::WithdrawError {
+            failure_reason: e.to_string(),
+        })?;
 
     let fees = PegOutFees::from_amount(fee);
 
