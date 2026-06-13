@@ -1,0 +1,130 @@
+name: "Codex CI Debug"
+
+on:
+  workflow_run:
+    workflows:
+      - "CI (nix)"
+      - "Backwards-Compatibility"
+      - "Upgrade Tests"
+      - "Publish docs"
+      - "Markdown Link Check"
+      - "Crate ownership check"
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "GitHub Actions run id to debug"
+        required: true
+      reason:
+        description: "Optional context for the manual debug run"
+        required: false
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    name: Debug failed CI run
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'failure' &&
+          (
+            github.event.workflow_run.event == 'merge_group' ||
+            (
+              github.event.workflow_run.event == 'push' &&
+              github.event.workflow_run.head_branch == 'master'
+            )
+          )
+        )
+      )
+
+    steps:
+      - name: Select failed run
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_DISPATCH_RUN_ID: ${{ inputs.run_id }}
+          WORKFLOW_DISPATCH_REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            run_id="${WORKFLOW_DISPATCH_RUN_ID}"
+            run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+            run_name="manual"
+            run_event="manual"
+            head_branch=""
+            head_sha=""
+          else
+            run_id="${WORKFLOW_RUN_ID}"
+            run_url="${WORKFLOW_RUN_URL}"
+            run_name="${WORKFLOW_RUN_NAME}"
+            run_event="${WORKFLOW_RUN_EVENT}"
+            head_branch="${WORKFLOW_RUN_HEAD_BRANCH}"
+            head_sha="${WORKFLOW_RUN_HEAD_SHA}"
+          fi
+
+          {
+            echo "run_id=${run_id}"
+            echo "run_url=${run_url}"
+            echo "run_name=${run_name}"
+            echo "run_event=${run_event}"
+            echo "head_branch=${head_branch}"
+            echo "head_sha=${head_sha}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Selected CI run ${run_id}: ${run_url}"
+          if [ -n "${WORKFLOW_DISPATCH_REASON}" ]; then
+            echo "Manual context: ${WORKFLOW_DISPATCH_REASON}"
+          fi
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex CI debugger
+        env:
+          BACKPORT_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          CI_DEBUG_RUN_ID: ${{ steps.target.outputs.run_id }}
+          CI_DEBUG_RUN_URL: ${{ steps.target.outputs.run_url }}
+          CI_DEBUG_WORKFLOW_NAME: ${{ steps.target.outputs.run_name }}
+          CI_DEBUG_WORKFLOW_EVENT: ${{ steps.target.outputs.run_event }}
+          CI_DEBUG_HEAD_BRANCH: ${{ steps.target.outputs.head_branch }}
+          CI_DEBUG_HEAD_SHA: ${{ steps.target.outputs.head_sha }}
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            develop \
+            .#default \
+            --command \
+            nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            github:numtide/llm-agents.nix/24ec6b7b1ddf8896ac8df3b65dc564575e0a1928#codex \
+            nixpkgs#gh \
+            nixpkgs#ripgrep \
+            nixpkgs#curl \
+            nixpkgs#jq \
+            nixpkgs#gettext \
+            -c bash .github/scripts/run-codex-ci-debug.sh
