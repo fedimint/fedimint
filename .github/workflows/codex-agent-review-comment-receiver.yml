@@ -24,11 +24,9 @@ jobs:
     steps:
       - name: Capture sanitized event
         id: capture
-        env:
-          EVENT_PATH: ${{ github.event_path }}
         run: |
           set -euo pipefail
-          body=$(jq -r '.comment.body // ""' "${EVENT_PATH}")
+          body=$(jq -r '.comment.body // ""' "${GITHUB_EVENT_PATH}")
 
           if [[ "${body}" != *"@fedimint-bot"* ]]; then
             echo "upload=false" >> "${GITHUB_OUTPUT}"
@@ -67,7 +65,7 @@ jobs:
               }
             },
             sender: { login: .sender.login }
-          }' "${EVENT_PATH}" > "${RUNNER_TEMP}/codex-agent-review-comment/event.json"
+          }' "${GITHUB_EVENT_PATH}" > "${RUNNER_TEMP}/codex-agent-review-comment/event.json"
           echo "upload=true" >> "${GITHUB_OUTPUT}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
