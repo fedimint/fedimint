@@ -6,7 +6,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::{Builder, TransportConfig};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
 use tracing::{debug, info, warn};
@@ -102,14 +102,7 @@ pub async fn build_iroh_endpoint(
         );
     }
 
-    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
-        builder = builder.discovery_n0();
-    } else {
-        warn!(
-            target: LOG_NET_IROH,
-            "Iroh n0 discovery is disabled"
-        );
-    }
+    builder = add_n0_discovery(builder);
 
     let mut transport_config = TransportConfig::default();
     transport_config.max_idle_timeout(Some(
@@ -154,6 +147,34 @@ fn relay_node_from_url(url: Url) -> RelayNode {
         stun_port: DEFAULT_STUN_PORT,
         quic: Some(RelayQuicConfig::default()),
     }
+}
+
+fn add_n0_discovery(builder: Builder) -> Builder {
+    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
+        return add_n0_pkarr_resolver(builder.discovery_n0());
+    }
+
+    warn!(target: LOG_NET_IROH, "Iroh n0 discovery is disabled");
+    builder
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn add_n0_pkarr_resolver(builder: Builder) -> Builder {
+    // Native discovery_n0 only uses DNS TXT; add HTTPS pkarr fallback.
+    if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
+        return builder.add_discovery(|_| Some(PkarrResolver::n0_dns()));
+    }
+
+    warn!(
+        target: LOG_NET_IROH,
+        "Iroh pkarr resolver is disabled"
+    );
+    builder
+}
+
+#[cfg(target_family = "wasm")]
+fn add_n0_pkarr_resolver(builder: Builder) -> Builder {
+    builder
 }
 
 #[cfg(test)]
