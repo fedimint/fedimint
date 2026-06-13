@@ -1,0 +1,165 @@
+name: "Codex Agent"
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.comment.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    name: Run Codex agent
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      github.actor != 'fedimint-bot' &&
+      github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Validate agent mention
+        id: validate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            nixpkgs#jq \
+            nixpkgs#curl \
+            -c bash <<'BASH'
+          set -euo pipefail
+
+          action=$(jq -r '.action // ""' "${GITHUB_EVENT_PATH}")
+          body=$(jq -r '.comment.body // ""' "${GITHUB_EVENT_PATH}")
+          author_association=$(jq -r '.comment.author_association // ""' "${GITHUB_EVENT_PATH}")
+          comment_id=$(jq -r '.comment.id // ""' "${GITHUB_EVENT_PATH}")
+          comment_user=$(jq -r '.comment.user.login // ""' "${GITHUB_EVENT_PATH}")
+          api_url="${GITHUB_API_URL:-https://api.github.com}"
+
+          echo "event=${EVENT_NAME}"
+          echo "action=${action}"
+          echo "comment_id=${comment_id}"
+          echo "comment_user=${comment_user}"
+          echo "author_association=${author_association:-<missing>}"
+
+          if [[ "${body}" != *"@fedimint-bot"* ]]; then
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: comment does not mention @fedimint-bot"
+            exit 0
+          fi
+
+          if [ "${EVENT_NAME}" = "pull_request_review_comment" ]; then
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
+          else
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
+          fi
+
+          live_author_association=$(
+            curl --fail-with-body --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api_url}/${comment_endpoint}" \
+              | jq -r '.author_association // ""'
+          )
+
+          echo "live_author_association=${live_author_association:-<missing>}"
+
+          maintainer_membership=$(
+            curl --silent --show-error \
+              --write-out '%{http_code}' \
+              --output /tmp/fedimint-bot-maintainer-membership.json \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api_url}/orgs/fedimint/teams/maintainer/memberships/${comment_user}"
+          )
+
+          if [ "${maintainer_membership}" = "200" ]; then
+            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-maintainer-membership.json)
+          else
+            membership_state=""
+          fi
+
+          echo "maintainer_membership_status=${maintainer_membership}"
+          echo "maintainer_membership_state=${membership_state:-<missing>}"
+
+          if [ "${membership_state}" = "active" ]; then
+            echo "run=true" >> "${GITHUB_OUTPUT}"
+            echo "Trigger accepted"
+          else
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: comment author is not an active fedimint/maintainer team member"
+          fi
+          BASH
+
+      - name: Acknowledge request
+        if: steps.validate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            nixpkgs#curl \
+            -c bash <<'BASH'
+          set -euo pipefail
+          api_url="${GITHUB_API_URL:-https://api.github.com}"
+
+          if [ "${EVENT_NAME}" = "pull_request_review_comment" ]; then
+            endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          else
+            endpoint="repos/${REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api_url}/${endpoint}" \
+            --data '{"content":"eyes"}' \
+            >/dev/null
+          BASH
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.validate.outputs.run == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex in Fedimint dev shell
+        if: steps.validate.outputs.run == 'true'
+        env:
+          BACKPORT_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            develop \
+            .#default \
+            --command \
+            nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            github:numtide/llm-agents.nix/24ec6b7b1ddf8896ac8df3b65dc564575e0a1928#codex \
+            nixpkgs#gh \
+            nixpkgs#ripgrep \
+            nixpkgs#curl \
+            -c bash .github/scripts/run-codex-agent.sh
