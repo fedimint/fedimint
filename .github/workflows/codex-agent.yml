@@ -3,14 +3,16 @@ name: "Codex Agent"
 on:
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
+  workflow_run:
+    workflows: ["Codex Agent Review Comment Receiver"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.comment.id }}
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.workflow_run.id || github.event.comment.id }}
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -20,8 +22,12 @@ jobs:
     timeout-minutes: 120
     if: >-
       github.repository == 'fedimint/fedimint' &&
-      github.actor != 'fedimint-bot' &&
-      github.actor != 'github-actions[bot]'
+      ((github.event_name == 'issue_comment' &&
+        github.actor != 'fedimint-bot' &&
+        github.actor != 'github-actions[bot]') ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request_review_comment' &&
+        github.event.workflow_run.conclusion == 'success'))
 
     steps:
       - name: Validate agent mention
@@ -36,44 +42,104 @@ jobs:
             shell \
             nixpkgs#jq \
             nixpkgs#curl \
+            nixpkgs#unzip \
+            nixpkgs#gh \
             -c bash <<'BASH'
           set -euo pipefail
 
-          action=$(jq -r '.action // ""' "${GITHUB_EVENT_PATH}")
-          body=$(jq -r '.comment.body // ""' "${GITHUB_EVENT_PATH}")
-          author_association=$(jq -r '.comment.author_association // ""' "${GITHUB_EVENT_PATH}")
-          comment_id=$(jq -r '.comment.id // ""' "${GITHUB_EVENT_PATH}")
-          comment_user=$(jq -r '.comment.user.login // ""' "${GITHUB_EVENT_PATH}")
           api_url="${GITHUB_API_URL:-https://api.github.com}"
+          event_payload="${GITHUB_EVENT_PATH}"
+          event_name="${EVENT_NAME}"
+          comment_endpoint=""
+          comment_user=""
+          comment_id=""
+          body=""
+          artifact_dir=""
 
-          echo "event=${EVENT_NAME}"
-          echo "action=${action}"
-          echo "comment_id=${comment_id}"
-          echo "comment_user=${comment_user}"
-          echo "author_association=${author_association:-<missing>}"
+          if [ "${event_name}" = "workflow_run" ]; then
+            # The receiver may have run without secrets on a fork PR. Treat its
+            # artifact as untrusted and use it only to find the live review
+            # comment, then re-check the mention and maintainer membership here.
+            artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
+            if [ -z "${artifacts_url}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: workflow_run event has no artifacts URL"
+              exit 0
+            fi
 
-          if [[ "${body}" != *"@fedimint-bot"* ]]; then
-            echo "run=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping: comment does not mention @fedimint-bot"
-            exit 0
-          fi
+            artifact_id=$(gh api "${artifacts_url}" \
+              --jq '.artifacts[] | select(.name == "codex-agent-review-comment-event") | .id' \
+              | head -n1)
 
-          if [ "${EVENT_NAME}" = "pull_request_review_comment" ]; then
+            if [ -z "${artifact_id}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: receiver uploaded no review-comment event artifact"
+              exit 0
+            fi
+
+            artifact_dir="${RUNNER_TEMP}/codex-agent-review-comment-artifact"
+            rm -rf "${artifact_dir}"
+            mkdir -p "${artifact_dir}"
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              > "${artifact_dir}/artifact.zip"
+            unzip -q "${artifact_dir}/artifact.zip" -d "${artifact_dir}"
+
+            event_payload="${artifact_dir}/event.json"
+            if [ ! -s "${event_payload}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: review-comment event artifact is missing event.json"
+              exit 0
+            fi
+
+            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+            if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: review-comment artifact has invalid comment id"
+              exit 0
+            fi
+
             comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
           else
+            body=$(jq -r '.comment.body // ""' "${event_payload}")
+            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+            comment_user=$(jq -r '.comment.user.login // ""' "${event_payload}")
+            author_association=$(jq -r '.comment.author_association // ""' "${event_payload}")
+
+            echo "event=${event_name}"
+            echo "comment_id=${comment_id}"
+            echo "comment_user=${comment_user}"
+            echo "author_association=${author_association:-<missing>}"
+
+            if [[ "${body}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: comment does not mention @fedimint-bot"
+              exit 0
+            fi
+
             comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
           fi
 
-          live_author_association=$(
-            curl --fail-with-body --silent --show-error \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "${api_url}/${comment_endpoint}" \
-              | jq -r '.author_association // ""'
-          )
+          live_comment=$(curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api_url}/${comment_endpoint}")
 
+          body=$(jq -r '.body // ""' <<<"${live_comment}")
+          comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
+          live_author_association=$(jq -r '.author_association // ""' <<<"${live_comment}")
+
+          echo "event=${event_name}"
+          echo "comment_id=${comment_id}"
+          echo "comment_user=${comment_user}"
           echo "live_author_association=${live_author_association:-<missing>}"
+
+          if [[ "${body}" != *"@fedimint-bot"* ]]; then
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: live comment does not mention @fedimint-bot"
+            exit 0
+          fi
 
           maintainer_membership=$(
             curl --silent --show-error \
@@ -94,21 +160,57 @@ jobs:
           echo "maintainer_membership_status=${maintainer_membership}"
           echo "maintainer_membership_state=${membership_state:-<missing>}"
 
-          if [ "${membership_state}" = "active" ]; then
-            echo "run=true" >> "${GITHUB_OUTPUT}"
-            echo "Trigger accepted"
-          else
+          if [ "${membership_state}" != "active" ]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
             echo "Skipping: comment author is not an active fedimint/maintainer team member"
+            exit 0
           fi
+
+          agent_event_path="${RUNNER_TEMP}/codex-agent-event.json"
+
+          if [ "${event_name}" = "workflow_run" ]; then
+            pull_request_url=$(jq -r '.pull_request_url // ""' <<<"${live_comment}")
+            if [ -z "${pull_request_url}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live review comment has no pull_request_url"
+              exit 0
+            fi
+
+            pull_request=$(curl --fail-with-body --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${pull_request_url}")
+
+            jq -n \
+              --argjson comment "${live_comment}" \
+              --argjson pull_request "${pull_request}" \
+              '{
+                action: "created",
+                comment: $comment,
+                pull_request: $pull_request
+              }' > "${agent_event_path}"
+            echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
+          else
+            cp "${event_payload}" "${agent_event_path}"
+            echo "agent_event_name=${event_name}" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${GITHUB_ACTOR}" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "agent_event_path=${agent_event_path}" >> "${GITHUB_OUTPUT}"
+          echo "comment_id=${comment_id}" >> "${GITHUB_OUTPUT}"
+          echo "comment_kind=${event_name}" >> "${GITHUB_OUTPUT}"
+          echo "run=true" >> "${GITHUB_OUTPUT}"
+          echo "Trigger accepted"
           BASH
 
       - name: Acknowledge request
         if: steps.validate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
-          COMMENT_ID: ${{ github.event.comment.id }}
-          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_ID: ${{ steps.validate.outputs.comment_id }}
+          COMMENT_KIND: ${{ steps.validate.outputs.comment_kind }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -120,7 +222,7 @@ jobs:
           set -euo pipefail
           api_url="${GITHUB_API_URL:-https://api.github.com}"
 
-          if [ "${EVENT_NAME}" = "pull_request_review_comment" ]; then
+          if [ "${COMMENT_KIND}" = "workflow_run" ]; then
             endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
           else
             endpoint="repos/${REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
@@ -139,6 +241,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         if: steps.validate.outputs.run == 'true'
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -146,6 +249,9 @@ jobs:
         if: steps.validate.outputs.run == 'true'
         env:
           BACKPORT_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          CODEX_AGENT_ACTOR: ${{ steps.validate.outputs.agent_actor }}
+          CODEX_AGENT_EVENT_NAME: ${{ steps.validate.outputs.agent_event_name }}
+          CODEX_AGENT_EVENT_PATH: ${{ steps.validate.outputs.agent_event_path }}
           PPQ_KEY: ${{ secrets.PPQ_KEY }}
           PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
         run: |
