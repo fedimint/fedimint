@@ -1,4 +1,4 @@
-name: "Claude PR Review"
+name: "Codex PR Review"
 
 on:
   # Use pull_request_target so secrets are available for fork PRs.
@@ -26,18 +26,18 @@ jobs:
         (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
          contains(github.event.comment.body, '/review'))
       )
-    name: Claude Code Review
+    name: Codex Code Review
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
-    env:
-      GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
 
     steps:
       - name: Resolve PR metadata
         id: pr
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -56,6 +56,8 @@ jobs:
 
       - name: Acknowledge review request
         if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
         run: |
           gh api \
             "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
@@ -67,6 +69,7 @@ jobs:
           # Checkout the base branch (trusted code only)
           ref: ${{ steps.pr.outputs.base_ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Fetch PR head
         run: |
@@ -124,11 +127,13 @@ jobs:
             echo "truncated=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
 
       - name: Fetch prior AI reviews
         id: prior
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
 
@@ -175,7 +180,7 @@ jobs:
           TRUNCATED="${{ steps.diff.outputs.truncated }}"
           HAS_PRIOR="${{ steps.prior.outputs.has_prior }}"
 
-          # Prepend the review instructions so Claude has them in context
+          # Prepend the review instructions so Codex has them in context
           cat .github/agents/review.md > /tmp/review_prompt.txt
 
           # Include prior AI reviews if they exist
@@ -232,44 +237,200 @@ jobs:
           printf '\nDiff:\n' >> /tmp/review_prompt.txt
           cat /tmp/pr_diff.patch >> /tmp/review_prompt.txt
 
-      - name: Run Claude review
-        id: claude-review
+      - name: Run Codex review
+        id: codex-review
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: openai/codex-5.5
         run: |
-          # Run Claude in print mode (non-interactive, stdout only)
-          # Allow up to 30 turns so it can explore the codebase for context
-          RAW=$(claude -p \
-            --model claude-sonnet-4-6 \
-            --max-turns 30 \
-            < /tmp/review_prompt.txt) || true
+          set -euo pipefail
 
+          export CODEX_HOME="${RUNNER_TEMP}/codex-review-home"
+          mkdir -p "$CODEX_HOME"
+          path_toml=$(jq -Rn --arg value "$PATH" '$value')
+          {
+            printf 'model = "%s"\n' "$PPQ_MODEL"
+            printf '%s\n' \
+              'model_provider = "ppq"' \
+              'model_reasoning_effort = "xhigh"' \
+              'sandbox_mode = "read-only"' \
+              'approval_policy = "never"' \
+              'hide_agent_reasoning = true' \
+              '' \
+              '[history]' \
+              'persistence = "none"' \
+              '' \
+              '[shell_environment_policy]' \
+              'inherit = "all"' \
+              'ignore_default_excludes = false'
+            printf 'set = { PATH = %s }\n' "$path_toml"
+            printf '%s\n' \
+              'include_only = [' \
+              '  "PATH",' \
+              '  "HOME",' \
+              '  "CODEX_HOME",' \
+              '  "CI",' \
+              '  "GITHUB_ACTION",' \
+              '  "GITHUB_ACTIONS",' \
+              '  "GITHUB_ACTOR",' \
+              '  "GITHUB_API_URL",' \
+              '  "GITHUB_BASE_REF",' \
+              '  "GITHUB_EVENT_NAME",' \
+              '  "GITHUB_GRAPHQL_URL",' \
+              '  "GITHUB_HEAD_REF",' \
+              '  "GITHUB_JOB",' \
+              '  "GITHUB_REF",' \
+              '  "GITHUB_REF_NAME",' \
+              '  "GITHUB_REPOSITORY",' \
+              '  "GITHUB_REPOSITORY_OWNER",' \
+              '  "GITHUB_RUN_ATTEMPT",' \
+              '  "GITHUB_RUN_ID",' \
+              '  "GITHUB_RUN_NUMBER",' \
+              '  "GITHUB_SERVER_URL",' \
+              '  "GITHUB_SHA",' \
+              '  "GITHUB_WORKFLOW",' \
+              '  "GITHUB_WORKSPACE",' \
+              '  "RUNNER_ARCH",' \
+              '  "RUNNER_NAME",' \
+              '  "RUNNER_OS",' \
+              '  "RUNNER_TEMP",' \
+              '  "RUNNER_TOOL_CACHE",' \
+              '  "RUNNER_WORKSPACE",' \
+              '  "SHELL",' \
+              '  "TERM",' \
+              '  "TMPDIR",' \
+              '  "TEMP",' \
+              '  "TMP",' \
+              '  "LANG",' \
+              '  "LC_*",' \
+              '  "RUST*",' \
+              '  "CARGO_*",' \
+              '  "NIX_*",' \
+              '  "IN_NIX_SHELL",' \
+              ']' \
+              '' \
+              '[model_providers.ppq]' \
+              'name = "PPQ"' \
+              'base_url = "https://api.ppq.ai/v1"' \
+              'env_key = "PPQ_KEY"' \
+              'wire_api = "responses"'
+          } > "$CODEX_HOME/config.toml"
+
+          run_codex() {
+            local prompt_file="$1"
+            local output_file="$2"
+            local log_file="$3"
+
+            codex exec \
+              --ephemeral \
+              --output-last-message "$output_file" \
+              - < "$prompt_file" > "$log_file" 2>&1 || true
+          }
+
+          extract_json() {
+            local raw_file="$1"
+
+            # Prefer the full output, then fenced JSON, then a best-effort
+            # balanced-object extraction for noisy command output.
+            JSON=$(cat "$raw_file")
+            if [ -z "$JSON" ] || ! echo "$JSON" | jq . > /dev/null 2>&1; then
+              JSON=$(sed -n '/^```json/,/^```$/p' "$raw_file" | sed '1d;$d')
+            fi
+            if [ -z "$JSON" ] || ! echo "$JSON" | jq . > /dev/null 2>&1; then
+              JSON=$(python3 - "$raw_file" <<'PY'
+          import sys
+
+          text = open(sys.argv[1], encoding="utf-8").read()
+          start = text.find("{")
+          if start == -1:
+              sys.exit(0)
+
+          depth = 0
+          in_string = False
+          escaped = False
+
+          for index, char in enumerate(text[start:], start):
+              if escaped:
+                  escaped = False
+              elif char == "\\":
+                  escaped = True
+              elif char == '"':
+                  in_string = not in_string
+              elif not in_string and char == "{":
+                  depth += 1
+              elif not in_string and char == "}":
+                  depth -= 1
+                  if depth == 0:
+                      print(text[start:index + 1])
+                      break
+          PY
+          )
+            fi
+
+            if echo "$JSON" | jq . > /dev/null 2>&1; then
+              echo "$JSON"
+            else
+              return 1
+            fi
+          }
+
+          run_codex /tmp/review_prompt.txt /tmp/codex_primary_raw.txt /tmp/codex_primary.log
+
+          RAW=$(cat /tmp/codex_primary_raw.txt 2>/dev/null || true)
           if [ -z "$RAW" ]; then
-            echo "Claude produced no output, skipping review"
+            echo "Codex produced no output, skipping review"
             echo "verdict=SKIP" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Extract JSON from the output (Claude may wrap it in markdown fences)
-          # Try to find a JSON block, fall back to treating the whole output as JSON
-          JSON=$(echo "$RAW" | sed -n '/^```json/,/^```$/p' | sed '1d;$d')
-          if [ -z "$JSON" ] || ! echo "$JSON" | jq . > /dev/null 2>&1; then
-            JSON=$(echo "$RAW" | sed -n '/^{/,/^}/p')
-          fi
-          if [ -z "$JSON" ] || ! echo "$JSON" | jq . > /dev/null 2>&1; then
-            # Last resort: try the raw output directly
-            JSON="$RAW"
-          fi
-
-          if ! echo "$JSON" | jq . > /dev/null 2>&1; then
-            echo "Failed to parse Claude output as JSON, posting raw output as comment"
+          if ! extract_json /tmp/codex_primary_raw.txt > /tmp/review_candidates.json; then
+            echo "Failed to parse Codex output as JSON, posting raw output as comment"
             echo "$RAW" > /tmp/review_body.txt
             echo "verdict=COMMENT" >> "$GITHUB_OUTPUT"
             echo "has_inline=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "$JSON" > /tmp/review.json
+          printf '%s\n' \
+            'You are a validation subagent for the Fedimint automated review bot.' \
+            '' \
+            'The primary reviewer produced candidate JSON findings for a pull request.' \
+            'Validate each candidate against the diff and repository context. Return the' \
+            'same JSON schema, but include only findings that are demonstrably real' \
+            'problems. Drop anything speculative, stylistic-only without project support,' \
+            'already addressed by the shown diff, or not attachable to the changed lines.' \
+            '' \
+            'Preserve every validated issue, preferably as an inline comment. Do not' \
+            'collapse multiple real issues into a summary. If the verdict is COMMENT,' \
+            'include a brief reason unless the validated inline comments make it obvious.' \
+            'Output ONLY valid JSON. No markdown fences, no preamble.' \
+            '' \
+            'Candidate review JSON:' \
+            > /tmp/validation_prompt.txt
+          cat /tmp/review_candidates.json >> /tmp/validation_prompt.txt
+          printf '\nReview instructions:\n' >> /tmp/validation_prompt.txt
+          cat .github/agents/review.md >> /tmp/validation_prompt.txt
+          printf '\nPR diff:\n' >> /tmp/validation_prompt.txt
+          cat /tmp/pr_diff.patch >> /tmp/validation_prompt.txt
+
+          run_codex /tmp/validation_prompt.txt /tmp/codex_validation_raw.txt /tmp/codex_validation.log
+
+          if ! extract_json /tmp/codex_validation_raw.txt > /tmp/review.json; then
+            echo "Validation subagent failed to return parseable JSON"
+            {
+              echo "Automated review found candidate issues, but the validation pass failed. Not posting unvalidated findings."
+              echo ""
+              echo "<details><summary>Primary reviewer output</summary>"
+              echo ""
+              echo '```json'
+              cat /tmp/review_candidates.json
+              echo '```'
+              echo "</details>"
+            } > /tmp/review_body.txt
+            echo "verdict=COMMENT" >> "$GITHUB_OUTPUT"
+            echo "has_inline=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Extract verdict
           VERDICT=$(jq -r '.verdict // "COMMENT"' < /tmp/review.json)
@@ -290,6 +451,9 @@ jobs:
           if [ "$TRUNCATED" = "true" ] && [ "$VERDICT" = "APPROVE" ]; then
             VERDICT="COMMENT"
           fi
+
+          # Check if there are inline comments
+          INLINE_COUNT=$(jq '.inline_comments | length' < /tmp/review.json)
 
           # Build a minimal review body — only show information a human needs
           CONSENSUS_IMPACT=$(jq -r '.consensus_impact // ""' < /tmp/review.json)
@@ -321,11 +485,19 @@ jobs:
           if [ ${#BODY_PARTS[@]} -gt 0 ]; then
             printf '%s\n\n' "${BODY_PARTS[@]}" | sed '$ d' > /tmp/review_body.txt
           else
-            echo "LGTM" > /tmp/review_body.txt
+            if [ "$VERDICT" = "APPROVE" ]; then
+              echo "LGTM" > /tmp/review_body.txt
+            else
+              : > /tmp/review_body.txt
+            fi
           fi
 
-          # Check if there are inline comments
-          INLINE_COUNT=$(jq '.inline_comments | length' < /tmp/review.json)
+          if [ "$VERDICT" = "COMMENT" ] && [ "$INLINE_COUNT" -eq 0 ] && [ ! -s /tmp/review_body.txt ]; then
+            echo "Codex produced no validated inline comments or review body, skipping review"
+            echo "verdict=SKIP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if [ "$INLINE_COUNT" -gt 0 ]; then
             echo "has_inline=true" >> "$GITHUB_OUTPUT"
           else
@@ -335,10 +507,12 @@ jobs:
           echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
 
       - name: Submit review with inline comments
-        if: steps.claude-review.outputs.verdict != 'SKIP'
+        if: steps.codex-review.outputs.verdict != 'SKIP'
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
         run: |
-          VERDICT="${{ steps.claude-review.outputs.verdict }}"
-          HAS_INLINE="${{ steps.claude-review.outputs.has_inline }}"
+          VERDICT="${{ steps.codex-review.outputs.verdict }}"
+          HAS_INLINE="${{ steps.codex-review.outputs.has_inline }}"
           PR_NUMBER="${{ steps.pr.outputs.number }}"
           COMMIT_SHA="${{ steps.pr.outputs.head_sha }}"
 
