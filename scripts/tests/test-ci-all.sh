@@ -94,7 +94,13 @@ export -f gw_liquidity_test
 function gw_liquidity_test_walletv2() {
   # walletv2 is not supported by older versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_ENABLE_MODULE_WALLETV2=true FM_ENABLE_MODULE_WALLET=false ./scripts/tests/gateway-module-test.sh liquidity-test
+    # Keep walletv2 peg-in diagnostics visible for CI flake investigation:
+    # https://github.com/fedimint/fedimint/pull/8702
+    fm-run-test "${FUNCNAME[0]}" env \
+      RUST_LOG="fm::devimint=debug,fm::client::module::walletv2=debug,fm::module::walletv2=debug,${RUST_LOG:-}" \
+      FM_ENABLE_MODULE_WALLETV2=true \
+      FM_ENABLE_MODULE_WALLET=false \
+      ./scripts/tests/gateway-module-test.sh liquidity-test
   fi
 }
 export -f gw_liquidity_test_walletv2
