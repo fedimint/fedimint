@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
@@ -16,7 +17,6 @@ use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio::sync::OnceCell;
 use tracing::{error, instrument, warn};
 
 use crate::db::{ChronologicalOperationLogKey, OperationLogKey};
@@ -27,34 +27,41 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct OperationLog {
     db: Database,
-    oldest_entry: tokio::sync::OnceCell<ChronologicalOperationLogKey>,
+    oldest_entry: Arc<Mutex<Option<ChronologicalOperationLogKey>>>,
 }
 
 impl OperationLog {
     pub fn new(db: Database) -> Self {
         Self {
             db,
-            oldest_entry: OnceCell::new(),
+            oldest_entry: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Will return the oldest operation log key in the database and cache the
     /// result. If no entry exists yet the DB will be queried on each call till
-    /// an entry is present.
+    /// an entry is present. Historical inserts can move the cached value
+    /// backwards.
     async fn get_oldest_operation_log_key(&self) -> Option<ChronologicalOperationLogKey> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
-        self.oldest_entry
-            .get_or_try_init(move || async move {
-                dbtx.find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
-                    .await
-                    .map(|(key, ())| key)
-                    .next()
-                    .await
-                    .ok_or(())
-            })
+        if let Some(oldest_entry) = *self.oldest_entry.lock().expect("mutex poisoned") {
+            return Some(oldest_entry);
+        }
+
+        let oldest_entry = self
+            .db
+            .begin_transaction_nc()
             .await
-            .ok()
-            .copied()
+            .find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
+            .await
+            .map(|(key, ())| key)
+            .next()
+            .await;
+
+        if let Some(oldest_entry) = oldest_entry {
+            *self.oldest_entry.lock().expect("mutex poisoned") = Some(oldest_entry);
+        }
+
+        oldest_entry
     }
 
     pub async fn add_operation_log_entry_dbtx(
@@ -63,6 +70,24 @@ impl OperationLog {
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
+    ) {
+        self.add_operation_log_entry_dbtx_with_creation_time(
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            now(),
+        )
+        .await;
+    }
+
+    pub async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
     ) {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
@@ -76,14 +101,24 @@ impl OperationLog {
             ),
         )
         .await;
-        dbtx.insert_new_entry(
-            &ChronologicalOperationLogKey {
-                creation_time: now(),
-                operation_id,
-            },
-            &(),
-        )
-        .await;
+        let chronological_key = ChronologicalOperationLogKey {
+            creation_time,
+            operation_id,
+        };
+        dbtx.insert_new_entry(&chronological_key, &()).await;
+
+        let oldest_entry = Arc::clone(&self.oldest_entry);
+        dbtx.on_commit(move || {
+            let mut cached_oldest_entry = oldest_entry.lock().expect("mutex poisoned");
+            if cached_oldest_entry.is_none_or(|cached_key| {
+                (
+                    chronological_key.creation_time,
+                    chronological_key.operation_id.0,
+                ) < (cached_key.creation_time, cached_key.operation_id.0)
+            }) {
+                *cached_oldest_entry = Some(chronological_key);
+            }
+        });
     }
 
     #[deprecated(since = "0.6.0", note = "Use `paginate_operations_rev` instead")]
@@ -175,6 +210,23 @@ impl OperationLog {
         dbtx.get_value(&OperationLogKey { operation_id }).await
     }
 
+    pub async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool {
+        Self::operation_log_entry_exists_dbtx(
+            &mut self.db.begin_transaction_nc().await.into_nc(),
+            operation_id,
+        )
+        .await
+    }
+
+    pub async fn operation_log_entry_exists_dbtx(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        dbtx.get_value(&OperationLogKey { operation_id })
+            .await
+            .is_some()
+    }
+
     /// Sets the outcome of an operation
     #[instrument(target = LOG_CLIENT, skip(db), level = "debug")]
     pub async fn set_operation_outcome(
@@ -256,6 +308,18 @@ impl IOperationLog for OperationLog {
         OperationLog::get_operation_dbtx(dbtx, operation_id).await
     }
 
+    async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool {
+        OperationLog::operation_log_entry_exists(self, operation_id).await
+    }
+
+    async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        OperationLog::operation_log_entry_exists_dbtx(dbtx, operation_id).await
+    }
+
     async fn add_operation_log_entry_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -269,6 +333,25 @@ impl IOperationLog for OperationLog {
             operation_id,
             operation_type,
             operation_meta,
+        )
+        .await
+    }
+
+    async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: serde_json::Value,
+        creation_time: SystemTime,
+    ) {
+        OperationLog::add_operation_log_entry_dbtx_with_creation_time(
+            self,
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            creation_time,
         )
         .await
     }

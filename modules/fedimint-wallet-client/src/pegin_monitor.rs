@@ -31,7 +31,9 @@ use crate::client_db::{
     PegInTweakIndexPrefix, TweakIdx,
 };
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{
+    WalletClientModule, WalletClientModuleData, WalletOperationMeta, WalletOperationMetaVariant,
+};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -373,7 +375,7 @@ async fn check_idx_pegins(
     client_ctx: &ClientContext<WalletClientModule>,
 ) -> Result<Vec<CheckOutcome>, anyhow::Error> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
-    let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
+    let (script, address, tweak_key, address_operation_id) = data.derive_peg_in_script(tweak_idx);
     btc_rpc.watch_script_history(&script).await?;
 
     let history = btc_rpc.get_script_history(&script).await?;
@@ -388,6 +390,8 @@ async fn check_idx_pegins(
             txid,
             vout: out_idx,
         };
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, outpoint);
 
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
@@ -405,6 +409,25 @@ async fn check_idx_pegins(
             outcomes.push(CheckOutcome::AlreadyClaimed);
             continue;
         }
+
+        let mut dbtx = db.begin_transaction().await;
+        ensure_receive_operation(
+            &mut dbtx.to_ref_nc(),
+            client_ctx,
+            receive_operation_id,
+            WalletOperationMetaVariant::Receive {
+                address_operation_id,
+                claim_operation_id: receive_operation_id,
+                address: address.clone().into_unchecked(),
+                tweak_idx,
+                btc_out_point: outpoint,
+                btc_deposited: transaction.output[out_idx as usize].value,
+            },
+            time::now(),
+        )
+        .await;
+        dbtx.commit_tx().await;
+
         let finality_delay = u64::from(data.cfg.finality_delay);
 
         let tx_block_count =
@@ -436,7 +459,8 @@ async fn check_idx_pegins(
             tweak_idx,
             tweak_key,
             &transaction,
-            operation_id,
+            address_operation_id,
+            receive_operation_id,
             outpoint,
             tx_out_proof,
             federation_knows_utxo,
@@ -447,13 +471,44 @@ async fn check_idx_pegins(
     Ok(outcomes)
 }
 
+/// Creates the receive operation-log entry for `receive_operation_id` (with
+/// metadata `variant` and the given `creation_time`) unless it already exists.
+pub(crate) async fn ensure_receive_operation(
+    dbtx: &mut DatabaseTransaction<'_>,
+    client_ctx: &ClientContext<WalletClientModule>,
+    receive_operation_id: OperationId,
+    variant: WalletOperationMetaVariant,
+    creation_time: SystemTime,
+) {
+    if client_ctx
+        .operation_log_entry_exists_dbtx(dbtx, receive_operation_id)
+        .await
+    {
+        return;
+    }
+
+    client_ctx
+        .add_operation_log_entry_dbtx_with_creation_time(
+            dbtx,
+            receive_operation_id,
+            fedimint_wallet_common::KIND.as_str(),
+            WalletOperationMeta {
+                variant,
+                extra_meta: serde_json::Value::Null,
+            },
+            creation_time,
+        )
+        .await;
+}
+
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
     tweak_key: Keypair,
     transaction: &bitcoin::Transaction,
-    operation_id: OperationId,
+    address_operation_id: OperationId,
+    receive_operation_id: OperationId,
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
     federation_knows_utxo: bool,
@@ -467,7 +522,8 @@ async fn claim_peg_in(
         out_idx: u32,
         tweak_key: Keypair,
         txout_proof: TxOutProof,
-        operation_id: OperationId,
+        address_operation_id: OperationId,
+        receive_operation_id: OperationId,
         federation_knows_utxo: bool,
     ) -> Option<OutPointRange> {
         let pegin_proof = PegInProof::new(
@@ -513,7 +569,8 @@ async fn claim_peg_in(
             .log_event(
                 dbtx,
                 ReceivePaymentEvent {
-                    operation_id,
+                    address_operation_id,
+                    receive_operation_id: Some(receive_operation_id),
                     amount,
                     txid,
                 },
@@ -525,7 +582,7 @@ async fn claim_peg_in(
                 .claim_inputs(
                     dbtx,
                     ClientInputBundle::new_no_sm(vec![client_input]),
-                    operation_id,
+                    receive_operation_id,
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
@@ -548,7 +605,8 @@ async fn claim_peg_in(
                         out_point.vout,
                         tweak_key,
                         tx_out_proof.clone(),
-                        operation_id,
+                        address_operation_id,
+                        receive_operation_id,
                         federation_knows_utxo,
                     )
                     .await;
