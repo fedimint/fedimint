@@ -241,7 +241,7 @@ jobs:
         id: codex-review
         env:
           PPQ_KEY: ${{ secrets.PPQ_KEY }}
-          PPQ_MODEL: openai/codex-5.5
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
         run: |
           set -euo pipefail
 
@@ -324,7 +324,23 @@ jobs:
             codex exec \
               --ephemeral \
               --output-last-message "$output_file" \
-              - < "$prompt_file" > "$log_file" 2>&1 || true
+              - < "$prompt_file" > "$log_file" 2>&1
+          }
+
+          print_codex_log_tail() {
+            local log_file="$1"
+
+            if [ ! -s "$log_file" ]; then
+              echo "Codex log is empty or missing: $log_file"
+              return
+            fi
+
+            echo "::group::$(basename "$log_file") tail"
+            sed -E \
+              -e "s/(Authorization: Bearer )[A-Za-z0-9._-]+/\\1<redacted>/g" \
+              -e "s/(api[_-]?key[=:] ?)[A-Za-z0-9._-]+/\\1<redacted>/Ig" \
+              "$log_file" | tail -n 120
+            echo "::endgroup::"
           }
 
           extract_json() {
@@ -374,13 +390,17 @@ jobs:
             fi
           }
 
-          run_codex /tmp/review_prompt.txt /tmp/codex_primary_raw.txt /tmp/codex_primary.log
+          if ! run_codex /tmp/review_prompt.txt /tmp/codex_primary_raw.txt /tmp/codex_primary.log; then
+            echo "Codex primary review failed"
+            print_codex_log_tail /tmp/codex_primary.log
+            exit 1
+          fi
 
           RAW=$(cat /tmp/codex_primary_raw.txt 2>/dev/null || true)
           if [ -z "$RAW" ]; then
-            echo "Codex produced no output, skipping review"
-            echo "verdict=SKIP" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "Codex produced no output"
+            print_codex_log_tail /tmp/codex_primary.log
+            exit 1
           fi
 
           if ! extract_json /tmp/codex_primary_raw.txt > /tmp/review_candidates.json; then
@@ -413,7 +433,18 @@ jobs:
           printf '\nPR diff:\n' >> /tmp/validation_prompt.txt
           cat /tmp/pr_diff.patch >> /tmp/validation_prompt.txt
 
-          run_codex /tmp/validation_prompt.txt /tmp/codex_validation_raw.txt /tmp/codex_validation.log
+          if ! run_codex /tmp/validation_prompt.txt /tmp/codex_validation_raw.txt /tmp/codex_validation.log; then
+            echo "Codex validation pass failed"
+            print_codex_log_tail /tmp/codex_validation.log
+            exit 1
+          fi
+
+          VALIDATION_RAW=$(cat /tmp/codex_validation_raw.txt 2>/dev/null || true)
+          if [ -z "$VALIDATION_RAW" ]; then
+            echo "Codex validation pass produced no output"
+            print_codex_log_tail /tmp/codex_validation.log
+            exit 1
+          fi
 
           if ! extract_json /tmp/codex_validation_raw.txt > /tmp/review.json; then
             echo "Validation subagent failed to return parseable JSON"
