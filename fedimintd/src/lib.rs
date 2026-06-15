@@ -52,6 +52,7 @@ use fedimintd_envs::{
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
+    FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
 #[cfg(all(
@@ -176,6 +177,12 @@ struct ServerOpts {
     /// Number of checkpoints from the current session to retain on disk
     #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
     db_checkpoint_retention: u64,
+
+    /// Exit the process if a consensus session is not completed within this
+    /// many seconds, relying on the process supervisor to restart fedimintd.
+    /// Restarting guardians has been observed to resolve stuck sessions.
+    #[arg(long, env = FM_SESSION_TIMEOUT_SECS_ENV, default_value = "3600")]
+    session_timeout_secs: u64,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
@@ -425,6 +432,7 @@ pub async fn run(
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
             server_opts.db_checkpoint_retention,
+            Duration::from_secs(server_opts.session_timeout_secs),
             fedimint_server::ConnectionLimits::new(
                 server_opts.iroh_api_max_connections,
                 server_opts.iroh_api_max_requests_per_connection,
