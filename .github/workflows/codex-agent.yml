@@ -59,7 +59,7 @@ jobs:
           if [ "${event_name}" = "workflow_run" ]; then
             # The receiver may have run without secrets on a fork PR. Treat its
             # artifact as untrusted and use it only to find the live review
-            # comment, then re-check the mention and maintainer membership here.
+            # comment, then re-check the mention and reviewer membership here.
             artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
             if [ -z "${artifacts_url}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
@@ -141,28 +141,28 @@ jobs:
             exit 0
           fi
 
-          maintainer_membership=$(
+          reviewer_membership=$(
             curl --silent --show-error \
               --write-out '%{http_code}' \
-              --output /tmp/fedimint-bot-maintainer-membership.json \
+              --output /tmp/fedimint-bot-reviewer-membership.json \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "${api_url}/orgs/fedimint/teams/maintainer/memberships/${comment_user}"
+              "${api_url}/orgs/fedimint/teams/reviewers/memberships/${comment_user}"
           )
 
-          if [ "${maintainer_membership}" = "200" ]; then
-            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-maintainer-membership.json)
+          if [ "${reviewer_membership}" = "200" ]; then
+            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-reviewer-membership.json)
           else
             membership_state=""
           fi
 
-          echo "maintainer_membership_status=${maintainer_membership}"
-          echo "maintainer_membership_state=${membership_state:-<missing>}"
+          echo "reviewer_membership_status=${reviewer_membership}"
+          echo "reviewer_membership_state=${membership_state:-<missing>}"
 
           if [ "${membership_state}" != "active" ]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping: comment author is not an active fedimint/maintainer team member"
+            echo "Skipping: comment author is not an active fedimint/reviewers team member"
             exit 0
           fi
 
