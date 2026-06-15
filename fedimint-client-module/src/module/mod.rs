@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::time::SystemTime;
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
@@ -24,7 +25,10 @@ use fedimint_core::{
     Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
     maybe_add_send_sync,
 };
-use fedimint_eventlog::{Event, EventKind, EventPersistence};
+use fedimint_eventlog::{
+    DBTransactionEventLogExt as _, Event, EventKind, EventLogId, EventPersistence,
+    PersistedLogEntry,
+};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::Serialize;
@@ -461,12 +465,46 @@ where
         &self.module_db
     }
 
+    pub async fn get_event_log_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry> {
+        dbtx.global_dbtx(self.global_dbtx_access_token)
+            .get_event_log(pos, limit)
+            .await
+    }
+
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
     }
 
     pub async fn operation_exists(&self, op_id: OperationId) -> bool {
         self.client.get().operation_exists(op_id).await
+    }
+
+    pub async fn operation_log_entry_exists(&self, op_id: OperationId) -> bool {
+        self.client
+            .get()
+            .operation_log()
+            .operation_log_entry_exists(op_id)
+            .await
+    }
+
+    pub async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        op_id: OperationId,
+    ) -> bool {
+        self.client
+            .get()
+            .operation_log()
+            .operation_log_entry_exists_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                op_id,
+            )
+            .await
     }
 
     pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {
@@ -705,6 +743,27 @@ where
                 operation_id,
                 operation_type,
                 serde_json::to_value(operation_meta).expect("Can't fail"),
+            )
+            .await;
+    }
+
+    pub async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
+    ) {
+        self.client
+            .get()
+            .operation_log()
+            .add_operation_log_entry_dbtx_with_creation_time(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+                operation_type,
+                serde_json::to_value(operation_meta).expect("Can't fail"),
+                creation_time,
             )
             .await;
     }

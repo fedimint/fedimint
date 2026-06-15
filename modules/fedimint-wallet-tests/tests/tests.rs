@@ -27,8 +27,8 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
-    WithdrawState,
+    AllocateDepositOutcome, MaybeNewAddress, ReceiveState, WalletClientInit, WalletClientModule,
+    WalletOperationMeta, WalletOperationMetaVariant, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -37,7 +37,6 @@ use fedimint_wallet_common::{PegOutFees, Rbf, TxOutputSummary};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use secp256k1::rand::rngs::OsRng;
-use tokio::select;
 use tracing::{info, warn};
 
 fn fixtures() -> Fixtures {
@@ -286,20 +285,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         deposit_operation
             .meta::<serde_json::Value>()
             .get("variant")
-            .and_then(|v| v.get("deposit"))
+            .and_then(|v| v.get("deposit_address"))
             .and_then(|d| d.get("address"))
             .is_some(),
         "Peg-in operation meta data should contain address"
-    );
-
-    // Test update stream returns expected updates
-    let mut deposit_updates = wallet_module
-        .subscribe_deposit(deposit_operation_id)
-        .await?
-        .into_stream();
-    assert_eq!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForTransaction
     );
 
     info!(?address, "Peg-in address generated");
@@ -311,10 +300,31 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         )
         .await;
 
-    info!("Waiting for confirmation");
+    wallet_module.recheck_pegin_address_by_op_id(op).await?;
+    let operations = client
+        .operation_log()
+        .paginate_operations_rev(10, None)
+        .await;
+    let (receive_operation_id, _) = operations
+        .iter()
+        .find(|(_, operation)| {
+            matches!(
+                operation.meta::<WalletOperationMeta>().variant,
+                WalletOperationMetaVariant::Receive { btc_out_point, .. }
+                    if btc_out_point.txid == tx.compute_txid()
+            )
+        })
+        .map(|(key, operation)| (key.operation_id, operation))
+        .expect("receive operation exists");
+
+    let mut receive_updates = wallet_module
+        .subscribe_receive(receive_operation_id)
+        .await?
+        .into_stream();
+
     assert_matches!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+        receive_updates.next().await.unwrap(),
+        ReceiveState::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     );
 
     bitcoin.mine_blocks(finality_delay).await;
@@ -327,25 +337,27 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
                 .recheck_pegin_address_by_op_id(op)
                 .await
                 .expect("Operation exists");
-            select! {
-                update = deposit_updates.next() => {
-                    break update;
-                },
-                _ = sleep_in_test("Waiting for address recheck", Duration::from_millis(100)) => { }
+            if wallet_module
+                .await_num_deposits_by_operation_id(op, 1)
+                .await
+                .is_ok()
+            {
+                break;
             }
+            sleep_in_test("Waiting for address recheck", Duration::from_millis(100)).await;
         }
     };
 
     info!("Waiting for claim tx");
-    assert_matches!(
-        await_update_while_rechecking.await.unwrap(),
-        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    );
+    await_update_while_rechecking.await;
 
-    info!("Waiting for e-cash");
     assert_matches!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+        receive_updates.next().await.unwrap(),
+        ReceiveState::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    );
+    assert_matches!(
+        receive_updates.next().await.unwrap(),
+        ReceiveState::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     );
 
     info!("Checking balance after deposit");
@@ -356,7 +368,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     );
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
 
-    assert_eq!(deposit_updates.next().await, None);
+    assert_eq!(receive_updates.next().await, None);
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
@@ -890,47 +902,40 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
         )
         .await;
 
-    let mut deposit_updates = wallet_module.subscribe_deposit(op).await?.into_stream();
-    info!("Waiting for transaction");
-    assert_matches!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForTransaction
-    );
-    info!("Waiting for confirmation");
-    assert_matches!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    );
-
     bitcoin.mine_blocks(finality_delay).await;
 
-    // Afaik technically not necessary, but useful to speed up test (should probably
-    // just poll more often in tests?)
-    let await_update_while_rechecking = async {
-        loop {
-            wallet_module
-                .recheck_pegin_address_by_op_id(op)
-                .await
-                .expect("Operation exists");
-            select! {
-                update = deposit_updates.next() => {
-                    break update;
-                },
-                _ = sleep_in_test("Waiting for address recheck", Duration::from_millis(100)) => { }
-            }
-        }
-    };
+    wallet_module
+        .await_num_deposits_by_operation_id(op, 1)
+        .await?;
 
-    info!("Waiting for claim tx");
+    let operations = client
+        .operation_log()
+        .paginate_operations_rev(10, None)
+        .await;
+    let (receive_operation_id, _) = operations
+        .iter()
+        .find(|(_, operation)| {
+            matches!(
+                operation.meta::<WalletOperationMeta>().variant,
+                WalletOperationMetaVariant::Receive { btc_out_point, .. }
+                    if btc_out_point.txid == tx.compute_txid()
+            )
+        })
+        .map(|(key, operation)| (key.operation_id, operation))
+        .expect("receive operation exists");
+
+    let mut receive_updates = wallet_module
+        .subscribe_receive(receive_operation_id)
+        .await?
+        .into_stream();
+
     assert_matches!(
-        await_update_while_rechecking.await.unwrap(),
-        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+        receive_updates.next().await.unwrap(),
+        ReceiveState::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     );
-
-    info!("Waiting for e-cash");
     assert_matches!(
-        deposit_updates.next().await.unwrap(),
-        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+        receive_updates.next().await.unwrap(),
+        ReceiveState::IgnoredDust { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
     );
 
     info!("Checking balance after deposit");
@@ -1922,6 +1927,7 @@ mod fedimint_migration_tests {
                         client_db::DbKeyPrefix::RecoveryState => {}
                         client_db::DbKeyPrefix::SupportsSafeDeposit => {}
                         client_db::DbKeyPrefix::PegInPoolCursor => {}
+                        client_db::DbKeyPrefix::ReceiveOperationsBackfilled => {}
                         client_db::DbKeyPrefix::ExternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedEnd => {}

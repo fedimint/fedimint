@@ -29,6 +29,11 @@ enum Opts {
         #[arg(long, default_value = "1")]
         num: usize,
     },
+    /// Return the final outcome for an old deposit-address operation
+    LegacyDepositOutcome {
+        #[arg(long)]
+        operation_id: OperationId,
+    },
     GetConsensusBlockCount,
     /// Returns the Bitcoin RPC kind
     GetBitcoinRpcKind {
@@ -157,6 +162,10 @@ pub(crate) async fn handle_cli_command(
         } => {
             await_deposit(module, addr, operation_id, tweak_idx, num).await?;
             serde_json::Value::Bool(true)
+        }
+        Opts::LegacyDepositOutcome { operation_id } => {
+            serde_json::to_value(module.get_legacy_deposit_outcome(operation_id).await?)
+                .expect("JSON serialization failed")
         }
         Opts::GetBitcoinRpcKind { peer_id } => {
             let kind = module
