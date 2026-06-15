@@ -16,8 +16,8 @@ use super::WalletClientModule;
 use crate::api::WalletFederationApi;
 use crate::client_db::TweakIdx;
 use crate::{
-    DepositAddressError, MaxWithdrawableAmountError, PegInError, SubscribeWithdrawError,
-    WithdrawFeesError, WithdrawState,
+    DepositAddressError, LegacyDepositOutcomeError, MaxWithdrawableAmountError, PegInError,
+    SubscribeWithdrawError, WithdrawFeesError, WithdrawState,
 };
 
 #[derive(Parser, Serialize)]
@@ -32,6 +32,11 @@ enum Opts {
         /// Await more than just one deposit
         #[arg(long, default_value = "1")]
         num: usize,
+    },
+    /// Return the final outcome for an old deposit-address operation
+    LegacyDepositOutcome {
+        #[arg(long)]
+        operation_id: OperationId,
     },
     GetConsensusBlockCount,
     /// Returns the Bitcoin RPC kind
@@ -165,6 +170,10 @@ pub(crate) async fn handle_cli_command(
             await_deposit(module, addr, operation_id, tweak_idx, num).await?;
             serde_json::Value::Bool(true)
         }
+        Opts::LegacyDepositOutcome { operation_id } => {
+            serde_json::to_value(module.get_legacy_deposit_outcome(operation_id).await?)
+                .expect("JSON serialization failed")
+        }
         Opts::GetBitcoinRpcKind { peer_id } => {
             let kind = module
                 .module_api
@@ -258,6 +267,10 @@ pub(crate) enum CliCommandError {
     /// The withdrawal transaction could not be submitted.
     #[error(transparent)]
     Withdraw(#[from] TransactionSubmitError),
+
+    /// The recorded legacy deposit outcome could not be read.
+    #[error(transparent)]
+    LegacyDepositOutcome(#[from] LegacyDepositOutcomeError),
 
     /// The withdrawal's updates could not be followed.
     #[error(transparent)]
