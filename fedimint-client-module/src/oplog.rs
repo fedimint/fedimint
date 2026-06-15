@@ -58,12 +58,31 @@ pub trait IOperationLog {
         operation_id: OperationId,
     ) -> Option<OperationLogEntry>;
 
+    /// Returns whether the operation log contains `operation_id`.
+    async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool;
+
+    /// Returns whether an existing transaction can see `operation_id`.
+    async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool;
+
     async fn add_operation_log_entry_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: serde_json::Value,
+    );
+
+    async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: serde_json::Value,
+        creation_time: SystemTime,
     );
 
     /// Wrap a module's operation update stream so that its last update is
