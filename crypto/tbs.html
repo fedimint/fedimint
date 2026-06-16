@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Threshold Blind Signatures — fedimint-tbs</title>
+<script>
+MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+    color: #1c1e21;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.9rem; border-bottom: 2px solid #e0e0e0; padding-bottom: .4rem; }
+  h2 { font-size: 1.4rem; margin-top: 2.4rem; border-bottom: 1px solid #ececec; padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+  code { background: #f4f4f6; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  .box {
+    background: #f8f9fb;
+    border: 1px solid #e3e6ea;
+    border-left: 4px solid #4a6fa5;
+    border-radius: 6px;
+    padding: .8rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .warn { border-left-color: #c0883a; background: #fbf7f0; }
+  .role { color: #4a6fa5; font-weight: 600; }
+  .nav { font-size: .9rem; margin-bottom: 1.5rem; }
+  .nav a { color: #4a6fa5; text-decoration: none; }
+  table { border-collapse: collapse; margin: 1rem 0; }
+  td, th { border: 1px solid #ddd; padding: .4rem .8rem; text-align: left; }
+  th { background: #f4f4f6; }
+  footer { margin-top: 3rem; color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="./index.html">← Cryptographic schemes</a></div>
+
+<h1>Threshold Blind Signatures</h1>
+<p>
+This page describes the cryptographic scheme implemented in <code>fedimint-tbs</code>:
+an ad-hoc <strong>threshold blind signature</strong> built from
+<strong>BLS signatures</strong> over the pairing-friendly curve BLS12-381. It is the
+primitive behind Fedimint's <strong>Chaumian e-cash</strong>: the federation blindly
+signs a note so that no guardian learns which note it signed, yet any later holder can
+verify the note against a single aggregate public key.
+</p>
+<p>
+Sections 1–3 present the scheme with a <em>single</em> signer; Section 5 then replaces
+the signer by a $t$-of-$n$ federation of guardians — a standard transformation that
+exploits only the linearity of signing in the secret key.
+</p>
+<div class="box">
+<strong>Where this is used.</strong>
+This is the signature on Chaumian e-cash notes in Fedimint's mint module. A note is a pair
+$(\mathit{nonce}, \sigma)$, where the message $m = \mathsf{H}_{\mathbb{G}_1}(\mathit{nonce})$
+is signed blindly at issuance and $\sigma$ is checked at redemption, with the federation
+marking each nonce spent to prevent double-spending. Crucially, a note's <em>amount is not a
+signed attribute</em>: the mint holds a separate keypair per denomination tier — a distinct
+key generation per tier — so the value of a note is fixed by <em>which</em> aggregate key
+verifies it. This is the point of departure from an attribute-based credential scheme, in
+which the amount would instead be a hidden message inside a single signature.
+</div>
+
+<h2>1. Setting and notation</h2>
+<p>
+Throughout, $K := \mathbb{Z}/p\mathbb{Z}$ denotes the field of integers modulo the
+prime $p$, and $K^n$ the $K$-vector space of (column) vectors of length $n$.
+</p>
+<p>
+Let $\mathbb{G}_1, \mathbb{G}_2, \mathbb{G}_T$ be the BLS12-381 pairing groups, all of
+order $p$ and written additively, with fixed generators $g_1 \in \mathbb{G}_1$,
+$g_2 \in \mathbb{G}_2$, and let
+$e : \mathbb{G}_1 \times \mathbb{G}_2 \to \mathbb{G}_T$ be the pairing, a nondegenerate
+$K$-bilinear map. Messages and signatures live in $\mathbb{G}_1$; keys live in $\mathbb{G}_2$.
+</p>
+<div class="box">
+<strong>Groups as vector spaces.</strong>
+Since $|\mathbb{G}_i| = p$ is prime, scalar multiplication
+$K \times \mathbb{G}_i \to \mathbb{G}_i$, $(\lambda, v) \mapsto \lambda\, v$ is
+well defined and makes each $\mathbb{G}_i$ a one-dimensional $K$-vector space; every
+nonzero element is a basis. Consequently the group homomorphisms appearing below are
+exactly the <em>$K$-linear maps</em> between these spaces, and the whole scheme can be
+read in the language of linear algebra.
+</div>
+<p>
+A note is identified by a message point obtained by hashing arbitrary bytes into the
+curve, $\mathsf{H}_{\mathbb{G}_1} : \{0,1\}^* \to \mathbb{G}_1$, modeled as a random
+oracle:
+</p>
+<p>
+$$m \;=\; \mathsf{H}_{\mathbb{G}_1}(\mathit{data}) \;\in\; \mathbb{G}_1.$$
+</p>
+<p>
+Because $\mathsf{H}_{\mathbb{G}_1}$ is a random oracle, no party knows the discrete
+logarithm of $m$ with respect to $g_1$, so a signature on $m$ cannot be produced by the
+holder alone.
+</p>
+
+<h2>2. Keys and the underlying signature</h2>
+<p>
+The <span class="role">signer</span>'s secret key is a single scalar $x \in K$, and the
+public key publishes it in $\mathbb{G}_2$:
+</p>
+<p>
+$$\mathsf{sk} = x \in K, \qquad \mathsf{pk} = x\, g_2 \in \mathbb{G}_2.$$
+</p>
+<div class="box">
+<strong>Underlying primitive — BLS.</strong>
+A BLS signature on a message point $m \in \mathbb{G}_1$ is
+$$\sigma = x\, m \;\in\; \mathbb{G}_1,$$
+verified by the single pairing equation
+$$e(m,\; \mathsf{pk}) \;=\; e(\sigma,\; g_2),$$
+which holds because $e(m, x\,g_2) = e(m,g_2)^x = e(x\,m, g_2)$ by bilinearity. Signing is
+the $K$-linear map $x \mapsto x\,m$ in the key — the single fact that makes both
+<em>blinding</em> (§3) and <em>thresholdizing</em> (§5) work.
+</div>
+
+<h2>3. Blind signing</h2>
+<p>
+To have a note signed without revealing it, the <span class="role">user</span> samples a
+blinding key $r \stackrel{\$}{\leftarrow} K \setminus \{0\}$ and sends the blinded
+message
+</p>
+<p>
+$$\bar{m} \;=\; r\, m \;\in\; \mathbb{G}_1.$$
+</p>
+<p>The <span class="role">signer</span> applies its key and returns the blinded signature</p>
+<p>
+$$\bar{\sigma} \;=\; x\, \bar{m} \;=\; r\,(x\,m) \;\in\; \mathbb{G}_1.$$
+</p>
+<p>
+The user verifies the response against the public key,
+$e(\bar{m}, \mathsf{pk}) = e(\bar{\sigma}, g_2)$, and removes the blinding by dividing out
+$r$ in the exponent:
+</p>
+<p>
+$$\sigma \;=\; r^{-1}\, \bar{\sigma} \;=\; x\, m,$$
+</p>
+<p>
+a plain BLS signature on $m$ that verifies under $\mathsf{pk}$ via the equation of §2.
+</p>
+<div class="box">
+<strong>Why blinding hides the note.</strong>
+Multiplication by a uniformly random nonzero scalar is a bijection of
+$\mathbb{G}_1 \setminus \{0\}$, so $\bar{m} = r\,m$ is uniformly distributed and carries
+no information about $m$. The signer's entire view $(\bar{m}, \bar{\sigma})$ is therefore
+statistically independent of which note is being signed: blindness is
+<em>perfect</em>, not merely computational.
+</div>
+
+<h2>4. Security properties (informal)</h2>
+<ul>
+  <li><strong>Unforgeability</strong> — from the unforgeability of BLS signatures: in the
+      random-oracle model, producing $x\,m$ for a fresh hash point $m$ without the key is
+      the (chosen-target) co-CDH problem on BLS12-381. A user who interacts with the signer
+      $k$ times cannot derive signatures on more than $k$ distinct notes (one-more
+      unforgeability).</li>
+  <li><strong>Blindness</strong> — the signer sees only the re-randomized point $\bar{m}$,
+      which is uniform and independent of $m$ (§3); it cannot link a later-shown note to
+      any signing interaction.</li>
+  <li><strong>Public verifiability</strong> — anyone holding $\mathsf{pk}$ (or the
+      aggregate key of §5) checks a note with one pairing equation; there is no interaction
+      and no secret involved in verification.</li>
+</ul>
+
+<h2>5. The threshold construction</h2>
+<p>
+Nothing above requires a single signer. Because signing
+$$\bar{\sigma} \;=\; x\, \bar{m}$$
+is <em>$K$-linear in the secret key</em> $x$, the signer can be replaced by a
+$t$-of-$n$ federation via Shamir secret sharing plus Lagrange interpolation
+<em>in the exponent</em> — the textbook threshold-BLS construction.
+</p>
+
+<h3>5.1 Key sharing</h3>
+<p>
+The key $x$ is Shamir-shared: pick a random polynomial $f \in K[X]$ of degree at most
+$t-1$ with $f(0) = x$, and give <span class="role">guardian</span>
+$i \in \{1, \dots, n\}$ the key share and public key share
+$$\mathsf{sk}_i = f(i) \in K, \qquad \mathsf{pk}_i = f(i)\, g_2 \in \mathbb{G}_2.$$
+The aggregate public key is unchanged: $\mathsf{pk} = f(0)\, g_2 = x\, g_2$.
+(Evaluation points are the indices $i = \texttt{peer} + 1$, since the point $0$ is
+reserved for the secret itself.) In a real federation this sharing is set up without a
+trusted dealer by a <a href="./dkg.html">distributed key generation</a>.
+</p>
+
+<h3>5.2 Share signing and aggregation</h3>
+<p>
+Each guardian signs the blinded message with its own share,
+$$\bar{\sigma}_i \;=\; f(i)\, \bar{m},$$
+and the user verifies each share independently against $\mathsf{pk}_i$ by the pairing
+equation $e(\bar{m}, \mathsf{pk}_i) = e(\bar{\sigma}_i, g_2)$ — so a misbehaving guardian
+is identified immediately and its share discarded. Any set $S$ of $t$ valid shares then
+interpolates to the federation signature. Write $\lambda_i^S$ for the Lagrange coefficients
+that reconstruct a degree-$(t-1)$ polynomial at the point $0$:
+$$\lambda_i^S \;=\; \prod_{\substack{j \in S \\ j \neq i}} \frac{j}{\,j - i\,},
+\qquad\text{so that}\qquad
+\sum_{i \in S} \lambda_i^S\, f(i) \;=\; f(0) \;=\; x
+\quad\text{for every } f \text{ with } \deg f \le t-1.$$
+</p>
+<p>
+The aggregation is this same combination carried out <em>in the exponent</em>. It lands on
+the single-signer signature because scalar multiplication
+$K \times \mathbb{G}_1 \to \mathbb{G}_1$, $(\lambda, v) \mapsto \lambda\,v$, is
+<strong>bilinear</strong> — in particular linear in its scalar argument — so it commutes
+with the Lagrange sum, letting the interpolation run on the group element $\bar{m}$ rather
+than on the field values $f(i)$:
+$$\begin{aligned}
+\bar{\sigma}
+&\;=\; \sum_{i \in S} \lambda_i^S\, \bar{\sigma}_i
+  && \text{(combine the shares)} \\[2pt]
+&\;=\; \sum_{i \in S} \lambda_i^S\, \bigl(f(i)\, \bar{m}\bigr)
+  && \text{(each share is } \bar{\sigma}_i = f(i)\,\bar{m}) \\[2pt]
+&\;=\; \Bigl(\sum_{i \in S} \lambda_i^S\, f(i)\Bigr) \bar{m}
+  && \text{(linearity in the scalar argument)} \\[2pt]
+&\;=\; f(0)\, \bar{m}
+  && \text{(Lagrange interpolation at } 0) \\[2pt]
+&\;=\; x\, \bar{m}.
+  && (f(0) = x)
+\end{aligned}$$
+The middle equality is the crux: pulling the coefficients $\lambda_i^S$ out through the
+scalar multiplication is exactly the bilinear map commuting with the interpolation, and it
+turns $t$ independent group elements back into the evaluation of the joint key polynomial at
+the secret point $0$. (For a $1$-of-$1$ federation the single share is already the aggregate
+and no interpolation is needed.)
+</p>
+<p>
+The user then unblinds as in §3, $\sigma = r^{-1}\bar{\sigma} = x\,m$, and the result
+verifies against the aggregate public key $\mathsf{pk}$ — identical to the single-signer
+scheme. Fewer than $t$ guardians learn nothing about $x$ and cannot assemble a valid
+combination.
+</p>
+<div class="box">
+<strong>Aggregating public keys.</strong>
+The same Lagrange-at-$0$ formula recombines public key shares
+$\mathsf{pk}_i = f(i)\,g_2$ into the aggregate $\mathsf{pk} = f(0)\,g_2$. The library
+exposes this as <code>aggregate_public_key_shares</code>, though the aggregate is more
+directly obtained by evaluating the DKG polynomial at $0$ during setup.
+</div>
+
+<div class="box warn">
+<strong>Implementation caveat (prototype).</strong>
+Hash-to-group is implemented by seeding a ChaCha RNG with SHA-256 rather than a
+standard <code>hash_to_curve</code> ciphersuite — fine as a random oracle into the group,
+but non-interoperable with other BLS implementations.
+</div>
+
+<h2>References</h2>
+<ul>
+  <li>D. Boneh, B. Lynn, H. Shacham. <em>Short Signatures from the Weil Pairing.</em> ASIACRYPT 2001.</li>
+  <li>A. Boldyreva. <em>Threshold Signatures, Multisignatures and Blind Signatures Based on the Gap-Diffie-Hellman-Group Signature Scheme.</em> PKC 2003.</li>
+  <li>A. Shamir. <em>How to Share a Secret.</em> Communications of the ACM, 1979.</li>
+</ul>
+
+<footer>
+Generated from <code>fedimint-tbs</code> — sources: <code>crypto/tbs/src/lib.rs</code>,
+<code>crypto/tbs/src/tests.rs</code>. Part of the
+<a href="./index.html">Fedimint cryptographic schemes</a>.
+</footer>
+
+</body>
+</html>

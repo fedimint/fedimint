@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Distributed Key Generation — fedimint-server</title>
+<script>
+MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+    color: #1c1e21;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.9rem; border-bottom: 2px solid #e0e0e0; padding-bottom: .4rem; }
+  h2 { font-size: 1.4rem; margin-top: 2.4rem; border-bottom: 1px solid #ececec; padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+  code { background: #f4f4f6; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  .box {
+    background: #f8f9fb;
+    border: 1px solid #e3e6ea;
+    border-left: 4px solid #4a6fa5;
+    border-radius: 6px;
+    padding: .8rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .warn { border-left-color: #c0883a; background: #fbf7f0; }
+  .role { color: #4a6fa5; font-weight: 600; }
+  .nav { font-size: .9rem; margin-bottom: 1.5rem; }
+  .nav a { color: #4a6fa5; text-decoration: none; }
+  table { border-collapse: collapse; margin: 1rem 0; }
+  td, th { border: 1px solid #ddd; padding: .4rem .8rem; text-align: left; }
+  th { background: #f4f4f6; }
+  footer { margin-top: 3rem; color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="./index.html">← Cryptographic schemes</a></div>
+
+<h1>Distributed Key Generation</h1>
+<p>
+This page describes the cryptographic ceremony implemented in
+<code>fedimint-server</code>'s configuration setup: a <strong>Pedersen distributed key
+generation</strong> (DKG) over BLS12-381. It is run once, when a federation is created, to
+produce the threshold keys used by the rest of the system <em>without any trusted
+dealer</em> — no single party ever holds the secret key. Concretely, the DKG produces
+exactly the Shamir-shared key that the
+<a href="./tbs.html">threshold blind signature</a> and
+<a href="./tpe.html">threshold point encryption</a> schemes take as given.
+</p>
+<div class="box">
+<strong>Two instances, one protocol.</strong>
+The ceremony is run separately for each pairing group: <code>run_dkg_g1</code> produces a
+key whose public material lives in $\mathbb{G}_1$ (as <a href="./tpe.html">tpe</a> needs),
+and <code>run_dkg_g2</code> produces one whose public material lives in $\mathbb{G}_2$ (as
+<a href="./tbs.html">tbs</a> needs). The two are identical line for line apart from the
+group in which commitments are formed, so we describe a single generic instance over a
+group $\mathbb{G}$ with generator $g$.
+</div>
+<div class="box">
+<strong>Where this is used.</strong>
+The ceremony runs once, during federation setup, before consensus begins. Each module that
+needs a threshold key drives one run per key: the mint module runs a $\mathbb{G}_2$ ceremony
+<em>per denomination tier</em> to obtain that tier's blind-signing key
+(<a href="./tbs.html">tbs</a>), and lnv2 runs a $\mathbb{G}_1$ ceremony for its decryption
+key (<a href="./tpe.html">tpe</a>). In each case the module's secret key exists only as the
+resulting threshold sharing — no guardian ever holds it.
+</div>
+
+<h2>1. Setting and notation</h2>
+<p>
+$K := \mathbb{Z}/p\mathbb{Z}$ is the field of integers modulo the prime $p$. Let
+$\mathbb{G}$ be one of the BLS12-381 groups of order $p$, written additively, with fixed
+generator $g \in \mathbb{G}$; scalar multiplication $\lambda \mapsto \lambda\,g$ is the map
+$K \to \mathbb{G}$ used throughout.
+</p>
+<div class="box">
+<strong>Groups as vector spaces.</strong>
+Since $|\mathbb{G}| = p$ is prime, $\mathbb{G}$ is a one-dimensional $K$-vector space, and
+$\lambda \mapsto \lambda\, g$ is a $K$-linear isomorphism $K \xrightarrow{\sim} \mathbb{G}$.
+Every operation below — committing to a polynomial, evaluating it, summing per-guardian
+contributions — is linear, so the whole ceremony is one extended exercise in carrying
+linear algebra "into the exponent".
+</div>
+<p>
+A federation has $n$ <span class="role">guardians</span>, indexed by $\mathsf{PeerId}$s.
+Guardian $i$ is assigned the evaluation point
+$$x_i \;=\; i + 1 \;\in\; K,$$
+shifting peer indices by one so that the point $0$ — which will carry the secret — is never
+an evaluation point. With at most $f = \lfloor (n-1)/3 \rfloor$ faulty guardians, the
+reconstruction threshold is
+$$t \;=\; n - f,$$
+and every guardian samples a secret polynomial of degree $t-1$ (i.e. $t$ coefficients), so
+that any $t$ shares determine it and any $t-1$ reveal nothing.
+</p>
+
+<h2>2. Committing to a secret polynomial</h2>
+<p>
+Each <span class="role">guardian</span> $i$ samples a uniformly random polynomial of
+degree $t-1$ over $K$,
+$$f_i(X) \;=\; \sum_{k=0}^{t-1} a_{i,k}\, X^k, \qquad a_{i,k} \stackrel{\$}{\leftarrow} K,$$
+and publishes a <strong>Feldman commitment</strong> to its coefficients — the coefficient
+vector mapped into the group:
+$$C_i \;=\; \bigl(C_{i,0}, \dots, C_{i,t-1}\bigr), \qquad C_{i,k} \;=\; a_{i,k}\, g \;\in\; \mathbb{G}.$$
+</p>
+<div class="box">
+<strong>What a Feldman commitment buys.</strong>
+Because $g$ is a generator, $a \mapsto a\,g$ is injective, so $C_i$ binds guardian $i$ to a
+unique polynomial. And because it is linear, the commitment to a polynomial
+<em>evaluated</em> at a point is the same linear combination of the $C_{i,k}$ — which lets
+any recipient check a privately received share against the public commitment (§3.3) without
+learning the polynomial.
+</div>
+
+<h2>3. The protocol</h2>
+<p>
+The ceremony runs in three message rounds over authenticated peer-to-peer links. Guardian
+$i$ tracks the others' hash commitments, full commitments, and the secret shares addressed
+to it; a round advances only once a message has been received from <em>every</em> guardian.
+</p>
+
+<h3>3.1 Round 1 — hash commitment</h3>
+<p>
+Each guardian first broadcasts only a hash of its commitment vector,
+$$h_i \;=\; \mathsf{SHA256}\bigl(\mathsf{encode}(C_i)\bigr),$$
+and waits until it holds $h_j$ from all $n$ guardians before revealing anything more.
+</p>
+<div class="box">
+<strong>Why commit to the commitment first?</strong>
+Broadcasting $h_i$ before any $C_j$ is revealed forces every guardian to fix its polynomial
+<em>before</em> seeing the others'. Without this round, a guardian who spoke last could
+choose its coefficients adaptively in response to everyone else's commitments and so bias
+the joint public key. The hash round removes that rushing advantage.
+</div>
+
+<h3>3.2 Round 2 — reveal and verify</h3>
+<p>
+Once all hashes are in, each guardian broadcasts its full commitment vector $C_i$. On
+receiving $C_j$, guardian $i$ checks that
+</p>
+<ul>
+  <li>it matches the earlier hash, $\mathsf{SHA256}(\mathsf{encode}(C_j)) = h_j$, and</li>
+  <li>it has the right length $t$ — i.e. $f_j$ has the agreed degree $t-1$.</li>
+</ul>
+<p>Any mismatch aborts the ceremony. The protocol proceeds once all $n$ commitments are in.</p>
+
+<h3>3.3 Round 3 — deal and verify shares</h3>
+<p>
+Each guardian $i$ now evaluates its polynomial at every guardian's point and sends the
+result privately:
+$$s_{i \to j} \;=\; f_i(x_j) \;\in\; K \qquad (\text{kept for } j = i,\ \text{sent over the private link otherwise}).$$
+On receiving the share $s_{j \to i}$ from guardian $j$, guardian $i$ verifies it against
+$j$'s public commitment with the Feldman check
+$$s_{j \to i}\, g \;\stackrel{?}{=}\; \sum_{k=0}^{t-1} x_i^{\,k}\, C_{j,k}.$$
+</p>
+<div class="box">
+<strong>Why the check works.</strong>
+The right-hand side is the commitment $C_j$ "evaluated at $x_i$ in the exponent":
+$$\sum_{k=0}^{t-1} x_i^{\,k}\, C_{j,k}
+ \;=\; \sum_{k=0}^{t-1} x_i^{\,k}\, a_{j,k}\, g
+ \;=\; \Bigl(\sum_{k=0}^{t-1} a_{j,k}\, x_i^{\,k}\Bigr) g
+ \;=\; f_j(x_i)\, g.$$
+So the check passes exactly when $s_{j\to i} = f_j(x_i)$ — a guardian cannot send a share
+inconsistent with the polynomial it already committed to.
+</div>
+
+<h3>3.4 Combine</h3>
+<p>
+After collecting a valid share from every guardian, guardian $i$ sums them into its secret
+key share, and sums the per-guardian commitments coefficient-wise into the public
+commitment:
+$$\mathsf{sk}_i \;=\; \sum_{j=1}^{n} s_{j \to i}, \qquad
+\mathsf{PK}_k \;=\; \sum_{j=1}^{n} C_{j,k} \quad (k = 0, \dots, t-1).$$
+</p>
+
+<h2>4. What the ceremony produces</h2>
+<p>
+Define the <em>joint secret polynomial</em> as the sum of all the guardians' polynomials,
+$$F(X) \;=\; \sum_{j=1}^{n} f_j(X) \;=\; \sum_{k=0}^{t-1} A_k\, X^k, \qquad A_k = \sum_{j=1}^{n} a_{j,k}.$$
+Then the outputs of §3.4 are exactly
+$$\mathsf{sk}_i \;=\; \sum_{j} f_j(x_i) \;=\; F(x_i), \qquad
+\mathsf{PK}_k \;=\; \sum_{j} a_{j,k}\, g \;=\; A_k\, g,$$
+i.e. each guardian holds the value of $F$ at its own point, and everyone holds the Feldman
+commitment $\mathsf{PK} = (A_0 g, \dots, A_{t-1} g)$ to $F$.
+</p>
+<div class="box">
+<strong>This is precisely the Shamir sharing the other schemes assume.</strong>
+The federation's secret key is $x = F(0) = \sum_j a_{j,0}$ — the sum of every guardian's
+constant term — which is <em>never reconstructed</em> anywhere. Its public key is
+$\mathsf{PK}_0 = x\, g$, and guardian $i$'s public key share is obtained by evaluating the
+public commitment at $x_i$,
+$$\mathsf{pk}_i \;=\; \sum_{k=0}^{t-1} x_i^{\,k}\, \mathsf{PK}_k \;=\; F(x_i)\, g \;=\; \mathsf{sk}_i\, g.$$
+Setting $f := F$, this is exactly the polynomial, shares $f(i)$, evaluation points $i+1$,
+and aggregate key of <a href="./tbs.html">tbs §5.1</a> and <a href="./tpe.html">tpe §6.1</a>
+— so signing or decryption shares produced afterwards interpolate to a signature or
+decryption key under the single aggregate public key $x\,g$.
+</div>
+
+<h2>5. Security properties (informal)</h2>
+<ul>
+  <li><strong>No dealer, no single point of trust</strong> — the secret $x = F(0)$ is a sum
+      of $n$ independently chosen constant terms and is never assembled; it exists only as
+      the threshold sharing $\{F(x_i)\}$.</li>
+  <li><strong>Secrecy</strong> — $F$ has degree $t-1$, so any coalition of fewer than $t$
+      guardians sees a set of shares consistent with every possible secret: $t-1$ shares
+      reveal nothing about $x$ (perfect secrecy of Shamir sharing). The public commitment
+      reveals $F$ only "in the exponent", i.e. $x\,g$ but not $x$.</li>
+  <li><strong>Verifiability</strong> — the Feldman check (§3.3) lets every guardian confirm
+      each received share is consistent with the sender's committed polynomial, and the
+      hash round (§3.1) fixes each polynomial before any are revealed, raising the bar
+      against a rushing guardian who would otherwise choose its polynomial after seeing the
+      others' (see the caveat below on the limits of this guarantee).</li>
+  <li><strong>Correctness</strong> — once all checks pass, the shares lie on the single
+      degree-$(t-1)$ polynomial $F$, so any $t$ of them Lagrange-interpolate to the same key
+      $x$, exactly as required by the downstream threshold schemes.</li>
+</ul>
+
+<div class="box warn">
+<strong>Implementation note — cooperative ceremony with abort.</strong>
+<p>
+The implementation assumes all guardians are present and cooperative: there is no
+complaint-and-disqualification phase, and an invalid hash, commitment, or share causes the
+whole ceremony to abort rather than excluding the offending guardian. This is appropriate
+for a one-time setup among a known guardian set — a failed run is simply retried — but it
+means liveness requires every guardian to behave during setup, even though the resulting
+key tolerates up to $f$ faults thereafter.
+</p>
+<p>
+More subtly, formally guaranteeing a <em>uniformly</em> distributed key in a dealerless DKG
+is notoriously delicate: Gennaro, Jarecki, Krawczyk and Rabin showed that plain
+Joint-Feldman admits a small bias in the public key, exploited through the disqualification
+phase. The hash-commit-then-reveal round here fixes each guardian's polynomial before any
+are opened, and aborting on any fault removes the disqualification phase that the classic
+attack turns on; the design thus targets an honest-majority-with-abort model rather than a
+formally analysed uniform-key DKG. The residual bias is harmless for the threshold schemes
+built on top, which only require that fewer than $t$ shares hide the key.
+</p>
+</div>
+
+<h2>References</h2>
+<ul>
+  <li>A. Shamir. <em>How to Share a Secret.</em> Communications of the ACM, 1979.</li>
+  <li>P. Feldman. <em>A Practical Scheme for Non-Interactive Verifiable Secret Sharing.</em> FOCS 1987.</li>
+  <li>T. P. Pedersen. <em>Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing.</em> CRYPTO 1991.</li>
+  <li>R. Gennaro, S. Jarecki, H. Krawczyk, T. Rabin. <em>Secure Distributed Key Generation for Discrete-Log Based Cryptosystems.</em> EUROCRYPT 1999 / Journal of Cryptology, 2007.</li>
+</ul>
+
+<footer>
+Generated from <code>fedimint-server</code> — sources:
+<code>fedimint-server/src/config/dkg.rs</code>,
+<code>config/dkg_g1.rs</code>, <code>config/dkg_g2.rs</code>, and the helpers in
+<code>fedimint-server-core/src/config.rs</code>. Part of the
+<a href="./index.html">Fedimint cryptographic schemes</a>.
+</footer>
+
+</body>
+</html>
