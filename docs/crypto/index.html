@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cryptographic schemes — Fedimint</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+    color: #1c1e21;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.9rem; border-bottom: 2px solid #e0e0e0; padding-bottom: .4rem; }
+  h2 { font-size: 1.25rem; margin: 0; }
+  h2 a { color: #4a6fa5; text-decoration: none; }
+  code { background: #f4f4f6; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  .card {
+    background: #f8f9fb;
+    border: 1px solid #e3e6ea;
+    border-left: 4px solid #4a6fa5;
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .card p { margin: .5rem 0 0; }
+  .nav { font-size: .9rem; margin-bottom: 1.5rem; }
+  .nav a { color: #4a6fa5; text-decoration: none; }
+  footer { margin-top: 3rem; color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="../index.html">← Fedimint technical reference</a></div>
+
+<h1>Fedimint cryptographic schemes</h1>
+<p>
+Self-contained write-ups of the pairing-based cryptography used inside Fedimint. Each page
+derives the scheme directly from its implementing crate, in the language of linear algebra
+over the BLS12-381 pairing groups.
+</p>
+
+<div class="card">
+  <h2><a href="./tbs.html">Threshold Blind Signatures</a></h2>
+  <p>
+    <code>fedimint-tbs</code> — the blind BLS signature behind Chaumian e-cash. The
+    federation blindly signs a note so no guardian learns which note it signed, and any
+    holder verifies it against one aggregate public key. Covers blinding, the pairing
+    verification, and the $t$-of-$n$ threshold construction.
+  </p>
+</div>
+
+<div class="card">
+  <h2><a href="./tpe.html">Threshold Point Encryption</a></h2>
+  <p>
+    <code>fedimint-tpe</code> — committed Diffie–Hellman encryption of a Lightning preimage
+    to the federation. Covers the ephemeral-key encryption, the embedded BLS signature that
+    binds the ciphertext to a contract commitment, and threshold decryption via
+    Lagrange-in-the-exponent.
+  </p>
+</div>
+
+<div class="card">
+  <h2><a href="./dkg.html">Distributed Key Generation</a></h2>
+  <p>
+    <code>fedimint-server</code> — the dealer-free Pedersen DKG ceremony that sets up a
+    federation's threshold keys at creation time, producing exactly the Shamir-shared key
+    the two schemes above assume. Covers the Feldman commitments, the hash-commit and
+    share-verification rounds, and what the ceremony outputs.
+  </p>
+</div>
+
+<footer>
+Part of the <a href="../index.html">Fedimint technical reference</a>, generated from the
+<code>fedimint/fedimint</code> source tree.
+</footer>
+
+</body>
+</html>

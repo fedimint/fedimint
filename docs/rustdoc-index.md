@@ -61,6 +61,16 @@ You might consider viewing the following top-level crates:
 * [fedimint_dbtool](./fedimint_dbtool/index.html) implements a helpful database helper tool.
 * [recoverytool](./recoverytool/index.html) implements an on chain multisig recovery tool for defunct/test Federations.
 
+# Cryptographic schemes
+
+Self-contained write-ups of the pairing-based cryptography used inside Fedimint, derived
+directly from the implementing crates:
+
+* [Cryptographic schemes overview](./crypto/index.html)
+* [Threshold Blind Signatures](./crypto/tbs.html) — the blind BLS signature behind Chaumian e-cash ([`fedimint-tbs`](./tbs/index.html)).
+* [Threshold Point Encryption](./crypto/tpe.html) — committed Diffie–Hellman encryption of Lightning preimages to the federation ([`fedimint-tpe`](./tpe/index.html)).
+* [Distributed Key Generation](./crypto/dkg.html) — the dealer-free Pedersen DKG that sets up a federation's threshold keys.
+
 # API documentation
 
 See [AI-generated API documentation](./api.md).

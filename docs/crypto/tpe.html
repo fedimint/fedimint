@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Threshold Point Encryption — fedimint-tpe</title>
+<script>
+MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+    color: #1c1e21;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.9rem; border-bottom: 2px solid #e0e0e0; padding-bottom: .4rem; }
+  h2 { font-size: 1.4rem; margin-top: 2.4rem; border-bottom: 1px solid #ececec; padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+  code { background: #f4f4f6; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  .box {
+    background: #f8f9fb;
+    border: 1px solid #e3e6ea;
+    border-left: 4px solid #4a6fa5;
+    border-radius: 6px;
+    padding: .8rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .warn { border-left-color: #c0883a; background: #fbf7f0; }
+  .role { color: #4a6fa5; font-weight: 600; }
+  .nav { font-size: .9rem; margin-bottom: 1.5rem; }
+  .nav a { color: #4a6fa5; text-decoration: none; }
+  table { border-collapse: collapse; margin: 1rem 0; }
+  td, th { border: 1px solid #ddd; padding: .4rem .8rem; text-align: left; }
+  th { background: #f4f4f6; }
+  footer { margin-top: 3rem; color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="./index.html">← Cryptographic schemes</a></div>
+
+<h1>Threshold Point Encryption</h1>
+<p>
+This page describes the cryptographic scheme implemented in <code>fedimint-tpe</code>:
+an encryption of a 32-byte secret to a keyholder, built from a pairing-based
+<strong>committed Diffie–Hellman</strong> construction over BLS12-381. It is used by the
+<strong>Lightning v2 module</strong> to encrypt a payment <em>preimage</em> to the
+federation, bound to a contract commitment, so that the secret can be recovered once the
+contract's conditions are met.
+</p>
+<p>
+Sections 1–5 present the complete scheme with a <em>single</em> keyholder; Section 6 then
+replaces the keyholder by a $t$-of-$n$ federation of guardians — a standard transformation
+that exploits only the linearity of the decryption operation in the secret key, and is the
+same threshold backbone as the <a href="./tbs.html">blind signature scheme</a>. Throughout,
+the encryptor and the keyholder play the two sides of a Diffie–Hellman exchange: the same
+shared secret is computed by the encryptor from its ephemeral key and the keyholder's public
+key, and by the keyholder from its secret key and the ephemeral public key.
+</p>
+<div class="box">
+<strong>Where this is used.</strong>
+This encrypts the Lightning preimage in Fedimint's lnv2 module. The binding commitment
+$\mathit{cm}$ is the payment hash of the contract, so a ciphertext is cryptographically tied
+to the specific contract it pays. The federation produces decryption shares — and thereby
+reveals the preimage — only once the contract's spend conditions are satisfied, which is what
+lets a Lightning payment settle atomically against the on-ledger contract.
+</div>
+
+<h2>1. Setting and notation</h2>
+<p>
+$K := \mathbb{Z}/p\mathbb{Z}$ is the field of integers modulo the prime $p$. Let
+$\mathbb{G}_1, \mathbb{G}_2, \mathbb{G}_T$ be the BLS12-381 pairing groups of order $p$,
+written additively, with generators $g_1 \in \mathbb{G}_1$, $g_2 \in \mathbb{G}_2$ and
+nondegenerate $K$-bilinear pairing $e : \mathbb{G}_1 \times \mathbb{G}_2 \to \mathbb{G}_T$.
+Keys and the ephemeral public key live in $\mathbb{G}_1$; hashed messages and signatures
+live in $\mathbb{G}_2$.
+</p>
+<div class="box">
+<strong>Groups as vector spaces.</strong>
+Because $|\mathbb{G}_i| = p$ is prime, each $\mathbb{G}_i$ is a one-dimensional
+$K$-vector space under scalar multiplication, and the maps below are $K$-linear. The
+single fact driving the construction is bilinearity of $e$: it lets anyone check ciphertext
+well-formedness with a pairing equation, and (in §6) lets a federation recombine a
+Diffie–Hellman secret across key shares.
+</div>
+<p>The plaintext and the binding value are:</p>
+<table>
+  <tr><th>Value</th><th>Meaning</th></tr>
+  <tr><td>$\mathit{preimage} \in \{0,1\}^{256}$</td><td>the 32-byte secret to be encrypted (a Lightning preimage)</td></tr>
+  <tr><td>$\mathit{cm}$</td><td>a SHA-256 <em>commitment</em> the ciphertext is bound to (the contract / payment hash)</td></tr>
+</table>
+<p>
+A hash $\mathsf{H}_{\mathbb{G}_2} : \{0,1\}^* \to \mathbb{G}_2$ maps bytes into the second
+group, modeled as a random oracle.
+</p>
+
+<h2>2. Keys and encryption</h2>
+<p>
+The <span class="role">keyholder</span>'s secret key is a scalar $x \in K$ with public key
+in $\mathbb{G}_1$:
+$$\mathsf{sk} = x \in K, \qquad \mathsf{pk} = x\, g_1 \in \mathbb{G}_1.$$
+</p>
+<p>
+To encrypt under $\mathsf{pk}$ and bind to commitment $\mathit{cm}$, the
+<span class="role">encryptor</span> derives an ephemeral scalar $\eta \in K$ from a
+32-byte encryption seed and forms:
+</p>
+<p>
+$$\begin{aligned}
+E &= \eta\, g_1 \in \mathbb{G}_1
+  && \text{(ephemeral public key)} \\[2pt]
+D &= \eta\, \mathsf{pk} = \eta x\, g_1 \in \mathbb{G}_1
+  && \text{(Diffie–Hellman shared secret)} \\[2pt]
+\mathit{ct} &= \mathit{preimage} \,\oplus\, \mathsf{SHA256}(D)
+  && \text{(one-time-pad encryption)} \\[2pt]
+M &= \mathsf{H}_{\mathbb{G}_2}(\mathit{ct} \,\|\, E \,\|\, \mathit{cm}) \in \mathbb{G}_2
+  && \text{(message point binding } \mathit{ct}, E, \mathit{cm}) \\[2pt]
+S &= \eta\, M \in \mathbb{G}_2
+  && \text{(ephemeral BLS signature)}
+\end{aligned}$$
+</p>
+<p>
+The ciphertext is the triple $(\mathit{ct}, E, S)$. The shared secret $D$ is the ECDH
+point of the ephemeral key $\eta$ and the keyholder's key $x$; its hash is used as a
+one-time pad over the preimage.
+</p>
+<div class="box">
+<strong>Why the embedded signature?</strong>
+$S = \eta\, M$ is a BLS signature under the ephemeral key $E$ on the message point
+$M = \mathsf{H}_{\mathbb{G}_2}(\mathit{ct} \,\|\, E \,\|\, \mathit{cm})$, which itself hashes
+the full ciphertext together with the commitment. It makes the ciphertext
+<em>non-malleable</em> and <em>publicly checkable</em>: nobody can alter $\mathit{ct}$, $E$,
+or the bound commitment without invalidating $S$, so the keyholder can safely decrypt only
+well-formed ciphertexts tied to the intended contract.
+</div>
+
+<h2>3. Ciphertext validity</h2>
+<p>
+Anyone can check that a ciphertext is well formed, against its commitment, with a single
+pairing equation:
+$$e(g_1,\; S) \;\stackrel{?}{=}\; e(E,\; M), \qquad M = \mathsf{H}_{\mathbb{G}_2}(\mathit{ct} \,\|\, E \,\|\, \mathit{cm}).$$
+This holds for an honest ciphertext because, by bilinearity,
+$$e(g_1,\; \eta M) = e(g_1, M)^{\eta} = e(\eta g_1,\; M) = e(E,\; M).$$
+A passing check certifies that $S$ is the ephemeral key's signature on the exact bytes of
+$(\mathit{ct}, E, \mathit{cm})$ — i.e. that $S = \eta M$ for the same $\eta$ as
+$E = \eta g_1$.
+</p>
+
+<h2>4. Decryption</h2>
+<p>
+The <span class="role">keyholder</span> recovers the shared secret from the <em>other</em>
+side of the Diffie–Hellman exchange. Where the encryptor formed $D = \eta\,\mathsf{pk}$ from
+the ephemeral scalar and the public key, the keyholder applies its secret key to the
+ephemeral public key:
+$$D \;=\; x\, E \;=\; x\,\eta\, g_1 \;=\; \eta\,(x\, g_1) \;=\; \eta\,\mathsf{pk},$$
+the very same group element. The preimage is then unmasked with the one-time pad:
+$$\mathit{preimage} \;=\; \mathit{ct} \,\oplus\, \mathsf{SHA256}(D).$$
+</p>
+<div class="box">
+<strong>The two sides of the exchange.</strong>
+Scalar multiplication commutes, $x\,(\eta g_1) = \eta\,(x g_1)$, so the encryptor (who knows
+$\eta$ and $\mathsf{pk}$) and the keyholder (who knows $x$ and $E$) arrive at the identical
+point $D = \eta x\, g_1$ without either learning the other's scalar. This is plain ElGamal /
+ECDH decryption; §6 performs exactly this step without ever assembling $x$.
+</div>
+
+<h2>5. Security properties (informal)</h2>
+<ul>
+  <li><strong>Confidentiality</strong> — recovering $D = \eta x\, g_1$ from the public
+      $E = \eta g_1$ and $\mathsf{pk} = x g_1$ is the computational Diffie–Hellman problem
+      in $\mathbb{G}_1$. Modeling $\mathsf{SHA256}$ as a random oracle, the one-time pad
+      $\mathit{ct} = \mathit{preimage} \oplus \mathsf{SHA256}(D)$ hides the preimage under
+      the hashed-DH assumption.</li>
+  <li><strong>Ciphertext integrity / non-malleability</strong> — the embedded BLS
+      signature $S = \eta M$, with $M$ hashing $(\mathit{ct}, E, \mathit{cm})$, is publicly
+      verifiable (§3); any tampering with the ciphertext or its bound commitment breaks the
+      pairing check, so a mauled or re-bound ciphertext is never decrypted.</li>
+</ul>
+
+<h2>6. The threshold construction</h2>
+<p>
+Nothing above requires a single keyholder. Because decryption
+$$D \;=\; x\, E$$
+is <em>$K$-linear in the secret key</em> $x$, the keyholder can be replaced by a
+$t$-of-$n$ federation via Shamir secret sharing plus Lagrange interpolation
+<em>in the exponent</em> — the same construction that thresholdizes
+<a href="./tbs.html">BLS signing</a>. Encryption (§2) and the validity check (§3) are
+unchanged; only the recovery of $D$ is distributed.
+</p>
+
+<h3>6.1 Key sharing</h3>
+<p>
+The key $x$ is Shamir-shared: pick a random polynomial $f \in K[X]$ of degree at most
+$t-1$ with $f(0) = x$, and give <span class="role">guardian</span>
+$i \in \{1, \dots, n\}$ the key share and public key share
+$$\mathsf{sk}_i = f(i) \in K, \qquad \mathsf{pk}_i = f(i)\, g_1 \in \mathbb{G}_1.$$
+The aggregate public key is unchanged: $\mathsf{pk} = f(0)\, g_1 = x\, g_1$. Evaluation
+points are the indices $i = \texttt{peer} + 1$, since the point $0$ is reserved for the
+secret. In a real federation this sharing is set up without a trusted dealer by a
+<a href="./dkg.html">distributed key generation</a>.
+</p>
+
+<h3>6.2 Decryption shares and aggregation</h3>
+<p>
+Each guardian applies its share to the ephemeral public key, producing a
+<em>decryption-key share</em>
+$$D_i \;=\; f(i)\, E \;\in\; \mathbb{G}_1,$$
+which the requester verifies independently (on a ciphertext already known to be valid, §3)
+by the pairing equation
+$$e(D_i,\; M) \;\stackrel{?}{=}\; e(\mathsf{pk}_i,\; S),$$
+both sides being $e(g_1, M)^{f(i)\,\eta}$: the left is $e(f(i)\eta g_1, M)$ and the right is
+$e(f(i) g_1,\, \eta M)$. So a misbehaving guardian is identified immediately and its share
+discarded.
+</p>
+<p>
+Any set $S$ of $t$ valid shares then interpolates to the shared secret. With the Lagrange
+coefficients $\lambda_i^S$ that reconstruct a degree-$(t-1)$ polynomial at the point $0$,
+$$\lambda_i^S \;=\; \prod_{\substack{j \in S \\ j \neq i}} \frac{j}{\,j - i\,},
+\qquad
+\sum_{i \in S} \lambda_i^S\, f(i) \;=\; f(0) \;=\; x,$$
+the recombination is a Lagrange combination <em>in the exponent</em>. As with signing, it
+lands on the single-keyholder secret because scalar multiplication
+$K \times \mathbb{G}_1 \to \mathbb{G}_1$ is bilinear, hence linear in its scalar argument, so
+it commutes with the Lagrange sum:
+$$\begin{aligned}
+D
+&\;=\; \sum_{i \in S} \lambda_i^S\, D_i
+  && \text{(combine the shares)} \\[2pt]
+&\;=\; \sum_{i \in S} \lambda_i^S\, \bigl(f(i)\, E\bigr)
+  && \text{(each share is } D_i = f(i)\,E) \\[2pt]
+&\;=\; \Bigl(\sum_{i \in S} \lambda_i^S\, f(i)\Bigr) E
+  && \text{(linearity in the scalar argument)} \\[2pt]
+&\;=\; f(0)\, E
+  && \text{(Lagrange interpolation at } 0) \\[2pt]
+&\;=\; x\, E \;=\; \eta\,\mathsf{pk},
+  && (f(0) = x)
+\end{aligned}$$
+which is exactly the shared secret of §4, so the preimage is unmasked as before,
+$\mathit{preimage} = \mathit{ct} \oplus \mathsf{SHA256}(D)$. Fewer than $t$ guardians learn
+nothing about $x$ and cannot assemble $D$.
+</p>
+<div class="box">
+<strong>Verifying the recombined key.</strong>
+The aggregate $D$ can itself be checked against the public key without decrypting, by
+$$e(D,\; M) \;\stackrel{?}{=}\; e(\mathsf{pk},\; S),$$
+again both sides being $e(g_1, M)^{x\eta}$. This certifies that $D$ is the correct ECDH
+point $\eta\,\mathsf{pk}$ before it is used to unmask the preimage.
+</div>
+
+<div class="box warn">
+<strong>Implementation caveat (prototype).</strong>
+Hash-to-group is implemented by seeding a ChaCha RNG with SHA-256 rather than a standard
+<code>hash_to_curve</code> ciphersuite — fine as a random oracle into the group, but
+non-interoperable. Note also that the share- and aggregate-verification routines
+<em>assert</em> ciphertext validity internally and will panic on a malformed ciphertext, so
+callers must run the ciphertext check of §3 first.
+</div>
+
+<h2>References</h2>
+<ul>
+  <li>T. ElGamal. <em>A Public-Key Cryptosystem and a Signature Scheme Based on Discrete Logarithms.</em> CRYPTO 1984.</li>
+  <li>D. Boneh, B. Lynn, H. Shacham. <em>Short Signatures from the Weil Pairing.</em> ASIACRYPT 2001.</li>
+  <li>A. Shamir. <em>How to Share a Secret.</em> Communications of the ACM, 1979.</li>
+</ul>
+
+<footer>
+Generated from <code>fedimint-tpe</code> — sources: <code>crypto/tpe/src/lib.rs</code>,
+<code>crypto/tpe/src/tests.rs</code>. Part of the
+<a href="./index.html">Fedimint cryptographic schemes</a>.
+</footer>
+
+</body>
+</html>

@@ -72,6 +72,10 @@ are:
 - [Fedimint Contributing Guidelines](CONTRIBUTING.md#) for information for contributors.
 - [Fedimint Developer Discord Server](https://discord.gg/cEVEmqCgWG): the best place to get help and ask questions.
 - [Fedimint Technical Reference Documentation](https://docs.fedimint.org)
+- [Fedimint Cryptographic Schemes](https://docs.fedimint.org/crypto/): self-contained write-ups of the pairing-based
+  cryptography behind Chaumian e-cash ([threshold blind signatures](https://docs.fedimint.org/crypto/tbs.html)),
+  Lightning v2 preimage encryption ([threshold point encryption](https://docs.fedimint.org/crypto/tpe.html)), and the
+  dealer-free [distributed key generation](https://docs.fedimint.org/crypto/dkg.html) that sets up a federation's keys.
 - [Fedimint Contributor Calendar](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com): This
   calendar contains all the developer calls and events.
 - [Fedimint Developer Calls](https://meet.jit.si/fedimintdevcall): We have developer calls every Monday at 4PM UTC to
