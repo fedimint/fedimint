@@ -9,6 +9,7 @@ use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
 use devimint::{cmd, util};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
+use fedimint_eventlog::EventLogId;
 use serde::Deserialize;
 use tokio::task::JoinHandle;
 use tokio::try_join;
@@ -84,7 +85,7 @@ async fn ensure_federation_total_value(client: &Client, min_value: u64) -> anyho
 /// polling the balance like the test used to.
 async fn await_deposits(
     client: &Client,
-    position: u64,
+    position: EventLogId,
     receives: usize,
     min_balance: u64,
 ) -> anyhow::Result<()> {
@@ -105,7 +106,7 @@ async fn await_deposits(
 
 /// Waits for the next receive recorded at or after `position` to be claimed,
 /// returning the event log position to use for the following wait.
-async fn await_receive(client: &Client, position: u64) -> anyhow::Result<u64> {
+async fn await_receive(client: &Client, position: EventLogId) -> anyhow::Result<EventLogId> {
     let output = cmd!(
         client,
         "module",
@@ -117,8 +118,7 @@ async fn await_receive(client: &Client, position: u64) -> anyhow::Result<u64> {
     .await?;
 
     // Walletv2 `await-receive` returns `[final_state, next_position]`.
-    output[1]
-        .as_u64()
+    serde_json::from_value(output[1].clone())
         .context("await-receive should return the next event log position")
 }
 
@@ -187,7 +187,7 @@ async fn ensure_tx_chain_length(client: &Client, expected: usize) -> anyhow::Res
     Ok(())
 }
 
-async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, u64)> {
+async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, EventLogId)> {
     let output = cmd!(client, "module", "walletv2", "receive")
         .out_json()
         .await?;
@@ -197,8 +197,7 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, u64)> 
         let address = serde_json::from_value::<Address<NetworkUnchecked>>(output[0].clone())?
             .assume_checked();
 
-        let position = output[1]
-            .as_u64()
+        let position = serde_json::from_value(output[1].clone())
             .context("receive should return an event log position")?;
 
         Ok((address, position))
@@ -207,7 +206,7 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, u64)> 
         // unused on this path as we fall back to polling the balance.
         let address = serde_json::from_value::<Address<NetworkUnchecked>>(output)?.assume_checked();
 
-        Ok((address, 0))
+        Ok((address, EventLogId::LOG_START))
     }
 }
 

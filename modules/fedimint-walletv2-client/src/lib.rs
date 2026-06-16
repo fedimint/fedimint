@@ -524,6 +524,26 @@ impl WalletClientModule {
             // A successful peg-in is terminal; an aborted one is retried as a
             // new receive operation, so keep waiting.
             if state == FinalReceiveOperationState::Success {
+                // Reaching `Success` only means the peg-in claim transaction was
+                // accepted into consensus. The ecash it mints is issued
+                // asynchronously by the primary module, so wait for those
+                // outputs before returning; otherwise the freshly claimed funds
+                // may not yet be reflected in the client's balance.
+                let operation = self.client_ctx.get_operation(operation_id).await?;
+
+                if let WalletOperationMeta::Receive(ReceiveMeta {
+                    change_outpoint_range,
+                    ..
+                }) = operation.meta::<WalletOperationMeta>()
+                {
+                    self.client_ctx
+                        .await_primary_module_outputs(
+                            operation_id,
+                            change_outpoint_range.into_iter().collect(),
+                        )
+                        .await?;
+                }
+
                 return Ok((state, position));
             }
         }
