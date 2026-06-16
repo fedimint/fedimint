@@ -379,6 +379,9 @@ Examples:
         #[arg(long, default_value = "10")]
         limit: u64,
     },
+    /// Print the id the next entry appended to the client's event log will be
+    /// assigned (the position just past the current end of the log).
+    NextEventLogId,
     /// Test the built-in event handling and tracking by printing events to
     /// console
     TestEventLogHandling,

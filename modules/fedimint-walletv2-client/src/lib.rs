@@ -473,23 +473,22 @@ impl WalletClientModule {
             .map(|entry| entry.0.0)
     }
 
-    /// Returns the next unused receive address, along with the event log
-    /// position at the time it was handed out.
+    /// Returns the next unused receive address.
     ///
-    /// Pass the returned position to [`Self::await_receive`] so it only
-    /// considers payments received after this address was derived, making the
-    /// wait race-free regardless of when `await_receive` is invoked.
+    /// To wait for a payment to this address race-free, read the client's
+    /// current event log position (via the global `get_next_event_log_id`)
+    /// *before* calling this, then pass that position to
+    /// [`Self::await_receive`]; it will only consider payments received
+    /// after that position.
     ///
     /// If the background scanner has already derived a valid address index this
     /// returns immediately. Otherwise it blocks, letting the scanner grind
     /// until it finds the next valid index, and returns once one is
     /// available.
-    pub async fn receive(&self) -> (Address, EventLogId) {
+    pub async fn receive(&self) -> Address {
         loop {
             if let Some(index) = self.valid_index().await {
-                let position = self.client_ctx.get_next_event_log_id().await;
-
-                return (self.derive_address(index), position);
+                return self.derive_address(index);
             }
 
             sleep(Duration::from_secs(1)).await;

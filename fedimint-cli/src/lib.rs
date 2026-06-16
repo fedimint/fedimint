@@ -1300,6 +1300,15 @@ impl FedimintCli {
                     serde_json::to_value(events).expect("Can be encoded"),
                 ))
             }
+            Command::Dev(DevCmd::NextEventLogId) => {
+                let client = self.client_open(&cli).await?;
+
+                let id = client.get_next_event_log_id().await;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(id).expect("Can be encoded"),
+                ))
+            }
             Command::Dev(DevCmd::SubmitTransaction { transaction }) => {
                 let client = self.client_open(&cli).await?;
                 let tx = Transaction::consensus_decode_hex(&transaction, client.decoders())

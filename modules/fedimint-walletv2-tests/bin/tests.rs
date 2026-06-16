@@ -188,23 +188,30 @@ async fn ensure_tx_chain_length(client: &Client, expected: usize) -> anyhow::Res
 }
 
 async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, EventLogId)> {
-    let output = cmd!(client, "module", "walletv2", "receive")
-        .out_json()
-        .await?;
-
     if util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
-        // Walletv2 `receive` returns `[address, event_log_position]`.
-        let address = serde_json::from_value::<Address<NetworkUnchecked>>(output[0].clone())?
-            .assume_checked();
+        // Capture the event log position *before* deriving the address so
+        // `await_receive` only considers payments received afterwards.
+        let position =
+            serde_json::from_value(cmd!(client, "dev", "next-event-log-id").out_json().await?)
+                .context("dev next-event-log-id should return an event log position")?;
 
-        let position = serde_json::from_value(output[1].clone())
-            .context("receive should return an event log position")?;
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(
+            cmd!(client, "module", "walletv2", "receive")
+                .out_json()
+                .await?,
+        )?
+        .assume_checked();
 
         Ok((address, position))
     } else {
         // Legacy (<= 0.11): `receive` returns the bare address. The position is
         // unused on this path as we fall back to polling the balance.
-        let address = serde_json::from_value::<Address<NetworkUnchecked>>(output)?.assume_checked();
+        let address = serde_json::from_value::<Address<NetworkUnchecked>>(
+            cmd!(client, "module", "walletv2", "receive")
+                .out_json()
+                .await?,
+        )?
+        .assume_checked();
 
         Ok((address, EventLogId::LOG_START))
     }

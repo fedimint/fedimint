@@ -23,15 +23,18 @@ enum Opts {
         #[arg(long)]
         fee: Option<bitcoin::Amount>,
     },
-    /// Return the next unused receive address along with the event log position
-    /// to pass to `await-receive`.
+    /// Return the next unused receive address.
+    ///
+    /// To wait for a payment to this address, read the current event log
+    /// position with `dev next-event-log-id` *before* running this, then pass
+    /// that position to `await-receive`.
     Receive,
     /// Block until the next payment is received, starting from the given event
     /// log position. Returns the receive's final state and the event log
     /// position to pass to the following `await-receive`.
     AwaitReceive {
-        /// Event log position to start scanning from, as returned by `receive`
-        /// or a prior `await-receive`.
+        /// Event log position to start scanning from, as returned by
+        /// `dev next-event-log-id` or a prior `await-receive`.
         position: EventLogId,
     },
 }

@@ -255,23 +255,26 @@ impl Client {
 
     pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
         if crate::util::supports_wallet_v2() {
-            let output = cmd!(self, "module", "walletv2", "receive")
-                .out_json()
-                .await?;
-
             if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
-                // Walletv2 `receive` returns `[address, event_log_position]`.
-                // The position is passed to `await_receive` to wait for the
-                // deposit; there is no operation id as deposits are auto-claimed.
-                Ok((
-                    output[0].as_str().unwrap().to_string(),
-                    output[1].to_string(),
-                ))
+                // Capture the event log position *before* deriving the address so
+                // `await_receive` can wait from it; there is no operation id as
+                // deposits are auto-claimed.
+                let position = cmd!(self, "dev", "next-event-log-id").out_json().await?;
+
+                let address = cmd!(self, "module", "walletv2", "receive")
+                    .out_json()
+                    .await?;
+
+                Ok((address.as_str().unwrap().to_string(), position.to_string()))
             } else {
                 // Legacy walletv2 (<= 0.11): `receive` returns the bare address
                 // and deposits are auto-claimed, so there is no position or
                 // operation id to wait on.
-                Ok((output.as_str().unwrap().to_string(), String::new()))
+                let address = cmd!(self, "module", "walletv2", "receive")
+                    .out_json()
+                    .await?;
+
+                Ok((address.as_str().unwrap().to_string(), String::new()))
             }
         } else {
             let deposit = cmd!(self, "deposit-address").out_json().await?;
