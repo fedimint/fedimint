@@ -23,6 +23,8 @@ use fedimint_metrics::HistogramExt as _;
 
 use crate::metrics::{BITCOIND_RPC_DURATION_SECONDS, BITCOIND_RPC_REQUESTS_TOTAL};
 
+const ESPLORA_CLIENT_TIMEOUT_SECONDS: u64 = 60;
+
 #[cfg(feature = "bitcoincore")]
 pub mod bitcoincore;
 
@@ -169,10 +171,11 @@ pub struct EsploraClient {
 
 impl EsploraClient {
     pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
-        Ok(Self {
-            // URL needs to have any trailing path including '/' removed
-            client: Builder::new(url.as_str().trim_end_matches('/')).build_async()?,
-        })
+        let client = Builder::new(url.as_str().trim_end_matches('/'))
+            .timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS)
+            .build_async()?;
+
+        Ok(Self { client })
     }
 }
 
