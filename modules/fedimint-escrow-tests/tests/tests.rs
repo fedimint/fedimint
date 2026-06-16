@@ -1,8 +1,6 @@
 use std::time::Duration;
 
 use fedimint_client::OperationId;
-use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
-use fedimint_core::db::DatabaseValue;
 use fedimint_core::module::AmountUnit;
 use fedimint_core::secp256k1::{Keypair, Message, Secp256k1};
 use fedimint_core::util::NextOrPending;
@@ -13,7 +11,9 @@ use fedimint_escrow_client::api::EscrowFederationApi;
 use fedimint_escrow_client::input::EscrowInputSMState;
 use fedimint_escrow_client::output::EscrowOutputSMState;
 use fedimint_escrow_client::{EscrowClientInit, EscrowClientModule};
-use fedimint_escrow_common::{EscrowContract, EscrowId, Outcome, compute_resolution_message};
+use fedimint_escrow_common::{
+    EscrowContract, EscrowId, EscrowMessage, Outcome, compute_escrow_message,
+};
 use fedimint_escrow_server::EscrowInit;
 use fedimint_testing::fixtures::Fixtures;
 use rand::rngs::OsRng;
@@ -40,7 +40,7 @@ async fn create_test_escrow(
     arbiter_fee: Amount,
     timeout: Duration,
 ) -> anyhow::Result<(OperationId, EscrowId)> {
-    let (operation_id, escrow_id) = buyer_escrow
+    let result = buyer_escrow
         .create_escrow(
             seller_keypair.public_key(),
             arbiter_keypair.public_key(),
@@ -50,14 +50,14 @@ async fn create_test_escrow(
         )
         .await?;
     let mut stream = buyer_escrow
-        .subscribe_escrow_creation(operation_id)
+        .subscribe_escrow_creation(result.operation_id)
         .await?
         .into_stream();
 
     assert_eq!(stream.ok().await?, EscrowOutputSMState::Creating);
     assert_eq!(stream.ok().await?, EscrowOutputSMState::Active);
 
-    Ok((operation_id, escrow_id))
+    Ok((result.operation_id, result.escrow_id))
 }
 
 fn sign_arbiter_decision(
@@ -67,30 +67,15 @@ fn sign_arbiter_decision(
     outcome: Outcome,
     arbiter_keypair: &Keypair,
 ) -> fedimint_core::secp256k1::schnorr::Signature {
-    let msg_bytes = compute_resolution_message(
-        &contract.federation_id,
-        &escrow_id,
-        &outcome,
-        &contract.contract_hash,
-    );
+    let resolution_message = EscrowMessage::Resolution {
+        escrow_id,
+        federation_id: contract.federation_id,
+        outcome,
+        contract_hash: contract.contract_hash,
+    };
+    let msg_bytes = compute_escrow_message(&resolution_message);
 
     let msg = Message::from_digest(msg_bytes);
-
-    secp.sign_schnorr(&msg, arbiter_keypair)
-}
-
-fn sign_fee_claim(
-    secp: &Secp256k1<fedimint_core::secp256k1::All>,
-    contract: &EscrowContract,
-    arbiter_keypair: &Keypair,
-) -> fedimint_core::secp256k1::schnorr::Signature {
-    let mut engine = sha256::HashEngine::default();
-
-    engine.input(b"arbiter_fee_claim");
-    engine.input(&contract.escrow_id.0);
-    engine.input(&contract.arbiter_fee.to_bytes());
-
-    let msg = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
 
     secp.sign_schnorr(&msg, arbiter_keypair)
 }
@@ -118,12 +103,14 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
     .await?;
 
     let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
-    let msg_bytes = compute_resolution_message(
-        &contract.federation_id,
-        &escrow_id,
-        &Outcome::Release,
-        &contract.contract_hash,
-    );
+
+    let resolution_message = EscrowMessage::Resolution {
+        escrow_id,
+        federation_id: contract.federation_id,
+        outcome: Outcome::Release,
+        contract_hash: contract.contract_hash,
+    };
+    let msg_bytes = compute_escrow_message(&resolution_message);
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
     let buyer_sig = Secp256k1::new().sign_schnorr(&msg, &buyer_escrow.keypair);
 
@@ -198,7 +185,11 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     assert!(buyer_client.get_balance_for_btc().await? > Amount::ZERO);
 
     // claiming arbiter's fee
-    let arbiter_signature = sign_fee_claim(&secp, &contract, &arbiter_keypair);
+    let arbiter_message = EscrowMessage::ArbiterFeeClaim {
+        escrow_id: contract.escrow_id,
+        fee_amount: contract.arbiter_fee,
+    };
+    let arbiter_signature = arbiter_escrow.sign_message(arbiter_message)?;
 
     let balance_before = arbiter_client.get_balance_for_btc().await?;
 

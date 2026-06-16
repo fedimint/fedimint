@@ -70,9 +70,12 @@ impl State for EscrowInputStateMachine {
                                         Outcome::Release => EscrowInputSMState::Released,
                                         Outcome::Refund => EscrowInputSMState::Refunded,
                                     },
-                                    Resolution::ArbiterFeeClaim {
-                                        arbiter_signature: _,
-                                    } => EscrowInputSMState::FeeClaimed,
+                                    Resolution::ArbiterFeeClaim { .. } => {
+                                        EscrowInputSMState::Failed {
+                                            reason: "unexpected: fee claim in resolution state"
+                                                .into(),
+                                        }
+                                    }
                                 },
                                 Err(e) => EscrowInputSMState::Failed { reason: e },
                             };

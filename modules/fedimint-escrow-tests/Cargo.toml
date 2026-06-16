@@ -11,6 +11,10 @@ readme.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[[test]]
+name = "fedimint_escrow_tests"
+path = "tests/tests.rs"
+
 [dependencies]
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }

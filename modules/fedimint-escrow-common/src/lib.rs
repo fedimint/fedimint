@@ -8,8 +8,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::{Amount, anyhow, plugin_types_trait_impl_common};
-use serde::{Deserialize, Serialize};
+use fedimint_core::{Amount, anyhow, hex, plugin_types_trait_impl_common};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 use crate::config::EscrowClientConfig;
@@ -20,21 +20,73 @@ pub const KIND: ModuleKind = ModuleKind::from_static_str("escrow");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    Encodable,
-    Decodable,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
+pub struct ContractHash(pub [u8; 32]);
+
+impl AsRef<[u8]> for EscrowId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for ContractHash {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Serialize for EscrowId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&hex::encode(self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for EscrowId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bytes = hex::decode(&s).map_err(serde::de::Error::custom)?;
+
+        let arr: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("expected 32 bytes"))?;
+
+        Ok(EscrowId(arr))
+    }
+}
+
+impl Serialize for ContractHash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&hex::encode(self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for ContractHash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+
+        let arr: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("expected 32 bytes"))?;
+
+        Ok(ContractHash(arr))
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
 pub struct EscrowContract {
@@ -44,7 +96,7 @@ pub struct EscrowContract {
     pub arbiter_key: PublicKey,
     pub amount: Amount,
     pub arbiter_fee: Amount,
-    pub contract_hash: [u8; 32],
+    pub contract_hash: ContractHash,
     pub timeout: u64,
     pub federation_id: FederationId,
 }
@@ -82,6 +134,21 @@ pub enum Resolution {
     },
     ArbiterFeeClaim {
         arbiter_signature: Signature,
+    },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum EscrowMessage {
+    Resolution {
+        escrow_id: EscrowId,
+        federation_id: FederationId,
+        outcome: Outcome,
+        contract_hash: ContractHash,
+    },
+
+    ArbiterFeeClaim {
+        escrow_id: EscrowId,
+        fee_amount: Amount,
     },
 }
 
@@ -179,23 +246,23 @@ impl std::fmt::Display for EscrowInput {
 pub const GET_CONTRACT_ENDPOINT: &str = "get_contract";
 pub const GET_PENDING_ARBITER_FEE_ENDPOINT: &str = "get_pending_arbiter_fee";
 
-pub fn compute_resolution_message(
+fn compute_resolution_message(
     federation_id: &FederationId,
     escrow_id: &EscrowId,
     outcome: &Outcome,
-    contract_hash: &[u8; 32],
-) -> [u8; 32] {
-    let mut engine = sha256::HashEngine::default();
+    contract_hash: &ContractHash,
+    engine: &mut sha256::HashEngine,
+) {
     let outcome_byte = match outcome {
         Outcome::Release => 0u8,
         Outcome::Refund => 1u8,
     };
-    engine.input(b"escrow_resolution_message_v1");
+
+    engine.input(b"escrow_resolution_message");
     engine.input(&federation_id.0.to_byte_array());
     engine.input(&escrow_id.0);
     engine.input(&[outcome_byte]);
-    engine.input(contract_hash);
-    sha256::Hash::from_engine(engine).to_byte_array()
+    engine.input(&contract_hash.0);
 }
 
 pub fn compute_contract_hash(
@@ -205,7 +272,7 @@ pub fn compute_contract_hash(
     amount: &Amount,
     timeout: &u64,
     federation_id: &FederationId,
-) -> [u8; 32] {
+) -> ContractHash {
     let mut engine = sha256::HashEngine::default();
     engine.input(b"escrow_contract_hash");
     engine.input(&buyer_key.serialize());
@@ -214,5 +281,35 @@ pub fn compute_contract_hash(
     engine.input(&amount.msats.to_le_bytes());
     engine.input(&timeout.to_le_bytes());
     engine.input(&federation_id.0.to_byte_array());
+    ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
+}
+
+pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
+    let mut engine = sha256::HashEngine::default();
+
+    match message {
+        EscrowMessage::Resolution {
+            escrow_id,
+            federation_id,
+            outcome,
+            contract_hash,
+        } => compute_resolution_message(
+            federation_id,
+            escrow_id,
+            outcome,
+            contract_hash,
+            &mut engine,
+        ),
+
+        EscrowMessage::ArbiterFeeClaim {
+            escrow_id,
+            fee_amount,
+        } => {
+            engine.input(b"arbiter_fee_claim");
+            engine.input(&escrow_id.0);
+            engine.input(&fee_amount.msats.to_le_bytes());
+        }
+    }
+
     sha256::Hash::from_engine(engine).to_byte_array()
 }

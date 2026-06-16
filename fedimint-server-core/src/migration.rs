@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::marker;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, DbMigrationError, DbMigrationFn,
@@ -79,7 +78,7 @@ pub type ServerModuleDbMigrationFnContext<'tx, M> =
 ///
 /// Needs to be an extension trait, as `fedimint-server-core` can't
 /// implement things on general-purpose [`DbMigrationFnContext`]
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait ServerModuleDbMigrationFnContextExt<M>
 where
     M: ServerModule,
@@ -89,7 +88,7 @@ where
     ) -> BoxStream<ModuleHistoryItem<<M as ServerModule>::Common>>;
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<M> ServerModuleDbMigrationFnContextExt<M> for ServerModuleDbMigrationFnContext<'_, M>
 where
     M: ServerModule + Send + Sync,

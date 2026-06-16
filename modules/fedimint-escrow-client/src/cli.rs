@@ -5,7 +5,7 @@ use anyhow::Ok;
 use clap::Parser;
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::{Amount, secp256k1};
-use fedimint_escrow_common::{EscrowId, Outcome};
+use fedimint_escrow_common::{ContractHash, EscrowId, EscrowMessage, Outcome};
 use futures::StreamExt;
 use serde::Serialize;
 
@@ -57,6 +57,36 @@ enum Opts {
         escrow_id: String,
         arbiter_signature: String,
     },
+
+    SignMessage {
+        #[command(subcommand)]
+        message: SignMessageOpts,
+    },
+}
+
+#[derive(clap::Subcommand, Serialize)]
+enum SignMessageOpts {
+    Resolution {
+        #[clap(long)]
+        escrow_id: String,
+
+        #[clap(long)]
+        federation_id: String,
+
+        #[clap(long)]
+        outcome: Outcome,
+
+        #[clap(long)]
+        contract_hash: String,
+    },
+
+    ArbiterFeeClaim {
+        #[clap(long)]
+        escrow_id: String,
+
+        #[clap(long)]
+        fee_msats: Amount,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -73,7 +103,7 @@ pub(crate) async fn handle_cli_command(
             amount_sats,
             timeout,
         } => {
-            let (operation_id, escrow_id) = client
+            let result = client
                 .create_escrow(
                     seller_key,
                     arbiter_key,
@@ -84,7 +114,7 @@ pub(crate) async fn handle_cli_command(
                 .await?;
 
             let mut stream = client
-                .subscribe_escrow_creation(operation_id)
+                .subscribe_escrow_creation(result.operation_id)
                 .await?
                 .into_stream();
 
@@ -101,8 +131,8 @@ pub(crate) async fn handle_cli_command(
             }
 
             Ok(serde_json::json!({
-                "operation_id": operation_id,
-                "escrow_id": hex::encode(escrow_id.0),
+                "operation_id": result.operation_id,
+                "escrow_id": hex::encode(result.escrow_id),
             }))
         }
         Opts::GetContract { escrow_id } => {
@@ -117,7 +147,7 @@ pub(crate) async fn handle_cli_command(
             Ok(serde_json::to_value(contract)?)
         }
         Opts::ListEscrow => {
-            let contracts = client.list_escrow_operation().await;
+            let contracts = client.list_escrow_operations().await;
             Ok(serde_json::to_value(contracts)?)
         }
         Opts::ResolveEscrow {
@@ -250,6 +280,60 @@ pub(crate) async fn handle_cli_command(
 
             Ok(serde_json::json!({
                 "operation_id": operation_id
+            }))
+        }
+        Opts::SignMessage { message } => {
+            let escrow_message = match message {
+                SignMessageOpts::Resolution {
+                    escrow_id,
+                    federation_id,
+                    outcome,
+                    contract_hash,
+                } => {
+                    let escrow_id_bytes = hex::decode(escrow_id)?;
+                    let escrow_id = EscrowId(
+                        escrow_id_bytes
+                            .try_into()
+                            .map_err(|_| anyhow::anyhow!("Invalid escrow_id"))?,
+                    );
+
+                    let contract_hash_bytes = hex::decode(contract_hash)?;
+                    let contract_hash: [u8; 32] = contract_hash_bytes
+                        .try_into()
+                        .map_err(|_| anyhow::anyhow!("Invalid contract hash"))?;
+
+                    let federation_id = federation_id.parse()?;
+
+                    EscrowMessage::Resolution {
+                        escrow_id,
+                        federation_id,
+                        outcome,
+                        contract_hash: ContractHash(contract_hash),
+                    }
+                }
+
+                SignMessageOpts::ArbiterFeeClaim {
+                    escrow_id,
+                    fee_msats,
+                } => {
+                    let escrow_id_bytes = hex::decode(escrow_id)?;
+                    let escrow_id = EscrowId(
+                        escrow_id_bytes
+                            .try_into()
+                            .map_err(|_| anyhow::anyhow!("Invalid escrow_id"))?,
+                    );
+
+                    EscrowMessage::ArbiterFeeClaim {
+                        escrow_id,
+                        fee_amount: fee_msats,
+                    }
+                }
+            };
+
+            let sig = client.sign_message(escrow_message)?;
+
+            Ok(serde_json::json!({
+                "signature": sig.to_string(),
             }))
         }
     }

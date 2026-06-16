@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Error, bail};
+use async_stream::{stream, try_stream};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -23,16 +24,20 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
-use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1, schnorr};
+use fedimint_core::secp256k1::schnorr::Signature;
+use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
-    EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowModuleTypes, EscrowOutput, KIND,
-    Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
+    EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
+    EscrowOutput, KIND, Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
+    compute_escrow_message,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_ESCROW;
 use futures::StreamExt;
 use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::info;
 
@@ -240,7 +245,7 @@ impl ClientModule for EscrowClientModule {
     async fn backup(&self) -> anyhow::Result<EscrowBackup> {
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let contracts = self.list_escrow_operation().await;
+        let contracts = self.list_escrow_operations().await;
         Ok(EscrowBackup {
             session_count,
             records: contracts,
@@ -262,6 +267,155 @@ impl ClientModule for EscrowClientModule {
     ) -> anyhow::Result<serde_json::Value> {
         cli::handle_cli_command(&self, args).await
     }
+
+    async fn handle_rpc(
+        &self,
+        method: String,
+        request: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "get_client_escrow_keys"=>{
+                    let keypair=self.keypair.public_key().to_string();
+                    yield serde_json::to_value(keypair)?;
+                }
+                "get_contract" => {
+                    let req:GetContractRequest= serde_json::from_value(request)?;
+                    let result= self.get_contract(req.escrow_id).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "list_escrows"=>{
+                    let result=self.list_escrow_operations().await;
+                    yield serde_json::to_value(result)?;
+                }
+                "create_contract"=>{
+                    let req:CreateContractRequest= serde_json::from_value(request)?;
+                    let result=self.create_escrow(
+                        req.seller_key,
+                        req.arbiter_key,
+                        req.arbiter_fee,
+                        req.amount,
+                        req.timeout
+                    ).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "subscribe_escrow_creation"=>{
+                    let req:SubscribeCreationRequest=serde_json::from_value(request)?;
+                    let stream=self.subscribe_escrow_creation(req.operation_id).await?;
+                    for await state in stream.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "resolve_escrow"=>{
+                    let req:ResolveEscrowRequest=serde_json::from_value(request)?;
+                    let result=self.resolve_escrow(
+                        req.escrow_id,
+                        req.buyer_signature
+                    ).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "submit_arbiter_decision"=>{
+                    let req:SubmitArbiterDecisionRequest=serde_json::from_value(request)?;
+                    let result=self.submit_arbiter_decision(
+                        req.escrow_id,
+                        req.outcome,
+                        req.arbiter_signature
+                    ).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "subscribe_escrow_resolution"=>{
+                    let req:SubscribeResolveRequest=serde_json::from_value(request)?;
+                    let stream=self.subscribe_escrow_resolution(req.operation_id).await?;
+                    for await state in stream.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "claim_arbiter_fee"=>{
+                    let req:ClaimArbiterFeeRequest=serde_json::from_value(request)?;
+                    let result=self.claim_arbiter_fee(
+                        req.escrow_id,
+                        req.arbiter_signature
+                    ).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "subscribe_fee_claim"=>{
+                    let req:SubscribeFeeClaimRequest=serde_json::from_value(request)?;
+                    let stream=self.subscribe_fee_claim(req.operation_id).await?;
+                    for await state in stream.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "sign_message"=>{
+                    let req:SignClientMessageRequest=serde_json::from_value(request)?;
+                    let result=self.sign_message(req.message)?;
+                    yield serde_json::to_value(result)?;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {method}"))?;
+                    unreachable!()
+                },
+            }
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct GetContractRequest {
+    escrow_id: EscrowId,
+}
+
+#[derive(Deserialize)]
+struct CreateContractRequest {
+    seller_key: PublicKey,
+    arbiter_key: PublicKey,
+    arbiter_fee: Amount,
+    amount: Amount,
+    timeout: Duration,
+}
+
+#[derive(Deserialize)]
+struct SubscribeCreationRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct ResolveEscrowRequest {
+    escrow_id: EscrowId,
+    buyer_signature: schnorr::Signature,
+}
+
+#[derive(Deserialize)]
+struct SubmitArbiterDecisionRequest {
+    escrow_id: EscrowId,
+    outcome: Outcome,
+    arbiter_signature: schnorr::Signature,
+}
+
+#[derive(Deserialize)]
+struct ClaimArbiterFeeRequest {
+    escrow_id: EscrowId,
+    arbiter_signature: schnorr::Signature,
+}
+
+#[derive(Deserialize)]
+struct SubscribeResolveRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeFeeClaimRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SignClientMessageRequest {
+    message: EscrowMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateContractResponse {
+    pub operation_id: OperationId,
+    pub escrow_id: EscrowId,
 }
 
 impl EscrowClientModule {
@@ -272,7 +426,7 @@ impl EscrowClientModule {
         arbiter_fee: Amount,
         amount: Amount,
         timeout: Duration,
-    ) -> Result<(OperationId, EscrowId), anyhow::Error> {
+    ) -> Result<CreateContractResponse, anyhow::Error> {
         let buyer_key = self.keypair.public_key();
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
@@ -307,7 +461,7 @@ impl EscrowClientModule {
         let escrow_id: EscrowId = {
             let mut engine = sha256::HashEngine::default();
             engine.input(b"escrow_id");
-            engine.input(&contract_hash);
+            engine.input(&contract_hash.0);
             engine.input(&nonce);
             EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
         };
@@ -389,7 +543,11 @@ impl EscrowClientModule {
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
 
-        Ok((operation_id, escrow_id))
+        let result = CreateContractResponse {
+            operation_id,
+            escrow_id,
+        };
+        Ok(result)
     }
 
     pub async fn resolve_escrow(
@@ -620,7 +778,7 @@ impl EscrowClientModule {
             .client_ctx
             .outcome_or_updates(operation, operation_id, move || {
                 let client_ctx = client_ctx.clone();
-                async_stream::stream! {
+                stream! {
                     yield EscrowInputSMState::FeeClaiming;
 
                     match client_ctx
@@ -660,7 +818,7 @@ impl EscrowClientModule {
         Ok(operation_log)
     }
 
-    pub async fn list_escrow_operation(&self) -> Vec<EscrowClientRecord> {
+    pub async fn list_escrow_operations(&self) -> Vec<EscrowClientRecord> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
 
         let records: Vec<EscrowClientRecord> = dbtx
@@ -692,7 +850,7 @@ impl EscrowClientModule {
             .client_ctx
             .outcome_or_updates(operation, operation_id, move || {
                 let client_ctx = client_ctx.clone();
-                async_stream::stream! {
+                stream! {
                     yield EscrowOutputSMState::Creating;
 
                     match client_ctx
@@ -741,7 +899,7 @@ impl EscrowClientModule {
             .client_ctx
             .outcome_or_updates(operation, operation_id, move || {
                 let client_ctx = client_ctx.clone();
-                async_stream::stream! {
+                stream! {
                     yield EscrowInputSMState::Pending;
 
                     // Waiting for resolution tx to be accepted
@@ -755,12 +913,11 @@ impl EscrowClientModule {
                             match meta.action {
                                 EscrowAction::Released => yield EscrowInputSMState::Released,
                                 EscrowAction::Refunded  => yield EscrowInputSMState::Refunded,
-                                EscrowAction::Created   => {
+                                EscrowAction::Created | EscrowAction::ArbiterFeeClaimed => {
                                     yield EscrowInputSMState::Failed {
-                                        reason: "unexpected error in resolution".to_string()
+                                        reason: "unexpected action in resolution stream".to_string()
                                     };
                                 }
-                                EscrowAction::ArbiterFeeClaimed => yield EscrowInputSMState::FeeClaimed,
                             }
                         }
                         Err(e) => {
@@ -769,5 +926,14 @@ impl EscrowClientModule {
                     }
                 }
             }))
+    }
+
+    pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {
+        let secp = Secp256k1::new();
+
+        let msg_bytes = compute_escrow_message(&message);
+        let msg = Message::from_digest(msg_bytes);
+
+        Ok(secp.sign_schnorr(&msg, &self.keypair))
     }
 }

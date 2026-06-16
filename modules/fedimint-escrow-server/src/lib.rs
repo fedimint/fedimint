@@ -1,13 +1,10 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    DatabaseTransaction, DatabaseValue, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::envs::{FM_ENABLE_MODULE_ESCROW_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -22,10 +19,11 @@ use fedimint_escrow_common::config::{
     EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
 };
 use fedimint_escrow_common::{
-    EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput, EscrowInputError,
-    EscrowModuleTypes, EscrowOutput, EscrowOutputError, EscrowOutputOutcome, GET_CONTRACT_ENDPOINT,
-    GET_PENDING_ARBITER_FEE_ENDPOINT, KIND, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
-    Resolution, compute_contract_hash, compute_resolution_message,
+    ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput,
+    EscrowInputError, EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
+    EscrowOutputOutcome, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT, KIND,
+    MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
+    compute_escrow_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -226,16 +224,17 @@ impl ServerModule for Escrow {
 
                 debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
 
-                let verified = verify_contract_hash(&contract.contract_hash, &contract);
+                let verified = verify_contract_hash(&contract.contract_hash.0, &contract);
                 if !verified {
                     return Err(EscrowInputError::ContractHashMismatch);
                 }
-                let msg_bytes = compute_resolution_message(
-                    &contract.federation_id,
-                    &contract.escrow_id,
-                    &Outcome::Release,
-                    &contract.contract_hash,
-                );
+                let resolution_message = EscrowMessage::Resolution {
+                    escrow_id: contract.escrow_id,
+                    federation_id: contract.federation_id,
+                    outcome: Outcome::Release,
+                    contract_hash: contract.contract_hash,
+                };
+                let msg_bytes = compute_escrow_message(&resolution_message);
                 info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
 
                 let msg = secp256k1::Message::from_digest(msg_bytes);
@@ -266,7 +265,7 @@ impl ServerModule for Escrow {
 
                 debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
 
-                let verified = verify_contract_hash(&contract.contract_hash, &contract);
+                let verified = verify_contract_hash(&contract.contract_hash.0, &contract);
                 if !verified {
                     return Err(EscrowInputError::ContractHashMismatch);
                 }
@@ -284,12 +283,13 @@ impl ServerModule for Escrow {
                         )
                     })?;
 
-                let msg_bytes = compute_resolution_message(
-                    &contract.federation_id,
-                    &contract.escrow_id,
-                    outcome,
-                    &contract.contract_hash,
-                );
+                let resolution_message = EscrowMessage::Resolution {
+                    escrow_id: contract.escrow_id,
+                    federation_id: contract.federation_id,
+                    outcome: *outcome,
+                    contract_hash: contract.contract_hash,
+                };
+                let msg_bytes = compute_escrow_message(&resolution_message);
                 let msg = secp256k1::Message::from_digest(msg_bytes);
                 let xonly = contract.arbiter_key.x_only_public_key().0;
                 secp256k1::global::SECP256K1
@@ -328,11 +328,11 @@ impl ServerModule for Escrow {
                     .await
                     .ok_or(EscrowInputError::ContractNotFound)?;
 
-                let mut engine = sha256::HashEngine::default();
-                engine.input(b"arbiter_fee_claim");
-                engine.input(&input.escrow_id.0);
-                engine.input(&pending.fee_amount.to_bytes());
-                let msg_bytes = sha256::Hash::from_engine(engine).to_byte_array();
+                let arbiter_message = EscrowMessage::ArbiterFeeClaim {
+                    escrow_id: input.escrow_id,
+                    fee_amount: pending.fee_amount,
+                };
+                let msg_bytes = compute_escrow_message(&arbiter_message);
                 let msg = secp256k1::Message::from_digest(msg_bytes);
                 let xonly = pending.arbiter_key.x_only_public_key().0;
                 secp256k1::global::SECP256K1
@@ -361,7 +361,7 @@ impl ServerModule for Escrow {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EscrowOutputError> {
         let contract = &output.contract;
-        let verified = verify_contract_hash(&contract.contract_hash, contract);
+        let verified = verify_contract_hash(&contract.contract_hash.0, contract);
         if !verified {
             return Err(EscrowOutputError::ContractHashMismatch);
         }
@@ -453,7 +453,7 @@ fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> 
         &contract.amount,
         &contract.timeout,
         &contract.federation_id,
-    ) == *contract_hash
+    ) == ContractHash(*contract_hash)
 }
 
 impl Escrow {

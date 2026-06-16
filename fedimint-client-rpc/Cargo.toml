@@ -23,6 +23,7 @@ fedimint-client-module = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
+fedimint-escrow-client = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-lnurl = { workspace = true }
 fedimint-meta-client = { workspace = true }
