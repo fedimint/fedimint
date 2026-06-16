@@ -5,7 +5,12 @@ set -euo pipefail
 source "./scripts/_common.sh"
 
 fm_index_md=${FM_RUSTDOC_INDEX_MD:-./docs/rustdoc-index.md}
-index_html="${CARGO_BUILD_TARGET_DIR:-target}/doc/index.html"
+doc_dir="${CARGO_BUILD_TARGET_DIR:-target}/doc"
+index_html="${doc_dir}/index.html"
+
+# Hand-written cryptographic scheme write-ups, published alongside the rustdoc
+# output at https://docs.fedimint.org/crypto/ and linked from the index page.
+crypto_src="./docs/crypto"
 
 export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings -A unknown-lints'
 if cargo version | grep -q nightly ; then
@@ -16,6 +21,12 @@ fi
 echo RUSTDOCFLAGS: "$RUSTDOCFLAGS"
 
 cargo doc --exclude fedimint-fuzz --profile "$CARGO_PROFILE" --locked --workspace --no-deps --document-private-items
+
+# Publish the static crypto write-ups under <doc>/crypto/.
+if [ -d "${crypto_src}" ]; then
+  mkdir -p "${doc_dir}/crypto"
+  cp -a "${crypto_src}"/*.html "${doc_dir}/crypto/"
+fi
 
 if [ -e "${index_html}" ]; then
   if command -v pandoc >/dev/null 2>/dev/null ; then
