@@ -8,6 +8,7 @@ pub mod ws;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -521,6 +522,36 @@ impl ConnectorRegistry {
         }
     }
 
+    /// Return iroh-specific peer details if `url` is handled by the iroh
+    /// connector.
+    pub async fn iroh_peer_info(
+        &self,
+        url: &SafeUrl,
+        path_timeout: Duration,
+    ) -> ServerResult<Option<IrohPeerInfo>> {
+        let url = match self.inner.connection_overrides.get(url) {
+            Some(replacement) => replacement,
+            None => url,
+        };
+
+        let Some((init_fn, connector_cell)) = self.inner.connectors_lazy.get(url.scheme()) else {
+            return Ok(None);
+        };
+
+        let init_fn = init_fn.clone();
+        connector_cell
+            .get_or_try_init(|| async move { init_fn().await })
+            .await
+            .map_err(|e| {
+                ServerError::Transport(anyhow!(
+                    "Connector failed to initialize: {}",
+                    e.fmt_compact_anyhow()
+                ))
+            })?
+            .iroh_peer_info(url, path_timeout)
+            .await
+    }
+
     /// Subscribe to transport-level connectivity changes across all
     /// connectors managed by this registry.
     ///
@@ -547,6 +578,15 @@ pub trait Connector: Send + Sync + 'static + Debug {
 
     /// Report how a connection to `url` is currently reaching its peer.
     fn connectivity(&self, url: &SafeUrl) -> Connectivity;
+
+    /// Return iroh-specific peer details if this connector supports them.
+    async fn iroh_peer_info(
+        &self,
+        _url: &SafeUrl,
+        _path_timeout: Duration,
+    ) -> ServerResult<Option<IrohPeerInfo>> {
+        Ok(None)
+    }
 }
 
 /// How a connection is currently reaching its peer.
@@ -576,6 +616,16 @@ pub enum Connectivity {
 pub enum PeerStatus {
     Disconnected,
     Connected(Connectivity),
+}
+
+/// Iroh-specific reachability details for a guardian endpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrohPeerInfo {
+    pub node_id: String,
+    pub connectivity: Connectivity,
+    pub direct_addr: Option<SocketAddr>,
+    pub known_direct_addrs: Vec<SocketAddr>,
+    pub relay_url: Option<String>,
 }
 
 /// Generic connection trait shared between [`IGuardianConnection`] and

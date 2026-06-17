@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -88,7 +88,7 @@ use tokio::sync::watch;
 use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
-use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection};
+use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -403,9 +403,99 @@ impl crate::Connector for IrohConnector {
             Ok(iroh::endpoint::ConnectionType::None) | Err(_) => Connectivity::Unknown,
         }
     }
+
+    async fn iroh_peer_info(
+        &self,
+        url: &SafeUrl,
+        path_timeout: Duration,
+    ) -> ServerResult<Option<IrohPeerInfo>> {
+        let node_id =
+            Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
+                source,
+                url: url.to_owned(),
+            })?;
+        let connection_override = self.connection_overrides.get(&node_id).cloned();
+        let _connection = self
+            .make_new_connection_stable(node_id, connection_override)
+            .await?;
+
+        let mut conn_type_watcher = self
+            .stable
+            .conn_type(node_id)
+            .map_err(ServerError::Connection)?;
+        let mut conn_type = conn_type_watcher
+            .get()
+            .unwrap_or(iroh::endpoint::ConnectionType::None);
+
+        if path_timeout > Duration::ZERO {
+            let timeout = fedimint_core::runtime::sleep(path_timeout);
+            tokio::pin!(timeout);
+
+            while !matches!(
+                conn_type,
+                iroh::endpoint::ConnectionType::Direct(_)
+                    | iroh::endpoint::ConnectionType::Mixed(..)
+            ) {
+                tokio::select! {
+                    () = &mut timeout => break,
+                    updated = conn_type_watcher.updated() => {
+                        match updated {
+                            Ok(updated) => conn_type = updated,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Some(self.iroh_peer_info_from_conn_type(node_id, conn_type)))
+    }
 }
 
 impl IrohConnector {
+    fn iroh_peer_info_from_conn_type(
+        &self,
+        node_id: NodeId,
+        conn_type: iroh::endpoint::ConnectionType,
+    ) -> IrohPeerInfo {
+        let remote_info = self.stable.remote_info(node_id);
+
+        let direct_addr = match &conn_type {
+            iroh::endpoint::ConnectionType::Direct(addr)
+            | iroh::endpoint::ConnectionType::Mixed(addr, _) => Some(*addr),
+            iroh::endpoint::ConnectionType::Relay(_) | iroh::endpoint::ConnectionType::None => None,
+        };
+
+        let mut known_direct_addrs = remote_info
+            .as_ref()
+            .map(|info| {
+                info.addrs
+                    .iter()
+                    .map(|addr_info| addr_info.addr)
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        if let Some(direct_addr) = direct_addr {
+            known_direct_addrs.insert(direct_addr);
+        }
+
+        let relay_url = match &conn_type {
+            iroh::endpoint::ConnectionType::Relay(relay_url)
+            | iroh::endpoint::ConnectionType::Mixed(_, relay_url) => Some(relay_url.to_string()),
+            iroh::endpoint::ConnectionType::Direct(_) | iroh::endpoint::ConnectionType::None => {
+                remote_info.and_then(|info| info.relay_url.map(|relay| relay.relay_url.to_string()))
+            }
+        };
+
+        IrohPeerInfo {
+            node_id: node_id.to_string(),
+            connectivity: connectivity_from_iroh_conn_type(&conn_type),
+            direct_addr,
+            known_direct_addrs: known_direct_addrs.into_iter().collect(),
+            relay_url,
+        }
+    }
+
     #[cfg(not(target_family = "wasm"))]
     fn spawn_connection_monitoring_stable(
         endpoint: &Endpoint,
@@ -542,6 +632,15 @@ fn quic_transport_config_next() -> iroh_next::endpoint::QuicTransportConfig {
         ))
         .keep_alive_interval(IROH_KEEP_ALIVE_INTERVAL)
         .build()
+}
+
+fn connectivity_from_iroh_conn_type(conn_type: &iroh::endpoint::ConnectionType) -> Connectivity {
+    match conn_type {
+        iroh::endpoint::ConnectionType::Direct(_) => Connectivity::Direct,
+        iroh::endpoint::ConnectionType::Relay(_) => Connectivity::Relay,
+        iroh::endpoint::ConnectionType::Mixed(..) => Connectivity::Mixed,
+        iroh::endpoint::ConnectionType::None => Connectivity::Unknown,
+    }
 }
 
 fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::EndpointAddr {

@@ -3118,6 +3118,7 @@ dependencies = [
  "itertools 0.14.0",
  "lightning-invoice",
  "rand 0.8.5",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
