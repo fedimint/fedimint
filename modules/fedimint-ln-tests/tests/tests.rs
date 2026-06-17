@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::bail;
 use assert_matches::assert_matches;
 use bitcoin_hashes::{Hash, sha256};
 use fedimint_client::transaction::{
-    ClientOutput, ClientOutputBundle, TransactionBuilder, TxSubmissionStates, TxSubmissionStatesSM,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder, TxSubmissionStates,
+    TxSubmissionStatesSM,
 };
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
@@ -14,9 +16,15 @@ use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::receive::{
+    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
+    LightningReceiveSubmittedOffer,
+};
 use fedimint_ln_client::{
-    InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    InternalPayState, LightningClientInit, LightningClientModule, LightningClientStateMachines,
+    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
+    MockGatewayConnection, OutgoingLightningPayment, PayType, ReceivingKey,
+    create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -80,6 +88,22 @@ async fn pay_invoice(
         None
     };
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+}
+
+async fn await_client_tx_accepted(
+    tx_updates: BoxStream<'static, TxSubmissionStatesSM>,
+) -> Result<(), String> {
+    tx_updates
+        .filter_map(|tx_update| {
+            std::future::ready(match tx_update.state {
+                TxSubmissionStates::Accepted(_) => Some(Ok(())),
+                TxSubmissionStates::Rejected(_, submit_error) => Some(Err(submit_error)),
+                _ => None,
+            })
+        })
+        .next()
+        .await
+        .expect("tx either accepted or rejected")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -737,6 +761,159 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
         error.to_string().contains("Invoice has expired"),
         "Expected 'Invoice has expired' error, got: {error}"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
+
+    client2_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
+    let amount = sats(250);
+
+    let receiving_keypair = Keypair::new_global(&mut OsRng);
+    let receiving_key = ReceivingKey::Personal(receiving_keypair);
+    let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
+    let preimage = sha256::Hash::hash(&preimage_key);
+    let payment_hash = sha256::Hash::hash(&preimage.to_byte_array());
+    let operation_id = OperationId(payment_hash.to_byte_array());
+
+    let secp = secp256k1::Secp256k1::new();
+    let node_keypair = Keypair::new(&secp, &mut OsRng);
+    let stale_timestamp = fedimint_core::time::duration_since_epoch()
+        .checked_sub(Duration::from_secs(120))
+        .expect("current time is after unix epoch");
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .amount_milli_satoshis(amount.msats)
+        .description("stale receive".to_string())
+        .payment_hash(payment_hash)
+        .payment_secret(PaymentSecret([1; 32]))
+        .duration_since_epoch(stale_timestamp)
+        .min_final_cltv_expiry_delta(18)
+        .payee_pub_key(node_keypair.public_key())
+        .expiry_time(Duration::from_secs(1))
+        .build_signed(|m| {
+            secp.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&node_keypair))
+        })?;
+
+    let offer_output = LightningOutput::new_v0_offer(IncomingContractOffer {
+        amount,
+        hash: payment_hash,
+        encrypted_preimage: EncryptedPreimage::new(
+            &PreimageKey(preimage_key),
+            &ln_module.cfg.threshold_pub_key,
+        ),
+        expiry_time: Some(1),
+    });
+    let sm_invoice = invoice.clone();
+    let transaction_builder = TransactionBuilder::new().with_outputs(
+        ClientOutputBundle::new(
+            vec![ClientOutput {
+                output: offer_output,
+                amounts: Amounts::ZERO,
+            }],
+            vec![ClientOutputSM {
+                state_machines: Arc::new(move |out_point_range| {
+                    vec![LightningClientStateMachines::Receive(
+                        LightningReceiveStateMachine {
+                            operation_id,
+                            state: LightningReceiveStates::SubmittedOffer(
+                                LightningReceiveSubmittedOffer {
+                                    offer_txid: out_point_range.txid(),
+                                    invoice: sm_invoice.clone(),
+                                    receiving_key,
+                                },
+                            ),
+                        },
+                    )]
+                }),
+            }],
+        )
+        .into_dyn(ln_module.id),
+    );
+    let meta_invoice = invoice.clone();
+    client1
+        .finalize_and_submit_transaction(
+            operation_id,
+            LightningCommonInit::KIND.as_str(),
+            move |out_point_range| LightningOperationMeta {
+                variant: LightningOperationMetaVariant::Receive {
+                    out_point: fedimint_core::OutPoint {
+                        txid: out_point_range.txid(),
+                        out_idx: 0,
+                    },
+                    invoice: meta_invoice.clone(),
+                    gateway_id: None,
+                },
+                extra_meta: serde_json::Value::Null,
+            },
+            transaction_builder,
+        )
+        .await?;
+
+    let mut sub = ln_module
+        .subscribe_ln_receive(operation_id)
+        .await?
+        .into_stream();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(10), sub.ok()).await?? {
+            LnReceiveState::Canceled {
+                reason: LightningReceiveError::Timeout,
+            } => break,
+            _ => continue,
+        }
+    }
+
+    let gateway_redeem_key = Keypair::new_global(&mut OsRng);
+    let (incoming_output, funded_amount, _contract_id) =
+        create_incoming_contract_output(&ln_module.api, payment_hash, amount, &gateway_redeem_key)
+            .await?;
+    let funding_operation_id = OperationId::new_random();
+    let funding_tx = TransactionBuilder::new().with_outputs(
+        ClientOutputBundle::new_no_sm(vec![ClientOutput {
+            output: LightningOutput::V0(incoming_output),
+            amounts: Amounts::new_bitcoin(funded_amount),
+        }])
+        .into_dyn(ln_module.id),
+    );
+    client2
+        .finalize_and_submit_transaction(
+            funding_operation_id,
+            LightningCommonInit::KIND.as_str(),
+            |_| (),
+            funding_tx,
+        )
+        .await?;
+    await_client_tx_accepted(
+        client2
+            .transaction_updates(funding_operation_id)
+            .await
+            .update_stream,
+    )
+    .await
+    .expect("late funding transaction should be accepted");
+
+    let reclaim_operation_id = ln_module.reclaim_ln_receive(operation_id).await?;
+    let mut reclaim_sub = ln_module
+        .subscribe_ln_receive(reclaim_operation_id)
+        .await?
+        .into_stream();
+    loop {
+        match tokio::time::timeout(Duration::from_secs(10), reclaim_sub.ok()).await?? {
+            LnReceiveState::Claimed => break,
+            _ => continue,
+        }
+    }
+
+    assert_eq!(client1.get_balance_for_btc().await?, amount);
 
     Ok(())
 }

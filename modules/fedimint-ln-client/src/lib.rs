@@ -108,8 +108,8 @@ use crate::pay::{
     LightningPayStateMachine,
 };
 use crate::receive::{
-    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
-    LightningReceiveSubmittedOffer, get_incoming_contract,
+    LightningReceiveConfirmedInvoice, LightningReceiveError, LightningReceiveStateMachine,
+    LightningReceiveStates, LightningReceiveSubmittedOffer, get_incoming_contract,
 };
 use crate::recurring::RecurringPaymentCodeEntry;
 
@@ -277,7 +277,8 @@ pub use deprecated_variant_hack::LightningOperationMetaVariant;
 #[allow(deprecated)]
 mod deprecated_variant_hack {
     use super::{
-        Bolt11Invoice, Deserialize, LightningOperationMetaPay, OutPoint, Serialize, secp256k1,
+        Bolt11Invoice, Deserialize, LightningOperationMetaPay, OperationId, OutPoint, Serialize,
+        secp256k1,
     };
     use crate::recurring::ReurringPaymentReceiveMeta;
 
@@ -287,6 +288,11 @@ mod deprecated_variant_hack {
         Pay(LightningOperationMetaPay),
         Receive {
             out_point: OutPoint,
+            invoice: Bolt11Invoice,
+            gateway_id: Option<secp256k1::PublicKey>,
+        },
+        ReceiveReclaim {
+            original_operation_id: OperationId,
             invoice: Bolt11Invoice,
             gateway_id: Option<secp256k1::PublicKey>,
         },
@@ -559,6 +565,13 @@ impl ClientModule for LightningClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
+                "reclaim_ln_receive" => {
+                    let req: ReclaimLnReceiveRequest = serde_json::from_value(payload)?;
+                    let operation_id = self.reclaim_ln_receive(req.original_operation_id).await?;
+                    yield serde_json::json!({
+                        "operation_id": operation_id,
+                    });
+                }
                 "create_bolt11_invoice_for_user_tweaked" => {
                     let req: CreateBolt11InvoiceForUserTweakedRequest = serde_json::from_value(payload)?;
                     let (op, invoice, _) = self
@@ -652,6 +665,11 @@ struct SubscribeInternalPayRequest {
 #[derive(Deserialize)]
 struct SubscribeLnReceiveRequest {
     operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct ReclaimLnReceiveRequest {
+    original_operation_id: OperationId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1895,6 +1913,119 @@ impl LightningClientModule {
         Ok((operation_id, invoice, preimage))
     }
 
+    /// Starts a new state machine that retries claiming a previously paid
+    /// invoice.
+    ///
+    /// This is a local state-history recovery tool: it requires the client DB
+    /// to still contain a historical `SubmittedOffer` or `ConfirmedInvoice`
+    /// state for the original operation. It does not recover seed-only
+    /// restores where that local state-machine history is unavailable.
+    ///
+    /// Repeated calls start independent reclaim attempts. This is intentional:
+    /// this is a manual break-glass recovery path, and concurrent attempts race
+    /// through the normal federation transaction validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the original operation is not a reclaimable
+    /// lightning receive, if it is still active, or if the original receiving
+    /// key cannot be recovered from state history.
+    pub async fn reclaim_ln_receive(
+        &self,
+        original_operation_id: OperationId,
+    ) -> anyhow::Result<OperationId> {
+        let operation = self.client_ctx.get_operation(original_operation_id).await?;
+        let LightningOperationMeta {
+            variant,
+            extra_meta,
+        } = operation
+            .try_meta::<LightningOperationMeta>()
+            .context("Invalid lightning operation metadata")?;
+
+        let (invoice, gateway_id) = match variant {
+            LightningOperationMetaVariant::Receive {
+                invoice,
+                gateway_id,
+                ..
+            } => (invoice, gateway_id),
+            LightningOperationMetaVariant::RecurringPaymentReceive(meta) => (meta.invoice, None),
+            _ => bail!("Operation is not a reclaimable lightning receive"),
+        };
+
+        let active_states = self
+            .client_ctx
+            .get_own_operation_active_states(original_operation_id)
+            .await;
+        ensure!(
+            !active_states
+                .iter()
+                .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_))),
+            "Cannot reclaim an active lightning receive"
+        );
+
+        let inactive_states = self
+            .client_ctx
+            .get_own_operation_inactive_states(original_operation_id)
+            .await;
+
+        let receiving_key = inactive_states
+            .iter()
+            .find_map(|(state, _)| Self::ln_receive_key_from_state(state))
+            .ok_or_else(|| {
+                anyhow!("Cannot reclaim LN receive because the original receive key is unavailable")
+            })?;
+        let db = self.client_ctx.module_db();
+        let mut dbtx = db.begin_transaction().await;
+        let reclaim_operation_id = OperationId::new_random();
+        let operation_meta = LightningOperationMeta {
+            variant: LightningOperationMetaVariant::ReceiveReclaim {
+                original_operation_id,
+                invoice: invoice.clone(),
+                gateway_id,
+            },
+            extra_meta,
+        };
+        let state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+            operation_id: reclaim_operation_id,
+            state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
+                invoice,
+                receiving_key,
+            }),
+        });
+
+        self.client_ctx
+            .manual_operation_start_dbtx(
+                &mut dbtx.to_ref_nc(),
+                reclaim_operation_id,
+                LightningCommonInit::KIND.as_str(),
+                operation_meta,
+                vec![self.client_ctx.make_dyn_state(state)],
+            )
+            .await?;
+
+        dbtx.commit_tx().await;
+
+        Ok(reclaim_operation_id)
+    }
+
+    fn ln_receive_key_from_state(state: &LightningClientStateMachines) -> Option<ReceivingKey> {
+        match state {
+            LightningClientStateMachines::Receive(receive) => match &receive.state {
+                LightningReceiveStates::SubmittedOffer(submitted_offer) => {
+                    Some(submitted_offer.receiving_key)
+                }
+                LightningReceiveStates::ConfirmedInvoice(confirmed_invoice) => {
+                    Some(confirmed_invoice.receiving_key)
+                }
+                LightningReceiveStates::Canceled(_)
+                | LightningReceiveStates::Funded(_)
+                | LightningReceiveStates::Success(_) => None,
+            },
+            LightningClientStateMachines::InternalPay(_)
+            | LightningClientStateMachines::LightningPay(_) => None,
+        }
+    }
+
     #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
     #[allow(deprecated)]
     pub async fn subscribe_ln_claim(
@@ -1928,18 +2059,21 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let LightningOperationMetaVariant::Receive {
-            out_point, invoice, ..
-        } = operation.meta::<LightningOperationMeta>().variant
-        else {
-            bail!("Operation is not a lightning payment")
+        let (invoice, tx_accepted_future) = match operation.meta::<LightningOperationMeta>().variant
+        {
+            LightningOperationMetaVariant::Receive {
+                out_point, invoice, ..
+            } => {
+                let tx_accepted_future = self
+                    .client_ctx
+                    .transaction_updates(operation_id)
+                    .await
+                    .await_tx_accepted(out_point.txid);
+                (invoice, Some(tx_accepted_future))
+            }
+            LightningOperationMetaVariant::ReceiveReclaim { invoice, .. } => (invoice, None),
+            _ => bail!("Operation is not a lightning receive"),
         };
-
-        let tx_accepted_future = self
-            .client_ctx
-            .transaction_updates(operation_id)
-            .await
-            .await_tx_accepted(out_point.txid);
 
         let client_ctx = self.client_ctx.clone();
 
@@ -1950,7 +2084,11 @@ impl LightningClientModule {
 
                 yield LnReceiveState::Created;
 
-                if tx_accepted_future.await.is_err() {
+                let tx_rejected = match tx_accepted_future {
+                    Some(tx_accepted_future) => tx_accepted_future.await.is_err(),
+                    None => false,
+                };
+                if tx_rejected {
                     yield LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
                     return;
                 }
@@ -1961,16 +2099,24 @@ impl LightningClientModule {
 
                         yield LnReceiveState::Funded;
 
-                        if let Ok(out_points) = self_ref.await_claim_acceptance(operation_id).await {
-                            yield LnReceiveState::AwaitingFunds;
+                        match self_ref.await_claim_acceptance(operation_id).await {
+                            Ok(out_points) => {
+                                yield LnReceiveState::AwaitingFunds;
 
-                            if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
-                                yield LnReceiveState::Claimed;
-                                return;
+                                if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
+                                    yield LnReceiveState::Claimed;
+                                    return;
+                                }
+
+                                // The claim transaction was accepted, but its outputs were not
+                                // confirmed by the primary module. The incoming contract is already
+                                // spent, so this is not reclaimable as a rejected claim.
+                                yield LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
+                            }
+                            Err(e) => {
+                                yield LnReceiveState::Canceled { reason: e };
                             }
                         }
-
-                        yield LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
                     }
                     Err(e) => {
                         yield LnReceiveState::Canceled { reason: e };
