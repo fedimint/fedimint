@@ -62,6 +62,7 @@ pub fn local_config_gen_params(
                 enabled_modules: None,
                 federation_size: None,
                 network: bitcoin::Network::Regtest,
+                fedimint_version: fedimint_core::version::cargo_pkg_release().to_owned(),
             };
             (*peer, params)
         })

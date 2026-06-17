@@ -121,7 +121,8 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct ServerConfigConsensus {
-    /// The version of the binary code running
+    /// The normalized `x.y.z` release version used for consensus config
+    /// checksums
     pub code_version: String,
     /// Agreed on core consensus version
     pub version: CoreConsensusVersion,
@@ -323,7 +324,7 @@ impl ServerConfig {
         code_version: String,
     ) -> Self {
         let consensus = ServerConfigConsensus {
-            code_version,
+            code_version: fedimint_core::version::release_version(&code_version).to_owned(),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_rounds_per_session: if is_running_in_test_env() {

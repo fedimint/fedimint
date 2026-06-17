@@ -3,6 +3,19 @@ pub fn cargo_pkg() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Get the `x.y.z` cargo release version of `fedimint-core`.
+pub fn cargo_pkg_release() -> &'static str {
+    release_version(cargo_pkg())
+}
+
+/// Return only the `x.y.z` release component of a cargo package version.
+pub fn release_version(version: &str) -> &str {
+    version
+        .split(['-', '+'])
+        .next()
+        .expect("split always returns at least one item")
+}
+
 /// Get the git hash version of `fedimint-core`
 ///
 /// Note, in certain situations this not be accurate (eg. might be all `0`s).
@@ -22,3 +35,6 @@ pub fn non_zero_version_hash(hash: &str) -> Option<&str> {
         Some(hash)
     }
 }
+
+#[cfg(test)]
+mod tests;

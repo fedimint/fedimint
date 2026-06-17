@@ -258,9 +258,9 @@ impl ServerOpts {
 ///
 /// * `code_version_vendor_suffix` - An optional suffix that will be appended to
 ///   the internal fedimint release version, to distinguish binaries built by
-///   different vendors, usually with a different set of modules. Currently DKG
-///   will enforce that the combined `code_version` is the same between all
-///   peers.
+///   different vendors, usually with a different set of modules. The suffix is
+///   informational in setup/DKG: compatibility and consensus config generation
+///   use the normalized `x.y.z` release version.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
