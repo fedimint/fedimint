@@ -1563,6 +1563,17 @@ mod fedimint_migration_tests {
 
                             info!("Validated RecurringPaymentCodes");
                         }
+                        fedimint_ln_client::db::DbKeyPrefix::ReceiveReclaim => {
+                            let receive_reclaims = dbtx
+                                .find_by_prefix(&fedimint_ln_client::db::ReceiveReclaimKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            ensure!(
+                                receive_reclaims.is_empty(),
+                                "validate_migrations found unexpected ReceiveReclaims"
+                            );
+                        }
                         fedimint_ln_client::db::DbKeyPrefix::CoreInternalReservedStart
                         | fedimint_ln_client::db::DbKeyPrefix::ExternalReservedStart
                         | fedimint_ln_client::db::DbKeyPrefix::CoreInternalReservedEnd => {}

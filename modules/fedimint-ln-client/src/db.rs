@@ -32,6 +32,7 @@ pub enum DbKeyPrefix {
     MetaOverridesDeprecated = 0x30,
     LightningGateway = 0x45,
     RecurringPaymentKey = 0x46,
+    ReceiveReclaim = 0x47,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -120,6 +121,36 @@ impl_db_record!(
 impl_db_lookup!(
     key = RecurringPaymentCodeKey,
     query_prefix = RecurringPaymentCodeKeyPrefix
+);
+
+/// Maps an original lightning receive operation to its manual reclaim
+/// operation.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveReclaimKey {
+    /// Original lightning receive operation being reclaimed.
+    pub original_operation_id: OperationId,
+}
+
+/// Prefix for manual lightning receive reclaim operation mappings.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveReclaimKeyPrefix;
+
+/// Stores the reclaim operation created for an original lightning receive.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveReclaimOperation {
+    /// Operation id of the reclaim operation.
+    pub operation_id: OperationId,
+}
+
+impl_db_record!(
+    key = ReceiveReclaimKey,
+    value = ReceiveReclaimOperation,
+    db_prefix = DbKeyPrefix::ReceiveReclaim,
+);
+
+impl_db_lookup!(
+    key = ReceiveReclaimKey,
+    query_prefix = ReceiveReclaimKeyPrefix
 );
 
 /// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to
