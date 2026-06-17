@@ -395,57 +395,60 @@
 <a href=#395 id=395 data-nosnippet>395</a>        <span class="attr">#[arg(long, default_value = <span class="string">"10"</span>)]
 <a href=#396 id=396 data-nosnippet>396</a>        </span>limit: u64,
 <a href=#397 id=397 data-nosnippet>397</a>    },
-<a href=#398 id=398 data-nosnippet>398</a>    <span class="doccomment">/// Test the built-in event handling and tracking by printing events to
-<a href=#399 id=399 data-nosnippet>399</a>    /// console
-<a href=#400 id=400 data-nosnippet>400</a>    </span>TestEventLogHandling,
-<a href=#401 id=401 data-nosnippet>401</a>    <span class="doccomment">/// Manually submit a fedimint transaction to guardians
-<a href=#402 id=402 data-nosnippet>402</a>    ///
-<a href=#403 id=403 data-nosnippet>403</a>    /// This can be useful to check why a transaction may have been rejected
-<a href=#404 id=404 data-nosnippet>404</a>    /// when debugging client issues.
-<a href=#405 id=405 data-nosnippet>405</a>    </span>SubmitTransaction {
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="doccomment">/// Hex-encoded fedimint transaction
-<a href=#407 id=407 data-nosnippet>407</a>        </span>transaction: String,
-<a href=#408 id=408 data-nosnippet>408</a>    },
-<a href=#409 id=409 data-nosnippet>409</a>    <span class="doccomment">/// Show the chain ID (bitcoin block hash at height 1) cached in the client
-<a href=#410 id=410 data-nosnippet>410</a>    /// database
-<a href=#411 id=411 data-nosnippet>411</a>    </span>ChainId,
-<a href=#412 id=412 data-nosnippet>412</a>    <span class="doccomment">/// Force refresh API versions from the federation, bypassing cached values.
-<a href=#413 id=413 data-nosnippet>413</a>    /// Queries all peers for their supported API versions and updates the
-<a href=#414 id=414 data-nosnippet>414</a>    /// cache.
-<a href=#415 id=415 data-nosnippet>415</a>    </span>RefreshApiVersions,
-<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Trigger a panic to verify backtrace handling
-<a href=#417 id=417 data-nosnippet>417</a>    </span>Panic,
-<a href=#418 id=418 data-nosnippet>418</a>    <span class="doccomment">/// Visualize client internals for debugging
-<a href=#419 id=419 data-nosnippet>419</a>    </span>Visualize {
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="attr">#[clap(subcommand)]
-<a href=#421 id=421 data-nosnippet>421</a>        </span>visualize_type: VisualizeCmd,
-<a href=#422 id=422 data-nosnippet>422</a>    },
-<a href=#423 id=423 data-nosnippet>423</a>}
-<a href=#424 id=424 data-nosnippet>424</a>
-<a href=#425 id=425 data-nosnippet>425</a><span class="attr">#[derive(Debug, Clone, Subcommand)]
-<a href=#426 id=426 data-nosnippet>426</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>VisualizeCmd {
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="doccomment">/// Show every e-cash note with creation/spending provenance
-<a href=#428 id=428 data-nosnippet>428</a>    </span>Notes {
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="attr">#[arg(long)]
-<a href=#430 id=430 data-nosnippet>430</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-<a href=#431 id=431 data-nosnippet>431</a>    },
-<a href=#432 id=432 data-nosnippet>432</a>    <span class="doccomment">/// Show transactions with inputs and outputs
-<a href=#433 id=433 data-nosnippet>433</a>    </span>Transactions {
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="doccomment">/// Show a specific operation (by full ID)
-<a href=#435 id=435 data-nosnippet>435</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
-<a href=#437 id=437 data-nosnippet>437</a>        /// given)
-<a href=#438 id=438 data-nosnippet>438</a>        </span><span class="attr">#[arg(long)]
-<a href=#439 id=439 data-nosnippet>439</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-<a href=#440 id=440 data-nosnippet>440</a>    },
-<a href=#441 id=441 data-nosnippet>441</a>    <span class="doccomment">/// Show operations with their state machines
-<a href=#442 id=442 data-nosnippet>442</a>    </span>Operations {
-<a href=#443 id=443 data-nosnippet>443</a>        <span class="doccomment">/// Show a specific operation (by full ID)
-<a href=#444 id=444 data-nosnippet>444</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
-<a href=#446 id=446 data-nosnippet>446</a>        /// given)
-<a href=#447 id=447 data-nosnippet>447</a>        </span><span class="attr">#[arg(long)]
-<a href=#448 id=448 data-nosnippet>448</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-<a href=#449 id=449 data-nosnippet>449</a>    },
-<a href=#450 id=450 data-nosnippet>450</a>}
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="doccomment">/// Print the id the next entry appended to the client's event log will be
+<a href=#399 id=399 data-nosnippet>399</a>    /// assigned (the position just past the current end of the log).
+<a href=#400 id=400 data-nosnippet>400</a>    </span>NextEventLogId,
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="doccomment">/// Test the built-in event handling and tracking by printing events to
+<a href=#402 id=402 data-nosnippet>402</a>    /// console
+<a href=#403 id=403 data-nosnippet>403</a>    </span>TestEventLogHandling,
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="doccomment">/// Manually submit a fedimint transaction to guardians
+<a href=#405 id=405 data-nosnippet>405</a>    ///
+<a href=#406 id=406 data-nosnippet>406</a>    /// This can be useful to check why a transaction may have been rejected
+<a href=#407 id=407 data-nosnippet>407</a>    /// when debugging client issues.
+<a href=#408 id=408 data-nosnippet>408</a>    </span>SubmitTransaction {
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="doccomment">/// Hex-encoded fedimint transaction
+<a href=#410 id=410 data-nosnippet>410</a>        </span>transaction: String,
+<a href=#411 id=411 data-nosnippet>411</a>    },
+<a href=#412 id=412 data-nosnippet>412</a>    <span class="doccomment">/// Show the chain ID (bitcoin block hash at height 1) cached in the client
+<a href=#413 id=413 data-nosnippet>413</a>    /// database
+<a href=#414 id=414 data-nosnippet>414</a>    </span>ChainId,
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="doccomment">/// Force refresh API versions from the federation, bypassing cached values.
+<a href=#416 id=416 data-nosnippet>416</a>    /// Queries all peers for their supported API versions and updates the
+<a href=#417 id=417 data-nosnippet>417</a>    /// cache.
+<a href=#418 id=418 data-nosnippet>418</a>    </span>RefreshApiVersions,
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="doccomment">/// Trigger a panic to verify backtrace handling
+<a href=#420 id=420 data-nosnippet>420</a>    </span>Panic,
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="doccomment">/// Visualize client internals for debugging
+<a href=#422 id=422 data-nosnippet>422</a>    </span>Visualize {
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="attr">#[clap(subcommand)]
+<a href=#424 id=424 data-nosnippet>424</a>        </span>visualize_type: VisualizeCmd,
+<a href=#425 id=425 data-nosnippet>425</a>    },
+<a href=#426 id=426 data-nosnippet>426</a>}
+<a href=#427 id=427 data-nosnippet>427</a>
+<a href=#428 id=428 data-nosnippet>428</a><span class="attr">#[derive(Debug, Clone, Subcommand)]
+<a href=#429 id=429 data-nosnippet>429</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>VisualizeCmd {
+<a href=#430 id=430 data-nosnippet>430</a>    <span class="doccomment">/// Show every e-cash note with creation/spending provenance
+<a href=#431 id=431 data-nosnippet>431</a>    </span>Notes {
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="attr">#[arg(long)]
+<a href=#433 id=433 data-nosnippet>433</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#434 id=434 data-nosnippet>434</a>    },
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="doccomment">/// Show transactions with inputs and outputs
+<a href=#436 id=436 data-nosnippet>436</a>    </span>Transactions {
+<a href=#437 id=437 data-nosnippet>437</a>        <span class="doccomment">/// Show a specific operation (by full ID)
+<a href=#438 id=438 data-nosnippet>438</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
+<a href=#440 id=440 data-nosnippet>440</a>        /// given)
+<a href=#441 id=441 data-nosnippet>441</a>        </span><span class="attr">#[arg(long)]
+<a href=#442 id=442 data-nosnippet>442</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#443 id=443 data-nosnippet>443</a>    },
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="doccomment">/// Show operations with their state machines
+<a href=#445 id=445 data-nosnippet>445</a>    </span>Operations {
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="doccomment">/// Show a specific operation (by full ID)
+<a href=#447 id=447 data-nosnippet>447</a>        </span>operation_id: <span class="prelude-ty">Option</span>&lt;OperationId&gt;,
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="doccomment">/// How many most-recent operations to show (ignored if operation_id is
+<a href=#449 id=449 data-nosnippet>449</a>        /// given)
+<a href=#450 id=450 data-nosnippet>450</a>        </span><span class="attr">#[arg(long)]
+<a href=#451 id=451 data-nosnippet>451</a>        </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#452 id=452 data-nosnippet>452</a>    },
+<a href=#453 id=453 data-nosnippet>453</a>}
 </code></pre></div></section></main></body></html>

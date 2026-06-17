@@ -2207,288 +2207,298 @@
 <a href=#2207 id=2207 data-nosnippet>2207</a>            .<span class="kw">await
 <a href=#2208 id=2208 data-nosnippet>2208</a>    </span>}
 <a href=#2209 id=2209 data-nosnippet>2209</a>
-<a href=#2210 id=2210 data-nosnippet>2210</a>    <span class="kw">pub async fn </span>get_event_log_trimable(
-<a href=#2211 id=2211 data-nosnippet>2211</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2212 id=2212 data-nosnippet>2212</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogTrimableId&gt;,
-<a href=#2213 id=2213 data-nosnippet>2213</a>        limit: u64,
-<a href=#2214 id=2214 data-nosnippet>2214</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt; {
-<a href=#2215 id=2215 data-nosnippet>2215</a>        <span class="self">self</span>.get_event_log_trimable_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>, pos, limit)
-<a href=#2216 id=2216 data-nosnippet>2216</a>            .<span class="kw">await
-<a href=#2217 id=2217 data-nosnippet>2217</a>    </span>}
-<a href=#2218 id=2218 data-nosnippet>2218</a>
-<a href=#2219 id=2219 data-nosnippet>2219</a>    <span class="kw">pub async fn </span>get_event_log_dbtx&lt;Cap&gt;(
-<a href=#2220 id=2220 data-nosnippet>2220</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2221 id=2221 data-nosnippet>2221</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt;,
-<a href=#2222 id=2222 data-nosnippet>2222</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogId&gt;,
+<a href=#2210 id=2210 data-nosnippet>2210</a>    <span class="doccomment">/// Returns the id that the next entry appended to the event log will be
+<a href=#2211 id=2211 data-nosnippet>2211</a>    /// assigned, i.e. the position just past the current end of the log.
+<a href=#2212 id=2212 data-nosnippet>2212</a>    </span><span class="kw">pub async fn </span>get_next_event_log_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EventLogId {
+<a href=#2213 id=2213 data-nosnippet>2213</a>        <span class="self">self</span>.db
+<a href=#2214 id=2214 data-nosnippet>2214</a>            .begin_transaction_nc()
+<a href=#2215 id=2215 data-nosnippet>2215</a>            .<span class="kw">await
+<a href=#2216 id=2216 data-nosnippet>2216</a>            </span>.get_next_event_log_id()
+<a href=#2217 id=2217 data-nosnippet>2217</a>            .<span class="kw">await
+<a href=#2218 id=2218 data-nosnippet>2218</a>    </span>}
+<a href=#2219 id=2219 data-nosnippet>2219</a>
+<a href=#2220 id=2220 data-nosnippet>2220</a>    <span class="kw">pub async fn </span>get_event_log_trimable(
+<a href=#2221 id=2221 data-nosnippet>2221</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2222 id=2222 data-nosnippet>2222</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogTrimableId&gt;,
 <a href=#2223 id=2223 data-nosnippet>2223</a>        limit: u64,
-<a href=#2224 id=2224 data-nosnippet>2224</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt;
-<a href=#2225 id=2225 data-nosnippet>2225</a>    <span class="kw">where
-<a href=#2226 id=2226 data-nosnippet>2226</a>        </span>Cap: Send,
-<a href=#2227 id=2227 data-nosnippet>2227</a>    {
-<a href=#2228 id=2228 data-nosnippet>2228</a>        dbtx.get_event_log(pos, limit).<span class="kw">await
-<a href=#2229 id=2229 data-nosnippet>2229</a>    </span>}
-<a href=#2230 id=2230 data-nosnippet>2230</a>
-<a href=#2231 id=2231 data-nosnippet>2231</a>    <span class="kw">pub async fn </span>get_event_log_trimable_dbtx&lt;Cap&gt;(
-<a href=#2232 id=2232 data-nosnippet>2232</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2233 id=2233 data-nosnippet>2233</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt;,
-<a href=#2234 id=2234 data-nosnippet>2234</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogTrimableId&gt;,
-<a href=#2235 id=2235 data-nosnippet>2235</a>        limit: u64,
-<a href=#2236 id=2236 data-nosnippet>2236</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt;
-<a href=#2237 id=2237 data-nosnippet>2237</a>    <span class="kw">where
-<a href=#2238 id=2238 data-nosnippet>2238</a>        </span>Cap: Send,
-<a href=#2239 id=2239 data-nosnippet>2239</a>    {
-<a href=#2240 id=2240 data-nosnippet>2240</a>        dbtx.get_event_log_trimable(pos, limit).<span class="kw">await
-<a href=#2241 id=2241 data-nosnippet>2241</a>    </span>}
-<a href=#2242 id=2242 data-nosnippet>2242</a>
-<a href=#2243 id=2243 data-nosnippet>2243</a>    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
-<a href=#2244 id=2244 data-nosnippet>2244</a>    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
-<a href=#2245 id=2245 data-nosnippet>2245</a>        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
-<a href=#2246 id=2246 data-nosnippet>2246</a>    }
-<a href=#2247 id=2247 data-nosnippet>2247</a>
-<a href=#2248 id=2248 data-nosnippet>2248</a>    <span class="doccomment">/// Get a receiver that signals when new events are added to the event log
-<a href=#2249 id=2249 data-nosnippet>2249</a>    </span><span class="kw">pub fn </span>log_event_added_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; watch::Receiver&lt;()&gt; {
-<a href=#2250 id=2250 data-nosnippet>2250</a>        <span class="self">self</span>.log_event_added_rx.clone()
-<a href=#2251 id=2251 data-nosnippet>2251</a>    }
+<a href=#2224 id=2224 data-nosnippet>2224</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt; {
+<a href=#2225 id=2225 data-nosnippet>2225</a>        <span class="self">self</span>.get_event_log_trimable_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>, pos, limit)
+<a href=#2226 id=2226 data-nosnippet>2226</a>            .<span class="kw">await
+<a href=#2227 id=2227 data-nosnippet>2227</a>    </span>}
+<a href=#2228 id=2228 data-nosnippet>2228</a>
+<a href=#2229 id=2229 data-nosnippet>2229</a>    <span class="kw">pub async fn </span>get_event_log_dbtx&lt;Cap&gt;(
+<a href=#2230 id=2230 data-nosnippet>2230</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2231 id=2231 data-nosnippet>2231</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt;,
+<a href=#2232 id=2232 data-nosnippet>2232</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogId&gt;,
+<a href=#2233 id=2233 data-nosnippet>2233</a>        limit: u64,
+<a href=#2234 id=2234 data-nosnippet>2234</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt;
+<a href=#2235 id=2235 data-nosnippet>2235</a>    <span class="kw">where
+<a href=#2236 id=2236 data-nosnippet>2236</a>        </span>Cap: Send,
+<a href=#2237 id=2237 data-nosnippet>2237</a>    {
+<a href=#2238 id=2238 data-nosnippet>2238</a>        dbtx.get_event_log(pos, limit).<span class="kw">await
+<a href=#2239 id=2239 data-nosnippet>2239</a>    </span>}
+<a href=#2240 id=2240 data-nosnippet>2240</a>
+<a href=#2241 id=2241 data-nosnippet>2241</a>    <span class="kw">pub async fn </span>get_event_log_trimable_dbtx&lt;Cap&gt;(
+<a href=#2242 id=2242 data-nosnippet>2242</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2243 id=2243 data-nosnippet>2243</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt;,
+<a href=#2244 id=2244 data-nosnippet>2244</a>        pos: <span class="prelude-ty">Option</span>&lt;EventLogTrimableId&gt;,
+<a href=#2245 id=2245 data-nosnippet>2245</a>        limit: u64,
+<a href=#2246 id=2246 data-nosnippet>2246</a>    ) -&gt; Vec&lt;PersistedLogEntry&gt;
+<a href=#2247 id=2247 data-nosnippet>2247</a>    <span class="kw">where
+<a href=#2248 id=2248 data-nosnippet>2248</a>        </span>Cap: Send,
+<a href=#2249 id=2249 data-nosnippet>2249</a>    {
+<a href=#2250 id=2250 data-nosnippet>2250</a>        dbtx.get_event_log_trimable(pos, limit).<span class="kw">await
+<a href=#2251 id=2251 data-nosnippet>2251</a>    </span>}
 <a href=#2252 id=2252 data-nosnippet>2252</a>
-<a href=#2253 id=2253 data-nosnippet>2253</a>    <span class="kw">pub fn </span>iroh_enable_dht(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#2254 id=2254 data-nosnippet>2254</a>        <span class="self">self</span>.iroh_enable_dht
-<a href=#2255 id=2255 data-nosnippet>2255</a>    }
-<a href=#2256 id=2256 data-nosnippet>2256</a>
-<a href=#2257 id=2257 data-nosnippet>2257</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>run_core_migrations(
-<a href=#2258 id=2258 data-nosnippet>2258</a>        db_no_decoders: <span class="kw-2">&amp;</span>Database,
-<a href=#2259 id=2259 data-nosnippet>2259</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-<a href=#2260 id=2260 data-nosnippet>2260</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db_no_decoders.begin_transaction().<span class="kw">await</span>;
-<a href=#2261 id=2261 data-nosnippet>2261</a>        apply_migrations_core_client_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), <span class="string">"fedimint-client"</span>.to_string())
-<a href=#2262 id=2262 data-nosnippet>2262</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#2263 id=2263 data-nosnippet>2263</a>        <span class="kw">if </span>is_running_in_test_env() {
-<a href=#2264 id=2264 data-nosnippet>2264</a>            verify_client_db_integrity_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc()).<span class="kw">await</span>;
-<a href=#2265 id=2265 data-nosnippet>2265</a>        }
-<a href=#2266 id=2266 data-nosnippet>2266</a>        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#2267 id=2267 data-nosnippet>2267</a>        <span class="prelude-val">Ok</span>(())
-<a href=#2268 id=2268 data-nosnippet>2268</a>    }
-<a href=#2269 id=2269 data-nosnippet>2269</a>
-<a href=#2270 id=2270 data-nosnippet>2270</a>    <span class="doccomment">/// Iterator over primary modules for a given `unit`
-<a href=#2271 id=2271 data-nosnippet>2271</a>    </span><span class="kw">fn </span>primary_modules_for_unit(
-<a href=#2272 id=2272 data-nosnippet>2272</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2273 id=2273 data-nosnippet>2273</a>        unit: AmountUnit,
-<a href=#2274 id=2274 data-nosnippet>2274</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule)&gt; {
-<a href=#2275 id=2275 data-nosnippet>2275</a>        <span class="self">self</span>.primary_modules
-<a href=#2276 id=2276 data-nosnippet>2276</a>            .iter()
-<a href=#2277 id=2277 data-nosnippet>2277</a>            .flat_map(<span class="kw">move </span>|(_prio, candidates)| {
-<a href=#2278 id=2278 data-nosnippet>2278</a>                candidates
-<a href=#2279 id=2279 data-nosnippet>2279</a>                    .specific
-<a href=#2280 id=2280 data-nosnippet>2280</a>                    .get(<span class="kw-2">&amp;</span>unit)
-<a href=#2281 id=2281 data-nosnippet>2281</a>                    .into_iter()
-<a href=#2282 id=2282 data-nosnippet>2282</a>                    .flatten()
-<a href=#2283 id=2283 data-nosnippet>2283</a>                    .copied()
-<a href=#2284 id=2284 data-nosnippet>2284</a>                    <span class="comment">// within same priority, wildcard matches come last
-<a href=#2285 id=2285 data-nosnippet>2285</a>                    </span>.chain(candidates.wildcard.iter().copied())
-<a href=#2286 id=2286 data-nosnippet>2286</a>            })
-<a href=#2287 id=2287 data-nosnippet>2287</a>            .map(|id| (id, <span class="self">self</span>.modules.get_expect(id)))
-<a href=#2288 id=2288 data-nosnippet>2288</a>    }
-<a href=#2289 id=2289 data-nosnippet>2289</a>
-<a href=#2290 id=2290 data-nosnippet>2290</a>    <span class="doccomment">/// Primary module to use for `unit`
-<a href=#2291 id=2291 data-nosnippet>2291</a>    ///
-<a href=#2292 id=2292 data-nosnippet>2292</a>    /// Currently, just pick the first (highest priority) match
-<a href=#2293 id=2293 data-nosnippet>2293</a>    </span><span class="kw">pub fn </span>primary_module_for_unit(
-<a href=#2294 id=2294 data-nosnippet>2294</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2295 id=2295 data-nosnippet>2295</a>        unit: AmountUnit,
-<a href=#2296 id=2296 data-nosnippet>2296</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule)&gt; {
-<a href=#2297 id=2297 data-nosnippet>2297</a>        <span class="self">self</span>.primary_modules_for_unit(unit).next()
+<a href=#2253 id=2253 data-nosnippet>2253</a>    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
+<a href=#2254 id=2254 data-nosnippet>2254</a>    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
+<a href=#2255 id=2255 data-nosnippet>2255</a>        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
+<a href=#2256 id=2256 data-nosnippet>2256</a>    }
+<a href=#2257 id=2257 data-nosnippet>2257</a>
+<a href=#2258 id=2258 data-nosnippet>2258</a>    <span class="doccomment">/// Get a receiver that signals when new events are added to the event log
+<a href=#2259 id=2259 data-nosnippet>2259</a>    </span><span class="kw">pub fn </span>log_event_added_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; watch::Receiver&lt;()&gt; {
+<a href=#2260 id=2260 data-nosnippet>2260</a>        <span class="self">self</span>.log_event_added_rx.clone()
+<a href=#2261 id=2261 data-nosnippet>2261</a>    }
+<a href=#2262 id=2262 data-nosnippet>2262</a>
+<a href=#2263 id=2263 data-nosnippet>2263</a>    <span class="kw">pub fn </span>iroh_enable_dht(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#2264 id=2264 data-nosnippet>2264</a>        <span class="self">self</span>.iroh_enable_dht
+<a href=#2265 id=2265 data-nosnippet>2265</a>    }
+<a href=#2266 id=2266 data-nosnippet>2266</a>
+<a href=#2267 id=2267 data-nosnippet>2267</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>run_core_migrations(
+<a href=#2268 id=2268 data-nosnippet>2268</a>        db_no_decoders: <span class="kw-2">&amp;</span>Database,
+<a href=#2269 id=2269 data-nosnippet>2269</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+<a href=#2270 id=2270 data-nosnippet>2270</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db_no_decoders.begin_transaction().<span class="kw">await</span>;
+<a href=#2271 id=2271 data-nosnippet>2271</a>        apply_migrations_core_client_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), <span class="string">"fedimint-client"</span>.to_string())
+<a href=#2272 id=2272 data-nosnippet>2272</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#2273 id=2273 data-nosnippet>2273</a>        <span class="kw">if </span>is_running_in_test_env() {
+<a href=#2274 id=2274 data-nosnippet>2274</a>            verify_client_db_integrity_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc()).<span class="kw">await</span>;
+<a href=#2275 id=2275 data-nosnippet>2275</a>        }
+<a href=#2276 id=2276 data-nosnippet>2276</a>        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#2277 id=2277 data-nosnippet>2277</a>        <span class="prelude-val">Ok</span>(())
+<a href=#2278 id=2278 data-nosnippet>2278</a>    }
+<a href=#2279 id=2279 data-nosnippet>2279</a>
+<a href=#2280 id=2280 data-nosnippet>2280</a>    <span class="doccomment">/// Iterator over primary modules for a given `unit`
+<a href=#2281 id=2281 data-nosnippet>2281</a>    </span><span class="kw">fn </span>primary_modules_for_unit(
+<a href=#2282 id=2282 data-nosnippet>2282</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2283 id=2283 data-nosnippet>2283</a>        unit: AmountUnit,
+<a href=#2284 id=2284 data-nosnippet>2284</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule)&gt; {
+<a href=#2285 id=2285 data-nosnippet>2285</a>        <span class="self">self</span>.primary_modules
+<a href=#2286 id=2286 data-nosnippet>2286</a>            .iter()
+<a href=#2287 id=2287 data-nosnippet>2287</a>            .flat_map(<span class="kw">move </span>|(_prio, candidates)| {
+<a href=#2288 id=2288 data-nosnippet>2288</a>                candidates
+<a href=#2289 id=2289 data-nosnippet>2289</a>                    .specific
+<a href=#2290 id=2290 data-nosnippet>2290</a>                    .get(<span class="kw-2">&amp;</span>unit)
+<a href=#2291 id=2291 data-nosnippet>2291</a>                    .into_iter()
+<a href=#2292 id=2292 data-nosnippet>2292</a>                    .flatten()
+<a href=#2293 id=2293 data-nosnippet>2293</a>                    .copied()
+<a href=#2294 id=2294 data-nosnippet>2294</a>                    <span class="comment">// within same priority, wildcard matches come last
+<a href=#2295 id=2295 data-nosnippet>2295</a>                    </span>.chain(candidates.wildcard.iter().copied())
+<a href=#2296 id=2296 data-nosnippet>2296</a>            })
+<a href=#2297 id=2297 data-nosnippet>2297</a>            .map(|id| (id, <span class="self">self</span>.modules.get_expect(id)))
 <a href=#2298 id=2298 data-nosnippet>2298</a>    }
 <a href=#2299 id=2299 data-nosnippet>2299</a>
-<a href=#2300 id=2300 data-nosnippet>2300</a>    <span class="doccomment">/// [`Self::primary_module_for_unit`] for Bitcoin
-<a href=#2301 id=2301 data-nosnippet>2301</a>    </span><span class="kw">pub fn </span>primary_module_for_btc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule) {
-<a href=#2302 id=2302 data-nosnippet>2302</a>        <span class="self">self</span>.primary_module_for_unit(AmountUnit::BITCOIN)
-<a href=#2303 id=2303 data-nosnippet>2303</a>            .expect(<span class="string">"No primary module for Bitcoin"</span>)
-<a href=#2304 id=2304 data-nosnippet>2304</a>    }
-<a href=#2305 id=2305 data-nosnippet>2305</a>}
-<a href=#2306 id=2306 data-nosnippet>2306</a>
-<a href=#2307 id=2307 data-nosnippet>2307</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#2308 id=2308 data-nosnippet>2308</a></span><span class="kw">impl </span>ClientContextIface <span class="kw">for </span>Client {
-<a href=#2309 id=2309 data-nosnippet>2309</a>    <span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
-<a href=#2310 id=2310 data-nosnippet>2310</a>        Client::get_module(<span class="self">self</span>, instance)
-<a href=#2311 id=2311 data-nosnippet>2311</a>    }
-<a href=#2312 id=2312 data-nosnippet>2312</a>
-<a href=#2313 id=2313 data-nosnippet>2313</a>    <span class="kw">fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
-<a href=#2314 id=2314 data-nosnippet>2314</a>        Client::api_clone(<span class="self">self</span>)
-<a href=#2315 id=2315 data-nosnippet>2315</a>    }
-<a href=#2316 id=2316 data-nosnippet>2316</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-<a href=#2317 id=2317 data-nosnippet>2317</a>        Client::decoders(<span class="self">self</span>)
-<a href=#2318 id=2318 data-nosnippet>2318</a>    }
-<a href=#2319 id=2319 data-nosnippet>2319</a>
-<a href=#2320 id=2320 data-nosnippet>2320</a>    <span class="kw">async fn </span>finalize_and_submit_transaction(
-<a href=#2321 id=2321 data-nosnippet>2321</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2322 id=2322 data-nosnippet>2322</a>        operation_id: OperationId,
-<a href=#2323 id=2323 data-nosnippet>2323</a>        operation_type: <span class="kw-2">&amp;</span>str,
-<a href=#2324 id=2324 data-nosnippet>2324</a>        operation_meta_gen: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(OutPointRange) -&gt; serde_json::Value)&gt;,
-<a href=#2325 id=2325 data-nosnippet>2325</a>        tx_builder: TransactionBuilder,
-<a href=#2326 id=2326 data-nosnippet>2326</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
-<a href=#2327 id=2327 data-nosnippet>2327</a>        Client::finalize_and_submit_transaction(
-<a href=#2328 id=2328 data-nosnippet>2328</a>            <span class="self">self</span>,
-<a href=#2329 id=2329 data-nosnippet>2329</a>            operation_id,
-<a href=#2330 id=2330 data-nosnippet>2330</a>            operation_type,
-<a href=#2331 id=2331 data-nosnippet>2331</a>            <span class="comment">// |out_point_range| operation_meta_gen(out_point_range),
-<a href=#2332 id=2332 data-nosnippet>2332</a>            </span><span class="kw-2">&amp;</span>operation_meta_gen,
-<a href=#2333 id=2333 data-nosnippet>2333</a>            tx_builder,
-<a href=#2334 id=2334 data-nosnippet>2334</a>        )
-<a href=#2335 id=2335 data-nosnippet>2335</a>        .<span class="kw">await
-<a href=#2336 id=2336 data-nosnippet>2336</a>    </span>}
-<a href=#2337 id=2337 data-nosnippet>2337</a>
-<a href=#2338 id=2338 data-nosnippet>2338</a>    <span class="kw">async fn </span>finalize_and_submit_transaction_dbtx(
-<a href=#2339 id=2339 data-nosnippet>2339</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2340 id=2340 data-nosnippet>2340</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#2341 id=2341 data-nosnippet>2341</a>        operation_id: OperationId,
-<a href=#2342 id=2342 data-nosnippet>2342</a>        operation_type: <span class="kw-2">&amp;</span>str,
-<a href=#2343 id=2343 data-nosnippet>2343</a>        operation_meta_gen: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(OutPointRange) -&gt; serde_json::Value)&gt;,
-<a href=#2344 id=2344 data-nosnippet>2344</a>        tx_builder: TransactionBuilder,
-<a href=#2345 id=2345 data-nosnippet>2345</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
-<a href=#2346 id=2346 data-nosnippet>2346</a>        Client::finalize_and_submit_transaction_dbtx(
-<a href=#2347 id=2347 data-nosnippet>2347</a>            <span class="self">self</span>,
-<a href=#2348 id=2348 data-nosnippet>2348</a>            dbtx,
-<a href=#2349 id=2349 data-nosnippet>2349</a>            operation_id,
-<a href=#2350 id=2350 data-nosnippet>2350</a>            operation_type,
-<a href=#2351 id=2351 data-nosnippet>2351</a>            <span class="kw-2">&amp;</span>operation_meta_gen,
-<a href=#2352 id=2352 data-nosnippet>2352</a>            tx_builder,
-<a href=#2353 id=2353 data-nosnippet>2353</a>        )
-<a href=#2354 id=2354 data-nosnippet>2354</a>        .<span class="kw">await
-<a href=#2355 id=2355 data-nosnippet>2355</a>    </span>}
-<a href=#2356 id=2356 data-nosnippet>2356</a>
-<a href=#2357 id=2357 data-nosnippet>2357</a>    <span class="kw">async fn </span>finalize_and_submit_transaction_inner(
-<a href=#2358 id=2358 data-nosnippet>2358</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2359 id=2359 data-nosnippet>2359</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#2360 id=2360 data-nosnippet>2360</a>        operation_id: OperationId,
-<a href=#2361 id=2361 data-nosnippet>2361</a>        tx_builder: TransactionBuilder,
-<a href=#2362 id=2362 data-nosnippet>2362</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
-<a href=#2363 id=2363 data-nosnippet>2363</a>        Client::finalize_and_submit_transaction_inner(<span class="self">self</span>, dbtx, operation_id, tx_builder).<span class="kw">await
-<a href=#2364 id=2364 data-nosnippet>2364</a>    </span>}
-<a href=#2365 id=2365 data-nosnippet>2365</a>
-<a href=#2366 id=2366 data-nosnippet>2366</a>    <span class="kw">async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
-<a href=#2367 id=2367 data-nosnippet>2367</a>        Client::transaction_updates(<span class="self">self</span>, operation_id).<span class="kw">await
-<a href=#2368 id=2368 data-nosnippet>2368</a>    </span>}
-<a href=#2369 id=2369 data-nosnippet>2369</a>
-<a href=#2370 id=2370 data-nosnippet>2370</a>    <span class="kw">async fn </span>await_primary_module_outputs(
-<a href=#2371 id=2371 data-nosnippet>2371</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2372 id=2372 data-nosnippet>2372</a>        operation_id: OperationId,
-<a href=#2373 id=2373 data-nosnippet>2373</a>        <span class="comment">// TODO: make `impl Iterator&lt;Item = ...&gt;`
-<a href=#2374 id=2374 data-nosnippet>2374</a>        </span>outputs: Vec&lt;OutPoint&gt;,
-<a href=#2375 id=2375 data-nosnippet>2375</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#2376 id=2376 data-nosnippet>2376</a>        Client::await_primary_bitcoin_module_outputs(<span class="self">self</span>, operation_id, outputs).<span class="kw">await
-<a href=#2377 id=2377 data-nosnippet>2377</a>    </span>}
-<a href=#2378 id=2378 data-nosnippet>2378</a>
-<a href=#2379 id=2379 data-nosnippet>2379</a>    <span class="kw">fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>IOperationLog {
-<a href=#2380 id=2380 data-nosnippet>2380</a>        Client::operation_log(<span class="self">self</span>)
-<a href=#2381 id=2381 data-nosnippet>2381</a>    }
-<a href=#2382 id=2382 data-nosnippet>2382</a>
-<a href=#2383 id=2383 data-nosnippet>2383</a>    <span class="kw">async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
-<a href=#2384 id=2384 data-nosnippet>2384</a>        Client::has_active_states(<span class="self">self</span>, operation_id).<span class="kw">await
-<a href=#2385 id=2385 data-nosnippet>2385</a>    </span>}
-<a href=#2386 id=2386 data-nosnippet>2386</a>
-<a href=#2387 id=2387 data-nosnippet>2387</a>    <span class="kw">async fn </span>operation_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
-<a href=#2388 id=2388 data-nosnippet>2388</a>        Client::operation_exists(<span class="self">self</span>, operation_id).<span class="kw">await
-<a href=#2389 id=2389 data-nosnippet>2389</a>    </span>}
-<a href=#2390 id=2390 data-nosnippet>2390</a>
-<a href=#2391 id=2391 data-nosnippet>2391</a>    <span class="kw">async fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
-<a href=#2392 id=2392 data-nosnippet>2392</a>        Client::config(<span class="self">self</span>).<span class="kw">await
-<a href=#2393 id=2393 data-nosnippet>2393</a>    </span>}
-<a href=#2394 id=2394 data-nosnippet>2394</a>
-<a href=#2395 id=2395 data-nosnippet>2395</a>    <span class="kw">fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-<a href=#2396 id=2396 data-nosnippet>2396</a>        Client::db(<span class="self">self</span>)
-<a href=#2397 id=2397 data-nosnippet>2397</a>    }
-<a href=#2398 id=2398 data-nosnippet>2398</a>
-<a href=#2399 id=2399 data-nosnippet>2399</a>    <span class="kw">fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IExecutor + <span class="lifetime">'static</span>)) {
-<a href=#2400 id=2400 data-nosnippet>2400</a>        Client::executor(<span class="self">self</span>)
-<a href=#2401 id=2401 data-nosnippet>2401</a>    }
-<a href=#2402 id=2402 data-nosnippet>2402</a>
-<a href=#2403 id=2403 data-nosnippet>2403</a>    <span class="kw">async fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
-<a href=#2404 id=2404 data-nosnippet>2404</a>        Client::invite_code(<span class="self">self</span>, peer).<span class="kw">await
-<a href=#2405 id=2405 data-nosnippet>2405</a>    </span>}
-<a href=#2406 id=2406 data-nosnippet>2406</a>
-<a href=#2407 id=2407 data-nosnippet>2407</a>    <span class="kw">fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
-<a href=#2408 id=2408 data-nosnippet>2408</a>        Client::get_internal_payment_markers(<span class="self">self</span>)
-<a href=#2409 id=2409 data-nosnippet>2409</a>    }
-<a href=#2410 id=2410 data-nosnippet>2410</a>
-<a href=#2411 id=2411 data-nosnippet>2411</a>    <span class="kw">async fn </span>log_event_json(
-<a href=#2412 id=2412 data-nosnippet>2412</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2413 id=2413 data-nosnippet>2413</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
-<a href=#2414 id=2414 data-nosnippet>2414</a>        module_kind: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;,
-<a href=#2415 id=2415 data-nosnippet>2415</a>        module_id: ModuleInstanceId,
-<a href=#2416 id=2416 data-nosnippet>2416</a>        kind: EventKind,
-<a href=#2417 id=2417 data-nosnippet>2417</a>        payload: serde_json::Value,
-<a href=#2418 id=2418 data-nosnippet>2418</a>        persist: EventPersistence,
-<a href=#2419 id=2419 data-nosnippet>2419</a>    ) {
-<a href=#2420 id=2420 data-nosnippet>2420</a>        dbtx.ensure_global()
-<a href=#2421 id=2421 data-nosnippet>2421</a>            .expect(<span class="string">"Must be called with global dbtx"</span>);
-<a href=#2422 id=2422 data-nosnippet>2422</a>        <span class="self">self</span>.log_event_raw_dbtx(
-<a href=#2423 id=2423 data-nosnippet>2423</a>            dbtx,
-<a href=#2424 id=2424 data-nosnippet>2424</a>            kind,
-<a href=#2425 id=2425 data-nosnippet>2425</a>            module_kind.map(|kind| (kind, module_id)),
-<a href=#2426 id=2426 data-nosnippet>2426</a>            serde_json::to_vec(<span class="kw-2">&amp;</span>payload).expect(<span class="string">"Serialization can't fail"</span>),
-<a href=#2427 id=2427 data-nosnippet>2427</a>            persist,
-<a href=#2428 id=2428 data-nosnippet>2428</a>        )
-<a href=#2429 id=2429 data-nosnippet>2429</a>        .<span class="kw">await</span>;
-<a href=#2430 id=2430 data-nosnippet>2430</a>    }
-<a href=#2431 id=2431 data-nosnippet>2431</a>
-<a href=#2432 id=2432 data-nosnippet>2432</a>    <span class="kw">async fn </span>read_operation_active_states&lt;<span class="lifetime">'dbtx</span>&gt;(
-<a href=#2433 id=2433 data-nosnippet>2433</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2434 id=2434 data-nosnippet>2434</a>        operation_id: OperationId,
-<a href=#2435 id=2435 data-nosnippet>2435</a>        module_id: ModuleInstanceId,
-<a href=#2436 id=2436 data-nosnippet>2436</a>        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#2437 id=2437 data-nosnippet>2437</a>    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (ActiveStateKey, ActiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;
-<a href=#2438 id=2438 data-nosnippet>2438</a>    {
-<a href=#2439 id=2439 data-nosnippet>2439</a>        Box::pin(
-<a href=#2440 id=2440 data-nosnippet>2440</a>            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ActiveModuleOperationStateKeyPrefix {
-<a href=#2441 id=2441 data-nosnippet>2441</a>                operation_id,
-<a href=#2442 id=2442 data-nosnippet>2442</a>                module_instance: module_id,
-<a href=#2443 id=2443 data-nosnippet>2443</a>            })
-<a href=#2444 id=2444 data-nosnippet>2444</a>            .<span class="kw">await
-<a href=#2445 id=2445 data-nosnippet>2445</a>            </span>.map(<span class="kw">move </span>|(k, v)| (k.<span class="number">0</span>, v)),
-<a href=#2446 id=2446 data-nosnippet>2446</a>        )
-<a href=#2447 id=2447 data-nosnippet>2447</a>    }
-<a href=#2448 id=2448 data-nosnippet>2448</a>    <span class="kw">async fn </span>read_operation_inactive_states&lt;<span class="lifetime">'dbtx</span>&gt;(
-<a href=#2449 id=2449 data-nosnippet>2449</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2450 id=2450 data-nosnippet>2450</a>        operation_id: OperationId,
-<a href=#2451 id=2451 data-nosnippet>2451</a>        module_id: ModuleInstanceId,
-<a href=#2452 id=2452 data-nosnippet>2452</a>        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#2453 id=2453 data-nosnippet>2453</a>    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (InactiveStateKey, InactiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;
-<a href=#2454 id=2454 data-nosnippet>2454</a>    {
-<a href=#2455 id=2455 data-nosnippet>2455</a>        Box::pin(
-<a href=#2456 id=2456 data-nosnippet>2456</a>            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>InactiveModuleOperationStateKeyPrefix {
-<a href=#2457 id=2457 data-nosnippet>2457</a>                operation_id,
-<a href=#2458 id=2458 data-nosnippet>2458</a>                module_instance: module_id,
-<a href=#2459 id=2459 data-nosnippet>2459</a>            })
-<a href=#2460 id=2460 data-nosnippet>2460</a>            .<span class="kw">await
-<a href=#2461 id=2461 data-nosnippet>2461</a>            </span>.map(<span class="kw">move </span>|(k, v)| (k.<span class="number">0</span>, v)),
-<a href=#2462 id=2462 data-nosnippet>2462</a>        )
-<a href=#2463 id=2463 data-nosnippet>2463</a>    }
-<a href=#2464 id=2464 data-nosnippet>2464</a>}
-<a href=#2465 id=2465 data-nosnippet>2465</a>
-<a href=#2466 id=2466 data-nosnippet>2466</a><span class="comment">// TODO: impl `Debug` for `Client` and derive here
-<a href=#2467 id=2467 data-nosnippet>2467</a></span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Client {
-<a href=#2468 id=2468 data-nosnippet>2468</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-<a href=#2469 id=2469 data-nosnippet>2469</a>        <span class="macro">write!</span>(f, <span class="string">"Client"</span>)
-<a href=#2470 id=2470 data-nosnippet>2470</a>    }
-<a href=#2471 id=2471 data-nosnippet>2471</a>}
-<a href=#2472 id=2472 data-nosnippet>2472</a>
-<a href=#2473 id=2473 data-nosnippet>2473</a><span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#2474 id=2474 data-nosnippet>2474</a>    registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
-<a href=#2475 id=2475 data-nosnippet>2475</a>    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
-<a href=#2476 id=2476 data-nosnippet>2476</a>) -&gt; ModuleDecoderRegistry {
-<a href=#2477 id=2477 data-nosnippet>2477</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
-<a href=#2478 id=2478 data-nosnippet>2478</a>    <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
-<a href=#2479 id=2479 data-nosnippet>2479</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-<a href=#2480 id=2480 data-nosnippet>2480</a>            <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
-<a href=#2481 id=2481 data-nosnippet>2481</a>            <span class="kw">continue</span>;
-<a href=#2482 id=2482 data-nosnippet>2482</a>        };
-<a href=#2483 id=2483 data-nosnippet>2483</a>
-<a href=#2484 id=2484 data-nosnippet>2484</a>        modules.insert(
-<a href=#2485 id=2485 data-nosnippet>2485</a>            id,
-<a href=#2486 id=2486 data-nosnippet>2486</a>            (
-<a href=#2487 id=2487 data-nosnippet>2487</a>                kind.clone(),
-<a href=#2488 id=2488 data-nosnippet>2488</a>                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">'static</span>&gt;::as_ref(init)),
-<a href=#2489 id=2489 data-nosnippet>2489</a>            ),
-<a href=#2490 id=2490 data-nosnippet>2490</a>        );
-<a href=#2491 id=2491 data-nosnippet>2491</a>    }
-<a href=#2492 id=2492 data-nosnippet>2492</a>    ModuleDecoderRegistry::from(modules)
-<a href=#2493 id=2493 data-nosnippet>2493</a>}
+<a href=#2300 id=2300 data-nosnippet>2300</a>    <span class="doccomment">/// Primary module to use for `unit`
+<a href=#2301 id=2301 data-nosnippet>2301</a>    ///
+<a href=#2302 id=2302 data-nosnippet>2302</a>    /// Currently, just pick the first (highest priority) match
+<a href=#2303 id=2303 data-nosnippet>2303</a>    </span><span class="kw">pub fn </span>primary_module_for_unit(
+<a href=#2304 id=2304 data-nosnippet>2304</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2305 id=2305 data-nosnippet>2305</a>        unit: AmountUnit,
+<a href=#2306 id=2306 data-nosnippet>2306</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule)&gt; {
+<a href=#2307 id=2307 data-nosnippet>2307</a>        <span class="self">self</span>.primary_modules_for_unit(unit).next()
+<a href=#2308 id=2308 data-nosnippet>2308</a>    }
+<a href=#2309 id=2309 data-nosnippet>2309</a>
+<a href=#2310 id=2310 data-nosnippet>2310</a>    <span class="doccomment">/// [`Self::primary_module_for_unit`] for Bitcoin
+<a href=#2311 id=2311 data-nosnippet>2311</a>    </span><span class="kw">pub fn </span>primary_module_for_btc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleInstanceId, <span class="kw-2">&amp;</span>DynClientModule) {
+<a href=#2312 id=2312 data-nosnippet>2312</a>        <span class="self">self</span>.primary_module_for_unit(AmountUnit::BITCOIN)
+<a href=#2313 id=2313 data-nosnippet>2313</a>            .expect(<span class="string">"No primary module for Bitcoin"</span>)
+<a href=#2314 id=2314 data-nosnippet>2314</a>    }
+<a href=#2315 id=2315 data-nosnippet>2315</a>}
+<a href=#2316 id=2316 data-nosnippet>2316</a>
+<a href=#2317 id=2317 data-nosnippet>2317</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#2318 id=2318 data-nosnippet>2318</a></span><span class="kw">impl </span>ClientContextIface <span class="kw">for </span>Client {
+<a href=#2319 id=2319 data-nosnippet>2319</a>    <span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
+<a href=#2320 id=2320 data-nosnippet>2320</a>        Client::get_module(<span class="self">self</span>, instance)
+<a href=#2321 id=2321 data-nosnippet>2321</a>    }
+<a href=#2322 id=2322 data-nosnippet>2322</a>
+<a href=#2323 id=2323 data-nosnippet>2323</a>    <span class="kw">fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
+<a href=#2324 id=2324 data-nosnippet>2324</a>        Client::api_clone(<span class="self">self</span>)
+<a href=#2325 id=2325 data-nosnippet>2325</a>    }
+<a href=#2326 id=2326 data-nosnippet>2326</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
+<a href=#2327 id=2327 data-nosnippet>2327</a>        Client::decoders(<span class="self">self</span>)
+<a href=#2328 id=2328 data-nosnippet>2328</a>    }
+<a href=#2329 id=2329 data-nosnippet>2329</a>
+<a href=#2330 id=2330 data-nosnippet>2330</a>    <span class="kw">async fn </span>finalize_and_submit_transaction(
+<a href=#2331 id=2331 data-nosnippet>2331</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2332 id=2332 data-nosnippet>2332</a>        operation_id: OperationId,
+<a href=#2333 id=2333 data-nosnippet>2333</a>        operation_type: <span class="kw-2">&amp;</span>str,
+<a href=#2334 id=2334 data-nosnippet>2334</a>        operation_meta_gen: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(OutPointRange) -&gt; serde_json::Value)&gt;,
+<a href=#2335 id=2335 data-nosnippet>2335</a>        tx_builder: TransactionBuilder,
+<a href=#2336 id=2336 data-nosnippet>2336</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+<a href=#2337 id=2337 data-nosnippet>2337</a>        Client::finalize_and_submit_transaction(
+<a href=#2338 id=2338 data-nosnippet>2338</a>            <span class="self">self</span>,
+<a href=#2339 id=2339 data-nosnippet>2339</a>            operation_id,
+<a href=#2340 id=2340 data-nosnippet>2340</a>            operation_type,
+<a href=#2341 id=2341 data-nosnippet>2341</a>            <span class="comment">// |out_point_range| operation_meta_gen(out_point_range),
+<a href=#2342 id=2342 data-nosnippet>2342</a>            </span><span class="kw-2">&amp;</span>operation_meta_gen,
+<a href=#2343 id=2343 data-nosnippet>2343</a>            tx_builder,
+<a href=#2344 id=2344 data-nosnippet>2344</a>        )
+<a href=#2345 id=2345 data-nosnippet>2345</a>        .<span class="kw">await
+<a href=#2346 id=2346 data-nosnippet>2346</a>    </span>}
+<a href=#2347 id=2347 data-nosnippet>2347</a>
+<a href=#2348 id=2348 data-nosnippet>2348</a>    <span class="kw">async fn </span>finalize_and_submit_transaction_dbtx(
+<a href=#2349 id=2349 data-nosnippet>2349</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2350 id=2350 data-nosnippet>2350</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#2351 id=2351 data-nosnippet>2351</a>        operation_id: OperationId,
+<a href=#2352 id=2352 data-nosnippet>2352</a>        operation_type: <span class="kw-2">&amp;</span>str,
+<a href=#2353 id=2353 data-nosnippet>2353</a>        operation_meta_gen: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(OutPointRange) -&gt; serde_json::Value)&gt;,
+<a href=#2354 id=2354 data-nosnippet>2354</a>        tx_builder: TransactionBuilder,
+<a href=#2355 id=2355 data-nosnippet>2355</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+<a href=#2356 id=2356 data-nosnippet>2356</a>        Client::finalize_and_submit_transaction_dbtx(
+<a href=#2357 id=2357 data-nosnippet>2357</a>            <span class="self">self</span>,
+<a href=#2358 id=2358 data-nosnippet>2358</a>            dbtx,
+<a href=#2359 id=2359 data-nosnippet>2359</a>            operation_id,
+<a href=#2360 id=2360 data-nosnippet>2360</a>            operation_type,
+<a href=#2361 id=2361 data-nosnippet>2361</a>            <span class="kw-2">&amp;</span>operation_meta_gen,
+<a href=#2362 id=2362 data-nosnippet>2362</a>            tx_builder,
+<a href=#2363 id=2363 data-nosnippet>2363</a>        )
+<a href=#2364 id=2364 data-nosnippet>2364</a>        .<span class="kw">await
+<a href=#2365 id=2365 data-nosnippet>2365</a>    </span>}
+<a href=#2366 id=2366 data-nosnippet>2366</a>
+<a href=#2367 id=2367 data-nosnippet>2367</a>    <span class="kw">async fn </span>finalize_and_submit_transaction_inner(
+<a href=#2368 id=2368 data-nosnippet>2368</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2369 id=2369 data-nosnippet>2369</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#2370 id=2370 data-nosnippet>2370</a>        operation_id: OperationId,
+<a href=#2371 id=2371 data-nosnippet>2371</a>        tx_builder: TransactionBuilder,
+<a href=#2372 id=2372 data-nosnippet>2372</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+<a href=#2373 id=2373 data-nosnippet>2373</a>        Client::finalize_and_submit_transaction_inner(<span class="self">self</span>, dbtx, operation_id, tx_builder).<span class="kw">await
+<a href=#2374 id=2374 data-nosnippet>2374</a>    </span>}
+<a href=#2375 id=2375 data-nosnippet>2375</a>
+<a href=#2376 id=2376 data-nosnippet>2376</a>    <span class="kw">async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
+<a href=#2377 id=2377 data-nosnippet>2377</a>        Client::transaction_updates(<span class="self">self</span>, operation_id).<span class="kw">await
+<a href=#2378 id=2378 data-nosnippet>2378</a>    </span>}
+<a href=#2379 id=2379 data-nosnippet>2379</a>
+<a href=#2380 id=2380 data-nosnippet>2380</a>    <span class="kw">async fn </span>await_primary_module_outputs(
+<a href=#2381 id=2381 data-nosnippet>2381</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2382 id=2382 data-nosnippet>2382</a>        operation_id: OperationId,
+<a href=#2383 id=2383 data-nosnippet>2383</a>        <span class="comment">// TODO: make `impl Iterator&lt;Item = ...&gt;`
+<a href=#2384 id=2384 data-nosnippet>2384</a>        </span>outputs: Vec&lt;OutPoint&gt;,
+<a href=#2385 id=2385 data-nosnippet>2385</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#2386 id=2386 data-nosnippet>2386</a>        Client::await_primary_bitcoin_module_outputs(<span class="self">self</span>, operation_id, outputs).<span class="kw">await
+<a href=#2387 id=2387 data-nosnippet>2387</a>    </span>}
+<a href=#2388 id=2388 data-nosnippet>2388</a>
+<a href=#2389 id=2389 data-nosnippet>2389</a>    <span class="kw">fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>IOperationLog {
+<a href=#2390 id=2390 data-nosnippet>2390</a>        Client::operation_log(<span class="self">self</span>)
+<a href=#2391 id=2391 data-nosnippet>2391</a>    }
+<a href=#2392 id=2392 data-nosnippet>2392</a>
+<a href=#2393 id=2393 data-nosnippet>2393</a>    <span class="kw">async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+<a href=#2394 id=2394 data-nosnippet>2394</a>        Client::has_active_states(<span class="self">self</span>, operation_id).<span class="kw">await
+<a href=#2395 id=2395 data-nosnippet>2395</a>    </span>}
+<a href=#2396 id=2396 data-nosnippet>2396</a>
+<a href=#2397 id=2397 data-nosnippet>2397</a>    <span class="kw">async fn </span>operation_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+<a href=#2398 id=2398 data-nosnippet>2398</a>        Client::operation_exists(<span class="self">self</span>, operation_id).<span class="kw">await
+<a href=#2399 id=2399 data-nosnippet>2399</a>    </span>}
+<a href=#2400 id=2400 data-nosnippet>2400</a>
+<a href=#2401 id=2401 data-nosnippet>2401</a>    <span class="kw">async fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+<a href=#2402 id=2402 data-nosnippet>2402</a>        Client::config(<span class="self">self</span>).<span class="kw">await
+<a href=#2403 id=2403 data-nosnippet>2403</a>    </span>}
+<a href=#2404 id=2404 data-nosnippet>2404</a>
+<a href=#2405 id=2405 data-nosnippet>2405</a>    <span class="kw">fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+<a href=#2406 id=2406 data-nosnippet>2406</a>        Client::db(<span class="self">self</span>)
+<a href=#2407 id=2407 data-nosnippet>2407</a>    }
+<a href=#2408 id=2408 data-nosnippet>2408</a>
+<a href=#2409 id=2409 data-nosnippet>2409</a>    <span class="kw">fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IExecutor + <span class="lifetime">'static</span>)) {
+<a href=#2410 id=2410 data-nosnippet>2410</a>        Client::executor(<span class="self">self</span>)
+<a href=#2411 id=2411 data-nosnippet>2411</a>    }
+<a href=#2412 id=2412 data-nosnippet>2412</a>
+<a href=#2413 id=2413 data-nosnippet>2413</a>    <span class="kw">async fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+<a href=#2414 id=2414 data-nosnippet>2414</a>        Client::invite_code(<span class="self">self</span>, peer).<span class="kw">await
+<a href=#2415 id=2415 data-nosnippet>2415</a>    </span>}
+<a href=#2416 id=2416 data-nosnippet>2416</a>
+<a href=#2417 id=2417 data-nosnippet>2417</a>    <span class="kw">fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
+<a href=#2418 id=2418 data-nosnippet>2418</a>        Client::get_internal_payment_markers(<span class="self">self</span>)
+<a href=#2419 id=2419 data-nosnippet>2419</a>    }
+<a href=#2420 id=2420 data-nosnippet>2420</a>
+<a href=#2421 id=2421 data-nosnippet>2421</a>    <span class="kw">async fn </span>log_event_json(
+<a href=#2422 id=2422 data-nosnippet>2422</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2423 id=2423 data-nosnippet>2423</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
+<a href=#2424 id=2424 data-nosnippet>2424</a>        module_kind: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;,
+<a href=#2425 id=2425 data-nosnippet>2425</a>        module_id: ModuleInstanceId,
+<a href=#2426 id=2426 data-nosnippet>2426</a>        kind: EventKind,
+<a href=#2427 id=2427 data-nosnippet>2427</a>        payload: serde_json::Value,
+<a href=#2428 id=2428 data-nosnippet>2428</a>        persist: EventPersistence,
+<a href=#2429 id=2429 data-nosnippet>2429</a>    ) {
+<a href=#2430 id=2430 data-nosnippet>2430</a>        dbtx.ensure_global()
+<a href=#2431 id=2431 data-nosnippet>2431</a>            .expect(<span class="string">"Must be called with global dbtx"</span>);
+<a href=#2432 id=2432 data-nosnippet>2432</a>        <span class="self">self</span>.log_event_raw_dbtx(
+<a href=#2433 id=2433 data-nosnippet>2433</a>            dbtx,
+<a href=#2434 id=2434 data-nosnippet>2434</a>            kind,
+<a href=#2435 id=2435 data-nosnippet>2435</a>            module_kind.map(|kind| (kind, module_id)),
+<a href=#2436 id=2436 data-nosnippet>2436</a>            serde_json::to_vec(<span class="kw-2">&amp;</span>payload).expect(<span class="string">"Serialization can't fail"</span>),
+<a href=#2437 id=2437 data-nosnippet>2437</a>            persist,
+<a href=#2438 id=2438 data-nosnippet>2438</a>        )
+<a href=#2439 id=2439 data-nosnippet>2439</a>        .<span class="kw">await</span>;
+<a href=#2440 id=2440 data-nosnippet>2440</a>    }
+<a href=#2441 id=2441 data-nosnippet>2441</a>
+<a href=#2442 id=2442 data-nosnippet>2442</a>    <span class="kw">async fn </span>read_operation_active_states&lt;<span class="lifetime">'dbtx</span>&gt;(
+<a href=#2443 id=2443 data-nosnippet>2443</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2444 id=2444 data-nosnippet>2444</a>        operation_id: OperationId,
+<a href=#2445 id=2445 data-nosnippet>2445</a>        module_id: ModuleInstanceId,
+<a href=#2446 id=2446 data-nosnippet>2446</a>        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#2447 id=2447 data-nosnippet>2447</a>    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (ActiveStateKey, ActiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;
+<a href=#2448 id=2448 data-nosnippet>2448</a>    {
+<a href=#2449 id=2449 data-nosnippet>2449</a>        Box::pin(
+<a href=#2450 id=2450 data-nosnippet>2450</a>            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ActiveModuleOperationStateKeyPrefix {
+<a href=#2451 id=2451 data-nosnippet>2451</a>                operation_id,
+<a href=#2452 id=2452 data-nosnippet>2452</a>                module_instance: module_id,
+<a href=#2453 id=2453 data-nosnippet>2453</a>            })
+<a href=#2454 id=2454 data-nosnippet>2454</a>            .<span class="kw">await
+<a href=#2455 id=2455 data-nosnippet>2455</a>            </span>.map(<span class="kw">move </span>|(k, v)| (k.<span class="number">0</span>, v)),
+<a href=#2456 id=2456 data-nosnippet>2456</a>        )
+<a href=#2457 id=2457 data-nosnippet>2457</a>    }
+<a href=#2458 id=2458 data-nosnippet>2458</a>    <span class="kw">async fn </span>read_operation_inactive_states&lt;<span class="lifetime">'dbtx</span>&gt;(
+<a href=#2459 id=2459 data-nosnippet>2459</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2460 id=2460 data-nosnippet>2460</a>        operation_id: OperationId,
+<a href=#2461 id=2461 data-nosnippet>2461</a>        module_id: ModuleInstanceId,
+<a href=#2462 id=2462 data-nosnippet>2462</a>        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#2463 id=2463 data-nosnippet>2463</a>    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (InactiveStateKey, InactiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;
+<a href=#2464 id=2464 data-nosnippet>2464</a>    {
+<a href=#2465 id=2465 data-nosnippet>2465</a>        Box::pin(
+<a href=#2466 id=2466 data-nosnippet>2466</a>            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>InactiveModuleOperationStateKeyPrefix {
+<a href=#2467 id=2467 data-nosnippet>2467</a>                operation_id,
+<a href=#2468 id=2468 data-nosnippet>2468</a>                module_instance: module_id,
+<a href=#2469 id=2469 data-nosnippet>2469</a>            })
+<a href=#2470 id=2470 data-nosnippet>2470</a>            .<span class="kw">await
+<a href=#2471 id=2471 data-nosnippet>2471</a>            </span>.map(<span class="kw">move </span>|(k, v)| (k.<span class="number">0</span>, v)),
+<a href=#2472 id=2472 data-nosnippet>2472</a>        )
+<a href=#2473 id=2473 data-nosnippet>2473</a>    }
+<a href=#2474 id=2474 data-nosnippet>2474</a>}
+<a href=#2475 id=2475 data-nosnippet>2475</a>
+<a href=#2476 id=2476 data-nosnippet>2476</a><span class="comment">// TODO: impl `Debug` for `Client` and derive here
+<a href=#2477 id=2477 data-nosnippet>2477</a></span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Client {
+<a href=#2478 id=2478 data-nosnippet>2478</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#2479 id=2479 data-nosnippet>2479</a>        <span class="macro">write!</span>(f, <span class="string">"Client"</span>)
+<a href=#2480 id=2480 data-nosnippet>2480</a>    }
+<a href=#2481 id=2481 data-nosnippet>2481</a>}
+<a href=#2482 id=2482 data-nosnippet>2482</a>
+<a href=#2483 id=2483 data-nosnippet>2483</a><span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#2484 id=2484 data-nosnippet>2484</a>    registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
+<a href=#2485 id=2485 data-nosnippet>2485</a>    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
+<a href=#2486 id=2486 data-nosnippet>2486</a>) -&gt; ModuleDecoderRegistry {
+<a href=#2487 id=2487 data-nosnippet>2487</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+<a href=#2488 id=2488 data-nosnippet>2488</a>    <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
+<a href=#2489 id=2489 data-nosnippet>2489</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
+<a href=#2490 id=2490 data-nosnippet>2490</a>            <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
+<a href=#2491 id=2491 data-nosnippet>2491</a>            <span class="kw">continue</span>;
+<a href=#2492 id=2492 data-nosnippet>2492</a>        };
+<a href=#2493 id=2493 data-nosnippet>2493</a>
+<a href=#2494 id=2494 data-nosnippet>2494</a>        modules.insert(
+<a href=#2495 id=2495 data-nosnippet>2495</a>            id,
+<a href=#2496 id=2496 data-nosnippet>2496</a>            (
+<a href=#2497 id=2497 data-nosnippet>2497</a>                kind.clone(),
+<a href=#2498 id=2498 data-nosnippet>2498</a>                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">'static</span>&gt;::as_ref(init)),
+<a href=#2499 id=2499 data-nosnippet>2499</a>            ),
+<a href=#2500 id=2500 data-nosnippet>2500</a>        );
+<a href=#2501 id=2501 data-nosnippet>2501</a>    }
+<a href=#2502 id=2502 data-nosnippet>2502</a>    ModuleDecoderRegistry::from(modules)
+<a href=#2503 id=2503 data-nosnippet>2503</a>}
 </code></pre></div></section></main></body></html>
