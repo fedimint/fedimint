@@ -2207,6 +2207,16 @@ impl Client {
             .await
     }
 
+    /// Returns the id that the next entry appended to the event log will be
+    /// assigned, i.e. the position just past the current end of the log.
+    pub async fn get_next_event_log_id(&self) -> EventLogId {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .get_next_event_log_id()
+            .await
+    }
+
     pub async fn get_event_log_trimable(
         &self,
         pos: Option<EventLogTrimableId>,

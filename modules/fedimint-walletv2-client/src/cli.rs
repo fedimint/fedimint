@@ -3,6 +3,7 @@ use std::{ffi, iter};
 use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
 use clap::{Parser, Subcommand};
+use fedimint_eventlog::EventLogId;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -23,7 +24,19 @@ enum Opts {
         fee: Option<bitcoin::Amount>,
     },
     /// Return the next unused receive address.
+    ///
+    /// To wait for a payment to this address, read the current event log
+    /// position with `dev next-event-log-id` *before* running this, then pass
+    /// that position to `await-receive`.
     Receive,
+    /// Block until the next payment is received, starting from the given event
+    /// log position. Returns the receive's final state and the event log
+    /// position to pass to the following `await-receive`.
+    AwaitReceive {
+        /// Event log position to start scanning from, as returned by
+        /// `dev next-event-log-id` or a prior `await-receive`.
+        position: EventLogId,
+    },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -69,6 +82,7 @@ pub(crate) async fn handle_cli_command(
                 .await?,
         ),
         Opts::Receive => json(wallet.receive().await),
+        Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
     };
 
     Ok(value)
