@@ -3,23 +3,39 @@
 <a href=#3 id=3 data-nosnippet>3</a>    <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>)
 <a href=#4 id=4 data-nosnippet>4</a>}
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// Get the git hash version of `fedimint-core`
-<a href=#7 id=7 data-nosnippet>7</a>///
-<a href=#8 id=8 data-nosnippet>8</a>/// Note, in certain situations this not be accurate (eg. might be all `0`s).
-<a href=#9 id=9 data-nosnippet>9</a>///
-<a href=#10 id=10 data-nosnippet>10</a>/// The return value was injected via `fedimint-build` crate at the compile
-<a href=#11 id=11 data-nosnippet>11</a>/// time.
-<a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub fn </span>git_hash() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
-<a href=#13 id=13 data-nosnippet>13</a>    <span class="macro">option_env!</span>(<span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>).unwrap_or(<span class="string">"0000000000000000000000000000000000000001"</span>)
-<a href=#14 id=14 data-nosnippet>14</a>}
-<a href=#15 id=15 data-nosnippet>15</a>
-<a href=#16 id=16 data-nosnippet>16</a><span class="doccomment">/// Returns the version hash if it is meaningful (i.e. not all zeros, which
-<a href=#17 id=17 data-nosnippet>17</a>/// `fedimint-build` substitutes when no git information is available).
-<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub fn </span>non_zero_version_hash(hash: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
-<a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">if </span>hash.bytes().all(|b| b == <span class="string">b'0'</span>) {
-<a href=#20 id=20 data-nosnippet>20</a>        <span class="prelude-val">None
-<a href=#21 id=21 data-nosnippet>21</a>    </span>} <span class="kw">else </span>{
-<a href=#22 id=22 data-nosnippet>22</a>        <span class="prelude-val">Some</span>(hash)
-<a href=#23 id=23 data-nosnippet>23</a>    }
-<a href=#24 id=24 data-nosnippet>24</a>}
+<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// Get the `x.y.z` cargo release version of `fedimint-core`.
+<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub fn </span>cargo_pkg_release() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#8 id=8 data-nosnippet>8</a>    release_version(cargo_pkg())
+<a href=#9 id=9 data-nosnippet>9</a>}
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="doccomment">/// Return only the `x.y.z` release component of a cargo package version.
+<a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub fn </span>release_version(version: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#13 id=13 data-nosnippet>13</a>    version
+<a href=#14 id=14 data-nosnippet>14</a>        .split([<span class="string">'-'</span>, <span class="string">'+'</span>])
+<a href=#15 id=15 data-nosnippet>15</a>        .next()
+<a href=#16 id=16 data-nosnippet>16</a>        .expect(<span class="string">"split always returns at least one item"</span>)
+<a href=#17 id=17 data-nosnippet>17</a>}
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Get the git hash version of `fedimint-core`
+<a href=#20 id=20 data-nosnippet>20</a>///
+<a href=#21 id=21 data-nosnippet>21</a>/// Note, in certain situations this not be accurate (eg. might be all `0`s).
+<a href=#22 id=22 data-nosnippet>22</a>///
+<a href=#23 id=23 data-nosnippet>23</a>/// The return value was injected via `fedimint-build` crate at the compile
+<a href=#24 id=24 data-nosnippet>24</a>/// time.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub fn </span>git_hash() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="macro">option_env!</span>(<span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>).unwrap_or(<span class="string">"0000000000000000000000000000000000000001"</span>)
+<a href=#27 id=27 data-nosnippet>27</a>}
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a><span class="doccomment">/// Returns the version hash if it is meaningful (i.e. not all zeros, which
+<a href=#30 id=30 data-nosnippet>30</a>/// `fedimint-build` substitutes when no git information is available).
+<a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">pub fn </span>non_zero_version_hash(hash: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">if </span>hash.bytes().all(|b| b == <span class="string">b'0'</span>) {
+<a href=#33 id=33 data-nosnippet>33</a>        <span class="prelude-val">None
+<a href=#34 id=34 data-nosnippet>34</a>    </span>} <span class="kw">else </span>{
+<a href=#35 id=35 data-nosnippet>35</a>        <span class="prelude-val">Some</span>(hash)
+<a href=#36 id=36 data-nosnippet>36</a>    }
+<a href=#37 id=37 data-nosnippet>37</a>}
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="attr">#[cfg(test)]
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
