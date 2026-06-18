@@ -45,10 +45,6 @@ pub struct OOBNotesSpent {
 
     /// The timeout before attempting to refund
     pub timeout: Duration,
-
-    /// Boolean that indicates if the invite code was included in the note
-    /// serialization
-    pub include_invite: bool,
 }
 
 impl Event for OOBNotesSpent {

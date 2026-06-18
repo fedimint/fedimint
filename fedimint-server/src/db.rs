@@ -5,7 +5,7 @@ use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCore as _, MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_record;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use futures::StreamExt as _;
 use strum::{EnumIter, IntoEnumIterator as _};
 
@@ -20,6 +20,8 @@ pub enum DbKeyPrefix {
     ApiAnnouncements = 0x06,
     ServerInfo = 0x07,
     GuardianMetadata = 0x08,
+    InviteId = 0x09,
+    InviteUserCount = 0x0a,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -67,4 +69,47 @@ impl_db_record!(
     value = ServerInfo,
     db_prefix = DbKeyPrefix::ServerInfo,
     notify_on_modify = false,
+);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct InviteIdKey(pub [u8; 16]);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct InviteIdKeyPrefix;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct InviteIdMeta {
+    /// Unix timestamp in seconds after which the invite code is expired
+    pub expires_at: u64,
+    /// Maximum number of users that may join via this invite code
+    pub user_limit: u64,
+}
+
+impl_db_record!(
+    key = InviteIdKey,
+    value = InviteIdMeta,
+    db_prefix = DbKeyPrefix::InviteId,
+    notify_on_modify = false,
+);
+
+impl_db_lookup!(key = InviteIdKey, query_prefix = InviteIdKeyPrefix);
+
+/// Number of users that have joined via the invite code with this invite id so
+/// far; a missing entry means zero
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct InviteUserCountKey(pub [u8; 16]);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct InviteUserCountKeyPrefix;
+
+impl_db_record!(
+    key = InviteUserCountKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::InviteUserCount,
+    notify_on_modify = false,
+);
+
+impl_db_lookup!(
+    key = InviteUserCountKey,
+    query_prefix = InviteUserCountKeyPrefix
 );

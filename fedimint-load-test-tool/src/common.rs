@@ -18,7 +18,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::retry;
-use fedimint_core::{Amount, OutPoint, PeerId, TieredCounts, secp256k1};
+use fedimint_core::{Amount, OutPoint, TieredCounts, secp256k1};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -33,14 +33,6 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::MetricEvent;
-
-pub async fn get_invite_code_cli(peer: PeerId) -> anyhow::Result<InviteCode> {
-    cmd!(FedimintCli, "invite-code", peer).out_json().await?["invite_code"]
-        .as_str()
-        .map(InviteCode::from_str)
-        .transpose()?
-        .context("missing invite code")
-}
 
 pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<OOBNotes> {
     cmd!(FedimintCli, "spend", amount.msats.to_string())
@@ -99,7 +91,6 @@ pub async fn do_spend_notes(
             &SelectNotesWithAtleastAmount,
             amount,
             Duration::from_mins(10),
-            false,
             (),
         )
         .await?;

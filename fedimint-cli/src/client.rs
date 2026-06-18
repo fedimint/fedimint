@@ -100,10 +100,6 @@ pub enum ClientCmd {
         /// hasn't been redeemed by the recipient. Defaults to one week.
         #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
         timeout: u64,
-        /// If the necessary information to join the federation the e-cash
-        /// belongs to should be included in the serialized notes
-        #[clap(long)]
-        include_invite: bool,
     },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
@@ -255,7 +251,6 @@ pub async fn handle_command(
             amount,
             allow_overpay,
             timeout,
-            include_invite,
         } => {
             warn!(
                 target: LOG_CLIENT,
@@ -270,13 +265,7 @@ pub async fn handle_command(
             let timeout = Duration::from_secs(timeout);
             let (operation, notes) = if allow_overpay {
                 let (operation, notes) = mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithAtleastAmount,
-                        amount,
-                        timeout,
-                        include_invite,
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithAtleastAmount, amount, timeout, ())
                     .await?;
 
                 let overspend_amount = notes.total_amount().saturating_sub(amount);
@@ -291,13 +280,7 @@ pub async fn handle_command(
                 (operation, notes)
             } else {
                 mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithExactAmount,
-                        amount,
-                        timeout,
-                        include_invite,
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithExactAmount, amount, timeout, ())
                     .await?
             };
             info!(target: LOG_CLIENT, "Spend e-cash operation: {}", operation.fmt_short());

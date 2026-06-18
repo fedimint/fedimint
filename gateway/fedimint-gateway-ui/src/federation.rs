@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -11,7 +10,7 @@ use bitcoin::address::NetworkUnchecked;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::{Amount, BitcoinAmountOrAll, PeerId, TieredCounts};
+use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts};
 use fedimint_gateway_common::{
     DepositAddressPayload, FederationInfo, LeaveFedPayload, ReceiveEcashPayload, SetFeesPayload,
     SpendEcashPayload, WithdrawPayload, WithdrawPreviewPayload,
@@ -145,7 +144,7 @@ pub fn scripts() -> Markup {
 
 pub fn render<E: Display>(
     fed: &FederationInfo,
-    invite_codes: &BTreeMap<PeerId, (String, InviteCode)>,
+    invite_code: Option<&InviteCode>,
     note_summary: &Result<TieredCounts, E>,
 ) -> Markup {
     html!(
@@ -534,70 +533,54 @@ pub fn render<E: Display>(
                                 role="tabpanel"
                                 aria-labelledby=(format!("peers-tab-{}", fed.federation_id))
                             {
-                                @if invite_codes.is_empty() {
-                                    div class="alert alert-secondary" {
-                                        "No invite codes found for this federation."
-                                    }
-                                } @else {
-                                    table class="table table-sm" {
-                                        thead {
-                                            tr {
-                                                th { "Peer ID" }
-                                                th { "Name" }
-                                                th { "Invite Code" }
-                                            }
+                                @match invite_code {
+                                    None => {
+                                        div class="alert alert-secondary" {
+                                            "No invite code found for this federation."
                                         }
-                                        tbody {
-                                            @for (peer_id, (name, code)) in invite_codes {
-                                                @let code_str = code.to_string();
-                                                @let modal_id = format!("qr-modal-{}-{}", fed.federation_id, peer_id);
-                                                @let qr = QrCode::new(code_str.as_bytes()).expect("Failed to generate QR code");
-                                                @let qr_svg = qr.render::<svg::Color>().build();
-                                                tr {
-                                                    td { (peer_id) }
-                                                    td { (name) }
-                                                    td {
-                                                        div class="d-flex align-items-center gap-1" {
-                                                            input type="text"
-                                                                class="form-control form-control-sm"
-                                                                value=(code_str)
-                                                                readonly
-                                                                onclick="copyText(this)"
-                                                                style="cursor: pointer; font-size: 0.75rem;";
-                                                            button type="button"
-                                                                class="btn btn-sm btn-outline-secondary"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target=(format!("#{}", modal_id))
-                                                                title="Show QR Code"
-                                                            { "QR" }
-                                                        }
+                                    }
+                                    Some(code) => {
+                                        @let code_str = code.to_string();
+                                        @let modal_id = format!("qr-modal-{}", fed.federation_id);
+                                        @let qr = QrCode::new(code_str.as_bytes()).expect("Failed to generate QR code");
+                                        @let qr_svg = qr.render::<svg::Color>().build();
+                                        div class="d-flex align-items-center gap-1" {
+                                            input type="text"
+                                                class="form-control form-control-sm"
+                                                value=(code_str)
+                                                readonly
+                                                onclick="copyText(this)"
+                                                style="cursor: pointer; font-size: 0.75rem;";
+                                            button type="button"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                data-bs-toggle="modal"
+                                                data-bs-target=(format!("#{}", modal_id))
+                                                title="Show QR Code"
+                                            { "QR" }
+                                        }
 
-                                                        // QR Code Modal
-                                                        div class="modal fade"
-                                                            id=(modal_id)
-                                                            tabindex="-1"
-                                                            aria-hidden="true"
+                                        // QR Code Modal
+                                        div class="modal fade"
+                                            id=(modal_id)
+                                            tabindex="-1"
+                                            aria-hidden="true"
+                                        {
+                                            div class="modal-dialog modal-dialog-centered" {
+                                                div class="modal-content" {
+                                                    div class="modal-header" {
+                                                        h5 class="modal-title" {
+                                                            "Invite Code"
+                                                        }
+                                                        button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
+                                                    }
+                                                    div class="modal-body d-flex justify-content-center" {
+                                                        div class="border rounded p-2 bg-white"
+                                                            style="width: 300px; height: 300px;"
                                                         {
-                                                            div class="modal-dialog modal-dialog-centered" {
-                                                                div class="modal-content" {
-                                                                    div class="modal-header" {
-                                                                        h5 class="modal-title" {
-                                                                            "Invite Code — Peer " (peer_id) " (" (name) ")"
-                                                                        }
-                                                                        button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
-                                                                    }
-                                                                    div class="modal-body d-flex justify-content-center" {
-                                                                        div class="border rounded p-2 bg-white"
-                                                                            style="width: 300px; height: 300px;"
-                                                                        {
-                                                                            (PreEscaped(format!(
-                                                                                r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
-                                                                                qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
-                                                                            )))
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
+                                                            (PreEscaped(format!(
+                                                                r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
+                                                                qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
+                                                            )))
                                                         }
                                                     }
                                                 }

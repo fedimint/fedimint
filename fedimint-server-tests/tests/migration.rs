@@ -28,7 +28,7 @@ use fedimint_server::consensus::db::{
     SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
-use fedimint_server::db::DbKeyPrefix;
+use fedimint_server::db::{DbKeyPrefix, InviteIdKeyPrefix, InviteUserCountKeyPrefix};
 use fedimint_server::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 use fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix;
 use fedimint_testing_core::db::{
@@ -224,6 +224,22 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // Guardian metadata is optional, just verify we can query it
                         let _metadata = dbtx
                             .find_by_prefix(&GuardianMetadataPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::InviteId => {
+                        // Invite ids are optional, just verify we can query them
+                        let _invite_ids = dbtx
+                            .find_by_prefix(&InviteIdKeyPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::InviteUserCount => {
+                        // Invite user counts are optional, just verify we can query them
+                        let _user_counts = dbtx
+                            .find_by_prefix(&InviteUserCountKeyPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

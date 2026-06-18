@@ -88,11 +88,6 @@ pub(crate) enum Command {
     #[clap(subcommand)]
     Dev(DevCmd),
 
-    /// Config enabling client to establish websocket connection to federation
-    InviteCode {
-        peer: PeerId,
-    },
-
     /// Join a federation using its InviteCode
     #[clap(alias = "join-federation")]
     Join {

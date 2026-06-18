@@ -9,12 +9,12 @@ use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
 
+use crate::PeerId;
 use crate::base32::FEDIMINT_PREFIX;
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
-use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
 ///
@@ -75,50 +75,6 @@ impl InviteCode {
         s
     }
 
-    pub fn from_map(
-        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
-        federation_id: FederationId,
-        api_secret: Option<String>,
-    ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
-        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
-            .iter()
-            .take(max_size)
-            .map(|(peer, url)| InviteCodePart::Api {
-                url: url.clone(),
-                peer: *peer,
-            })
-            .collect();
-
-        code_vec.push(InviteCodePart::FederationId(federation_id));
-
-        if let Some(api_secret) = api_secret {
-            code_vec.push(InviteCodePart::ApiSecret(api_secret));
-        }
-
-        Self(code_vec)
-    }
-
-    /// Constructs an [`InviteCode`] which contains as many guardian URLs as
-    /// needed to always be able to join a working federation
-    pub fn new_with_essential_num_guardians(
-        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
-        federation_id: FederationId,
-    ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
-        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
-            .iter()
-            .take(max_size)
-            .map(|(peer, url)| InviteCodePart::Api {
-                url: url.clone(),
-                peer: *peer,
-            })
-            .collect();
-        code_vec.push(InviteCodePart::FederationId(federation_id));
-
-        Self(code_vec)
-    }
-
     /// Returns the API URL of one of the guardians.
     pub fn url(&self) -> SafeUrl {
         self.0
@@ -171,6 +127,23 @@ impl InviteCode {
             })
             .expect("Ensured by constructor")
     }
+
+    /// Opaque id identifying this invite code to the issuing guardian, if one
+    /// was set.
+    pub fn invite_id(&self) -> Option<[u8; 16]> {
+        self.0.iter().find_map(|data| match data {
+            InviteCodePart::InviteId(invite_id) => Some(*invite_id),
+            _ => None,
+        })
+    }
+
+    /// Sets the invite id, replacing any previously set one.
+    pub fn with_invite_id(mut self, invite_id: [u8; 16]) -> Self {
+        self.0
+            .retain(|data| !matches!(data, InviteCodePart::InviteId(_)));
+        self.0.push(InviteCodePart::InviteId(invite_id));
+        self
+    }
 }
 
 /// For extendability [`InviteCode`] consists of parts, where client can ignore
@@ -196,6 +169,11 @@ enum InviteCodePart {
 
     /// Api secret to use
     ApiSecret(String),
+
+    /// Opaque id identifying this invite code to the issuing guardian, which
+    /// tracks metadata such as the expiration date and user limit for it in
+    /// its local database
+    InviteId([u8; 16]),
 
     /// Unknown invite code fields to be defined in the future
     #[encodable_default]

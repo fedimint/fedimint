@@ -21,12 +21,12 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use fedimint_core::TieredCounts;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{PeerId, TieredCounts};
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
@@ -231,9 +231,7 @@ pub trait IAdminGateway {
         payload: PaymentLogPayload,
     ) -> Result<PaymentLogResponse, Self::Error>;
 
-    async fn handle_export_invite_codes(
-        &self,
-    ) -> BTreeMap<FederationId, BTreeMap<PeerId, (String, InviteCode)>>;
+    async fn handle_export_invite_codes(&self) -> BTreeMap<FederationId, InviteCode>;
 
     fn get_password_hash(&self) -> String;
 
@@ -398,12 +396,11 @@ where
         }
 
         @let invite_codes = state.api.handle_export_invite_codes().await;
-        @let empty_map = BTreeMap::new();
 
         @for fed in &gateway_info.federations {
-            @let fed_codes = invite_codes.get(&fed.federation_id).unwrap_or(&empty_map);
+            @let invite_code = invite_codes.get(&fed.federation_id);
             @let note_summary = state.api.handle_get_note_summary_msg(&fed.federation_id).await;
-            (federation::render(fed, fed_codes, &note_summary))
+            (federation::render(fed, invite_code, &note_summary))
         }
     };
 
@@ -439,10 +436,7 @@ where
         .handle_export_invite_codes()
         .await
         .into_iter()
-        .map(|(fed_id, peers)| {
-            let codes = peers.into_values().map(|(_, code)| code).collect();
-            (fed_id, codes)
-        })
+        .map(|(fed_id, code)| (fed_id, vec![code]))
         .collect();
     let json = match serde_json::to_string_pretty(&invite_codes) {
         Ok(json) => json,

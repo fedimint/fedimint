@@ -1090,16 +1090,6 @@ impl FedimintCli {
         }
 
         match cli.command.clone() {
-            Command::InviteCode { peer } => {
-                let client = self.client_open(&cli).await?;
-
-                let invite_code = client
-                    .invite_code(peer)
-                    .await
-                    .ok_or_cli_msg("peer not found")?;
-
-                Ok(CliOutput::InviteCode { invite_code })
-            }
             Command::Join { invite_code } => {
                 {
                     let invite_code: InviteCode = InviteCode::from_str(&invite_code)
