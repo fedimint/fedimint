@@ -239,10 +239,6 @@ impl Opts {
         self.iroh_enable_dht.unwrap_or(true)
     }
 
-    fn iroh_enable_next(&self) -> bool {
-        self.iroh_enable_next.unwrap_or(true)
-    }
-
     fn use_tor(&self) -> bool {
         #[cfg(feature = "tor")]
         return self.use_tor;
@@ -299,7 +295,6 @@ impl Opts {
 
     async fn make_endpoints(&self) -> Result<ConnectorRegistry, anyhow::Error> {
         ConnectorRegistry::build_from_client_defaults()
-            .iroh_next(self.iroh_enable_next())
             .iroh_pkarr_dht(self.iroh_enable_dht())
             .ws_force_tor(self.use_tor())
             .bind()
@@ -440,8 +435,7 @@ impl FedimintCli {
         let mut client_builder = Client::builder()
             .await
             .map_err_cli()?
-            .with_iroh_enable_dht(cli.iroh_enable_dht())
-            .with_iroh_enable_next(cli.iroh_enable_next());
+            .with_iroh_enable_dht(cli.iroh_enable_dht());
         client_builder.with_module_inits(self.module_inits.clone());
 
         let db = cli.load_database().await?;

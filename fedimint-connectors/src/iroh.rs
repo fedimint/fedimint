@@ -93,7 +93,7 @@ use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection}
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
     stable: iroh::endpoint::Endpoint,
-    next: Option<iroh_next::endpoint::Endpoint>,
+    next: iroh_next::endpoint::Endpoint,
 
     /// List of overrides to use when attempting to connect to given
     /// `NodeId`
@@ -113,7 +113,7 @@ impl fmt::Debug for IrohConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IrohEndpoint")
             .field("stable-id", &self.stable.node_id())
-            .field("next-id", &self.next.as_ref().map(iroh_next::Endpoint::id))
+            .field("next-id", &self.next.id())
             .finish_non_exhaustive()
     }
 }
@@ -122,14 +122,11 @@ impl IrohConnector {
     pub async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
-        iroh_enable_next: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES";
-        let mut s =
-            Self::new_no_overrides(iroh_dns, iroh_enable_dht, iroh_enable_next, path_change)
-                .await?;
+        let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -146,7 +143,6 @@ impl IrohConnector {
     pub async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
-        iroh_enable_next: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> anyhow::Result<Self> {
         let endpoint_stable = Box::pin({
@@ -250,12 +246,7 @@ impl IrohConnector {
             Ok(endpoint)
         });
 
-        let (endpoint_stable, endpoint_next) = if iroh_enable_next {
-            let (s, n) = tokio::try_join!(endpoint_stable, endpoint_next)?;
-            (s, Some(n))
-        } else {
-            (endpoint_stable.await?, None)
-        };
+        let (endpoint_stable, endpoint_next) = tokio::try_join!(endpoint_stable, endpoint_next)?;
 
         Ok(Self {
             stable: endpoint_stable,
@@ -328,19 +319,17 @@ impl crate::Connector for IrohConnector {
             }
         }));
 
-        if let Some(endpoint_next) = &self.next {
-            let self_clone = self.clone();
-            let endpoint_next = endpoint_next.clone();
-            futures.push(Box::pin(async move {
-                (
-                    self_clone
-                        .make_new_connection_next(&endpoint_next, node_id, connection_override)
-                        .await
-                        .map(super::IGuardianConnection::into_dyn),
-                    "next",
-                )
-            }));
-        }
+        let self_clone = self.clone();
+        let endpoint_next = self.next.clone();
+        futures.push(Box::pin(async move {
+            (
+                self_clone
+                    .make_new_connection_next(&endpoint_next, node_id, connection_override)
+                    .await
+                    .map(super::IGuardianConnection::into_dyn),
+                "next",
+            )
+        }));
 
         // Remember last error, so we have something to return if
         // neither connection works.

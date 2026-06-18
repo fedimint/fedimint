@@ -15,7 +15,7 @@ use crate::client::{ClientCmd, ModuleSelector};
 use crate::envs::FM_USE_TOR_ENV;
 use crate::envs::{
     FM_API_SECRET_ENV, FM_CLIENT_DIR_ENV, FM_DB_BACKEND_ENV, FM_FEDERATION_SECRET_HEX_ENV,
-    FM_IROH_ENABLE_DHT_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV,
+    FM_IROH_ENABLE_DHT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV,
 };
 use crate::utils::parse_peer_id;
 
@@ -56,10 +56,6 @@ pub(crate) struct Opts {
     // Enable using DHT name resolution in Iroh
     #[arg(long, env = FM_IROH_ENABLE_DHT_ENV)]
     pub iroh_enable_dht: Option<bool>,
-
-    // Enable using (in parallel) unstable/next Iroh stack
-    #[arg(long, env = FM_IROH_ENABLE_NEXT_ENV)]
-    pub iroh_enable_next: Option<bool>,
 
     /// Database backend to use.
     #[arg(long, env = FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]

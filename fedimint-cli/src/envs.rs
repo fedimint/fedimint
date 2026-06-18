@@ -16,8 +16,6 @@ pub const FM_USE_TOR_ENV: &str = "FM_USE_TOR";
 
 pub const FM_IROH_ENABLE_DHT_ENV: &str = "FM_IROH_ENABLE_DHT";
 
-pub const FM_IROH_ENABLE_NEXT_ENV: &str = "FM_IROH_ENABLE_NEXT";
-
 // Api authentication secret
 pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
 

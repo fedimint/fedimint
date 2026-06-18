@@ -169,7 +169,6 @@ pub struct Client {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
-    iroh_enable_next: bool,
     /// User-provided Bitcoin RPC client for modules to use
     ///
     /// Stored here for potential future access; currently passed to modules

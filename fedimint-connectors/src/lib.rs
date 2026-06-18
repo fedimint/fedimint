@@ -54,8 +54,6 @@ pub struct ConnectorRegistryBuilder {
     iroh_enable: bool,
     /// Override the Iroh DNS server to use
     iroh_dns: Option<SafeUrl>,
-    /// Should start the "next/unstable" Iroh stack
-    iroh_next: bool,
     /// Enable Pkarr DHT discovery
     iroh_pkarr_dht: bool,
 
@@ -140,13 +138,8 @@ impl ConnectorRegistryBuilder {
             bail!("Iroh connector not enabled");
         }
         Ok(Arc::new(
-            iroh::IrohConnector::new(
-                self.iroh_dns.clone(),
-                self.iroh_pkarr_dht,
-                self.iroh_next,
-                path_change,
-            )
-            .await?,
+            iroh::IrohConnector::new(self.iroh_dns.clone(), self.iroh_pkarr_dht, path_change)
+                .await?,
         ) as DynConnector)
     }
 
@@ -180,13 +173,6 @@ impl ConnectorRegistryBuilder {
     pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
         Self {
             iroh_pkarr_dht: enable,
-            ..self
-        }
-    }
-
-    pub fn iroh_next(self, enable: bool) -> Self {
-        Self {
-            iroh_next: enable,
             ..self
         }
     }
@@ -285,7 +271,6 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
-            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
@@ -301,7 +286,6 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: true,
-            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: false,
@@ -317,7 +301,6 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
-            iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
