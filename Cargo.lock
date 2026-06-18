@@ -3530,6 +3530,7 @@ dependencies = [
  "fedimint-lnv2-common",
  "futures",
  "lightning-invoice",
+ "lockable",
  "serde",
  "thiserror 2.0.12",
  "tokio-stream",

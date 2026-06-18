@@ -161,6 +161,7 @@ impl ClientModuleInit for GatewayClientInit {
             client_ctx: args.context(),
             lightning_manager: self.lightning_manager.clone(),
             connector_registry: args.connector_registry.clone(),
+            intercepted_htlc_lock_pool: lockable::LockPool::new(),
         })
     }
 }
@@ -197,7 +198,6 @@ impl From<&GatewayClientContext> for LightningClientContext {
 ///
 /// For the client side Lightning module for normal clients,
 /// see [`fedimint_ln_client::LightningClientModule`]
-#[derive(Debug)]
 pub struct GatewayClientModule {
     cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<GatewayClientStateMachines>,
@@ -207,6 +207,14 @@ pub struct GatewayClientModule {
     client_ctx: ClientContext<Self>,
     pub lightning_manager: Arc<dyn IGatewayClientV1>,
     connector_registry: ConnectorRegistry,
+    intercepted_htlc_lock_pool: lockable::LockPool<HtlcCircuitKey>,
+}
+
+impl fmt::Debug for GatewayClientModule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GatewayClientModule")
+            .finish_non_exhaustive()
+    }
 }
 
 impl ClientModule for GatewayClientModule {
@@ -474,12 +482,76 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    /// Attempt fulfill HTLC by buying preimage from the federation
+    /// Attempt fulfill HTLC by buying preimage from the federation.
+    ///
+    /// LND can replay a still-pending HTLC after interceptor reconnect or
+    /// gatewayd restart. Since the operation id is deterministic from the
+    /// payment hash, the replay must not re-fetch the consumed federation offer
+    /// or submit the same funding transaction again.
+    ///
+    /// We only short-circuit if a `GatewayCompleteStateMachine` is or was
+    /// handling the exact same LND circuit. Direct swaps with the same payment
+    /// hash and different circuits fall through to the normal failure/cancel
+    /// path.
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, amount, client_output, client_output_sm, contract_id) = self
+
+        let operation_id = OperationId(htlc.payment_hash.to_byte_array());
+        let circuit_key = HtlcCircuitKey {
+            operation_id,
+            incoming_chan_id: htlc.incoming_chan_id,
+            htlc_id: htlc.htlc_id,
+        };
+
+        // Serialize same-circuit handling so the active-state replay scan and
+        // operation creation are atomic for LND stream-reconnect replays.
+        let _circuit_lock_guard = self
+            .intercepted_htlc_lock_pool
+            .async_lock(circuit_key)
+            .await;
+
+        // Check before the funding helper: the first handling consumes the
+        // federation offer. Match the full circuit key, not just `operation_id`.
+        let replay_of_active_circuit = self
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .into_iter()
+            .any(|(state, _)| circuit_key.matches_state(&state));
+        if replay_of_active_circuit {
+            debug!(
+                ?operation_id,
+                incoming_chan_id = htlc.incoming_chan_id,
+                htlc_id = htlc.htlc_id,
+                "HTLC circuit already being handled by an active completion state machine, treating as in-flight (likely an LND stream-reconnect replay)"
+            );
+            return Ok(operation_id);
+        }
+        let replay_of_inactive_circuit = self
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .into_iter()
+            .any(|(state, _)| circuit_key.matches_state(&state));
+        if replay_of_inactive_circuit {
+            debug!(
+                ?operation_id,
+                incoming_chan_id = htlc.incoming_chan_id,
+                htlc_id = htlc.htlc_id,
+                "HTLC circuit was already handled by a completion state machine, treating as idempotent replay"
+            );
+            return Ok(operation_id);
+        }
+
+        let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
+        // Keep the direct derivation above in sync with the funding helper. Return
+        // an error instead of panicking so the caller can fail back the HTLC cleanly.
+        anyhow::ensure!(
+            op_id_from_funding == operation_id,
+            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
+        );
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
@@ -759,6 +831,25 @@ impl GatewayClientModule {
                 }
             }
         }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+struct HtlcCircuitKey {
+    operation_id: OperationId,
+    incoming_chan_id: u64,
+    htlc_id: u64,
+}
+
+impl HtlcCircuitKey {
+    fn matches_state(self, state: &GatewayClientStateMachines) -> bool {
+        matches!(
+            state,
+            GatewayClientStateMachines::Complete(sm)
+                if sm.common.operation_id == self.operation_id
+                    && sm.common.incoming_chan_id == self.incoming_chan_id
+                    && sm.common.htlc_id == self.htlc_id
+        )
     }
 }
 
