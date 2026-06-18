@@ -2,11 +2,11 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::util::broadcaststream::BroadcastStream;
-use fedimint_core::util::{BoxStream, FmtCompact};
+use fedimint_core::util::broadcaststream::{BroadcastStream, BroadcastStreamRecvError};
+use fedimint_core::util::BoxStream;
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
-use tracing::{debug, error, trace};
+use tracing::{debug, trace, warn};
 
 use super::{DynState, State};
 use crate::module::FinalClientIface;
@@ -143,26 +143,25 @@ where
         let module_instance_id = self.module_instance;
         Box::pin(
             BroadcastStream::new(self.broadcast.subscribe())
-                .take_while(|res| {
-                    let cont = if let Err(err) = res {
-                        error!(target: LOG_CLIENT, err = %err.fmt_compact(), "ModuleNotifier stream stopped on error");
-                        false
-                    } else {
-                        true
-                    };
-                    std::future::ready(cont)
-                })
                 .filter_map(move |res| async move {
-                    let s = res.expect("We filtered out errors above");
-                    if s.module_instance_id() == module_instance_id {
-                        Some(
-                            s.as_any()
-                                .downcast_ref::<S>()
-                                .expect("Tried to subscribe to wrong state type")
-                                .clone(),
-                        )
-                    } else {
-                        None
+                    match res {
+                        Ok(state) => {
+                            if state.module_instance_id() == module_instance_id {
+                                Some(
+                                    state
+                                        .as_any()
+                                        .downcast_ref::<S>()
+                                        .expect("Tried to subscribe to wrong state type")
+                                        .clone(),
+                                )
+                            } else {
+                                None
+                            }
+                        }
+                        Err(BroadcastStreamRecvError::Lagged(n)) => {
+                            warn!(target: LOG_CLIENT, skipped = n, "ModuleNotifier consumer lagged, catching up");
+                            None
+                        }
                     }
                 }),
         )
