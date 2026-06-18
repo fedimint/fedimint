@@ -50,7 +50,7 @@ use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::metrics::{
     IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTIONS_ACTIVE,
-    IROH_API_REQUEST_DURATION_SECONDS,
+    IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
 };
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
@@ -582,6 +582,13 @@ async fn handle_request(
     let response = await_response(consensus_api, core_api, module_api, request).await;
 
     timer.observe_duration();
+
+    let response_code = response
+        .as_ref()
+        .map_or_else(|err| err.code.to_string(), |_| "0".to_string());
+    IROH_API_REQUEST_RESPONSE_CODE
+        .with_label_values(&[method.as_str(), response_code.as_str(), "default"])
+        .inc();
 
     let response = serde_json::to_vec(&response)?;
 
