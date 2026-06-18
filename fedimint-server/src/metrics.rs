@@ -132,6 +132,18 @@ pub(crate) static IROH_API_REQUEST_DURATION_SECONDS: LazyLock<HistogramVec> = La
     .unwrap()
 });
 
+pub(crate) static IROH_API_REQUEST_RESPONSE_CODE: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec_with_registry!(
+        opts!(
+            "iroh_api_request_response_code_total",
+            "Count of iroh API response codes and types",
+        ),
+        &["method", "code", "type"],
+        REGISTRY
+    )
+    .unwrap()
+});
+
 pub(crate) static JSONRPC_API_REQUEST_DURATION_SECONDS: LazyLock<HistogramVec> =
     LazyLock::new(|| {
         register_histogram_vec_with_registry!(
