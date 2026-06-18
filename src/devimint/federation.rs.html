@@ -903,466 +903,502 @@
 <a href=#903 id=903 data-nosnippet>903</a>
 <a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
 <a href=#905 id=905 data-nosnippet>905</a>            <span class="kw">let </span>pegin_addr = gw.client().get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#906 id=906 data-nosnippet>906</a>            <span class="self">self</span>.bitcoind
-<a href=#907 id=907 data-nosnippet>907</a>                .send_to(pegin_addr, amount + deposit_fees)
-<a href=#908 id=908 data-nosnippet>908</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#909 id=909 data-nosnippet>909</a>        }
-<a href=#910 id=910 data-nosnippet>910</a>
-<a href=#911 id=911 data-nosnippet>911</a>        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">let </span>bitcoind_block_height: u64 = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
-<a href=#913 id=913 data-nosnippet>913</a>        try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
-<a href=#914 id=914 data-nosnippet>914</a>            <span class="kw">let </span>initial_balance = <span class="kw">if </span>uses_walletv2 {
-<a href=#915 id=915 data-nosnippet>915</a>                initial_balances[i]
-<a href=#916 id=916 data-nosnippet>916</a>            } <span class="kw">else </span>{
-<a href=#917 id=917 data-nosnippet>917</a>                <span class="number">0
-<a href=#918 id=918 data-nosnippet>918</a>            </span>};
-<a href=#919 id=919 data-nosnippet>919</a>            <span class="kw">let </span>fed_id = fed_id.clone();
-<a href=#920 id=920 data-nosnippet>920</a>            poll(<span class="string">"gateway pegin"</span>, <span class="kw">move </span>|| {
-<a href=#921 id=921 data-nosnippet>921</a>                <span class="kw">let </span>fed_id = fed_id.clone();
-<a href=#922 id=922 data-nosnippet>922</a>                <span class="kw">async move </span>{
-<a href=#923 id=923 data-nosnippet>923</a>                    <span class="kw">let </span>gw_info = gw
-<a href=#924 id=924 data-nosnippet>924</a>                        .client()
-<a href=#925 id=925 data-nosnippet>925</a>                        .get_info()
-<a href=#926 id=926 data-nosnippet>926</a>                        .<span class="kw">await
-<a href=#927 id=927 data-nosnippet>927</a>                        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#928 id=928 data-nosnippet>928</a>
-<a href=#929 id=929 data-nosnippet>929</a>                    <span class="kw">let </span>block_height: u64 = <span class="kw">if </span>gw.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
-<a href=#930 id=930 data-nosnippet>930</a>                        gw_info[<span class="string">"block_height"</span>]
-<a href=#931 id=931 data-nosnippet>931</a>                            .as_u64()
-<a href=#932 id=932 data-nosnippet>932</a>                            .expect(<span class="string">"Could not parse block height"</span>)
-<a href=#933 id=933 data-nosnippet>933</a>                    } <span class="kw">else </span>{
-<a href=#934 id=934 data-nosnippet>934</a>                        gw_info[<span class="string">"lightning_info"</span>][<span class="string">"connected"</span>][<span class="string">"block_height"</span>]
-<a href=#935 id=935 data-nosnippet>935</a>                            .as_u64()
-<a href=#936 id=936 data-nosnippet>936</a>                            .expect(<span class="string">"Could not parse block height"</span>)
-<a href=#937 id=937 data-nosnippet>937</a>                    };
-<a href=#938 id=938 data-nosnippet>938</a>
-<a href=#939 id=939 data-nosnippet>939</a>                    <span class="kw">if </span><span class="macro">bitcoind_block_height !</span>= block_height {
-<a href=#940 id=940 data-nosnippet>940</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-<a href=#941 id=941 data-nosnippet>941</a>                            <span class="string">"gateway block height is not synced"
-<a href=#942 id=942 data-nosnippet>942</a>                        </span>)));
-<a href=#943 id=943 data-nosnippet>943</a>                    }
-<a href=#944 id=944 data-nosnippet>944</a>
-<a href=#945 id=945 data-nosnippet>945</a>                    <span class="kw">let </span>gateway_balance = gw
-<a href=#946 id=946 data-nosnippet>946</a>                        .client()
-<a href=#947 id=947 data-nosnippet>947</a>                        .ecash_balance(fed_id)
-<a href=#948 id=948 data-nosnippet>948</a>                        .<span class="kw">await
-<a href=#949 id=949 data-nosnippet>949</a>                        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#950 id=950 data-nosnippet>950</a>
-<a href=#951 id=951 data-nosnippet>951</a>                    <span class="kw">if </span>uses_walletv2 {
-<a href=#952 id=952 data-nosnippet>952</a>                        <span class="comment">// Walletv2: check balance increased by approximately
-<a href=#953 id=953 data-nosnippet>953</a>                        // the expected amount. Use 90% threshold to account
-<a href=#954 id=954 data-nosnippet>954</a>                        // for mintv2 fees (same as pegin_client).
-<a href=#955 id=955 data-nosnippet>955</a>                        </span><span class="kw">let </span>expected = initial_balance + (amount * <span class="number">1000 </span>* <span class="number">9 </span>/ <span class="number">10</span>);
-<a href=#956 id=956 data-nosnippet>956</a>                        <span class="kw">if </span>gateway_balance &gt;= expected {
-<a href=#957 id=957 data-nosnippet>957</a>                            <span class="prelude-val">Ok</span>(())
-<a href=#958 id=958 data-nosnippet>958</a>                        } <span class="kw">else </span>{
-<a href=#959 id=959 data-nosnippet>959</a>                            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-<a href=#960 id=960 data-nosnippet>960</a>                                <span class="string">"Gateway balance {gateway_balance} has not reached expected {expected} (initial: {initial_balance})"
-<a href=#961 id=961 data-nosnippet>961</a>                            </span>)))
-<a href=#962 id=962 data-nosnippet>962</a>                        }
-<a href=#963 id=963 data-nosnippet>963</a>                    } <span class="kw">else </span>{
-<a href=#964 id=964 data-nosnippet>964</a>                        <span class="macro">poll_almost_equal!</span>(gateway_balance, amount * <span class="number">1000</span>)
-<a href=#965 id=965 data-nosnippet>965</a>                    }
-<a href=#966 id=966 data-nosnippet>966</a>                }
-<a href=#967 id=967 data-nosnippet>967</a>            })
-<a href=#968 id=968 data-nosnippet>968</a>        }))
-<a href=#969 id=969 data-nosnippet>969</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#970 id=970 data-nosnippet>970</a>
-<a href=#971 id=971 data-nosnippet>971</a>        <span class="prelude-val">Ok</span>(())
-<a href=#972 id=972 data-nosnippet>972</a>    }
-<a href=#973 id=973 data-nosnippet>973</a>
-<a href=#974 id=974 data-nosnippet>974</a>    <span class="doccomment">/// Initiates multiple peg-outs from the same federation for the set of
-<a href=#975 id=975 data-nosnippet>975</a>    /// gateways to save on mining blocks in parallel.
-<a href=#976 id=976 data-nosnippet>976</a>    </span><span class="kw">pub async fn </span>pegout_gateways(
-<a href=#977 id=977 data-nosnippet>977</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#978 id=978 data-nosnippet>978</a>        amount: u64,
-<a href=#979 id=979 data-nosnippet>979</a>        gateways: Vec&lt;<span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd&gt;,
-<a href=#980 id=980 data-nosnippet>980</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#981 id=981 data-nosnippet>981</a>        <span class="macro">info!</span>(amount, <span class="string">"Pegging-out gateway funds"</span>);
-<a href=#982 id=982 data-nosnippet>982</a>        <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id();
-<a href=#983 id=983 data-nosnippet>983</a>        <span class="kw">let </span><span class="kw-2">mut </span>peg_outs: BTreeMap&lt;LightningNodeType, (Amount, WithdrawResponse)&gt; = BTreeMap::new();
-<a href=#984 id=984 data-nosnippet>984</a>        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
-<a href=#985 id=985 data-nosnippet>985</a>            <span class="kw">let </span>prev_fed_ecash_balance = gw
-<a href=#986 id=986 data-nosnippet>986</a>                .client()
-<a href=#987 id=987 data-nosnippet>987</a>                .get_balances()
-<a href=#988 id=988 data-nosnippet>988</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#989 id=989 data-nosnippet>989</a>                </span>.ecash_balances
-<a href=#990 id=990 data-nosnippet>990</a>                .into_iter()
-<a href=#991 id=991 data-nosnippet>991</a>                .find(|fed| fed.federation_id.to_string() == fed_id)
-<a href=#992 id=992 data-nosnippet>992</a>                .expect(<span class="string">"Gateway has not joined federation"</span>)
-<a href=#993 id=993 data-nosnippet>993</a>                .ecash_balance_msats;
-<a href=#994 id=994 data-nosnippet>994</a>
-<a href=#995 id=995 data-nosnippet>995</a>            <span class="kw">let </span>pegout_address = <span class="self">self</span>.bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#996 id=996 data-nosnippet>996</a>            <span class="kw">let </span>response = gw
-<a href=#997 id=997 data-nosnippet>997</a>                .client()
-<a href=#998 id=998 data-nosnippet>998</a>                .pegout(fed_id.clone(), amount, pegout_address)
-<a href=#999 id=999 data-nosnippet>999</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1000 id=1000 data-nosnippet>1000</a>            peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
-<a href=#1001 id=1001 data-nosnippet>1001</a>        }
-<a href=#1002 id=1002 data-nosnippet>1002</a>        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1003 id=1003 data-nosnippet>1003</a>
-<a href=#1004 id=1004 data-nosnippet>1004</a>        try_join_all(
-<a href=#1005 id=1005 data-nosnippet>1005</a>            peg_outs
-<a href=#1006 id=1006 data-nosnippet>1006</a>                .values()
-<a href=#1007 id=1007 data-nosnippet>1007</a>                .map(|(<span class="kw">_</span>, pegout)| <span class="self">self</span>.bitcoind.poll_get_transaction(pegout.txid)),
-<a href=#1008 id=1008 data-nosnippet>1008</a>        )
-<a href=#1009 id=1009 data-nosnippet>1009</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1010 id=1010 data-nosnippet>1010</a>
-<a href=#1011 id=1011 data-nosnippet>1011</a>        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
-<a href=#1012 id=1012 data-nosnippet>1012</a>            <span class="kw">let </span>after_fed_ecash_balance = gw
-<a href=#1013 id=1013 data-nosnippet>1013</a>                .client()
-<a href=#1014 id=1014 data-nosnippet>1014</a>                .get_balances()
-<a href=#1015 id=1015 data-nosnippet>1015</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#1016 id=1016 data-nosnippet>1016</a>                </span>.ecash_balances
-<a href=#1017 id=1017 data-nosnippet>1017</a>                .into_iter()
-<a href=#1018 id=1018 data-nosnippet>1018</a>                .find(|fed| fed.federation_id.to_string() == fed_id)
-<a href=#1019 id=1019 data-nosnippet>1019</a>                .expect(<span class="string">"Gateway has not joined federation"</span>)
-<a href=#1020 id=1020 data-nosnippet>1020</a>                .ecash_balance_msats;
-<a href=#1021 id=1021 data-nosnippet>1021</a>
-<a href=#1022 id=1022 data-nosnippet>1022</a>            <span class="kw">let </span>ln_type = gw.ln.ln_type();
-<a href=#1023 id=1023 data-nosnippet>1023</a>            <span class="kw">let </span>prev_balance = peg_outs
-<a href=#1024 id=1024 data-nosnippet>1024</a>                .get(<span class="kw-2">&amp;</span>ln_type)
-<a href=#1025 id=1025 data-nosnippet>1025</a>                .expect(<span class="string">"peg out does not exist"</span>)
-<a href=#1026 id=1026 data-nosnippet>1026</a>                .<span class="number">0
-<a href=#1027 id=1027 data-nosnippet>1027</a>                </span>.msats;
-<a href=#1028 id=1028 data-nosnippet>1028</a>            <span class="kw">let </span>fees = peg_outs
-<a href=#1029 id=1029 data-nosnippet>1029</a>                .get(<span class="kw-2">&amp;</span>ln_type)
-<a href=#1030 id=1030 data-nosnippet>1030</a>                .expect(<span class="string">"peg out does not exist"</span>)
-<a href=#1031 id=1031 data-nosnippet>1031</a>                .<span class="number">1
-<a href=#1032 id=1032 data-nosnippet>1032</a>                </span>.fees;
-<a href=#1033 id=1033 data-nosnippet>1033</a>            <span class="kw">let </span>total_fee = fees.amount().to_sat() * <span class="number">1000</span>;
-<a href=#1034 id=1034 data-nosnippet>1034</a>            <span class="comment">// Walletv2 charges a module fee on top of the on-chain fee:
-<a href=#1035 id=1035 data-nosnippet>1035</a>            // 100 sats base + 1% of amount (amount is in msats)
-<a href=#1036 id=1036 data-nosnippet>1036</a>            </span><span class="kw">let </span>tolerance = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
-<a href=#1037 id=1037 data-nosnippet>1037</a>                <span class="kw">let </span>amount_sats = amount / <span class="number">1000</span>;
-<a href=#1038 id=1038 data-nosnippet>1038</a>                <span class="kw">let </span>module_fee_sats = <span class="number">100 </span>+ amount_sats / <span class="number">100</span>;
-<a href=#1039 id=1039 data-nosnippet>1039</a>                module_fee_sats * <span class="number">1000 </span>+ <span class="number">2000
-<a href=#1040 id=1040 data-nosnippet>1040</a>            </span>} <span class="kw">else if </span><span class="kw">crate</span>::util::supports_mint_v2() {
-<a href=#1041 id=1041 data-nosnippet>1041</a>                <span class="number">4000
-<a href=#1042 id=1042 data-nosnippet>1042</a>            </span>} <span class="kw">else </span>{
-<a href=#1043 id=1043 data-nosnippet>1043</a>                <span class="number">2000
-<a href=#1044 id=1044 data-nosnippet>1044</a>            </span>};
-<a href=#1045 id=1045 data-nosnippet>1045</a>            <span class="kw">crate</span>::util::almost_equal(
-<a href=#1046 id=1046 data-nosnippet>1046</a>                after_fed_ecash_balance.msats,
-<a href=#1047 id=1047 data-nosnippet>1047</a>                prev_balance - amount - total_fee,
-<a href=#1048 id=1048 data-nosnippet>1048</a>                tolerance,
-<a href=#1049 id=1049 data-nosnippet>1049</a>            )
-<a href=#1050 id=1050 data-nosnippet>1050</a>            .map_err(|e| {
-<a href=#1051 id=1051 data-nosnippet>1051</a>                <span class="macro">anyhow::anyhow!</span>(
-<a href=#1052 id=1052 data-nosnippet>1052</a>                    <span class="string">"new balance did not equal prev balance minus withdraw_amount minus fees: {e}"
-<a href=#1053 id=1053 data-nosnippet>1053</a>                </span>)
-<a href=#1054 id=1054 data-nosnippet>1054</a>            })<span class="question-mark">?</span>;
-<a href=#1055 id=1055 data-nosnippet>1055</a>        }
-<a href=#1056 id=1056 data-nosnippet>1056</a>
-<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1058 id=1058 data-nosnippet>1058</a>    }
-<a href=#1059 id=1059 data-nosnippet>1059</a>
-<a href=#1060 id=1060 data-nosnippet>1060</a>    <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-<a href=#1061 id=1061 data-nosnippet>1061</a>        <span class="self">self</span>.client_config()
-<a href=#1062 id=1062 data-nosnippet>1062</a>            .unwrap()
-<a href=#1063 id=1063 data-nosnippet>1063</a>            .global
-<a href=#1064 id=1064 data-nosnippet>1064</a>            .calculate_federation_id()
-<a href=#1065 id=1065 data-nosnippet>1065</a>            .to_string()
-<a href=#1066 id=1066 data-nosnippet>1066</a>    }
-<a href=#1067 id=1067 data-nosnippet>1067</a>
-<a href=#1068 id=1068 data-nosnippet>1068</a>    <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
-<a href=#1070 id=1070 data-nosnippet>1070</a>        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
-<a href=#1072 id=1072 data-nosnippet>1072</a>
-<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
-<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="comment">// Walletv2 doesn't have `dev wait-block-count`, poll using CLI instead
-<a href=#1075 id=1075 data-nosnippet>1075</a>            </span><span class="kw">let </span>client = <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1076 id=1076 data-nosnippet>1076</a>            <span class="kw">loop </span>{
-<a href=#1077 id=1077 data-nosnippet>1077</a>                <span class="kw">let </span>value = <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"walletv2"</span>, <span class="string">"info"</span>, <span class="string">"block-count"</span>)
-<a href=#1078 id=1078 data-nosnippet>1078</a>                    .out_json()
-<a href=#1079 id=1079 data-nosnippet>1079</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1080 id=1080 data-nosnippet>1080</a>                <span class="kw">let </span>current: u64 = serde_json::from_value(value)<span class="question-mark">?</span>;
-<a href=#1081 id=1081 data-nosnippet>1081</a>                <span class="kw">if </span>current &gt;= expected {
-<a href=#1082 id=1082 data-nosnippet>1082</a>                    <span class="kw">break</span>;
-<a href=#1083 id=1083 data-nosnippet>1083</a>                }
-<a href=#1084 id=1084 data-nosnippet>1084</a>                fedimint_core::task::sleep_in_test(
-<a href=#1085 id=1085 data-nosnippet>1085</a>                    <span class="macro">format!</span>(<span class="string">"Waiting for consensus block count to reach {expected}"</span>),
-<a href=#1086 id=1086 data-nosnippet>1086</a>                    std::time::Duration::from_secs(<span class="number">1</span>),
-<a href=#1087 id=1087 data-nosnippet>1087</a>                )
-<a href=#1088 id=1088 data-nosnippet>1088</a>                .<span class="kw">await</span>;
-<a href=#1089 id=1089 data-nosnippet>1089</a>            }
-<a href=#1090 id=1090 data-nosnippet>1090</a>        } <span class="kw">else </span>{
-<a href=#1091 id=1091 data-nosnippet>1091</a>            <span class="macro">cmd!</span>(
-<a href=#1092 id=1092 data-nosnippet>1092</a>                <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#1093 id=1093 data-nosnippet>1093</a>                <span class="string">"dev"</span>,
-<a href=#1094 id=1094 data-nosnippet>1094</a>                <span class="string">"wait-block-count"</span>,
-<a href=#1095 id=1095 data-nosnippet>1095</a>                expected
-<a href=#1096 id=1096 data-nosnippet>1096</a>            )
-<a href=#1097 id=1097 data-nosnippet>1097</a>            .run()
-<a href=#1098 id=1098 data-nosnippet>1098</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1099 id=1099 data-nosnippet>1099</a>        }
-<a href=#1100 id=1100 data-nosnippet>1100</a>
-<a href=#1101 id=1101 data-nosnippet>1101</a>        <span class="prelude-val">Ok</span>(expected)
+<a href=#906 id=906 data-nosnippet>906</a>            <span class="macro">debug!</span>(
+<a href=#907 id=907 data-nosnippet>907</a>                gateway = %gw.gw_name,
+<a href=#908 id=908 data-nosnippet>908</a>                ln = %gw.ln.ln_type(),
+<a href=#909 id=909 data-nosnippet>909</a>                address = %pegin_addr,
+<a href=#910 id=910 data-nosnippet>910</a>                amount_sats = amount + deposit_fees,
+<a href=#911 id=911 data-nosnippet>911</a>                uses_walletv2,
+<a href=#912 id=912 data-nosnippet>912</a>                <span class="string">"Sending gateway pegin"
+<a href=#913 id=913 data-nosnippet>913</a>            </span>);
+<a href=#914 id=914 data-nosnippet>914</a>            <span class="self">self</span>.bitcoind
+<a href=#915 id=915 data-nosnippet>915</a>                .send_to(pegin_addr, amount + deposit_fees)
+<a href=#916 id=916 data-nosnippet>916</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#917 id=917 data-nosnippet>917</a>        }
+<a href=#918 id=918 data-nosnippet>918</a>
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="kw">let </span>pegin_start = Instant::now();
+<a href=#920 id=920 data-nosnippet>920</a>        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#921 id=921 data-nosnippet>921</a>        <span class="kw">let </span>bitcoind_block_height: u64 = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
+<a href=#922 id=922 data-nosnippet>922</a>        <span class="macro">debug!</span>(
+<a href=#923 id=923 data-nosnippet>923</a>            bitcoind_block_height,
+<a href=#924 id=924 data-nosnippet>924</a>            elapsed_ms = %pegin_start.elapsed().as_millis(),
+<a href=#925 id=925 data-nosnippet>925</a>            <span class="string">"Mined gateway pegin blocks"
+<a href=#926 id=926 data-nosnippet>926</a>        </span>);
+<a href=#927 id=927 data-nosnippet>927</a>
+<a href=#928 id=928 data-nosnippet>928</a>        try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
+<a href=#929 id=929 data-nosnippet>929</a>            <span class="kw">let </span>initial_balance = <span class="kw">if </span>uses_walletv2 {
+<a href=#930 id=930 data-nosnippet>930</a>                initial_balances[i]
+<a href=#931 id=931 data-nosnippet>931</a>            } <span class="kw">else </span>{
+<a href=#932 id=932 data-nosnippet>932</a>                <span class="number">0
+<a href=#933 id=933 data-nosnippet>933</a>            </span>};
+<a href=#934 id=934 data-nosnippet>934</a>            <span class="kw">let </span>gateway_name = gw.gw_name.clone();
+<a href=#935 id=935 data-nosnippet>935</a>            <span class="kw">let </span>gateway_ln = gw.ln.ln_type().to_string();
+<a href=#936 id=936 data-nosnippet>936</a>            <span class="kw">let </span>fed_id = fed_id.clone();
+<a href=#937 id=937 data-nosnippet>937</a>            poll(<span class="string">"gateway pegin"</span>, <span class="kw">move </span>|| {
+<a href=#938 id=938 data-nosnippet>938</a>                <span class="kw">let </span>fed_id = fed_id.clone();
+<a href=#939 id=939 data-nosnippet>939</a>                <span class="kw">let </span>gateway_name = gateway_name.clone();
+<a href=#940 id=940 data-nosnippet>940</a>                <span class="kw">let </span>gateway_ln = gateway_ln.clone();
+<a href=#941 id=941 data-nosnippet>941</a>                <span class="kw">async move </span>{
+<a href=#942 id=942 data-nosnippet>942</a>                    <span class="kw">let </span>gw_info = gw
+<a href=#943 id=943 data-nosnippet>943</a>                        .client()
+<a href=#944 id=944 data-nosnippet>944</a>                        .get_info()
+<a href=#945 id=945 data-nosnippet>945</a>                        .<span class="kw">await
+<a href=#946 id=946 data-nosnippet>946</a>                        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#947 id=947 data-nosnippet>947</a>
+<a href=#948 id=948 data-nosnippet>948</a>                    <span class="kw">let </span>block_height: u64 = <span class="kw">if </span>gw.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
+<a href=#949 id=949 data-nosnippet>949</a>                        gw_info[<span class="string">"block_height"</span>]
+<a href=#950 id=950 data-nosnippet>950</a>                            .as_u64()
+<a href=#951 id=951 data-nosnippet>951</a>                            .expect(<span class="string">"Could not parse block height"</span>)
+<a href=#952 id=952 data-nosnippet>952</a>                    } <span class="kw">else </span>{
+<a href=#953 id=953 data-nosnippet>953</a>                        gw_info[<span class="string">"lightning_info"</span>][<span class="string">"connected"</span>][<span class="string">"block_height"</span>]
+<a href=#954 id=954 data-nosnippet>954</a>                            .as_u64()
+<a href=#955 id=955 data-nosnippet>955</a>                            .expect(<span class="string">"Could not parse block height"</span>)
+<a href=#956 id=956 data-nosnippet>956</a>                    };
+<a href=#957 id=957 data-nosnippet>957</a>
+<a href=#958 id=958 data-nosnippet>958</a>                    <span class="kw">if </span><span class="macro">bitcoind_block_height !</span>= block_height {
+<a href=#959 id=959 data-nosnippet>959</a>                        <span class="macro">debug!</span>(
+<a href=#960 id=960 data-nosnippet>960</a>                            gateway = %gateway_name,
+<a href=#961 id=961 data-nosnippet>961</a>                            ln = %gateway_ln,
+<a href=#962 id=962 data-nosnippet>962</a>                            bitcoind_block_height,
+<a href=#963 id=963 data-nosnippet>963</a>                            gateway_block_height = block_height,
+<a href=#964 id=964 data-nosnippet>964</a>                            elapsed_ms = %pegin_start.elapsed().as_millis(),
+<a href=#965 id=965 data-nosnippet>965</a>                            <span class="string">"Waiting for gateway pegin block sync"
+<a href=#966 id=966 data-nosnippet>966</a>                        </span>);
+<a href=#967 id=967 data-nosnippet>967</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+<a href=#968 id=968 data-nosnippet>968</a>                            <span class="string">"gateway block height is not synced"
+<a href=#969 id=969 data-nosnippet>969</a>                        </span>)));
+<a href=#970 id=970 data-nosnippet>970</a>                    }
+<a href=#971 id=971 data-nosnippet>971</a>
+<a href=#972 id=972 data-nosnippet>972</a>                    <span class="kw">let </span>gateway_balance = gw
+<a href=#973 id=973 data-nosnippet>973</a>                        .client()
+<a href=#974 id=974 data-nosnippet>974</a>                        .ecash_balance(fed_id)
+<a href=#975 id=975 data-nosnippet>975</a>                        .<span class="kw">await
+<a href=#976 id=976 data-nosnippet>976</a>                        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#977 id=977 data-nosnippet>977</a>
+<a href=#978 id=978 data-nosnippet>978</a>                    <span class="kw">if </span>uses_walletv2 {
+<a href=#979 id=979 data-nosnippet>979</a>                        <span class="comment">// Walletv2: check balance increased by approximately
+<a href=#980 id=980 data-nosnippet>980</a>                        // the expected amount. Use 90% threshold to account
+<a href=#981 id=981 data-nosnippet>981</a>                        // for mintv2 fees (same as pegin_client).
+<a href=#982 id=982 data-nosnippet>982</a>                        </span><span class="kw">let </span>expected = initial_balance + (amount * <span class="number">1000 </span>* <span class="number">9 </span>/ <span class="number">10</span>);
+<a href=#983 id=983 data-nosnippet>983</a>                        <span class="macro">debug!</span>(
+<a href=#984 id=984 data-nosnippet>984</a>                            gateway = %gateway_name,
+<a href=#985 id=985 data-nosnippet>985</a>                            ln = %gateway_ln,
+<a href=#986 id=986 data-nosnippet>986</a>                            gateway_balance_msats = gateway_balance,
+<a href=#987 id=987 data-nosnippet>987</a>                            expected_msats = expected,
+<a href=#988 id=988 data-nosnippet>988</a>                            initial_balance_msats = initial_balance,
+<a href=#989 id=989 data-nosnippet>989</a>                            elapsed_ms = %pegin_start.elapsed().as_millis(),
+<a href=#990 id=990 data-nosnippet>990</a>                            <span class="string">"Checked walletv2 gateway pegin balance"
+<a href=#991 id=991 data-nosnippet>991</a>                        </span>);
+<a href=#992 id=992 data-nosnippet>992</a>                        <span class="kw">if </span>expected &lt;= gateway_balance {
+<a href=#993 id=993 data-nosnippet>993</a>                            <span class="prelude-val">Ok</span>(())
+<a href=#994 id=994 data-nosnippet>994</a>                        } <span class="kw">else </span>{
+<a href=#995 id=995 data-nosnippet>995</a>                            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+<a href=#996 id=996 data-nosnippet>996</a>                                <span class="string">"Gateway balance {gateway_balance} has not reached expected {expected} (initial: {initial_balance})"
+<a href=#997 id=997 data-nosnippet>997</a>                            </span>)))
+<a href=#998 id=998 data-nosnippet>998</a>                        }
+<a href=#999 id=999 data-nosnippet>999</a>                    } <span class="kw">else </span>{
+<a href=#1000 id=1000 data-nosnippet>1000</a>                        <span class="macro">poll_almost_equal!</span>(gateway_balance, amount * <span class="number">1000</span>)
+<a href=#1001 id=1001 data-nosnippet>1001</a>                    }
+<a href=#1002 id=1002 data-nosnippet>1002</a>                }
+<a href=#1003 id=1003 data-nosnippet>1003</a>            })
+<a href=#1004 id=1004 data-nosnippet>1004</a>        }))
+<a href=#1005 id=1005 data-nosnippet>1005</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1006 id=1006 data-nosnippet>1006</a>
+<a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1008 id=1008 data-nosnippet>1008</a>    }
+<a href=#1009 id=1009 data-nosnippet>1009</a>
+<a href=#1010 id=1010 data-nosnippet>1010</a>    <span class="doccomment">/// Initiates multiple peg-outs from the same federation for the set of
+<a href=#1011 id=1011 data-nosnippet>1011</a>    /// gateways to save on mining blocks in parallel.
+<a href=#1012 id=1012 data-nosnippet>1012</a>    </span><span class="kw">pub async fn </span>pegout_gateways(
+<a href=#1013 id=1013 data-nosnippet>1013</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1014 id=1014 data-nosnippet>1014</a>        amount: u64,
+<a href=#1015 id=1015 data-nosnippet>1015</a>        gateways: Vec&lt;<span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd&gt;,
+<a href=#1016 id=1016 data-nosnippet>1016</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="macro">info!</span>(amount, <span class="string">"Pegging-out gateway funds"</span>);
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id();
+<a href=#1019 id=1019 data-nosnippet>1019</a>        <span class="kw">let </span><span class="kw-2">mut </span>peg_outs: BTreeMap&lt;LightningNodeType, (Amount, WithdrawResponse)&gt; = BTreeMap::new();
+<a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
+<a href=#1021 id=1021 data-nosnippet>1021</a>            <span class="kw">let </span>prev_fed_ecash_balance = gw
+<a href=#1022 id=1022 data-nosnippet>1022</a>                .client()
+<a href=#1023 id=1023 data-nosnippet>1023</a>                .get_balances()
+<a href=#1024 id=1024 data-nosnippet>1024</a>                .<span class="kw">await</span><span class="question-mark">?
+<a href=#1025 id=1025 data-nosnippet>1025</a>                </span>.ecash_balances
+<a href=#1026 id=1026 data-nosnippet>1026</a>                .into_iter()
+<a href=#1027 id=1027 data-nosnippet>1027</a>                .find(|fed| fed.federation_id.to_string() == fed_id)
+<a href=#1028 id=1028 data-nosnippet>1028</a>                .expect(<span class="string">"Gateway has not joined federation"</span>)
+<a href=#1029 id=1029 data-nosnippet>1029</a>                .ecash_balance_msats;
+<a href=#1030 id=1030 data-nosnippet>1030</a>
+<a href=#1031 id=1031 data-nosnippet>1031</a>            <span class="kw">let </span>pegout_address = <span class="self">self</span>.bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1032 id=1032 data-nosnippet>1032</a>            <span class="kw">let </span>response = gw
+<a href=#1033 id=1033 data-nosnippet>1033</a>                .client()
+<a href=#1034 id=1034 data-nosnippet>1034</a>                .pegout(fed_id.clone(), amount, pegout_address)
+<a href=#1035 id=1035 data-nosnippet>1035</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1036 id=1036 data-nosnippet>1036</a>            peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
+<a href=#1037 id=1037 data-nosnippet>1037</a>        }
+<a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1039 id=1039 data-nosnippet>1039</a>
+<a href=#1040 id=1040 data-nosnippet>1040</a>        try_join_all(
+<a href=#1041 id=1041 data-nosnippet>1041</a>            peg_outs
+<a href=#1042 id=1042 data-nosnippet>1042</a>                .values()
+<a href=#1043 id=1043 data-nosnippet>1043</a>                .map(|(<span class="kw">_</span>, pegout)| <span class="self">self</span>.bitcoind.poll_get_transaction(pegout.txid)),
+<a href=#1044 id=1044 data-nosnippet>1044</a>        )
+<a href=#1045 id=1045 data-nosnippet>1045</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1046 id=1046 data-nosnippet>1046</a>
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="kw">for </span>gw <span class="kw">in </span>gateways.clone() {
+<a href=#1048 id=1048 data-nosnippet>1048</a>            <span class="kw">let </span>after_fed_ecash_balance = gw
+<a href=#1049 id=1049 data-nosnippet>1049</a>                .client()
+<a href=#1050 id=1050 data-nosnippet>1050</a>                .get_balances()
+<a href=#1051 id=1051 data-nosnippet>1051</a>                .<span class="kw">await</span><span class="question-mark">?
+<a href=#1052 id=1052 data-nosnippet>1052</a>                </span>.ecash_balances
+<a href=#1053 id=1053 data-nosnippet>1053</a>                .into_iter()
+<a href=#1054 id=1054 data-nosnippet>1054</a>                .find(|fed| fed.federation_id.to_string() == fed_id)
+<a href=#1055 id=1055 data-nosnippet>1055</a>                .expect(<span class="string">"Gateway has not joined federation"</span>)
+<a href=#1056 id=1056 data-nosnippet>1056</a>                .ecash_balance_msats;
+<a href=#1057 id=1057 data-nosnippet>1057</a>
+<a href=#1058 id=1058 data-nosnippet>1058</a>            <span class="kw">let </span>ln_type = gw.ln.ln_type();
+<a href=#1059 id=1059 data-nosnippet>1059</a>            <span class="kw">let </span>prev_balance = peg_outs
+<a href=#1060 id=1060 data-nosnippet>1060</a>                .get(<span class="kw-2">&amp;</span>ln_type)
+<a href=#1061 id=1061 data-nosnippet>1061</a>                .expect(<span class="string">"peg out does not exist"</span>)
+<a href=#1062 id=1062 data-nosnippet>1062</a>                .<span class="number">0
+<a href=#1063 id=1063 data-nosnippet>1063</a>                </span>.msats;
+<a href=#1064 id=1064 data-nosnippet>1064</a>            <span class="kw">let </span>fees = peg_outs
+<a href=#1065 id=1065 data-nosnippet>1065</a>                .get(<span class="kw-2">&amp;</span>ln_type)
+<a href=#1066 id=1066 data-nosnippet>1066</a>                .expect(<span class="string">"peg out does not exist"</span>)
+<a href=#1067 id=1067 data-nosnippet>1067</a>                .<span class="number">1
+<a href=#1068 id=1068 data-nosnippet>1068</a>                </span>.fees;
+<a href=#1069 id=1069 data-nosnippet>1069</a>            <span class="kw">let </span>total_fee = fees.amount().to_sat() * <span class="number">1000</span>;
+<a href=#1070 id=1070 data-nosnippet>1070</a>            <span class="comment">// Walletv2 charges a module fee on top of the on-chain fee:
+<a href=#1071 id=1071 data-nosnippet>1071</a>            // 100 sats base + 1% of amount (amount is in msats)
+<a href=#1072 id=1072 data-nosnippet>1072</a>            </span><span class="kw">let </span>tolerance = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
+<a href=#1073 id=1073 data-nosnippet>1073</a>                <span class="kw">let </span>amount_sats = amount / <span class="number">1000</span>;
+<a href=#1074 id=1074 data-nosnippet>1074</a>                <span class="kw">let </span>module_fee_sats = <span class="number">100 </span>+ amount_sats / <span class="number">100</span>;
+<a href=#1075 id=1075 data-nosnippet>1075</a>                module_fee_sats * <span class="number">1000 </span>+ <span class="number">2000
+<a href=#1076 id=1076 data-nosnippet>1076</a>            </span>} <span class="kw">else if </span><span class="kw">crate</span>::util::supports_mint_v2() {
+<a href=#1077 id=1077 data-nosnippet>1077</a>                <span class="number">4000
+<a href=#1078 id=1078 data-nosnippet>1078</a>            </span>} <span class="kw">else </span>{
+<a href=#1079 id=1079 data-nosnippet>1079</a>                <span class="number">2000
+<a href=#1080 id=1080 data-nosnippet>1080</a>            </span>};
+<a href=#1081 id=1081 data-nosnippet>1081</a>            <span class="kw">crate</span>::util::almost_equal(
+<a href=#1082 id=1082 data-nosnippet>1082</a>                after_fed_ecash_balance.msats,
+<a href=#1083 id=1083 data-nosnippet>1083</a>                prev_balance - amount - total_fee,
+<a href=#1084 id=1084 data-nosnippet>1084</a>                tolerance,
+<a href=#1085 id=1085 data-nosnippet>1085</a>            )
+<a href=#1086 id=1086 data-nosnippet>1086</a>            .map_err(|e| {
+<a href=#1087 id=1087 data-nosnippet>1087</a>                <span class="macro">anyhow::anyhow!</span>(
+<a href=#1088 id=1088 data-nosnippet>1088</a>                    <span class="string">"new balance did not equal prev balance minus withdraw_amount minus fees: {e}"
+<a href=#1089 id=1089 data-nosnippet>1089</a>                </span>)
+<a href=#1090 id=1090 data-nosnippet>1090</a>            })<span class="question-mark">?</span>;
+<a href=#1091 id=1091 data-nosnippet>1091</a>        }
+<a href=#1092 id=1092 data-nosnippet>1092</a>
+<a href=#1093 id=1093 data-nosnippet>1093</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1094 id=1094 data-nosnippet>1094</a>    }
+<a href=#1095 id=1095 data-nosnippet>1095</a>
+<a href=#1096 id=1096 data-nosnippet>1096</a>    <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#1097 id=1097 data-nosnippet>1097</a>        <span class="self">self</span>.client_config()
+<a href=#1098 id=1098 data-nosnippet>1098</a>            .unwrap()
+<a href=#1099 id=1099 data-nosnippet>1099</a>            .global
+<a href=#1100 id=1100 data-nosnippet>1100</a>            .calculate_federation_id()
+<a href=#1101 id=1101 data-nosnippet>1101</a>            .to_string()
 <a href=#1102 id=1102 data-nosnippet>1102</a>    }
 <a href=#1103 id=1103 data-nosnippet>1103</a>
-<a href=#1104 id=1104 data-nosnippet>1104</a>    <span class="kw">fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
-<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="comment">// Walletv2 uses a constant finality delay
-<a href=#1106 id=1106 data-nosnippet>1106</a>        </span><span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
-<a href=#1107 id=1107 data-nosnippet>1107</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY <span class="kw">as </span>u32);
-<a href=#1108 id=1108 data-nosnippet>1108</a>        }
-<a href=#1109 id=1109 data-nosnippet>1109</a>
-<a href=#1110 id=1110 data-nosnippet>1110</a>        <span class="kw">let </span>wallet_instance_id = <span class="self">self</span>.module_instance_id_by_kind(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND)<span class="question-mark">?</span>;
-<a href=#1111 id=1111 data-nosnippet>1111</a>        <span class="kw">let </span>client_config = <span class="kw-2">&amp;</span><span class="self">self</span>.client_config()<span class="question-mark">?</span>;
-<a href=#1112 id=1112 data-nosnippet>1112</a>        <span class="kw">let </span>wallet_cfg = client_config
-<a href=#1113 id=1113 data-nosnippet>1113</a>            .modules
-<a href=#1114 id=1114 data-nosnippet>1114</a>            .get(<span class="kw-2">&amp;</span>wallet_instance_id)
-<a href=#1115 id=1115 data-nosnippet>1115</a>            .context(<span class="string">"wallet module not found"</span>)<span class="question-mark">?
-<a href=#1116 id=1116 data-nosnippet>1116</a>            </span>.clone()
-<a href=#1117 id=1117 data-nosnippet>1117</a>            .redecode_raw(<span class="kw-2">&amp;</span>ModuleDecoderRegistry::new([(
-<a href=#1118 id=1118 data-nosnippet>1118</a>                wallet_instance_id,
-<a href=#1119 id=1119 data-nosnippet>1119</a>                fedimint_wallet_client::KIND,
-<a href=#1120 id=1120 data-nosnippet>1120</a>                fedimint_wallet_client::WalletModuleTypes::decoder(),
-<a href=#1121 id=1121 data-nosnippet>1121</a>            )]))<span class="question-mark">?</span>;
-<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = wallet_cfg.cast()<span class="question-mark">?</span>;
-<a href=#1123 id=1123 data-nosnippet>1123</a>
-<a href=#1124 id=1124 data-nosnippet>1124</a>        <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;
-<a href=#1125 id=1125 data-nosnippet>1125</a>        <span class="prelude-val">Ok</span>(finality_delay)
-<a href=#1126 id=1126 data-nosnippet>1126</a>    }
-<a href=#1127 id=1127 data-nosnippet>1127</a>
-<a href=#1128 id=1128 data-nosnippet>1128</a>    <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="kw">let </span>start_time = Instant::now();
-<a href=#1130 id=1130 data-nosnippet>1130</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
-<a href=#1131 id=1131 data-nosnippet>1131</a>
-<a href=#1132 id=1132 data-nosnippet>1132</a>        poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
-<a href=#1133 id=1133 data-nosnippet>1133</a>            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
-<a href=#1134 id=1134 data-nosnippet>1134</a>                <span class="self">self</span>.internal_client()
-<a href=#1135 id=1135 data-nosnippet>1135</a>                    .<span class="kw">await
-<a href=#1136 id=1136 data-nosnippet>1136</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1137 id=1137 data-nosnippet>1137</a>                <span class="string">"list-gateways"
-<a href=#1138 id=1138 data-nosnippet>1138</a>            </span>)
-<a href=#1139 id=1139 data-nosnippet>1139</a>            .out_json()
-<a href=#1140 id=1140 data-nosnippet>1140</a>            .<span class="kw">await
-<a href=#1141 id=1141 data-nosnippet>1141</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-<a href=#1142 id=1142 data-nosnippet>1142</a>            </span>.as_array()
-<a href=#1143 id=1143 data-nosnippet>1143</a>            .context(<span class="string">"invalid output"</span>)
-<a href=#1144 id=1144 data-nosnippet>1144</a>            .map_err(ControlFlow::Break)<span class="question-mark">?
-<a href=#1145 id=1145 data-nosnippet>1145</a>            </span>.len();
-<a href=#1146 id=1146 data-nosnippet>1146</a>
-<a href=#1147 id=1147 data-nosnippet>1147</a>            <span class="comment">// After version v0.10.0, the LND gateway will register twice. Once for the HTTP
-<a href=#1148 id=1148 data-nosnippet>1148</a>            // server, and once for the iroh endpoint.
-<a href=#1149 id=1149 data-nosnippet>1149</a>            </span><span class="kw">let </span>expected_gateways =
-<a href=#1150 id=1150 data-nosnippet>1150</a>                <span class="kw">if </span><span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
-<a href=#1151 id=1151 data-nosnippet>1151</a>                    <span class="number">1
-<a href=#1152 id=1152 data-nosnippet>1152</a>                </span>} <span class="kw">else </span>{
-<a href=#1153 id=1153 data-nosnippet>1153</a>                    <span class="number">2
-<a href=#1154 id=1154 data-nosnippet>1154</a>                </span>};
-<a href=#1155 id=1155 data-nosnippet>1155</a>
-<a href=#1156 id=1156 data-nosnippet>1156</a>            <span class="macro">poll_eq!</span>(num_gateways, expected_gateways)
-<a href=#1157 id=1157 data-nosnippet>1157</a>        })
-<a href=#1158 id=1158 data-nosnippet>1158</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1159 id=1159 data-nosnippet>1159</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
-<a href=#1160 id=1160 data-nosnippet>1160</a>            elapsed_ms = %start_time.elapsed().as_millis(),
-<a href=#1161 id=1161 data-nosnippet>1161</a>            <span class="string">"Gateways registered"</span>);
-<a href=#1162 id=1162 data-nosnippet>1162</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1163 id=1163 data-nosnippet>1163</a>    }
-<a href=#1164 id=1164 data-nosnippet>1164</a>
-<a href=#1165 id=1165 data-nosnippet>1165</a>    <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1166 id=1166 data-nosnippet>1166</a>        <span class="kw">let </span>(module_name, endpoint) = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
-<a href=#1167 id=1167 data-nosnippet>1167</a>            (<span class="string">"walletv2"</span>, <span class="string">"consensus_block_count"</span>)
-<a href=#1168 id=1168 data-nosnippet>1168</a>        } <span class="kw">else </span>{
-<a href=#1169 id=1169 data-nosnippet>1169</a>            (<span class="string">"wallet"</span>, <span class="string">"block_count"</span>)
-<a href=#1170 id=1170 data-nosnippet>1170</a>        };
-<a href=#1171 id=1171 data-nosnippet>1171</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
-<a href=#1172 id=1172 data-nosnippet>1172</a>            <span class="macro">cmd!</span>(
-<a href=#1173 id=1173 data-nosnippet>1173</a>                <span class="self">self</span>.internal_client()
-<a href=#1174 id=1174 data-nosnippet>1174</a>                    .<span class="kw">await
-<a href=#1175 id=1175 data-nosnippet>1175</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1176 id=1176 data-nosnippet>1176</a>                <span class="string">"dev"</span>,
-<a href=#1177 id=1177 data-nosnippet>1177</a>                <span class="string">"api"</span>,
-<a href=#1178 id=1178 data-nosnippet>1178</a>                <span class="string">"--module"</span>,
-<a href=#1179 id=1179 data-nosnippet>1179</a>                module_name,
-<a href=#1180 id=1180 data-nosnippet>1180</a>                endpoint
-<a href=#1181 id=1181 data-nosnippet>1181</a>            )
-<a href=#1182 id=1182 data-nosnippet>1182</a>            .run()
-<a href=#1183 id=1183 data-nosnippet>1183</a>            .<span class="kw">await
-<a href=#1184 id=1184 data-nosnippet>1184</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#1185 id=1185 data-nosnippet>1185</a>            <span class="prelude-val">Ok</span>(())
-<a href=#1186 id=1186 data-nosnippet>1186</a>        })
-<a href=#1187 id=1187 data-nosnippet>1187</a>        .<span class="kw">await
-<a href=#1188 id=1188 data-nosnippet>1188</a>    </span>}
-<a href=#1189 id=1189 data-nosnippet>1189</a>
-<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="kw">pub async fn </span>await_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1191 id=1191 data-nosnippet>1191</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
-<a href=#1192 id=1192 data-nosnippet>1192</a>            <span class="macro">cmd!</span>(
-<a href=#1193 id=1193 data-nosnippet>1193</a>                <span class="self">self</span>.internal_client()
-<a href=#1194 id=1194 data-nosnippet>1194</a>                    .<span class="kw">await
-<a href=#1195 id=1195 data-nosnippet>1195</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1196 id=1196 data-nosnippet>1196</a>                <span class="string">"dev"</span>,
-<a href=#1197 id=1197 data-nosnippet>1197</a>                <span class="string">"api"</span>,
-<a href=#1198 id=1198 data-nosnippet>1198</a>                <span class="string">"--peer-id"</span>,
-<a href=#1199 id=1199 data-nosnippet>1199</a>                peer_id,
-<a href=#1200 id=1200 data-nosnippet>1200</a>                <span class="string">"--module"</span>,
-<a href=#1201 id=1201 data-nosnippet>1201</a>                <span class="string">"wallet"</span>,
-<a href=#1202 id=1202 data-nosnippet>1202</a>                <span class="string">"block_count"
-<a href=#1203 id=1203 data-nosnippet>1203</a>            </span>)
-<a href=#1204 id=1204 data-nosnippet>1204</a>            .run()
-<a href=#1205 id=1205 data-nosnippet>1205</a>            .<span class="kw">await
-<a href=#1206 id=1206 data-nosnippet>1206</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="prelude-val">Ok</span>(())
-<a href=#1208 id=1208 data-nosnippet>1208</a>        })
-<a href=#1209 id=1209 data-nosnippet>1209</a>        .<span class="kw">await
-<a href=#1210 id=1210 data-nosnippet>1210</a>    </span>}
-<a href=#1211 id=1211 data-nosnippet>1211</a>
-<a href=#1212 id=1212 data-nosnippet>1212</a>    <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
-<a href=#1213 id=1213 data-nosnippet>1213</a>    /// federation to process finalized blocks.
-<a href=#1214 id=1214 data-nosnippet>1214</a>    ///
-<a href=#1215 id=1215 data-nosnippet>1215</a>    /// ex:
-<a href=#1216 id=1216 data-nosnippet>1216</a>    ///   tx submitted to mempool at height 100
-<a href=#1217 id=1217 data-nosnippet>1217</a>    ///   finality delay = 10
-<a href=#1218 id=1218 data-nosnippet>1218</a>    ///   mine finality delay blocks + 1 =&gt; new height 111
-<a href=#1219 id=1219 data-nosnippet>1219</a>    ///   tx included in block 101
-<a href=#1220 id=1220 data-nosnippet>1220</a>    ///   highest finalized height = 111 - 10 = 101
-<a href=#1221 id=1221 data-nosnippet>1221</a>    </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1222 id=1222 data-nosnippet>1222</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
-<a href=#1223 id=1223 data-nosnippet>1223</a>        <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
-<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1225 id=1225 data-nosnippet>1225</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1226 id=1226 data-nosnippet>1226</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1227 id=1227 data-nosnippet>1227</a>    }
-<a href=#1228 id=1228 data-nosnippet>1228</a>
-<a href=#1229 id=1229 data-nosnippet>1229</a>    <span class="kw">pub async fn </span>mine_then_wait_blocks_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1231 id=1231 data-nosnippet>1231</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1233 id=1233 data-nosnippet>1233</a>    }
-<a href=#1234 id=1234 data-nosnippet>1234</a>
-<a href=#1235 id=1235 data-nosnippet>1235</a>    <span class="kw">pub fn </span>num_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="self">self</span>.members.len()
-<a href=#1237 id=1237 data-nosnippet>1237</a>    }
-<a href=#1238 id=1238 data-nosnippet>1238</a>
-<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="kw">pub fn </span>member_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; + <span class="lifetime">'_ </span>{
-<a href=#1240 id=1240 data-nosnippet>1240</a>        <span class="self">self</span>.members
-<a href=#1241 id=1241 data-nosnippet>1241</a>            .keys()
-<a href=#1242 id=1242 data-nosnippet>1242</a>            .map(|<span class="kw-2">&amp;</span>peer_id| PeerId::from(peer_id <span class="kw">as </span>u16))
-<a href=#1243 id=1243 data-nosnippet>1243</a>    }
-<a href=#1244 id=1244 data-nosnippet>1244</a>}
-<a href=#1245 id=1245 data-nosnippet>1245</a>
-<a href=#1246 id=1246 data-nosnippet>1246</a><span class="attr">#[derive(Clone)]
-<a href=#1247 id=1247 data-nosnippet>1247</a></span><span class="kw">pub struct </span>Fedimintd {
-<a href=#1248 id=1248 data-nosnippet>1248</a>    _bitcoind: Bitcoind,
-<a href=#1249 id=1249 data-nosnippet>1249</a>    process: ProcessHandle,
-<a href=#1250 id=1250 data-nosnippet>1250</a>}
-<a href=#1251 id=1251 data-nosnippet>1251</a>
-<a href=#1252 id=1252 data-nosnippet>1252</a><span class="kw">impl </span>Fedimintd {
-<a href=#1253 id=1253 data-nosnippet>1253</a>    <span class="kw">pub async fn </span>new(
-<a href=#1254 id=1254 data-nosnippet>1254</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
-<a href=#1255 id=1255 data-nosnippet>1255</a>        bitcoind: Bitcoind,
-<a href=#1256 id=1256 data-nosnippet>1256</a>        peer_id: usize,
-<a href=#1257 id=1257 data-nosnippet>1257</a>        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
-<a href=#1258 id=1258 data-nosnippet>1258</a>        fed_name: String,
-<a href=#1259 id=1259 data-nosnippet>1259</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#1260 id=1260 data-nosnippet>1260</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{fed_name}-{peer_id}"</span>);
-<a href=#1261 id=1261 data-nosnippet>1261</a>        <span class="kw">let </span>process = process_mgr
-<a href=#1262 id=1262 data-nosnippet>1262</a>            .spawn_daemon(
-<a href=#1263 id=1263 data-nosnippet>1263</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{fed_name}-{peer_id}"</span>),
-<a href=#1264 id=1264 data-nosnippet>1264</a>                <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
-<a href=#1265 id=1265 data-nosnippet>1265</a>            )
-<a href=#1266 id=1266 data-nosnippet>1266</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1267 id=1267 data-nosnippet>1267</a>
-<a href=#1268 id=1268 data-nosnippet>1268</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#1269 id=1269 data-nosnippet>1269</a>            _bitcoind: bitcoind,
-<a href=#1270 id=1270 data-nosnippet>1270</a>            process,
-<a href=#1271 id=1271 data-nosnippet>1271</a>        })
-<a href=#1272 id=1272 data-nosnippet>1272</a>    }
-<a href=#1273 id=1273 data-nosnippet>1273</a>
-<a href=#1274 id=1274 data-nosnippet>1274</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1275 id=1275 data-nosnippet>1275</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
-<a href=#1276 id=1276 data-nosnippet>1276</a>    </span>}
-<a href=#1277 id=1277 data-nosnippet>1277</a>
-<a href=#1278 id=1278 data-nosnippet>1278</a>    <span class="kw">pub async fn </span>await_terminated(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1279 id=1279 data-nosnippet>1279</a>        <span class="self">self</span>.process.await_terminated().<span class="kw">await
-<a href=#1280 id=1280 data-nosnippet>1280</a>    </span>}
-<a href=#1281 id=1281 data-nosnippet>1281</a>}
-<a href=#1282 id=1282 data-nosnippet>1282</a>
-<a href=#1283 id=1283 data-nosnippet>1283</a><span class="kw">pub async fn </span>run_cli_dkg_v2(endpoints: BTreeMap&lt;PeerId, String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1284 id=1284 data-nosnippet>1284</a>    <span class="comment">// Parallelize setup status checks
-<a href=#1285 id=1285 data-nosnippet>1285</a>    </span><span class="kw">let </span>status_futures = endpoints.values().map(|endpoint| {
-<a href=#1286 id=1286 data-nosnippet>1286</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1287 id=1287 data-nosnippet>1287</a>        <span class="kw">async move </span>{
-<a href=#1288 id=1288 data-nosnippet>1288</a>            <span class="kw">let </span>status = poll(<span class="string">"awaiting-setup-status-awaiting-local-params"</span>, || <span class="kw">async </span>{
-<a href=#1289 id=1289 data-nosnippet>1289</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1290 id=1290 data-nosnippet>1290</a>                    .setup_status(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1291 id=1291 data-nosnippet>1291</a>                    .<span class="kw">await
-<a href=#1292 id=1292 data-nosnippet>1292</a>                    </span>.map_err(ControlFlow::Continue)
-<a href=#1293 id=1293 data-nosnippet>1293</a>            })
-<a href=#1294 id=1294 data-nosnippet>1294</a>            .<span class="kw">await
-<a href=#1295 id=1295 data-nosnippet>1295</a>            </span>.unwrap();
-<a href=#1296 id=1296 data-nosnippet>1296</a>
-<a href=#1297 id=1297 data-nosnippet>1297</a>            <span class="macro">assert_eq!</span>(status, SetupStatus::AwaitingLocalParams);
-<a href=#1298 id=1298 data-nosnippet>1298</a>        }
-<a href=#1299 id=1299 data-nosnippet>1299</a>    });
-<a href=#1300 id=1300 data-nosnippet>1300</a>    join_all(status_futures).<span class="kw">await</span>;
-<a href=#1301 id=1301 data-nosnippet>1301</a>
-<a href=#1302 id=1302 data-nosnippet>1302</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting local parameters..."</span>);
+<a href=#1104 id=1104 data-nosnippet>1104</a>    <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
+<a href=#1106 id=1106 data-nosnippet>1106</a>        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1107 id=1107 data-nosnippet>1107</a>        <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
+<a href=#1108 id=1108 data-nosnippet>1108</a>
+<a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
+<a href=#1110 id=1110 data-nosnippet>1110</a>            <span class="comment">// Walletv2 doesn't have `dev wait-block-count`, poll using CLI instead
+<a href=#1111 id=1111 data-nosnippet>1111</a>            </span><span class="kw">let </span>client = <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1112 id=1112 data-nosnippet>1112</a>            <span class="kw">loop </span>{
+<a href=#1113 id=1113 data-nosnippet>1113</a>                <span class="kw">let </span>value = <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"walletv2"</span>, <span class="string">"info"</span>, <span class="string">"block-count"</span>)
+<a href=#1114 id=1114 data-nosnippet>1114</a>                    .out_json()
+<a href=#1115 id=1115 data-nosnippet>1115</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1116 id=1116 data-nosnippet>1116</a>                <span class="kw">let </span>current: u64 = serde_json::from_value(value)<span class="question-mark">?</span>;
+<a href=#1117 id=1117 data-nosnippet>1117</a>                <span class="kw">if </span>current &gt;= expected {
+<a href=#1118 id=1118 data-nosnippet>1118</a>                    <span class="kw">break</span>;
+<a href=#1119 id=1119 data-nosnippet>1119</a>                }
+<a href=#1120 id=1120 data-nosnippet>1120</a>                fedimint_core::task::sleep_in_test(
+<a href=#1121 id=1121 data-nosnippet>1121</a>                    <span class="macro">format!</span>(<span class="string">"Waiting for consensus block count to reach {expected}"</span>),
+<a href=#1122 id=1122 data-nosnippet>1122</a>                    std::time::Duration::from_secs(<span class="number">1</span>),
+<a href=#1123 id=1123 data-nosnippet>1123</a>                )
+<a href=#1124 id=1124 data-nosnippet>1124</a>                .<span class="kw">await</span>;
+<a href=#1125 id=1125 data-nosnippet>1125</a>            }
+<a href=#1126 id=1126 data-nosnippet>1126</a>        } <span class="kw">else </span>{
+<a href=#1127 id=1127 data-nosnippet>1127</a>            <span class="macro">cmd!</span>(
+<a href=#1128 id=1128 data-nosnippet>1128</a>                <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#1129 id=1129 data-nosnippet>1129</a>                <span class="string">"dev"</span>,
+<a href=#1130 id=1130 data-nosnippet>1130</a>                <span class="string">"wait-block-count"</span>,
+<a href=#1131 id=1131 data-nosnippet>1131</a>                expected
+<a href=#1132 id=1132 data-nosnippet>1132</a>            )
+<a href=#1133 id=1133 data-nosnippet>1133</a>            .run()
+<a href=#1134 id=1134 data-nosnippet>1134</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1135 id=1135 data-nosnippet>1135</a>        }
+<a href=#1136 id=1136 data-nosnippet>1136</a>
+<a href=#1137 id=1137 data-nosnippet>1137</a>        <span class="prelude-val">Ok</span>(expected)
+<a href=#1138 id=1138 data-nosnippet>1138</a>    }
+<a href=#1139 id=1139 data-nosnippet>1139</a>
+<a href=#1140 id=1140 data-nosnippet>1140</a>    <span class="kw">fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
+<a href=#1141 id=1141 data-nosnippet>1141</a>        <span class="comment">// Walletv2 uses a constant finality delay
+<a href=#1142 id=1142 data-nosnippet>1142</a>        </span><span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
+<a href=#1143 id=1143 data-nosnippet>1143</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY <span class="kw">as </span>u32);
+<a href=#1144 id=1144 data-nosnippet>1144</a>        }
+<a href=#1145 id=1145 data-nosnippet>1145</a>
+<a href=#1146 id=1146 data-nosnippet>1146</a>        <span class="kw">let </span>wallet_instance_id = <span class="self">self</span>.module_instance_id_by_kind(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND)<span class="question-mark">?</span>;
+<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="kw">let </span>client_config = <span class="kw-2">&amp;</span><span class="self">self</span>.client_config()<span class="question-mark">?</span>;
+<a href=#1148 id=1148 data-nosnippet>1148</a>        <span class="kw">let </span>wallet_cfg = client_config
+<a href=#1149 id=1149 data-nosnippet>1149</a>            .modules
+<a href=#1150 id=1150 data-nosnippet>1150</a>            .get(<span class="kw-2">&amp;</span>wallet_instance_id)
+<a href=#1151 id=1151 data-nosnippet>1151</a>            .context(<span class="string">"wallet module not found"</span>)<span class="question-mark">?
+<a href=#1152 id=1152 data-nosnippet>1152</a>            </span>.clone()
+<a href=#1153 id=1153 data-nosnippet>1153</a>            .redecode_raw(<span class="kw-2">&amp;</span>ModuleDecoderRegistry::new([(
+<a href=#1154 id=1154 data-nosnippet>1154</a>                wallet_instance_id,
+<a href=#1155 id=1155 data-nosnippet>1155</a>                fedimint_wallet_client::KIND,
+<a href=#1156 id=1156 data-nosnippet>1156</a>                fedimint_wallet_client::WalletModuleTypes::decoder(),
+<a href=#1157 id=1157 data-nosnippet>1157</a>            )]))<span class="question-mark">?</span>;
+<a href=#1158 id=1158 data-nosnippet>1158</a>        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = wallet_cfg.cast()<span class="question-mark">?</span>;
+<a href=#1159 id=1159 data-nosnippet>1159</a>
+<a href=#1160 id=1160 data-nosnippet>1160</a>        <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;
+<a href=#1161 id=1161 data-nosnippet>1161</a>        <span class="prelude-val">Ok</span>(finality_delay)
+<a href=#1162 id=1162 data-nosnippet>1162</a>    }
+<a href=#1163 id=1163 data-nosnippet>1163</a>
+<a href=#1164 id=1164 data-nosnippet>1164</a>    <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1165 id=1165 data-nosnippet>1165</a>        <span class="kw">let </span>start_time = Instant::now();
+<a href=#1166 id=1166 data-nosnippet>1166</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
+<a href=#1167 id=1167 data-nosnippet>1167</a>
+<a href=#1168 id=1168 data-nosnippet>1168</a>        poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
+<a href=#1169 id=1169 data-nosnippet>1169</a>            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
+<a href=#1170 id=1170 data-nosnippet>1170</a>                <span class="self">self</span>.internal_client()
+<a href=#1171 id=1171 data-nosnippet>1171</a>                    .<span class="kw">await
+<a href=#1172 id=1172 data-nosnippet>1172</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1173 id=1173 data-nosnippet>1173</a>                <span class="string">"list-gateways"
+<a href=#1174 id=1174 data-nosnippet>1174</a>            </span>)
+<a href=#1175 id=1175 data-nosnippet>1175</a>            .out_json()
+<a href=#1176 id=1176 data-nosnippet>1176</a>            .<span class="kw">await
+<a href=#1177 id=1177 data-nosnippet>1177</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
+<a href=#1178 id=1178 data-nosnippet>1178</a>            </span>.as_array()
+<a href=#1179 id=1179 data-nosnippet>1179</a>            .context(<span class="string">"invalid output"</span>)
+<a href=#1180 id=1180 data-nosnippet>1180</a>            .map_err(ControlFlow::Break)<span class="question-mark">?
+<a href=#1181 id=1181 data-nosnippet>1181</a>            </span>.len();
+<a href=#1182 id=1182 data-nosnippet>1182</a>
+<a href=#1183 id=1183 data-nosnippet>1183</a>            <span class="comment">// After version v0.10.0, the LND gateway will register twice. Once for the HTTP
+<a href=#1184 id=1184 data-nosnippet>1184</a>            // server, and once for the iroh endpoint.
+<a href=#1185 id=1185 data-nosnippet>1185</a>            </span><span class="kw">let </span>expected_gateways =
+<a href=#1186 id=1186 data-nosnippet>1186</a>                <span class="kw">if </span><span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
+<a href=#1187 id=1187 data-nosnippet>1187</a>                    <span class="number">1
+<a href=#1188 id=1188 data-nosnippet>1188</a>                </span>} <span class="kw">else </span>{
+<a href=#1189 id=1189 data-nosnippet>1189</a>                    <span class="number">2
+<a href=#1190 id=1190 data-nosnippet>1190</a>                </span>};
+<a href=#1191 id=1191 data-nosnippet>1191</a>
+<a href=#1192 id=1192 data-nosnippet>1192</a>            <span class="macro">poll_eq!</span>(num_gateways, expected_gateways)
+<a href=#1193 id=1193 data-nosnippet>1193</a>        })
+<a href=#1194 id=1194 data-nosnippet>1194</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1195 id=1195 data-nosnippet>1195</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
+<a href=#1196 id=1196 data-nosnippet>1196</a>            elapsed_ms = %start_time.elapsed().as_millis(),
+<a href=#1197 id=1197 data-nosnippet>1197</a>            <span class="string">"Gateways registered"</span>);
+<a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1199 id=1199 data-nosnippet>1199</a>    }
+<a href=#1200 id=1200 data-nosnippet>1200</a>
+<a href=#1201 id=1201 data-nosnippet>1201</a>    <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1202 id=1202 data-nosnippet>1202</a>        <span class="kw">let </span>(module_name, endpoint) = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
+<a href=#1203 id=1203 data-nosnippet>1203</a>            (<span class="string">"walletv2"</span>, <span class="string">"consensus_block_count"</span>)
+<a href=#1204 id=1204 data-nosnippet>1204</a>        } <span class="kw">else </span>{
+<a href=#1205 id=1205 data-nosnippet>1205</a>            (<span class="string">"wallet"</span>, <span class="string">"block_count"</span>)
+<a href=#1206 id=1206 data-nosnippet>1206</a>        };
+<a href=#1207 id=1207 data-nosnippet>1207</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
+<a href=#1208 id=1208 data-nosnippet>1208</a>            <span class="macro">cmd!</span>(
+<a href=#1209 id=1209 data-nosnippet>1209</a>                <span class="self">self</span>.internal_client()
+<a href=#1210 id=1210 data-nosnippet>1210</a>                    .<span class="kw">await
+<a href=#1211 id=1211 data-nosnippet>1211</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1212 id=1212 data-nosnippet>1212</a>                <span class="string">"dev"</span>,
+<a href=#1213 id=1213 data-nosnippet>1213</a>                <span class="string">"api"</span>,
+<a href=#1214 id=1214 data-nosnippet>1214</a>                <span class="string">"--module"</span>,
+<a href=#1215 id=1215 data-nosnippet>1215</a>                module_name,
+<a href=#1216 id=1216 data-nosnippet>1216</a>                endpoint
+<a href=#1217 id=1217 data-nosnippet>1217</a>            )
+<a href=#1218 id=1218 data-nosnippet>1218</a>            .run()
+<a href=#1219 id=1219 data-nosnippet>1219</a>            .<span class="kw">await
+<a href=#1220 id=1220 data-nosnippet>1220</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#1221 id=1221 data-nosnippet>1221</a>            <span class="prelude-val">Ok</span>(())
+<a href=#1222 id=1222 data-nosnippet>1222</a>        })
+<a href=#1223 id=1223 data-nosnippet>1223</a>        .<span class="kw">await
+<a href=#1224 id=1224 data-nosnippet>1224</a>    </span>}
+<a href=#1225 id=1225 data-nosnippet>1225</a>
+<a href=#1226 id=1226 data-nosnippet>1226</a>    <span class="kw">pub async fn </span>await_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1227 id=1227 data-nosnippet>1227</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
+<a href=#1228 id=1228 data-nosnippet>1228</a>            <span class="macro">cmd!</span>(
+<a href=#1229 id=1229 data-nosnippet>1229</a>                <span class="self">self</span>.internal_client()
+<a href=#1230 id=1230 data-nosnippet>1230</a>                    .<span class="kw">await
+<a href=#1231 id=1231 data-nosnippet>1231</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1232 id=1232 data-nosnippet>1232</a>                <span class="string">"dev"</span>,
+<a href=#1233 id=1233 data-nosnippet>1233</a>                <span class="string">"api"</span>,
+<a href=#1234 id=1234 data-nosnippet>1234</a>                <span class="string">"--peer-id"</span>,
+<a href=#1235 id=1235 data-nosnippet>1235</a>                peer_id,
+<a href=#1236 id=1236 data-nosnippet>1236</a>                <span class="string">"--module"</span>,
+<a href=#1237 id=1237 data-nosnippet>1237</a>                <span class="string">"wallet"</span>,
+<a href=#1238 id=1238 data-nosnippet>1238</a>                <span class="string">"block_count"
+<a href=#1239 id=1239 data-nosnippet>1239</a>            </span>)
+<a href=#1240 id=1240 data-nosnippet>1240</a>            .run()
+<a href=#1241 id=1241 data-nosnippet>1241</a>            .<span class="kw">await
+<a href=#1242 id=1242 data-nosnippet>1242</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#1243 id=1243 data-nosnippet>1243</a>            <span class="prelude-val">Ok</span>(())
+<a href=#1244 id=1244 data-nosnippet>1244</a>        })
+<a href=#1245 id=1245 data-nosnippet>1245</a>        .<span class="kw">await
+<a href=#1246 id=1246 data-nosnippet>1246</a>    </span>}
+<a href=#1247 id=1247 data-nosnippet>1247</a>
+<a href=#1248 id=1248 data-nosnippet>1248</a>    <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
+<a href=#1249 id=1249 data-nosnippet>1249</a>    /// federation to process finalized blocks.
+<a href=#1250 id=1250 data-nosnippet>1250</a>    ///
+<a href=#1251 id=1251 data-nosnippet>1251</a>    /// ex:
+<a href=#1252 id=1252 data-nosnippet>1252</a>    ///   tx submitted to mempool at height 100
+<a href=#1253 id=1253 data-nosnippet>1253</a>    ///   finality delay = 10
+<a href=#1254 id=1254 data-nosnippet>1254</a>    ///   mine finality delay blocks + 1 =&gt; new height 111
+<a href=#1255 id=1255 data-nosnippet>1255</a>    ///   tx included in block 101
+<a href=#1256 id=1256 data-nosnippet>1256</a>    ///   highest finalized height = 111 - 10 = 101
+<a href=#1257 id=1257 data-nosnippet>1257</a>    </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1258 id=1258 data-nosnippet>1258</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
+<a href=#1259 id=1259 data-nosnippet>1259</a>        <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
+<a href=#1260 id=1260 data-nosnippet>1260</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1261 id=1261 data-nosnippet>1261</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1262 id=1262 data-nosnippet>1262</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1263 id=1263 data-nosnippet>1263</a>    }
+<a href=#1264 id=1264 data-nosnippet>1264</a>
+<a href=#1265 id=1265 data-nosnippet>1265</a>    <span class="kw">pub async fn </span>mine_then_wait_blocks_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1266 id=1266 data-nosnippet>1266</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1267 id=1267 data-nosnippet>1267</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1268 id=1268 data-nosnippet>1268</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1269 id=1269 data-nosnippet>1269</a>    }
+<a href=#1270 id=1270 data-nosnippet>1270</a>
+<a href=#1271 id=1271 data-nosnippet>1271</a>    <span class="kw">pub fn </span>num_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#1272 id=1272 data-nosnippet>1272</a>        <span class="self">self</span>.members.len()
+<a href=#1273 id=1273 data-nosnippet>1273</a>    }
+<a href=#1274 id=1274 data-nosnippet>1274</a>
+<a href=#1275 id=1275 data-nosnippet>1275</a>    <span class="kw">pub fn </span>member_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; + <span class="lifetime">'_ </span>{
+<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="self">self</span>.members
+<a href=#1277 id=1277 data-nosnippet>1277</a>            .keys()
+<a href=#1278 id=1278 data-nosnippet>1278</a>            .map(|<span class="kw-2">&amp;</span>peer_id| PeerId::from(peer_id <span class="kw">as </span>u16))
+<a href=#1279 id=1279 data-nosnippet>1279</a>    }
+<a href=#1280 id=1280 data-nosnippet>1280</a>}
+<a href=#1281 id=1281 data-nosnippet>1281</a>
+<a href=#1282 id=1282 data-nosnippet>1282</a><span class="attr">#[derive(Clone)]
+<a href=#1283 id=1283 data-nosnippet>1283</a></span><span class="kw">pub struct </span>Fedimintd {
+<a href=#1284 id=1284 data-nosnippet>1284</a>    _bitcoind: Bitcoind,
+<a href=#1285 id=1285 data-nosnippet>1285</a>    process: ProcessHandle,
+<a href=#1286 id=1286 data-nosnippet>1286</a>}
+<a href=#1287 id=1287 data-nosnippet>1287</a>
+<a href=#1288 id=1288 data-nosnippet>1288</a><span class="kw">impl </span>Fedimintd {
+<a href=#1289 id=1289 data-nosnippet>1289</a>    <span class="kw">pub async fn </span>new(
+<a href=#1290 id=1290 data-nosnippet>1290</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+<a href=#1291 id=1291 data-nosnippet>1291</a>        bitcoind: Bitcoind,
+<a href=#1292 id=1292 data-nosnippet>1292</a>        peer_id: usize,
+<a href=#1293 id=1293 data-nosnippet>1293</a>        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
+<a href=#1294 id=1294 data-nosnippet>1294</a>        fed_name: String,
+<a href=#1295 id=1295 data-nosnippet>1295</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#1296 id=1296 data-nosnippet>1296</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{fed_name}-{peer_id}"</span>);
+<a href=#1297 id=1297 data-nosnippet>1297</a>        <span class="kw">let </span>process = process_mgr
+<a href=#1298 id=1298 data-nosnippet>1298</a>            .spawn_daemon(
+<a href=#1299 id=1299 data-nosnippet>1299</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{fed_name}-{peer_id}"</span>),
+<a href=#1300 id=1300 data-nosnippet>1300</a>                <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
+<a href=#1301 id=1301 data-nosnippet>1301</a>            )
+<a href=#1302 id=1302 data-nosnippet>1302</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1303 id=1303 data-nosnippet>1303</a>
-<a href=#1304 id=1304 data-nosnippet>1304</a>    <span class="comment">// Parallelize setting local parameters
-<a href=#1305 id=1305 data-nosnippet>1305</a>    // --federation-size is only supported by fedimint-cli &gt;= 0.11.0-alpha
-<a href=#1306 id=1306 data-nosnippet>1306</a>    </span><span class="kw">let </span>federation_size =
-<a href=#1307 id=1307 data-nosnippet>1307</a>        <span class="kw">if </span><span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await </span>&gt;= <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
-<a href=#1308 id=1308 data-nosnippet>1308</a>            <span class="prelude-val">Some</span>(endpoints.len())
-<a href=#1309 id=1309 data-nosnippet>1309</a>        } <span class="kw">else </span>{
-<a href=#1310 id=1310 data-nosnippet>1310</a>            <span class="prelude-val">None
-<a href=#1311 id=1311 data-nosnippet>1311</a>        </span>};
-<a href=#1312 id=1312 data-nosnippet>1312</a>    <span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
-<a href=#1313 id=1313 data-nosnippet>1313</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
-<a href=#1314 id=1314 data-nosnippet>1314</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1315 id=1315 data-nosnippet>1315</a>        <span class="kw">async move </span>{
-<a href=#1316 id=1316 data-nosnippet>1316</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
-<a href=#1317 id=1317 data-nosnippet>1317</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1318 id=1318 data-nosnippet>1318</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint, federation_size)
-<a href=#1319 id=1319 data-nosnippet>1319</a>                    .<span class="kw">await
-<a href=#1320 id=1320 data-nosnippet>1320</a>            </span>} <span class="kw">else </span>{
-<a href=#1321 id=1321 data-nosnippet>1321</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1322 id=1322 data-nosnippet>1322</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1323 id=1323 data-nosnippet>1323</a>                    .<span class="kw">await
-<a href=#1324 id=1324 data-nosnippet>1324</a>            </span>};
-<a href=#1325 id=1325 data-nosnippet>1325</a>            info.map(|i| (peer, i))
-<a href=#1326 id=1326 data-nosnippet>1326</a>        }
-<a href=#1327 id=1327 data-nosnippet>1327</a>    });
-<a href=#1328 id=1328 data-nosnippet>1328</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
-<a href=#1329 id=1329 data-nosnippet>1329</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#1330 id=1330 data-nosnippet>1330</a>        </span>.into_iter()
-<a href=#1331 id=1331 data-nosnippet>1331</a>        .collect();
+<a href=#1304 id=1304 data-nosnippet>1304</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#1305 id=1305 data-nosnippet>1305</a>            _bitcoind: bitcoind,
+<a href=#1306 id=1306 data-nosnippet>1306</a>            process,
+<a href=#1307 id=1307 data-nosnippet>1307</a>        })
+<a href=#1308 id=1308 data-nosnippet>1308</a>    }
+<a href=#1309 id=1309 data-nosnippet>1309</a>
+<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
+<a href=#1312 id=1312 data-nosnippet>1312</a>    </span>}
+<a href=#1313 id=1313 data-nosnippet>1313</a>
+<a href=#1314 id=1314 data-nosnippet>1314</a>    <span class="kw">pub async fn </span>await_terminated(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1315 id=1315 data-nosnippet>1315</a>        <span class="self">self</span>.process.await_terminated().<span class="kw">await
+<a href=#1316 id=1316 data-nosnippet>1316</a>    </span>}
+<a href=#1317 id=1317 data-nosnippet>1317</a>}
+<a href=#1318 id=1318 data-nosnippet>1318</a>
+<a href=#1319 id=1319 data-nosnippet>1319</a><span class="kw">pub async fn </span>run_cli_dkg_v2(endpoints: BTreeMap&lt;PeerId, String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1320 id=1320 data-nosnippet>1320</a>    <span class="comment">// Parallelize setup status checks
+<a href=#1321 id=1321 data-nosnippet>1321</a>    </span><span class="kw">let </span>status_futures = endpoints.values().map(|endpoint| {
+<a href=#1322 id=1322 data-nosnippet>1322</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1323 id=1323 data-nosnippet>1323</a>        <span class="kw">async move </span>{
+<a href=#1324 id=1324 data-nosnippet>1324</a>            <span class="kw">let </span>status = poll(<span class="string">"awaiting-setup-status-awaiting-local-params"</span>, || <span class="kw">async </span>{
+<a href=#1325 id=1325 data-nosnippet>1325</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1326 id=1326 data-nosnippet>1326</a>                    .setup_status(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1327 id=1327 data-nosnippet>1327</a>                    .<span class="kw">await
+<a href=#1328 id=1328 data-nosnippet>1328</a>                    </span>.map_err(ControlFlow::Continue)
+<a href=#1329 id=1329 data-nosnippet>1329</a>            })
+<a href=#1330 id=1330 data-nosnippet>1330</a>            .<span class="kw">await
+<a href=#1331 id=1331 data-nosnippet>1331</a>            </span>.unwrap();
 <a href=#1332 id=1332 data-nosnippet>1332</a>
-<a href=#1333 id=1333 data-nosnippet>1333</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
-<a href=#1334 id=1334 data-nosnippet>1334</a>
-<a href=#1335 id=1335 data-nosnippet>1335</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
-<a href=#1336 id=1336 data-nosnippet>1336</a>    // operation
-<a href=#1337 id=1337 data-nosnippet>1337</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
-<a href=#1338 id=1338 data-nosnippet>1338</a>        endpoints
-<a href=#1339 id=1339 data-nosnippet>1339</a>            .iter()
-<a href=#1340 id=1340 data-nosnippet>1340</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="macro">p !</span>= peer)
-<a href=#1341 id=1341 data-nosnippet>1341</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
-<a href=#1342 id=1342 data-nosnippet>1342</a>                <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1343 id=1343 data-nosnippet>1343</a>                <span class="kw">let </span>info = info.clone();
-<a href=#1344 id=1344 data-nosnippet>1344</a>                <span class="kw">async move </span>{
-<a href=#1345 id=1345 data-nosnippet>1345</a>                    <span class="kw">crate</span>::util::FedimintCli
-<a href=#1346 id=1346 data-nosnippet>1346</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1347 id=1347 data-nosnippet>1347</a>                        .<span class="kw">await
-<a href=#1348 id=1348 data-nosnippet>1348</a>                </span>}
-<a href=#1349 id=1349 data-nosnippet>1349</a>            })
-<a href=#1350 id=1350 data-nosnippet>1350</a>    });
-<a href=#1351 id=1351 data-nosnippet>1351</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1352 id=1352 data-nosnippet>1352</a>
-<a href=#1353 id=1353 data-nosnippet>1353</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
-<a href=#1354 id=1354 data-nosnippet>1354</a>
-<a href=#1355 id=1355 data-nosnippet>1355</a>    <span class="comment">// Parallelize DKG start
-<a href=#1356 id=1356 data-nosnippet>1356</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
-<a href=#1357 id=1357 data-nosnippet>1357</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1358 id=1358 data-nosnippet>1358</a>        <span class="kw">async move </span>{
-<a href=#1359 id=1359 data-nosnippet>1359</a>            <span class="kw">crate</span>::util::FedimintCli
-<a href=#1360 id=1360 data-nosnippet>1360</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1361 id=1361 data-nosnippet>1361</a>                .<span class="kw">await
-<a href=#1362 id=1362 data-nosnippet>1362</a>        </span>}
+<a href=#1333 id=1333 data-nosnippet>1333</a>            <span class="macro">assert_eq!</span>(status, SetupStatus::AwaitingLocalParams);
+<a href=#1334 id=1334 data-nosnippet>1334</a>        }
+<a href=#1335 id=1335 data-nosnippet>1335</a>    });
+<a href=#1336 id=1336 data-nosnippet>1336</a>    join_all(status_futures).<span class="kw">await</span>;
+<a href=#1337 id=1337 data-nosnippet>1337</a>
+<a href=#1338 id=1338 data-nosnippet>1338</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting local parameters..."</span>);
+<a href=#1339 id=1339 data-nosnippet>1339</a>
+<a href=#1340 id=1340 data-nosnippet>1340</a>    <span class="comment">// Parallelize setting local parameters
+<a href=#1341 id=1341 data-nosnippet>1341</a>    // --federation-size is only supported by fedimint-cli &gt;= 0.11.0-alpha
+<a href=#1342 id=1342 data-nosnippet>1342</a>    </span><span class="kw">let </span>federation_size =
+<a href=#1343 id=1343 data-nosnippet>1343</a>        <span class="kw">if </span><span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await </span>&gt;= <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#1344 id=1344 data-nosnippet>1344</a>            <span class="prelude-val">Some</span>(endpoints.len())
+<a href=#1345 id=1345 data-nosnippet>1345</a>        } <span class="kw">else </span>{
+<a href=#1346 id=1346 data-nosnippet>1346</a>            <span class="prelude-val">None
+<a href=#1347 id=1347 data-nosnippet>1347</a>        </span>};
+<a href=#1348 id=1348 data-nosnippet>1348</a>    <span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
+<a href=#1349 id=1349 data-nosnippet>1349</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
+<a href=#1350 id=1350 data-nosnippet>1350</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1351 id=1351 data-nosnippet>1351</a>        <span class="kw">async move </span>{
+<a href=#1352 id=1352 data-nosnippet>1352</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
+<a href=#1353 id=1353 data-nosnippet>1353</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1354 id=1354 data-nosnippet>1354</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint, federation_size)
+<a href=#1355 id=1355 data-nosnippet>1355</a>                    .<span class="kw">await
+<a href=#1356 id=1356 data-nosnippet>1356</a>            </span>} <span class="kw">else </span>{
+<a href=#1357 id=1357 data-nosnippet>1357</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1358 id=1358 data-nosnippet>1358</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1359 id=1359 data-nosnippet>1359</a>                    .<span class="kw">await
+<a href=#1360 id=1360 data-nosnippet>1360</a>            </span>};
+<a href=#1361 id=1361 data-nosnippet>1361</a>            info.map(|i| (peer, i))
+<a href=#1362 id=1362 data-nosnippet>1362</a>        }
 <a href=#1363 id=1363 data-nosnippet>1363</a>    });
-<a href=#1364 id=1364 data-nosnippet>1364</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1365 id=1365 data-nosnippet>1365</a>
-<a href=#1366 id=1366 data-nosnippet>1366</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1367 id=1367 data-nosnippet>1367</a>}
+<a href=#1364 id=1364 data-nosnippet>1364</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
+<a href=#1365 id=1365 data-nosnippet>1365</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#1366 id=1366 data-nosnippet>1366</a>        </span>.into_iter()
+<a href=#1367 id=1367 data-nosnippet>1367</a>        .collect();
+<a href=#1368 id=1368 data-nosnippet>1368</a>
+<a href=#1369 id=1369 data-nosnippet>1369</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
+<a href=#1370 id=1370 data-nosnippet>1370</a>
+<a href=#1371 id=1371 data-nosnippet>1371</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
+<a href=#1372 id=1372 data-nosnippet>1372</a>    // operation
+<a href=#1373 id=1373 data-nosnippet>1373</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
+<a href=#1374 id=1374 data-nosnippet>1374</a>        endpoints
+<a href=#1375 id=1375 data-nosnippet>1375</a>            .iter()
+<a href=#1376 id=1376 data-nosnippet>1376</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="macro">p !</span>= peer)
+<a href=#1377 id=1377 data-nosnippet>1377</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
+<a href=#1378 id=1378 data-nosnippet>1378</a>                <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1379 id=1379 data-nosnippet>1379</a>                <span class="kw">let </span>info = info.clone();
+<a href=#1380 id=1380 data-nosnippet>1380</a>                <span class="kw">async move </span>{
+<a href=#1381 id=1381 data-nosnippet>1381</a>                    <span class="kw">crate</span>::util::FedimintCli
+<a href=#1382 id=1382 data-nosnippet>1382</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1383 id=1383 data-nosnippet>1383</a>                        .<span class="kw">await
+<a href=#1384 id=1384 data-nosnippet>1384</a>                </span>}
+<a href=#1385 id=1385 data-nosnippet>1385</a>            })
+<a href=#1386 id=1386 data-nosnippet>1386</a>    });
+<a href=#1387 id=1387 data-nosnippet>1387</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1388 id=1388 data-nosnippet>1388</a>
+<a href=#1389 id=1389 data-nosnippet>1389</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
+<a href=#1390 id=1390 data-nosnippet>1390</a>
+<a href=#1391 id=1391 data-nosnippet>1391</a>    <span class="comment">// Parallelize DKG start
+<a href=#1392 id=1392 data-nosnippet>1392</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
+<a href=#1393 id=1393 data-nosnippet>1393</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1394 id=1394 data-nosnippet>1394</a>        <span class="kw">async move </span>{
+<a href=#1395 id=1395 data-nosnippet>1395</a>            <span class="kw">crate</span>::util::FedimintCli
+<a href=#1396 id=1396 data-nosnippet>1396</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1397 id=1397 data-nosnippet>1397</a>                .<span class="kw">await
+<a href=#1398 id=1398 data-nosnippet>1398</a>        </span>}
+<a href=#1399 id=1399 data-nosnippet>1399</a>    });
+<a href=#1400 id=1400 data-nosnippet>1400</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1401 id=1401 data-nosnippet>1401</a>
+<a href=#1402 id=1402 data-nosnippet>1402</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1403 id=1403 data-nosnippet>1403</a>}
 </code></pre></div></section></main></body></html>
