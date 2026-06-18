@@ -56,6 +56,7 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
 
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
@@ -106,6 +107,8 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Build dev shell
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -151,6 +154,8 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Build workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -234,6 +239,7 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
       - name: Check package features
         run: |
           nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
@@ -261,10 +267,12 @@ jobs:
       - name: Run cargo audit
         run: |
           nix flake update advisory-db || nix flake lock --update-input advisory-db
+          ./.github/scripts/pin-nix-flake-inputs.sh .
           nix build -L .#ci.cargoAudit
 
       - name: Run cargo deny
         run: |
+          ./.github/scripts/pin-nix-flake-inputs.sh .
           nix build -L .#ci.cargoDeny
 
   cross:
@@ -310,6 +318,8 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Build client packages for ${{ matrix.toolchain }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -369,6 +379,8 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
+        if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
 
       - name: Build ${{ matrix.container.name }} container for ${{ matrix.platform.arch }}
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
@@ -523,6 +535,7 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
 
       - name: Set BUILD_ID to tag or commit hash
         run: |

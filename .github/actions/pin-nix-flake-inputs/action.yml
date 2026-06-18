@@ -1,0 +1,13 @@
+name: 'Pin Nix flake inputs'
+description: 'Create temporary indirect GC roots for Nix flake input source paths'
+inputs:
+  flake:
+    description: 'Flake reference to archive and pin'
+    required: false
+    default: '.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Pin Nix flake inputs
+      shell: bash
+      run: ./.github/scripts/pin-nix-flake-inputs.sh '${{ inputs.flake }}'

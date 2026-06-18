@@ -19,6 +19,7 @@ jobs:
           path: .lycheecache
           key: cache-lychee-${{ github.sha }}
           restore-keys: cache-lychee-
+      - uses: ./.github/actions/pin-nix-flake-inputs
 
       # Accept 429 status codes so we don't fail when GitHub rate-limits us. The --github-token option didn't work and
       # this way we'll successfully check *some* links each run, cache them and check others the next run.

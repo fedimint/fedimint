@@ -23,6 +23,7 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
 
       - name: Build docs
         run: nix build -L .#nightly.ci.workspaceDocExport
