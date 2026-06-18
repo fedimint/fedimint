@@ -278,7 +278,7 @@ impl ConsensusApi {
                 let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
 
                 let consensus_status = LegacyPeerStatus {
-                    connection_status: match *p2p_receiver.borrow() {
+                    connection_status: match p2p_receiver.borrow().connected {
                         Some(..) => LegacyP2PConnectionStatus::Connected,
                         None => LegacyP2PConnectionStatus::Disconnected,
                     },
@@ -766,7 +766,7 @@ impl IDashboardApi for ConsensusApi {
     async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
         self.p2p_status_receivers
             .iter()
-            .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
+            .map(|(peer, receiver)| (*peer, receiver.borrow().connected.clone()))
             .collect()
     }
 
@@ -953,7 +953,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
                 Ok(fedimint.p2p_status_receivers
                     .iter()
-                    .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
+                    .map(|(peer, receiver)| (*peer, receiver.borrow().connected.clone()))
                     .collect())
             }
         },

@@ -25,15 +25,26 @@ use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_CO
 use crate::net::p2p_connection::DynP2PConnection;
 use crate::net::p2p_connector::DynP2PConnector;
 
-pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<Option<P2PConnectionStatus>>>;
-pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<Option<P2PConnectionStatus>>>;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct P2PConnectionState {
+    /// Current connection metadata, or `None` if disconnected.
+    pub connected: Option<P2PConnectionStatus>,
+    /// Last disconnect/connect error observed while disconnected.
+    pub last_error: Option<String>,
+}
+
+pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<P2PConnectionState>>;
+pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<P2PConnectionState>>;
 
 pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusReceivers) {
     let mut senders = BTreeMap::new();
     let mut receivers = BTreeMap::new();
 
     for peer in peers {
-        let (sender, receiver) = watch::channel(None);
+        let (sender, receiver) = watch::channel(P2PConnectionState {
+            connected: None,
+            last_error: None,
+        });
 
         senders.insert(peer, sender);
         receivers.insert(peer, receiver);
@@ -156,7 +167,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         peer_id: PeerId,
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
-        status_sender: watch::Sender<Option<P2PConnectionStatus>>,
+        status_sender: watch::Sender<P2PConnectionState>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
         // We use small message queues here to avoid outdated messages such as requests
@@ -185,7 +196,10 @@ impl<M: Send + 'static> P2PConnection<M> {
                         incoming_connections,
                         status_sender,
                     },
-                    state: P2PConnectionSMState::Disconnected(api_networking_backoff()),
+                    state: P2PConnectionSMState::Disconnected {
+                        backoff: api_networking_backoff(),
+                        last_error: None,
+                    },
                 };
 
                 while let Some(sm) = state_machine.state_transition().await {
@@ -228,19 +242,28 @@ struct P2PConnectionSMCommon<M> {
     peer_id_str: String,
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
-    status_sender: watch::Sender<Option<P2PConnectionStatus>>,
+    status_sender: watch::Sender<P2PConnectionState>,
 }
 
 enum P2PConnectionSMState<M> {
-    Disconnected(FibonacciBackoff),
+    Disconnected {
+        backoff: FibonacciBackoff,
+        last_error: Option<String>,
+    },
     Connected(DynP2PConnection<M>),
 }
 
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
-            P2PConnectionSMState::Disconnected(backoff) => {
-                self.common.status_sender.send_replace(None);
+            P2PConnectionSMState::Disconnected {
+                backoff,
+                last_error,
+            } => {
+                self.common.status_sender.send_replace(P2PConnectionState {
+                    connected: None,
+                    last_error,
+                });
 
                 self.common.transition_disconnected(backoff).await
             }
@@ -250,7 +273,10 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                     rtt: connection.rtt(),
                 };
 
-                self.common.status_sender.send_replace(Some(status));
+                self.common.status_sender.send_replace(P2PConnectionState {
+                    connected: Some(status),
+                    last_error: None,
+                });
 
                 self.common.transition_connected(connection).await
             }
@@ -301,13 +327,22 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     }
 
     fn disconnect(&self, error: anyhow::Error) -> P2PConnectionSMState<M> {
-        info!(target: LOG_NET_PEER, "Disconnected from peer: {}",  error);
+        let last_error = error.fmt_compact_anyhow().to_string();
+
+        info!(
+            target: LOG_NET_PEER,
+            error = %last_error,
+            "Disconnected from peer"
+        );
 
         PEER_DISCONNECT_COUNT
             .with_label_values(&[&self.our_id_str, &self.peer_id_str])
             .inc();
 
-        P2PConnectionSMState::Disconnected(api_networking_backoff())
+        P2PConnectionSMState::Disconnected {
+            backoff: api_networking_backoff(),
+            last_error: Some(last_error),
+        }
     }
 
     async fn send_message(
@@ -346,11 +381,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             },
             // to prevent "reconnection ping-pongs", only the side with lower PeerId reconnects
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
-
-
                 info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
 
-                match  self.connector.connect(self.peer_id).await {
+                match self.connector.connect(self.peer_id).await {
                     Ok(connection) => {
                         PEER_CONNECT_COUNT
                             .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "outgoing"])
@@ -358,12 +391,23 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                         info!(target: LOG_NET_PEER, "Connected to peer");
 
-                        return Some(P2PConnectionSMState::Connected(connection));
+                        Some(P2PConnectionSMState::Connected(connection))
                     }
-                    Err(e) => warn!(target: LOG_CONSENSUS, "Failed to connect to peer: {e}")
-                }
+                    Err(e) => {
+                        let last_error = e.fmt_compact_anyhow().to_string();
 
-                Some(P2PConnectionSMState::Disconnected(backoff))
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            error = %last_error,
+                            "Failed to connect to peer"
+                        );
+
+                        Some(P2PConnectionSMState::Disconnected {
+                            backoff,
+                            last_error: Some(last_error),
+                        })
+                    }
+                }
             },
         }
     }

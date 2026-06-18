@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail, format_err};
 use bitcoin::hashes::sha256;
@@ -561,7 +561,7 @@ impl ServerConfig {
                 .iter_mut()
                 .filter_map(|(p, r)| {
                     r.mark_unchanged();
-                    r.borrow().is_none().then_some((*p, r.clone()))
+                    r.borrow().connected.is_none().then_some((*p, r.clone()))
                 })
                 .collect();
 
@@ -571,8 +571,12 @@ impl ServerConfig {
 
             let disconnected_peers = pending_connection_receivers
                 .iter()
-                .map(|entry| entry.0)
-                .collect::<Vec<PeerId>>();
+                .map(|(peer, receiver)| {
+                    let last_error = receiver.borrow().last_error.clone();
+
+                    (*peer, last_error)
+                })
+                .collect::<Vec<_>>();
 
             info!(
                 target: LOG_NET_PEER_DKG,
@@ -600,10 +604,12 @@ impl ServerConfig {
             .into_iter()
             .filter(|p| *p != params.identity)
         {
-            let peer_message = connections
-                .receive_from_peer(peer)
-                .await
-                .context("Unexpected shutdown of p2p connections")?;
+            let peer_message = receive_from_peer_with_progress(
+                &connections,
+                peer,
+                "connection code checksum message",
+            )
+            .await?;
 
             if peer_message != P2PMessage::Checksum(checksum) {
                 error!(
@@ -690,10 +696,9 @@ impl ServerConfig {
             .into_iter()
             .filter(|p| *p != params.identity)
         {
-            let peer_message = connections
-                .receive_from_peer(peer)
-                .await
-                .context("Unexpected shutdown of p2p connections")?;
+            let peer_message =
+                receive_from_peer_with_progress(&connections, peer, "consensus config checksum")
+                    .await?;
 
             if peer_message != P2PMessage::Checksum(checksum) {
                 warn!(
@@ -719,6 +724,34 @@ impl ServerConfig {
         );
 
         Ok(cfg)
+    }
+}
+
+async fn receive_from_peer_with_progress(
+    connections: &DynP2PConnections<P2PMessage>,
+    peer: PeerId,
+    message_description: &'static str,
+) -> anyhow::Result<P2PMessage> {
+    let start = Instant::now();
+
+    loop {
+        select! {
+            // Cancel-safe: `receive_from_peer` is backed by
+            // `async_channel::Receiver::recv`, so dropping this future on the
+            // periodic progress-log tick does not lose messages.
+            peer_message = connections.receive_from_peer(peer) => {
+                return peer_message.context("Unexpected shutdown of p2p connections");
+            }
+            () = sleep(Duration::from_secs(10)) => {
+                info!(
+                    target: LOG_NET_PEER_DKG,
+                    %peer,
+                    message = message_description,
+                    elapsed_secs = start.elapsed().as_secs(),
+                    "Still waiting for peer message"
+                );
+            }
+        }
     }
 }
 
