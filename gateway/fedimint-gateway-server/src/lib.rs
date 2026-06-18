@@ -2560,7 +2560,7 @@ impl IAdminGateway for Gateway {
                 notes: notes.to_string(),
             })
         } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
-            let ecash = mint_module
+            let (_, ecash) = mint_module
                 .send(payload.amount, serde_json::Value::Null, true)
                 .await
                 .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
