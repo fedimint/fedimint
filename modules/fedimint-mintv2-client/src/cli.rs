@@ -36,10 +36,8 @@ pub(crate) async fn handle_cli_command(
             amount,
             include_invite,
         } => {
-            let ecash = mint
-                .send(amount, Value::Null, include_invite)
-                .await
-                .map(|ecash| base32::encode_prefixed(FEDIMINT_PREFIX, &ecash))?;
+            let (_, ecash) = mint.send(amount, Value::Null, include_invite).await?;
+            let ecash = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
 
             Ok(json(ecash))
         }
