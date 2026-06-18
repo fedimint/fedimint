@@ -903,22 +903,41 @@ impl Federation {
 
         for gw in gateways.clone() {
             let pegin_addr = gw.client().get_pegin_addr(&fed_id).await?;
+            debug!(
+                gateway = %gw.gw_name,
+                ln = %gw.ln.ln_type(),
+                address = %pegin_addr,
+                amount_sats = amount + deposit_fees,
+                uses_walletv2,
+                "Sending gateway pegin"
+            );
             self.bitcoind
                 .send_to(pegin_addr, amount + deposit_fees)
                 .await?;
         }
 
+        let pegin_start = Instant::now();
         self.bitcoind.mine_blocks(21).await?;
         let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
+        debug!(
+            bitcoind_block_height,
+            elapsed_ms = %pegin_start.elapsed().as_millis(),
+            "Mined gateway pegin blocks"
+        );
+
         try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
             let initial_balance = if uses_walletv2 {
                 initial_balances[i]
             } else {
                 0
             };
+            let gateway_name = gw.gw_name.clone();
+            let gateway_ln = gw.ln.ln_type().to_string();
             let fed_id = fed_id.clone();
             poll("gateway pegin", move || {
                 let fed_id = fed_id.clone();
+                let gateway_name = gateway_name.clone();
+                let gateway_ln = gateway_ln.clone();
                 async move {
                     let gw_info = gw
                         .client()
@@ -937,6 +956,14 @@ impl Federation {
                     };
 
                     if bitcoind_block_height != block_height {
+                        debug!(
+                            gateway = %gateway_name,
+                            ln = %gateway_ln,
+                            bitcoind_block_height,
+                            gateway_block_height = block_height,
+                            elapsed_ms = %pegin_start.elapsed().as_millis(),
+                            "Waiting for gateway pegin block sync"
+                        );
                         return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
                             "gateway block height is not synced"
                         )));
@@ -953,7 +980,16 @@ impl Federation {
                         // the expected amount. Use 90% threshold to account
                         // for mintv2 fees (same as pegin_client).
                         let expected = initial_balance + (amount * 1000 * 9 / 10);
-                        if gateway_balance >= expected {
+                        debug!(
+                            gateway = %gateway_name,
+                            ln = %gateway_ln,
+                            gateway_balance_msats = gateway_balance,
+                            expected_msats = expected,
+                            initial_balance_msats = initial_balance,
+                            elapsed_ms = %pegin_start.elapsed().as_millis(),
+                            "Checked walletv2 gateway pegin balance"
+                        );
+                        if expected <= gateway_balance {
                             Ok(())
                         } else {
                             Err(ControlFlow::Continue(anyhow::anyhow!(

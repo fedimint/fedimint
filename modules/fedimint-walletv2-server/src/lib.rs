@@ -1044,7 +1044,7 @@ impl Wallet {
                             %outpoint,
                             value_sat = tx_out.value.to_sat(),
                             height,
-                            "Recorded potential receive"
+                            "Recorded potential walletv2 receive"
                         );
 
                         potential_receives_num += 1;

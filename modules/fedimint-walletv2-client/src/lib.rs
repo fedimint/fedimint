@@ -51,8 +51,8 @@ use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    KIND, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes,
-    WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
+    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -782,37 +782,8 @@ impl WalletClientModule {
                     address_map.insert(self.derive_address(index).script_pubkey(), index);
                 }
 
-                if !output.spent {
-                    // In order to not overpay on fees we choose to wait,
-                    // the congestion will clear up within a few blocks.
-                    if self.module_api.pending_tx_chain().await?.len() >= 3 {
-                        return Ok(false);
-                    }
-
-                    let receive_fee = self
-                        .module_api
-                        .receive_fee()
-                        .await?
-                        .ok_or(anyhow!("No consensus feerate is available"))?;
-
-                    if output.value > receive_fee {
-                        let (operation_id, txid) = self
-                            .receive_output(
-                                output.index,
-                                output.value,
-                                address_index,
-                                receive_fee,
-                                output.outpoint,
-                            )
-                            .await;
-
-                        self.client_ctx
-                            .transaction_updates(operation_id)
-                            .await
-                            .await_tx_accepted(txid)
-                            .await
-                            .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
-                    }
+                if !output.spent && !self.process_unspent_output(output, address_index).await? {
+                    return Ok(false);
                 }
             }
 
@@ -834,6 +805,90 @@ impl WalletClientModule {
         );
 
         Ok(!outputs.is_empty())
+    }
+
+    async fn process_unspent_output(
+        &self,
+        output: &OutputInfo,
+        address_index: u64,
+    ) -> anyhow::Result<bool> {
+        debug!(
+            target: LOG_CLIENT_MODULE_WALLETV2,
+            output_index = output.index,
+            value_sat = output.value.to_sat(),
+            address_index,
+            outpoint = ?output.outpoint,
+            "Discovered unspent walletv2 receive output"
+        );
+
+        // In order to not overpay on fees we choose to wait,
+        // the congestion will clear up within a few blocks.
+        let pending_tx_chain_len = self.module_api.pending_tx_chain().await?.len();
+        if 3 <= pending_tx_chain_len {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                pending_tx_chain_len,
+                "Delaying walletv2 receive claim because pending transaction chain is full"
+            );
+            return Ok(false);
+        }
+
+        let receive_fee = self
+            .module_api
+            .receive_fee()
+            .await?
+            .ok_or(anyhow!("No consensus feerate is available"))?;
+
+        if receive_fee < output.value {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                value_sat = output.value.to_sat(),
+                fee_sat = receive_fee.to_sat(),
+                "Submitting walletv2 receive claim"
+            );
+            let (operation_id, txid) = self
+                .receive_output(
+                    output.index,
+                    output.value,
+                    address_index,
+                    receive_fee,
+                    output.outpoint,
+                )
+                .await;
+
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                ?operation_id,
+                %txid,
+                "Waiting for walletv2 receive claim acceptance"
+            );
+            self.client_ctx
+                .transaction_updates(operation_id)
+                .await
+                .await_tx_accepted(txid)
+                .await
+                .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                ?operation_id,
+                %txid,
+                "Walletv2 receive claim accepted"
+            );
+        } else {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                value_sat = output.value.to_sat(),
+                fee_sat = receive_fee.to_sat(),
+                "Skipping walletv2 receive output because fee meets or exceeds value"
+            );
+        }
+
+        Ok(true)
     }
 }
 
