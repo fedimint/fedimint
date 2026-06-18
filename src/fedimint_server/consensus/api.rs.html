@@ -278,7 +278,7 @@
 <a href=#278 id=278 data-nosnippet>278</a>                <span class="kw">let </span>ci_receiver = <span class="self">self</span>.ci_status_receivers.get(peer).unwrap();
 <a href=#279 id=279 data-nosnippet>279</a>
 <a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">let </span>consensus_status = LegacyPeerStatus {
-<a href=#281 id=281 data-nosnippet>281</a>                    connection_status: <span class="kw">match </span><span class="kw-2">*</span>p2p_receiver.borrow() {
+<a href=#281 id=281 data-nosnippet>281</a>                    connection_status: <span class="kw">match </span>p2p_receiver.borrow().connected {
 <a href=#282 id=282 data-nosnippet>282</a>                        <span class="prelude-val">Some</span>(..) =&gt; LegacyP2PConnectionStatus::Connected,
 <a href=#283 id=283 data-nosnippet>283</a>                        <span class="prelude-val">None </span>=&gt; LegacyP2PConnectionStatus::Disconnected,
 <a href=#284 id=284 data-nosnippet>284</a>                    },
@@ -766,7 +766,7 @@
 <a href=#766 id=766 data-nosnippet>766</a>    <span class="kw">async fn </span>p2p_connection_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;P2PConnectionStatus&gt;&gt; {
 <a href=#767 id=767 data-nosnippet>767</a>        <span class="self">self</span>.p2p_status_receivers
 <a href=#768 id=768 data-nosnippet>768</a>            .iter()
-<a href=#769 id=769 data-nosnippet>769</a>            .map(|(peer, receiver)| (<span class="kw-2">*</span>peer, receiver.borrow().clone()))
+<a href=#769 id=769 data-nosnippet>769</a>            .map(|(peer, receiver)| (<span class="kw-2">*</span>peer, receiver.borrow().connected.clone()))
 <a href=#770 id=770 data-nosnippet>770</a>            .collect()
 <a href=#771 id=771 data-nosnippet>771</a>    }
 <a href=#772 id=772 data-nosnippet>772</a>
@@ -953,7 +953,7 @@
 <a href=#953 id=953 data-nosnippet>953</a>            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _c, _v: ()| -&gt; BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;P2PConnectionStatus&gt;&gt; {
 <a href=#954 id=954 data-nosnippet>954</a>                <span class="prelude-val">Ok</span>(fedimint.p2p_status_receivers
 <a href=#955 id=955 data-nosnippet>955</a>                    .iter()
-<a href=#956 id=956 data-nosnippet>956</a>                    .map(|(peer, receiver)| (<span class="kw-2">*</span>peer, receiver.borrow().clone()))
+<a href=#956 id=956 data-nosnippet>956</a>                    .map(|(peer, receiver)| (<span class="kw-2">*</span>peer, receiver.borrow().connected.clone()))
 <a href=#957 id=957 data-nosnippet>957</a>                    .collect())
 <a href=#958 id=958 data-nosnippet>958</a>            }
 <a href=#959 id=959 data-nosnippet>959</a>        },
