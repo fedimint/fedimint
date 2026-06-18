@@ -20,12 +20,14 @@ jobs:
       - name: Run cargo audit
         run: |
           nix flake update advisory-db || nix flake lock --update-input advisory-db
+          ./.github/scripts/pin-nix-flake-inputs.sh .
           nix build -L .#ci.cargoAudit
 
   fuzz:
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/pin-nix-flake-inputs
       - name: Quick fuzzing
         run: |
           env \

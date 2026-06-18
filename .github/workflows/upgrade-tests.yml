@@ -53,6 +53,7 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
 
       - name: Upgrade tests
         run: |
