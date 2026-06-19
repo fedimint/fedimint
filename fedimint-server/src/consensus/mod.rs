@@ -34,8 +34,8 @@ use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
-use iroh::Endpoint;
-use iroh::endpoint::{Incoming, RecvStream, SendStream};
+use iroh_next::Endpoint;
+use iroh_next::endpoint::{Incoming, RecvStream, SendStream};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
@@ -417,7 +417,7 @@ fn submit_module_ci_proposals(
 }
 
 async fn start_iroh_api(
-    secret_key: iroh::SecretKey,
+    secret_key: iroh_next::SecretKey,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,

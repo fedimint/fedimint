@@ -3,13 +3,13 @@ use std::io::{Error, Read, Write};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
-impl Encodable for iroh_base::SecretKey {
+impl Encodable for iroh_next_base::SecretKey {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for iroh_base::SecretKey {
+impl Decodable for iroh_next_base::SecretKey {
     fn consensus_decode_partial<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
@@ -20,13 +20,13 @@ impl Decodable for iroh_base::SecretKey {
     }
 }
 
-impl Encodable for iroh_base::PublicKey {
+impl Encodable for iroh_next_base::PublicKey {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.as_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for iroh_base::PublicKey {
+impl Decodable for iroh_next_base::PublicKey {
     fn consensus_decode_partial<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,

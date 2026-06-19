@@ -264,7 +264,6 @@ iroh-next = { version = "=1.0.0", default-features = false, features = [
     "tls-ring",
 ], package = "iroh" }
 iroh-next-base = { version = "=1.0.0", default-features = false, package = "iroh-base" }
-iroh-relay = { version = "=0.35.0", default-features = false }
 itertools = "0.14.0"
 jaq-core = "2.1.1"
 jaq-json = { version = "1.1.1", features = ["serde_json"] }

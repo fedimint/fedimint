@@ -109,10 +109,10 @@ pub struct ServerConfigPrivate {
     pub tls_key: Option<String>,
     /// Optional secret key for our iroh api endpoint
     #[serde(default)]
-    pub iroh_api_sk: Option<iroh::SecretKey>,
+    pub iroh_api_sk: Option<iroh_next::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
     #[serde(default)]
-    pub iroh_p2p_sk: Option<iroh::SecretKey>,
+    pub iroh_p2p_sk: Option<iroh_next::SecretKey>,
     /// Secret key for the atomic broadcast to sign messages
     pub broadcast_secret_key: SecretKey,
     /// Secret material from modules
@@ -149,9 +149,9 @@ pub struct PeerIrohEndpoints {
     /// The peer's name
     pub name: String,
     /// Public key for our iroh api endpoint
-    pub api_pk: iroh::PublicKey,
+    pub api_pk: iroh_next::PublicKey,
     /// Public key for our iroh p2p endpoint
-    pub p2p_pk: iroh::PublicKey,
+    pub p2p_pk: iroh_next::PublicKey,
 }
 
 pub fn legacy_consensus_config_hash(cfg: &ServerConfigConsensus) -> sha256::Hash {
@@ -235,9 +235,9 @@ pub struct ConfigGenParams {
     /// Our TLS certificate private key
     pub tls_key: Option<Arc<rustls::pki_types::PrivateKeyDer<'static>>>,
     /// Optional secret key for our iroh api endpoint
-    pub iroh_api_sk: Option<iroh::SecretKey>,
+    pub iroh_api_sk: Option<iroh_next::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
-    pub iroh_p2p_sk: Option<iroh::SecretKey>,
+    pub iroh_p2p_sk: Option<iroh_next::SecretKey>,
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Endpoints of all servers

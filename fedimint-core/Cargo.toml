@@ -40,9 +40,7 @@ group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = { workspace = true }
-iroh = { workspace = true, default-features = false }
-iroh-base = { workspace = true, features = ["key"] }
-iroh-relay = { workspace = true, default-features = false }
+iroh-next-base = { workspace = true, features = ["key"] }
 itertools = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client"] }
 lightning = { workspace = true }
@@ -69,9 +67,8 @@ z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 aws-lc-sys = { version = "0.41", features = ["bindgen"] }
-iroh = { workspace = true, default-features = false, features = [
-    "discovery-pkarr-dht",
-] }
+iroh-mainline-address-lookup = { workspace = true }
+iroh-next = { workspace = true, default-features = false }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
