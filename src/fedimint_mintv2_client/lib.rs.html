@@ -757,7 +757,7 @@
 <a href=#757 id=757 data-nosnippet>757</a>            .<span class="kw">await
 <a href=#758 id=758 data-nosnippet>758</a>    </span>}
 <a href=#759 id=759 data-nosnippet>759</a>
-<a href=#760 id=760 data-nosnippet>760</a>    <span class="doccomment">/// Send `ECash` for the given amount. The
+<a href=#760 id=760 data-nosnippet>760</a>    <span class="doccomment">/// Send `ECash` for the given amount and return the send operation ID. The
 <a href=#761 id=761 data-nosnippet>761</a>    /// amount will be rounded up to a multiple of 512 msats which is the
 <a href=#762 id=762 data-nosnippet>762</a>    /// smallest denomination used throughout the client. If the rounded
 <a href=#763 id=763 data-nosnippet>763</a>    /// amount cannot be covered with the ecash notes in the client's
@@ -775,10 +775,10 @@
 <a href=#775 id=775 data-nosnippet>775</a>        amount: Amount,
 <a href=#776 id=776 data-nosnippet>776</a>        custom_meta: Value,
 <a href=#777 id=777 data-nosnippet>777</a>        include_invite: bool,
-<a href=#778 id=778 data-nosnippet>778</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ECash, SendECashError&gt; {
+<a href=#778 id=778 data-nosnippet>778</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OperationId, ECash), SendECashError&gt; {
 <a href=#779 id=779 data-nosnippet>779</a>        <span class="kw">let </span>amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 <a href=#780 id=780 data-nosnippet>780</a>
-<a href=#781 id=781 data-nosnippet>781</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(ecash) = <span class="self">self
+<a href=#781 id=781 data-nosnippet>781</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((operation_id, ecash)) = <span class="self">self
 <a href=#782 id=782 data-nosnippet>782</a>            </span>.client_ctx
 <a href=#783 id=783 data-nosnippet>783</a>            .module_db()
 <a href=#784 id=784 data-nosnippet>784</a>            .autocommit(
@@ -795,7 +795,7 @@
 <a href=#795 id=795 data-nosnippet>795</a>            .<span class="kw">await
 <a href=#796 id=796 data-nosnippet>796</a>            </span>.expect(<span class="string">"Failed to commit dbtx after 100 retries"</span>)
 <a href=#797 id=797 data-nosnippet>797</a>        {
-<a href=#798 id=798 data-nosnippet>798</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(ecash);
+<a href=#798 id=798 data-nosnippet>798</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>((operation_id, ecash));
 <a href=#799 id=799 data-nosnippet>799</a>        }
 <a href=#800 id=800 data-nosnippet>800</a>
 <a href=#801 id=801 data-nosnippet>801</a>        <span class="self">self</span>.client_ctx
@@ -842,7 +842,7 @@
 <a href=#842 id=842 data-nosnippet>842</a>        <span class="kw-2">mut </span>remaining_amount: Amount,
 <a href=#843 id=843 data-nosnippet>843</a>        custom_meta: Value,
 <a href=#844 id=844 data-nosnippet>844</a>        include_invite: bool,
-<a href=#845 id=845 data-nosnippet>845</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ECash&gt;, Infallible&gt; {
+<a href=#845 id=845 data-nosnippet>845</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;(OperationId, ECash)&gt;, Infallible&gt; {
 <a href=#846 id=846 data-nosnippet>846</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = dbtx
 <a href=#847 id=847 data-nosnippet>847</a>            .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SpendableNotePrefix)
 <a href=#848 id=848 data-nosnippet>848</a>            .<span class="kw">await
@@ -904,7 +904,7 @@
 <a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">let </span>sender = <span class="self">self</span>.balance_update_sender.clone();
 <a href=#905 id=905 data-nosnippet>905</a>        dbtx.on_commit(<span class="kw">move </span>|| sender.send_replace(()));
 <a href=#906 id=906 data-nosnippet>906</a>
-<a href=#907 id=907 data-nosnippet>907</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(ecash))
+<a href=#907 id=907 data-nosnippet>907</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((operation_id, ecash)))
 <a href=#908 id=908 data-nosnippet>908</a>    }
 <a href=#909 id=909 data-nosnippet>909</a>
 <a href=#910 id=910 data-nosnippet>910</a>    <span class="doccomment">/// Receive the `ECash` by reissuing the notes and return the total amount
