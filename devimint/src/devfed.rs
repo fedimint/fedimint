@@ -467,6 +467,7 @@ impl DevJitFed {
         );
 
         if !self.pre_dkg && !self.skip_setup {
+            let _ = self.gw_lnd_registered().await?;
             let _ = self.internal_client_gw_registered().await?;
         }
         let _ = self.channel_opened.get_try().await?;
