@@ -8,7 +8,6 @@ use axum::routing::{get, post};
 use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::module::ApiAuth;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -32,7 +31,6 @@ const RESTORE_BACKUP_UPLOAD_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
-    pub password: String,
     pub name: String,
     #[serde(default)]
     pub is_lead: bool,
@@ -172,12 +170,12 @@ fn restore_form_content(error: Option<&str>) -> Markup {
         }
 
         p class="text-muted" {
-            "Upload a guardian backup tar file and enter the guardian password used when the backup was created."
+            "Upload a guardian backup tar file. The password is only required for older, encrypted backups; leave it blank otherwise."
         }
 
         form method="post" action=(RESTORE_GUARDIAN_ROUTE) enctype="multipart/form-data" {
             div class="form-group mb-3" {
-                input type="password" class="form-control" name="password" placeholder="Guardian Password" required;
+                input type="password" class="form-control" name="password" placeholder="Guardian Password (only for encrypted backups)";
             }
             div class="form-group mb-3" {
                 input type="file" class="form-control" name="backup" accept="application/x-tar,.tar" required;
@@ -258,10 +256,6 @@ fn setup_form_content(
 
             div class="form-group mb-4" {
                 input type="text" class="form-control" id="name" name="name" placeholder="Your Guardian Name" required;
-            }
-
-            div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Your Password" required;
             }
 
             div class="alert alert-warning mb-3" style="font-size: 0.875rem;" {
@@ -365,7 +359,10 @@ fn setup_form_content(
 }
 
 // GET handler for the / route (choose setup or restore)
-async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+async fn setup_form(
+    State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
+) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
@@ -401,6 +398,7 @@ async fn start_federation_form(State(state): State<UiState<DynSetupApi>>) -> imp
 // POST handler for the /setup route (process the setup form)
 async fn setup_submit(
     State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
     // Only use these settings if is_lead is true
@@ -448,7 +446,6 @@ async fn setup_submit(
     match state
         .api
         .set_local_parameters(
-            ApiAuth::new(input.password),
             input.name,
             federation_name,
             disable_base_fees,
@@ -506,9 +503,9 @@ async fn restore_submit(
         }
     }
 
-    let Some(password) = password else {
-        return restore_error_response("Missing guardian password");
-    };
+    // An empty password field means the user left it blank, which is the
+    // expected case for current plaintext backups.
+    let password = password.filter(|password| !password.is_empty());
     let Some(backup) = backup else {
         return restore_error_response("Missing guardian backup file");
     };
@@ -537,16 +534,15 @@ async fn restore_submit(
             };
             Html(single_card_layout("Guardian Restored", content).into_string()).into_response()
         }
-        Err(e) => restore_error_response(e.to_string()),
+        // Render the full error chain so the underlying cause (e.g. an
+        // incorrect password for an encrypted backup) is surfaced rather than
+        // just the outermost "Reading restored config" context.
+        Err(e) => restore_error_response(format!("{e:#}")),
     }
 }
 
 // GET handler for the /login route (display the login form)
 async fn login_form_handler(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.setup_code().await.is_none() {
-        return Redirect::to(ROOT_ROUTE).into_response();
-    }
-
     let version = state.api.fedimintd_version().await;
     let version_hash = state.api.fedimintd_version_hash().await;
     Html(
@@ -561,25 +557,24 @@ async fn login_form_handler(State(state): State<UiState<DynSetupApi>>) -> impl I
     .into_response()
 }
 
-// POST handler for the /login route (authenticate and set session cookie)
+// POST handler for the /login route (authenticate and set session cookie).
+// Only mounted when the guardian has a password configured, so `auth()` is
+// always `Some` here.
 async fn login_submit(
     State(state): State<UiState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    let auth = match state.api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to(ROOT_ROUTE).into_response(),
-    };
-
     login_submit_response(
-        auth,
+        state
+            .api
+            .auth_ui()
+            .expect("login route is mounted only when auth is configured"),
         state.auth_cookie_name,
         state.auth_cookie_value,
         jar,
         input,
     )
-    .into_response()
 }
 
 // GET handler for the /federation-setup route (main federation management page)
@@ -855,7 +850,9 @@ async fn post_reset_setup_codes(
 }
 
 pub fn router(api: DynSetupApi) -> Router {
-    Router::new()
+    let requires_auth = api.auth_ui().is_some();
+
+    let mut router = Router::new()
         .route(ROOT_ROUTE, get(setup_form).post(setup_submit))
         .route(START_FEDERATION_ROUTE, get(start_federation_form))
         .route(
@@ -864,7 +861,6 @@ pub fn router(api: DynSetupApi) -> Router {
                 .post(restore_submit)
                 .layer(DefaultBodyLimit::max(RESTORE_BACKUP_UPLOAD_LIMIT_BYTES)),
         )
-        .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(FEDERATION_SETUP_ROUTE, get(federation_setup))
         .route(ADD_SETUP_CODE_ROUTE, post(post_add_setup_code))
         .route(RESET_SETUP_CODES_ROUTE, post(post_reset_setup_codes))
@@ -872,9 +868,15 @@ pub fn router(api: DynSetupApi) -> Router {
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynSetupApi>),
-        )
+        );
+
+    if requires_auth {
+        router = router.route(LOGIN_ROUTE, get(login_form_handler).post(login_submit));
+    }
+
+    router
         .with_static_routes()
-        .with_state(UiState::new(api))
+        .with_state(UiState::new(api, requires_auth))
 }
 
 #[cfg(test)]

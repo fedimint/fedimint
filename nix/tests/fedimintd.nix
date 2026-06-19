@@ -21,6 +21,8 @@ pkgs.testers.runNixOSTest {
       services.fedimintd."mainnet" = {
         enable = true;
         package = fedimintdPackage;
+        passwordUi = "pass";
+        passwordApi = "pass";
         p2p = {
           url = "fedimint://example.com:8173";
         };

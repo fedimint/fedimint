@@ -24,7 +24,6 @@ Commands:
 
 Options:
       --cfg <CONFIG>             Directory containing server config files
-      --password <PASSWORD>      The password that encrypts the configs [env: FM_PASSWORD=]
       --descriptor <DESCRIPTOR>  Wallet descriptor, can be used instead of --cfg
       --key <KEY>                Wallet secret key, can be used instead of config together with --descriptor
       --network <NETWORK>        Network to operate on, has to be specified if --cfg isn't present [default: bitcoin]

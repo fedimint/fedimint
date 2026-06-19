@@ -227,12 +227,6 @@ function test_client_config_change_detection() {
 }
 export -f test_client_config_change_detection
 
-function test_guardian_password_change() {
-  # test modifies server configs and restarts, so we need to override FM_OFFLINE_NODES
-  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-guardian-password-change.sh
-}
-export -f test_guardian_password_change
-
 function test_admin_auth() {
   # test requires v0.11.0-alpha features, skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -501,7 +495,6 @@ tests_to_run_in_parallel+=(
   "cannot_replay_tx"
   "test_offline_client_initialization"
   "test_client_config_change_detection"
-  "test_guardian_password_change"
   "test_admin_auth"
   "circular_deposit"
   "wallet_recovery"

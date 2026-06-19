@@ -63,6 +63,12 @@ else
     exit 1
 fi
 
+# Read and set password (used for both UI login and API admin auth)
+GUARDIAN_PASSWORD=$(yq '.password' /start-os/start9/config.yaml)
+export FM_PASSWORD_UI="$GUARDIAN_PASSWORD"
+export FM_PASSWORD_API="$GUARDIAN_PASSWORD"
+echo "FM_PASSWORD_UI and FM_PASSWORD_API are set"
+
 # Read and set RUST_LOG from config
 RUST_LOG_LEVEL=$(yq '.advanced.rust-log-level' /start-os/start9/config.yaml)
 export RUST_LOG="${RUST_LOG_LEVEL}"
