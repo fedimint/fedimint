@@ -7,7 +7,8 @@ use fedimint_core::backup::ClientBackupKeyPrefix;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_metrics::prometheus::{
-    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, register_histogram_vec_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    register_histogram_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use fedimint_metrics::{
@@ -116,6 +117,18 @@ pub(crate) static IROH_API_CONNECTION_DURATION_SECONDS: LazyLock<Histogram> = La
     )
     .unwrap()
 });
+
+pub(crate) static IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL: LazyLock<IntCounter> =
+    LazyLock::new(|| {
+        register_int_counter_with_registry!(
+            opts!(
+                "iroh_api_connection_idle_timeout_total",
+                "Number of iroh API connections closed by the server after being idle",
+            ),
+            REGISTRY
+        )
+        .unwrap()
+    });
 
 pub(crate) static IROH_API_REQUEST_DURATION_SECONDS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(
