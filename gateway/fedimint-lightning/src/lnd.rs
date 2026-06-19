@@ -35,9 +35,10 @@ use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    FeeReportRequest, GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress,
-    ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
-    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    FeeReportRequest, GetInfoRequest, Hop, HtlcAttempt, Invoice, InvoiceSubscription,
+    LightningAddress, ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest,
+    ListPeersRequest, OpenChannelRequest, Payment, PolicyUpdateRequest, Route, SendCoinsRequest,
+    UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -49,7 +50,8 @@ use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
+    ChannelInfo, ILnRpcClient, LightningPaymentFailure, LightningPaymentFailureAttempt,
+    LightningPaymentRouteHop, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
     MAX_LIGHTNING_RETRIES, RouteHtlcStream,
 };
 use crate::{
@@ -64,6 +66,104 @@ use crate::{
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
+
+fn lnd_failed_payment_error(payment: &Payment) -> LightningRpcError {
+    let failure_reason = format!("{:?}", payment.failure_reason());
+    LightningRpcError::FailedPaymentWithDetails {
+        failure_reason,
+        payment_failure: lnd_payment_failure(payment),
+    }
+}
+
+fn lnd_payment_failure(payment: &Payment) -> LightningPaymentFailure {
+    LightningPaymentFailure {
+        failure_reason: Some(format!("{:?}", payment.failure_reason())),
+        attempts: payment
+            .htlcs
+            .iter()
+            .filter_map(lnd_payment_failure_attempt)
+            .collect(),
+    }
+}
+
+fn lnd_payment_failure_attempt(htlc: &HtlcAttempt) -> Option<LightningPaymentFailureAttempt> {
+    if htlc.status() != tonic_lnd::lnrpc::htlc_attempt::HtlcStatus::Failed {
+        return None;
+    }
+
+    let route = htlc.route.as_ref();
+    let failure = htlc.failure.as_ref();
+    let failure_source_index = failure.map(|failure| failure.failure_source_index);
+    let failure_channel_id = failure
+        .and_then(|failure| {
+            failure
+                .channel_update
+                .as_ref()
+                .map(|channel_update| channel_update.chan_id)
+        })
+        .or_else(|| {
+            route.and_then(|route| lnd_route_failure_channel_id(route, failure_source_index))
+        });
+    let failure_node_pub_key =
+        route.and_then(|route| lnd_route_failure_node_pub_key(route, failure_source_index));
+
+    Some(LightningPaymentFailureAttempt {
+        attempt_id: Some(htlc.attempt_id),
+        failure_source_index,
+        failure_code: failure.map(|failure| format!("{:?}", failure.code())),
+        failure_node_pub_key,
+        failure_channel_id,
+        route: route
+            .map(|route| route.hops.iter().map(lnd_payment_route_hop).collect())
+            .unwrap_or_default(),
+    })
+}
+
+fn lnd_route_failure_channel_id(route: &Route, failure_source_index: Option<u32>) -> Option<u64> {
+    let failure_source_index = failure_source_index?;
+    if failure_source_index == 0 {
+        return None;
+    }
+
+    let hop_index = usize::try_from(failure_source_index - 1).ok()?;
+    route
+        .hops
+        .get(hop_index)
+        .and_then(|hop| (hop.chan_id != 0).then_some(hop.chan_id))
+}
+
+fn lnd_route_failure_node_pub_key(
+    route: &Route,
+    failure_source_index: Option<u32>,
+) -> Option<String> {
+    let failure_source_index = failure_source_index?;
+    if failure_source_index == 0 {
+        return None;
+    }
+
+    let hop_index = usize::try_from(failure_source_index - 1).ok()?;
+    let pub_key = &route.hops.get(hop_index)?.pub_key;
+    (!pub_key.is_empty()).then(|| pub_key.clone())
+}
+
+fn lnd_payment_route_hop(hop: &Hop) -> LightningPaymentRouteHop {
+    LightningPaymentRouteHop {
+        pub_key: (!hop.pub_key.is_empty()).then(|| hop.pub_key.clone()),
+        channel_id: (hop.chan_id != 0).then_some(hop.chan_id),
+        amount_to_forward_msat: non_negative_i64_to_u64(hop.amt_to_forward_msat),
+        fee_msat: non_negative_i64_to_u64(hop.fee_msat),
+        expiry: hop.expiry,
+    }
+}
+
+fn non_negative_i64_to_u64(value: i64) -> Option<u64> {
+    if value < 0 {
+        debug!(value, "LND returned negative millisatoshi value");
+        return None;
+    }
+
+    Some(u64::try_from(value).expect("value was checked to be non-negative"))
+}
 
 #[derive(Clone)]
 pub struct GatewayLndClient {
@@ -610,10 +710,7 @@ impl GatewayLndClient {
                             return Ok(Some(payment.payment_preimage));
                         }
 
-                        let failure_reason = payment.failure_reason();
-                        return Err(LightningRpcError::FailedPayment {
-                            failure_reason: format!("{failure_reason:?}"),
-                        });
+                        return Err(lnd_failed_payment_error(&payment));
                     }
                 }
                 Err(err) => {
@@ -1006,10 +1103,7 @@ impl ILnRpcClient for GatewayLndClient {
                                 status = %payment.status,
                                 "LND payment failed",
                             );
-                            let failure_reason = payment.failure_reason();
-                            return Err(LightningRpcError::FailedPayment {
-                                failure_reason: format!("{failure_reason:?}"),
-                            });
+                            return Err(lnd_failed_payment_error(&payment));
                         }
                         Ok(None) => {
                             warn!(

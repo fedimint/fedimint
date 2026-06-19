@@ -45,6 +45,47 @@ pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;
 pub type Lnv2HoldInvoiceFilter =
     Arc<dyn Fn(sha256::Hash) -> BoxFuture<'static, bool> + Send + Sync + 'static>;
 
+/// Structured diagnostics for a failed outgoing Lightning payment.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailure {
+    /// Backend-level failure reason, when available.
+    pub failure_reason: Option<String>,
+    /// Per-attempt failure details, when exposed by the backend.
+    pub attempts: Vec<LightningPaymentFailureAttempt>,
+}
+
+/// Details for one failed Lightning payment attempt.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailureAttempt {
+    /// Backend-specific payment attempt id.
+    pub attempt_id: Option<u64>,
+    /// BOLT failure source index, when provided by the backend.
+    pub failure_source_index: Option<u32>,
+    /// BOLT or backend-specific failure code.
+    pub failure_code: Option<String>,
+    /// Public key of the node that failed the attempt, when known.
+    pub failure_node_pub_key: Option<String>,
+    /// Channel id associated with the failure, when known.
+    pub failure_channel_id: Option<u64>,
+    /// Route attempted by this failed payment attempt, when known.
+    pub route: Vec<LightningPaymentRouteHop>,
+}
+
+/// Hop in a route attempted by a failed Lightning payment attempt.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentRouteHop {
+    /// Public key of the hop node, when known.
+    pub pub_key: Option<String>,
+    /// Channel id used for this hop, when known.
+    pub channel_id: Option<u64>,
+    /// Amount forwarded by this hop in millisatoshis.
+    pub amount_to_forward_msat: Option<u64>,
+    /// Fee paid to this hop in millisatoshis.
+    pub fee_msat: Option<u64>,
+    /// CLTV expiry for this hop.
+    pub expiry: u32,
+}
+
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
@@ -57,6 +98,11 @@ pub enum LightningRpcError {
     FailedToGetRouteHints { failure_reason: String },
     #[error("Payment failed: {failure_reason}")]
     FailedPayment { failure_reason: String },
+    #[error("Payment failed: {failure_reason}")]
+    FailedPaymentWithDetails {
+        failure_reason: String,
+        payment_failure: LightningPaymentFailure,
+    },
     #[error("Failed to route HTLCs: {failure_reason}")]
     FailedToRouteHtlcs { failure_reason: String },
     #[error("Failed to complete HTLC: {failure_reason}")]
