@@ -19,15 +19,19 @@ mod input;
 pub mod issuance;
 mod output;
 mod receive;
+mod send_cancellable;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::{Context as _, anyhow, bail};
 use bitcoin_hashes::sha256;
-use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
+use client_db::{
+    CancellableSendKey, CancelledSendKey, RecoveryState, RecoveryStateKey,
+    SpendableNoteAmountPrefix, SpendableNotePrefix,
+};
 pub use events::*;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
@@ -43,6 +47,7 @@ use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress}
 use fedimint_client_module::module::{
     ClientContext, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
 };
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
@@ -55,7 +60,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
@@ -77,6 +82,10 @@ use crate::input::{InputSMCommon, InputSMState, InputStateMachine};
 use crate::issuance::NoteIssuanceRequest;
 use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
 use crate::receive::{ReceiveSMState, ReceiveStateMachine};
+use crate::send_cancellable::{
+    SendCancellableSMCommon, SendCancellableSMCreated, SendCancellableSMState,
+    SendCancellableStateMachine,
+};
 
 const TARGET_PER_DENOMINATION: usize = 3;
 const SLICE_SIZE: u64 = 10000;
@@ -341,9 +350,19 @@ pub struct MintClientModule {
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
     client_ctx: ClientContext<MintClientModule>,
+    amount_unit: AmountUnit,
     tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
     tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, tbs::PublicKeyShare>>,
     pub balance_update_sender: tokio::sync::watch::Sender<()>,
+}
+
+impl MintClientContext {
+    fn await_cancel_send(&self, operation_id: OperationId) -> BoxFuture<'static, ()> {
+        let db = self.client_ctx.module_db().clone();
+        Box::pin(async move {
+            db.wait_key_exists(&CancelledSendKey(operation_id)).await;
+        })
+    }
 }
 
 impl Context for MintClientContext {
@@ -361,6 +380,7 @@ impl ClientModule for MintClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
             client_ctx: self.client_ctx.clone(),
+            amount_unit: self.cfg.amount_unit,
             tbs_agg_pks: self.cfg.tbs_agg_pks.clone(),
             tbs_pks: self.cfg.tbs_pks.clone(),
             balance_update_sender: self.balance_update_sender.clone(),
@@ -776,6 +796,30 @@ impl MintClientModule {
         custom_meta: Value,
         include_invite: bool,
     ) -> Result<(OperationId, ECash), SendECashError> {
+        Box::pin(self.send_inner(amount, custom_meta, include_invite, None)).await
+    }
+
+    /// Send `ECash` for the given amount and make the send cancellable by
+    /// calling [`MintClientModule::try_cancel_send_cancellable`] before the
+    /// recipient reissues the ecash. If the ecash was not reissued before
+    /// `try_cancel_after`, the client will automatically attempt to reclaim it.
+    pub async fn send_cancellable(
+        &self,
+        amount: Amount,
+        custom_meta: Value,
+        include_invite: bool,
+        try_cancel_after: Duration,
+    ) -> Result<(OperationId, ECash), SendECashError> {
+        Box::pin(self.send_inner(amount, custom_meta, include_invite, Some(try_cancel_after))).await
+    }
+
+    async fn send_inner(
+        &self,
+        amount: Amount,
+        custom_meta: Value,
+        include_invite: bool,
+        try_cancel_after: Option<Duration>,
+    ) -> Result<(OperationId, ECash), SendECashError> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
         if let Some((operation_id, ecash)) = self
@@ -788,6 +832,7 @@ impl MintClientModule {
                         amount,
                         custom_meta.clone(),
                         include_invite,
+                        try_cancel_after,
                     ))
                 },
                 Some(100),
@@ -833,7 +878,7 @@ impl MintClientModule {
                 .map_err(|_| SendECashError::Failure)?;
         }
 
-        Box::pin(self.send(amount, custom_meta, include_invite)).await
+        Box::pin(self.send_inner(amount, custom_meta, include_invite, try_cancel_after)).await
     }
 
     async fn send_ecash_dbtx(
@@ -842,6 +887,7 @@ impl MintClientModule {
         mut remaining_amount: Amount,
         custom_meta: Value,
         include_invite: bool,
+        try_cancel_after: Option<Duration>,
     ) -> Result<Option<(OperationId, ECash)>, Infallible> {
         let mut stream = dbtx
             .find_by_prefix_sorted_descending(&SpendableNotePrefix)
@@ -877,6 +923,7 @@ impl MintClientModule {
         };
         let amount = ecash.amount();
         let operation_id = OperationId::new_random();
+        let encoded_ecash = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
 
         self.client_ctx
             .add_operation_log_entry_dbtx(
@@ -884,11 +931,36 @@ impl MintClientModule {
                 operation_id,
                 MintCommonInit::KIND.as_str(),
                 MintOperationMeta::Send {
-                    ecash: base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
+                    ecash: encoded_ecash.clone(),
                     custom_meta,
                 },
             )
             .await;
+
+        if let Some(try_cancel_after) = try_cancel_after {
+            dbtx.insert_new_entry(&CancellableSendKey(operation_id), &())
+                .await;
+
+            self.client_ctx
+                .add_state_machines_dbtx(
+                    dbtx,
+                    self.client_ctx
+                        .map_dyn(vec![MintClientStateMachines::SendCancellable(
+                            SendCancellableStateMachine {
+                                common: SendCancellableSMCommon {
+                                    operation_id,
+                                    spendable_notes: ecash.notes(),
+                                },
+                                state: SendCancellableSMState::Created(SendCancellableSMCreated {
+                                    timeout: fedimint_core::time::now() + try_cancel_after,
+                                }),
+                            },
+                        )])
+                        .collect(),
+                )
+                .await
+                .expect("Cancellable send state machine must be valid");
+        }
 
         self.client_ctx
             .log_event(
@@ -896,7 +968,7 @@ impl MintClientModule {
                 SendPaymentEvent {
                     operation_id,
                     amount,
-                    ecash: base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
+                    ecash: encoded_ecash,
                 },
             )
             .await;
@@ -966,6 +1038,154 @@ impl MintClientModule {
         dbtx.commit_tx().await;
 
         Ok(operation_id)
+    }
+
+    /// Try to cancel a cancellable send operation started with
+    /// [`MintClientModule::send_cancellable`]. If the e-cash notes have already
+    /// been spent this operation will fail, which can be observed using
+    /// [`MintClientModule::subscribe_send_cancellable`].
+    pub async fn try_cancel_send_cancellable(&self, operation_id: OperationId) {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async move {
+                        dbtx.insert_entry(&CancelledSendKey(operation_id), &())
+                            .await;
+                        Ok::<(), Infallible>(())
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .expect("Failed to commit dbtx after 100 retries");
+    }
+
+    /// Subscribe to updates on the progress of a cancellable e-cash send
+    /// operation started with [`MintClientModule::send_cancellable`].
+    pub async fn subscribe_send_cancellable(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<SendCancellableOperationState>> {
+        let operation = self.mint_operation(operation_id).await?;
+        if !matches!(
+            operation.meta::<MintOperationMeta>(),
+            MintOperationMeta::Send { .. }
+        ) {
+            bail!("Operation is not an e-cash send");
+        }
+
+        let cancellable = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&CancellableSendKey(operation_id))
+            .await
+            .is_some();
+        if !cancellable {
+            bail!("Operation is not a cancellable e-cash send");
+        }
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                async_stream::stream! {
+                    yield SendCancellableOperationState::Created;
+
+                    let self_ref = client_ctx.self_ref();
+                    let refund = self_ref.await_send_cancellable_refund(operation_id).await;
+
+                    if refund.user_triggered {
+                        yield SendCancellableOperationState::UserCanceledProcessing;
+                    }
+
+                    let success = client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(refund.refund_range.txid())
+                        .await
+                        .is_ok()
+                        && self_ref
+                            .await_send_cancellable_refund_outputs(
+                                operation_id,
+                                refund.refund_range,
+                            )
+                            .await
+                            .is_ok();
+
+                    match (refund.user_triggered, success) {
+                        (true, true) => {
+                            yield SendCancellableOperationState::UserCanceledSuccess;
+                        },
+                        (true, false) => {
+                            yield SendCancellableOperationState::UserCanceledFailure;
+                        },
+                        (false, true) => {
+                            yield SendCancellableOperationState::Refunded;
+                        },
+                        (false, false) => {
+                            yield SendCancellableOperationState::Success;
+                        }
+                    }
+                }
+            }))
+    }
+
+    async fn await_send_cancellable_refund(
+        &self,
+        operation_id: OperationId,
+    ) -> SendCancellableRefund {
+        Box::pin(
+            self.notifier
+                .subscribe(operation_id)
+                .await
+                .filter_map(|state| async {
+                    let MintClientStateMachines::SendCancellable(state) = state else {
+                        return None;
+                    };
+
+                    match state.state {
+                        SendCancellableSMState::UserRefund(refund) => Some(SendCancellableRefund {
+                            user_triggered: true,
+                            refund_range: refund.refund_range,
+                        }),
+                        SendCancellableSMState::TimeoutRefund(refund) => {
+                            Some(SendCancellableRefund {
+                                user_triggered: false,
+                                refund_range: refund.refund_range,
+                            })
+                        }
+                        SendCancellableSMState::Created(_) => None,
+                    }
+                }),
+        )
+        .next_or_pending()
+        .await
+    }
+
+    async fn await_send_cancellable_refund_outputs(
+        &self,
+        operation_id: OperationId,
+        refund_range: OutPointRange,
+    ) -> anyhow::Result<()> {
+        for outpoint in refund_range {
+            self.await_output_sm_success(operation_id, outpoint).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+
+        if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
+            bail!("Operation is not a mint operation");
+        }
+
+        Ok(operation)
     }
 
     /// Await the final state of the receive operation.
@@ -1128,11 +1348,39 @@ pub enum FinalReceiveOperationState {
     Rejected,
 }
 
+/// The high-level state of an e-cash send operation started with
+/// [`MintClientModule::send_cancellable`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum SendCancellableOperationState {
+    /// The e-cash has been selected and given to the caller.
+    Created,
+    /// The user requested a cancellation of the operation, and the client is
+    /// waiting for the outcome of the cancel transaction.
+    UserCanceledProcessing,
+    /// The user-requested cancellation transaction was accepted.
+    UserCanceledSuccess,
+    /// The user-requested cancellation failed, meaning the e-cash notes were
+    /// already spent by someone else.
+    UserCanceledFailure,
+    /// The automatic timeout cancellation failed, meaning the recipient
+    /// reissued the e-cash before timeout.
+    Success,
+    /// The automatic timeout cancellation transaction was accepted, meaning the
+    /// recipient did not reissue the e-cash before timeout.
+    Refunded,
+}
+
+struct SendCancellableRefund {
+    user_triggered: bool,
+    refund_range: OutPointRange,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintClientStateMachines {
     Input(InputStateMachine),
     Output(MintOutputStateMachine),
     Receive(ReceiveStateMachine),
+    SendCancellable(SendCancellableStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -1170,6 +1418,12 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::Receive
                 )
             }
+            MintClientStateMachines::SendCancellable(send_state) => {
+                sm_enum_variant_translation!(
+                    send_state.transitions(context, global_context),
+                    MintClientStateMachines::SendCancellable
+                )
+            }
         }
     }
 
@@ -1178,6 +1432,7 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
             MintClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
+            MintClientStateMachines::SendCancellable(send_state) => send_state.operation_id(),
         }
     }
 }

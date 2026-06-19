@@ -15,6 +15,8 @@ use crate::issuance::NoteIssuanceRequest;
 pub enum DbKeyPrefix {
     Note = 0x20,
     RecoveryState = 0x21,
+    CancelledSend = 0x22,
+    CancellableSend = 0x23,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -61,4 +63,23 @@ impl_db_record!(
     key = RecoveryStateKey,
     value = RecoveryState,
     db_prefix = DbKeyPrefix::RecoveryState,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct CancelledSendKey(pub fedimint_core::core::OperationId);
+
+impl_db_record!(
+    key = CancelledSendKey,
+    value = (),
+    db_prefix = DbKeyPrefix::CancelledSend,
+    notify_on_modify = true,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct CancellableSendKey(pub fedimint_core::core::OperationId);
+
+impl_db_record!(
+    key = CancellableSendKey,
+    value = (),
+    db_prefix = DbKeyPrefix::CancellableSend,
 );

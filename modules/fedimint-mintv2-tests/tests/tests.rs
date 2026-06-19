@@ -1,4 +1,5 @@
 use std::pin::pin;
+use std::time::Duration;
 
 use anyhow::ensure;
 use async_stream::stream;
@@ -14,7 +15,8 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_mintv2_client::{
     ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, ReceivePaymentEvent,
-    ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendPaymentEvent,
+    ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendCancellableOperationState,
+    SendPaymentEvent,
 };
 use fedimint_mintv2_common::KIND;
 use fedimint_mintv2_server::MintInit;
@@ -291,6 +293,164 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
     };
     assert_eq!(update.operation_id, receive.operation_id);
     assert_eq!(update.status, ReceivePaymentStatus::Rejected);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancellable_send_can_be_manually_refunded() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed.new_client().await;
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let balance_before = client.get_balance_for_btc().await?;
+
+    let (operation_id, _ecash) = mint_module
+        .send_cancellable(
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+            Duration::from_secs(60),
+        )
+        .await?;
+    let balance_after_send = client.get_balance_for_btc().await?;
+
+    assert!(balance_after_send < balance_before);
+
+    let mut updates = mint_module
+        .subscribe_send_cancellable(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::Created)
+    );
+
+    mint_module.try_cancel_send_cancellable(operation_id).await;
+
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::UserCanceledProcessing)
+    );
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::UserCanceledSuccess)
+    );
+
+    let balance_after_cancel = client.get_balance_for_btc().await?;
+
+    assert!(balance_after_cancel > balance_after_send);
+    assert!(balance_after_cancel <= balance_before);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancellable_send_manual_refund_fails_after_receive() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let (client_send, client_receive) = fed.two_clients().await;
+    issue_ecash(&client_send, Amount::from_sats(10_000)).await?;
+
+    let sender_mint = client_send.get_first_module::<MintClientModule>()?;
+    let receiver_mint = client_receive.get_first_module::<MintClientModule>()?;
+    let sender_balance_before = client_send.get_balance_for_btc().await?;
+
+    let (send_operation_id, ecash) = sender_mint
+        .send_cancellable(
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+            Duration::from_secs(60),
+        )
+        .await?;
+    let sender_balance_after_send = client_send.get_balance_for_btc().await?;
+
+    assert!(sender_balance_after_send < sender_balance_before);
+
+    let receive_operation_id = receiver_mint.receive(ecash, Value::Null).await?;
+    let receive_state = receiver_mint
+        .await_final_receive_operation_state(receive_operation_id)
+        .await?;
+
+    assert_eq!(receive_state, FinalReceiveOperationState::Success);
+
+    let mut updates = sender_mint
+        .subscribe_send_cancellable(send_operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::Created)
+    );
+
+    sender_mint
+        .try_cancel_send_cancellable(send_operation_id)
+        .await;
+
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::UserCanceledProcessing)
+    );
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::UserCanceledFailure)
+    );
+
+    let sender_balance_after_failed_cancel = client_send.get_balance_for_btc().await?;
+
+    assert!(sender_balance_after_failed_cancel <= sender_balance_after_send);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancellable_send_is_refunded_after_timeout() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed.new_client().await;
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let balance_before = client.get_balance_for_btc().await?;
+
+    let (operation_id, _ecash) = mint_module
+        .send_cancellable(
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+            Duration::from_millis(10),
+        )
+        .await?;
+    let balance_after_send = client.get_balance_for_btc().await?;
+
+    assert!(balance_after_send < balance_before);
+
+    let mut updates = mint_module
+        .subscribe_send_cancellable(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::Created)
+    );
+    assert_eq!(
+        updates.next().await,
+        Some(SendCancellableOperationState::Refunded)
+    );
+
+    let balance_after_refund = client.get_balance_for_btc().await?;
+
+    assert!(balance_after_refund > balance_after_send);
+    assert!(balance_after_refund <= balance_before);
 
     Ok(())
 }
