@@ -961,8 +961,7 @@ impl ServerModule for Lightning {
                 Contract::Incoming(_) => ContractDirection::Incoming,
                 Contract::Outgoing(_) => ContractDirection::Outgoing,
             }),
-            LightningOutputV0::Offer(_) => None,
-            LightningOutputV0::CancelOutgoing { .. } => None,
+            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => None,
         };
 
         let amounts = self

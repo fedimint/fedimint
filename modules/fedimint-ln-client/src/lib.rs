@@ -503,8 +503,7 @@ impl ClientModule for LightningClientModule {
         let legacy_fee = <Self as ClientModule>::input_fee(self, amount, input)?.get_bitcoin();
         let amount = input
             .maybe_v0_ref()
-            .map(|input| input.amount)
-            .unwrap_or_else(|| amount.get_bitcoin());
+            .map_or_else(|| amount.get_bitcoin(), |input| input.amount);
         let Some(fee_consensus) = decode_current_fee_consensus::<LightningFeeConsensus>(
             fee_consensus,
             &ModuleDecoderRegistry::default(),

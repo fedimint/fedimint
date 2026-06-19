@@ -10,7 +10,7 @@ use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
-use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId};
+use fedimint_core::core::{DynInput, DynOutput, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
@@ -1280,12 +1280,12 @@ impl ConsensusEngine {
                         transaction
                             .inputs
                             .iter()
-                            .map(|input| input.module_instance_id())
+                            .map(DynInput::module_instance_id)
                             .chain(
                                 transaction
                                     .outputs
                                     .iter()
-                                    .map(|output| output.module_instance_id()),
+                                    .map(DynOutput::module_instance_id),
                             ),
                     )
                     .await?;

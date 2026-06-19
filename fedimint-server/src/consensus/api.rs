@@ -16,7 +16,7 @@ use fedimint_core::backup::{
 };
 use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME_KEY};
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
-use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{DynInput, DynOutput, DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped,
@@ -337,12 +337,12 @@ impl ConsensusApi {
                 transaction
                     .inputs
                     .iter()
-                    .map(|input| input.module_instance_id())
+                    .map(DynInput::module_instance_id)
                     .chain(
                         transaction
                             .outputs
                             .iter()
-                            .map(|output| output.module_instance_id()),
+                            .map(DynOutput::module_instance_id),
                     ),
             )
             .await

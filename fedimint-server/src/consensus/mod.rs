@@ -291,16 +291,18 @@ pub async fn run(
 
         submit_module_ci_proposals(
             task_group,
-            db.clone(),
-            global_api.clone(),
-            cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.to_num_peers(),
-            module_id,
-            kind.clone(),
-            module.clone(),
-            initial_module_consensus_version,
-            cfg.consensus.version,
-            submission_sender.clone(),
+            ModuleCiProposalContext {
+                db: db.clone(),
+                federation_api: global_api.clone(),
+                our_peer_id: cfg.local.identity,
+                num_peers: cfg.consensus.broadcast_public_keys.to_num_peers(),
+                module_id,
+                kind: kind.clone(),
+                module: module.clone(),
+                initial_module_consensus_version,
+                core_consensus_version: cfg.consensus.version,
+                submission_sender: submission_sender.clone(),
+            },
         );
     }
 
@@ -454,8 +456,7 @@ fn submit_core_ci_proposals(
     });
 }
 
-fn submit_module_ci_proposals(
-    task_group: &TaskGroup,
+struct ModuleCiProposalContext {
     db: Database,
     federation_api: DynGlobalApi,
     our_peer_id: PeerId,
@@ -466,7 +467,22 @@ fn submit_module_ci_proposals(
     initial_module_consensus_version: ModuleConsensusVersion,
     core_consensus_version: fedimint_core::module::CoreConsensusVersion,
     submission_sender: Sender<ConsensusItem>,
-) {
+}
+
+fn submit_module_ci_proposals(task_group: &TaskGroup, context: ModuleCiProposalContext) {
+    let ModuleCiProposalContext {
+        db,
+        federation_api,
+        our_peer_id,
+        num_peers,
+        module_id,
+        kind,
+        module,
+        initial_module_consensus_version,
+        core_consensus_version,
+        submission_sender,
+    } = context;
+
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
         Duration::from_millis(100)
     } else {
@@ -503,8 +519,7 @@ fn submit_module_ci_proposals(
                     false
                 } else {
                     last_automatic_vote_check
-                        .map(|last: Instant| last.elapsed() >= automatic_vote_check_interval)
-                        .unwrap_or(true)
+                        .is_none_or(|last: Instant| last.elapsed() >= automatic_vote_check_interval)
                 };
                 if check_automatic_vote {
                     last_automatic_vote_check = Some(Instant::now());

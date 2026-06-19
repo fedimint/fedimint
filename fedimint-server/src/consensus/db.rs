@@ -390,14 +390,16 @@ where
         .await
         .into_iter()
         .max_by_key(|(key, _)| (key.active_since, key.sequence))
-        .map(|(key, fee_consensus)| CurrentFeeConsensus {
-            active_since: key.active_since,
-            fee_consensus,
-        })
-        .unwrap_or(CurrentFeeConsensus {
-            active_since: ConsensusUnixTime::default(),
-            fee_consensus: initial_fee_consensus,
-        })
+        .map_or(
+            CurrentFeeConsensus {
+                active_since: ConsensusUnixTime::default(),
+                fee_consensus: initial_fee_consensus,
+            },
+            |(key, fee_consensus)| CurrentFeeConsensus {
+                active_since: key.active_since,
+                fee_consensus,
+            },
+        )
 }
 
 pub async fn module_fee_consensus_schedules<Cap>(
@@ -426,14 +428,16 @@ where
         .iter()
         .rev()
         .find(|(key, _)| key.active_since < cutoff)
-        .map(|(key, fee_consensus)| CurrentFeeConsensus {
-            fee_consensus: fee_consensus.clone(),
-            active_since: key.active_since,
-        })
-        .unwrap_or(CurrentFeeConsensus {
-            fee_consensus: initial_fee_consensus,
-            active_since: ConsensusUnixTime::default(),
-        });
+        .map_or(
+            CurrentFeeConsensus {
+                fee_consensus: initial_fee_consensus,
+                active_since: ConsensusUnixTime::default(),
+            },
+            |(key, fee_consensus)| CurrentFeeConsensus {
+                fee_consensus: fee_consensus.clone(),
+                active_since: key.active_since,
+            },
+        );
 
     let mut schedules = vec![previous_schedule];
     schedules.extend(

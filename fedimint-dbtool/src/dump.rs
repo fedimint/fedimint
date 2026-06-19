@@ -271,6 +271,10 @@ impl DatabaseDump {
         dbtx: &mut DatabaseTransaction<'_>,
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
+        if Self::write_serialized_dynamic_fee_consensus_range(&table, dbtx, consensus).await {
+            return;
+        }
+
         match table {
             server_db::DbKeyPrefix::AcceptedItem => {
                 push_db_pair_items_no_serde!(
@@ -312,6 +316,47 @@ impl DatabaseDump {
                     "Aleph Units"
                 );
             }
+            // Module is a global prefix for all module data
+            server_db::DbKeyPrefix::ModuleConsensusVersionVote
+            | server_db::DbKeyPrefix::ModuleConsensusVersionVotingActivation
+            | server_db::DbKeyPrefix::CoreUnixTimeVote
+            | server_db::DbKeyPrefix::ConsensusUnixTime
+            | server_db::DbKeyPrefix::ModuleFeeConsensusVote
+            | server_db::DbKeyPrefix::ModuleFeeConsensusDesired
+            | server_db::DbKeyPrefix::ModuleFeeConsensusSchedule
+            | server_db::DbKeyPrefix::Module
+            | server_db::DbKeyPrefix::ServerInfo
+            | server_db::DbKeyPrefix::DatabaseVersion
+            | server_db::DbKeyPrefix::ClientBackup => {}
+            server_db::DbKeyPrefix::ApiAnnouncements => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ApiAnnouncementPrefix,
+                    ApiAnnouncementKey,
+                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
+                    consensus,
+                    "API Announcements"
+                );
+            }
+            server_db::DbKeyPrefix::GuardianMetadata => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix,
+                    fedimint_server::net::api::guardian_metadata::GuardianMetadataKey,
+                    fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+                    consensus,
+                    "Guardian Metadata"
+                );
+            }
+        }
+    }
+
+    async fn write_serialized_dynamic_fee_consensus_range(
+        table: &server_db::DbKeyPrefix,
+        dbtx: &mut DatabaseTransaction<'_>,
+        consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
+    ) -> bool {
+        match table {
             server_db::DbKeyPrefix::ModuleConsensusVersionVote => {
                 push_db_pair_items_no_serde!(
                     dbtx,
@@ -382,33 +427,12 @@ impl DatabaseDump {
                     "Module Fee Consensus Schedules"
                 );
             }
-            // Module is a global prefix for all module data
-            server_db::DbKeyPrefix::Module
-            | server_db::DbKeyPrefix::ServerInfo
-            | server_db::DbKeyPrefix::DatabaseVersion
-            | server_db::DbKeyPrefix::ClientBackup => {}
-            server_db::DbKeyPrefix::ApiAnnouncements => {
-                push_db_pair_items_no_serde!(
-                    dbtx,
-                    ApiAnnouncementPrefix,
-                    ApiAnnouncementKey,
-                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
-                    consensus,
-                    "API Announcements"
-                );
-            }
-            server_db::DbKeyPrefix::GuardianMetadata => {
-                push_db_pair_items_no_serde!(
-                    dbtx,
-                    fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix,
-                    fedimint_server::net::api::guardian_metadata::GuardianMetadataKey,
-                    fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
-                    consensus,
-                    "Guardian Metadata"
-                );
-            }
+            _ => return false,
         }
+
+        true
     }
+
     async fn write_serialized_client_operation_log(
         serialized: &mut BTreeMap<String, Box<dyn Serialize>>,
         dbtx: &mut DatabaseTransaction<'_>,
