@@ -467,68 +467,69 @@
 <a href=#467 id=467 data-nosnippet>467</a>        </span>);
 <a href=#468 id=468 data-nosnippet>468</a>
 <a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">if </span>!<span class="self">self</span>.pre_dkg &amp;&amp; !<span class="self">self</span>.skip_setup {
-<a href=#470 id=470 data-nosnippet>470</a>            <span class="kw">let _ </span>= <span class="self">self</span>.internal_client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#471 id=471 data-nosnippet>471</a>        }
-<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_connected().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_second_connected().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let _ </span>= <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw">let _ </span>= <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let _ </span>= <span class="self">self</span>.recurringd_connected().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let _ </span>= <span class="self">self</span>.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">let _ </span>= <span class="self">self</span>.fed_epoch_generated.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#481 id=481 data-nosnippet>481</a>
-<a href=#482 id=482 data-nosnippet>482</a>        <span class="macro">debug!</span>(
-<a href=#483 id=483 data-nosnippet>483</a>            target: LOG_DEVIMINT,
-<a href=#484 id=484 data-nosnippet>484</a>            fed_size,
-<a href=#485 id=485 data-nosnippet>485</a>            offline_nodes,
-<a href=#486 id=486 data-nosnippet>486</a>            elapsed_ms = %<span class="self">self</span>.start_time.elapsed()<span class="question-mark">?</span>.as_millis(),
-<a href=#487 id=487 data-nosnippet>487</a>            <span class="string">"Dev federation ready"</span>,
-<a href=#488 id=488 data-nosnippet>488</a>        );
-<a href=#489 id=489 data-nosnippet>489</a>        <span class="prelude-val">Ok</span>(())
-<a href=#490 id=490 data-nosnippet>490</a>    }
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">pub async fn </span>to_dev_fed(<span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; anyhow::Result&lt;DevFed&gt; {
-<a href=#493 id=493 data-nosnippet>493</a>        <span class="self">self</span>.finalize(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#494 id=494 data-nosnippet>494</a>        <span class="prelude-val">Ok</span>(DevFed {
-<a href=#495 id=495 data-nosnippet>495</a>            bitcoind: <span class="self">self</span>.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#496 id=496 data-nosnippet>496</a>            lnd: <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#497 id=497 data-nosnippet>497</a>            fed: <span class="self">self</span>.fed().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#498 id=498 data-nosnippet>498</a>            gw_lnd: <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#499 id=499 data-nosnippet>499</a>            gw_ldk: <span class="self">self</span>.gw_ldk().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#500 id=500 data-nosnippet>500</a>            gw_ldk_second: <span class="self">self</span>.gw_ldk_second().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#501 id=501 data-nosnippet>501</a>            esplora: <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#502 id=502 data-nosnippet>502</a>            recurringd: <span class="self">self</span>.recurringd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#503 id=503 data-nosnippet>503</a>            recurringdv2: <span class="self">self</span>.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
-<a href=#504 id=504 data-nosnippet>504</a>        })
-<a href=#505 id=505 data-nosnippet>505</a>    }
-<a href=#506 id=506 data-nosnippet>506</a>
-<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">pub async fn </span>fast_terminate(<span class="self">self</span>) {
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span><span class="self">Self </span>{
-<a href=#509 id=509 data-nosnippet>509</a>            bitcoind,
-<a href=#510 id=510 data-nosnippet>510</a>            lnd,
-<a href=#511 id=511 data-nosnippet>511</a>            fed,
-<a href=#512 id=512 data-nosnippet>512</a>            gw_lnd,
-<a href=#513 id=513 data-nosnippet>513</a>            esplora,
-<a href=#514 id=514 data-nosnippet>514</a>            gw_ldk,
-<a href=#515 id=515 data-nosnippet>515</a>            gw_ldk_second,
-<a href=#516 id=516 data-nosnippet>516</a>            recurringd,
-<a href=#517 id=517 data-nosnippet>517</a>            recurringdv2,
-<a href=#518 id=518 data-nosnippet>518</a>            ..
-<a href=#519 id=519 data-nosnippet>519</a>        } = <span class="self">self</span>;
-<a href=#520 id=520 data-nosnippet>520</a>
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="macro">join!</span>(
-<a href=#522 id=522 data-nosnippet>522</a>            spawn_drop(gw_lnd),
-<a href=#523 id=523 data-nosnippet>523</a>            spawn_drop(gw_ldk),
-<a href=#524 id=524 data-nosnippet>524</a>            spawn_drop(gw_ldk_second),
-<a href=#525 id=525 data-nosnippet>525</a>            spawn_drop(fed),
-<a href=#526 id=526 data-nosnippet>526</a>            spawn_drop(lnd),
-<a href=#527 id=527 data-nosnippet>527</a>            spawn_drop(esplora),
-<a href=#528 id=528 data-nosnippet>528</a>            spawn_drop(bitcoind),
-<a href=#529 id=529 data-nosnippet>529</a>            spawn_drop(recurringd),
-<a href=#530 id=530 data-nosnippet>530</a>            spawn_drop(recurringdv2),
-<a href=#531 id=531 data-nosnippet>531</a>        );
-<a href=#532 id=532 data-nosnippet>532</a>    }
-<a href=#533 id=533 data-nosnippet>533</a>}
+<a href=#470 id=470 data-nosnippet>470</a>            <span class="kw">let _ </span>= <span class="self">self</span>.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#471 id=471 data-nosnippet>471</a>            <span class="kw">let _ </span>= <span class="self">self</span>.internal_client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#472 id=472 data-nosnippet>472</a>        }
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_connected().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_second_connected().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw">let _ </span>= <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let _ </span>= <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let _ </span>= <span class="self">self</span>.recurringd_connected().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">let _ </span>= <span class="self">self</span>.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="kw">let _ </span>= <span class="self">self</span>.fed_epoch_generated.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#482 id=482 data-nosnippet>482</a>
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="macro">debug!</span>(
+<a href=#484 id=484 data-nosnippet>484</a>            target: LOG_DEVIMINT,
+<a href=#485 id=485 data-nosnippet>485</a>            fed_size,
+<a href=#486 id=486 data-nosnippet>486</a>            offline_nodes,
+<a href=#487 id=487 data-nosnippet>487</a>            elapsed_ms = %<span class="self">self</span>.start_time.elapsed()<span class="question-mark">?</span>.as_millis(),
+<a href=#488 id=488 data-nosnippet>488</a>            <span class="string">"Dev federation ready"</span>,
+<a href=#489 id=489 data-nosnippet>489</a>        );
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="prelude-val">Ok</span>(())
+<a href=#491 id=491 data-nosnippet>491</a>    }
+<a href=#492 id=492 data-nosnippet>492</a>
+<a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">pub async fn </span>to_dev_fed(<span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; anyhow::Result&lt;DevFed&gt; {
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="self">self</span>.finalize(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="prelude-val">Ok</span>(DevFed {
+<a href=#496 id=496 data-nosnippet>496</a>            bitcoind: <span class="self">self</span>.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#497 id=497 data-nosnippet>497</a>            lnd: <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#498 id=498 data-nosnippet>498</a>            fed: <span class="self">self</span>.fed().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#499 id=499 data-nosnippet>499</a>            gw_lnd: <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#500 id=500 data-nosnippet>500</a>            gw_ldk: <span class="self">self</span>.gw_ldk().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#501 id=501 data-nosnippet>501</a>            gw_ldk_second: <span class="self">self</span>.gw_ldk_second().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#502 id=502 data-nosnippet>502</a>            esplora: <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#503 id=503 data-nosnippet>503</a>            recurringd: <span class="self">self</span>.recurringd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#504 id=504 data-nosnippet>504</a>            recurringdv2: <span class="self">self</span>.recurringdv2().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+<a href=#505 id=505 data-nosnippet>505</a>        })
+<a href=#506 id=506 data-nosnippet>506</a>    }
+<a href=#507 id=507 data-nosnippet>507</a>
+<a href=#508 id=508 data-nosnippet>508</a>    <span class="kw">pub async fn </span>fast_terminate(<span class="self">self</span>) {
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span><span class="self">Self </span>{
+<a href=#510 id=510 data-nosnippet>510</a>            bitcoind,
+<a href=#511 id=511 data-nosnippet>511</a>            lnd,
+<a href=#512 id=512 data-nosnippet>512</a>            fed,
+<a href=#513 id=513 data-nosnippet>513</a>            gw_lnd,
+<a href=#514 id=514 data-nosnippet>514</a>            esplora,
+<a href=#515 id=515 data-nosnippet>515</a>            gw_ldk,
+<a href=#516 id=516 data-nosnippet>516</a>            gw_ldk_second,
+<a href=#517 id=517 data-nosnippet>517</a>            recurringd,
+<a href=#518 id=518 data-nosnippet>518</a>            recurringdv2,
+<a href=#519 id=519 data-nosnippet>519</a>            ..
+<a href=#520 id=520 data-nosnippet>520</a>        } = <span class="self">self</span>;
+<a href=#521 id=521 data-nosnippet>521</a>
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="macro">join!</span>(
+<a href=#523 id=523 data-nosnippet>523</a>            spawn_drop(gw_lnd),
+<a href=#524 id=524 data-nosnippet>524</a>            spawn_drop(gw_ldk),
+<a href=#525 id=525 data-nosnippet>525</a>            spawn_drop(gw_ldk_second),
+<a href=#526 id=526 data-nosnippet>526</a>            spawn_drop(fed),
+<a href=#527 id=527 data-nosnippet>527</a>            spawn_drop(lnd),
+<a href=#528 id=528 data-nosnippet>528</a>            spawn_drop(esplora),
+<a href=#529 id=529 data-nosnippet>529</a>            spawn_drop(bitcoind),
+<a href=#530 id=530 data-nosnippet>530</a>            spawn_drop(recurringd),
+<a href=#531 id=531 data-nosnippet>531</a>            spawn_drop(recurringdv2),
+<a href=#532 id=532 data-nosnippet>532</a>        );
+<a href=#533 id=533 data-nosnippet>533</a>    }
+<a href=#534 id=534 data-nosnippet>534</a>}
 </code></pre></div></section></main></body></html>
