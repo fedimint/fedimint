@@ -849,6 +849,11 @@ impl Gatewayd {
             gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
         }
 
+        // Both the plain and legacy `NodeTicket` override formats are exported
+        // globally under separate env vars (see `net_overrides`), so gateways of
+        // any version read the one they understand without a per-version branch
+        // here.
+
         let process = process_mgr
             .spawn_daemon(
                 &gw_name,

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::envs::{
+    FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV, FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
     FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
     parse_kv_list_from_env,
 };
@@ -81,7 +83,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
-use iroh_base::ticket::NodeTicket;
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tokio::sync::watch;
@@ -124,16 +125,21 @@ impl IrohConnector {
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> anyhow::Result<Self> {
-        const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
-        const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES";
         let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
 
-        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v.into());
-        }
-
-        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_GW_IROH_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v.into());
+        // Overrides are `<node-id>=<socket-addr>` pairs: the node id is the key
+        // and the value is a single direct address. iroh 1.0 no longer ships
+        // the `NodeTicket` format, so we keep the override wire format version
+        // agnostic and build the (legacy) `NodeAddr` from its parts. Pre-0.12
+        // binaries read the `NodeTicket`-format `FM_IROH_CONNECT_OVERRIDES`
+        // instead; devimint emits both side by side.
+        for env_var in [
+            FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+            FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+        ] {
+            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var)? {
+                s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
+            }
         }
 
         Ok(s)

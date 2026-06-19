@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use fedimint_core::envs::{FM_GW_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_CONNECT_OVERRIDES_ENV};
+use fedimint_core::envs::{
+    FM_GW_IROH_CONNECT_OVERRIDES_ENV, FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+    FM_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+};
 use fedimint_core::{NumPeers, PeerId};
 use iroh_base::NodeAddr;
 use iroh_base::ticket::{NodeTicket, Ticket};
@@ -42,6 +45,17 @@ impl FedimintIrohEndpoint {
     }
 
     fn to_override(&self) -> String {
+        // The override is a `<node-id>=<socket-addr>` pair. Only used for local
+        // testing, so there is no relay and a single localhost address. iroh
+        // 1.0 no longer ships the `NodeTicket` format, so this stays version
+        // agnostic and the consumer rebuilds the address from its parts.
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.port));
+        format!("{}={},", self.node_id, addr)
+    }
+
+    /// The legacy iroh 0.35 `NodeTicket` override format, for binaries older
+    /// than 0.12 that still parse `FM_IROH_CONNECT_OVERRIDES` that way.
+    fn to_override_legacy(&self) -> String {
         let node_addr = NodeAddr {
             node_id: self.node_id,
             relay_url: None,
@@ -139,19 +153,51 @@ impl FederationsNetOverrides {
             .get(&peer_id)
             .expect("Wrong peer_id?")
     }
+
+    /// Guardian api/p2p overrides in the plain `<id>=<addr>` format, for
+    /// current binaries.
+    fn overrides_plain(&self) -> String {
+        self.federations
+            .iter()
+            .flat_map(|f| f.peers.values())
+            .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override()))
+            .collect::<Vec<String>>()
+            .join(",")
+    }
+
+    /// Guardian api/p2p overrides in the legacy `NodeTicket` format, for
+    /// binaries older than 0.12 that still parse the override that way.
+    fn overrides_legacy(&self) -> String {
+        self.federations
+            .iter()
+            .flat_map(|f| f.peers.values())
+            .map(|peer| {
+                format!(
+                    "{},{}",
+                    peer.p2p.to_override_legacy(),
+                    peer.api.to_override_legacy(),
+                )
+            })
+            .collect::<Vec<String>>()
+            .join(",")
+    }
 }
 
 impl ToEnvVar for FederationsNetOverrides {
     fn to_env_values(&self, _base_env: &str) -> impl Iterator<Item = (String, String)> {
-        vec![(
-            FM_IROH_CONNECT_OVERRIDES_ENV.to_string(),
-            self.federations
-                .iter()
-                .flat_map(|f| f.peers.values())
-                .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override(),))
-                .collect::<Vec<String>>()
-                .join(","),
-        )]
+        // Emit both formats under their own env vars so a single devimint run
+        // serves current binaries (plain) and pre-0.12 ones (legacy) at the
+        // same time; each reads only the var it understands.
+        vec![
+            (
+                FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV.to_string(),
+                self.overrides_plain(),
+            ),
+            (
+                FM_IROH_CONNECT_OVERRIDES_ENV.to_string(),
+                self.overrides_legacy(),
+            ),
+        ]
         .into_iter()
     }
 }
@@ -171,16 +217,41 @@ impl GatewaydNetOverrides {
     }
 }
 
+impl GatewaydNetOverrides {
+    /// Gateway overrides in the plain `<id>=<addr>` format, for current
+    /// binaries.
+    fn overrides_plain(&self) -> String {
+        self.gateway_iroh_endpoints
+            .iter()
+            .map(FedimintIrohEndpoint::to_override)
+            .collect::<Vec<String>>()
+            .join(",")
+    }
+
+    /// Gateway overrides in the legacy `NodeTicket` format, for binaries older
+    /// than 0.12 that still parse the override that way.
+    fn overrides_legacy(&self) -> String {
+        self.gateway_iroh_endpoints
+            .iter()
+            .map(FedimintIrohEndpoint::to_override_legacy)
+            .collect::<Vec<String>>()
+            .join(",")
+    }
+}
+
 impl ToEnvVar for GatewaydNetOverrides {
     fn to_env_values(&self, _base_env: &str) -> impl Iterator<Item = (String, String)> {
-        vec![(
-            FM_GW_IROH_CONNECT_OVERRIDES_ENV.to_string(),
-            self.gateway_iroh_endpoints
-                .iter()
-                .map(|gw| gw.to_override().clone())
-                .collect::<Vec<String>>()
-                .join(","),
-        )]
+        // See `FederationsNetOverrides`: both formats are emitted side by side.
+        vec![
+            (
+                FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV.to_string(),
+                self.overrides_plain(),
+            ),
+            (
+                FM_GW_IROH_CONNECT_OVERRIDES_ENV.to_string(),
+                self.overrides_legacy(),
+            ),
+        ]
         .into_iter()
     }
 }

@@ -5,14 +5,13 @@ use anyhow::{Context as _, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV, parse_kv_list_from_env};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use fedimint_server_core::dashboard_ui::ConnectionType;
 use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
-use iroh_base::ticket::NodeTicket;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::trace;
@@ -57,8 +56,15 @@ impl IrohConnector {
             Self::new_no_overrides(secret_key, p2p_bind_addr, iroh_dns, iroh_relays, node_ids)
                 .await?;
 
-        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v.into());
+        // Overrides are `<node-id>=<socket-addr>` pairs (the node id is the
+        // key); iroh 1.0 no longer ships the `NodeTicket` format, so build the
+        // `NodeAddr` from its parts to keep the wire format version agnostic.
+        // Pre-0.12 guardians read the `NodeTicket`-format
+        // `FM_IROH_CONNECT_OVERRIDES` instead; devimint emits both side by side.
+        for (k, v) in
+            parse_kv_list_from_env::<NodeId, SocketAddr>(FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV)?
+        {
+            s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
         }
 
         Ok(s)

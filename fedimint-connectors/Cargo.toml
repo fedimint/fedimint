@@ -34,9 +34,6 @@ fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 futures = { workspace = true }
 iroh = { workspace = true, default-features = false }
-iroh-base = { workspace = true, default-features = false, features = [
-    "ticket",
-] }
 iroh-next = { workspace = true, default-features = false }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
