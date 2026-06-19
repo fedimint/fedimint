@@ -49,8 +49,8 @@ use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::metrics::{
-    IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTIONS_ACTIVE,
-    IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
+    IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL,
+    IROH_API_CONNECTIONS_ACTIVE, IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
 };
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
@@ -554,7 +554,8 @@ async fn handle_incoming(
                 continue;
             }
             Err(_) => {
-                info!(
+                IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
+                tracing::debug!(
                     target: LOG_NET_API,
                     idle_timeout_secs = IROH_API_CONNECTION_IDLE_TIMEOUT.as_secs(),
                     "Closing idle iroh API connection"
