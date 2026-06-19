@@ -36,7 +36,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
+use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -1345,8 +1345,14 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 }
 
 pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
+    use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
+    use fedimint_connectors::ConnectorRegistry;
     use fedimint_core::PeerId;
+    use fedimint_core::endpoint_constants::INVITE_CODE_ENDPOINT;
+    use fedimint_core::invite_code::InviteCode;
+    use fedimint_core::module::ApiRequestErased;
     use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
+    use fedimint_core::util::SafeUrl;
 
     log_binary_versions().await?;
 
@@ -1456,6 +1462,40 @@ pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(
         metadata.pkarr_id_z32, TEST_PKARR_ID,
         "Pkarr ID did not propagate correctly"
+    );
+
+    // `invite_code` only honors overridden API URLs since 0.12.0-alpha; skip
+    // against older fedimintd in backwards-compatibility tests.
+    if fedimintd_version < *VERSION_0_12_0_ALPHA {
+        info!("Skipping invite_code endpoint assertion: fedimintd < 0.12.0-alpha");
+        return Ok(());
+    }
+
+    info!("Checking invite_code endpoint reflects overridden guardian metadata URL...");
+    // Query peer 0 directly: the client's peer-URL map now points at the fake
+    // override URL, so `dev api --peer-id 0` would fail to connect.
+    let peer_id = PeerId::from(0);
+    let peer0_real_url: SafeUrl = fed
+        .vars
+        .get(&0)
+        .expect("peer 0 vars must exist")
+        .FM_API_URL
+        .parse()
+        .expect("FM_API_URL must be a valid SafeUrl");
+    let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+    let admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, None)?;
+    let invite: InviteCode = admin_api
+        .request_single_peer(
+            INVITE_CODE_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
+            peer_id,
+        )
+        .await
+        .expect("invite_code RPC request should succeed");
+    assert_eq!(
+        invite.url().to_string(),
+        TEST_API_URL,
+        "invite_code endpoint did not reflect overridden guardian metadata URL"
     );
 
     Ok(())
