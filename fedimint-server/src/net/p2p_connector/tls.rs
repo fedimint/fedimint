@@ -8,7 +8,6 @@ use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_server_core::dashboard_ui::ConnectionType;
 use rustls::pki_types::ServerName;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -177,11 +176,6 @@ where
             .new_framed(TlsStream::Server(tls));
 
         Ok((auth_peer, framed.into_dyn()))
-    }
-
-    fn connection_type(&self, _peer: PeerId) -> Option<ConnectionType> {
-        // TLS connections are always direct
-        Some(ConnectionType::Direct)
     }
 }
 

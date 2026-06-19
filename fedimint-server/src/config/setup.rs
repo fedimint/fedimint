@@ -28,8 +28,7 @@ use fedimint_core::net::auth::check_auth;
 use fedimint_core::setup_code::PeerEndpoints;
 use fedimint_core::{PeerId, base32, runtime};
 use fedimint_server_core::setup_ui::ISetupApi;
-use iroh::SecretKey;
-use rand::rngs::OsRng;
+use iroh_next::SecretKey;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, oneshot};
 use tokio_rustls::rustls;
@@ -69,9 +68,9 @@ pub struct LocalParams {
     /// Our TLS private key
     tls_key: Option<Arc<rustls::pki_types::PrivateKeyDer<'static>>>,
     /// Optional secret key for our iroh api endpoint
-    iroh_api_sk: Option<iroh::SecretKey>,
+    iroh_api_sk: Option<iroh_next::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
-    iroh_p2p_sk: Option<iroh::SecretKey>,
+    iroh_p2p_sk: Option<iroh_next::SecretKey>,
     /// Our api and p2p endpoint
     endpoints: PeerEndpoints,
     /// Name of the peer, used in TLS auth
@@ -372,14 +371,14 @@ impl ISetupApi for SetupApi {
                 SecretKey::from_str(&var)
                     .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
             } else {
-                SecretKey::generate(&mut OsRng)
+                SecretKey::generate()
             };
 
             let iroh_p2p_sk = if let Ok(var) = std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV) {
                 SecretKey::from_str(&var)
                     .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
             } else {
-                SecretKey::generate(&mut OsRng)
+                SecretKey::generate()
             };
 
             LocalParams {

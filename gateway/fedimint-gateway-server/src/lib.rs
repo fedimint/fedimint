@@ -349,7 +349,7 @@ pub struct Gateway {
     default_transaction_fees: PaymentFee,
 
     /// The secret key for the Iroh `Endpoint`
-    iroh_sk: iroh::SecretKey,
+    iroh_sk: iroh_next::SecretKey,
 
     /// The socket that the gateway listens on for the Iroh `Endpoint`
     iroh_listen: Option<SocketAddr>,
@@ -743,9 +743,9 @@ impl Gateway {
         keypair
     }
 
-    /// Returns `iroh::SecretKey` and saves it to the database if it does not
-    /// exist
-    async fn load_or_create_iroh_key(gateway_db: &Database) -> iroh::SecretKey {
+    /// Returns `iroh_next::SecretKey` and saves it to the database if it does
+    /// not exist
+    async fn load_or_create_iroh_key(gateway_db: &Database) -> iroh_next::SecretKey {
         let mut dbtx = gateway_db.begin_transaction().await;
         let iroh_sk = dbtx.load_or_create_iroh_key().await;
         dbtx.commit_tx().await;

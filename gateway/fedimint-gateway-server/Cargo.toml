@@ -70,13 +70,7 @@ fedimint-walletv2-client = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
-iroh = { workspace = true, features = [
-    "discovery-pkarr-dht",
-], default-features = false }
-iroh-base = { workspace = true, default-features = false, features = [
-    "ticket",
-] }
-iroh-relay = { workspace = true, default-features = false }
+iroh-next = { workspace = true, default-features = false }
 lightning-invoice = { workspace = true }
 lockable = { workspace = true }
 prost = { workspace = true }

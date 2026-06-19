@@ -33,7 +33,10 @@ impl FedimintIrohEndpoint {
     }
 
     pub fn secret_key(&self) -> String {
-        self.secret_key.to_string()
+        // The guardian/gateway now parse their iroh secret key with iroh 1.0's
+        // `SecretKey::from_str`, which expects lowercase hex. The raw 32 key
+        // bytes are identical across iroh versions, so emit them as hex.
+        hex::encode(self.secret_key.to_bytes())
     }
 
     pub fn port(&self) -> u16 {
