@@ -35,7 +35,7 @@ use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
 use iroh::Endpoint;
-use iroh::endpoint::{Incoming, RecvStream, SendStream};
+use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
@@ -49,8 +49,8 @@ use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::metrics::{
-    IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTIONS_ACTIVE,
-    IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
+    IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL,
+    IROH_API_CONNECTIONS_ACTIVE, IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
 };
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
@@ -59,6 +59,16 @@ use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
+
+/// How long an iroh API connection may stay idle before the server closes it.
+const IROH_API_CONNECTION_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Application-level QUIC error code for expected idle iroh API connection
+/// reaping.
+const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE: u32 = 0;
+
+/// Application-level QUIC close reason for idle iroh API connection reaping.
+const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON: &[u8] = b"idle timeout";
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
@@ -529,7 +539,34 @@ async fn handle_incoming(
     }
 
     loop {
-        let (send_stream, recv_stream) = connection.accept_bi().await?;
+        let accept_result = fedimint_core::runtime::timeout(
+            IROH_API_CONNECTION_IDLE_TIMEOUT,
+            connection.accept_bi(),
+        )
+        .await;
+
+        let (send_stream, recv_stream) = match accept_result {
+            Ok(streams) => streams?,
+            Err(_)
+                if parallel_requests_limit.available_permits()
+                    < iroh_api_max_requests_per_connection =>
+            {
+                continue;
+            }
+            Err(_) => {
+                IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
+                tracing::debug!(
+                    target: LOG_NET_API,
+                    idle_timeout_secs = IROH_API_CONNECTION_IDLE_TIMEOUT.as_secs(),
+                    "Closing idle iroh API connection"
+                );
+                connection.close(
+                    VarInt::from_u32(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE),
+                    IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON,
+                );
+                return Ok(());
+            }
+        };
 
         if parallel_requests_limit.available_permits() == 0 {
             warn!(
