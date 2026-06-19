@@ -849,143 +849,148 @@
 <a href=#849 id=849 data-nosnippet>849</a>            gateway_env.insert(<span class="string">"FM_LDK_ALIAS"</span>.to_owned(), gw_name.clone());
 <a href=#850 id=850 data-nosnippet>850</a>        }
 <a href=#851 id=851 data-nosnippet>851</a>
-<a href=#852 id=852 data-nosnippet>852</a>        <span class="kw">let </span>process = process_mgr
-<a href=#853 id=853 data-nosnippet>853</a>            .spawn_daemon(
-<a href=#854 id=854 data-nosnippet>854</a>                <span class="kw-2">&amp;</span>gw_name,
-<a href=#855 id=855 data-nosnippet>855</a>                <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Gatewayd, ln_type).envs(gateway_env),
-<a href=#856 id=856 data-nosnippet>856</a>            )
-<a href=#857 id=857 data-nosnippet>857</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#858 id=858 data-nosnippet>858</a>
-<a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">let </span>timeout = <span class="kw">if </span>is_env_var_set(FM_PRE_DKG_ENV) {
-<a href=#860 id=860 data-nosnippet>860</a>            Duration::from_secs(<span class="number">300</span>)
-<a href=#861 id=861 data-nosnippet>861</a>        } <span class="kw">else </span>{
-<a href=#862 id=862 data-nosnippet>862</a>            Duration::from_secs(<span class="number">60</span>)
-<a href=#863 id=863 data-nosnippet>863</a>        };
-<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">let </span>(gateway_id, iroh_gateway_id) = poll_with_timeout(
-<a href=#865 id=865 data-nosnippet>865</a>            <span class="string">"waiting for gateway to be ready to respond to rpc"</span>,
-<a href=#866 id=866 data-nosnippet>866</a>            timeout,
-<a href=#867 id=867 data-nosnippet>867</a>            || <span class="kw">async </span>{
-<a href=#868 id=868 data-nosnippet>868</a>                <span class="comment">// Once the gateway id is available via RPC, the gateway is ready
-<a href=#869 id=869 data-nosnippet>869</a>                </span><span class="kw">let </span>info = <span class="macro">cmd!</span>(
-<a href=#870 id=870 data-nosnippet>870</a>                    <span class="kw">crate</span>::util::get_gateway_cli_path(),
-<a href=#871 id=871 data-nosnippet>871</a>                    <span class="string">"--rpcpassword"</span>,
-<a href=#872 id=872 data-nosnippet>872</a>                    <span class="string">"theresnosecondbest"</span>,
-<a href=#873 id=873 data-nosnippet>873</a>                    <span class="string">"-a"</span>,
-<a href=#874 id=874 data-nosnippet>874</a>                    addr,
-<a href=#875 id=875 data-nosnippet>875</a>                    <span class="string">"info"
-<a href=#876 id=876 data-nosnippet>876</a>                </span>)
-<a href=#877 id=877 data-nosnippet>877</a>                .out_json()
-<a href=#878 id=878 data-nosnippet>878</a>                .<span class="kw">await
-<a href=#879 id=879 data-nosnippet>879</a>                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#880 id=880 data-nosnippet>880</a>                <span class="kw">let </span>(gateway_id, iroh_gateway_id) = <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
-<a href=#881 id=881 data-nosnippet>881</a>                    <span class="kw">let </span>gateway_id = info[<span class="string">"gateway_id"</span>]
-<a href=#882 id=882 data-nosnippet>882</a>                        .as_str()
-<a href=#883 id=883 data-nosnippet>883</a>                        .context(<span class="string">"gateway_id must be a string"</span>)
-<a href=#884 id=884 data-nosnippet>884</a>                        .map_err(ControlFlow::Break)<span class="question-mark">?
-<a href=#885 id=885 data-nosnippet>885</a>                        </span>.to_owned();
-<a href=#886 id=886 data-nosnippet>886</a>                    (gateway_id, <span class="prelude-val">None</span>)
-<a href=#887 id=887 data-nosnippet>887</a>                } <span class="kw">else </span>{
-<a href=#888 id=888 data-nosnippet>888</a>                    <span class="kw">let </span>gateway_id = info[<span class="string">"registrations"</span>][<span class="string">"http"</span>][<span class="number">1</span>]
-<a href=#889 id=889 data-nosnippet>889</a>                        .as_str()
-<a href=#890 id=890 data-nosnippet>890</a>                        .context(<span class="string">"gateway id must be a string"</span>)
-<a href=#891 id=891 data-nosnippet>891</a>                        .map_err(ControlFlow::Break)<span class="question-mark">?
-<a href=#892 id=892 data-nosnippet>892</a>                        </span>.to_owned();
-<a href=#893 id=893 data-nosnippet>893</a>                    <span class="kw">let </span>iroh_gateway_id = info[<span class="string">"registrations"</span>][<span class="string">"iroh"</span>][<span class="number">1</span>]
+<a href=#852 id=852 data-nosnippet>852</a>        <span class="comment">// Both the plain and legacy `NodeTicket` override formats are exported
+<a href=#853 id=853 data-nosnippet>853</a>        // globally under separate env vars (see `net_overrides`), so gateways of
+<a href=#854 id=854 data-nosnippet>854</a>        // any version read the one they understand without a per-version branch
+<a href=#855 id=855 data-nosnippet>855</a>        // here.
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a>        </span><span class="kw">let </span>process = process_mgr
+<a href=#858 id=858 data-nosnippet>858</a>            .spawn_daemon(
+<a href=#859 id=859 data-nosnippet>859</a>                <span class="kw-2">&amp;</span>gw_name,
+<a href=#860 id=860 data-nosnippet>860</a>                <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Gatewayd, ln_type).envs(gateway_env),
+<a href=#861 id=861 data-nosnippet>861</a>            )
+<a href=#862 id=862 data-nosnippet>862</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#863 id=863 data-nosnippet>863</a>
+<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">let </span>timeout = <span class="kw">if </span>is_env_var_set(FM_PRE_DKG_ENV) {
+<a href=#865 id=865 data-nosnippet>865</a>            Duration::from_secs(<span class="number">300</span>)
+<a href=#866 id=866 data-nosnippet>866</a>        } <span class="kw">else </span>{
+<a href=#867 id=867 data-nosnippet>867</a>            Duration::from_secs(<span class="number">60</span>)
+<a href=#868 id=868 data-nosnippet>868</a>        };
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="kw">let </span>(gateway_id, iroh_gateway_id) = poll_with_timeout(
+<a href=#870 id=870 data-nosnippet>870</a>            <span class="string">"waiting for gateway to be ready to respond to rpc"</span>,
+<a href=#871 id=871 data-nosnippet>871</a>            timeout,
+<a href=#872 id=872 data-nosnippet>872</a>            || <span class="kw">async </span>{
+<a href=#873 id=873 data-nosnippet>873</a>                <span class="comment">// Once the gateway id is available via RPC, the gateway is ready
+<a href=#874 id=874 data-nosnippet>874</a>                </span><span class="kw">let </span>info = <span class="macro">cmd!</span>(
+<a href=#875 id=875 data-nosnippet>875</a>                    <span class="kw">crate</span>::util::get_gateway_cli_path(),
+<a href=#876 id=876 data-nosnippet>876</a>                    <span class="string">"--rpcpassword"</span>,
+<a href=#877 id=877 data-nosnippet>877</a>                    <span class="string">"theresnosecondbest"</span>,
+<a href=#878 id=878 data-nosnippet>878</a>                    <span class="string">"-a"</span>,
+<a href=#879 id=879 data-nosnippet>879</a>                    addr,
+<a href=#880 id=880 data-nosnippet>880</a>                    <span class="string">"info"
+<a href=#881 id=881 data-nosnippet>881</a>                </span>)
+<a href=#882 id=882 data-nosnippet>882</a>                .out_json()
+<a href=#883 id=883 data-nosnippet>883</a>                .<span class="kw">await
+<a href=#884 id=884 data-nosnippet>884</a>                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#885 id=885 data-nosnippet>885</a>                <span class="kw">let </span>(gateway_id, iroh_gateway_id) = <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
+<a href=#886 id=886 data-nosnippet>886</a>                    <span class="kw">let </span>gateway_id = info[<span class="string">"gateway_id"</span>]
+<a href=#887 id=887 data-nosnippet>887</a>                        .as_str()
+<a href=#888 id=888 data-nosnippet>888</a>                        .context(<span class="string">"gateway_id must be a string"</span>)
+<a href=#889 id=889 data-nosnippet>889</a>                        .map_err(ControlFlow::Break)<span class="question-mark">?
+<a href=#890 id=890 data-nosnippet>890</a>                        </span>.to_owned();
+<a href=#891 id=891 data-nosnippet>891</a>                    (gateway_id, <span class="prelude-val">None</span>)
+<a href=#892 id=892 data-nosnippet>892</a>                } <span class="kw">else </span>{
+<a href=#893 id=893 data-nosnippet>893</a>                    <span class="kw">let </span>gateway_id = info[<span class="string">"registrations"</span>][<span class="string">"http"</span>][<span class="number">1</span>]
 <a href=#894 id=894 data-nosnippet>894</a>                        .as_str()
 <a href=#895 id=895 data-nosnippet>895</a>                        .context(<span class="string">"gateway id must be a string"</span>)
 <a href=#896 id=896 data-nosnippet>896</a>                        .map_err(ControlFlow::Break)<span class="question-mark">?
 <a href=#897 id=897 data-nosnippet>897</a>                        </span>.to_owned();
-<a href=#898 id=898 data-nosnippet>898</a>                    (gateway_id, <span class="prelude-val">Some</span>(iroh_gateway_id))
-<a href=#899 id=899 data-nosnippet>899</a>                };
-<a href=#900 id=900 data-nosnippet>900</a>
-<a href=#901 id=901 data-nosnippet>901</a>                <span class="prelude-val">Ok</span>((gateway_id, iroh_gateway_id))
-<a href=#902 id=902 data-nosnippet>902</a>            },
-<a href=#903 id=903 data-nosnippet>903</a>        )
-<a href=#904 id=904 data-nosnippet>904</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#898 id=898 data-nosnippet>898</a>                    <span class="kw">let </span>iroh_gateway_id = info[<span class="string">"registrations"</span>][<span class="string">"iroh"</span>][<span class="number">1</span>]
+<a href=#899 id=899 data-nosnippet>899</a>                        .as_str()
+<a href=#900 id=900 data-nosnippet>900</a>                        .context(<span class="string">"gateway id must be a string"</span>)
+<a href=#901 id=901 data-nosnippet>901</a>                        .map_err(ControlFlow::Break)<span class="question-mark">?
+<a href=#902 id=902 data-nosnippet>902</a>                        </span>.to_owned();
+<a href=#903 id=903 data-nosnippet>903</a>                    (gateway_id, <span class="prelude-val">Some</span>(iroh_gateway_id))
+<a href=#904 id=904 data-nosnippet>904</a>                };
 <a href=#905 id=905 data-nosnippet>905</a>
-<a href=#906 id=906 data-nosnippet>906</a>        <span class="kw">let </span>log_path = process_mgr
-<a href=#907 id=907 data-nosnippet>907</a>            .globals
-<a href=#908 id=908 data-nosnippet>908</a>            .FM_LOGS_DIR
-<a href=#909 id=909 data-nosnippet>909</a>            .join(<span class="macro">format!</span>(<span class="string">"{gw_name}.log"</span>));
-<a href=#910 id=910 data-nosnippet>910</a>        <span class="kw">let </span>gatewayd = <span class="self">Self </span>{
-<a href=#911 id=911 data-nosnippet>911</a>            process,
-<a href=#912 id=912 data-nosnippet>912</a>            ln,
-<a href=#913 id=913 data-nosnippet>913</a>            addr,
-<a href=#914 id=914 data-nosnippet>914</a>            lightning_node_addr,
-<a href=#915 id=915 data-nosnippet>915</a>            gatewayd_version,
-<a href=#916 id=916 data-nosnippet>916</a>            gw_name,
-<a href=#917 id=917 data-nosnippet>917</a>            log_path,
-<a href=#918 id=918 data-nosnippet>918</a>            gw_port: port,
-<a href=#919 id=919 data-nosnippet>919</a>            ldk_port: lightning_node_port,
-<a href=#920 id=920 data-nosnippet>920</a>            metrics_port,
-<a href=#921 id=921 data-nosnippet>921</a>            gateway_id,
-<a href=#922 id=922 data-nosnippet>922</a>            iroh_gateway_id,
-<a href=#923 id=923 data-nosnippet>923</a>            iroh_port: iroh_endpoint.port(),
-<a href=#924 id=924 data-nosnippet>924</a>            node_id: iroh_endpoint.node_id(),
-<a href=#925 id=925 data-nosnippet>925</a>            gateway_index,
-<a href=#926 id=926 data-nosnippet>926</a>        };
-<a href=#927 id=927 data-nosnippet>927</a>
-<a href=#928 id=928 data-nosnippet>928</a>        <span class="prelude-val">Ok</span>(gatewayd)
-<a href=#929 id=929 data-nosnippet>929</a>    }
-<a href=#930 id=930 data-nosnippet>930</a>
-<a href=#931 id=931 data-nosnippet>931</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#932 id=932 data-nosnippet>932</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
-<a href=#933 id=933 data-nosnippet>933</a>    </span>}
-<a href=#934 id=934 data-nosnippet>934</a>
-<a href=#935 id=935 data-nosnippet>935</a>    <span class="kw">pub fn </span>set_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ln_node: LightningNode) {
-<a href=#936 id=936 data-nosnippet>936</a>        <span class="self">self</span>.ln = ln_node;
-<a href=#937 id=937 data-nosnippet>937</a>    }
-<a href=#938 id=938 data-nosnippet>938</a>
-<a href=#939 id=939 data-nosnippet>939</a>    <span class="kw">pub async fn </span>stop_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#940 id=940 data-nosnippet>940</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Stopping lightning node"</span>);
-<a href=#941 id=941 data-nosnippet>941</a>        <span class="kw">match </span><span class="self">self</span>.ln.clone() {
-<a href=#942 id=942 data-nosnippet>942</a>            LightningNode::Lnd(lnd) =&gt; lnd.terminate().<span class="kw">await</span>,
-<a href=#943 id=943 data-nosnippet>943</a>            LightningNode::Ldk {
-<a href=#944 id=944 data-nosnippet>944</a>                name: <span class="kw">_</span>,
-<a href=#945 id=945 data-nosnippet>945</a>                gw_port: <span class="kw">_</span>,
-<a href=#946 id=946 data-nosnippet>946</a>                ldk_port: <span class="kw">_</span>,
-<a href=#947 id=947 data-nosnippet>947</a>                metrics_port: <span class="kw">_</span>,
-<a href=#948 id=948 data-nosnippet>948</a>            } =&gt; {
-<a href=#949 id=949 data-nosnippet>949</a>                <span class="comment">// This is not implemented because the LDK node lives in
-<a href=#950 id=950 data-nosnippet>950</a>                // the gateway process and cannot be stopped independently.
-<a href=#951 id=951 data-nosnippet>951</a>                </span><span class="macro">unimplemented!</span>(<span class="string">"LDK node termination not implemented"</span>)
-<a href=#952 id=952 data-nosnippet>952</a>            }
-<a href=#953 id=953 data-nosnippet>953</a>        }
-<a href=#954 id=954 data-nosnippet>954</a>    }
-<a href=#955 id=955 data-nosnippet>955</a>
-<a href=#956 id=956 data-nosnippet>956</a>    <span class="doccomment">/// Restarts the gateway using the provided `bin_path`, which is useful for
-<a href=#957 id=957 data-nosnippet>957</a>    /// testing upgrades.
-<a href=#958 id=958 data-nosnippet>958</a>    </span><span class="kw">pub async fn </span>restart_with_bin(
-<a href=#959 id=959 data-nosnippet>959</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#960 id=960 data-nosnippet>960</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
-<a href=#961 id=961 data-nosnippet>961</a>        gatewayd_path: <span class="kw-2">&amp;</span>PathBuf,
-<a href=#962 id=962 data-nosnippet>962</a>        gateway_cli_path: <span class="kw-2">&amp;</span>PathBuf,
-<a href=#963 id=963 data-nosnippet>963</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#964 id=964 data-nosnippet>964</a>        <span class="kw">let </span>ln = <span class="self">self</span>.ln.clone();
-<a href=#965 id=965 data-nosnippet>965</a>
-<a href=#966 id=966 data-nosnippet>966</a>        <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#967 id=967 data-nosnippet>967</a>        <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
-<a href=#968 id=968 data-nosnippet>968</a>        </span><span class="kw">unsafe </span>{ std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, gatewayd_path) };
-<a href=#969 id=969 data-nosnippet>969</a>        <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
-<a href=#970 id=970 data-nosnippet>970</a>        </span><span class="kw">unsafe </span>{ std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, gateway_cli_path) };
-<a href=#971 id=971 data-nosnippet>971</a>
-<a href=#972 id=972 data-nosnippet>972</a>        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-<a href=#973 id=973 data-nosnippet>973</a>        <span class="kw">let </span>new_ln = ln;
-<a href=#974 id=974 data-nosnippet>974</a>        <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, new_ln.clone(), <span class="self">self</span>.gateway_index).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#975 id=975 data-nosnippet>975</a>        <span class="self">self</span>.process = new_gw.process;
-<a href=#976 id=976 data-nosnippet>976</a>        <span class="self">self</span>.set_lightning_node(new_ln);
-<a href=#977 id=977 data-nosnippet>977</a>        <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
-<a href=#978 id=978 data-nosnippet>978</a>        <span class="macro">info!</span>(
-<a href=#979 id=979 data-nosnippet>979</a>            target: LOG_DEVIMINT,
-<a href=#980 id=980 data-nosnippet>980</a>            <span class="question-mark">?</span>gatewayd_version,
-<a href=#981 id=981 data-nosnippet>981</a>            <span class="question-mark">?</span>gateway_cli_version,
-<a href=#982 id=982 data-nosnippet>982</a>            <span class="string">"upgraded gatewayd and gateway-cli"
-<a href=#983 id=983 data-nosnippet>983</a>        </span>);
-<a href=#984 id=984 data-nosnippet>984</a>        <span class="prelude-val">Ok</span>(())
-<a href=#985 id=985 data-nosnippet>985</a>    }
-<a href=#986 id=986 data-nosnippet>986</a>
-<a href=#987 id=987 data-nosnippet>987</a>    <span class="kw">pub fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayClient {
-<a href=#988 id=988 data-nosnippet>988</a>        GatewayClient::new(<span class="self">self</span>)
-<a href=#989 id=989 data-nosnippet>989</a>    }
-<a href=#990 id=990 data-nosnippet>990</a>}
+<a href=#906 id=906 data-nosnippet>906</a>                <span class="prelude-val">Ok</span>((gateway_id, iroh_gateway_id))
+<a href=#907 id=907 data-nosnippet>907</a>            },
+<a href=#908 id=908 data-nosnippet>908</a>        )
+<a href=#909 id=909 data-nosnippet>909</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#910 id=910 data-nosnippet>910</a>
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span>log_path = process_mgr
+<a href=#912 id=912 data-nosnippet>912</a>            .globals
+<a href=#913 id=913 data-nosnippet>913</a>            .FM_LOGS_DIR
+<a href=#914 id=914 data-nosnippet>914</a>            .join(<span class="macro">format!</span>(<span class="string">"{gw_name}.log"</span>));
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw">let </span>gatewayd = <span class="self">Self </span>{
+<a href=#916 id=916 data-nosnippet>916</a>            process,
+<a href=#917 id=917 data-nosnippet>917</a>            ln,
+<a href=#918 id=918 data-nosnippet>918</a>            addr,
+<a href=#919 id=919 data-nosnippet>919</a>            lightning_node_addr,
+<a href=#920 id=920 data-nosnippet>920</a>            gatewayd_version,
+<a href=#921 id=921 data-nosnippet>921</a>            gw_name,
+<a href=#922 id=922 data-nosnippet>922</a>            log_path,
+<a href=#923 id=923 data-nosnippet>923</a>            gw_port: port,
+<a href=#924 id=924 data-nosnippet>924</a>            ldk_port: lightning_node_port,
+<a href=#925 id=925 data-nosnippet>925</a>            metrics_port,
+<a href=#926 id=926 data-nosnippet>926</a>            gateway_id,
+<a href=#927 id=927 data-nosnippet>927</a>            iroh_gateway_id,
+<a href=#928 id=928 data-nosnippet>928</a>            iroh_port: iroh_endpoint.port(),
+<a href=#929 id=929 data-nosnippet>929</a>            node_id: iroh_endpoint.node_id(),
+<a href=#930 id=930 data-nosnippet>930</a>            gateway_index,
+<a href=#931 id=931 data-nosnippet>931</a>        };
+<a href=#932 id=932 data-nosnippet>932</a>
+<a href=#933 id=933 data-nosnippet>933</a>        <span class="prelude-val">Ok</span>(gatewayd)
+<a href=#934 id=934 data-nosnippet>934</a>    }
+<a href=#935 id=935 data-nosnippet>935</a>
+<a href=#936 id=936 data-nosnippet>936</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
+<a href=#938 id=938 data-nosnippet>938</a>    </span>}
+<a href=#939 id=939 data-nosnippet>939</a>
+<a href=#940 id=940 data-nosnippet>940</a>    <span class="kw">pub fn </span>set_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ln_node: LightningNode) {
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="self">self</span>.ln = ln_node;
+<a href=#942 id=942 data-nosnippet>942</a>    }
+<a href=#943 id=943 data-nosnippet>943</a>
+<a href=#944 id=944 data-nosnippet>944</a>    <span class="kw">pub async fn </span>stop_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#945 id=945 data-nosnippet>945</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Stopping lightning node"</span>);
+<a href=#946 id=946 data-nosnippet>946</a>        <span class="kw">match </span><span class="self">self</span>.ln.clone() {
+<a href=#947 id=947 data-nosnippet>947</a>            LightningNode::Lnd(lnd) =&gt; lnd.terminate().<span class="kw">await</span>,
+<a href=#948 id=948 data-nosnippet>948</a>            LightningNode::Ldk {
+<a href=#949 id=949 data-nosnippet>949</a>                name: <span class="kw">_</span>,
+<a href=#950 id=950 data-nosnippet>950</a>                gw_port: <span class="kw">_</span>,
+<a href=#951 id=951 data-nosnippet>951</a>                ldk_port: <span class="kw">_</span>,
+<a href=#952 id=952 data-nosnippet>952</a>                metrics_port: <span class="kw">_</span>,
+<a href=#953 id=953 data-nosnippet>953</a>            } =&gt; {
+<a href=#954 id=954 data-nosnippet>954</a>                <span class="comment">// This is not implemented because the LDK node lives in
+<a href=#955 id=955 data-nosnippet>955</a>                // the gateway process and cannot be stopped independently.
+<a href=#956 id=956 data-nosnippet>956</a>                </span><span class="macro">unimplemented!</span>(<span class="string">"LDK node termination not implemented"</span>)
+<a href=#957 id=957 data-nosnippet>957</a>            }
+<a href=#958 id=958 data-nosnippet>958</a>        }
+<a href=#959 id=959 data-nosnippet>959</a>    }
+<a href=#960 id=960 data-nosnippet>960</a>
+<a href=#961 id=961 data-nosnippet>961</a>    <span class="doccomment">/// Restarts the gateway using the provided `bin_path`, which is useful for
+<a href=#962 id=962 data-nosnippet>962</a>    /// testing upgrades.
+<a href=#963 id=963 data-nosnippet>963</a>    </span><span class="kw">pub async fn </span>restart_with_bin(
+<a href=#964 id=964 data-nosnippet>964</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#965 id=965 data-nosnippet>965</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+<a href=#966 id=966 data-nosnippet>966</a>        gatewayd_path: <span class="kw-2">&amp;</span>PathBuf,
+<a href=#967 id=967 data-nosnippet>967</a>        gateway_cli_path: <span class="kw-2">&amp;</span>PathBuf,
+<a href=#968 id=968 data-nosnippet>968</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">let </span>ln = <span class="self">self</span>.ln.clone();
+<a href=#970 id=970 data-nosnippet>970</a>
+<a href=#971 id=971 data-nosnippet>971</a>        <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
+<a href=#973 id=973 data-nosnippet>973</a>        </span><span class="kw">unsafe </span>{ std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, gatewayd_path) };
+<a href=#974 id=974 data-nosnippet>974</a>        <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
+<a href=#975 id=975 data-nosnippet>975</a>        </span><span class="kw">unsafe </span>{ std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, gateway_cli_path) };
+<a href=#976 id=976 data-nosnippet>976</a>
+<a href=#977 id=977 data-nosnippet>977</a>        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+<a href=#978 id=978 data-nosnippet>978</a>        <span class="kw">let </span>new_ln = ln;
+<a href=#979 id=979 data-nosnippet>979</a>        <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, new_ln.clone(), <span class="self">self</span>.gateway_index).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="self">self</span>.process = new_gw.process;
+<a href=#981 id=981 data-nosnippet>981</a>        <span class="self">self</span>.set_lightning_node(new_ln);
+<a href=#982 id=982 data-nosnippet>982</a>        <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="macro">info!</span>(
+<a href=#984 id=984 data-nosnippet>984</a>            target: LOG_DEVIMINT,
+<a href=#985 id=985 data-nosnippet>985</a>            <span class="question-mark">?</span>gatewayd_version,
+<a href=#986 id=986 data-nosnippet>986</a>            <span class="question-mark">?</span>gateway_cli_version,
+<a href=#987 id=987 data-nosnippet>987</a>            <span class="string">"upgraded gatewayd and gateway-cli"
+<a href=#988 id=988 data-nosnippet>988</a>        </span>);
+<a href=#989 id=989 data-nosnippet>989</a>        <span class="prelude-val">Ok</span>(())
+<a href=#990 id=990 data-nosnippet>990</a>    }
+<a href=#991 id=991 data-nosnippet>991</a>
+<a href=#992 id=992 data-nosnippet>992</a>    <span class="kw">pub fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayClient {
+<a href=#993 id=993 data-nosnippet>993</a>        GatewayClient::new(<span class="self">self</span>)
+<a href=#994 id=994 data-nosnippet>994</a>    }
+<a href=#995 id=995 data-nosnippet>995</a>}
 </code></pre></div></section></main></body></html>
