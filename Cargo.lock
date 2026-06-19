@@ -4633,7 +4633,6 @@ dependencies = [
  "strum_macros 0.27.1",
  "subtle",
  "tar",
- "tempfile",
  "test-log",
  "tokio",
  "tokio-rustls 0.26.4",

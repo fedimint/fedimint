@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::Context as _;
-use fedimint_aead::{LessSafeKey, encrypted_read, get_encryption_key};
+use fedimint_aead::{LessSafeKey, decrypt, encrypted_read, get_encryption_key};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_logging::LOG_CORE;
 use fedimint_server_core::ServerModuleInitRegistry;
@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::warn;
 
-use crate::config::{ServerConfig, ServerConfigPrivate};
+use crate::config::ServerConfig;
 
 /// Client configuration file
 pub const CLIENT_CONFIG: &str = "client";
@@ -66,17 +66,8 @@ fn read_server_config_plaintext(path: &Path) -> anyhow::Result<ServerConfig> {
 /// using the password from the password.private file.
 fn read_server_config_legacy_encrypted(path: &Path) -> anyhow::Result<ServerConfig> {
     let password = fs::read_to_string(path.join(PLAINTEXT_PASSWORD))?;
-    read_server_config_legacy_encrypted_with_password(path, &password)
-}
-
-/// Reads the legacy encrypted server config, decrypting the private config with
-/// the provided password rather than the on-disk password.private file.
-pub(crate) fn read_server_config_legacy_encrypted_with_password(
-    path: &Path,
-    password: &str,
-) -> anyhow::Result<ServerConfig> {
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
-    let key = get_encryption_key(trim_password(password), &salt)?;
+    let key = get_encryption_key(trim_password(&password), &salt)?;
 
     Ok(ServerConfig {
         consensus: plaintext_json_read(&path.join(CONSENSUS_CONFIG))?,
@@ -85,12 +76,43 @@ pub(crate) fn read_server_config_legacy_encrypted_with_password(
     })
 }
 
-/// Writes a private config as plaintext `private.json` into `path`.
-pub(crate) fn write_private_config_plaintext(
-    private: &ServerConfigPrivate,
-    path: &Path,
-) -> anyhow::Result<()> {
-    plaintext_json_write(private, &path.join(PRIVATE_CONFIG))
+/// Parses the current plaintext guardian backup format from raw file contents.
+pub(crate) fn parse_plaintext_backup(
+    local: &[u8],
+    consensus: &[u8],
+    private: &[u8],
+) -> anyhow::Result<ServerConfig> {
+    Ok(ServerConfig {
+        consensus: serde_json::from_slice(consensus)?,
+        local: serde_json::from_slice(local)?,
+        private: serde_json::from_slice(private)?,
+    })
+}
+
+/// Parses the legacy encrypted guardian backup format from raw file contents,
+/// decrypting the private config with the provided password. The `salt` and
+/// `private` bytes come from the backup's `private.salt` and `private.encrypt`
+/// entries.
+pub(crate) fn parse_legacy_encrypted_backup(
+    local: &[u8],
+    consensus: &[u8],
+    private: &[u8],
+    salt: &[u8],
+    password: &str,
+) -> anyhow::Result<ServerConfig> {
+    let salt = std::str::from_utf8(salt).context("Salt is not valid UTF-8")?;
+    let key = get_encryption_key(trim_password(password), salt)?;
+
+    let mut ciphertext =
+        hex::decode(private).context("Encrypted private config is not valid hex")?;
+    let decrypted = decrypt(&mut ciphertext, &key)
+        .context("Failed to decrypt the private config, the password may be incorrect")?;
+
+    Ok(ServerConfig {
+        consensus: serde_json::from_slice(consensus)?,
+        local: serde_json::from_slice(local)?,
+        private: serde_json::from_slice(decrypted)?,
+    })
 }
 
 /// Reads a plaintext json file into a struct

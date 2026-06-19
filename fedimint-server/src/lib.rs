@@ -346,7 +346,6 @@ pub async fn run_config_gen(
     let setup_api = SetupApi::new(
         settings.clone(),
         db.clone(),
-        data_dir.clone(),
         cgp_sender,
         code_version_str.clone(),
         code_version_hash,
@@ -475,37 +474,25 @@ pub async fn run_config_gen(
             ConfigGenOutcome::Restored(restored, restore_result_sender) => {
                 // Process restore outcomes while setup serving is still running. This lets the
                 // HTTP handler wait for a precise success/error acknowledgement and keeps setup
-                // retryable if validation or install fails after unpacking.
-                let result = async {
-                    let restored = *restored;
-                    let cfg = &restored.cfg;
+                // retryable if validation or the config write fails.
+                let result: anyhow::Result<_> = async {
+                    let cfg = *restored;
 
-                    if let Err(e) = module_init_registry.decoders_strict(
+                    module_init_registry.decoders_strict(
                         cfg.consensus
                             .modules
                             .iter()
                             .map(|(id, config)| (*id, &config.kind)),
-                    ) {
-                        restored.cleanup();
-                        return Err(e);
+                    )?;
+
+                    cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
+
+                    if cfg.consensus.iroh_endpoints.is_empty() {
+                        validate_restored_tcp_config(&cfg)?;
                     }
 
-                    if let Err(e) = cfg.validate_config(&cfg.local.identity, &module_init_registry)
-                    {
-                        restored.cleanup();
-                        return Err(e);
-                    }
-
-                    if cfg.consensus.iroh_endpoints.is_empty()
-                        && let Err(e) = validate_restored_tcp_config(cfg)
-                    {
-                        restored.cleanup();
-                        return Err(e);
-                    }
-
-                    // Build the connector from the already validated restored config before moving
-                    // the config into its final location, avoiding a redundant config
-                    // re-read after install.
+                    // Build the connector from the already validated restored config before
+                    // writing it to its final location.
                     let connector = if cfg.consensus.iroh_endpoints.is_empty() {
                         TlsTcpConnector::new(
                             cfg.tls_config(),
@@ -516,15 +503,9 @@ pub async fn run_config_gen(
                         .await
                         .into_dyn()
                     } else {
-                        let iroh_p2p_sk = match restored_iroh_p2p_key(cfg) {
-                            Ok(iroh_p2p_sk) => iroh_p2p_sk,
-                            Err(e) => {
-                                restored.cleanup();
-                                return Err(e);
-                            }
-                        };
+                        let iroh_p2p_sk = restored_iroh_p2p_key(&cfg)?;
 
-                        match IrohConnector::new(
+                        IrohConnector::new(
                             iroh_p2p_sk,
                             settings.p2p_bind,
                             settings.iroh_dns.clone(),
@@ -535,19 +516,21 @@ pub async fn run_config_gen(
                                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                                 .collect(),
                         )
-                        .await
-                        {
-                            Ok(connector) => connector.into_dyn(),
-                            Err(e) => {
-                                restored.cleanup();
-                                return Err(e);
-                            }
-                        }
+                        .await?
+                        .into_dyn()
                     };
 
                     let (p2p_status_senders, p2p_status_receivers) =
                         p2p_status_channels(connector.peers());
-                    let cfg = restored.install(&data_dir)?;
+
+                    // Write the restored config directly into the data directory, exactly
+                    // like a freshly generated config.
+                    write_server_config(
+                        &cfg,
+                        &data_dir,
+                        &module_init_registry,
+                        api_secrets.get_active(),
+                    )?;
 
                     Ok((cfg, connector, p2p_status_senders, p2p_status_receivers))
                 }
