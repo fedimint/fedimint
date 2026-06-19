@@ -12,6 +12,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
     api_endpoint,
 };
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{
     InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, secp256k1,
 };
@@ -22,8 +23,8 @@ use fedimint_escrow_common::{
     ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput,
     EscrowInputError, EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
     EscrowOutputOutcome, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT, KIND,
-    MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
-    compute_escrow_message,
+    LIST_CONTRACT_BY_KEY_ENDPOINT, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
+    Resolution, compute_contract_hash, compute_escrow_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -439,6 +440,38 @@ impl ServerModule for Escrow {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(dbtx.get_value(&PendingArbiterFeeKey(escrow_id)).await)
+                }
+            },
+            api_endpoint! {
+                LIST_CONTRACT_BY_KEY_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Escrow, context, pubkey: PublicKey|
+                    -> Vec<EscrowContract>
+                {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+
+                    let all: Vec<EscrowContract> = dbtx
+                        .find_by_prefix(&EscrowContractPrefix)
+                        .await
+                        .filter_map(|(_, contract)| {
+                            let matches =
+                                contract.buyer_key == pubkey
+                                    || contract.seller_key == pubkey
+                                    || contract.arbiter_key == pubkey;
+
+                            async move {
+                                if matches {
+                                    Some(contract)
+                                } else {
+                                    None
+                                }
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    Ok(all)
                 }
             },
         ]

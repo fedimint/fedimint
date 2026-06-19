@@ -821,14 +821,43 @@ impl EscrowClientModule {
     pub async fn list_escrow_operations(&self) -> Vec<EscrowClientRecord> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
 
-        let records: Vec<EscrowClientRecord> = dbtx
+        let local: std::collections::HashMap<EscrowId, EscrowClientRecord> = dbtx
             .find_by_prefix(&ClientEscrowKeyPrefix)
             .await
-            .map(|(_, record)| record)
+            .map(|(_, record)| (record.escrow_id, record))
             .collect()
             .await;
 
-        records
+        let pubkey = self.keypair.public_key();
+        let remote = self
+            .client_ctx
+            .module_api()
+            .list_contracts_by_key(pubkey)
+            .await
+            .unwrap_or_default();
+
+        let mut result: Vec<EscrowClientRecord> = remote
+            .into_iter()
+            .map(|contract| {
+                local
+                    .get(&contract.escrow_id)
+                    .cloned()
+                    .unwrap_or(EscrowClientRecord {
+                        escrow_id: contract.escrow_id,
+                        operation_id: OperationId([0u8; 32]),
+                        amount: contract.amount,
+                        status: EscrowClientStatus::Active,
+                    })
+            })
+            .collect();
+
+        for (escrow_id, record) in &local {
+            if !result.iter().any(|r| &r.escrow_id == escrow_id) {
+                result.push(record.clone());
+            }
+        }
+
+        result
     }
 
     pub async fn subscribe_escrow_creation(

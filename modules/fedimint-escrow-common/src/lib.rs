@@ -245,6 +245,7 @@ impl std::fmt::Display for EscrowInput {
 
 pub const GET_CONTRACT_ENDPOINT: &str = "get_contract";
 pub const GET_PENDING_ARBITER_FEE_ENDPOINT: &str = "get_pending_arbiter_fee";
+pub const LIST_CONTRACT_BY_KEY_ENDPOINT: &str = "list_contract_by_key";
 
 fn compute_resolution_message(
     federation_id: &FederationId,
