@@ -296,7 +296,7 @@ fn validate_restored_tcp_config(cfg: &ServerConfig) -> anyhow::Result<()> {
 /// Restore data must contain both API and p2p secret keys, and both must match
 /// this guardian's public keys in the restored consensus endpoints before the
 /// config is installed.
-fn restored_iroh_p2p_key(cfg: &ServerConfig) -> anyhow::Result<iroh::SecretKey> {
+fn restored_iroh_p2p_key(cfg: &ServerConfig) -> anyhow::Result<iroh_next::SecretKey> {
     let iroh_p2p_sk = cfg
         .private
         .iroh_p2p_sk

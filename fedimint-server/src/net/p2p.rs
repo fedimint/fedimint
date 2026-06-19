@@ -269,7 +269,7 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
             }
             P2PConnectionSMState::Connected(connection) => {
                 let status = P2PConnectionStatus {
-                    conn_type: self.common.connector.connection_type(self.common.peer_id),
+                    paths: connection.connection_paths(),
                     rtt: connection.rtt(),
                 };
 

@@ -87,9 +87,9 @@ pub trait GatewayDbtxNcExt {
         prefix_names: Vec<String>,
     ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>>;
 
-    /// Returns `iroh::SecretKey` and saves it to the database if it does not
-    /// exist
-    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
+    /// Returns `iroh_next::SecretKey` and saves it to the database if it does
+    /// not exist
+    async fn load_or_create_iroh_key(&mut self) -> iroh_next::SecretKey;
 
     /// Returns a `BTreeMap` that maps `FederationId` to its last backup time
     async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>>;
@@ -243,14 +243,14 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         gateway_items
     }
 
-    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
+    async fn load_or_create_iroh_key(&mut self) -> iroh_next::SecretKey {
         if let Some(iroh_sk) = self.get_value(&IrohKey).await {
             iroh_sk
         } else {
             let iroh_sk = if let Ok(var) = std::env::var(FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV) {
-                iroh::SecretKey::from_str(&var).expect("Invalid overridden iroh secret key")
+                iroh_next::SecretKey::from_str(&var).expect("Invalid overridden iroh secret key")
             } else {
-                iroh::SecretKey::generate(&mut OsRng)
+                iroh_next::SecretKey::generate()
             };
 
             self.insert_new_entry(&IrohKey, &iroh_sk).await;
@@ -485,7 +485,7 @@ struct IrohKey;
 
 impl_db_record!(
     key = IrohKey,
-    value = iroh::SecretKey,
+    value = iroh_next::SecretKey,
     db_prefix = DbKeyPrefix::Iroh
 );
 

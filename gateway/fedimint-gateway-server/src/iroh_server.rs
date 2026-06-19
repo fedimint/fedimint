@@ -11,7 +11,7 @@ use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
 use fedimint_gateway_common::STOP_ENDPOINT;
 use fedimint_logging::LOG_GATEWAY;
-use iroh::endpoint::Incoming;
+use iroh_next::endpoint::Incoming;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -192,7 +192,7 @@ async fn handle_incoming_iroh_request(
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
     let connection = incoming.accept()?.await?;
-    let remote_node_id = &connection.remote_node_id()?;
+    let remote_node_id = connection.remote_id();
     info!(%remote_node_id, "Handler received connection");
     while let Ok((mut send, mut recv)) = connection.accept_bi().await {
         let request = recv.read_to_end(100_000).await?;

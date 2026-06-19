@@ -6,8 +6,9 @@ use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_server_core::dashboard_ui::ConnectionPaths;
 use futures::{SinkExt, StreamExt};
-use iroh::endpoint::{Connection, RecvStream};
+use iroh_next::endpoint::{Connection, RecvStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
@@ -48,6 +49,10 @@ pub trait IP2PConnection<M>: Send + 'static {
 
     /// Get the round-trip time of the connection.
     fn rtt(&self) -> Option<Duration>;
+
+    /// Get the transport paths (direct and/or relayed) currently backing the
+    /// connection, for reporting on the guardian dashboard.
+    fn connection_paths(&self) -> Option<ConnectionPaths>;
 
     fn into_dyn(self) -> DynP2PConnection<M>
     where
@@ -101,6 +106,14 @@ where
     fn rtt(&self) -> Option<Duration> {
         None
     }
+
+    fn connection_paths(&self) -> Option<ConnectionPaths> {
+        // TLS connections are always a direct TCP connection, never relayed.
+        Some(ConnectionPaths {
+            direct: true,
+            relay: false,
+        })
+    }
 }
 
 /// Implementations of the IP2PFrame and IP2PConnection traits for Iroh
@@ -145,6 +158,23 @@ where
     }
 
     fn rtt(&self) -> Option<Duration> {
-        Some(Connection::rtt(self))
+        // iroh 1.0 reports RTT per path; use the currently selected one.
+        self.paths()
+            .iter()
+            .find(iroh_next::endpoint::Path::is_selected)
+            .and_then(|path| Connection::rtt(self, path.id()))
+    }
+
+    fn connection_paths(&self) -> Option<ConnectionPaths> {
+        // iroh 1.0 exposes path information per connection; report whether any
+        // direct (IP) and/or relayed path is currently available.
+        let mut direct = false;
+        let mut relay = false;
+        for path in self.paths().iter() {
+            direct |= path.is_ip();
+            relay |= path.is_relay();
+        }
+
+        Some(ConnectionPaths { direct, relay })
     }
 }

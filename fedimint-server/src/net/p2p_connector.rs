@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use fedimint_server_core::dashboard_ui::ConnectionType;
 
 pub use self::iroh::*;
 pub use self::tls::*;
@@ -26,9 +25,6 @@ pub trait IP2PConnector<M>: Send + Sync + 'static {
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
 
     async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)>;
-
-    /// Get the connection type for a specific peer
-    fn connection_type(&self, peer: PeerId) -> Option<ConnectionType>;
 
     fn into_dyn(self) -> DynP2PConnector<M>
     where

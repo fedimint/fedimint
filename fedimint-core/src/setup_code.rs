@@ -43,8 +43,8 @@ pub enum PeerEndpoints {
     },
     Iroh {
         /// Public key for our iroh api endpoint
-        api_pk: iroh_base::PublicKey,
+        api_pk: iroh_next_base::PublicKey,
         /// Public key for our iroh p2p endpoint
-        p2p_pk: iroh_base::PublicKey,
+        p2p_pk: iroh_next_base::PublicKey,
     },
 }
