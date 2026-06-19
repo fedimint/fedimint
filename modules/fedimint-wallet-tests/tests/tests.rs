@@ -52,10 +52,10 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
 
 const PEG_IN_AMOUNT_SATS: u64 = 10000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
-const FM_BITCOIND_WALLET_TEST_GROUP_ENV: &str = "FM_BITCOIND_WALLET_TEST_GROUP";
+const FM_WALLET_TEST_GROUP_ENV: &str = "FM_WALLET_TEST_GROUP";
 
 fn should_skip_wallet_test_group(test_group: &str) -> bool {
-    match env::var(FM_BITCOIND_WALLET_TEST_GROUP_ENV) {
+    match env::var(FM_WALLET_TEST_GROUP_ENV) {
         Ok(selected_group) if selected_group != test_group => {
             info!(
                 selected_group,
