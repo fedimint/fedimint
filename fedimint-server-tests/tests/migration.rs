@@ -232,24 +232,6 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                             .collect::<Vec<_>>()
                             .await;
                     }
-                    DbKeyPrefix::CoreConsensusVersionVote => {
-                        // Core consensus version votes are optional, just verify we can query
-                        // them.
-                        let _votes = dbtx
-                            .find_by_prefix(&CoreConsensusVersionVotePrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                    }
-                    DbKeyPrefix::CoreConsensusVersionVotingActivation => {
-                        // Core consensus version voting activations are optional, just verify we
-                        // can query them.
-                        let _activations = dbtx
-                            .find_by_prefix(&CoreConsensusVersionVotingActivationPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                    }
                     DbKeyPrefix::ModuleConsensusVersionVote => {
                         // Consensus version votes are optional, just verify we can query them.
                         let _votes = dbtx
@@ -303,6 +285,24 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // Fee consensus schedules are optional, just verify we can query them.
                         let _schedules = dbtx
                             .find_by_prefix(&ModuleFeeConsensusScheduleFullPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::CoreConsensusVersionVote => {
+                        // Core consensus version votes are optional, just verify we can query
+                        // them.
+                        let _votes = dbtx
+                            .find_by_prefix(&CoreConsensusVersionVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::CoreConsensusVersionVotingActivation => {
+                        // Core consensus version voting activations are optional, just verify we
+                        // can query them.
+                        let _activations = dbtx
+                            .find_by_prefix(&CoreConsensusVersionVotingActivationPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

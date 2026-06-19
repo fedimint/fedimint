@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
@@ -67,7 +68,7 @@ pub async fn process_transaction_with_dbtx(
         let module_consensus_version = *module_consensus_versions
             .get(&module_instance_id)
             .expect("Module consensus versions were precomputed");
-        if !fee_consensus_schedules.contains_key(&module_instance_id) {
+        if let Entry::Vacant(entry) = fee_consensus_schedules.entry(module_instance_id) {
             let module = modules.get_expect(module_instance_id);
             let schedules = module_fee_consensus_schedules(
                 dbtx,
@@ -76,7 +77,7 @@ pub async fn process_transaction_with_dbtx(
                 module.initial_fee_consensus(),
             )
             .await;
-            fee_consensus_schedules.insert(module_instance_id, schedules);
+            entry.insert(schedules);
         }
         let module_fee_consensus = fee_consensus_schedules
             .get(&module_instance_id)
@@ -118,7 +119,7 @@ pub async fn process_transaction_with_dbtx(
         let module_consensus_version = *module_consensus_versions
             .get(&module_instance_id)
             .expect("Module consensus versions were precomputed");
-        if !fee_consensus_schedules.contains_key(&module_instance_id) {
+        if let Entry::Vacant(entry) = fee_consensus_schedules.entry(module_instance_id) {
             let module = modules.get_expect(module_instance_id);
             let schedules = module_fee_consensus_schedules(
                 dbtx,
@@ -127,7 +128,7 @@ pub async fn process_transaction_with_dbtx(
                 module.initial_fee_consensus(),
             )
             .await;
-            fee_consensus_schedules.insert(module_instance_id, schedules);
+            entry.insert(schedules);
         }
         let module_fee_consensus = fee_consensus_schedules
             .get(&module_instance_id)

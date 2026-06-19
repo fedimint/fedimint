@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use axum::extract::{Form, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -16,9 +14,6 @@ pub const FEES_EXPERT_ROUTE: &str = "/fees/expert";
 
 #[derive(Debug, Deserialize)]
 pub struct SimplifiedFeeForm {
-    ecash_input_base_msats: u64,
-    ecash_output_base_msats: u64,
-    peg_in_base_msats: u64,
     percentage_ppm: u64,
 }
 
@@ -40,14 +35,12 @@ pub fn render(fees: &[DashboardModuleFeeConsensus]) -> Markup {
                         span class="badge bg-secondary" { "Dynamic" }
                     }
                     div class="card-body" {
-                        div class="row gy-4" {
-                            div class="col-lg-4" {
+                        div class="row" {
+                            div class="col-lg-4 col-xl-3" {
                                 (render_simplified_form(&simplified))
                             }
-                            div class="col-lg-8" {
-                                (render_expert_forms(fees))
-                            }
                         }
+                        (render_expert_forms(fees))
                     }
                 }
             }
@@ -59,21 +52,6 @@ fn render_simplified_form(values: &SimplifiedFeeValues) -> Markup {
     html! {
         h5 class="mb-3" { "Simplified" }
         form method="post" action=(FEES_SIMPLE_ROUTE) {
-            div class="mb-3" {
-                label for="ecash_input_base_msats" class="form-label" { "Ecash input base (msats)" }
-                input type="number" min="0" class="form-control" id="ecash_input_base_msats"
-                    name="ecash_input_base_msats" value=(values.ecash_input_base_msats) required;
-            }
-            div class="mb-3" {
-                label for="ecash_output_base_msats" class="form-label" { "Ecash output base (msats)" }
-                input type="number" min="0" class="form-control" id="ecash_output_base_msats"
-                    name="ecash_output_base_msats" value=(values.ecash_output_base_msats) required;
-            }
-            div class="mb-3" {
-                label for="peg_in_base_msats" class="form-label" { "Peg-in base (msats)" }
-                input type="number" min="0" class="form-control" id="peg_in_base_msats"
-                    name="peg_in_base_msats" value=(values.peg_in_base_msats) required;
-            }
             div class="mb-3" {
                 label for="percentage_ppm" class="form-label" { "Economic percentage (ppm)" }
                 input type="number" min="0" max="210000" class="form-control" id="percentage_ppm"
@@ -89,37 +67,45 @@ fn render_simplified_form(values: &SimplifiedFeeValues) -> Markup {
 
 fn render_expert_forms(fees: &[DashboardModuleFeeConsensus]) -> Markup {
     html! {
-        h5 class="mb-3" { "Expert" }
-        div class="accordion" id="fee-expert-accordion" {
-            @for fee in fees {
-                @let item_id = format!("fee-module-{}", fee.module_instance_id);
-                @let current = fee.desired.as_ref().unwrap_or(&fee.current);
-                @let json = serde_json::to_string_pretty(current)
-                    .expect("fee consensus JSON must serialize");
-                div class="accordion-item" {
-                    h2 class="accordion-header" {
-                        button class="accordion-button collapsed" type="button"
-                            data-bs-toggle="collapse" data-bs-target=(format!("#{item_id}")) {
-                            (format!("{} #{}", fee.module_kind, fee.module_instance_id))
-                        }
-                    }
-                    div id=(item_id) class="accordion-collapse collapse" data-bs-parent="#fee-expert-accordion" {
-                        div class="accordion-body" {
-                            form method="post" action=(FEES_EXPERT_ROUTE) {
-                                input type="hidden" name="module_instance_id" value=(fee.module_instance_id);
-                                div class="mb-2 text-muted" {
-                                    (format!("Active since consensus unix time {}", fee.active_since.0))
-                                    @if fee.desired.is_some() {
-                                        " - local desired vote pending"
+        div class="mt-4" {
+            button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                data-bs-target="#fee-expert-mode" aria-expanded="false" aria-controls="fee-expert-mode" {
+                i class="bi bi-sliders me-1" {}
+                "Expert"
+            }
+            div class="collapse mt-3" id="fee-expert-mode" {
+                div class="accordion" id="fee-expert-accordion" {
+                    @for fee in fees {
+                        @let item_id = format!("fee-module-{}", fee.module_instance_id);
+                        @let current = fee.desired.as_ref().unwrap_or(&fee.current);
+                        @let json = serde_json::to_string_pretty(current)
+                            .expect("fee consensus JSON must serialize");
+                        div class="accordion-item" {
+                            h2 class="accordion-header" {
+                                button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target=(format!("#{item_id}")) {
+                                    (format!("{} #{}", fee.module_kind, fee.module_instance_id))
+                                }
+                            }
+                            div id=(item_id) class="accordion-collapse collapse" data-bs-parent="#fee-expert-accordion" {
+                                div class="accordion-body" {
+                                    form method="post" action=(FEES_EXPERT_ROUTE) {
+                                        input type="hidden" name="module_instance_id" value=(fee.module_instance_id);
+                                        div class="mb-2 text-muted" {
+                                            (format!("Active since consensus unix time {}", fee.active_since.0))
+                                            @if fee.desired.is_some() {
+                                                " - local desired vote pending"
+                                            }
+                                        }
+                                        textarea class="form-control font-monospace" name="fee_consensus_json"
+                                            rows="10" spellcheck="false" {
+                                            (json)
+                                        }
+                                        button type="submit" class="btn btn-outline-primary mt-3" {
+                                            i class="bi bi-save me-1" {}
+                                            "Save JSON"
+                                        }
                                     }
-                                }
-                                textarea class="form-control font-monospace" name="fee_consensus_json"
-                                    rows="10" spellcheck="false" {
-                                    (json)
-                                }
-                                button type="submit" class="btn btn-outline-primary mt-3" {
-                                    i class="bi bi-save me-1" {}
-                                    "Save JSON"
                                 }
                             }
                         }
@@ -201,38 +187,18 @@ fn apply_simplified_fee_policy(
 ) -> bool {
     match module_kind {
         "mint" | "mintv2" => {
-            set_fee_rate(
-                fee_consensus,
-                "input",
-                Some(form.ecash_input_base_msats),
-                Some(0),
-            );
-            set_fee_rate(
-                fee_consensus,
-                "output",
-                Some(form.ecash_output_base_msats),
-                Some(form.percentage_ppm),
-            );
-            true
-        }
-        "wallet" | "walletv2" => {
-            set_fee_rate(
-                fee_consensus,
-                "peg_in",
-                Some(form.peg_in_base_msats),
-                Some(0),
-            );
+            set_fee_rate_ppm(fee_consensus, "input", 0);
+            set_fee_rate_ppm(fee_consensus, "output", form.percentage_ppm);
             true
         }
         "ln" | "lnv2" => {
-            set_fee_rate(fee_consensus, "incoming_contract_input", None, Some(0));
-            set_fee_rate(fee_consensus, "outgoing_contract_input", None, Some(0));
-            set_fee_rate(fee_consensus, "incoming_contract_output", None, Some(0));
-            set_fee_rate(
+            set_fee_rate_ppm(fee_consensus, "incoming_contract_input", 0);
+            set_fee_rate_ppm(fee_consensus, "outgoing_contract_input", 0);
+            set_fee_rate_ppm(fee_consensus, "incoming_contract_output", 0);
+            set_fee_rate_ppm(
                 fee_consensus,
                 "outgoing_contract_output",
-                None,
-                Some(form.percentage_ppm),
+                form.percentage_ppm,
             );
             true
         }
@@ -240,12 +206,7 @@ fn apply_simplified_fee_policy(
     }
 }
 
-fn set_fee_rate(
-    fee_consensus: &mut Value,
-    field: &str,
-    base_msats: Option<u64>,
-    parts_per_million: Option<u64>,
-) {
+fn set_fee_rate_ppm(fee_consensus: &mut Value, field: &str, parts_per_million: u64) {
     let Some(rate) = fee_consensus
         .as_object_mut()
         .and_then(|fields| fields.get_mut(field))
@@ -254,61 +215,43 @@ fn set_fee_rate(
         return;
     };
 
-    if let Some(base_msats) = base_msats {
-        rate.insert("base".to_owned(), Value::from(base_msats));
-    }
-
-    if let Some(parts_per_million) = parts_per_million {
-        rate.insert(
-            "parts_per_million".to_owned(),
-            Value::from(parts_per_million),
-        );
-    }
+    rate.insert(
+        "parts_per_million".to_owned(),
+        Value::from(parts_per_million),
+    );
 }
 
 #[derive(Debug, Default)]
 struct SimplifiedFeeValues {
-    ecash_input_base_msats: u64,
-    ecash_output_base_msats: u64,
-    peg_in_base_msats: u64,
     percentage_ppm: u64,
 }
 
 impl SimplifiedFeeValues {
     fn from_fees(fees: &[DashboardModuleFeeConsensus]) -> Self {
         let mut values = Self::default();
-        let mut percentages = BTreeMap::new();
 
         for fee in fees {
             let fee_consensus = fee.desired.as_ref().unwrap_or(&fee.current);
             match fee.module_kind.as_str() {
                 "mint" | "mintv2" => {
-                    values.ecash_input_base_msats =
-                        get_fee_rate_base(fee_consensus, "input").unwrap_or_default();
-                    values.ecash_output_base_msats =
-                        get_fee_rate_base(fee_consensus, "output").unwrap_or_default();
                     if let Some(ppm) = get_fee_rate_ppm(fee_consensus, "output") {
-                        percentages.insert(fee.module_instance_id, ppm);
+                        values.percentage_ppm = values.percentage_ppm.max(ppm);
                     }
-                }
-                "wallet" | "walletv2" => {
-                    values.peg_in_base_msats =
-                        get_fee_rate_base(fee_consensus, "peg_in").unwrap_or_default();
                 }
                 "ln" | "lnv2" => {
                     if let Some(ppm) = get_fee_rate_ppm(fee_consensus, "outgoing_contract_output") {
-                        percentages.insert(fee.module_instance_id, ppm);
+                        values.percentage_ppm = values.percentage_ppm.max(ppm);
                     }
                 }
                 _ => {}
             }
         }
 
-        values.percentage_ppm = percentages.values().copied().max().unwrap_or_default();
         values
     }
 }
 
+#[cfg(test)]
 fn get_fee_rate_base(fee_consensus: &Value, field: &str) -> Option<u64> {
     fee_consensus
         .get(field)
@@ -329,12 +272,17 @@ mod tests {
 
     #[test]
     fn simplified_policy_preserves_expert_only_fields() {
-        let form = SimplifiedFeeForm {
-            ecash_input_base_msats: 11,
-            ecash_output_base_msats: 12,
-            peg_in_base_msats: 13,
-            percentage_ppm: 14,
-        };
+        let form = SimplifiedFeeForm { percentage_ppm: 14 };
+
+        let mut mint = serde_json::json!({
+            "input": { "base": 1, "parts_per_million": 2 },
+            "output": { "base": 3, "parts_per_million": 4 }
+        });
+        assert!(apply_simplified_fee_policy(&mut mint, "mint", &form));
+        assert_eq!(get_fee_rate_base(&mint, "input"), Some(1));
+        assert_eq!(get_fee_rate_ppm(&mint, "input"), Some(0));
+        assert_eq!(get_fee_rate_base(&mint, "output"), Some(3));
+        assert_eq!(get_fee_rate_ppm(&mint, "output"), Some(form.percentage_ppm));
 
         let mut ln = serde_json::json!({
             "incoming_contract_input": { "base": 1, "parts_per_million": 2 },
@@ -344,9 +292,13 @@ mod tests {
             "offer": 9
         });
         assert!(apply_simplified_fee_policy(&mut ln, "ln", &form));
+        assert_eq!(get_fee_rate_base(&ln, "incoming_contract_input"), Some(1));
         assert_eq!(get_fee_rate_ppm(&ln, "incoming_contract_input"), Some(0));
+        assert_eq!(get_fee_rate_base(&ln, "incoming_contract_output"), Some(3));
         assert_eq!(get_fee_rate_ppm(&ln, "incoming_contract_output"), Some(0));
+        assert_eq!(get_fee_rate_base(&ln, "outgoing_contract_input"), Some(5));
         assert_eq!(get_fee_rate_ppm(&ln, "outgoing_contract_input"), Some(0));
+        assert_eq!(get_fee_rate_base(&ln, "outgoing_contract_output"), Some(7));
         assert_eq!(
             get_fee_rate_ppm(&ln, "outgoing_contract_output"),
             Some(form.percentage_ppm)
@@ -357,12 +309,9 @@ mod tests {
             "peg_in": { "base": 1, "parts_per_million": 2 },
             "peg_out": { "base": 3, "parts_per_million": 4 }
         });
-        assert!(apply_simplified_fee_policy(&mut wallet, "wallet", &form));
-        assert_eq!(
-            get_fee_rate_base(&wallet, "peg_in"),
-            Some(form.peg_in_base_msats)
-        );
-        assert_eq!(get_fee_rate_ppm(&wallet, "peg_in"), Some(0));
+        assert!(!apply_simplified_fee_policy(&mut wallet, "wallet", &form));
+        assert_eq!(get_fee_rate_base(&wallet, "peg_in"), Some(1));
+        assert_eq!(get_fee_rate_ppm(&wallet, "peg_in"), Some(2));
         assert_eq!(get_fee_rate_base(&wallet, "peg_out"), Some(3));
         assert_eq!(get_fee_rate_ppm(&wallet, "peg_out"), Some(4));
 

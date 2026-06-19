@@ -196,33 +196,6 @@ fn active_module_consensus_version_from_votes(
     versions[num_peers.max_evil()]
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use fedimint_core::module::ModuleConsensusVersion;
-    use fedimint_core::{NumPeers, PeerId};
-
-    use super::active_module_consensus_version_from_votes;
-
-    #[test]
-    fn active_module_consensus_version_merges_legacy_and_core_votes() {
-        let initial = ModuleConsensusVersion::new(1, 0);
-        let legacy = BTreeMap::from([
-            (PeerId::from(0), ModuleConsensusVersion::new(2, 0)),
-            (PeerId::from(1), ModuleConsensusVersion::new(2, 0)),
-            (PeerId::from(2), ModuleConsensusVersion::new(2, 0)),
-            (PeerId::from(3), ModuleConsensusVersion::new(1, 0)),
-        ]);
-        let core = BTreeMap::from([(PeerId::from(3), ModuleConsensusVersion::new(2, 0))]);
-
-        assert_eq!(
-            active_module_consensus_version_from_votes(NumPeers::from(4), initial, legacy, core),
-            ModuleConsensusVersion::new(2, 0)
-        );
-    }
-}
-
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct CoreConsensusVersionVoteKey(pub PeerId);
 
@@ -322,10 +295,29 @@ fn active_core_consensus_version_from_votes(
 mod tests {
     use std::collections::BTreeMap;
 
-    use fedimint_core::module::CoreConsensusVersion;
+    use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
     use fedimint_core::{NumPeers, PeerId};
 
-    use super::active_core_consensus_version_from_votes;
+    use super::{
+        active_core_consensus_version_from_votes, active_module_consensus_version_from_votes,
+    };
+
+    #[test]
+    fn active_module_consensus_version_merges_legacy_and_core_votes() {
+        let initial = ModuleConsensusVersion::new(1, 0);
+        let legacy = BTreeMap::from([
+            (PeerId::from(0), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(1), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(2), ModuleConsensusVersion::new(2, 0)),
+            (PeerId::from(3), ModuleConsensusVersion::new(1, 0)),
+        ]);
+        let core = BTreeMap::from([(PeerId::from(3), ModuleConsensusVersion::new(2, 0))]);
+
+        assert_eq!(
+            active_module_consensus_version_from_votes(NumPeers::from(4), initial, legacy, core),
+            ModuleConsensusVersion::new(2, 0)
+        );
+    }
 
     #[test]
     fn active_core_consensus_version_defaults_to_config_version() {
@@ -425,6 +417,7 @@ mod tests {
         );
     }
 }
+
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct CoreUnixTimeVoteKey(pub PeerId);
 
@@ -592,14 +585,16 @@ where
         .await
         .into_iter()
         .max_by_key(|(key, _)| (key.active_since, key.sequence))
-        .map(|(key, fee_consensus)| CurrentFeeConsensus {
-            active_since: key.active_since,
-            fee_consensus,
-        })
-        .unwrap_or(CurrentFeeConsensus {
-            active_since: ConsensusUnixTime::default(),
-            fee_consensus: initial_fee_consensus,
-        })
+        .map_or(
+            CurrentFeeConsensus {
+                active_since: ConsensusUnixTime::default(),
+                fee_consensus: initial_fee_consensus,
+            },
+            |(key, fee_consensus)| CurrentFeeConsensus {
+                active_since: key.active_since,
+                fee_consensus,
+            },
+        )
 }
 
 pub async fn module_fee_consensus_schedules<Cap>(
@@ -628,14 +623,16 @@ where
         .iter()
         .rev()
         .find(|(key, _)| key.active_since < cutoff)
-        .map(|(key, fee_consensus)| CurrentFeeConsensus {
-            fee_consensus: fee_consensus.clone(),
-            active_since: key.active_since,
-        })
-        .unwrap_or(CurrentFeeConsensus {
-            fee_consensus: initial_fee_consensus,
-            active_since: ConsensusUnixTime::default(),
-        });
+        .map_or(
+            CurrentFeeConsensus {
+                fee_consensus: initial_fee_consensus,
+                active_since: ConsensusUnixTime::default(),
+            },
+            |(key, fee_consensus)| CurrentFeeConsensus {
+                fee_consensus: fee_consensus.clone(),
+                active_since: key.active_since,
+            },
+        );
 
     let mut schedules = vec![previous_schedule];
     schedules.extend(

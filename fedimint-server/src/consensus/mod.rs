@@ -299,16 +299,18 @@ pub async fn run(
 
         submit_module_ci_proposals(
             task_group,
-            db.clone(),
-            global_api.clone(),
-            cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.to_num_peers(),
-            module_id,
-            kind.clone(),
-            module.clone(),
-            initial_module_consensus_version,
-            cfg.consensus.version,
-            submission_sender.clone(),
+            ModuleCiProposalContext {
+                db: db.clone(),
+                federation_api: global_api.clone(),
+                our_peer_id: cfg.local.identity,
+                num_peers: cfg.consensus.broadcast_public_keys.to_num_peers(),
+                module_id,
+                kind: kind.clone(),
+                module: module.clone(),
+                initial_module_consensus_version,
+                initial_core_consensus_version: cfg.consensus.version,
+                submission_sender: submission_sender.clone(),
+            },
         );
     }
 
@@ -514,8 +516,7 @@ fn submit_core_ci_proposals(task_group: &TaskGroup, context: CoreCiProposalConte
     });
 }
 
-fn submit_module_ci_proposals(
-    task_group: &TaskGroup,
+struct ModuleCiProposalContext {
     db: Database,
     federation_api: DynGlobalApi,
     our_peer_id: PeerId,
@@ -526,7 +527,22 @@ fn submit_module_ci_proposals(
     initial_module_consensus_version: ModuleConsensusVersion,
     initial_core_consensus_version: CoreConsensusVersion,
     submission_sender: Sender<ConsensusItem>,
-) {
+}
+
+fn submit_module_ci_proposals(task_group: &TaskGroup, context: ModuleCiProposalContext) {
+    let ModuleCiProposalContext {
+        db,
+        federation_api,
+        our_peer_id,
+        num_peers,
+        module_id,
+        kind,
+        module,
+        initial_module_consensus_version,
+        initial_core_consensus_version,
+        submission_sender,
+    } = context;
+
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
         Duration::from_millis(100)
     } else {
@@ -569,8 +585,7 @@ fn submit_module_ci_proposals(
                     false
                 } else {
                     last_automatic_vote_check
-                        .map(|last: Instant| last.elapsed() >= automatic_vote_check_interval)
-                        .unwrap_or(true)
+                        .is_none_or(|last: Instant| last.elapsed() >= automatic_vote_check_interval)
                 };
                 if check_automatic_vote {
                     last_automatic_vote_check = Some(Instant::now());
@@ -664,6 +679,23 @@ fn submit_module_ci_proposals(
             }
         },
     );
+}
+
+async fn module_fee_consensus_vote(
+    db: &Database,
+    module_id: ModuleInstanceId,
+    module: &DynServerModule,
+) -> Option<Vec<u8>> {
+    let mut dbtx = db.begin_transaction_nc().await;
+    let desired_vote = dbtx
+        .get_value(&ModuleFeeConsensusDesiredKey {
+            module_instance_id: module_id,
+        })
+        .await?;
+    let current_fee_consensus =
+        current_module_fee_consensus(&mut dbtx, module_id, module.initial_fee_consensus()).await;
+
+    (desired_vote != current_fee_consensus.fee_consensus).then_some(desired_vote)
 }
 
 /// Determines the core consensus version we want to vote for, if any.
@@ -771,23 +803,6 @@ async fn all_peers_supported_core_consensus_version(
     );
 
     Some(all_peers_supported_version)
-}
-
-async fn module_fee_consensus_vote(
-    db: &Database,
-    module_id: ModuleInstanceId,
-    module: &DynServerModule,
-) -> Option<Vec<u8>> {
-    let mut dbtx = db.begin_transaction_nc().await;
-    let desired_vote = dbtx
-        .get_value(&ModuleFeeConsensusDesiredKey {
-            module_instance_id: module_id,
-        })
-        .await?;
-    let current_fee_consensus =
-        current_module_fee_consensus(&mut dbtx, module_id, module.initial_fee_consensus()).await;
-
-    (desired_vote != current_fee_consensus.fee_consensus).then_some(desired_vote)
 }
 
 async fn module_consensus_version_vote(
