@@ -669,7 +669,7 @@ jobs:
           path: "bins/**"
 
       - name: Release Binaries
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "bins/**"
@@ -707,7 +707,7 @@ jobs:
 
       - name: Release DEB packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -722,7 +722,7 @@ jobs:
 
       - name: Release RPM packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -865,7 +865,7 @@ jobs:
           name: fedimintd-v${{ steps.build.outputs.version }}.s9pk
           path: fedimint-startos/fedimintd-v*.s9pk
       - name: Attach to release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ env.TAG_NAME }}
           files: fedimint-startos/fedimintd-v*.s9pk
@@ -966,7 +966,7 @@ jobs:
           name: fedimint-gatewayd-v${{ steps.build.outputs.version }}.s9pk
           path: gatewayd-startos/fedimint-gatewayd-v*.s9pk
       - name: Attach to release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ env.TAG_NAME }}
           files: gatewayd-startos/fedimint-gatewayd-v*.s9pk
