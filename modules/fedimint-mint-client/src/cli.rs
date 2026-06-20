@@ -74,7 +74,7 @@ async fn spend(
             .spend_notes_with_selector(
                 &SelectNotesWithAtleastAmount,
                 amount,
-                timeout,
+                Some(timeout),
                 include_invite,
                 (),
             )
@@ -90,7 +90,7 @@ async fn spend(
         mint.spend_notes_with_selector(
             &SelectNotesWithExactAmount,
             amount,
-            timeout,
+            Some(timeout),
             include_invite,
             (),
         )

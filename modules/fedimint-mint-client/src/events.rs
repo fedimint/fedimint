@@ -43,8 +43,9 @@ pub struct OOBNotesSpent {
     /// The actual amount of ecash spent
     pub spent_amount: Amount,
 
-    /// The timeout before attempting to refund
-    pub timeout: Duration,
+    /// The timeout before attempting to refund, or `None` if automatic refund
+    /// is disabled.
+    pub timeout: Option<Duration>,
 
     /// Boolean that indicates if the invite code was included in the note
     /// serialization

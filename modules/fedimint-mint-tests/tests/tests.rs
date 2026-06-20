@@ -131,7 +131,13 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let client2_mint = client2.get_first_module::<MintClientModule>()?;
     info!("### SPEND NOTES");
     let (op, notes) = client1_mint
-        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            Some(TIMEOUT),
+            false,
+            (),
+        )
         .await?;
     let sub1 = &mut client1_mint.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -194,7 +200,7 @@ async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
             .spend_notes_with_selector(
                 &SelectNotesWithAtleastAmount,
                 sats(1_000),
-                TIMEOUT,
+                Some(TIMEOUT),
                 false,
                 (),
             )
@@ -368,7 +374,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                     .spend_notes_with_selector(
                         &SelectNotesWithAtleastAmount,
                         sats(30),
-                        ECASH_TIMEOUT,
+                        Some(ECASH_TIMEOUT),
                         false,
                         (),
                     )
@@ -502,7 +508,13 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let mint_module = client.get_first_module::<MintClientModule>()?;
     let (op, _) = mint_module
-        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            Some(TIMEOUT),
+            false,
+            (),
+        )
         .await?;
     let sub1 = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -528,6 +540,24 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn sends_ecash_out_of_band_no_timeout_finishes_without_refund() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, sats(1000)).await?;
+
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let (op, _) = mint_module
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), None, false, ())
+        .await?;
+
+    let sub = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
+    assert_eq!(sub.ok().await?, SpendOOBState::Created);
+    assert_eq!(sub.ok().await?, SpendOOBState::Success);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
     let (client, client2) = fed.two_clients().await;
@@ -543,7 +573,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             sats(750),
-            TIMEOUT * 3,
+            Some(TIMEOUT * 3),
             false,
             (),
         )
@@ -618,7 +648,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             Amount::ZERO,
-            TIMEOUT,
+            Some(TIMEOUT),
             false,
             (),
         )
@@ -846,7 +876,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .spend_notes_with_selector(
                 &SelectNotesWithExactAmount,
                 Amount::from_msats(1),
-                TIMEOUT,
+                Some(TIMEOUT),
                 false,
                 (),
             )

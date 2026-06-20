@@ -273,7 +273,7 @@ pub async fn handle_command(
                     .spend_notes_with_selector(
                         &SelectNotesWithAtleastAmount,
                         amount,
-                        timeout,
+                        Some(timeout),
                         include_invite,
                         (),
                     )
@@ -294,7 +294,7 @@ pub async fn handle_command(
                     .spend_notes_with_selector(
                         &SelectNotesWithExactAmount,
                         amount,
-                        timeout,
+                        Some(timeout),
                         include_invite,
                         (),
                     )
