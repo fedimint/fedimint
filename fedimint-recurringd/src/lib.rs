@@ -307,35 +307,44 @@ impl RecurringInvoiceServer {
                     let payment_code = payment_code.clone();
                     let gateway = gateway.clone();
                     Box::pin(async move {
-                        let invoice_index = self
+                        let mut invoice_index = self
                             .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
                             .await;
 
-                        // Check if the invoice index was already used in an aborted call to this
+                        // Check if any invoice indices were already used in aborted calls to this
                         // fn. If so:
-                        //   1. Save the previously generated invoice. We don't want to reuse it
+                        //   1. Save each previously generated invoice. We don't want to reuse it
                         //      since it may be expired and in the future may contain call-specific
                         //      data, but also want to allow the client to sync past it.
-                        //   2. Increment the invoice index to generate a new invoice since re-using
-                        //      the same index wouldn't work (operation id reuse is forbidden).
-                        let initial_operation_id =
-                            operation_id_from_user_key(payment_code.root_key, invoice_index);
-                        let invoice_index = if let Some(invoice) =
-                            Self::check_if_invoice_exists(&federation_client, initial_operation_id)
-                                .await
-                        {
+                        //   2. Increment the invoice index until we find an unused one, since
+                        //      re-using an index would re-use an operation id, which is forbidden.
+                        //
+                        // A single request can only create one orphaned operation, but multiple
+                        // cancelled/restarted requests in a row can leave multiple consecutive
+                        // orphaned operations before recurringd commits its own DB state.
+                        let invoice_index = loop {
+                            let operation_id =
+                                operation_id_from_user_key(payment_code.root_key, invoice_index);
+
+                            let Some(invoice) =
+                                Self::check_if_invoice_exists(&federation_client, operation_id)
+                                    .await
+                            else {
+                                break invoice_index;
+                            };
+
                             self.save_bolt11_invoice(
                                 dbtx,
-                                initial_operation_id,
+                                operation_id,
                                 payment_code_id,
                                 invoice_index,
                                 invoice,
                             )
                             .await;
-                            self.get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
-                                .await
-                        } else {
-                            invoice_index
+
+                            invoice_index = self
+                                .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
+                                .await;
                         };
 
                         // This is where the main part starts: generate the invoice and save it to
