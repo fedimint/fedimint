@@ -99,6 +99,37 @@ pub struct EscrowContract {
     pub contract_hash: ContractHash,
     pub timeout: u64,
     pub federation_id: FederationId,
+    pub status: EscrowStatus,
+}
+
+impl EscrowContract {
+    pub fn transition(&mut self, new_status: EscrowStatus) -> Result<(), EscrowInputError> {
+        match (self.status.clone(), new_status.clone()) {
+            (EscrowStatus::Active, EscrowStatus::Released)
+            | (EscrowStatus::Active, EscrowStatus::Refunded) => {
+                self.status = new_status;
+                Ok(())
+            }
+
+            _ => Err(EscrowInputError::InvalidStateTransition),
+        }
+    }
+
+    pub fn resolution_message(&self, outcome: Outcome) -> EscrowMessage {
+        EscrowMessage::Resolution {
+            escrow_id: self.escrow_id,
+            federation_id: self.federation_id,
+            outcome,
+            contract_hash: self.contract_hash,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+pub enum EscrowStatus {
+    Active,
+    Released,
+    Refunded,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -177,6 +208,8 @@ pub enum EscrowInputError {
     TimeoutNotReached,
     #[error("Contract hash not matched")]
     ContractHashMismatch,
+    #[error("Invalid contract state transition")]
+    InvalidStateTransition,
     #[error("Internal error: {0}")]
     InternalError(String),
 }

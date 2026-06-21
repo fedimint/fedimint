@@ -13,6 +13,7 @@ use fedimint_core::module::{
     api_endpoint,
 };
 use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{
     InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, secp256k1,
 };
@@ -22,8 +23,8 @@ use fedimint_escrow_common::config::{
 use fedimint_escrow_common::{
     ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput,
     EscrowInputError, EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
-    EscrowOutputOutcome, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT, KIND,
-    LIST_CONTRACT_BY_KEY_ENDPOINT, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
+    EscrowOutputOutcome, EscrowStatus, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT,
+    KIND, LIST_CONTRACT_BY_KEY_ENDPOINT, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
     Resolution, compute_contract_hash, compute_escrow_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
@@ -218,138 +219,18 @@ impl ServerModule for Escrow {
 
         match &input.resolution {
             Resolution::BuyerRelease { buyer_signature } => {
-                let contract = dbtx
-                    .get_value(&EscrowContractKey(input.escrow_id))
+                self.handle_buyer_release(dbtx, input, buyer_signature)
                     .await
-                    .ok_or(EscrowInputError::ContractNotFound)?;
-
-                debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
-
-                let verified = verify_contract_hash(&contract.contract_hash.0, &contract);
-                if !verified {
-                    return Err(EscrowInputError::ContractHashMismatch);
-                }
-                let resolution_message = EscrowMessage::Resolution {
-                    escrow_id: contract.escrow_id,
-                    federation_id: contract.federation_id,
-                    outcome: Outcome::Release,
-                    contract_hash: contract.contract_hash,
-                };
-                let msg_bytes = compute_escrow_message(&resolution_message);
-                info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
-
-                let msg = secp256k1::Message::from_digest(msg_bytes);
-                let xonly_public_key = contract.buyer_key.x_only_public_key().0;
-                secp256k1::global::SECP256K1
-                    .verify_schnorr(buyer_signature, &msg, &xonly_public_key)
-                    .map_err(|_| EscrowInputError::InvalidBuyerSignature)?;
-
-                dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
-
-                info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
-                Ok(InputMeta {
-                    amount: TransactionItemAmounts {
-                        amounts: Amounts::new_bitcoin(contract.amount),
-                        fees: Amounts::ZERO,
-                    },
-                    pub_key: contract.seller_key,
-                })
             }
             Resolution::ArbiterOutcome {
                 arbiter_signature,
                 outcome,
             } => {
-                let contract = dbtx
-                    .get_value(&EscrowContractKey(input.escrow_id))
+                self.handle_arbiter_decision(input, dbtx, arbiter_signature, outcome)
                     .await
-                    .ok_or(EscrowInputError::ContractNotFound)?;
-
-                debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
-
-                let verified = verify_contract_hash(&contract.contract_hash.0, &contract);
-                if !verified {
-                    return Err(EscrowInputError::ContractHashMismatch);
-                }
-                let now = fedimint_core::time::duration_since_epoch().as_secs();
-                if now < contract.timeout {
-                    return Err(EscrowInputError::TimeoutNotReached);
-                }
-
-                let payout_amount = contract
-                    .amount
-                    .checked_sub(contract.arbiter_fee)
-                    .ok_or_else(|| {
-                        EscrowInputError::InternalError(
-                            "arbiter fee exceeds contract amount".into(),
-                        )
-                    })?;
-
-                let resolution_message = EscrowMessage::Resolution {
-                    escrow_id: contract.escrow_id,
-                    federation_id: contract.federation_id,
-                    outcome: *outcome,
-                    contract_hash: contract.contract_hash,
-                };
-                let msg_bytes = compute_escrow_message(&resolution_message);
-                let msg = secp256k1::Message::from_digest(msg_bytes);
-                let xonly = contract.arbiter_key.x_only_public_key().0;
-                secp256k1::global::SECP256K1
-                    .verify_schnorr(arbiter_signature, &msg, &xonly)
-                    .map_err(|_| EscrowInputError::InvalidArbiterSignature)?;
-
-                let recipient_key = match outcome {
-                    Outcome::Release => contract.seller_key,
-                    Outcome::Refund => contract.buyer_key,
-                };
-
-                dbtx.insert_entry(
-                    &PendingArbiterFeeKey(input.escrow_id),
-                    &PendingArbiterFee {
-                        escrow_id: input.escrow_id,
-                        arbiter_key: contract.arbiter_key,
-                        fee_amount: contract.arbiter_fee,
-                    },
-                )
-                .await;
-
-                dbtx.remove_entry(&EscrowContractKey(input.escrow_id)).await;
-
-                info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved and removed: escrow_id={:?}",contract.escrow_id);
-                Ok(InputMeta {
-                    amount: TransactionItemAmounts {
-                        amounts: Amounts::new_bitcoin(payout_amount),
-                        fees: Amounts::ZERO,
-                    },
-                    pub_key: recipient_key,
-                })
             }
             Resolution::ArbiterFeeClaim { arbiter_signature } => {
-                let pending = dbtx
-                    .get_value(&PendingArbiterFeeKey(input.escrow_id))
-                    .await
-                    .ok_or(EscrowInputError::ContractNotFound)?;
-
-                let arbiter_message = EscrowMessage::ArbiterFeeClaim {
-                    escrow_id: input.escrow_id,
-                    fee_amount: pending.fee_amount,
-                };
-                let msg_bytes = compute_escrow_message(&arbiter_message);
-                let msg = secp256k1::Message::from_digest(msg_bytes);
-                let xonly = pending.arbiter_key.x_only_public_key().0;
-                secp256k1::global::SECP256K1
-                    .verify_schnorr(arbiter_signature, &msg, &xonly)
-                    .map_err(|_| EscrowInputError::InvalidArbiterSignature)?;
-
-                dbtx.remove_entry(&PendingArbiterFeeKey(input.escrow_id))
-                    .await;
-
-                Ok(InputMeta {
-                    amount: TransactionItemAmounts {
-                        amounts: Amounts::new_bitcoin(pending.fee_amount),
-                        fees: Amounts::ZERO,
-                    },
-                    pub_key: pending.arbiter_key,
-                })
+                self.handle_fee_claim(dbtx, input, arbiter_signature).await
             }
         }
     }
@@ -413,7 +294,13 @@ impl ServerModule for Escrow {
                 dbtx,
                 module_instance_id,
                 &EscrowContractPrefix,
-                |_, contract: EscrowContract| -(contract.amount.msats as i64),
+                |_, contract: EscrowContract| {
+                    if contract.status == EscrowStatus::Active {
+                        -(contract.amount.msats as i64)
+                    } else {
+                        0
+                    }
+                },
             )
             .await;
     }
@@ -454,21 +341,14 @@ impl ServerModule for Escrow {
                     let all: Vec<EscrowContract> = dbtx
                         .find_by_prefix(&EscrowContractPrefix)
                         .await
-                        .filter_map(|(_, contract)| {
-                            let matches =
-                                contract.buyer_key == pubkey
-                                    || contract.seller_key == pubkey
-                                    || contract.arbiter_key == pubkey;
-
-                            async move {
-                                if matches {
-                                    Some(contract)
-                                } else {
-                                    None
-                                }
-                            }
+                        .map(|(_, c)| c)
+                        .filter(|c| {
+                            let visible = c.buyer_key == pubkey
+                                || c.seller_key == pubkey
+                                || c.arbiter_key == pubkey;
+                            async move { visible }
                         })
-                        .collect::<Vec<_>>()
+                        .collect()
                         .await;
 
                     Ok(all)
@@ -489,8 +369,162 @@ fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> 
     ) == ContractHash(*contract_hash)
 }
 
+fn verify_signature(
+    pubkey: &PublicKey,
+    msg_bytes: [u8; 32],
+    sig: &secp256k1::schnorr::Signature,
+) -> bool {
+    let msg = secp256k1::Message::from_digest(msg_bytes);
+
+    secp256k1::global::SECP256K1
+        .verify_schnorr(sig, &msg, &pubkey.x_only_public_key().0)
+        .is_ok()
+}
+
 impl Escrow {
     pub fn new(cfg: EscrowConfig) -> Self {
         Self { cfg }
+    }
+
+    async fn load_contract(
+        &self,
+        escrow_id: EscrowId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Result<EscrowContract, EscrowInputError> {
+        let contract = dbtx
+            .get_value(&EscrowContractKey(escrow_id))
+            .await
+            .ok_or(EscrowInputError::ContractNotFound)?;
+
+        debug!(target: LOG_MODULE_ESCROW, "Loaded escrow contract for escrow_id={:?}",contract.escrow_id);
+
+        let verified = verify_contract_hash(&contract.contract_hash.0, &contract);
+        if !verified {
+            return Err(EscrowInputError::ContractHashMismatch);
+        }
+
+        Ok(contract)
+    }
+
+    async fn handle_buyer_release(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        input: &EscrowInput,
+        buyer_signature: &Signature,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+
+        let resolution_message = contract.resolution_message(Outcome::Release);
+
+        let msg_bytes = compute_escrow_message(&resolution_message);
+        info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
+
+        if !verify_signature(&contract.buyer_key, msg_bytes, buyer_signature) {
+            return Err(EscrowInputError::InvalidBuyerSignature);
+        }
+
+        contract.transition(EscrowStatus::Released)?;
+        dbtx.insert_entry(&EscrowContractKey(input.escrow_id), &contract)
+            .await;
+
+        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved with buyer release");
+        Ok(InputMeta {
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(contract.amount),
+                fees: Amounts::ZERO,
+            },
+            pub_key: contract.seller_key,
+        })
+    }
+
+    async fn handle_arbiter_decision(
+        &self,
+        input: &EscrowInput,
+        dbtx: &mut DatabaseTransaction<'_>,
+        arbiter_signature: &Signature,
+        outcome: &Outcome,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        if now < contract.timeout {
+            return Err(EscrowInputError::TimeoutNotReached);
+        }
+
+        let payout_amount = contract
+            .amount
+            .checked_sub(contract.arbiter_fee)
+            .ok_or_else(|| {
+                EscrowInputError::InternalError("arbiter fee exceeds contract amount".into())
+            })?;
+
+        let resolution_message = contract.resolution_message(*outcome);
+
+        let msg_bytes = compute_escrow_message(&resolution_message);
+        if !verify_signature(&contract.arbiter_key, msg_bytes, arbiter_signature) {
+            return Err(EscrowInputError::InvalidArbiterSignature);
+        }
+
+        let recipient_key = match outcome {
+            Outcome::Release => contract.seller_key,
+            Outcome::Refund => contract.buyer_key,
+        };
+
+        dbtx.insert_entry(
+            &PendingArbiterFeeKey(input.escrow_id),
+            &PendingArbiterFee {
+                escrow_id: input.escrow_id,
+                arbiter_key: contract.arbiter_key,
+                fee_amount: contract.arbiter_fee,
+            },
+        )
+        .await;
+
+        let new_status = match outcome {
+            Outcome::Release => EscrowStatus::Released,
+            Outcome::Refund => EscrowStatus::Refunded,
+        };
+        contract.transition(new_status)?;
+        dbtx.insert_entry(&EscrowContractKey(input.escrow_id), &contract)
+            .await;
+
+        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved");
+        Ok(InputMeta {
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(payout_amount),
+                fees: Amounts::ZERO,
+            },
+            pub_key: recipient_key,
+        })
+    }
+
+    async fn handle_fee_claim(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        input: &EscrowInput,
+        arbiter_signature: &Signature,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let pending = dbtx
+            .get_value(&PendingArbiterFeeKey(input.escrow_id))
+            .await
+            .ok_or(EscrowInputError::ContractNotFound)?;
+
+        let arbiter_message = EscrowMessage::ArbiterFeeClaim {
+            escrow_id: input.escrow_id,
+            fee_amount: pending.fee_amount,
+        };
+        let msg_bytes = compute_escrow_message(&arbiter_message);
+        if !verify_signature(&pending.arbiter_key, msg_bytes, arbiter_signature) {
+            return Err(EscrowInputError::InvalidArbiterSignature);
+        }
+        dbtx.remove_entry(&PendingArbiterFeeKey(input.escrow_id))
+            .await;
+
+        Ok(InputMeta {
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(pending.fee_amount),
+                fees: Amounts::ZERO,
+            },
+            pub_key: pending.arbiter_key,
+        })
     }
 }

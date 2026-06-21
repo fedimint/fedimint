@@ -5,9 +5,8 @@ use std::time::Duration;
 
 use anyhow::{Error, bail};
 use async_stream::{stream, try_stream};
-use fedimint_client_module::module::init::{
-    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
-};
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
     ClientContext, ClientModule, OutPointRange, PrimaryModuleSupport,
 };
@@ -21,36 +20,28 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
+use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
-    EscrowOutput, KIND, Outcome, PendingArbiterFee, Resolution, compute_contract_hash,
-    compute_escrow_message,
+    EscrowOutput, EscrowStatus, KIND, Outcome, PendingArbiterFee, Resolution,
+    compute_contract_hash, compute_escrow_message,
 };
-use fedimint_logging::LOG_CLIENT_MODULE_ESCROW;
-use futures::StreamExt;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use tracing::info;
 
 use crate::api::EscrowFederationApi;
-use crate::backup::{EscrowBackup, EscrowRecovery};
-use crate::client_db::{
-    ClientEscrowKey, ClientEscrowKeyPrefix, DbKeyPrefix, EscrowAction, EscrowClientRecord,
-    EscrowClientStatus, EscrowOperationMeta,
-};
+use crate::client_db::{DbKeyPrefix, EscrowAction, EscrowOperationMeta};
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
 pub mod api;
-pub mod backup;
 mod client_db;
 pub mod input;
 pub mod output;
@@ -153,30 +144,17 @@ impl ModuleInit for EscrowClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let mut contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
-            BTreeMap::new();
+        let contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
         let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
             prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
         for table in filtered_prefixes {
             match table {
-                DbKeyPrefix::ClientEscrows => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientEscrowKeyPrefix,
-                        ClientEscrowKey,
-                        EscrowClientRecord,
-                        contracts,
-                        "Client Escrow Contracts"
-                    );
-                }
                 DbKeyPrefix::ExternalReservedStart
-                | DbKeyPrefix::RecoveryState
-                | DbKeyPrefix::RecoveryFinalized
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
@@ -207,22 +185,13 @@ impl ClientModuleInit for EscrowClientInit {
             notifier: args.notifier().clone(),
         })
     }
-
-    async fn recover(
-        &self,
-        args: &ClientModuleRecoverArgs<Self>,
-        snapshot: Option<&EscrowBackup>,
-    ) -> anyhow::Result<()> {
-        args.recover_from_history::<EscrowRecovery>(&self, snapshot)
-            .await
-    }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for EscrowClientModule {
     type Init = EscrowClientInit;
     type Common = EscrowModuleTypes;
-    type Backup = EscrowBackup;
+    type Backup = NoModuleBackup;
     type ModuleStateMachineContext = EscrowClientContext;
     type States = EscrowStateMachine;
 
@@ -239,17 +208,7 @@ impl ClientModule for EscrowClientModule {
     }
 
     fn supports_backup(&self) -> bool {
-        true
-    }
-
-    async fn backup(&self) -> anyhow::Result<EscrowBackup> {
-        let session_count = self.client_ctx.global_api().session_count().await?;
-
-        let contracts = self.list_escrow_operations().await;
-        Ok(EscrowBackup {
-            session_count,
-            records: contracts,
-        })
+        false
     }
 
     fn input_fee(&self, _amount: &Amounts, _input: &EscrowInput) -> Option<Amounts> {
@@ -476,23 +435,8 @@ impl EscrowClientModule {
             contract_hash,
             timeout: timeout_deadline,
             federation_id: self.federation_id,
+            status: EscrowStatus::Active,
         };
-
-        info!(target: LOG_CLIENT_MODULE_ESCROW, "Created escrow contract locally");
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        dbtx.insert_entry(
-            &ClientEscrowKey(escrow_id),
-            &EscrowClientRecord {
-                operation_id,
-                escrow_id,
-                amount,
-                status: EscrowClientStatus::Creating,
-            },
-        )
-        .await;
-
-        dbtx.commit_tx().await;
 
         let output_sm = ClientOutputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -818,46 +762,13 @@ impl EscrowClientModule {
         Ok(operation_log)
     }
 
-    pub async fn list_escrow_operations(&self) -> Vec<EscrowClientRecord> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
-
-        let local: std::collections::HashMap<EscrowId, EscrowClientRecord> = dbtx
-            .find_by_prefix(&ClientEscrowKeyPrefix)
-            .await
-            .map(|(_, record)| (record.escrow_id, record))
-            .collect()
-            .await;
-
+    pub async fn list_escrow_operations(&self) -> Vec<EscrowContract> {
         let pubkey = self.keypair.public_key();
-        let remote = self
-            .client_ctx
+        self.client_ctx
             .module_api()
             .list_contracts_by_key(pubkey)
             .await
-            .unwrap_or_default();
-
-        let mut result: Vec<EscrowClientRecord> = remote
-            .into_iter()
-            .map(|contract| {
-                local
-                    .get(&contract.escrow_id)
-                    .cloned()
-                    .unwrap_or(EscrowClientRecord {
-                        escrow_id: contract.escrow_id,
-                        operation_id: OperationId([0u8; 32]),
-                        amount: contract.amount,
-                        status: EscrowClientStatus::Active,
-                    })
-            })
-            .collect();
-
-        for (escrow_id, record) in &local {
-            if !result.iter().any(|r| &r.escrow_id == escrow_id) {
-                result.push(record.clone());
-            }
-        }
-
-        result
+            .unwrap_or_default()
     }
 
     pub async fn subscribe_escrow_creation(

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use fedimint_client::OperationId;
 use fedimint_core::module::AmountUnit;
+use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, Secp256k1};
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{Amount, anyhow};
@@ -63,18 +64,12 @@ async fn create_test_escrow(
 fn sign_arbiter_decision(
     secp: &Secp256k1<fedimint_core::secp256k1::All>,
     contract: &EscrowContract,
-    escrow_id: EscrowId,
     outcome: Outcome,
     arbiter_keypair: &Keypair,
-) -> fedimint_core::secp256k1::schnorr::Signature {
-    let resolution_message = EscrowMessage::Resolution {
-        escrow_id,
-        federation_id: contract.federation_id,
-        outcome,
-        contract_hash: contract.contract_hash,
-    };
-    let msg_bytes = compute_escrow_message(&resolution_message);
+) -> Signature {
+    let resolution_message = contract.resolution_message(outcome);
 
+    let msg_bytes = compute_escrow_message(&resolution_message);
     let msg = Message::from_digest(msg_bytes);
 
     secp.sign_schnorr(&msg, arbiter_keypair)
@@ -104,12 +99,7 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
 
     let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
 
-    let resolution_message = EscrowMessage::Resolution {
-        escrow_id,
-        federation_id: contract.federation_id,
-        outcome: Outcome::Release,
-        contract_hash: contract.contract_hash,
-    };
+    let resolution_message = contract.resolution_message(Outcome::Release);
     let msg_bytes = compute_escrow_message(&resolution_message);
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
     let buyer_sig = Secp256k1::new().sign_schnorr(&msg, &buyer_escrow.keypair);
@@ -123,8 +113,6 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
 
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Pending);
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Released);
-
-    assert!(buyer_escrow.get_contract(escrow_id).await?.is_none());
 
     assert!(seller_client.get_balance_for_btc().await? > Amount::ZERO);
 
@@ -161,13 +149,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
 
     let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
 
-    let arbiter_sig = sign_arbiter_decision(
-        &secp,
-        &contract,
-        escrow_id,
-        Outcome::Refund,
-        &arbiter_keypair,
-    );
+    let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
 
     let resolve_op = buyer_escrow
         .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
@@ -181,7 +163,6 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Pending);
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Refunded);
 
-    assert!(buyer_escrow.get_contract(escrow_id).await?.is_none());
     assert!(buyer_client.get_balance_for_btc().await? > Amount::ZERO);
 
     // claiming arbiter's fee
@@ -257,13 +238,7 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
     .await?;
 
     let contract = seller_escrow.get_contract(escrow_id).await?.unwrap();
-    let arbiter_sig = sign_arbiter_decision(
-        &secp,
-        &contract,
-        escrow_id,
-        Outcome::Refund,
-        &arbiter_keypair,
-    );
+    let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
 
     let resolve_op = buyer_escrow
         .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
