@@ -252,12 +252,8 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         let actual_fee = ecash_value - (after - before);
 
         ensure!(
-            quote.total == actual_fee,
+            quote.total() == actual_fee,
             "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
-        );
-        ensure!(
-            quote.total == quote.input + quote.output + quote.dust,
-            "iteration {i}: breakdown {quote:?} does not sum to total"
         );
     }
 

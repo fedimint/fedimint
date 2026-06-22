@@ -442,12 +442,10 @@ pub struct FeeQuoteRequest {
 /// point-in-time: it depends on the client's current inventory and can move as
 /// funds change.
 ///
-/// The fields satisfy `total == input + output + dust`.
+/// The total fee is the sum of the breakdown fields, available via
+/// [`FeeQuote::total`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FeeQuote {
-    /// Total fee: everything the gross input value does not become a net wallet
-    /// gain.
-    pub total: fedimint_core::Amount,
     /// Federation fees charged on the spent (input) items — both the
     /// transaction's explicit inputs and any inputs the primary module pulls in
     /// to balance it.
@@ -457,6 +455,14 @@ pub struct FeeQuote {
     pub output: fedimint_core::Amount,
     /// Sub-denomination remainder that cannot form an output and is lost.
     pub dust: fedimint_core::Amount,
+}
+
+impl FeeQuote {
+    /// Total fee: everything the gross input value does not become a net wallet
+    /// gain. Equal to `input + output + dust`.
+    pub fn total(&self) -> fedimint_core::Amount {
+        self.input + self.output + self.dust
+    }
 }
 
 #[derive(Default, Clone, Debug)]

@@ -832,7 +832,6 @@ impl Client {
         let dust = total.saturating_sub(input_fees + output_fees);
 
         Ok(FeeQuote {
-            total,
             input: input_fees,
             output: output_fees,
             dust,
