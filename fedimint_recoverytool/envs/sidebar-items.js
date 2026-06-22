@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FM_PASSWORD_ENV"]};

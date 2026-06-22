@@ -73,18 +73,17 @@
 <a href=#73 id=73 data-nosnippet>73</a>        .map(|peer| {
 <a href=#74 id=74 data-nosnippet>74</a>            <span class="kw">let </span>params = ConfigGenParams {
 <a href=#75 id=75 data-nosnippet>75</a>                identity: <span class="kw-2">*</span>peer,
-<a href=#76 id=76 data-nosnippet>76</a>                api_auth: API_AUTH.clone(),
-<a href=#77 id=77 data-nosnippet>77</a>                tls_key: <span class="prelude-val">Some</span>(tls_keys[peer].<span class="number">1</span>.clone()),
-<a href=#78 id=78 data-nosnippet>78</a>                iroh_api_sk: <span class="prelude-val">None</span>,
-<a href=#79 id=79 data-nosnippet>79</a>                iroh_p2p_sk: <span class="prelude-val">None</span>,
-<a href=#80 id=80 data-nosnippet>80</a>                peers: connections.clone(),
-<a href=#81 id=81 data-nosnippet>81</a>                meta: BTreeMap::new(),
-<a href=#82 id=82 data-nosnippet>82</a>                disable_base_fees: !enable_mint_fees,
-<a href=#83 id=83 data-nosnippet>83</a>                enabled_modules: enabled_modules.clone(),
-<a href=#84 id=84 data-nosnippet>84</a>                network: bitcoin::Network::Regtest,
-<a href=#85 id=85 data-nosnippet>85</a>            };
-<a href=#86 id=86 data-nosnippet>86</a>            <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
-<a href=#87 id=87 data-nosnippet>87</a>        })
-<a href=#88 id=88 data-nosnippet>88</a>        .collect()
-<a href=#89 id=89 data-nosnippet>89</a>}
+<a href=#76 id=76 data-nosnippet>76</a>                tls_key: <span class="prelude-val">Some</span>(tls_keys[peer].<span class="number">1</span>.clone()),
+<a href=#77 id=77 data-nosnippet>77</a>                iroh_api_sk: <span class="prelude-val">None</span>,
+<a href=#78 id=78 data-nosnippet>78</a>                iroh_p2p_sk: <span class="prelude-val">None</span>,
+<a href=#79 id=79 data-nosnippet>79</a>                peers: connections.clone(),
+<a href=#80 id=80 data-nosnippet>80</a>                meta: BTreeMap::new(),
+<a href=#81 id=81 data-nosnippet>81</a>                disable_base_fees: !enable_mint_fees,
+<a href=#82 id=82 data-nosnippet>82</a>                enabled_modules: enabled_modules.clone(),
+<a href=#83 id=83 data-nosnippet>83</a>                network: bitcoin::Network::Regtest,
+<a href=#84 id=84 data-nosnippet>84</a>            };
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
+<a href=#86 id=86 data-nosnippet>86</a>        })
+<a href=#87 id=87 data-nosnippet>87</a>        .collect()
+<a href=#88 id=88 data-nosnippet>88</a>}
 </code></pre></div></section></main></body></html>
