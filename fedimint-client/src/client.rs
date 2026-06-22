@@ -810,14 +810,9 @@ impl Client {
             // Fold the change into the totals. These are a disjoint set of items
             // from the explicit ones (the primary module only sees the scalar
             // amounts to balance, never the explicit items), so this is not
-            // double-counting. Wrap them in a `TransactionBuilder` so the (dyn)
-            // items can be iterated the way `finalize_transaction` would, looking
-            // each fee up via the module that owns the item.
-            let change = TransactionBuilder::new()
-                .with_inputs(change_input)
-                .with_outputs(change_output);
-
-            for input in change.inputs() {
+            // double-counting. Iterate the bundles the way `finalize_transaction`
+            // would, looking each fee up via the module that owns the item.
+            for input in change_input.inputs() {
                 let module = self.get_module(input.input.module_instance_id());
                 let fee = module
                     .input_fee(&input.amounts, &input.input)
@@ -826,7 +821,7 @@ impl Client {
                 input_fees.checked_add_mut(&fee);
             }
 
-            for output in change.outputs() {
+            for output in change_output.outputs() {
                 let module = self.get_module(output.output.module_instance_id());
                 let fee = module
                     .output_fee(&output.amounts, &output.output)

@@ -205,7 +205,7 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     // rebalance-driven fee — differs between iterations (first into an empty
     // wallet, then into a progressively more populated one).
     for i in 0..5 {
-        let ecash = client_send
+        let (_operation_id, ecash) = client_send
             .get_first_module::<MintClientModule>()?
             .send(Amount::from_sats(1_000), Value::Null, false)
             .await?;

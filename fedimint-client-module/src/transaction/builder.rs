@@ -116,10 +116,6 @@ where
         Self { inputs, sm_gens }
     }
 
-    pub fn inputs(&self) -> &[ClientInput<I>] {
-        &self.inputs
-    }
-
     pub fn sms(&self) -> &[ClientInputSM<S>] {
         &self.sm_gens
     }
@@ -147,6 +143,10 @@ where
 }
 
 impl<I, S> ClientInputBundle<I, S> {
+    pub fn inputs(&self) -> &[ClientInput<I>] {
+        &self.inputs
+    }
+
     pub fn is_empty(&self) -> bool {
         // Notably, sm_gen will not be called when inputs are empty anyway
         self.inputs.is_empty()
