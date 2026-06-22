@@ -1,0 +1,333 @@
+name: "Codex Agent"
+
+on:
+  issues:
+    types: [opened, assigned]
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: ["Codex Agent Review Comment Receiver"]
+    types: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.workflow_run.id || github.event.comment.id }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  agent:
+    name: Run Codex agent
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      ((github.event_name == 'issues' &&
+        github.actor != 'fedimint-bot' &&
+        github.actor != 'github-actions[bot]' &&
+        (github.event.action == 'opened' ||
+         (github.event.action == 'assigned' &&
+          github.event.assignee.login == 'fedimint-bot'))) ||
+       (github.event_name == 'issue_comment' &&
+        github.actor != 'fedimint-bot' &&
+        github.actor != 'github-actions[bot]') ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'pull_request_review_comment' &&
+        github.event.workflow_run.conclusion == 'success'))
+
+    steps:
+      - name: Validate agent mention
+        id: validate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            nixpkgs#jq \
+            nixpkgs#curl \
+            nixpkgs#unzip \
+            nixpkgs#gh \
+            -c bash <<'BASH'
+          set -euo pipefail
+
+          api_url="${GITHUB_API_URL:-https://api.github.com}"
+          event_payload="${GITHUB_EVENT_PATH}"
+          event_name="${EVENT_NAME}"
+          comment_endpoint=""
+          comment_user=""
+          comment_id=""
+          issue_number=""
+          body=""
+          artifact_dir=""
+
+          if [ "${event_name}" = "workflow_run" ]; then
+            # The receiver may have run without secrets on a fork PR. Treat its
+            # artifact as untrusted and use it only to find the live review
+            # comment, then re-check the mention and reviewer membership here.
+            artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
+            if [ -z "${artifacts_url}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: workflow_run event has no artifacts URL"
+              exit 0
+            fi
+
+            artifact_id=$(gh api "${artifacts_url}" \
+              --jq '.artifacts[] | select(.name == "codex-agent-review-comment-event") | .id' \
+              | head -n1)
+
+            if [ -z "${artifact_id}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: receiver uploaded no review-comment event artifact"
+              exit 0
+            fi
+
+            artifact_dir="${RUNNER_TEMP}/codex-agent-review-comment-artifact"
+            rm -rf "${artifact_dir}"
+            mkdir -p "${artifact_dir}"
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              > "${artifact_dir}/artifact.zip"
+            unzip -q "${artifact_dir}/artifact.zip" -d "${artifact_dir}"
+
+            event_payload="${artifact_dir}/event.json"
+            if [ ! -s "${event_payload}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: review-comment event artifact is missing event.json"
+              exit 0
+            fi
+
+            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+            if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: review-comment artifact has invalid comment id"
+              exit 0
+            fi
+
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
+          elif [ "${event_name}" = "issue_comment" ]; then
+            body=$(jq -r '.comment.body // ""' "${event_payload}")
+            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+            comment_user=$(jq -r '.comment.user.login // ""' "${event_payload}")
+            author_association=$(jq -r '.comment.author_association // ""' "${event_payload}")
+
+            echo "event=${event_name}"
+            echo "comment_id=${comment_id}"
+            echo "comment_user=${comment_user}"
+            echo "author_association=${author_association:-<missing>}"
+
+            if [[ "${body}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: comment does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
+          else
+            issue_number=$(jq -r '.issue.number // ""' "${event_payload}")
+            comment_id="${issue_number}"
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+            body=$(jq -r '.issue.body // ""' "${event_payload}")
+            comment_user=$(jq -r '.sender.login // env.GITHUB_ACTOR' "${event_payload}")
+            author_association=$(jq -r '.issue.author_association // ""' "${event_payload}")
+
+            echo "event=${event_name}"
+            echo "action=${action}"
+            echo "issue_number=${issue_number}"
+            echo "request_user=${comment_user}"
+            echo "author_association=${author_association:-<missing>}"
+
+            if ! [[ "${issue_number}" =~ ^[0-9]+$ ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issues event has invalid issue number"
+              exit 0
+            fi
+
+            if [ "${action}" = "opened" ] && [[ "${body}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: opened issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issue was not assigned to fedimint-bot"
+              exit 0
+            fi
+
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/${issue_number}"
+          fi
+
+          live_comment=$(curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api_url}/${comment_endpoint}")
+
+          body=$(jq -r '.body // ""' <<<"${live_comment}")
+          live_author_association=$(jq -r '.author_association // ""' <<<"${live_comment}")
+          if [ "${event_name}" != "issues" ]; then
+            comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
+          fi
+
+          echo "event=${event_name}"
+          echo "comment_id=${comment_id}"
+          echo "comment_user=${comment_user}"
+          echo "live_author_association=${live_author_association:-<missing>}"
+
+          if [ "${event_name}" = "issues" ]; then
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+
+            if [ "${action}" = "opened" ] && [[ "${body}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue assignment is not for fedimint-bot"
+              exit 0
+            fi
+          elif [[ "${body}" != *"@fedimint-bot"* ]]; then
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: live comment does not mention @fedimint-bot"
+            exit 0
+          fi
+
+          reviewer_membership=$(
+            curl --silent --show-error \
+              --write-out '%{http_code}' \
+              --output /tmp/fedimint-bot-reviewer-membership.json \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api_url}/orgs/fedimint/teams/reviewers/memberships/${comment_user}"
+          )
+
+          if [ "${reviewer_membership}" = "200" ]; then
+            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-reviewer-membership.json)
+          else
+            membership_state=""
+          fi
+
+          echo "reviewer_membership_status=${reviewer_membership}"
+          echo "reviewer_membership_state=${membership_state:-<missing>}"
+
+          if [ "${membership_state}" != "active" ]; then
+            echo "run=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping: requester is not an active fedimint/reviewers team member"
+            exit 0
+          fi
+
+          agent_event_path="${RUNNER_TEMP}/codex-agent-event.json"
+
+          if [ "${event_name}" = "workflow_run" ]; then
+            pull_request_url=$(jq -r '.pull_request_url // ""' <<<"${live_comment}")
+            if [ -z "${pull_request_url}" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live review comment has no pull_request_url"
+              exit 0
+            fi
+
+            pull_request=$(curl --fail-with-body --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${pull_request_url}")
+
+            jq -n \
+              --argjson comment "${live_comment}" \
+              --argjson pull_request "${pull_request}" \
+              '{
+                action: "created",
+                comment: $comment,
+                pull_request: $pull_request
+              }' > "${agent_event_path}"
+            echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
+          else
+            cp "${event_payload}" "${agent_event_path}"
+            echo "agent_event_name=${event_name}" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "agent_event_path=${agent_event_path}" >> "${GITHUB_OUTPUT}"
+          echo "comment_id=${comment_id}" >> "${GITHUB_OUTPUT}"
+          echo "comment_kind=${event_name}" >> "${GITHUB_OUTPUT}"
+          echo "run=true" >> "${GITHUB_OUTPUT}"
+          echo "Trigger accepted"
+          BASH
+
+      - name: Acknowledge request
+        if: steps.validate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          COMMENT_ID: ${{ steps.validate.outputs.comment_id }}
+          COMMENT_KIND: ${{ steps.validate.outputs.comment_kind }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            nixpkgs#curl \
+            -c bash <<'BASH'
+          set -euo pipefail
+          api_url="${GITHUB_API_URL:-https://api.github.com}"
+
+          if [ "${COMMENT_KIND}" = "workflow_run" ]; then
+            endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          elif [ "${COMMENT_KIND}" = "issues" ]; then
+            endpoint="repos/${REPOSITORY}/issues/${COMMENT_ID}/reactions"
+          else
+            endpoint="repos/${REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api_url}/${endpoint}" \
+            --data '{"content":"eyes"}' \
+            >/dev/null
+          BASH
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: steps.validate.outputs.run == 'true'
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex in Fedimint dev shell
+        if: steps.validate.outputs.run == 'true'
+        env:
+          BACKPORT_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          CODEX_AGENT_ACTOR: ${{ steps.validate.outputs.agent_actor }}
+          CODEX_AGENT_EVENT_NAME: ${{ steps.validate.outputs.agent_event_name }}
+          CODEX_AGENT_EVENT_PATH: ${{ steps.validate.outputs.agent_event_path }}
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            develop \
+            .#default \
+            --command \
+            nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            github:numtide/llm-agents.nix/24ec6b7b1ddf8896ac8df3b65dc564575e0a1928#codex \
+            nixpkgs#gh \
+            nixpkgs#ripgrep \
+            nixpkgs#curl \
+            -c bash .github/scripts/run-codex-agent.sh
