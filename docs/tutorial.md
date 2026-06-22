@@ -193,7 +193,7 @@ Commands:
 Options:
       --data-dir <DATA_DIR>  The working directory of the client containing the config and db [env: FM_CLIENT_DIR=]
       --our-id <OUR_ID>      Peer id of the guardian [env: FM_OUR_ID=]
-      --password <PASSWORD>  Guardian password for authentication [env: FM_PASSWORD=]
+      --password <PASSWORD>  Guardian password for authentication [env: FM_PASSWORD_API=]
   -h, --help                 Print help
   -V, --version              Print version
 ```

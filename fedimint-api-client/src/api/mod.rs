@@ -505,11 +505,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         id: &secp256k1::PublicKey,
     ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>>;
 
-    /// Sets the password used to decrypt the configs and authenticate
-    ///
-    /// Must be called first before any other calls to the API
-    async fn set_password(&self, auth: ApiAuth) -> FederationResult<()>;
-
     async fn setup_status(&self, auth: ApiAuth) -> FederationResult<SetupStatus>;
 
     async fn set_local_params(
@@ -601,10 +596,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Get the invite code for the federation guardian.
     /// For instance, useful after DKG
     async fn get_invite_code(&self, guardian: PeerId) -> ServerResult<InviteCode>;
-
-    /// Change the password used to encrypt the configs and for guardian
-    /// authentication
-    async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
 
     /// Returns the chain ID (bitcoin block hash at height 1) from the
     /// federation

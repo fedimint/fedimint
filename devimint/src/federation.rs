@@ -23,9 +23,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_server::config::io::{
-    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
-};
+use fedimint_server::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
@@ -555,8 +553,7 @@ impl Federation {
             for path in [
                 PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
                 PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
-                PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
-                PathBuf::from(SALT_FILE),
+                PathBuf::from(PRIVATE_CONFIG).with_extension(JSON_EXT),
             ] {
                 archive
                     .append_path_with_name(data_dir.join(&path), &path)
