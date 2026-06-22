@@ -161,7 +161,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let fees_from_operation = client2
         .get_transaction_fees(op)
         .await
-        .expect("Fee calculation should succeed");
+        .expect("Operation exists")
+        .expect("Fee data is present for new operations");
 
     assert!(
         !client2.has_active_states(op).await,

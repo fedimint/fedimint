@@ -971,16 +971,18 @@ impl Client {
     /// The returned amount may still increase while the operation is active;
     /// use [`Client::has_active_states`] to check whether it is final.
     ///
-    /// Returns `None` if any transaction's fee data is missing (e.g. for
+    /// Returns `Ok(None)` if any transaction's fee data is missing (e.g. for
     /// operations created before this feature was enabled).
     ///
-    /// # Panics
-    /// Panics if the operation does not exist.
-    pub async fn get_transaction_fees(&self, operation_id: OperationId) -> Option<Amounts> {
-        assert!(
-            self.operation_exists(operation_id).await,
-            "Operation does not exist"
-        );
+    /// # Errors
+    /// Returns an error if the operation does not exist.
+    pub async fn get_transaction_fees(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<Amounts>> {
+        if !self.operation_exists(operation_id).await {
+            bail!("Operation does not exist");
+        }
 
         let (active_states, inactive_states) =
             self.executor().get_operation_states(operation_id).await;
@@ -1005,13 +1007,15 @@ impl Client {
         let mut dbtx = self.db.begin_transaction_nc().await;
         let mut total_fees = Amounts::ZERO;
         for txid in &accepted_transactions {
-            let fees = dbtx.get_value(&TransactionFeesKey(*txid)).await?;
+            let Some(fees) = dbtx.get_value(&TransactionFeesKey(*txid)).await else {
+                return Ok(None);
+            };
             total_fees = total_fees
                 .checked_add(&fees)
                 .expect("Fee amounts don't overflow in practice");
         }
 
-        Some(total_fees)
+        Ok(Some(total_fees))
     }
 
     /// Waits for an output from the primary module to reach its final
