@@ -51,7 +51,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
@@ -1784,11 +1784,10 @@ impl LightningClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::bitcoin(),
-                    input_amount: amount,
-                    output_amount: Amount::ZERO,
-                    input_fee: self.cfg.fee_consensus.contract_input,
-                    output_fee: Amount::ZERO,
+                    input_amount: Amounts::new_bitcoin(amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input),
+                    output_fee: Amounts::ZERO,
                 },
             )
             .await
@@ -1813,11 +1812,10 @@ impl LightningClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::bitcoin(),
-                    input_amount: Amount::ZERO,
-                    output_amount: amount,
-                    input_fee: Amount::ZERO,
-                    output_fee: self.cfg.fee_consensus.contract_output,
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_output),
                 },
             )
             .await

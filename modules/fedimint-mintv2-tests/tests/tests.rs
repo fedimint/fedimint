@@ -9,6 +9,7 @@ use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::module::Amounts;
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
@@ -252,7 +253,7 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         let actual_fee = ecash_value - (after - before);
 
         ensure!(
-            quote.total() == actual_fee,
+            quote.total() == Amounts::new_bitcoin(actual_fee),
             "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
         );
     }

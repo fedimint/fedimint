@@ -408,28 +408,30 @@ where
 /// fee quote via `Client::fee_quote`.
 ///
 /// A module describes the inputs and outputs its operation would contribute by
-/// their gross value and federation fees (for a single `unit`), rather than
-/// building the actual transaction. The primary module then balances the
-/// resulting imbalance with change, and the full breakdown is returned as a
+/// their gross value and federation fees (per unit), rather than building the
+/// actual transaction. The primary module for each affected unit then balances
+/// the resulting imbalance with change, and the full breakdown is returned as a
 /// [`FeeQuote`]. This avoids fabricating real inputs/outputs (which may require
 /// cryptographic material not available when quoting), since fees depend only
 /// on amounts and module.
 ///
+/// All four fields are multi-unit [`Amounts`], so an operation can describe
+/// explicit items spanning several units (e.g. Bitcoin plus a custom currency);
+/// each unit is then balanced independently by its own primary module, the same
+/// way `Client::finalize_transaction` does.
+///
 /// For a typical receive there are no explicit outputs, so `output_amount` and
-/// `output_fee` are [`Amount::ZERO`](fedimint_core::Amount::ZERO).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `output_fee` are [`Amounts::ZERO`].
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeeQuoteRequest {
-    /// The unit the quote is denominated in (typically
-    /// [`AmountUnit::BITCOIN`](fedimint_core::module::AmountUnit::bitcoin)).
-    pub unit: fedimint_core::module::AmountUnit,
-    /// Gross value of the operation's explicit inputs.
-    pub input_amount: fedimint_core::Amount,
-    /// Gross value of the operation's explicit outputs.
-    pub output_amount: fedimint_core::Amount,
-    /// Federation fees charged on the operation's explicit inputs.
-    pub input_fee: fedimint_core::Amount,
-    /// Federation fees charged on the operation's explicit outputs.
-    pub output_fee: fedimint_core::Amount,
+    /// Gross value of the operation's explicit inputs, per unit.
+    pub input_amount: Amounts,
+    /// Gross value of the operation's explicit outputs, per unit.
+    pub output_amount: Amounts,
+    /// Federation fees charged on the operation's explicit inputs, per unit.
+    pub input_fee: Amounts,
+    /// Federation fees charged on the operation's explicit outputs, per unit.
+    pub output_fee: Amounts,
 }
 
 /// Breakdown of the fee finalizing a transaction would incur, as computed by
@@ -442,26 +444,31 @@ pub struct FeeQuoteRequest {
 /// point-in-time: it depends on the client's current inventory and can move as
 /// funds change.
 ///
-/// The total fee is the sum of the breakdown fields, available via
-/// [`FeeQuote::total`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Each field is a multi-unit [`Amounts`], since the quoted operation may span
+/// several units. The total fee is the sum of the breakdown fields, available
+/// via [`FeeQuote::total`].
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeeQuote {
     /// Federation fees charged on the spent (input) items — both the
     /// transaction's explicit inputs and any inputs the primary module pulls in
     /// to balance it.
-    pub input: fedimint_core::Amount,
+    pub input: Amounts,
     /// Federation fees charged on the created (output) items — both the
     /// transaction's explicit outputs and the change minted to balance it.
-    pub output: fedimint_core::Amount,
+    pub output: Amounts,
     /// Sub-denomination remainder that cannot form an output and is lost.
-    pub dust: fedimint_core::Amount,
+    pub dust: Amounts,
 }
 
 impl FeeQuote {
-    /// Total fee: everything the gross input value does not become a net wallet
-    /// gain. Equal to `input + output + dust`.
-    pub fn total(&self) -> fedimint_core::Amount {
-        self.input + self.output + self.dust
+    /// Total fee per unit: everything the gross input value does not become a
+    /// net wallet gain. Equal to `input + output + dust`.
+    pub fn total(&self) -> Amounts {
+        self.input
+            .clone()
+            .checked_add(&self.output)
+            .and_then(|sum| sum.checked_add(&self.dust))
+            .expect("aggregate fee components cannot overflow an Amounts")
     }
 }
 

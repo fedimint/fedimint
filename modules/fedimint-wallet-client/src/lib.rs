@@ -53,8 +53,8 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon,
-    ModuleConsensusVersion, ModuleInit, MultiApiVersion,
+    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion,
+    ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
@@ -869,11 +869,10 @@ impl WalletClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::BITCOIN,
-                    input_amount: fedimint_core::Amount::ZERO,
-                    output_amount: amount,
-                    input_fee: fedimint_core::Amount::ZERO,
-                    output_fee: self.cfg().fee_consensus.peg_out_abs,
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs),
                 },
             )
             .await

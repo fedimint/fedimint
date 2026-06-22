@@ -287,11 +287,10 @@ impl WalletClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::BITCOIN,
-                    input_amount: Amount::ZERO,
-                    output_amount: amount,
-                    input_fee: Amount::ZERO,
-                    output_fee: self.cfg.fee_consensus.fee(amount),
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
                 },
             )
             .await

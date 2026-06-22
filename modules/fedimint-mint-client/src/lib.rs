@@ -1774,11 +1774,10 @@ impl MintClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::BITCOIN,
-                    input_amount,
-                    output_amount: Amount::ZERO,
-                    input_fee,
-                    output_fee: Amount::ZERO,
+                    input_amount: Amounts::new_bitcoin(input_amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(input_fee),
+                    output_fee: Amounts::ZERO,
                 },
             )
             .await

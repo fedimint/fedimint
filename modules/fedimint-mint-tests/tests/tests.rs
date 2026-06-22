@@ -204,7 +204,7 @@ async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         assert_eq!(
             quote.total(),
-            actual_fee,
+            Amounts::new_bitcoin(actual_fee),
             "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
         );
     }

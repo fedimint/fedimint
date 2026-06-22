@@ -36,8 +36,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, Operati
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
-    MultiApiVersion,
+    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
@@ -856,11 +855,10 @@ impl LightningClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::bitcoin(),
-                    input_amount: amount,
-                    output_amount: Amount::ZERO,
-                    input_fee: self.cfg.fee_consensus.fee(amount),
-                    output_fee: Amount::ZERO,
+                    input_amount: Amounts::new_bitcoin(amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                    output_fee: Amounts::ZERO,
                 },
             )
             .await
@@ -886,11 +884,10 @@ impl LightningClientModule {
             .fee_quote(
                 OperationId::new_random(),
                 FeeQuoteRequest {
-                    unit: AmountUnit::bitcoin(),
-                    input_amount: Amount::ZERO,
-                    output_amount: amount,
-                    input_fee: Amount::ZERO,
-                    output_fee: self.cfg.fee_consensus.fee(amount),
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
                 },
             )
             .await
