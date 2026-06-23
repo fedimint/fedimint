@@ -52,6 +52,7 @@ jobs:
           echo "base_ref=$(echo "$PR_JSON" | jq -r '.base.ref')" >> "$GITHUB_OUTPUT"
           echo "base_sha=$(echo "$PR_JSON" | jq -r '.base.sha')" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(echo "$PR_JSON" | jq -r '.head.sha')" >> "$GITHUB_OUTPUT"
+          echo "author_login=$(echo "$PR_JSON" | jq -r '.user.login')" >> "$GITHUB_OUTPUT"
           echo "title=$(echo "$PR_JSON" | jq -r '.title')" >> "$GITHUB_OUTPUT"
 
       - name: Acknowledge review request
@@ -175,6 +176,7 @@ jobs:
       - name: Build review prompt
         env:
           PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_AUTHOR: ${{ steps.pr.outputs.author_login }}
         run: |
           IS_CONSENSUS="${{ steps.changed.outputs.consensus }}"
           TRUNCATED="${{ steps.diff.outputs.truncated }}"
@@ -211,6 +213,7 @@ jobs:
           PR metadata:
           PROMPT_META
           printf 'PR Title: %s\n' "$PR_TITLE" >> /tmp/review_prompt.txt
+          printf 'PR Author: %s\n' "$PR_AUTHOR" >> /tmp/review_prompt.txt
           printf 'Consensus-critical files changed: %s\n' "$IS_CONSENSUS" >> /tmp/review_prompt.txt
 
           # Conditional instructions

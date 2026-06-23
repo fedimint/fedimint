@@ -46,6 +46,25 @@ before posting them; when acting as that validation subagent, keep every
 finding that is demonstrably a real problem and drop anything speculative or
 unsupported by the diff.
 
+## Dependabot Dependency Bumps
+
+If the PR metadata says `PR Author: dependabot[bot]`, use the relevant
+dependency-bump review skill instead of treating the PR as a generic low-risk
+dependency bump:
+
+- For Rust/Cargo updates (`Cargo.toml` or `Cargo.lock`), read and follow
+  `.agents/skills/github-cargo-dependabot-review/SKILL.md`.
+- For GitHub Actions updates (`.github/workflows/**`, `.github/actions/**`,
+  `action.yml`, or `action.yaml`), read and follow
+  `.agents/skills/github-actions-dependabot-review/SKILL.md`.
+
+Adapt those skills to this workflow's JSON output: do not post PR comments
+yourself, put line-specific findings in `inline_comments`, and use the
+top-level `reason` for review-wide dependency-risk notes. Only output
+`APPROVE` after the applicable upstream/tarball checks are complete and no
+risks were found. If the required dependency review cannot be completed,
+output `COMMENT` with a concise reason explaining what remains unreviewed.
+
 ## Consensus-Critical Code
 
 ### What is consensus-critical?
