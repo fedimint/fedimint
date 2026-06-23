@@ -268,11 +268,12 @@ impl WalletClientModule {
     }
 
     /// Fetch the current fee required to claim an onchain deposit (peg-in).
-    pub async fn receive_fee(&self) -> anyhow::Result<bitcoin::Amount> {
+    pub async fn receive_fee(&self) -> Result<bitcoin::Amount, ReceiveError> {
         self.module_api
             .receive_fee()
-            .await?
-            .ok_or_else(|| anyhow!("No consensus feerate is available"))
+            .await
+            .map_err(|e| ReceiveError::FederationError(e.to_string()))?
+            .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
     /// Send an onchain payment with the given fee.
@@ -906,6 +907,14 @@ pub enum SendError {
     InsufficientFunds,
     #[error("Unsupported address type")]
     UnsupportedAddress,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum ReceiveError {
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("No consensus feerate is available at this time")]
+    NoConsensusFeerateAvailable,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

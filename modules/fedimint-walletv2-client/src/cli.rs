@@ -16,6 +16,8 @@ enum Opts {
     Info(InfoOpts),
     /// Fetch the current fee required to send an onchain payment.
     SendFee,
+    /// Fetch the current fee required to claim an onchain deposit (peg-in).
+    ReceiveFee,
     /// Send an onchain payment.
     Send {
         address: Address<NetworkUnchecked>,
@@ -68,6 +70,7 @@ pub(crate) async fn handle_cli_command(
             InfoOpts::TxChain => json(wallet.tx_chain().await?),
         },
         Opts::SendFee => json(wallet.send_fee().await?),
+        Opts::ReceiveFee => json(wallet.receive_fee().await?),
         Opts::Send {
             address,
             value,
