@@ -109,8 +109,8 @@ jobs:
           CI_DEBUG_WORKFLOW_EVENT: ${{ steps.target.outputs.run_event }}
           CI_DEBUG_HEAD_BRANCH: ${{ steps.target.outputs.head_branch }}
           CI_DEBUG_HEAD_SHA: ${{ steps.target.outputs.head_sha }}
-          PPQ_KEY: ${{ secrets.PPQ_KEY }}
-          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+          OPENAI_API_KEY: ${{ secrets.OPEN_AI_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.5' }}
         run: |
           set -euo pipefail
           nix --extra-experimental-features 'nix-command flakes' \
