@@ -101,7 +101,10 @@ impl ReceiveStateMachine {
     ) -> Option<OutPoint> {
         global_context
             .module_api()
-            .await_incoming_contract(&contract.contract_id(), contract.commitment.expiration)
+            .await_incoming_contract(
+                &contract.contract_id(),
+                contract.commitment.expiration_or_fee,
+            )
             .await
     }
 
@@ -146,7 +149,7 @@ impl ReceiveStateMachine {
             // operation), so the fee is recovered from the fee-encoded expiration.
             Ok(LightningOperationMeta::Receive(meta)) => meta.gateway_fee(),
             _ => Amount::from_msats(fee_from_expiration(
-                old_state.common.contract.commitment.expiration,
+                old_state.common.contract.commitment.expiration_or_fee,
             )),
         };
 

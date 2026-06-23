@@ -29,7 +29,11 @@ pub struct IncomingContract {
 pub struct Commitment {
     pub payment_image: PaymentImage,
     pub amount: Amount,
-    pub expiration: u64,
+    /// A real unix-time expiration for ordinary incoming contracts, or a
+    /// fee-encoded value for lnurl receives (see [`fee_encoded_expiration`]).
+    /// The wire name stays `expiration` for backwards compatibility.
+    #[serde(rename = "expiration")]
+    pub expiration_or_fee: u64,
     pub claim_pk: PublicKey,
     pub refund_pk: PublicKey,
     pub ephemeral_pk: PublicKey,
@@ -71,7 +75,7 @@ impl IncomingContract {
         let commitment = Commitment {
             payment_image,
             amount,
-            expiration,
+            expiration_or_fee: expiration,
             claim_pk,
             refund_pk,
             ephemeral_pk,
