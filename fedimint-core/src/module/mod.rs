@@ -183,9 +183,17 @@ impl Amounts {
         let mut result = self.clone();
 
         for (unit, amount) in &other.0 {
+            if *amount == Amount::ZERO {
+                continue;
+            }
+
             let prev = result.0.entry(*unit).or_default();
 
             *prev = prev.checked_sub(*amount)?;
+
+            if *prev == Amount::ZERO {
+                result.0.remove(unit);
+            }
         }
 
         Some(result)
