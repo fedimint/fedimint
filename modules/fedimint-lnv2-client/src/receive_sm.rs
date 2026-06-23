@@ -1,20 +1,20 @@
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_core::OutPoint;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_core::{Amount, OutPoint};
+use fedimint_lnv2_common::contracts::{IncomingContract, fee_from_expiration};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use tpe::AggregateDecryptionKey;
 use tracing::instrument;
 
-use crate::LightningClientContext;
 use crate::api::LightningFederationApi;
 use crate::events::ReceivePaymentEvent;
+use crate::{LightningClientContext, LightningOperationMeta};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {
@@ -101,7 +101,10 @@ impl ReceiveStateMachine {
     ) -> Option<OutPoint> {
         global_context
             .module_api()
-            .await_incoming_contract(&contract.contract_id(), contract.commitment.expiration)
+            .await_incoming_contract(
+                &contract.contract_id(),
+                contract.commitment.expiration_or_fee,
+            )
             .await
     }
 
@@ -130,6 +133,26 @@ impl ReceiveStateMachine {
             .await
             .expect("Cannot claim input, additional funding needed");
 
+        // The event reports the invoice amount and the gateway fee separately.
+        // Manual receives carry the invoice in their operation meta, so the fee
+        // is the difference between invoice and contract amount. Lnurl receives
+        // do not have an invoice on the client, so the fee is recovered from the
+        // fee-encoded contract expiration set by the recurring daemon instead.
+        let fee = match context
+            .client_ctx
+            .get_operation(old_state.common.operation_id)
+            .await
+            .map(|operation| operation.meta::<LightningOperationMeta>())
+        {
+            // A receive operation meta is only recorded for manually created
+            // invoices; lnurl receives have no invoice on the client (and no
+            // operation), so the fee is recovered from the fee-encoded expiration.
+            Ok(LightningOperationMeta::Receive(meta)) => meta.gateway_fee(),
+            _ => Amount::from_msats(fee_from_expiration(
+                old_state.common.contract.commitment.expiration_or_fee,
+            )),
+        };
+
         // Log event when receive completes successfully
         context
             .client_ctx
@@ -137,7 +160,8 @@ impl ReceiveStateMachine {
                 &mut dbtx.module_tx(),
                 ReceivePaymentEvent {
                     operation_id: old_state.common.operation_id,
-                    amount: old_state.common.contract.commitment.amount,
+                    amount: old_state.common.contract.commitment.amount + fee,
+                    fee,
                 },
             )
             .await;
