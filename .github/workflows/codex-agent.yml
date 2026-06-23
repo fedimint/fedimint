@@ -1,6 +1,8 @@
 name: "Codex Agent"
 
 on:
+  issues:
+    types: [opened, assigned]
   issue_comment:
     types: [created]
   workflow_run:
@@ -22,7 +24,13 @@ jobs:
     timeout-minutes: 120
     if: >-
       github.repository == 'fedimint/fedimint' &&
-      ((github.event_name == 'issue_comment' &&
+      ((github.event_name == 'issues' &&
+        github.actor != 'fedimint-bot' &&
+        github.actor != 'github-actions[bot]' &&
+        (github.event.action == 'opened' ||
+         (github.event.action == 'assigned' &&
+          github.event.assignee.login == 'fedimint-bot'))) ||
+       (github.event_name == 'issue_comment' &&
         github.actor != 'fedimint-bot' &&
         github.actor != 'github-actions[bot]') ||
        (github.event_name == 'workflow_run' &&
@@ -53,6 +61,7 @@ jobs:
           comment_endpoint=""
           comment_user=""
           comment_id=""
+          issue_number=""
           body=""
           artifact_dir=""
 
@@ -100,7 +109,7 @@ jobs:
             fi
 
             comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
-          else
+          elif [ "${event_name}" = "issue_comment" ]; then
             body=$(jq -r '.comment.body // ""' "${event_payload}")
             comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
             comment_user=$(jq -r '.comment.user.login // ""' "${event_payload}")
@@ -118,6 +127,42 @@ jobs:
             fi
 
             comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
+          else
+            issue_number=$(jq -r '.issue.number // ""' "${event_payload}")
+            comment_id="${issue_number}"
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+            title=$(jq -r '.issue.title // ""' "${event_payload}")
+            body=$(jq -r '.issue.body // ""' "${event_payload}")
+            issue_text=$(printf '%s\n%s' "${title}" "${body}")
+            comment_user=$(jq -r '.sender.login // env.GITHUB_ACTOR' "${event_payload}")
+            author_association=$(jq -r '.issue.author_association // ""' "${event_payload}")
+
+            echo "event=${event_name}"
+            echo "action=${action}"
+            echo "issue_number=${issue_number}"
+            echo "request_user=${comment_user}"
+            echo "author_association=${author_association:-<missing>}"
+
+            if ! [[ "${issue_number}" =~ ^[0-9]+$ ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issues event has invalid issue number"
+              exit 0
+            fi
+
+            if [ "${action}" = "opened" ] && [[ "${issue_text}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: opened issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issue was not assigned to fedimint-bot"
+              exit 0
+            fi
+
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/${issue_number}"
           fi
 
           live_comment=$(curl --fail-with-body --silent --show-error \
@@ -127,15 +172,40 @@ jobs:
             "${api_url}/${comment_endpoint}")
 
           body=$(jq -r '.body // ""' <<<"${live_comment}")
-          comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
           live_author_association=$(jq -r '.author_association // ""' <<<"${live_comment}")
+          if [ "${event_name}" != "issues" ]; then
+            comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
+          fi
 
           echo "event=${event_name}"
           echo "comment_id=${comment_id}"
           echo "comment_user=${comment_user}"
           echo "live_author_association=${live_author_association:-<missing>}"
 
-          if [[ "${body}" != *"@fedimint-bot"* ]]; then
+          if [ "${event_name}" = "issues" ]; then
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+            title=$(jq -r '.title // ""' <<<"${live_comment}")
+            issue_text=$(printf '%s\n%s' "${title}" "${body}")
+
+            if [ "${action}" = "opened" ] && [[ "${issue_text}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issue assignment event is not for fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && ! jq -e '.assignees[]? | select(.login == "fedimint-bot")' <<<"${live_comment}" >/dev/null; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue is no longer assigned to fedimint-bot"
+              exit 0
+            fi
+          elif [[ "${body}" != *"@fedimint-bot"* ]]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
             echo "Skipping: live comment does not mention @fedimint-bot"
             exit 0
@@ -162,7 +232,7 @@ jobs:
 
           if [ "${membership_state}" != "active" ]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping: comment author is not an active fedimint/reviewers team member"
+            echo "Skipping: requester is not an active fedimint/reviewers team member"
             exit 0
           fi
 
@@ -195,7 +265,7 @@ jobs:
           else
             cp "${event_payload}" "${agent_event_path}"
             echo "agent_event_name=${event_name}" >> "${GITHUB_OUTPUT}"
-            echo "agent_actor=${GITHUB_ACTOR}" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
           fi
 
           echo "agent_event_path=${agent_event_path}" >> "${GITHUB_OUTPUT}"
@@ -224,6 +294,8 @@ jobs:
 
           if [ "${COMMENT_KIND}" = "workflow_run" ]; then
             endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          elif [ "${COMMENT_KIND}" = "issues" ]; then
+            endpoint="repos/${REPOSITORY}/issues/${COMMENT_ID}/reactions"
           else
             endpoint="repos/${REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
           fi
