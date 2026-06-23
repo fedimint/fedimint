@@ -5,7 +5,7 @@ on:
   # Safety: we checkout the base branch (trusted) and only fetch the PR
   # diff as text — no untrusted code is checked out or executed.
   pull_request_target:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, review_requested]
   # Re-review only when explicitly requested via "/review" comment on a PR
   issue_comment:
     types: [created]
@@ -19,10 +19,13 @@ permissions: {}
 
 jobs:
   review:
-    # Run on PR open/ready-for-review, or when someone comments "/review" on a PR
+    # Run on PR open/ready-for-review, when fedimint-bot is requested for
+    # review, or when someone comments "/review" on a PR
     if: >-
       github.repository == 'fedimint/fedimint' && (
-        (github.event_name == 'pull_request_target' && !github.event.pull_request.draft) ||
+        (github.event_name == 'pull_request_target' && !github.event.pull_request.draft &&
+         (github.event.action != 'review_requested' ||
+          github.event.requested_reviewer.login == 'fedimint-bot')) ||
         (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
          contains(github.event.comment.body, '/review'))
       )
