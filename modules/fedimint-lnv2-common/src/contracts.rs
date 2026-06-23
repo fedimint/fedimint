@@ -35,6 +35,26 @@ pub struct Commitment {
     pub ephemeral_pk: PublicKey,
 }
 
+/// Encode a gateway fee into an incoming-contract expiration.
+///
+/// Incoming contracts created for lnurl receives store the gateway fee here
+/// instead of a real timestamp: the receiving client never sees the invoice for
+/// these contracts, so this is the only way for it to recover the fee and
+/// report the invoice amount in its payment events. A real expiration is not
+/// needed as these contracts are discovered via the contract stream rather than
+/// awaited per-invoice, and the funding-time validation only requires the
+/// expiration to lie in the future, which the resulting near-`u64::MAX` value
+/// satisfies.
+pub fn fee_encoded_expiration(fee_msats: u64) -> u64 {
+    u64::MAX - fee_msats
+}
+
+/// Recover the gateway fee from an incoming-contract expiration created with
+/// [`fee_encoded_expiration`].
+pub fn fee_from_expiration(expiration: u64) -> u64 {
+    u64::MAX - expiration
+}
+
 impl IncomingContract {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

@@ -660,7 +660,7 @@ impl LightningClientModule {
                 &mut dbtx,
                 SendPaymentEvent {
                     operation_id,
-                    amount: send_fee.add_to(amount),
+                    amount: Amount::from_msats(amount),
                     fee: send_fee.fee(amount),
                 },
             )
