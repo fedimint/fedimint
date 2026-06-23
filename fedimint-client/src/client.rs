@@ -992,7 +992,7 @@ impl Client {
     ///
     /// # Errors
     /// Returns an error if the operation does not exist.
-    pub async fn get_transaction_fees(
+    pub async fn get_operation_fees(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<Option<Amounts>> {

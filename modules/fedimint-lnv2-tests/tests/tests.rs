@@ -268,7 +268,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     // Verify that fees were paid, which is always the case for LNv2
     let operation_fees = client
-        .get_transaction_fees(operation_id)
+        .get_operation_fees(operation_id)
         .await
         .expect("Operation exists")
         .expect("Fee data is present for new operations");
