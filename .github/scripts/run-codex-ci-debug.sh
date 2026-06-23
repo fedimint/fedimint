@@ -17,8 +17,8 @@ require_env GITHUB_EVENT_NAME
 require_env GITHUB_EVENT_PATH
 require_env GITHUB_REPOSITORY
 require_env GITHUB_WORKSPACE
-require_env PPQ_KEY
-require_env PPQ_MODEL
+require_env OPENAI_API_KEY
+require_env OPENAI_MODEL
 require_env RUNNER_TEMP
 
 # Workflow-dispatch runs intentionally leave some CI_DEBUG_* values empty.
@@ -38,16 +38,11 @@ mkdir -p \
 path_toml=$(jq -Rn --arg value "${PATH}" '$value')
 
 cat > "${codex_home}/config.toml" <<EOF
-model = "${PPQ_MODEL}"
-model_provider = "ppq"
+model = "${OPENAI_MODEL}"
+model_provider = "openai"
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
 
-[model_providers.ppq]
-name = "PPQ"
-base_url = "https://api.ppq.ai/v1"
-env_key = "PPQ_KEY"
-wire_api = "responses"
 
 [shell_environment_policy]
 inherit = "all"
