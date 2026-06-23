@@ -13,7 +13,8 @@ use fedimint_escrow_client::input::EscrowInputSMState;
 use fedimint_escrow_client::output::EscrowOutputSMState;
 use fedimint_escrow_client::{EscrowClientInit, EscrowClientModule};
 use fedimint_escrow_common::{
-    EscrowContract, EscrowId, EscrowMessage, Outcome, compute_escrow_message,
+    EscrowContract, EscrowId, EscrowMessage, GET_PENDING_FEE_DOMAIN, GetPendinFeeParams, Outcome,
+    compute_escrow_message, compute_proof_message,
 };
 use fedimint_escrow_server::EscrowInit;
 use fedimint_testing::fixtures::Fixtures;
@@ -114,6 +115,20 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Pending);
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Released);
 
+    for _i in 0..10 {
+        let balance = seller_client.get_balance_for_btc().await?;
+
+        if balance > Amount::ZERO {
+            break;
+        }
+
+        fedimint_core::task::sleep_in_test(
+            "waiting for balance update",
+            Duration::from_millis(500),
+        )
+        .await;
+    }
+
     assert!(seller_client.get_balance_for_btc().await? > Amount::ZERO);
 
     Ok(())
@@ -202,11 +217,19 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
 
     let balance_after = arbiter_client.get_balance_for_btc().await?;
 
+    let secp = Secp256k1::new();
+    let msg_bytes = compute_proof_message(GET_PENDING_FEE_DOMAIN.as_bytes(), &escrow_id.0);
+    let get_arbiter_fee_signature =
+        secp.sign_schnorr(&Message::from_digest(msg_bytes), &arbiter_keypair);
+
     assert_eq!(balance_after, balance_before + contract.arbiter_fee);
     assert!(
         arbiter_escrow
             .api
-            .get_pending_arbiter_fee(escrow_id)
+            .get_pending_arbiter_fee(GetPendinFeeParams {
+                escrow_id,
+                sign: get_arbiter_fee_signature
+            })
             .await?
             .is_none()
     );

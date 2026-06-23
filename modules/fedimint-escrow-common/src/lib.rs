@@ -280,6 +280,27 @@ pub const GET_CONTRACT_ENDPOINT: &str = "get_contract";
 pub const GET_PENDING_ARBITER_FEE_ENDPOINT: &str = "get_pending_arbiter_fee";
 pub const LIST_CONTRACT_BY_KEY_ENDPOINT: &str = "list_contract_by_key";
 
+pub const GET_CONTRACT_DOMAIN: &str = "get_contract";
+pub const GET_PENDING_FEE_DOMAIN: &str = "get_pending_fee";
+pub const LIST_CONTRACT_DOMAIN: &str = "list_contracts";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GetContractParams {
+    pub escrow_id: EscrowId,
+    pub sign: Signature,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GetPendinFeeParams {
+    pub escrow_id: EscrowId,
+    pub sign: Signature,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ListContractParams {
+    pub sig: Signature,
+}
+
 fn compute_resolution_message(
     federation_id: &FederationId,
     escrow_id: &EscrowId,
@@ -316,6 +337,14 @@ pub fn compute_contract_hash(
     engine.input(&timeout.to_le_bytes());
     engine.input(&federation_id.0.to_byte_array());
     ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
+}
+
+pub fn compute_proof_message(domain: &[u8], payload: &[u8]) -> [u8; 32] {
+    let mut engine = sha256::HashEngine::default();
+    engine.input(b"escrow_proof");
+    engine.input(domain);
+    engine.input(payload);
+    sha256::Hash::from_engine(engine).to_byte_array()
 }
 
 pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {

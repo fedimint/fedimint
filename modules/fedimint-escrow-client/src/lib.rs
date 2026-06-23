@@ -30,8 +30,9 @@ use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
-    EscrowOutput, EscrowStatus, KIND, Outcome, PendingArbiterFee, Resolution,
-    compute_contract_hash, compute_escrow_message,
+    EscrowOutput, EscrowStatus, GET_CONTRACT_DOMAIN, GET_PENDING_FEE_DOMAIN, GetContractParams,
+    GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome, PendingArbiterFee,
+    Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
@@ -651,11 +652,19 @@ impl EscrowClientModule {
         arbiter_signature: schnorr::Signature,
     ) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
+        let secp = Secp256k1::new();
+
+        let msg_bytes = compute_proof_message(GET_PENDING_FEE_DOMAIN.as_bytes(), &escrow_id.0);
+        let get_arbiter_fee_signature =
+            secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
 
         let pending: PendingArbiterFee = self
             .client_ctx
             .module_api()
-            .get_pending_arbiter_fee(escrow_id)
+            .get_pending_arbiter_fee(GetPendinFeeParams {
+                escrow_id,
+                sign: get_arbiter_fee_signature,
+            })
             .await?
             .ok_or_else(|| anyhow::anyhow!("No pending arbiter fee for escrow"))?;
 
@@ -746,8 +755,20 @@ impl EscrowClientModule {
         &self,
         escrow_id: EscrowId,
     ) -> Result<Option<EscrowContract>, anyhow::Error> {
-        let contract: Option<EscrowContract> =
-            self.client_ctx.module_api().get_contract(escrow_id).await?;
+        let secp = Secp256k1::new();
+        let msg_bytes = compute_proof_message(GET_CONTRACT_DOMAIN.as_bytes(), &escrow_id.0);
+
+        let signature = secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
+
+        let contract: Option<EscrowContract> = self
+            .client_ctx
+            .module_api()
+            .get_contract(GetContractParams {
+                escrow_id,
+                sign: signature,
+            })
+            .await?;
+
         Ok(contract)
     }
 
@@ -763,10 +784,16 @@ impl EscrowClientModule {
     }
 
     pub async fn list_escrow_operations(&self) -> Vec<EscrowContract> {
-        let pubkey = self.keypair.public_key();
+        let secp = Secp256k1::new();
+        let msg = compute_proof_message(
+            LIST_CONTRACT_DOMAIN.as_bytes(),
+            &self.federation_id.0.to_byte_array(),
+        );
+        let sig = secp.sign_schnorr(&Message::from_digest(msg), &self.keypair);
+
         self.client_ctx
             .module_api()
-            .list_contracts_by_key(pubkey)
+            .list_contracts_by_key(ListContractParams { sig })
             .await
             .unwrap_or_default()
     }

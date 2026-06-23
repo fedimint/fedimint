@@ -15,7 +15,8 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{
-    InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, secp256k1,
+    BitcoinHash, InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items,
+    secp256k1,
 };
 use fedimint_escrow_common::config::{
     EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
@@ -23,9 +24,11 @@ use fedimint_escrow_common::config::{
 use fedimint_escrow_common::{
     ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput,
     EscrowInputError, EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
-    EscrowOutputOutcome, EscrowStatus, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT,
-    KIND, LIST_CONTRACT_BY_KEY_ENDPOINT, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee,
-    Resolution, compute_contract_hash, compute_escrow_message,
+    EscrowOutputOutcome, EscrowStatus, GET_CONTRACT_DOMAIN, GET_CONTRACT_ENDPOINT,
+    GET_PENDING_ARBITER_FEE_ENDPOINT, GET_PENDING_FEE_DOMAIN, GetContractParams,
+    GetPendinFeeParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT, LIST_CONTRACT_DOMAIN,
+    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee, Resolution,
+    compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -310,43 +313,81 @@ impl ServerModule for Escrow {
             api_endpoint! {
                 GET_CONTRACT_ENDPOINT,
                 ApiVersion::new(0, 1),
-                async |_module: &Escrow, context, escrow_id: EscrowId|
+                async |_module: &Escrow, context, params: GetContractParams|
                     -> Option<EscrowContract>
                 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(dbtx.get_value(&EscrowContractKey(escrow_id)).await)
+                    let Some(contract) = dbtx
+                        .get_value(&EscrowContractKey(params.escrow_id)).await
+                    else { return Ok(None) };
+
+                    let msg = compute_proof_message(
+                        GET_CONTRACT_DOMAIN.as_bytes(),
+                        &params.escrow_id.0
+                    );
+
+                    let authorized =
+                        verify_signature(&contract.buyer_key, msg, &params.sign) ||
+                        verify_signature(&contract.seller_key, msg, &params.sign) ||
+                        verify_signature(&contract.arbiter_key, msg, &params.sign);
+
+                    if authorized { Ok(Some(contract)) } else { Ok(None) }
                 }
             },
             api_endpoint! {
                 GET_PENDING_ARBITER_FEE_ENDPOINT,
                 ApiVersion::new(0, 1),
-                async |_module: &Escrow, context, escrow_id: EscrowId|
+                async |_module: &Escrow, context, params: GetPendinFeeParams|
                     -> Option<PendingArbiterFee>
                 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(dbtx.get_value(&PendingArbiterFeeKey(escrow_id)).await)
+
+                    let pending_fee = match dbtx.get_value(&PendingArbiterFeeKey(params.escrow_id)).await{
+                        Some(fee) => fee,
+                        None => return Ok(None),
+                    };
+
+                    let msg = compute_proof_message(
+                        GET_PENDING_FEE_DOMAIN.as_bytes(),
+                        &params.escrow_id.0,
+                    );
+                    let authorized = verify_signature(&pending_fee.arbiter_key, msg, &params.sign);
+                    if !authorized {
+                        return Ok(None);
+                    }
+
+                    Ok(Some(pending_fee))
                 }
             },
             api_endpoint! {
                 LIST_CONTRACT_BY_KEY_ENDPOINT,
                 ApiVersion::new(0, 1),
-                async |_module: &Escrow, context, pubkey: PublicKey|
+                async |_module: &Escrow, context, params: ListContractParams|
                     -> Vec<EscrowContract>
                 {
-                    let db = context.db();
+                    let db=context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
 
-                    let all: Vec<EscrowContract> = dbtx
+                    let all = dbtx
                         .find_by_prefix(&EscrowContractPrefix)
                         .await
                         .map(|(_, c)| c)
                         .filter(|c| {
-                            let visible = c.buyer_key == pubkey
-                                || c.seller_key == pubkey
-                                || c.arbiter_key == pubkey;
-                            async move { visible }
+                            let sig = params.sig;
+                            let c = c.clone();
+
+                            async move {
+                                let msg = compute_proof_message(
+                                    LIST_CONTRACT_DOMAIN.as_bytes(),
+                                    &c.federation_id.0.to_byte_array(),
+                                );
+
+                                verify_signature(&c.buyer_key, msg, &sig)
+                                    || verify_signature(&c.seller_key, msg, &sig)
+                                    || verify_signature(&c.arbiter_key, msg, &sig)
+                            }
                         })
                         .collect()
                         .await;
