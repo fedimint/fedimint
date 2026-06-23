@@ -246,8 +246,8 @@ jobs:
       - name: Run Codex review
         id: codex-review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPEN_AI_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.5' }}
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
         run: |
           set -euo pipefail
 
@@ -255,19 +255,18 @@ jobs:
           mkdir -p "$CODEX_HOME"
           path_toml=$(jq -Rn --arg value "$PATH" '$value')
           {
-            printf 'model = "%s"\n' "$OPENAI_MODEL"
+            printf 'model = "%s"\n' "$PPQ_MODEL"
             printf '%s\n' \
-              'model_provider = "openai-api-key"' \
+              'model_provider = "ppq"' \
               'model_reasoning_effort = "xhigh"' \
               'sandbox_mode = "read-only"' \
               'approval_policy = "never"' \
               'hide_agent_reasoning = true' \
               '' \
-              '[model_providers.openai-api-key]' \
-              'name = "OpenAI"' \
-              'base_url = "https://api.openai.com/v1"' \
-              'env_key = "OPENAI_API_KEY"' \
-              'supports_websockets = true' \
+              '[model_providers.ppq]' \
+              'name = "PPQ"' \
+              'base_url = "https://api.ppq.ai/v1"' \
+              'env_key = "PPQ_KEY"' \
               'wire_api = "responses"' \
               '' \
               '[history]' \
