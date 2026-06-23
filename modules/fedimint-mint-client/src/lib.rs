@@ -1328,6 +1328,8 @@ impl MintClientModule {
             return ClientOutputBundle::new(vec![], vec![]);
         }
 
+        // Change layout: carve notes out of `exact_amount`, paying each note's
+        // own fee from that same value (the leftover below a note's fee is dust).
         let denominations = represent_amount(
             exact_amount,
             &self.get_note_counts_by_denomination(dbtx).await,
@@ -1336,6 +1338,60 @@ impl MintClientModule {
             &self.cfg.fee_consensus,
         );
 
+        self.create_output_for_denominations(dbtx, operation_id, denominations)
+            .await
+    }
+
+    /// Issues note outputs worth *exactly* `amount`, with no fee carved out of
+    /// that value — the federation fee is funded separately by the primary
+    /// module's balancing (extra inputs pulled in by
+    /// `create_final_inputs_and_outputs`). This is how a *target* amount should
+    /// be minted (e.g. an ecash send reissuing itself the denominations to hand
+    /// out), as opposed to laying out change; it mirrors mintv2's `send`.
+    ///
+    /// Because the smallest denomination is 1 msat (denominations are
+    /// contiguous powers of two), every amount is exactly representable, so
+    /// a single reissue always yields notes that can be spent for the exact
+    /// amount.
+    async fn create_exact_output(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
+        if amount == Amount::ZERO {
+            return ClientOutputBundle::new(vec![], vec![]);
+        }
+
+        self.create_output_for_denominations(
+            dbtx,
+            operation_id,
+            self.represent_exact_amount(amount),
+        )
+        .await
+    }
+
+    /// Decomposes `amount` into the minimal set of note denominations summing
+    /// to *exactly* `amount` — a plain greedy power-of-two breakdown with
+    /// no fee subtracted (unlike [`represent_amount`], which lays out
+    /// change). Used when minting a target amount; see
+    /// [`Self::create_exact_output`].
+    fn represent_exact_amount(&self, amount: Amount) -> TieredCounts {
+        represent_amount(
+            amount,
+            &TieredCounts::default(),
+            &self.cfg.tbs_pks,
+            0,
+            &FeeConsensus::zero(),
+        )
+    }
+
+    async fn create_output_for_denominations(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        denominations: TieredCounts,
+    ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
         let mut outputs = Vec::new();
         let mut issuance_requests = Vec::new();
 
@@ -1783,6 +1839,67 @@ impl MintClientModule {
             .await
     }
 
+    /// Computes the fee a `send_oob_notes(amount)` would incur given the
+    /// wallet's current note inventory, without sending anything.
+    ///
+    /// A send is free when the wallet's existing notes can cover the (rounded)
+    /// amount exactly — it just hands those notes out. Otherwise the send first
+    /// reissues itself the right denominations, and that self-reissue
+    /// transaction is the only thing a send ever pays a fee for. This quote
+    /// mirrors that: it returns [`FeeQuote::ZERO`] when exact change is
+    /// available, and otherwise quotes the reissue the same way the real send
+    /// submits it (explicit outputs representing `amount`, no explicit inputs)
+    /// via the shared, module-agnostic fee quote over the real inventory. The
+    /// quote is point-in-time: it depends on the current inventory and can move
+    /// as notes change.
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        let amount = self.cfg.fee_consensus.round_up(amount);
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+
+        // Exact-change path: handing out existing notes never costs a fee. This
+        // is the same selection `send_oob_notes` tries first (see
+        // `try_spend_exact_notes_dbtx`).
+        if Self::select_notes(
+            &mut dbtx,
+            &SelectNotesWithExactAmount,
+            amount,
+            FeeConsensus::zero(),
+        )
+        .await
+        .is_ok()
+        {
+            return Ok(FeeQuote::ZERO);
+        }
+
+        drop(dbtx);
+
+        // Reissue path: the send mints itself notes worth exactly `amount` as
+        // explicit outputs (no explicit inputs) and the primary module funds and
+        // balances it. Quote that exact transaction — the same exact
+        // decomposition the real send's `create_exact_output` uses, so a single
+        // reissue covers it.
+        let denominations = self.represent_exact_amount(amount);
+
+        let output_amount = denominations.total_amount();
+        let output_fee: Amount = denominations
+            .iter()
+            .map(|(denomination, count)| self.cfg.fee_consensus.fee(denomination) * count as u64)
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(output_amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(output_fee),
+                },
+            )
+            .await
+    }
+
     /// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientModule::subscribe_reissue_external_notes`].
@@ -2149,8 +2266,11 @@ impl MintClientModule {
 
         let operation_id = OperationId::new_random();
 
-        // Create outputs for reissuance, committing the note index counter
-        // updates so that create_final_inputs_and_outputs won't reuse the same
+        // Reissue ourselves notes worth *exactly* `amount` (fee funded by the
+        // balancing layer), so the retry below can hand out the exact amount in a
+        // single reissue — rather than minting `amount` minus fees and having to
+        // reissue repeatedly to make up the difference. Commit the note index
+        // counter updates so create_final_inputs_and_outputs won't reuse the same
         // indices for change outputs.
         let output_bundle = self
             .client_ctx
@@ -2159,7 +2279,7 @@ impl MintClientModule {
                 |dbtx, _| {
                     Box::pin(async {
                         Ok::<_, anyhow::Error>(
-                            self.create_output(dbtx, operation_id, 1, amount).await,
+                            self.create_exact_output(dbtx, operation_id, amount).await,
                         )
                     })
                 },
