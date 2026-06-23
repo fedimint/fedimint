@@ -252,6 +252,34 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Regression test: a send that requires a self-reissue must succeed without
+/// settling state machines between sends (as a wallet UI does).
+///
+/// Three 5,000,000 msat sends from a 20,000,000 msat balance. The first two are
+/// served from exact change; the third can't make exact change and triggers a
+/// self-reissue. Previously the reissue recursion ran before its freshly-minted
+/// notes were spendable (it awaited only the *change* outputs), failed to make
+/// exact change, re-reissued, and drained the wallet — surfacing as
+/// "Failed to submit reissuance transaction: Insufficient balance" even though
+/// the `send_fee_quote` had just succeeded.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, Amount::from_msats(20_000_000)).await?;
+
+    for i in 0..3 {
+        let mint = client.get_first_module::<MintClientModule>()?;
+        // The quote must succeed (it always did); the send must succeed too.
+        mint.send_fee_quote(Amount::from_msats(5_000_000)).await?;
+        mint.send_oob_notes(Amount::from_msats(5_000_000), ())
+            .await
+            .map_err(|e| anyhow::anyhow!("iteration {i}: send_oob_notes failed: {e:#}"))?;
+    }
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn blind_nonce_index() -> anyhow::Result<()> {
     // Give client initial balance

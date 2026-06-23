@@ -84,7 +84,7 @@ use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
-    Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
+    Amount, IdxRange, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
     async_trait_maybe_send, base32, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -2288,6 +2288,13 @@ impl MintClientModule {
             .await
             .expect("Failed to commit output creation after 100 retries");
 
+        // The explicit outputs we just minted (worth exactly `amount`) occupy the
+        // first `explicit_output_count` out points of the transaction; the
+        // primary module's change is appended after them. The recursion below
+        // hands out these exact notes, so we must wait for *them* to finalize —
+        // not just the change.
+        let explicit_output_count = output_bundle.outputs().len() as u64;
+
         // Combine the output bundle state machines with the send state machine
         let combined_bundle = ClientOutputBundle::new(
             output_bundle.outputs().to_vec(),
@@ -2321,9 +2328,17 @@ impl MintClientModule {
             .await
             .context("Failed to submit reissuance transaction")?;
 
-        // Wait for outputs to be finalized
+        // Wait for *all* of the transaction's outputs to be finalized — both the
+        // change (returned in `out_point_range`) and the explicit exact-amount
+        // notes at out points `[0, explicit_output_count)`. The recursion below
+        // can only hand out the exact notes once they are spendable; awaiting
+        // only the change (as before) raced the recursion against issuance,
+        // causing it to re-reissue and drain the wallet.
+        let txid = out_point_range.txid();
+        let total_output_count = explicit_output_count + out_point_range.count() as u64;
+        let all_outputs = OutPointRange::new(txid, IdxRange::from(0..total_output_count));
         self.client_ctx
-            .await_primary_module_outputs(operation_id, out_point_range.into_iter().collect())
+            .await_primary_module_outputs(operation_id, all_outputs.into_iter().collect())
             .await
             .context("Failed to await output finalization")?;
 
