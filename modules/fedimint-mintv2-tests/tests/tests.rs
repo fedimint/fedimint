@@ -261,6 +261,52 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    issue_ecash(&client, Amount::from_sats(11_000)).await?;
+
+    // Send several times so the wallet's note inventory — and therefore whether a
+    // self-reissue (and its fee) is needed to reach the requested denomination —
+    // differs between iterations.
+    for i in 0..5 {
+        let mint = client.get_first_module::<MintClientModule>()?;
+
+        // Settle any pending change from the previous iteration so the quote and
+        // the send observe the same inventory.
+        client.wait_for_all_active_state_machines().await?;
+
+        let quote = mint.send_fee_quote(Amount::from_sats(1_000)).await?;
+        let before = client.get_balance_for_btc().await?;
+
+        let (_operation_id, ecash) = mint
+            .send(Amount::from_sats(1_000), Value::Null, false)
+            .await?;
+        let sent_value = ecash.amount();
+
+        // A send may trigger an internal reissue whose change notes are credited
+        // by output state machines; wait for them before reading the balance.
+        client.wait_for_all_active_state_machines().await?;
+        let after = client.get_balance_for_btc().await?;
+
+        // Value conservation: the wallet loses exactly the sent value plus the fee.
+        let actual_fee = before - after - sent_value;
+
+        ensure!(
+            quote.total() == Amounts::new_bitcoin(actual_fee),
+            "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
+        );
+    }
+
+    Ok(())
+}
+
 async fn test_client_recovery(
     fed: &FederationTest,
     client: &ClientHandleArc,
