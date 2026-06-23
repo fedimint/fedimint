@@ -15,10 +15,10 @@ require_env GITHUB_EVENT_NAME
 require_env GITHUB_EVENT_PATH
 require_env GITHUB_REPOSITORY
 require_env GITHUB_WORKSPACE
-require_env OPENAI_API_KEY
+require_env PPQ_KEY
 require_env RUNNER_TEMP
 
-OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.5}"
+PPQ_MODEL="${PPQ_MODEL:-openai/gpt-5.5}"
 agent_event_name="${CODEX_AGENT_EVENT_NAME:-${GITHUB_EVENT_NAME}}"
 agent_event_path="${CODEX_AGENT_EVENT_PATH:-${GITHUB_EVENT_PATH}}"
 agent_actor="${CODEX_AGENT_ACTOR:-${GITHUB_ACTOR}}"
@@ -45,17 +45,16 @@ path_toml=$(jq -Rn --arg value "${PATH}" '$value')
 # isolation for process containment, and on Codex's shell environment policy
 # to keep provider credentials out of agent-spawned commands.
 cat > "${codex_home}/config.toml" <<EOF
-model = "${OPENAI_MODEL}"
-model_provider = "openai-api-key"
+model = "${PPQ_MODEL}"
+model_provider = "ppq"
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
 
 
-[model_providers.openai-api-key]
-name = "OpenAI"
-base_url = "https://api.openai.com/v1"
-env_key = "OPENAI_API_KEY"
-supports_websockets = true
+[model_providers.ppq]
+name = "PPQ"
+base_url = "https://api.ppq.ai/v1"
+env_key = "PPQ_KEY"
 wire_api = "responses"
 
 
