@@ -257,11 +257,18 @@ jobs:
           {
             printf 'model = "%s"\n' "$OPENAI_MODEL"
             printf '%s\n' \
-              'model_provider = "openai"' \
+              'model_provider = "openai-api-key"' \
               'model_reasoning_effort = "xhigh"' \
               'sandbox_mode = "read-only"' \
               'approval_policy = "never"' \
               'hide_agent_reasoning = true' \
+              '' \
+              '[model_providers.openai-api-key]' \
+              'name = "OpenAI"' \
+              'base_url = "https://api.openai.com/v1"' \
+              'env_key = "OPENAI_API_KEY"' \
+              'supports_websockets = true' \
+              'wire_api = "responses"' \
               '' \
               '[history]' \
               'persistence = "none"' \
