@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PaymentImage"],"fn":["verify_preimage"],"struct":["Commitment","IncomingContract","OutgoingContract"]};
+window.SIDEBAR_ITEMS = {"enum":["PaymentImage"],"fn":["fee_encoded_expiration","fee_from_expiration","verify_preimage"],"struct":["Commitment","IncomingContract","OutgoingContract"]};

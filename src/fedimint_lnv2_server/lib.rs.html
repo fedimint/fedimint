@@ -560,7 +560,7 @@
 <a href=#560 id=560 data-nosnippet>560</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::InvalidContract);
 <a href=#561 id=561 data-nosnippet>561</a>                }
 <a href=#562 id=562 data-nosnippet>562</a>
-<a href=#563 id=563 data-nosnippet>563</a>                <span class="kw">if </span>contract.commitment.expiration &lt;= <span class="self">self</span>.consensus_unix_time(dbtx).<span class="kw">await </span>{
+<a href=#563 id=563 data-nosnippet>563</a>                <span class="kw">if </span>contract.commitment.expiration_or_fee &lt;= <span class="self">self</span>.consensus_unix_time(dbtx).<span class="kw">await </span>{
 <a href=#564 id=564 data-nosnippet>564</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::ContractExpired);
 <a href=#565 id=565 data-nosnippet>565</a>                }
 <a href=#566 id=566 data-nosnippet>566</a>

@@ -3083,7 +3083,7 @@
 <a href=#3083 id=3083 data-nosnippet>3083</a>            )));
 <a href=#3084 id=3084 data-nosnippet>3084</a>        }
 <a href=#3085 id=3085 data-nosnippet>3085</a>
-<a href=#3086 id=3086 data-nosnippet>3086</a>        <span class="kw">if </span>payload.contract.commitment.expiration &lt;= duration_since_epoch().as_secs() {
+<a href=#3086 id=3086 data-nosnippet>3086</a>        <span class="kw">if </span>payload.contract.commitment.expiration_or_fee &lt;= duration_since_epoch().as_secs() {
 <a href=#3087 id=3087 data-nosnippet>3087</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
 <a href=#3088 id=3088 data-nosnippet>3088</a>                <span class="string">"The contract has already expired"</span>.to_string(),
 <a href=#3089 id=3089 data-nosnippet>3089</a>            )));
