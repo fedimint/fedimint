@@ -3083,7 +3083,7 @@ impl Gateway {
             )));
         }
 
-        if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
+        if payload.contract.commitment.expiry_or_fee <= duration_since_epoch().as_secs() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract has already expired".to_string(),
             )));

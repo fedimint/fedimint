@@ -1033,7 +1033,8 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
         [0; 32],
         PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
-        0, // this incoming contract expired on the 1st of January 1970
+        0, /* this incoming contract expired on the
+            * 1st of January 1970 */
         Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
             .get_first_module::<GatewayClientModuleV2>()?

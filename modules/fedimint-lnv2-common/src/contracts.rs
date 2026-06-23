@@ -29,10 +29,36 @@ pub struct IncomingContract {
 pub struct Commitment {
     pub payment_image: PaymentImage,
     pub amount: Amount,
-    pub expiration: u64,
+    /// Incoming-contract expiration as stored in the legacy consensus/JSON
+    /// `expiration` field. Regular incoming contracts use this as a unix
+    /// timestamp, while lnurl incoming contracts overload it with
+    /// `u64::MAX - gateway_fee_msats` so the receiving client can recover the
+    /// fee without having the invoice locally.
+    #[serde(rename = "expiration")]
+    pub expiry_or_fee: u64,
     pub claim_pk: PublicKey,
     pub refund_pk: PublicKey,
     pub ephemeral_pk: PublicKey,
+}
+
+/// Encode a gateway fee into an incoming-contract expiry-or-fee field.
+///
+/// Incoming contracts created for lnurl receives store the gateway fee here
+/// instead of a real timestamp: the receiving client never sees the invoice for
+/// these contracts, so this is the only way for it to recover the fee and
+/// report the invoice amount in its payment events. A real expiration is not
+/// needed as these contracts are discovered via the contract stream rather than
+/// awaited per-invoice, and the funding-time validation only requires the
+/// expiration to lie in the future, which the resulting near-`u64::MAX` value
+/// satisfies.
+pub fn fee_encoded_expiry_or_fee(fee_msats: u64) -> u64 {
+    u64::MAX - fee_msats
+}
+
+/// Recover the gateway fee from an incoming-contract expiry-or-fee field
+/// created with [`fee_encoded_expiry_or_fee`].
+pub fn fee_from_expiry_or_fee(expiry_or_fee: u64) -> u64 {
+    u64::MAX - expiry_or_fee
 }
 
 impl IncomingContract {
@@ -43,7 +69,7 @@ impl IncomingContract {
         preimage: [u8; 32],
         payment_image: PaymentImage,
         amount: Amount,
-        expiration: u64,
+        expiry_or_fee: u64,
         claim_pk: PublicKey,
         refund_pk: PublicKey,
         ephemeral_pk: PublicKey,
@@ -51,7 +77,7 @@ impl IncomingContract {
         let commitment = Commitment {
             payment_image,
             amount,
-            expiration,
+            expiry_or_fee,
             claim_pk,
             refund_pk,
             ephemeral_pk,

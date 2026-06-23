@@ -560,7 +560,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::InvalidContract);
                 }
 
-                if contract.commitment.expiration <= self.consensus_unix_time(dbtx).await {
+                if contract.commitment.expiry_or_fee <= self.consensus_unix_time(dbtx).await {
                     return Err(LightningOutputError::ContractExpired);
                 }
 
