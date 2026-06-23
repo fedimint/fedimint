@@ -46,9 +46,17 @@ path_toml=$(jq -Rn --arg value "${PATH}" '$value')
 # to keep provider credentials out of agent-spawned commands.
 cat > "${codex_home}/config.toml" <<EOF
 model = "${OPENAI_MODEL}"
-model_provider = "openai"
+model_provider = "openai-api-key"
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
+
+
+[model_providers.openai-api-key]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"
+supports_websockets = true
+wire_api = "responses"
 
 
 [shell_environment_policy]
