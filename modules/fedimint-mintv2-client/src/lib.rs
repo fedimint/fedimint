@@ -839,31 +839,14 @@ impl MintClientModule {
     async fn send_ecash_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        mut remaining_amount: Amount,
+        remaining_amount: Amount,
         custom_meta: Value,
         include_invite: bool,
     ) -> Result<Option<(OperationId, ECash)>, Infallible> {
-        let mut stream = dbtx
-            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
-            .await
-            .map(|entry| entry.0.0);
-
-        let mut notes = vec![];
-
-        while let Some(spendable_note) = stream.next().await {
-            remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
-                Some(amount) => amount,
-                None => continue,
-            };
-
-            notes.push(spendable_note);
-        }
-
-        drop(stream);
-
-        if remaining_amount != Amount::ZERO {
+        let Some(notes) = Self::select_exact_change(&mut dbtx.to_ref_nc(), remaining_amount).await
+        else {
             return Ok(None);
-        }
+        };
 
         for spendable_note in &notes {
             self.remove_spendable_note(dbtx, spendable_note).await;
@@ -999,6 +982,94 @@ impl MintClientModule {
                 },
             )
             .await
+    }
+
+    /// Computes the fee a `send(amount)` would incur given the client's current
+    /// note inventory, without sending anything.
+    ///
+    /// A send is free when the client's existing notes can cover the (rounded)
+    /// amount exactly — it just hands those notes out. Otherwise the send first
+    /// reissues itself the right denominations, and that self-reissue
+    /// transaction is the only thing a send ever pays a fee for. This quote
+    /// mirrors that: it returns [`FeeQuote::ZERO`] when exact change is
+    /// available, and otherwise quotes the reissue the same way the real send
+    /// submits it (explicit outputs `represent_amount(amount)`, no explicit
+    /// inputs) via the shared, module-agnostic fee quote over the real
+    /// inventory. The quote is point-in-time: it depends on the current
+    /// inventory and can move as notes change.
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
+
+        // Exact-change path: handing out existing notes never costs a fee.
+        if self.can_make_exact_change(amount).await {
+            return Ok(FeeQuote::ZERO);
+        }
+
+        // Reissue path: the send mints itself `represent_amount(amount)` as
+        // explicit outputs (no explicit inputs) and the primary module funds and
+        // balances it. Quote that exact transaction.
+        let denominations = represent_amount(amount);
+        let output_amount: Amount = denominations.iter().map(|d| d.amount()).sum();
+        let output_fee: Amount = denominations
+            .iter()
+            .map(|d| self.cfg.fee_consensus.fee(d.amount()))
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_custom(self.cfg.amount_unit, output_amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_custom(self.cfg.amount_unit, output_fee),
+                },
+            )
+            .await
+    }
+
+    /// Returns whether the client's current notes can be handed out to cover
+    /// `amount` exactly — the free path in [`Self::send`] — without modifying
+    /// the inventory. Shares its greedy selection with
+    /// [`Self::send_ecash_dbtx`] via [`Self::select_exact_change`].
+    async fn can_make_exact_change(&self, remaining_amount: Amount) -> bool {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+
+        Self::select_exact_change(&mut dbtx, remaining_amount)
+            .await
+            .is_some()
+    }
+
+    /// Greedily selects spendable notes (largest-first) summing to *exactly*
+    /// `remaining_amount`, or `None` if the inventory can't make exact change.
+    /// Reads the DB but does not modify it. Single source of truth for the free
+    /// (hand-out-existing-notes) selection shared by [`Self::send_ecash_dbtx`]
+    /// and [`Self::can_make_exact_change`].
+    async fn select_exact_change(
+        dbtx: &mut DatabaseTransaction<'_>,
+        mut remaining_amount: Amount,
+    ) -> Option<Vec<SpendableNote>> {
+        let mut stream = dbtx
+            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
+            .await
+            .map(|entry| entry.0.0);
+
+        let mut notes = vec![];
+
+        while let Some(spendable_note) = stream.next().await {
+            remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
+                Some(amount) => amount,
+                None => continue,
+            };
+
+            notes.push(spendable_note);
+
+            if remaining_amount == Amount::ZERO {
+                break;
+            }
+        }
+
+        (remaining_amount == Amount::ZERO).then_some(notes)
     }
 
     /// Await the final state of the receive operation.

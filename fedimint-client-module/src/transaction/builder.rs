@@ -461,6 +461,15 @@ pub struct FeeQuote {
 }
 
 impl FeeQuote {
+    /// A zero fee, for operations that incur no cost at all — e.g. an ecash
+    /// send served entirely from existing exact-change notes, which submits
+    /// no transaction.
+    pub const ZERO: Self = Self {
+        input: Amounts::ZERO,
+        output: Amounts::ZERO,
+        dust: Amounts::ZERO,
+    };
+
     /// Total fee per unit: everything the gross input value does not become a
     /// net wallet gain. Equal to `input + output + dust`.
     pub fn total(&self) -> Amounts {
