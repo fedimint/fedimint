@@ -116,37 +116,37 @@
 <a href=#116 id=116 data-nosnippet>116</a>        <span class="self">Self </span>{ inputs, sm_gens }
 <a href=#117 id=117 data-nosnippet>117</a>    }
 <a href=#118 id=118 data-nosnippet>118</a>
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInput&lt;I&gt;] {
-<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.inputs
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInputSM&lt;S&gt;] {
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.sm_gens
 <a href=#121 id=121 data-nosnippet>121</a>    }
 <a href=#122 id=122 data-nosnippet>122</a>
-<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInputSM&lt;S&gt;] {
-<a href=#124 id=124 data-nosnippet>124</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.sm_gens
-<a href=#125 id=125 data-nosnippet>125</a>    }
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a>    <span class="kw">pub fn </span>into_instanceless(<span class="self">self</span>) -&gt; InstancelessDynClientInputBundle {
-<a href=#128 id=128 data-nosnippet>128</a>        InstancelessDynClientInputBundle {
-<a href=#129 id=129 data-nosnippet>129</a>            inputs: <span class="self">self
-<a href=#130 id=130 data-nosnippet>130</a>                </span>.inputs
-<a href=#131 id=131 data-nosnippet>131</a>                .into_iter()
-<a href=#132 id=132 data-nosnippet>132</a>                .map(|input| InstancelessDynClientInput {
-<a href=#133 id=133 data-nosnippet>133</a>                    input: Box::new(input.input),
-<a href=#134 id=134 data-nosnippet>134</a>                    keys: input.keys,
-<a href=#135 id=135 data-nosnippet>135</a>                    amounts: input.amounts,
-<a href=#136 id=136 data-nosnippet>136</a>                })
-<a href=#137 id=137 data-nosnippet>137</a>                .collect(),
-<a href=#138 id=138 data-nosnippet>138</a>            sm_gens: <span class="self">self
-<a href=#139 id=139 data-nosnippet>139</a>                </span>.sm_gens
-<a href=#140 id=140 data-nosnippet>140</a>                .into_iter()
-<a href=#141 id=141 data-nosnippet>141</a>                .map(|input_sm| InstancelessDynClientInputSM {
-<a href=#142 id=142 data-nosnippet>142</a>                    state_machines: states_to_instanceless_dyn(input_sm.state_machines),
-<a href=#143 id=143 data-nosnippet>143</a>                })
-<a href=#144 id=144 data-nosnippet>144</a>                .collect(),
-<a href=#145 id=145 data-nosnippet>145</a>        }
-<a href=#146 id=146 data-nosnippet>146</a>    }
-<a href=#147 id=147 data-nosnippet>147</a>}
-<a href=#148 id=148 data-nosnippet>148</a>
-<a href=#149 id=149 data-nosnippet>149</a><span class="kw">impl</span>&lt;I, S&gt; ClientInputBundle&lt;I, S&gt; {
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">pub fn </span>into_instanceless(<span class="self">self</span>) -&gt; InstancelessDynClientInputBundle {
+<a href=#124 id=124 data-nosnippet>124</a>        InstancelessDynClientInputBundle {
+<a href=#125 id=125 data-nosnippet>125</a>            inputs: <span class="self">self
+<a href=#126 id=126 data-nosnippet>126</a>                </span>.inputs
+<a href=#127 id=127 data-nosnippet>127</a>                .into_iter()
+<a href=#128 id=128 data-nosnippet>128</a>                .map(|input| InstancelessDynClientInput {
+<a href=#129 id=129 data-nosnippet>129</a>                    input: Box::new(input.input),
+<a href=#130 id=130 data-nosnippet>130</a>                    keys: input.keys,
+<a href=#131 id=131 data-nosnippet>131</a>                    amounts: input.amounts,
+<a href=#132 id=132 data-nosnippet>132</a>                })
+<a href=#133 id=133 data-nosnippet>133</a>                .collect(),
+<a href=#134 id=134 data-nosnippet>134</a>            sm_gens: <span class="self">self
+<a href=#135 id=135 data-nosnippet>135</a>                </span>.sm_gens
+<a href=#136 id=136 data-nosnippet>136</a>                .into_iter()
+<a href=#137 id=137 data-nosnippet>137</a>                .map(|input_sm| InstancelessDynClientInputSM {
+<a href=#138 id=138 data-nosnippet>138</a>                    state_machines: states_to_instanceless_dyn(input_sm.state_machines),
+<a href=#139 id=139 data-nosnippet>139</a>                })
+<a href=#140 id=140 data-nosnippet>140</a>                .collect(),
+<a href=#141 id=141 data-nosnippet>141</a>        }
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>}
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a><span class="kw">impl</span>&lt;I, S&gt; ClientInputBundle&lt;I, S&gt; {
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientInput&lt;I&gt;] {
+<a href=#147 id=147 data-nosnippet>147</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.inputs
+<a href=#148 id=148 data-nosnippet>148</a>    }
+<a href=#149 id=149 data-nosnippet>149</a>
 <a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
 <a href=#151 id=151 data-nosnippet>151</a>        <span class="comment">// Notably, sm_gen will not be called when inputs are empty anyway
 <a href=#152 id=152 data-nosnippet>152</a>        </span><span class="self">self</span>.inputs.is_empty()
@@ -404,166 +404,234 @@
 <a href=#404 id=404 data-nosnippet>404</a>    }
 <a href=#405 id=405 data-nosnippet>405</a>}
 <a href=#406 id=406 data-nosnippet>406</a>
-<a href=#407 id=407 data-nosnippet>407</a><span class="attr">#[derive(Default, Clone, Debug)]
-<a href=#408 id=408 data-nosnippet>408</a></span><span class="kw">pub struct </span>TransactionBuilder {
-<a href=#409 id=409 data-nosnippet>409</a>    inputs: Vec&lt;ClientInputBundle&gt;,
-<a href=#410 id=410 data-nosnippet>410</a>    outputs: Vec&lt;ClientOutputBundle&gt;,
-<a href=#411 id=411 data-nosnippet>411</a>}
-<a href=#412 id=412 data-nosnippet>412</a>
-<a href=#413 id=413 data-nosnippet>413</a><span class="kw">impl </span>TransactionBuilder {
-<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-<a href=#415 id=415 data-nosnippet>415</a>        <span class="self">Self</span>::default()
-<a href=#416 id=416 data-nosnippet>416</a>    }
-<a href=#417 id=417 data-nosnippet>417</a>
-<a href=#418 id=418 data-nosnippet>418</a>    <span class="kw">pub fn </span>with_inputs(<span class="kw-2">mut </span><span class="self">self</span>, inputs: ClientInputBundle) -&gt; <span class="self">Self </span>{
-<a href=#419 id=419 data-nosnippet>419</a>        <span class="self">self</span>.inputs.push(inputs);
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="self">self
-<a href=#421 id=421 data-nosnippet>421</a>    </span>}
-<a href=#422 id=422 data-nosnippet>422</a>
-<a href=#423 id=423 data-nosnippet>423</a>    <span class="kw">pub fn </span>with_outputs(<span class="kw-2">mut </span><span class="self">self</span>, outputs: ClientOutputBundle) -&gt; <span class="self">Self </span>{
-<a href=#424 id=424 data-nosnippet>424</a>        <span class="self">self</span>.outputs.push(outputs);
-<a href=#425 id=425 data-nosnippet>425</a>        <span class="self">self
-<a href=#426 id=426 data-nosnippet>426</a>    </span>}
-<a href=#427 id=427 data-nosnippet>427</a>
-<a href=#428 id=428 data-nosnippet>428</a>    <span class="kw">pub fn </span>build&lt;C, R: RngCore + CryptoRng&gt;(
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="self">self</span>,
-<a href=#430 id=430 data-nosnippet>430</a>        secp_ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw-2">mut </span>rng: R,
-<a href=#432 id=432 data-nosnippet>432</a>    ) -&gt; (Transaction, Vec&lt;DynState&gt;)
-<a href=#433 id=433 data-nosnippet>433</a>    <span class="kw">where
-<a href=#434 id=434 data-nosnippet>434</a>        </span>C: secp256k1::Signing + secp256k1::Verification,
-<a href=#435 id=435 data-nosnippet>435</a>    {
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="comment">// `input_idx_to_bundle_idx[input_idx]` stores the index of a bundle the input
-<a href=#437 id=437 data-nosnippet>437</a>        // at `input_idx` comes from, so we can call state machines of the
-<a href=#438 id=438 data-nosnippet>438</a>        // corresponding bundle for every input bundle. It is always
-<a href=#439 id=439 data-nosnippet>439</a>        // monotonically increasing, e.g. `[0, 0, 1, 2, 2, 2, 4]`
-<a href=#440 id=440 data-nosnippet>440</a>        </span><span class="kw">let </span>(input_idx_to_bundle_idx, inputs, input_keys): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
-<a href=#441 id=441 data-nosnippet>441</a>            <span class="self">self</span>.inputs
-<a href=#442 id=442 data-nosnippet>442</a>                .iter()
-<a href=#443 id=443 data-nosnippet>443</a>                .enumerate()
-<a href=#444 id=444 data-nosnippet>444</a>                .flat_map(|(bundle_idx, bundle)| {
-<a href=#445 id=445 data-nosnippet>445</a>                    bundle
-<a href=#446 id=446 data-nosnippet>446</a>                        .inputs
-<a href=#447 id=447 data-nosnippet>447</a>                        .iter()
-<a href=#448 id=448 data-nosnippet>448</a>                        .map(<span class="kw">move </span>|input| (bundle_idx, input.input.clone(), input.keys.clone()))
-<a href=#449 id=449 data-nosnippet>449</a>                }),
-<a href=#450 id=450 data-nosnippet>450</a>        );
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="comment">// `output_idx_to_bundle` works exactly like `input_idx_to_bundle_idx` above,
-<a href=#452 id=452 data-nosnippet>452</a>        // but for outputs.
-<a href=#453 id=453 data-nosnippet>453</a>        </span><span class="kw">let </span>(output_idx_to_bundle_idx, outputs): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
-<a href=#454 id=454 data-nosnippet>454</a>            <span class="self">self</span>.outputs
-<a href=#455 id=455 data-nosnippet>455</a>                .iter()
-<a href=#456 id=456 data-nosnippet>456</a>                .enumerate()
-<a href=#457 id=457 data-nosnippet>457</a>                .flat_map(|(bundle_idx, bundle)| {
-<a href=#458 id=458 data-nosnippet>458</a>                    bundle
-<a href=#459 id=459 data-nosnippet>459</a>                        .outputs
-<a href=#460 id=460 data-nosnippet>460</a>                        .iter()
-<a href=#461 id=461 data-nosnippet>461</a>                        .map(<span class="kw">move </span>|output| (bundle_idx, output.output.clone()))
-<a href=#462 id=462 data-nosnippet>462</a>                }),
-<a href=#463 id=463 data-nosnippet>463</a>        );
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.r#gen();
-<a href=#465 id=465 data-nosnippet>465</a>
-<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>msg = secp256k1::Message::from_digest_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
-<a href=#468 id=468 data-nosnippet>468</a>
-<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span>signatures = input_keys
-<a href=#470 id=470 data-nosnippet>470</a>            .iter()
-<a href=#471 id=471 data-nosnippet>471</a>            .flatten()
-<a href=#472 id=472 data-nosnippet>472</a>            .map(|keypair| secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, keypair))
-<a href=#473 id=473 data-nosnippet>473</a>            .collect();
+<a href=#407 id=407 data-nosnippet>407</a><span class="doccomment">/// The explicit (operation-supplied) side of a transaction, summarized for a
+<a href=#408 id=408 data-nosnippet>408</a>/// fee quote via `Client::fee_quote`.
+<a href=#409 id=409 data-nosnippet>409</a>///
+<a href=#410 id=410 data-nosnippet>410</a>/// A module describes the inputs and outputs its operation would contribute by
+<a href=#411 id=411 data-nosnippet>411</a>/// their gross value and federation fees (per unit), rather than building the
+<a href=#412 id=412 data-nosnippet>412</a>/// actual transaction. The primary module for each affected unit then balances
+<a href=#413 id=413 data-nosnippet>413</a>/// the resulting imbalance with change, and the full breakdown is returned as a
+<a href=#414 id=414 data-nosnippet>414</a>/// [`FeeQuote`]. This avoids fabricating real inputs/outputs (which may require
+<a href=#415 id=415 data-nosnippet>415</a>/// cryptographic material not available when quoting), since fees depend only
+<a href=#416 id=416 data-nosnippet>416</a>/// on amounts and module.
+<a href=#417 id=417 data-nosnippet>417</a>///
+<a href=#418 id=418 data-nosnippet>418</a>/// All four fields are multi-unit [`Amounts`], so an operation can describe
+<a href=#419 id=419 data-nosnippet>419</a>/// explicit items spanning several units (e.g. Bitcoin plus a custom currency);
+<a href=#420 id=420 data-nosnippet>420</a>/// each unit is then balanced independently by its own primary module, the same
+<a href=#421 id=421 data-nosnippet>421</a>/// way `Client::finalize_transaction` does.
+<a href=#422 id=422 data-nosnippet>422</a>///
+<a href=#423 id=423 data-nosnippet>423</a>/// For a typical receive there are no explicit outputs, so `output_amount` and
+<a href=#424 id=424 data-nosnippet>424</a>/// `output_fee` are [`Amounts::ZERO`].
+<a href=#425 id=425 data-nosnippet>425</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq)]
+<a href=#426 id=426 data-nosnippet>426</a></span><span class="kw">pub struct </span>FeeQuoteRequest {
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="doccomment">/// Gross value of the operation's explicit inputs, per unit.
+<a href=#428 id=428 data-nosnippet>428</a>    </span><span class="kw">pub </span>input_amount: Amounts,
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="doccomment">/// Gross value of the operation's explicit outputs, per unit.
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="kw">pub </span>output_amount: Amounts,
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="doccomment">/// Federation fees charged on the operation's explicit inputs, per unit.
+<a href=#432 id=432 data-nosnippet>432</a>    </span><span class="kw">pub </span>input_fee: Amounts,
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="doccomment">/// Federation fees charged on the operation's explicit outputs, per unit.
+<a href=#434 id=434 data-nosnippet>434</a>    </span><span class="kw">pub </span>output_fee: Amounts,
+<a href=#435 id=435 data-nosnippet>435</a>}
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a><span class="doccomment">/// Breakdown of the fee finalizing a transaction would incur, as computed by
+<a href=#438 id=438 data-nosnippet>438</a>/// `Client::fee_quote` (a dry-run of the same balancing the real submission
+<a href=#439 id=439 data-nosnippet>439</a>/// performs).
+<a href=#440 id=440 data-nosnippet>440</a>///
+<a href=#441 id=441 data-nosnippet>441</a>/// This is module-agnostic: the explicit inputs/outputs are described by the
+<a href=#442 id=442 data-nosnippet>442</a>/// [`FeeQuoteRequest`] from whichever module is quoting (mint, lightning,
+<a href=#443 id=443 data-nosnippet>443</a>/// wallet, …) and the change is generated by the primary module. The quote is
+<a href=#444 id=444 data-nosnippet>444</a>/// point-in-time: it depends on the client's current inventory and can move as
+<a href=#445 id=445 data-nosnippet>445</a>/// funds change.
+<a href=#446 id=446 data-nosnippet>446</a>///
+<a href=#447 id=447 data-nosnippet>447</a>/// Each field is a multi-unit [`Amounts`], since the quoted operation may span
+<a href=#448 id=448 data-nosnippet>448</a>/// several units. The total fee is the sum of the breakdown fields, available
+<a href=#449 id=449 data-nosnippet>449</a>/// via [`FeeQuote::total`].
+<a href=#450 id=450 data-nosnippet>450</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq)]
+<a href=#451 id=451 data-nosnippet>451</a></span><span class="kw">pub struct </span>FeeQuote {
+<a href=#452 id=452 data-nosnippet>452</a>    <span class="doccomment">/// Federation fees charged on the spent (input) items — both the
+<a href=#453 id=453 data-nosnippet>453</a>    /// transaction's explicit inputs and any inputs the primary module pulls in
+<a href=#454 id=454 data-nosnippet>454</a>    /// to balance it.
+<a href=#455 id=455 data-nosnippet>455</a>    </span><span class="kw">pub </span>input: Amounts,
+<a href=#456 id=456 data-nosnippet>456</a>    <span class="doccomment">/// Federation fees charged on the created (output) items — both the
+<a href=#457 id=457 data-nosnippet>457</a>    /// transaction's explicit outputs and the change minted to balance it.
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">pub </span>output: Amounts,
+<a href=#459 id=459 data-nosnippet>459</a>    <span class="doccomment">/// Sub-denomination remainder that cannot form an output and is lost.
+<a href=#460 id=460 data-nosnippet>460</a>    </span><span class="kw">pub </span>dust: Amounts,
+<a href=#461 id=461 data-nosnippet>461</a>}
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a><span class="kw">impl </span>FeeQuote {
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="doccomment">/// Total fee per unit: everything the gross input value does not become a
+<a href=#465 id=465 data-nosnippet>465</a>    /// net wallet gain. Equal to `input + output + dust`.
+<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">pub fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amounts {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="self">self</span>.input
+<a href=#468 id=468 data-nosnippet>468</a>            .clone()
+<a href=#469 id=469 data-nosnippet>469</a>            .checked_add(<span class="kw-2">&amp;</span><span class="self">self</span>.output)
+<a href=#470 id=470 data-nosnippet>470</a>            .and_then(|sum| sum.checked_add(<span class="kw-2">&amp;</span><span class="self">self</span>.dust))
+<a href=#471 id=471 data-nosnippet>471</a>            .expect(<span class="string">"aggregate fee components cannot overflow an Amounts"</span>)
+<a href=#472 id=472 data-nosnippet>472</a>    }
+<a href=#473 id=473 data-nosnippet>473</a>}
 <a href=#474 id=474 data-nosnippet>474</a>
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>transaction = Transaction {
-<a href=#476 id=476 data-nosnippet>476</a>            inputs,
-<a href=#477 id=477 data-nosnippet>477</a>            outputs,
-<a href=#478 id=478 data-nosnippet>478</a>            nonce,
-<a href=#479 id=479 data-nosnippet>479</a>            signatures: TransactionSignature::NaiveMultisig(signatures),
-<a href=#480 id=480 data-nosnippet>480</a>        };
-<a href=#481 id=481 data-nosnippet>481</a>
-<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">let </span>input_states = <span class="self">self
-<a href=#483 id=483 data-nosnippet>483</a>            </span>.inputs
-<a href=#484 id=484 data-nosnippet>484</a>            .into_iter()
-<a href=#485 id=485 data-nosnippet>485</a>            .enumerate()
-<a href=#486 id=486 data-nosnippet>486</a>            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
-<a href=#487 id=487 data-nosnippet>487</a>            .flat_map(|(bundle_idx, bundle)| {
-<a href=#488 id=488 data-nosnippet>488</a>                <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx)
-<a href=#489 id=489 data-nosnippet>489</a>                    .expect(<span class="string">"Non empty bundles must always have a match"</span>);
-<a href=#490 id=490 data-nosnippet>490</a>                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
-<a href=#491 id=491 data-nosnippet>491</a>                    (sm.state_machines)(OutPointRange::new(
-<a href=#492 id=492 data-nosnippet>492</a>                        txid,
-<a href=#493 id=493 data-nosnippet>493</a>                        IdxRange::from_inclusive(input_idxs.clone()).expect(<span class="string">"can't overflow"</span>),
-<a href=#494 id=494 data-nosnippet>494</a>                    ))
-<a href=#495 id=495 data-nosnippet>495</a>                })
-<a href=#496 id=496 data-nosnippet>496</a>            });
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">let </span>output_states = <span class="self">self
-<a href=#499 id=499 data-nosnippet>499</a>            </span>.outputs
-<a href=#500 id=500 data-nosnippet>500</a>            .into_iter()
-<a href=#501 id=501 data-nosnippet>501</a>            .enumerate()
-<a href=#502 id=502 data-nosnippet>502</a>            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
-<a href=#503 id=503 data-nosnippet>503</a>            .flat_map(|(bundle_idx, bundle)| {
-<a href=#504 id=504 data-nosnippet>504</a>                <span class="kw">let </span>output_idxs =
-<a href=#505 id=505 data-nosnippet>505</a>                    find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx)
-<a href=#506 id=506 data-nosnippet>506</a>                        .expect(<span class="string">"Non empty bundles must always have a match"</span>);
-<a href=#507 id=507 data-nosnippet>507</a>                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
-<a href=#508 id=508 data-nosnippet>508</a>                    (sm.state_machines)(OutPointRange::new(
-<a href=#509 id=509 data-nosnippet>509</a>                        txid,
-<a href=#510 id=510 data-nosnippet>510</a>                        IdxRange::from_inclusive(output_idxs.clone())
-<a href=#511 id=511 data-nosnippet>511</a>                            .expect(<span class="string">"can't possibly overflow"</span>),
-<a href=#512 id=512 data-nosnippet>512</a>                    ))
-<a href=#513 id=513 data-nosnippet>513</a>                })
-<a href=#514 id=514 data-nosnippet>514</a>            });
-<a href=#515 id=515 data-nosnippet>515</a>        (transaction, input_states.chain(output_states).collect())
-<a href=#516 id=516 data-nosnippet>516</a>    }
-<a href=#517 id=517 data-nosnippet>517</a>
-<a href=#518 id=518 data-nosnippet>518</a>    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientInput&gt; {
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="self">self</span>.inputs.iter().flat_map(|i| i.inputs.iter())
-<a href=#520 id=520 data-nosnippet>520</a>    }
-<a href=#521 id=521 data-nosnippet>521</a>
-<a href=#522 id=522 data-nosnippet>522</a>    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientOutput&gt; {
-<a href=#523 id=523 data-nosnippet>523</a>        <span class="self">self</span>.outputs.iter().flat_map(|i| i.outputs.iter())
-<a href=#524 id=524 data-nosnippet>524</a>    }
-<a href=#525 id=525 data-nosnippet>525</a>}
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a><span class="doccomment">/// Find the range of indexes in an monotonically increasing `arr`, that is
-<a href=#528 id=528 data-nosnippet>528</a>/// equal to `item`
-<a href=#529 id=529 data-nosnippet>529</a></span><span class="kw">fn </span>find_range_of_matching_items(arr: <span class="kw-2">&amp;</span>[usize], item: usize) -&gt; <span class="prelude-ty">Option</span>&lt;RangeInclusive&lt;u64&gt;&gt; {
-<a href=#530 id=530 data-nosnippet>530</a>    <span class="comment">// `arr` must be monotonically increasing
-<a href=#531 id=531 data-nosnippet>531</a>    </span><span class="macro">debug_assert!</span>(arr.windows(<span class="number">2</span>).all(|w| w[<span class="number">0</span>] &lt;= w[<span class="number">1</span>]));
-<a href=#532 id=532 data-nosnippet>532</a>
-<a href=#533 id=533 data-nosnippet>533</a>    arr.iter()
-<a href=#534 id=534 data-nosnippet>534</a>        .enumerate()
-<a href=#535 id=535 data-nosnippet>535</a>        .filter_map(|(arr_idx, arr_item)| (<span class="kw-2">*</span>arr_item == item).then_some(arr_idx <span class="kw">as </span>u64))
-<a href=#536 id=536 data-nosnippet>536</a>        .fold(<span class="prelude-val">None</span>, |cur: <span class="prelude-ty">Option</span>&lt;(u64, u64)&gt;, idx| {
-<a href=#537 id=537 data-nosnippet>537</a>            <span class="prelude-val">Some</span>(cur.map_or((idx, idx), |cur| (cur.<span class="number">0</span>.min(idx), cur.<span class="number">1</span>.max(idx))))
-<a href=#538 id=538 data-nosnippet>538</a>        })
-<a href=#539 id=539 data-nosnippet>539</a>        .map(|(start, end)| start..=end)
-<a href=#540 id=540 data-nosnippet>540</a>}
-<a href=#541 id=541 data-nosnippet>541</a>
-<a href=#542 id=542 data-nosnippet>542</a><span class="attr">#[test]
-<a href=#543 id=543 data-nosnippet>543</a></span><span class="kw">fn </span>find_range_of_matching_items_sanity() {
-<a href=#544 id=544 data-nosnippet>544</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
-<a href=#545 id=545 data-nosnippet>545</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
-<a href=#546 id=546 data-nosnippet>546</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>..=<span class="number">2</span>));
-<a href=#547 id=547 data-nosnippet>547</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">2</span>), <span class="prelude-val">None</span>);
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[], <span class="number">0</span>), <span class="prelude-val">None</span>);
-<a href=#549 id=549 data-nosnippet>549</a>}
-<a href=#550 id=550 data-nosnippet>550</a>
-<a href=#551 id=551 data-nosnippet>551</a><span class="kw">fn </span>state_gen_to_dyn&lt;S&gt;(
-<a href=#552 id=552 data-nosnippet>552</a>    state_gen: StateGenerator&lt;S&gt;,
-<a href=#553 id=553 data-nosnippet>553</a>    module_instance: ModuleInstanceId,
-<a href=#554 id=554 data-nosnippet>554</a>) -&gt; StateGenerator&lt;DynState&gt;
-<a href=#555 id=555 data-nosnippet>555</a><span class="kw">where
-<a href=#556 id=556 data-nosnippet>556</a>    </span>S: IntoDynInstance&lt;DynType = DynState&gt; + <span class="lifetime">'static</span>,
-<a href=#557 id=557 data-nosnippet>557</a>{
-<a href=#558 id=558 data-nosnippet>558</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
-<a href=#559 id=559 data-nosnippet>559</a>        <span class="kw">let </span>states = state_gen(out_point_range);
-<a href=#560 id=560 data-nosnippet>560</a>        states
-<a href=#561 id=561 data-nosnippet>561</a>            .into_iter()
-<a href=#562 id=562 data-nosnippet>562</a>            .map(|state| state.into_dyn(module_instance))
-<a href=#563 id=563 data-nosnippet>563</a>            .collect()
-<a href=#564 id=564 data-nosnippet>564</a>    })
-<a href=#565 id=565 data-nosnippet>565</a>}
-<a href=#566 id=566 data-nosnippet>566</a>
-<a href=#567 id=567 data-nosnippet>567</a><span class="attr">#[cfg(test)]
-<a href=#568 id=568 data-nosnippet>568</a></span><span class="kw">mod </span>tests;
+<a href=#475 id=475 data-nosnippet>475</a><span class="attr">#[derive(Default, Clone, Debug)]
+<a href=#476 id=476 data-nosnippet>476</a></span><span class="kw">pub struct </span>TransactionBuilder {
+<a href=#477 id=477 data-nosnippet>477</a>    inputs: Vec&lt;ClientInputBundle&gt;,
+<a href=#478 id=478 data-nosnippet>478</a>    outputs: Vec&lt;ClientOutputBundle&gt;,
+<a href=#479 id=479 data-nosnippet>479</a>}
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a><span class="kw">impl </span>TransactionBuilder {
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="self">Self</span>::default()
+<a href=#484 id=484 data-nosnippet>484</a>    }
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a>    <span class="kw">pub fn </span>with_inputs(<span class="kw-2">mut </span><span class="self">self</span>, inputs: ClientInputBundle) -&gt; <span class="self">Self </span>{
+<a href=#487 id=487 data-nosnippet>487</a>        <span class="self">self</span>.inputs.push(inputs);
+<a href=#488 id=488 data-nosnippet>488</a>        <span class="self">self
+<a href=#489 id=489 data-nosnippet>489</a>    </span>}
+<a href=#490 id=490 data-nosnippet>490</a>
+<a href=#491 id=491 data-nosnippet>491</a>    <span class="kw">pub fn </span>with_outputs(<span class="kw-2">mut </span><span class="self">self</span>, outputs: ClientOutputBundle) -&gt; <span class="self">Self </span>{
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="self">self</span>.outputs.push(outputs);
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="self">self
+<a href=#494 id=494 data-nosnippet>494</a>    </span>}
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">pub fn </span>build&lt;C, R: RngCore + CryptoRng&gt;(
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="self">self</span>,
+<a href=#498 id=498 data-nosnippet>498</a>        secp_ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw-2">mut </span>rng: R,
+<a href=#500 id=500 data-nosnippet>500</a>    ) -&gt; (Transaction, Vec&lt;DynState&gt;)
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">where
+<a href=#502 id=502 data-nosnippet>502</a>        </span>C: secp256k1::Signing + secp256k1::Verification,
+<a href=#503 id=503 data-nosnippet>503</a>    {
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="comment">// `input_idx_to_bundle_idx[input_idx]` stores the index of a bundle the input
+<a href=#505 id=505 data-nosnippet>505</a>        // at `input_idx` comes from, so we can call state machines of the
+<a href=#506 id=506 data-nosnippet>506</a>        // corresponding bundle for every input bundle. It is always
+<a href=#507 id=507 data-nosnippet>507</a>        // monotonically increasing, e.g. `[0, 0, 1, 2, 2, 2, 4]`
+<a href=#508 id=508 data-nosnippet>508</a>        </span><span class="kw">let </span>(input_idx_to_bundle_idx, inputs, input_keys): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
+<a href=#509 id=509 data-nosnippet>509</a>            <span class="self">self</span>.inputs
+<a href=#510 id=510 data-nosnippet>510</a>                .iter()
+<a href=#511 id=511 data-nosnippet>511</a>                .enumerate()
+<a href=#512 id=512 data-nosnippet>512</a>                .flat_map(|(bundle_idx, bundle)| {
+<a href=#513 id=513 data-nosnippet>513</a>                    bundle
+<a href=#514 id=514 data-nosnippet>514</a>                        .inputs
+<a href=#515 id=515 data-nosnippet>515</a>                        .iter()
+<a href=#516 id=516 data-nosnippet>516</a>                        .map(<span class="kw">move </span>|input| (bundle_idx, input.input.clone(), input.keys.clone()))
+<a href=#517 id=517 data-nosnippet>517</a>                }),
+<a href=#518 id=518 data-nosnippet>518</a>        );
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="comment">// `output_idx_to_bundle` works exactly like `input_idx_to_bundle_idx` above,
+<a href=#520 id=520 data-nosnippet>520</a>        // but for outputs.
+<a href=#521 id=521 data-nosnippet>521</a>        </span><span class="kw">let </span>(output_idx_to_bundle_idx, outputs): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
+<a href=#522 id=522 data-nosnippet>522</a>            <span class="self">self</span>.outputs
+<a href=#523 id=523 data-nosnippet>523</a>                .iter()
+<a href=#524 id=524 data-nosnippet>524</a>                .enumerate()
+<a href=#525 id=525 data-nosnippet>525</a>                .flat_map(|(bundle_idx, bundle)| {
+<a href=#526 id=526 data-nosnippet>526</a>                    bundle
+<a href=#527 id=527 data-nosnippet>527</a>                        .outputs
+<a href=#528 id=528 data-nosnippet>528</a>                        .iter()
+<a href=#529 id=529 data-nosnippet>529</a>                        .map(<span class="kw">move </span>|output| (bundle_idx, output.output.clone()))
+<a href=#530 id=530 data-nosnippet>530</a>                }),
+<a href=#531 id=531 data-nosnippet>531</a>        );
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.r#gen();
+<a href=#533 id=533 data-nosnippet>533</a>
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
+<a href=#535 id=535 data-nosnippet>535</a>        <span class="kw">let </span>msg = secp256k1::Message::from_digest_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
+<a href=#536 id=536 data-nosnippet>536</a>
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">let </span>signatures = input_keys
+<a href=#538 id=538 data-nosnippet>538</a>            .iter()
+<a href=#539 id=539 data-nosnippet>539</a>            .flatten()
+<a href=#540 id=540 data-nosnippet>540</a>            .map(|keypair| secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, keypair))
+<a href=#541 id=541 data-nosnippet>541</a>            .collect();
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">let </span>transaction = Transaction {
+<a href=#544 id=544 data-nosnippet>544</a>            inputs,
+<a href=#545 id=545 data-nosnippet>545</a>            outputs,
+<a href=#546 id=546 data-nosnippet>546</a>            nonce,
+<a href=#547 id=547 data-nosnippet>547</a>            signatures: TransactionSignature::NaiveMultisig(signatures),
+<a href=#548 id=548 data-nosnippet>548</a>        };
+<a href=#549 id=549 data-nosnippet>549</a>
+<a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">let </span>input_states = <span class="self">self
+<a href=#551 id=551 data-nosnippet>551</a>            </span>.inputs
+<a href=#552 id=552 data-nosnippet>552</a>            .into_iter()
+<a href=#553 id=553 data-nosnippet>553</a>            .enumerate()
+<a href=#554 id=554 data-nosnippet>554</a>            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
+<a href=#555 id=555 data-nosnippet>555</a>            .flat_map(|(bundle_idx, bundle)| {
+<a href=#556 id=556 data-nosnippet>556</a>                <span class="kw">let </span>input_idxs = find_range_of_matching_items(<span class="kw-2">&amp;</span>input_idx_to_bundle_idx, bundle_idx)
+<a href=#557 id=557 data-nosnippet>557</a>                    .expect(<span class="string">"Non empty bundles must always have a match"</span>);
+<a href=#558 id=558 data-nosnippet>558</a>                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
+<a href=#559 id=559 data-nosnippet>559</a>                    (sm.state_machines)(OutPointRange::new(
+<a href=#560 id=560 data-nosnippet>560</a>                        txid,
+<a href=#561 id=561 data-nosnippet>561</a>                        IdxRange::from_inclusive(input_idxs.clone()).expect(<span class="string">"can't overflow"</span>),
+<a href=#562 id=562 data-nosnippet>562</a>                    ))
+<a href=#563 id=563 data-nosnippet>563</a>                })
+<a href=#564 id=564 data-nosnippet>564</a>            });
+<a href=#565 id=565 data-nosnippet>565</a>
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">let </span>output_states = <span class="self">self
+<a href=#567 id=567 data-nosnippet>567</a>            </span>.outputs
+<a href=#568 id=568 data-nosnippet>568</a>            .into_iter()
+<a href=#569 id=569 data-nosnippet>569</a>            .enumerate()
+<a href=#570 id=570 data-nosnippet>570</a>            .filter(|(<span class="kw">_</span>, bundle)| !bundle.is_empty())
+<a href=#571 id=571 data-nosnippet>571</a>            .flat_map(|(bundle_idx, bundle)| {
+<a href=#572 id=572 data-nosnippet>572</a>                <span class="kw">let </span>output_idxs =
+<a href=#573 id=573 data-nosnippet>573</a>                    find_range_of_matching_items(<span class="kw-2">&amp;</span>output_idx_to_bundle_idx, bundle_idx)
+<a href=#574 id=574 data-nosnippet>574</a>                        .expect(<span class="string">"Non empty bundles must always have a match"</span>);
+<a href=#575 id=575 data-nosnippet>575</a>                bundle.sm_gens.into_iter().flat_map(<span class="kw">move </span>|sm| {
+<a href=#576 id=576 data-nosnippet>576</a>                    (sm.state_machines)(OutPointRange::new(
+<a href=#577 id=577 data-nosnippet>577</a>                        txid,
+<a href=#578 id=578 data-nosnippet>578</a>                        IdxRange::from_inclusive(output_idxs.clone())
+<a href=#579 id=579 data-nosnippet>579</a>                            .expect(<span class="string">"can't possibly overflow"</span>),
+<a href=#580 id=580 data-nosnippet>580</a>                    ))
+<a href=#581 id=581 data-nosnippet>581</a>                })
+<a href=#582 id=582 data-nosnippet>582</a>            });
+<a href=#583 id=583 data-nosnippet>583</a>        (transaction, input_states.chain(output_states).collect())
+<a href=#584 id=584 data-nosnippet>584</a>    }
+<a href=#585 id=585 data-nosnippet>585</a>
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientInput&gt; {
+<a href=#587 id=587 data-nosnippet>587</a>        <span class="self">self</span>.inputs.iter().flat_map(|i| i.inputs.iter())
+<a href=#588 id=588 data-nosnippet>588</a>    }
+<a href=#589 id=589 data-nosnippet>589</a>
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientOutput&gt; {
+<a href=#591 id=591 data-nosnippet>591</a>        <span class="self">self</span>.outputs.iter().flat_map(|i| i.outputs.iter())
+<a href=#592 id=592 data-nosnippet>592</a>    }
+<a href=#593 id=593 data-nosnippet>593</a>}
+<a href=#594 id=594 data-nosnippet>594</a>
+<a href=#595 id=595 data-nosnippet>595</a><span class="doccomment">/// Find the range of indexes in an monotonically increasing `arr`, that is
+<a href=#596 id=596 data-nosnippet>596</a>/// equal to `item`
+<a href=#597 id=597 data-nosnippet>597</a></span><span class="kw">fn </span>find_range_of_matching_items(arr: <span class="kw-2">&amp;</span>[usize], item: usize) -&gt; <span class="prelude-ty">Option</span>&lt;RangeInclusive&lt;u64&gt;&gt; {
+<a href=#598 id=598 data-nosnippet>598</a>    <span class="comment">// `arr` must be monotonically increasing
+<a href=#599 id=599 data-nosnippet>599</a>    </span><span class="macro">debug_assert!</span>(arr.windows(<span class="number">2</span>).all(|w| w[<span class="number">0</span>] &lt;= w[<span class="number">1</span>]));
+<a href=#600 id=600 data-nosnippet>600</a>
+<a href=#601 id=601 data-nosnippet>601</a>    arr.iter()
+<a href=#602 id=602 data-nosnippet>602</a>        .enumerate()
+<a href=#603 id=603 data-nosnippet>603</a>        .filter_map(|(arr_idx, arr_item)| (<span class="kw-2">*</span>arr_item == item).then_some(arr_idx <span class="kw">as </span>u64))
+<a href=#604 id=604 data-nosnippet>604</a>        .fold(<span class="prelude-val">None</span>, |cur: <span class="prelude-ty">Option</span>&lt;(u64, u64)&gt;, idx| {
+<a href=#605 id=605 data-nosnippet>605</a>            <span class="prelude-val">Some</span>(cur.map_or((idx, idx), |cur| (cur.<span class="number">0</span>.min(idx), cur.<span class="number">1</span>.max(idx))))
+<a href=#606 id=606 data-nosnippet>606</a>        })
+<a href=#607 id=607 data-nosnippet>607</a>        .map(|(start, end)| start..=end)
+<a href=#608 id=608 data-nosnippet>608</a>}
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a><span class="attr">#[test]
+<a href=#611 id=611 data-nosnippet>611</a></span><span class="kw">fn </span>find_range_of_matching_items_sanity() {
+<a href=#612 id=612 data-nosnippet>612</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">0</span>), <span class="prelude-val">Some</span>(<span class="number">0</span>..=<span class="number">1</span>));
+<a href=#614 id=614 data-nosnippet>614</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">1</span>), <span class="prelude-val">Some</span>(<span class="number">2</span>..=<span class="number">2</span>));
+<a href=#615 id=615 data-nosnippet>615</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="number">2</span>), <span class="prelude-val">None</span>);
+<a href=#616 id=616 data-nosnippet>616</a>    <span class="macro">assert_eq!</span>(find_range_of_matching_items(<span class="kw-2">&amp;</span>[], <span class="number">0</span>), <span class="prelude-val">None</span>);
+<a href=#617 id=617 data-nosnippet>617</a>}
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a><span class="kw">fn </span>state_gen_to_dyn&lt;S&gt;(
+<a href=#620 id=620 data-nosnippet>620</a>    state_gen: StateGenerator&lt;S&gt;,
+<a href=#621 id=621 data-nosnippet>621</a>    module_instance: ModuleInstanceId,
+<a href=#622 id=622 data-nosnippet>622</a>) -&gt; StateGenerator&lt;DynState&gt;
+<a href=#623 id=623 data-nosnippet>623</a><span class="kw">where
+<a href=#624 id=624 data-nosnippet>624</a>    </span>S: IntoDynInstance&lt;DynType = DynState&gt; + <span class="lifetime">'static</span>,
+<a href=#625 id=625 data-nosnippet>625</a>{
+<a href=#626 id=626 data-nosnippet>626</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="kw">let </span>states = state_gen(out_point_range);
+<a href=#628 id=628 data-nosnippet>628</a>        states
+<a href=#629 id=629 data-nosnippet>629</a>            .into_iter()
+<a href=#630 id=630 data-nosnippet>630</a>            .map(|state| state.into_dyn(module_instance))
+<a href=#631 id=631 data-nosnippet>631</a>            .collect()
+<a href=#632 id=632 data-nosnippet>632</a>    })
+<a href=#633 id=633 data-nosnippet>633</a>}
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a><span class="attr">#[cfg(test)]
+<a href=#636 id=636 data-nosnippet>636</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
