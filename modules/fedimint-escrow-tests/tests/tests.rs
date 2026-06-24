@@ -218,7 +218,12 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     let balance_after = arbiter_client.get_balance_for_btc().await?;
 
     let secp = Secp256k1::new();
-    let msg_bytes = compute_proof_message(GET_PENDING_FEE_DOMAIN.as_bytes(), &escrow_id.0);
+    let msg_bytes = compute_proof_message(
+        GET_PENDING_FEE_DOMAIN.as_bytes(),
+        &escrow_id.0,
+        &arbiter_keypair.public_key(),
+        Some(&arbiter_client.federation_id()),
+    );
     let get_arbiter_fee_signature =
         secp.sign_schnorr(&Message::from_digest(msg_bytes), &arbiter_keypair);
 
@@ -228,7 +233,8 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
             .api
             .get_pending_arbiter_fee(GetPendinFeeParams {
                 escrow_id,
-                sign: get_arbiter_fee_signature
+                sign: get_arbiter_fee_signature,
+                pubkey: arbiter_escrow.keypair.public_key()
             })
             .await?
             .is_none()

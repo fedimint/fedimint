@@ -15,8 +15,8 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{
-    BitcoinHash, InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items,
-    secp256k1,
+    Amount, BitcoinHash, InPoint, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_pair_items, secp256k1,
 };
 use fedimint_escrow_common::config::{
     EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
@@ -246,6 +246,24 @@ impl ServerModule for Escrow {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EscrowOutputError> {
         let contract = &output.contract;
+
+        if contract.amount == Amount::ZERO {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+        if contract.arbiter_fee >= contract.amount {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        if contract.timeout <= now {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+        if contract.buyer_key == contract.seller_key
+            || contract.buyer_key == contract.arbiter_key
+            || contract.seller_key == contract.arbiter_key
+        {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+
         let verified = verify_contract_hash(&contract.contract_hash.0, contract);
         if !verified {
             return Err(EscrowOutputError::ContractHashMismatch);
@@ -324,15 +342,26 @@ impl ServerModule for Escrow {
 
                     let msg = compute_proof_message(
                         GET_CONTRACT_DOMAIN.as_bytes(),
-                        &params.escrow_id.0
+                        &params.escrow_id.0,
+                        &params.pubkey,
+                        Some(&contract.federation_id)
                     );
 
-                    let authorized =
-                        verify_signature(&contract.buyer_key, msg, &params.sign) ||
-                        verify_signature(&contract.seller_key, msg, &params.sign) ||
-                        verify_signature(&contract.arbiter_key, msg, &params.sign);
+                    let participant = params.pubkey == contract.buyer_key ||
+                        params.pubkey == contract.seller_key ||
+                        params.pubkey == contract.arbiter_key;
 
-                    if authorized { Ok(Some(contract)) } else { Ok(None) }
+                    if !participant {
+                        return Ok(None);
+                    }
+
+                    let authorized = verify_signature(&params.pubkey, msg, &params.sign);
+
+                    if authorized {
+                        Ok(Some(contract))
+                    } else {
+                        Ok(None)
+                    }
                 }
             },
             api_endpoint! {
@@ -352,6 +381,8 @@ impl ServerModule for Escrow {
                     let msg = compute_proof_message(
                         GET_PENDING_FEE_DOMAIN.as_bytes(),
                         &params.escrow_id.0,
+                        &params.pubkey,
+                        None
                     );
                     let authorized = verify_signature(&pending_fee.arbiter_key, msg, &params.sign);
                     if !authorized {
@@ -367,32 +398,42 @@ impl ServerModule for Escrow {
                 async |_module: &Escrow, context, params: ListContractParams|
                     -> Vec<EscrowContract>
                 {
-                    let db=context.db();
+                    let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
 
-                    let all = dbtx
+                    let msg = compute_proof_message(
+                        LIST_CONTRACT_DOMAIN.as_bytes(),
+                        &params.federation_id.0.to_byte_array(),
+                        &params.pubkey,
+                        Some(&params.federation_id),
+                    );
+
+                    if !verify_signature(&params.pubkey, msg, &params.sig) {
+                        return Ok(vec![]);
+                    }
+
+                    let pubkey = params.pubkey;
+                    let contracts: Vec<EscrowContract> = dbtx
                         .find_by_prefix(&EscrowContractPrefix)
                         .await
-                        .map(|(_, c)| c)
-                        .filter(|c| {
-                            let sig = params.sig;
-                            let c = c.clone();
+                        .filter_map(move |(_, contract)| {
+                            let pubkey = pubkey;
 
                             async move {
-                                let msg = compute_proof_message(
-                                    LIST_CONTRACT_DOMAIN.as_bytes(),
-                                    &c.federation_id.0.to_byte_array(),
-                                );
-
-                                verify_signature(&c.buyer_key, msg, &sig)
-                                    || verify_signature(&c.seller_key, msg, &sig)
-                                    || verify_signature(&c.arbiter_key, msg, &sig)
+                                if contract.buyer_key == pubkey
+                                    || contract.seller_key == pubkey
+                                    || contract.arbiter_key == pubkey
+                                {
+                                    Some(contract)
+                                } else {
+                                    None
+                                }
                             }
                         })
                         .collect()
                         .await;
 
-                    Ok(all)
+                    Ok(contracts)
                 }
             },
         ]

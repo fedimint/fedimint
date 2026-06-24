@@ -575,6 +575,9 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        anyhow::ensure!(now >= contract.timeout, "arbiter cannot act before timeout");
+
         let payout_amount = contract
             .amount
             .checked_sub(contract.arbiter_fee)
@@ -654,7 +657,12 @@ impl EscrowClientModule {
         let operation_id = OperationId::new_random();
         let secp = Secp256k1::new();
 
-        let msg_bytes = compute_proof_message(GET_PENDING_FEE_DOMAIN.as_bytes(), &escrow_id.0);
+        let msg_bytes = compute_proof_message(
+            GET_PENDING_FEE_DOMAIN.as_bytes(),
+            &escrow_id.0,
+            &self.keypair.public_key(),
+            None,
+        );
         let get_arbiter_fee_signature =
             secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
 
@@ -663,6 +671,7 @@ impl EscrowClientModule {
             .module_api()
             .get_pending_arbiter_fee(GetPendinFeeParams {
                 escrow_id,
+                pubkey: self.keypair.public_key(),
                 sign: get_arbiter_fee_signature,
             })
             .await?
@@ -756,7 +765,12 @@ impl EscrowClientModule {
         escrow_id: EscrowId,
     ) -> Result<Option<EscrowContract>, anyhow::Error> {
         let secp = Secp256k1::new();
-        let msg_bytes = compute_proof_message(GET_CONTRACT_DOMAIN.as_bytes(), &escrow_id.0);
+        let msg_bytes = compute_proof_message(
+            GET_CONTRACT_DOMAIN.as_bytes(),
+            &escrow_id.0,
+            &self.keypair.public_key(),
+            Some(&self.federation_id),
+        );
 
         let signature = secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
 
@@ -765,6 +779,7 @@ impl EscrowClientModule {
             .module_api()
             .get_contract(GetContractParams {
                 escrow_id,
+                pubkey: self.keypair.public_key(),
                 sign: signature,
             })
             .await?;
@@ -788,12 +803,18 @@ impl EscrowClientModule {
         let msg = compute_proof_message(
             LIST_CONTRACT_DOMAIN.as_bytes(),
             &self.federation_id.0.to_byte_array(),
+            &self.keypair.public_key(),
+            None,
         );
         let sig = secp.sign_schnorr(&Message::from_digest(msg), &self.keypair);
 
         self.client_ctx
             .module_api()
-            .list_contracts_by_key(ListContractParams { sig })
+            .list_contracts_by_key(ListContractParams {
+                sig,
+                pubkey: self.keypair.public_key(),
+                federation_id: self.federation_id,
+            })
             .await
             .unwrap_or_default()
     }

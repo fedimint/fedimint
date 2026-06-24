@@ -287,17 +287,21 @@ pub const LIST_CONTRACT_DOMAIN: &str = "list_contracts";
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GetContractParams {
     pub escrow_id: EscrowId,
+    pub pubkey: PublicKey,
     pub sign: Signature,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GetPendinFeeParams {
     pub escrow_id: EscrowId,
+    pub pubkey: PublicKey,
     pub sign: Signature,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ListContractParams {
+    pub pubkey: PublicKey,
+    pub federation_id: FederationId,
     pub sig: Signature,
 }
 
@@ -339,11 +343,21 @@ pub fn compute_contract_hash(
     ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
-pub fn compute_proof_message(domain: &[u8], payload: &[u8]) -> [u8; 32] {
+pub fn compute_proof_message(
+    domain: &[u8],
+    payload: &[u8],
+    pubkey: &PublicKey,
+    federation_id: Option<&FederationId>,
+) -> [u8; 32] {
     let mut engine = sha256::HashEngine::default();
     engine.input(b"escrow_proof");
     engine.input(domain);
     engine.input(payload);
+    engine.input(&pubkey.serialize());
+    engine.input(&(federation_id.is_some() as u8).to_le_bytes());
+    if let Some(id) = federation_id {
+        engine.input(&id.0.to_byte_array());
+    }
     sha256::Hash::from_engine(engine).to_byte_array()
 }
 
