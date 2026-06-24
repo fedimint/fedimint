@@ -1856,48 +1856,73 @@ impl MintClientModule {
         let amount = self.cfg.fee_consensus.round_up(amount);
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
-
-        // Exact-change path: handing out existing notes never costs a fee. This
-        // is the same selection `send_oob_notes` tries first (see
-        // `try_spend_exact_notes_dbtx`).
-        if Self::select_notes(
+        let selected_notes = Self::select_notes(
             &mut dbtx,
-            &SelectNotesWithExactAmount,
+            &SelectNotesWithAtleastAmount,
             amount,
             FeeConsensus::zero(),
         )
-        .await
-        .is_ok()
-        {
+        .await?;
+
+        if selected_notes.total_amount() == amount {
             return Ok(FeeQuote::ZERO);
         }
 
-        drop(dbtx);
+        for (note_amount, note) in selected_notes.iter_items() {
+            Self::delete_spendable_note(&self.client_ctx, &mut dbtx, note_amount, note).await;
+        }
 
-        // Reissue path: the send mints itself notes worth exactly `amount` as
-        // explicit outputs (no explicit inputs) and the primary module funds and
-        // balances it. Quote that exact transaction — the same exact
-        // decomposition the real send's `create_exact_output` uses, so a single
-        // reissue covers it.
-        let denominations = self.represent_exact_amount(amount);
-
-        let output_amount = denominations.total_amount();
-        let output_fee: Amount = denominations
+        let input_amount = selected_notes.total_amount();
+        let input_fee: Amount = selected_notes
             .iter()
-            .map(|(denomination, count)| self.cfg.fee_consensus.fee(denomination) * count as u64)
+            .map(|(denomination, notes)| {
+                self.cfg.fee_consensus.fee(denomination) * notes.len() as u64
+            })
             .sum();
 
-        self.client_ctx
-            .fee_quote(
-                OperationId::new_random(),
-                FeeQuoteRequest {
-                    input_amount: Amounts::ZERO,
-                    output_amount: Amounts::new_bitcoin(output_amount),
-                    input_fee: Amounts::ZERO,
-                    output_fee: Amounts::new_bitcoin(output_fee),
-                },
-            )
-            .await
+        let (inputs, outputs) = ClientModule::create_final_inputs_and_outputs(
+            self,
+            &mut dbtx.to_ref_nc(),
+            OperationId::new_random(),
+            AmountUnit::BITCOIN,
+            input_amount,
+            input_fee,
+        )
+        .await?;
+        dbtx.ignore_uncommitted();
+
+        let change_input_amount: Amount = inputs
+            .inputs()
+            .iter()
+            .map(|input| input.amounts.get_bitcoin())
+            .sum();
+        let change_output_amount: Amount = outputs
+            .outputs()
+            .iter()
+            .map(|output| output.amounts.get_bitcoin())
+            .sum();
+        let change_input_fee: Amount = inputs
+            .inputs()
+            .iter()
+            .map(|input| self.cfg.fee_consensus.fee(input.amounts.get_bitcoin()))
+            .sum();
+        let change_output_fee: Amount = outputs
+            .outputs()
+            .iter()
+            .map(|output| self.cfg.fee_consensus.fee(output.amounts.get_bitcoin()))
+            .sum();
+
+        let total = (input_amount + change_input_amount).saturating_sub(change_output_amount);
+        let input = Amounts::new_bitcoin(input_fee + change_input_fee);
+        let output = Amounts::new_bitcoin(change_output_fee);
+        let dust =
+            Amounts::new_bitcoin(total.saturating_sub(input.get_bitcoin() + output.get_bitcoin()));
+
+        Ok(FeeQuote {
+            input,
+            output,
+            dust,
+        })
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them

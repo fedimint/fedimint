@@ -1017,8 +1017,18 @@ impl MintClientModule {
     pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let exact_change = match self
+            .send_ecash_dbtx(&mut dbtx, amount, Value::Null, false)
+            .await
+        {
+            Ok(result) => result.is_some(),
+            Err(infallible) => match infallible {},
+        };
+        dbtx.ignore_uncommitted();
+
         // Exact-change path: handing out existing notes never costs a fee.
-        if self.can_make_exact_change(amount).await {
+        if exact_change {
             return Ok(FeeQuote::ZERO);
         }
 
@@ -1043,31 +1053,6 @@ impl MintClientModule {
                 },
             )
             .await
-    }
-
-    /// Returns whether the client's current notes can be handed out to cover
-    /// `amount` exactly — the free path in [`Self::send`] — without modifying
-    /// the inventory. Mirrors the greedy selection in
-    /// [`Self::send_ecash_dbtx`].
-    async fn can_make_exact_change(&self, mut remaining_amount: Amount) -> bool {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
-        let mut stream = dbtx
-            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
-            .await
-            .map(|entry| entry.0.0);
-
-        while let Some(spendable_note) = stream.next().await {
-            remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
-                Some(amount) => amount,
-                None => continue,
-            };
-
-            if remaining_amount == Amount::ZERO {
-                return true;
-            }
-        }
-
-        remaining_amount == Amount::ZERO
     }
 
     /// Await the final state of the receive operation.
