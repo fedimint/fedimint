@@ -43,7 +43,7 @@ use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule,
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -847,6 +847,35 @@ impl WalletClientModule {
             .fetch_peg_out_fees(address, amount)
             .await?
             .context("Federation didn't return peg-out fees")
+    }
+
+    /// Computes the federation fee a peg-out of an on-chain output worth
+    /// `amount` (the withdrawal amount plus the on-chain miner fee) would
+    /// incur, without submitting anything.
+    ///
+    /// A peg-out submits a single wallet output worth `amount`; the primary
+    /// module balances it by spending ecash to fund the output and minting any
+    /// change. This quotes the fee of that transaction — the wallet (peg-out)
+    /// output fee, the mint input fees on the funding notes, any mint change
+    /// output fees, and sub-denomination dust — via the shared, module-agnostic
+    /// fee quote.
+    ///
+    /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
+    /// the output `amount` (see [`Self::get_withdraw_fees`]), not the
+    /// on-federation transaction fee.
+    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+        let amount = fedimint_core::Amount::from_sats(amount.to_sat());
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs),
+                },
+            )
+            .await
     }
 
     /// Returns a summary of the wallet's coins

@@ -180,6 +180,63 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let (client_send, client_receive) = fed.two_clients().await;
+    issue_ecash(&client_send, sats(11_000)).await?;
+
+    // Reissue several times so the receiver's note inventory — and therefore the
+    // consolidation-driven fee — differs between iterations (first into an empty
+    // wallet, then into a progressively more populated one).
+    for i in 0..5 {
+        let send_mint = client_send.get_first_module::<MintClientModule>()?;
+        let (spend_op, notes) = send_mint
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                sats(1_000),
+                TIMEOUT,
+                false,
+                (),
+            )
+            .await?;
+        let mut send_sub = send_mint
+            .subscribe_spend_notes(spend_op)
+            .await?
+            .into_stream();
+        assert_eq!(send_sub.ok().await?, SpendOOBState::Created);
+
+        let receive_mint = client_receive.get_first_module::<MintClientModule>()?;
+        let reissued_value = notes.total_amount();
+
+        let quote = receive_mint.reissue_fee_quote(&notes).await?;
+        let before = client_receive.get_balance_for_btc().await?;
+
+        let op = receive_mint.reissue_external_notes(notes, ()).await?;
+        let mut sub = receive_mint
+            .subscribe_reissue_external_notes(op)
+            .await?
+            .into_stream();
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Created);
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Issuing);
+        // `Done` is reached once the reissued (and consolidation) notes have been
+        // issued, so the balance is settled by here.
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Done);
+        assert_eq!(send_sub.ok().await?, SpendOOBState::Success);
+
+        let after = client_receive.get_balance_for_btc().await?;
+        let actual_fee = reissued_value - (after - before);
+
+        assert_eq!(
+            quote.total(),
+            Amounts::new_bitcoin(actual_fee),
+            "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn blind_nonce_index() -> anyhow::Result<()> {
     // Give client initial balance
     let fed = fixtures().new_fed_degraded().await;

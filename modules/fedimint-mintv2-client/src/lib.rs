@@ -33,7 +33,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
@@ -966,6 +966,39 @@ impl MintClientModule {
         dbtx.commit_tx().await;
 
         Ok(operation_id)
+    }
+
+    /// Computes the exact fee a `receive(ecash)` would incur given the client's
+    /// current note inventory, without submitting anything.
+    ///
+    /// This runs the same change generation the real receive does
+    /// (`create_final_inputs_and_outputs`, including funding selection and
+    /// rebalancing) against a non-committable transaction that is dropped
+    /// rather than committed, so the client's notes are read but left
+    /// untouched. The quote is point-in-time: it depends on the current
+    /// inventory and can move as notes change.
+    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+        // A receive submits the ecash notes as explicit inputs and no explicit
+        // outputs; the shared, module-agnostic fee quote runs the primary-module
+        // balancing (rebalancing + minting change) over the real inventory.
+        let notes = ecash.notes();
+        let input_amount: Amount = notes.iter().map(SpendableNote::amount).sum();
+        let input_fee: Amount = notes
+            .iter()
+            .map(|note| self.cfg.fee_consensus.fee(note.amount()))
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_custom(self.cfg.amount_unit, input_amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_custom(self.cfg.amount_unit, input_fee),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
     }
 
     /// Await the final state of the receive operation.

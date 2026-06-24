@@ -63,7 +63,7 @@ use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
@@ -1747,6 +1747,40 @@ impl MintClientModule {
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, &secret)
+    }
+
+    /// Computes the exact fee `reissue_external_notes(oob_notes)` would incur
+    /// given the wallet's current note inventory, without submitting anything.
+    ///
+    /// Runs the same change generation the real reissue does
+    /// (`create_final_inputs_and_outputs`, including note consolidation)
+    /// against a non-committable transaction that is dropped rather than
+    /// committed, so the wallet's notes are read but left untouched. The
+    /// quote is point-in-time: it depends on the current inventory and can
+    /// move as notes change.
+    pub async fn reissue_fee_quote(&self, oob_notes: &OOBNotes) -> anyhow::Result<FeeQuote> {
+        // A reissue submits the external notes as explicit inputs and no explicit
+        // outputs; the shared, module-agnostic fee quote runs the primary-module
+        // balancing (note consolidation + minting change) over the real
+        // inventory.
+        let input_amount = oob_notes.total_amount();
+        let input_fee: Amount = oob_notes
+            .notes()
+            .iter_items()
+            .map(|(amount, _)| self.cfg.fee_consensus.fee(amount))
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_bitcoin(input_amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(input_fee),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them
