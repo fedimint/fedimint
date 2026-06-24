@@ -97,7 +97,6 @@ use futures::{StreamExt, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use itertools::Itertools as _;
-use oob::MintOOBStatesCreatedMulti;
 use output::MintOutputStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -111,12 +110,14 @@ use crate::client_db::{
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
-use crate::oob::{MintOOBStateMachine, MintOOBStates};
+use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, NoteIssuanceRequest,
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+
+const OOB_SPEND_NO_TIMEOUT: Duration = Duration::MAX;
 
 #[derive(Clone)]
 struct PeerSelector {
@@ -550,6 +551,8 @@ pub enum MintOperationMetaVariant {
     SpendOOB {
         requested_amount: Amount,
         oob_notes: OOBNotes,
+        #[serde(default)]
+        no_timeout: bool,
     },
 }
 
@@ -1205,7 +1208,7 @@ struct SubscribeReissueExternalNotesRequest {
 #[derive(Deserialize)]
 struct SpendNotesExpertRequest {
     min_amount: Amount,
-    try_cancel_after: Duration,
+    try_cancel_after: Option<Duration>,
     include_invite: bool,
     extra_meta: serde_json::Value,
 }
@@ -1213,7 +1216,7 @@ struct SpendNotesExpertRequest {
 #[derive(Deserialize)]
 struct SpendNotesRequest {
     amount: Amount,
-    try_cancel_after: Duration,
+    try_cancel_after: Option<Duration>,
     include_invite: bool,
     extra_meta: serde_json::Value,
 }
@@ -1587,7 +1590,7 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector,
         amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
     ) -> anyhow::Result<(
         OperationId,
         Vec<MintClientStateMachines>,
@@ -1611,18 +1614,45 @@ impl MintClientModule {
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
 
-        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
-            operation_id,
-            state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
-                spendable_notes: selected_notes.clone().into_iter_items().collect(),
-                timeout: fedimint_core::time::now() + try_cancel_after,
-            }),
-        })];
+        let try_cancel_after = try_cancel_after.unwrap_or(OOB_SPEND_NO_TIMEOUT);
+        let state_machines = if try_cancel_after == OOB_SPEND_NO_TIMEOUT {
+            vec![]
+        } else {
+            vec![MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id,
+                state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
+                    spendable_notes: selected_notes.clone().into_iter_items().collect(),
+                    timeout: fedimint_core::time::now() + try_cancel_after,
+                }),
+            })]
+        };
 
         Ok((operation_id, state_machines, selected_notes))
     }
 
+    async fn is_no_timeout_oob_spend(&self, operation_id: OperationId) -> anyhow::Result<bool> {
+        let operation = self.mint_operation(operation_id).await?;
+        let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
+            operation.meta::<MintOperationMeta>().variant
+        else {
+            bail!("Operation is not a out-of-band spend");
+        };
+
+        Ok(no_timeout)
+    }
+
     pub async fn await_spend_oob_refund(&self, operation_id: OperationId) -> SpendOOBRefund {
+        if self
+            .is_no_timeout_oob_spend(operation_id)
+            .await
+            .unwrap_or(false)
+        {
+            return SpendOOBRefund {
+                user_triggered: false,
+                transaction_ids: vec![],
+            };
+        }
+
         Box::pin(
             self.notifier
                 .subscribe(operation_id)
@@ -1945,7 +1975,8 @@ impl MintClientModule {
     /// users forgetting about failed out-of-band transactions. The timeout
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
-    /// come online and reissue the notes themselves.
+    /// come online and reissue the notes themselves. Pass `None` to disable
+    /// automatic cancellation.
     #[deprecated(
         since = "0.5.0",
         note = "Use `spend_notes_with_selector` instead, with `SelectNotesWithAtleastAmount` to maintain the same behavior"
@@ -1953,7 +1984,7 @@ impl MintClientModule {
     pub async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
@@ -1981,12 +2012,13 @@ impl MintClientModule {
     /// users forgetting about failed out-of-band transactions. The timeout
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
-    /// come online and reissue the notes themselves.
+    /// come online and reissue the notes themselves. Pass `None` to disable
+    /// automatic cancellation.
     pub async fn spend_notes_with_selector<M: Serialize + Send>(
         &self,
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
@@ -2000,6 +2032,7 @@ impl MintClientModule {
                 |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async {
+                        let no_timeout = try_cancel_after.is_none();
                         let (operation_id, states, notes) = self
                             .spend_notes_oob(
                                 dbtx,
@@ -2033,6 +2066,7 @@ impl MintClientModule {
                                     variant: MintOperationMetaVariant::SpendOOB {
                                         requested_amount,
                                         oob_notes: oob_notes.clone(),
+                                        no_timeout,
                                     },
                                     amount: oob_notes.total_amount(),
                                     extra_meta,
@@ -2252,6 +2286,7 @@ impl MintClientModule {
                     variant: MintOperationMetaVariant::SpendOOB {
                         requested_amount: amount,
                         oob_notes: oob_notes.clone(),
+                        no_timeout: true,
                     },
                     amount: oob_notes.total_amount(),
                     extra_meta,
@@ -2348,12 +2383,11 @@ impl MintClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
         let operation = self.mint_operation(operation_id).await?;
-        if !matches!(
-            operation.meta::<MintOperationMeta>().variant,
-            MintOperationMetaVariant::SpendOOB { .. }
-        ) {
+        let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
+            operation.meta::<MintOperationMeta>().variant
+        else {
             bail!("Operation is not a out-of-band spend");
-        }
+        };
 
         let client_ctx = self.client_ctx.clone();
 
@@ -2362,6 +2396,11 @@ impl MintClientModule {
             .outcome_or_updates(operation, operation_id, move || {
                 stream! {
                     yield SpendOOBState::Created;
+
+                    if no_timeout {
+                        yield SpendOOBState::Success;
+                        return;
+                    }
 
                     let self_ref = client_ctx.self_ref();
 
@@ -2499,6 +2538,8 @@ pub fn spendable_notes_to_operation_id(
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
+    /// Empty when the spend disabled automatic refunds and no refund was
+    /// attempted.
     pub transaction_ids: Vec<TransactionId>,
 }
 
@@ -3351,6 +3392,49 @@ mod tests {
                     "out_point_indices": [dummy_outpoint.out_idx],
                 }
             })
+        );
+    }
+
+    #[test]
+    fn spend_oob_meta_no_timeout_defaults_to_false() {
+        let notes = vec![(
+            Amount::from_sats(1),
+            SpendableNote::consensus_decode_hex("a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd", &ModuleRegistry::default()).unwrap(),
+        )]
+        .into_iter()
+        .collect::<TieredMulti<_>>();
+        let oob_notes = OOBNotes::new(FederationId::dummy().to_prefix(), notes);
+        let mut old_meta_json = serde_json::to_value(MintOperationMetaVariant::SpendOOB {
+            requested_amount: Amount::from_sats(42),
+            oob_notes: oob_notes.clone(),
+            no_timeout: false,
+        })
+        .expect("serializing always works");
+        old_meta_json
+            .get_mut("spend_o_o_b")
+            .expect("spend OOB variant should serialize as spend_o_o_b")
+            .as_object_mut()
+            .expect("spend OOB variant should serialize to an object")
+            .remove("no_timeout");
+        assert_eq!(
+            old_meta_json,
+            json!({
+                "spend_o_o_b": {
+                    "requested_amount": Amount::from_sats(42),
+                    "oob_notes": oob_notes.clone(),
+                }
+            })
+        );
+
+        let old_meta: MintOperationMetaVariant =
+            serde_json::from_value(old_meta_json).expect("parsing old spend OOB meta failed");
+        assert_eq!(
+            old_meta,
+            MintOperationMetaVariant::SpendOOB {
+                requested_amount: Amount::from_sats(42),
+                oob_notes,
+                no_timeout: false,
+            }
         );
     }
 }
