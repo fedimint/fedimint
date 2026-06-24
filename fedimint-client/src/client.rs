@@ -109,6 +109,13 @@ pub(crate) mod handle;
 const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
     &[ApiVersion { major: 0, minor: 0 }];
 
+struct FinalizedTransaction {
+    transaction: Transaction,
+    states: Vec<DynState>,
+    change_range: Range<u64>,
+    fees: Amounts,
+}
+
 /// Primary module candidates at specific priority level
 #[derive(Default)]
 pub(crate) struct PrimaryModuleCandidates {
@@ -652,7 +659,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>, Amounts)> {
+    ) -> anyhow::Result<FinalizedTransaction> {
         let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
 
         let mut added_inputs_bundles = vec![];
@@ -744,9 +751,14 @@ impl Client {
                 .expect("Inputs >= outputs for own transactions")
         };
 
-        let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
+        let (transaction, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 
-        Ok((tx, states, change_range, fees))
+        Ok(FinalizedTransaction {
+            transaction,
+            states,
+            change_range,
+            fees,
+        })
     }
 
     /// Computes the fee that finalizing and submitting a transaction with the
@@ -979,7 +991,12 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
-        let (transaction, mut states, change_range, fees) = self
+        let FinalizedTransaction {
+            transaction,
+            mut states,
+            change_range,
+            fees,
+        } = self
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
 
@@ -1107,7 +1124,7 @@ impl Client {
     ///
     /// # Errors
     /// Returns an error if the operation does not exist.
-    pub async fn get_transaction_fees(
+    pub async fn get_operation_fees(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<Option<Amounts>> {

@@ -159,7 +159,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
         )
         .expect("Balance higher than received amount");
     let fees_from_operation = client2
-        .get_transaction_fees(op)
+        .get_operation_fees(op)
         .await
         .expect("Operation exists")
         .expect("Fee data is present for new operations");
