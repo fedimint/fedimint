@@ -150,9 +150,9 @@ jq '{
 cat > "${context_dir}/prompt.md" <<'EOF'
 You are fedimint-bot, an automation agent for the Fedimint GitHub repository.
 An organization member invoked you by mentioning @fedimint-bot in a GitHub
-issue, pull request, or pull request review thread; by opening an issue that
-mentions @fedimint-bot; or by assigning an issue to fedimint-bot. Decide what
-action is useful from the context.
+issue, pull request, pull request review body, or pull request review thread;
+by opening an issue that mentions @fedimint-bot; or by assigning an issue to
+fedimint-bot. Decide what action is useful from the context.
 
 You may:
 - answer the question directly in the relevant GitHub thread;
@@ -189,9 +189,10 @@ Operational rules:
 - The GitHub event payload is at `$RUNNER_TEMP/codex-agent/context/event.json`.
 - The checked out repository is at `$GITHUB_WORKSPACE`.
 - First inspect the normalized `event_name` field in the event payload to
-  understand whether this is an issue event, issue comment, PR comment, or
-  inline PR review comment. Inline PR review comments may arrive through a
-  privileged follow-up workflow, but the payload is normalized to
+  understand whether this is an issue event, issue comment, PR comment,
+  submitted PR review, or inline PR review comment. Submitted PR reviews and
+  inline PR review comments may arrive through a privileged follow-up workflow,
+  but their payloads are normalized to `pull_request_review` or
   `pull_request_review_comment`.
 - Use `gh` to fetch additional context as needed.
 - For issue assignment events, treat the assignment as a request to open a
@@ -207,6 +208,8 @@ Operational rules:
   and body text, then retry the reply using the matched comment id if found.
 - If responding to a pull request review comment, prefer replying to that
   review comment thread when possible. Otherwise comment on the issue or PR.
+- If responding to a submitted pull request review body, prefer a top-level PR
+  comment because GitHub does not expose a review-body reply thread.
 - Before finishing, post a GitHub comment/reply, open a GitHub issue, or open a
   draft PR, unless the safest action is explicitly to do nothing.
 - If you cannot complete the requested action, post a short comment explaining

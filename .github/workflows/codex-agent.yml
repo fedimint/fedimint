@@ -34,7 +34,8 @@ jobs:
         github.actor != 'fedimint-bot' &&
         github.actor != 'github-actions[bot]') ||
        (github.event_name == 'workflow_run' &&
-        github.event.workflow_run.event == 'pull_request_review_comment' &&
+        (github.event.workflow_run.event == 'pull_request_review' ||
+         github.event.workflow_run.event == 'pull_request_review_comment') &&
         github.event.workflow_run.conclusion == 'success'))
 
     steps:
@@ -62,13 +63,14 @@ jobs:
           comment_user=""
           comment_id=""
           issue_number=""
+          request_kind="${event_name}"
           body=""
           artifact_dir=""
 
           if [ "${event_name}" = "workflow_run" ]; then
             # The receiver may have run without secrets on a fork PR. Treat its
             # artifact as untrusted and use it only to find the live review
-            # comment, then re-check the mention and reviewer membership here.
+            # object, then re-check the mention and reviewer membership here.
             artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
             if [ -z "${artifacts_url}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
@@ -77,16 +79,16 @@ jobs:
             fi
 
             artifact_id=$(gh api "${artifacts_url}" \
-              --jq '.artifacts[] | select(.name == "codex-agent-review-comment-event") | .id' \
+              --jq '.artifacts[] | select(.name == "codex-agent-review-event" or .name == "codex-agent-review-comment-event") | .id' \
               | head -n1)
 
             if [ -z "${artifact_id}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: receiver uploaded no review-comment event artifact"
+              echo "Skipping: receiver uploaded no review event artifact"
               exit 0
             fi
 
-            artifact_dir="${RUNNER_TEMP}/codex-agent-review-comment-artifact"
+            artifact_dir="${RUNNER_TEMP}/codex-agent-review-artifact"
             rm -rf "${artifact_dir}"
             mkdir -p "${artifact_dir}"
             gh api \
@@ -97,18 +99,48 @@ jobs:
             event_payload="${artifact_dir}/event.json"
             if [ ! -s "${event_payload}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: review-comment event artifact is missing event.json"
+              echo "Skipping: review event artifact is missing event.json"
               exit 0
             fi
 
-            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
-            if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+            request_kind=$(jq -r '.event_name // ""' "${event_payload}")
+            if [ -z "${request_kind}" ]; then
+              if jq -e '.comment.id?' "${event_payload}" >/dev/null; then
+                request_kind="pull_request_review_comment"
+              elif jq -e '.review.id?' "${event_payload}" >/dev/null; then
+                request_kind="pull_request_review"
+              fi
+            fi
+
+            if [ "${request_kind}" = "pull_request_review_comment" ]; then
+              comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+              if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review-comment artifact has invalid comment id"
+                exit 0
+              fi
+
+              comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
+            elif [ "${request_kind}" = "pull_request_review" ]; then
+              comment_id=$(jq -r '.review.id // ""' "${event_payload}")
+              pull_number=$(jq -r '.pull_request.number // ""' "${event_payload}")
+              if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review artifact has invalid review id"
+                exit 0
+              fi
+              if ! [[ "${pull_number}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review artifact has invalid pull request number"
+                exit 0
+              fi
+
+              comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/${pull_number}/reviews/${comment_id}"
+            else
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: review-comment artifact has invalid comment id"
+              echo "Skipping: review artifact has unsupported event_name=${request_kind:-<missing>}"
               exit 0
             fi
-
-            comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
           elif [ "${event_name}" = "issue_comment" ]; then
             body=$(jq -r '.comment.body // ""' "${event_payload}")
             comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
@@ -240,9 +272,9 @@ jobs:
 
           if [ "${event_name}" = "workflow_run" ]; then
             pull_request_url=$(jq -r '.pull_request_url // ""' <<<"${live_comment}")
-            if [ -z "${pull_request_url}" ]; then
+            if [ -z "${pull_request_url}" ] || [ "${pull_request_url}" = "null" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: live review comment has no pull_request_url"
+              echo "Skipping: live review object has no pull_request_url"
               exit 0
             fi
 
@@ -252,15 +284,27 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "${pull_request_url}")
 
-            jq -n \
-              --argjson comment "${live_comment}" \
-              --argjson pull_request "${pull_request}" \
-              '{
-                action: "created",
-                comment: $comment,
-                pull_request: $pull_request
-              }' > "${agent_event_path}"
-            echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            if [ "${request_kind}" = "pull_request_review_comment" ]; then
+              jq -n \
+                --argjson comment "${live_comment}" \
+                --argjson pull_request "${pull_request}" \
+                '{
+                  action: "created",
+                  comment: $comment,
+                  pull_request: $pull_request
+                }' > "${agent_event_path}"
+              echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            else
+              jq -n \
+                --argjson review "${live_comment}" \
+                --argjson pull_request "${pull_request}" \
+                '{
+                  action: "submitted",
+                  review: $review,
+                  pull_request: $pull_request
+                }' > "${agent_event_path}"
+              echo "agent_event_name=pull_request_review" >> "${GITHUB_OUTPUT}"
+            fi
             echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
           else
             cp "${event_payload}" "${agent_event_path}"
@@ -270,7 +314,7 @@ jobs:
 
           echo "agent_event_path=${agent_event_path}" >> "${GITHUB_OUTPUT}"
           echo "comment_id=${comment_id}" >> "${GITHUB_OUTPUT}"
-          echo "comment_kind=${event_name}" >> "${GITHUB_OUTPUT}"
+          echo "comment_kind=${request_kind}" >> "${GITHUB_OUTPUT}"
           echo "run=true" >> "${GITHUB_OUTPUT}"
           echo "Trigger accepted"
           BASH
@@ -292,8 +336,11 @@ jobs:
           set -euo pipefail
           api_url="${GITHUB_API_URL:-https://api.github.com}"
 
-          if [ "${COMMENT_KIND}" = "workflow_run" ]; then
+          if [ "${COMMENT_KIND}" = "pull_request_review_comment" ]; then
             endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          elif [ "${COMMENT_KIND}" = "pull_request_review" ]; then
+            echo "Skipping reaction: pull request reviews do not have a supported reactions endpoint"
+            exit 0
           elif [ "${COMMENT_KIND}" = "issues" ]; then
             endpoint="repos/${REPOSITORY}/issues/${COMMENT_ID}/reactions"
           else
