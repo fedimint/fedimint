@@ -12,9 +12,6 @@ use iroh_relay::RelayQuicConfig;
 use tracing::{info, warn};
 use url::Url;
 
-/// Protocol version string for the iroh-next dual-stack endpoints.
-pub const IROH_NEXT_VERSION: &str = "0.90";
-
 use crate::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
     FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
@@ -103,10 +100,20 @@ pub async fn build_iroh_next_endpoint(
         );
     }
 
+    let transport_config = iroh_next::endpoint::QuicTransportConfig::builder()
+        .max_idle_timeout(Some(
+            IROH_IDLE_TIMEOUT
+                .try_into()
+                .expect("idle timeout fits in IdleTimeout"),
+        ))
+        .keep_alive_interval(IROH_KEEP_ALIVE_INTERVAL)
+        .build();
+
     let endpoint = builder
         .relay_mode(relay_mode)
         .secret_key(secret_key)
         .alpns(vec![alpn.to_vec()])
+        .transport_config(transport_config)
         .bind_addr(bind_addr)?
         .bind()
         .await
@@ -117,7 +124,7 @@ pub async fn build_iroh_next_endpoint(
         %bind_addr,
         node_id = %endpoint.id(),
         node_id_pkarr = %z32::encode(endpoint.id().as_bytes()),
-        "Iroh-next p2p server endpoint"
+        "Iroh-next endpoint"
     );
 
     Ok(endpoint)

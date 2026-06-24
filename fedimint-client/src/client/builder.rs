@@ -125,6 +125,7 @@ pub struct ClientBuilder {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
     bitcoind_rpc_factory: Option<BitcoindRpcFactory>,
     bitcoind_rpc_no_chain_id_factory: Option<BitcoindRpcNoChainIdFactory>,
 }
@@ -148,6 +149,7 @@ impl ClientBuilder {
             log_event_added_transient_tx,
             request_hook: Arc::new(|api| api),
             iroh_enable_dht: true,
+            iroh_enable_next: true,
             bitcoind_rpc_factory: None,
             bitcoind_rpc_no_chain_id_factory: None,
         }
@@ -163,6 +165,7 @@ impl ClientBuilder {
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
+            iroh_enable_next: client.iroh_enable_next,
             // Note: bitcoind_rpc_factory is not cloned from existing client
             // since it's a one-time factory that's consumed during build
             bitcoind_rpc_factory: None,
@@ -622,13 +625,8 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = db_no_decoders.with_decoders(decoders.clone());
-        self.iroh_enable_next &= connectors.iroh_next_enabled();
-        let iroh_next_version = if self.iroh_enable_next {
-            Some(fedimint_core::net::iroh::IROH_NEXT_VERSION)
-        } else {
-            None
-        };
-        let peer_urls = get_api_urls(&db, &config, iroh_next_version).await;
+        let iroh_enable_next = self.iroh_enable_next && connectors.iroh_next_enabled();
+        let peer_urls = get_api_urls(&db, &config, iroh_enable_next).await;
         let api = match self.admin_creds.as_ref() {
             Some(admin_creds) => FederationApi::new(
                 connectors.clone(),
@@ -1046,6 +1044,7 @@ impl ClientBuilder {
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
             iroh_enable_dht: self.iroh_enable_dht,
+            iroh_enable_next,
             user_bitcoind_rpc,
             user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });

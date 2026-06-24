@@ -59,6 +59,8 @@ pub struct ConnectorRegistryBuilder {
     iroh_dns: Option<SafeUrl>,
     /// Enable Pkarr DHT discovery
     iroh_pkarr_dht: bool,
+    /// Enable compatible iroh-next endpoint preference from guardian metadata
+    iroh_next: bool,
 
     /// Enable Websocket API handling at all?
     ws_enable: bool,
@@ -181,6 +183,15 @@ impl ConnectorRegistryBuilder {
         }
     }
 
+    /// Enable use of compatible iroh-next endpoints advertised in guardian
+    /// metadata.
+    pub fn iroh_next(self, enable: bool) -> Self {
+        Self {
+            iroh_next: enable,
+            ..self
+        }
+    }
+
     pub fn ws_force_tor(self, enable: bool) -> Self {
         Self {
             ws_force_tor: enable,
@@ -209,8 +220,8 @@ impl ConnectorRegistryBuilder {
             self = self.with_connection_override(k, v);
         }
 
-        // Disable iroh-next in test/devimint environments where
-        // iroh-next server endpoints are not running.
+        // Disable iroh-next endpoint preference in test/devimint environments
+        // where iroh-next server endpoints are not running.
         if is_running_in_test_env() {
             self.iroh_next = false;
         }
@@ -243,7 +254,8 @@ struct ConnectorRegistryInner {
     /// Ticks whenever a connector observes a transport-level path change
     /// (e.g. iroh relay → direct). Only Iroh bumps this today.
     path_change: Arc<watch::Sender<u64>>,
-    /// Whether the registry constructs Iroh connectors with iroh-next support.
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
     iroh_next: bool,
 }
 
@@ -275,6 +287,8 @@ impl fmt::Debug for ConnectorRegistry {
 }
 
 impl ConnectorRegistry {
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
     pub fn iroh_next_enabled(&self) -> bool {
         self.inner.iroh_next
     }
@@ -288,6 +302,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
@@ -303,6 +318,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: true,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: false,
@@ -318,6 +334,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,

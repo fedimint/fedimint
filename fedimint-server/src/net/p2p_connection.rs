@@ -150,7 +150,7 @@ where
 }
 
 /// Implementations of the IP2PFrame and IP2PConnection traits for Iroh-next
-/// (v0.90)
+/// 1.0-compatible
 
 #[async_trait]
 impl<M> IP2PFrame<M> for iroh_next::endpoint::RecvStream

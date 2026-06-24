@@ -44,9 +44,6 @@ hyper = { workspace = true }
 iroh = { workspace = true, features = [
     "discovery-pkarr-dht",
 ], default-features = false }
-iroh-base = { workspace = true, default-features = false, features = [
-    "ticket",
-] }
 iroh-next = { workspace = true, default-features = false }
 iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }

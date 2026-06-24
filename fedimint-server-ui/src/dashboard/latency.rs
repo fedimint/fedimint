@@ -63,6 +63,9 @@ pub fn render(
                                             Some(ConnectionType::Mixed) => {
                                                 span class="badge bg-info" { "Mixed" }
                                             }
+                                            Some(ConnectionType::IrohNext) => {
+                                                span class="badge bg-primary" { "Iroh Next" }
+                                            }
                                             None => {
                                                 span class="text-muted" { "N/A" }
                                             }

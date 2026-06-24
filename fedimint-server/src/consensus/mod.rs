@@ -692,7 +692,7 @@ async fn await_response(
     }
 }
 
-// --- iroh-next (v0.90) API endpoint functions ---
+// --- iroh-next API endpoint functions ---
 
 async fn start_iroh_api_next(
     secret_key: iroh_next::SecretKey,
@@ -799,8 +799,44 @@ async fn handle_incoming_next(
     let connection = incoming.accept()?.await?;
     let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
 
+    IROH_API_CONNECTIONS_ACTIVE.inc();
+    let connection_timer = IROH_API_CONNECTION_DURATION_SECONDS.start_timer();
+    scopeguard::defer! {
+        IROH_API_CONNECTIONS_ACTIVE.dec();
+        connection_timer.observe_duration();
+    }
+
     loop {
-        let (send_stream, recv_stream) = connection.accept_bi().await?;
+        let accept_result = fedimint_core::runtime::timeout(
+            IROH_API_CONNECTION_IDLE_TIMEOUT,
+            connection.accept_bi(),
+        )
+        .await;
+
+        let (send_stream, recv_stream) = match accept_result {
+            Ok(streams) => streams?,
+            Err(_)
+                if parallel_requests_limit.available_permits()
+                    < iroh_api_max_requests_per_connection =>
+            {
+                continue;
+            }
+            Err(_) => {
+                IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
+                tracing::debug!(
+                    target: LOG_NET_API,
+                    idle_timeout_secs = IROH_API_CONNECTION_IDLE_TIMEOUT.as_secs(),
+                    "Closing idle iroh-next API connection"
+                );
+                connection.close(
+                    iroh_next::endpoint::VarInt::from_u32(
+                        IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE,
+                    ),
+                    IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON,
+                );
+                return Ok(());
+            }
+        };
 
         if parallel_requests_limit.available_permits() == 0 {
             warn!(
@@ -845,7 +881,21 @@ async fn handle_request_next(
 
     let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
 
+    let method = request.method.to_string();
+    let timer = IROH_API_REQUEST_DURATION_SECONDS
+        .with_label_values(&[&method])
+        .start_timer();
+
     let response = await_response(consensus_api, core_api, module_api, request).await;
+
+    timer.observe_duration();
+
+    let response_code = response
+        .as_ref()
+        .map_or_else(|err| err.code.to_string(), |_| "0".to_string());
+    IROH_API_REQUEST_RESPONSE_CODE
+        .with_label_values(&[method.as_str(), response_code.as_str(), "next"])
+        .inc();
 
     let response = serde_json::to_vec(&response)?;
 

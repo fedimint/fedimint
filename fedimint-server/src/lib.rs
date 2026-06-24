@@ -77,7 +77,7 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
-/// Runtime settings for the iroh-next (v0.90) dual-stack endpoints.
+/// Runtime settings for the iroh-next 1.0-compatible dual-stack endpoints.
 /// Passed as `Option<IrohNextSettings>` — `None` means disabled.
 #[derive(Debug, Clone)]
 pub struct IrohNextSettings {
@@ -134,7 +134,6 @@ pub async fn run(
                         .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                         .collect(),
                     iroh_next_settings.as_ref(),
-                    Some(&cfg.private.broadcast_secret_key),
                 )
                 .await?
                 .into_dyn()
@@ -165,6 +164,7 @@ pub async fn run(
                 module_init_registry.clone(),
                 auth_ui.clone(),
                 auth_api.clone(),
+                iroh_next_settings.clone(),
             ))
             .await?
         }
@@ -354,6 +354,7 @@ pub async fn run_config_gen(
     module_init_registry: ServerModuleInitRegistry,
     auth_ui: Option<ApiAuth>,
     auth_api: Option<ApiAuth>,
+    iroh_next_settings: Option<IrohNextSettings>,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -454,8 +455,7 @@ pub async fn run_config_gen(
                             .iter()
                             .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                             .collect(),
-                        None,
-                        None,
+                        iroh_next_settings.as_ref(),
                     )
                     .await?
                     .into_dyn()
@@ -539,8 +539,7 @@ pub async fn run_config_gen(
                                 .iter()
                                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                                 .collect(),
-                            None,
-                            None,
+                            iroh_next_settings.as_ref(),
                         )
                         .await?
                         .into_dyn()

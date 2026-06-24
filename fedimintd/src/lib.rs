@@ -237,7 +237,8 @@ struct ServerOpts {
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
 
-    /// Enable iroh-next (v0.90) dual-stack endpoints alongside stable iroh
+    /// Enable iroh-next 1.0-compatible dual-stack endpoints alongside stable
+    /// iroh
     #[arg(long, env = FM_IROH_NEXT_ENABLE_ENV)]
     enable_iroh_next: bool,
 
@@ -457,7 +458,7 @@ pub async fn run(
     let auth_ui = server_opts.password_ui.or(password_file).map(ApiAuth::new);
     let auth_api = server_opts.password_api.map(ApiAuth::new);
 
-    let iroh_next_settings = if server_opts.enable_iroh_next {
+    let iroh_next_settings = if server_opts.enable_iroh && server_opts.enable_iroh_next {
         let default_next_bind = |mut addr: std::net::SocketAddr, env_var: &str| {
             let port = addr.port().checked_add(10).with_context(|| {
                 format!("Default iroh-next bind port would overflow; set {env_var} explicitly")

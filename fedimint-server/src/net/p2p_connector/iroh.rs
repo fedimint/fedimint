@@ -1,12 +1,16 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context as _, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV, FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN_ENV,
+    parse_kv_list_from_env,
+};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::net::iroh::{build_iroh_endpoint, build_iroh_next_endpoint};
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
@@ -15,7 +19,6 @@ use fedimint_server_core::dashboard_ui::ConnectionType;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
 use iroh::{Endpoint, NodeAddr, NodeId};
-use iroh_base::ticket::NodeTicket;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::{trace, warn};
@@ -47,6 +50,10 @@ pub struct IrohConnector {
     ///
     /// This is useful for testing, or forcing non-default network connectivity.
     pub(crate) connection_overrides: BTreeMap<NodeId, NodeAddr>,
+    /// List of overrides to use for iroh-next connection attempts.
+    pub(crate) next_connection_overrides: BTreeMap<iroh_next::EndpointId, iroh_next::EndpointAddr>,
+    /// Peers with last-known connectivity through the iroh-next stack.
+    pub(crate) next_connected_peers: Arc<Mutex<BTreeSet<PeerId>>>,
 }
 
 pub(crate) const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
@@ -59,7 +66,6 @@ impl IrohConnector {
         iroh_relays: Vec<SafeUrl>,
         node_ids: BTreeMap<PeerId, NodeId>,
         iroh_next_settings: Option<&IrohNextSettings>,
-        broadcast_sk: Option<&fedimint_core::secp256k1::SecretKey>,
     ) -> anyhow::Result<Self> {
         let mut s = Self::new_no_overrides(
             secret_key,
@@ -68,7 +74,6 @@ impl IrohConnector {
             iroh_relays,
             node_ids,
             iroh_next_settings,
-            broadcast_sk,
         )
         .await?;
 
@@ -83,6 +88,15 @@ impl IrohConnector {
             s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
         }
 
+        for (k, v) in parse_kv_list_from_env::<iroh_next::EndpointId, SocketAddr>(
+            FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN_ENV,
+        )? {
+            s = s.with_next_connection_override(
+                k,
+                iroh_next::EndpointAddr::from_parts(k, [iroh_next::TransportAddr::Ip(v)]),
+            );
+        }
+
         Ok(s)
     }
 
@@ -93,7 +107,6 @@ impl IrohConnector {
         iroh_relays: Vec<SafeUrl>,
         node_ids: BTreeMap<PeerId, NodeId>,
         iroh_next_settings: Option<&IrohNextSettings>,
-        _broadcast_sk: Option<&fedimint_core::secp256k1::SecretKey>,
     ) -> anyhow::Result<Self> {
         let identity = *node_ids
             .iter()
@@ -135,12 +148,40 @@ impl IrohConnector {
             endpoint,
             endpoint_next,
             connection_overrides: BTreeMap::default(),
+            next_connection_overrides: BTreeMap::default(),
+            next_connected_peers: Arc::new(Mutex::new(BTreeSet::new())),
         })
     }
 
     pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
         self.connection_overrides.insert(node, addr);
         self
+    }
+
+    /// Add a direct-address override for an iroh-next endpoint connection
+    /// attempt.
+    pub fn with_next_connection_override(
+        mut self,
+        node: iroh_next::EndpointId,
+        addr: iroh_next::EndpointAddr,
+    ) -> Self {
+        self.next_connection_overrides.insert(node, addr);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IrohStack {
+    Stable,
+    Next,
+}
+
+impl IrohStack {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Next => "next",
+        }
     }
 }
 
@@ -157,11 +198,7 @@ where
         let node_id = *self.node_ids.get(&peer).expect("No node id found for peer");
 
         let mut futures = FuturesUnordered::<
-            Pin<
-                Box<
-                    dyn Future<Output = (anyhow::Result<DynP2PConnection<M>>, &'static str)> + Send,
-                >,
-            >,
+            Pin<Box<dyn Future<Output = (anyhow::Result<DynP2PConnection<M>>, IrohStack)> + Send>>,
         >::new();
 
         // Stable endpoint connection attempt
@@ -176,7 +213,7 @@ where
                     }
                     None => endpoint.connect(node_id, FEDIMINT_P2P_ALPN).await,
                 };
-                (conn.map(IP2PConnection::into_dyn), "stable")
+                (conn.map(IP2PConnection::into_dyn), IrohStack::Stable)
             }));
         }
 
@@ -185,12 +222,18 @@ where
             let endpoint_next = endpoint_next.clone();
             let next_node_id =
                 iroh_next::EndpointId::from_bytes(node_id.as_bytes()).expect("Can't fail");
+            let override_addr = self.next_connection_overrides.get(&next_node_id).cloned();
             futures.push(Box::pin(async move {
-                let conn: Result<iroh_next::endpoint::Connection, _> =
-                    endpoint_next.connect(next_node_id, FEDIMINT_P2P_ALPN).await;
+                let conn: Result<iroh_next::endpoint::Connection, _> = match override_addr {
+                    Some(endpoint_addr) => {
+                        trace!(target: LOG_NET_IROH, %next_node_id, "Using a connectivity override for next connection");
+                        endpoint_next.connect(endpoint_addr, FEDIMINT_P2P_ALPN).await
+                    }
+                    None => endpoint_next.connect(next_node_id, FEDIMINT_P2P_ALPN).await,
+                };
                 (
                     conn.map(IP2PConnection::into_dyn).map_err(Into::into),
-                    "next",
+                    IrohStack::Next,
                 )
             }));
         }
@@ -198,8 +241,17 @@ where
         let mut prev_err = None;
         while let Some((result, iroh_stack)) = futures.next().await {
             match result {
-                Ok(connection) => return Ok(connection),
+                Ok(connection) => {
+                    if matches!(iroh_stack, IrohStack::Next) {
+                        self.next_connected_peers
+                            .lock()
+                            .expect("next connected peers mutex should not be poisoned")
+                            .insert(peer);
+                    }
+                    return Ok(connection);
+                }
                 Err(err) => {
+                    let iroh_stack = iroh_stack.as_str();
                     warn!(
                         target: LOG_NET_IROH,
                         err = %err.fmt_compact_anyhow(),
@@ -243,14 +295,18 @@ where
                     // Convert iroh-next EndpointId back to stable NodeId for peer lookup
                     let node_id = NodeId::from_bytes(next_node_id.as_bytes())
                         .expect("Can't fail");
-                    let auth_peer = self
+                    let auth_peer = *self
                         .node_ids
                         .iter()
                         .find(|entry| entry.1 == &node_id)
                         .with_context(|| format!("Node id {node_id} (next) is unknown"))?
                         .0;
+                    self.next_connected_peers
+                        .lock()
+                        .expect("next connected peers mutex should not be poisoned")
+                        .insert(auth_peer);
 
-                    Ok((*auth_peer, connection.into_dyn()))
+                    Ok((auth_peer, connection.into_dyn()))
                 }
             }
         } else {
@@ -278,19 +334,21 @@ where
         let node_id = *self.node_ids.get(&peer).expect("No node id found for peer");
 
         // Check stable endpoint first
-        if let Ok(conn_type) = self.endpoint.conn_type(node_id).ok()?.get() {
-            return match conn_type {
-                iroh::endpoint::ConnectionType::None => None,
-                iroh::endpoint::ConnectionType::Direct(..) => Some(ConnectionType::Direct),
-                iroh::endpoint::ConnectionType::Relay(..) => Some(ConnectionType::Relay),
-                iroh::endpoint::ConnectionType::Mixed(..) => Some(ConnectionType::Mixed),
-            };
+        if let Ok(watcher) = self.endpoint.conn_type(node_id)
+            && let Ok(conn_type) = watcher.get()
+        {
+            match conn_type {
+                iroh::endpoint::ConnectionType::None => {}
+                iroh::endpoint::ConnectionType::Direct(..) => return Some(ConnectionType::Direct),
+                iroh::endpoint::ConnectionType::Relay(..) => return Some(ConnectionType::Relay),
+                iroh::endpoint::ConnectionType::Mixed(..) => return Some(ConnectionType::Mixed),
+            }
         }
 
-        // iroh 0.96 does not expose endpoint-level connection-type lookup like
-        // the stable stack; active iroh-next connections still report their
-        // path changes through the per-connection monitoring task.
-
-        None
+        self.next_connected_peers
+            .lock()
+            .expect("next connected peers mutex should not be poisoned")
+            .contains(&peer)
+            .then_some(ConnectionType::IrohNext)
     }
 }

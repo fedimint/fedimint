@@ -150,6 +150,14 @@ pub const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES
 /// [`FM_IROH_CONNECT_OVERRIDES_ENV`] instead.
 pub const FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV: &str = "FM_IROH_CONNECT_OVERRIDES_PLAIN";
 
+/// Env var to override iroh-next P2P connectivity, in the plain
+/// `<id>=<addr>` format.
+///
+/// This is separate from [`FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV`] so tests and
+/// local deployments can point the stable and iroh-next stacks at different
+/// direct addresses.
+pub const FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN_ENV: &str = "FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN";
+
 /// Env var to override iroh connectivity, in the plain `<id>=<addr>` format.
 /// Gateway counterpart of [`FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV`].
 pub const FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES_PLAIN";

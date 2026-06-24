@@ -163,10 +163,7 @@ async fn update_signed_guardian_metadata(
 
     if iroh_next_settings.is_some() {
         let iroh_sk = broadcast_keys::derive_iroh_next_api_sk(&cfg.private.broadcast_secret_key);
-        guardian_metadata = guardian_metadata.with_iroh_next(
-            fedimint_core::net::iroh::IROH_NEXT_VERSION.to_string(),
-            iroh_sk.public().to_string(),
-        );
+        guardian_metadata = guardian_metadata.with_iroh_next_endpoint(iroh_sk.public().to_string());
     }
     let ctx = secp256k1::Secp256k1::new();
     let signed_metadata =
