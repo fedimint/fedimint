@@ -839,31 +839,14 @@ impl MintClientModule {
     async fn send_ecash_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        mut remaining_amount: Amount,
+        remaining_amount: Amount,
         custom_meta: Value,
         include_invite: bool,
     ) -> Result<Option<(OperationId, ECash)>, Infallible> {
-        let mut stream = dbtx
-            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
-            .await
-            .map(|entry| entry.0.0);
-
-        let mut notes = vec![];
-
-        while let Some(spendable_note) = stream.next().await {
-            remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
-                Some(amount) => amount,
-                None => continue,
-            };
-
-            notes.push(spendable_note);
-        }
-
-        drop(stream);
-
-        if remaining_amount != Amount::ZERO {
+        let Some(notes) = Self::select_exact_change(&mut dbtx.to_ref_nc(), remaining_amount).await
+        else {
             return Ok(None);
-        }
+        };
 
         for spendable_note in &notes {
             self.remove_spendable_note(dbtx, spendable_note).await;
@@ -1047,14 +1030,31 @@ impl MintClientModule {
 
     /// Returns whether the client's current notes can be handed out to cover
     /// `amount` exactly — the free path in [`Self::send`] — without modifying
-    /// the inventory. Mirrors the greedy selection in
-    /// [`Self::send_ecash_dbtx`].
-    async fn can_make_exact_change(&self, mut remaining_amount: Amount) -> bool {
+    /// the inventory. Shares its greedy selection with
+    /// [`Self::send_ecash_dbtx`] via [`Self::select_exact_change`].
+    async fn can_make_exact_change(&self, remaining_amount: Amount) -> bool {
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+
+        Self::select_exact_change(&mut dbtx, remaining_amount)
+            .await
+            .is_some()
+    }
+
+    /// Greedily selects spendable notes (largest-first) summing to *exactly*
+    /// `remaining_amount`, or `None` if the inventory can't make exact change.
+    /// Reads the DB but does not modify it. Single source of truth for the free
+    /// (hand-out-existing-notes) selection shared by [`Self::send_ecash_dbtx`]
+    /// and [`Self::can_make_exact_change`].
+    async fn select_exact_change(
+        dbtx: &mut DatabaseTransaction<'_>,
+        mut remaining_amount: Amount,
+    ) -> Option<Vec<SpendableNote>> {
         let mut stream = dbtx
             .find_by_prefix_sorted_descending(&SpendableNotePrefix)
             .await
             .map(|entry| entry.0.0);
+
+        let mut notes = vec![];
 
         while let Some(spendable_note) = stream.next().await {
             remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
@@ -1062,12 +1062,14 @@ impl MintClientModule {
                 None => continue,
             };
 
+            notes.push(spendable_note);
+
             if remaining_amount == Amount::ZERO {
-                return true;
+                break;
             }
         }
 
-        remaining_amount == Amount::ZERO
+        (remaining_amount == Amount::ZERO).then_some(notes)
     }
 
     /// Await the final state of the receive operation.
