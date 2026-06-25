@@ -2,7 +2,9 @@ use bitcoin::{TxOut, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_walletv2_common::TxInfo;
-use fedimint_walletv2_common::taproot::frost::{FrostSignatureShares, FrostSigningCommitments};
+use fedimint_walletv2_common::taproot::frost::{
+    FrostFinalizationStat, FrostSignatureShares, FrostSigningCommitments,
+};
 use secp256k1::ecdsa::Signature;
 use secp256k1::schnorr;
 use serde::Serialize;
@@ -32,6 +34,7 @@ pub enum DbKeyPrefix {
     FrostSigningAttempt = 0x3f,
     FrostAdvanceVote = 0x40,
     LocalFrostSignatureShare = 0x41,
+    FrostFinalizationStat = 0x42,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -420,4 +423,30 @@ impl_db_lookup!(
     query_prefix = FrostAdvanceVotePrefix,
     query_prefix = FrostAdvanceVoteTxidPrefix,
     query_prefix = FrostAdvanceVoteAttemptPrefix
+);
+
+/// Per-guardian, locally-measured FROST finalization-latency record for a
+/// finalized federation transaction, keyed by its `txid`. Written in the
+/// finalize branch of `process_frost_signature_share`; read by the
+/// authenticated `FROST_FINALIZATION_STATS_ENDPOINT`.
+///
+/// Node-local diagnostics: `duration_millis` comes from a local wall clock, so
+/// the value differs across guardians — but it is never read back during
+/// consensus, so (like the FROST nonces in `FrostSigningNoncesKey`) the
+/// divergence has no consensus implications.
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct FrostFinalizationStatKey(pub Txid);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct FrostFinalizationStatPrefix;
+
+impl_db_record!(
+    key = FrostFinalizationStatKey,
+    value = FrostFinalizationStat,
+    db_prefix = DbKeyPrefix::FrostFinalizationStat
+);
+
+impl_db_lookup!(
+    key = FrostFinalizationStatKey,
+    query_prefix = FrostFinalizationStatPrefix
 );

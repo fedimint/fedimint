@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use anyhow::{anyhow, ensure};
@@ -8,6 +8,7 @@ use bitcoin::sighash::{Prevouts, SighashCache};
 use bitcoin::{Txid, XOnlyPublicKey};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::envs::FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
@@ -16,7 +17,9 @@ use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_walletv2_common::WalletConsensusItem;
 use fedimint_walletv2_common::config::WalletDescriptor;
-use fedimint_walletv2_common::taproot::frost::{FrostSignatureShares, FrostSigningCommitments};
+use fedimint_walletv2_common::taproot::frost::{
+    FrostFinalizationStat, FrostSignatureShares, FrostSigningCommitments,
+};
 use frost_secp256k1_tr as frost;
 use frost_secp256k1_tr::keys::{
     EvenY, KeyPackage, PublicKeyPackage, SigningShare, Tweak, VerifyingShare,
@@ -32,12 +35,12 @@ use secp256k1::{PublicKey, Scalar};
 
 use crate::db::{
     FrostAdvanceVoteAttemptPrefix, FrostAdvanceVoteKey, FrostAdvanceVoteTxidPrefix,
-    FrostSignatureShareAttemptPrefix, FrostSignatureShareKey, FrostSignatureShareTxidPrefix,
-    FrostSigningAttempt, FrostSigningAttemptKey, FrostSigningAttemptTxidPrefix,
-    FrostSigningCommitmentsKey, FrostSigningCommitmentsPeerPrefix, FrostSigningNoncesKey,
-    FrostSigningNoncesPrefix, FrostSigningPackagesKey, FrostSigningPackagesTxidPrefix,
-    LocalFrostSignatureShareKey, LocalFrostSignatureShareTxidPrefix, UnconfirmedTxKey,
-    UnsignedTxKey, UnsignedTxPrefix,
+    FrostFinalizationStatKey, FrostSignatureShareAttemptPrefix, FrostSignatureShareKey,
+    FrostSignatureShareTxidPrefix, FrostSigningAttempt, FrostSigningAttemptKey,
+    FrostSigningAttemptTxidPrefix, FrostSigningCommitmentsKey, FrostSigningCommitmentsPeerPrefix,
+    FrostSigningNoncesKey, FrostSigningNoncesPrefix, FrostSigningPackagesKey,
+    FrostSigningPackagesTxidPrefix, LocalFrostSignatureShareKey,
+    LocalFrostSignatureShareTxidPrefix, UnconfirmedTxKey, UnsignedTxKey, UnsignedTxPrefix,
 };
 use crate::{FederationTx, Wallet};
 
@@ -310,7 +313,7 @@ impl Wallet {
             .0;
 
         // Inline 1:1 replacement: keep our local nonce buffer at
-        // `FROST_NONCE_BUFFER_TARGET` invariantly. Local-only state, no
+        // `frost_nonce_buffer_target()` invariantly. Local-only state, no
         // consensus implications.
         let key_package = self
             .cfg
@@ -685,7 +688,7 @@ impl Wallet {
             target: LOG_MODULE_WALLETV2,
             ?peer,
             commitment_count,
-            target = FROST_NONCE_BUFFER_TARGET,
+            target = frost_nonce_buffer_target(),
             "Stored FROST signing commitment"
         );
 
@@ -897,6 +900,11 @@ impl Wallet {
             let mut unsigned = unsigned_tx;
             finalize_tx_frost(&mut unsigned, &final_sigs);
 
+            // Capture this guardian's local finalization-latency stat before
+            // the cleanup below removes the attempt / advance-vote records and
+            // the first-seen timestamp it's derived from.
+            self.record_finalization_stat(dbtx, txid).await;
+
             // All per-attempt state for this tx — across every
             // attempt that ever ran — gets cleaned up here, since
             // shares, packages, and attempt records are all keyed
@@ -951,6 +959,85 @@ impl Wallet {
         self.try_progress_pending_signings(dbtx).await?;
 
         Ok(())
+    }
+
+    /// Record a local finalization-latency record for `txid` under
+    /// [`FrostFinalizationStatKey`]. Must be called from the finalize branch
+    /// *before* it removes the attempt and advance-vote records (whose counts
+    /// are read here) and *before* `tx_attempt_first_seen` is cleared (the
+    /// earliest attempt's first-seen timestamp is the measurement start).
+    ///
+    /// `attempts` and `advance_votes` are read from the consensus DB, so they
+    /// are identical on every guardian; `duration_millis` is derived from a
+    /// local wall-clock `now()` and is therefore per-peer state. It's written
+    /// to `dbtx` purely as diagnostics and is never read back during consensus,
+    /// so — like the per-guardian FROST nonces — the divergence has no
+    /// consensus implications.
+    async fn record_finalization_stat(&self, dbtx: &mut DatabaseTransaction<'_>, txid: Txid) {
+        let attempts = dbtx
+            .find_by_prefix(&FrostSigningAttemptTxidPrefix(txid))
+            .await
+            .count()
+            .await as u32;
+        let advance_votes = dbtx
+            .find_by_prefix(&FrostAdvanceVoteTxidPrefix(txid))
+            .await
+            .count()
+            .await as u64;
+
+        // Start = when we first observed the earliest attempt of this tx (the
+        // smallest attempt entry we still hold). Absent only in the
+        // pathological case where we process the threshold share before our
+        // own `consensus_proposal` ever logged the tx — skip recording then
+        // rather than report a bogus duration.
+        let first_seen = {
+            let map = self
+                .frost
+                .tx_attempt_first_seen
+                .lock()
+                .expect("tx_attempt_first_seen mutex poisoned");
+            map.iter()
+                .filter(|((t, _), _)| *t == txid)
+                .min_by_key(|((_, attempt), _)| *attempt)
+                .map(|(_, seen)| *seen)
+        };
+        let Some(first_seen) = first_seen else {
+            tracing::debug!(
+                target: LOG_MODULE_WALLETV2,
+                ?txid,
+                "No first-seen timestamp for finalized tx; skipping finalization stat"
+            );
+            return;
+        };
+
+        let duration_millis = fedimint_core::time::now()
+            .duration_since(first_seen)
+            .unwrap_or_default()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+
+        dbtx.insert_entry(
+            &FrostFinalizationStatKey(txid),
+            &FrostFinalizationStat {
+                txid,
+                duration_millis,
+                attempts,
+                advance_votes,
+            },
+        )
+        .await;
+    }
+
+    /// This guardian's locally-measured FROST finalization-latency record for
+    /// `txid`, or `None` if this guardian hasn't finalized that tx. Backs the
+    /// authenticated `FROST_FINALIZATION_STATS_ENDPOINT`.
+    pub(crate) async fn finalization_stat(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        txid: Txid,
+    ) -> Option<FrostFinalizationStat> {
+        dbtx.get_value(&FrostFinalizationStatKey(txid)).await
     }
 
     /// Handle a `WalletConsensusItem::FrostAdvanceVote` from `peer`:
@@ -1148,7 +1235,23 @@ impl Wallet {
 /// the federation runs out of fresh nonces. Each unused commitment is also
 /// broadcast as a consensus item, so this also caps the per-peer commitment
 /// bytes flowing through `AlephBFT`.
-pub(crate) const FROST_NONCE_BUFFER_TARGET: usize = 64;
+pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 64;
+
+/// Target size of the local FROST nonce buffer (see
+/// [`spawn_initial_nonce_backfill`]).
+/// Reads [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] once on first use,
+/// falling back to [`DEFAULT_FROST_NONCE_BUFFER_TARGET`] when unset or
+/// unparsable.
+pub(crate) fn frost_nonce_buffer_target() -> usize {
+    static TARGET: LazyLock<usize> = LazyLock::new(|| {
+        std::env::var(FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV)
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_FROST_NONCE_BUFFER_TARGET)
+    });
+
+    *TARGET
+}
 
 /// How often a peer re-broadcasts its FROST signature share (or
 /// commitment) when the previous broadcast hasn't yet been delivered
@@ -1175,7 +1278,7 @@ pub(crate) fn local_advance_timeout() -> std::time::Duration {
 }
 
 /// One-shot startup backfill: top the local FROST nonce buffer up to
-/// [`FROST_NONCE_BUFFER_TARGET`] and exit. After this, the buffer is
+/// [`frost_nonce_buffer_target()`] and exit. After this, the buffer is
 /// maintained 1:1 by `consume_our_nonce`, which generates a replacement
 /// nonce inline every time it consumes one. So this only ever generates
 /// nonces on cold start, restart, or recovery — anything that produces
@@ -1198,7 +1301,7 @@ pub(crate) fn spawn_initial_nonce_backfill(
             .await
             .count()
             .await;
-        for _ in 0..FROST_NONCE_BUFFER_TARGET.saturating_sub(count) {
+        for _ in 0..frost_nonce_buffer_target().saturating_sub(count) {
             let (nonce, commitment) =
                 frost_secp256k1_tr::round1::commit(key_package.signing_share(), &mut OsRng);
 
