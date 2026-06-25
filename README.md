@@ -52,7 +52,7 @@ Fedimint federations.
 You can pick one of Fedimint-supporting applications:
 
 * [Fedi](https://www.fedi.xyz/) - for MacOS, Android and Web browsers
-* [Ecash App](https://ecash.love) - Android and desktop wallet
+* [Ecash App](https://github.com/fedimint/ecash-app) - Android and desktop wallet
 * [Conduit Wallet](https://joschisan.github.io/conduit) - iOS and Android wallet
 * [Harbor Wallet](https://harbor.cash/) - desktop wallet
 * [Vipr Wallet](https://github.com/ngutech21/vipr-wallet) - Web (PWA) wallet
