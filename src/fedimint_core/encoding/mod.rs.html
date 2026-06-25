@@ -923,14 +923,14 @@
 <a href=#923 id=923 data-nosnippet>923</a>        );
 <a href=#924 id=924 data-nosnippet>924</a>    }
 <a href=#925 id=925 data-nosnippet>925</a>
-<a href=#926 id=926 data-nosnippet>926</a>    <span class="attr">#[test_log::test]
-<a href=#927 id=927 data-nosnippet>927</a>    </span><span class="kw">fn </span>test_derive_struct() {
-<a href=#928 id=928 data-nosnippet>928</a>        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-<a href=#929 id=929 data-nosnippet>929</a>        </span><span class="kw">struct </span>TestStruct {
-<a href=#930 id=930 data-nosnippet>930</a>            vec: Vec&lt;u8&gt;,
-<a href=#931 id=931 data-nosnippet>931</a>            num: u32,
-<a href=#932 id=932 data-nosnippet>932</a>        }
-<a href=#933 id=933 data-nosnippet>933</a>
+<a href=#926 id=926 data-nosnippet>926</a>    <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+<a href=#927 id=927 data-nosnippet>927</a>    </span><span class="kw">struct </span>TestStruct {
+<a href=#928 id=928 data-nosnippet>928</a>        vec: Vec&lt;u8&gt;,
+<a href=#929 id=929 data-nosnippet>929</a>        num: u32,
+<a href=#930 id=930 data-nosnippet>930</a>    }
+<a href=#931 id=931 data-nosnippet>931</a>
+<a href=#932 id=932 data-nosnippet>932</a>    <span class="attr">#[test_log::test]
+<a href=#933 id=933 data-nosnippet>933</a>    </span><span class="kw">fn </span>test_derive_struct() {
 <a href=#934 id=934 data-nosnippet>934</a>        <span class="kw">let </span>reference = TestStruct {
 <a href=#935 id=935 data-nosnippet>935</a>            vec: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
 <a href=#936 id=936 data-nosnippet>936</a>            num: <span class="number">42</span>,
@@ -940,25 +940,25 @@
 <a href=#940 id=940 data-nosnippet>940</a>        test_roundtrip_expected(<span class="kw-2">&amp;</span>reference, <span class="kw-2">&amp;</span>bytes);
 <a href=#941 id=941 data-nosnippet>941</a>    }
 <a href=#942 id=942 data-nosnippet>942</a>
-<a href=#943 id=943 data-nosnippet>943</a>    <span class="attr">#[test_log::test]
-<a href=#944 id=944 data-nosnippet>944</a>    </span><span class="kw">fn </span>test_derive_tuple_struct() {
-<a href=#945 id=945 data-nosnippet>945</a>        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-<a href=#946 id=946 data-nosnippet>946</a>        </span><span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
-<a href=#947 id=947 data-nosnippet>947</a>
-<a href=#948 id=948 data-nosnippet>948</a>        <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
+<a href=#943 id=943 data-nosnippet>943</a>    <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+<a href=#944 id=944 data-nosnippet>944</a>    </span><span class="kw">struct </span>TestTupleStruct(Vec&lt;u8&gt;, u32);
+<a href=#945 id=945 data-nosnippet>945</a>
+<a href=#946 id=946 data-nosnippet>946</a>    <span class="attr">#[test_log::test]
+<a href=#947 id=947 data-nosnippet>947</a>    </span><span class="kw">fn </span>test_derive_tuple_struct() {
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="kw">let </span>reference = TestTupleStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
 <a href=#949 id=949 data-nosnippet>949</a>        <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>];
 <a href=#950 id=950 data-nosnippet>950</a>
 <a href=#951 id=951 data-nosnippet>951</a>        test_roundtrip_expected(<span class="kw-2">&amp;</span>reference, <span class="kw-2">&amp;</span>bytes);
 <a href=#952 id=952 data-nosnippet>952</a>    }
 <a href=#953 id=953 data-nosnippet>953</a>
-<a href=#954 id=954 data-nosnippet>954</a>    <span class="attr">#[test_log::test]
-<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">fn </span>test_derive_enum() {
-<a href=#956 id=956 data-nosnippet>956</a>        <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-<a href=#957 id=957 data-nosnippet>957</a>        </span><span class="kw">enum </span>TestEnum {
-<a href=#958 id=958 data-nosnippet>958</a>            Foo(<span class="prelude-ty">Option</span>&lt;u64&gt;),
-<a href=#959 id=959 data-nosnippet>959</a>            Bar { bazz: Vec&lt;u8&gt; },
-<a href=#960 id=960 data-nosnippet>960</a>        }
-<a href=#961 id=961 data-nosnippet>961</a>
+<a href=#954 id=954 data-nosnippet>954</a>    <span class="attr">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">enum </span>TestEnum {
+<a href=#956 id=956 data-nosnippet>956</a>        Foo(<span class="prelude-ty">Option</span>&lt;u64&gt;),
+<a href=#957 id=957 data-nosnippet>957</a>        Bar { bazz: Vec&lt;u8&gt; },
+<a href=#958 id=958 data-nosnippet>958</a>    }
+<a href=#959 id=959 data-nosnippet>959</a>
+<a href=#960 id=960 data-nosnippet>960</a>    <span class="attr">#[test_log::test]
+<a href=#961 id=961 data-nosnippet>961</a>    </span><span class="kw">fn </span>test_derive_enum() {
 <a href=#962 id=962 data-nosnippet>962</a>        <span class="kw">let </span>test_cases = [
 <a href=#963 id=963 data-nosnippet>963</a>            (TestEnum::Foo(<span class="prelude-val">Some</span>(<span class="number">42</span>)), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">1</span>, <span class="number">42</span>]),
 <a href=#964 id=964 data-nosnippet>964</a>            (TestEnum::Foo(<span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>]),
