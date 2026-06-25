@@ -121,6 +121,12 @@ pub enum LightningReceiveError {
     InvalidPreimage,
 }
 
+impl From<LightningReceiveError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: LightningReceiveError) -> Self {
+        Self::General(e.to_string())
+    }
+}
+
 impl LightningReceiveSubmittedOffer {
     fn transitions(
         &self,

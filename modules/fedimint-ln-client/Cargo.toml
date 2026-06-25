@@ -18,6 +18,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 [features]
 cli = ["dep:clap"]
 default = []
+uniffi = ["dep:uniffi", "fedimint-core/uniffi", "fedimint-ln-common/uniffi"]
 
 [lib]
 name = "fedimint_ln_client"
@@ -43,6 +44,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
 lnurl-rs = { workspace = true, features = ["async"] }
+log = "0.4"
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -52,6 +54,7 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [lints]
 workspace = true

@@ -78,6 +78,9 @@
 /// Federation Api announcement handling
 mod api_announcements;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 /// Guardian metadata handling
 mod guardian_metadata;
 
@@ -86,9 +89,10 @@ mod client;
 
 /// Client backup
 pub mod backup;
-
 /// Database keys used by the client
 pub mod db;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 
 /// Management of meta fields
 pub mod meta;
@@ -99,12 +103,32 @@ pub mod module_init;
 
 pub mod sm;
 pub mod visualize;
+#[cfg(feature = "uniffi")]
+pub use backup::Metadata;
 pub use client::Client;
 pub use client::builder::{ClientBuilder, ClientPreview, RootSecret};
 pub use client::handle::{ClientHandle, ClientHandleArc};
+#[cfg(feature = "uniffi")]
+pub use db::ChronologicalOperationLogKey;
 pub use fedimint_client_module as module;
 /// Re-exporting of everything from `fedimint_client_module`
 ///
 /// This should be removed when the splitting of [`fedimint_client_module`] is
 /// complete.
 pub use fedimint_client_module::*;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::Amount;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::config::FederationId;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::core::OperationId;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::invite_code::InviteCode;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::module::AmountUnit;
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::{ChainId, OutPoint, TransactionId};
+#[cfg(feature = "uniffi")]
+pub use fedimint_core::{UnifiedCallback, UnifiedCallbackEvent};
+#[cfg(feature = "uniffi")]
+pub use fedimint_eventlog::{EventLogEntry, PersistedLogEntry};

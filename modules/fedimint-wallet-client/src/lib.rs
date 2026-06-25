@@ -5,6 +5,9 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 pub mod api;
 #[cfg(feature = "cli")]
 mod cli;
@@ -17,6 +20,8 @@ pub mod client_db;
 mod deposit;
 pub mod events;
 use events::SendPaymentEvent;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -538,6 +543,7 @@ impl WalletClientModuleData {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct WalletClientModule {
     data: WalletClientModuleData,
     db: Database,
@@ -737,6 +743,12 @@ pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(PegInRequest, String, {
+    lower: |v| serde_json::to_string(&v).unwrap(),
+    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!(format!("Failed to parse PegInRequest: {e}"))),
+});
+
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
     operation_id: OperationId,
@@ -753,6 +765,11 @@ pub struct PegInResponse {
     pub operation_id: OperationId,
 }
 
+uniffi::custom_type!(PegInResponse, String, {
+    lower: |v| serde_json::to_string(&v).unwrap(),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse PegInResponse: {e}"))),
+});
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegOutRequest {
     pub amount_sat: u64,
@@ -760,7 +777,13 @@ pub struct PegOutRequest {
     pub extra_meta: serde_json::Value,
 }
 
+uniffi::custom_type!(PegOutRequest, String, {
+    lower: |v| serde_json::to_string(&v).unwrap(),
+    try_lift: |s| serde_json::from_str::<PegOutRequest>(&s).map_err(|e| anyhow!(format!("Failed to parse PegOutRequest: {e}"))),
+});
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct PegOutResponse {
     pub operation_id: OperationId,
 }

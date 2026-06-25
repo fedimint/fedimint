@@ -2,6 +2,9 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -11,7 +14,7 @@ pub mod states;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
@@ -29,6 +32,7 @@ use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::backoff_util::FibonacciBackoff;
+use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
@@ -41,7 +45,22 @@ use states::MetaStateMachine;
 use strum::IntoEnumIterator;
 use tracing::{debug, warn};
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(MetaKey, u8, {
+    remote,
+    lower: |k| k.0,
+    try_lift: |v| Ok(MetaKey(v)),
+});
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(MetaConsensusValue, String, {
+    remote,
+    lower: |value| serde_json::to_string(&value).expect("MetaConsensusValue always serializes"),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse MetaConsensusValue: {e}"))),
+});
+
 #[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct MetaClientModule {
     module_api: DynModuleApi,
     admin_auth: Option<ApiAuth>,
@@ -99,6 +118,21 @@ impl MetaClientModule {
             .module_api
             .get_submissions(key, self.admin_auth()?)
             .await?)
+    }
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(async_runtime = "tokio")]
+impl MetaClientModule {
+    #[uniffi::method(name = "get_consensus_value")]
+    pub async fn get_consensus_value_uniffi(
+        &self,
+        key: MetaKey,
+    ) -> Result<Option<MetaConsensusValue>, UniffiError> {
+        self.module_api
+            .get_consensus(key)
+            .await
+            .map_err(|e| UniffiError::from(anyhow!(e.to_string())))
     }
 }
 
