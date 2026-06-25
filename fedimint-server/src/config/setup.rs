@@ -327,10 +327,6 @@ impl ISetupApi for SetupApi {
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
     ) -> anyhow::Result<String> {
-        // Only the leader carries a descriptor_kind. Anyone setting
-        // `federation_name` is treated as the leader; the env var is
-        // only read on that path. This mirrors the leader-only semantics
-        // we previously had with the use_taproot UI checkbox.
         let descriptor_kind = if federation_name.is_some() {
             std::env::var(FM_WALLETV2_DESCRIPTOR_ENV)
                 .ok()
