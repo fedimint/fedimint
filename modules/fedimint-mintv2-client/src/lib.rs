@@ -297,7 +297,13 @@ impl ClientModuleInit for MintClientInit {
 
         let filter = issuance::tweak_filter(args.module_root_secret());
 
-        tokio::task::spawn_blocking(move || {
+        // Only ~1/65536 random tweaks pass the filter, so grinding is
+        // CPU-bound. Pre-grind in the background and feed tweaks through a
+        // channel to keep the cost off the spend path. `send` only suspends
+        // once the channel is full, so we yield explicitly on each found tweak
+        // to keep single-threaded (wasm) runtimes responsive while the channel
+        // still has space.
+        fedimint_core::task::spawn("mintv2-tweak-grinder", async move {
             loop {
                 let tweak: [u8; 16] = thread_rng().r#gen();
 
@@ -305,9 +311,11 @@ impl ClientModuleInit for MintClientInit {
                     continue;
                 }
 
-                if tweak_sender.send_blocking(tweak).is_err() {
+                if tweak_sender.send(tweak).await.is_err() {
                     return;
                 }
+
+                fedimint_core::task::sleep(Duration::ZERO).await;
             }
         });
 
