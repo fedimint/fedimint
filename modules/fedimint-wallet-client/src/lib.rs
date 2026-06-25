@@ -5,9 +5,6 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 pub mod api;
 #[cfg(feature = "cli")]
 mod cli;
@@ -19,8 +16,6 @@ pub mod client_db;
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
 pub mod events;
-#[cfg(feature = "uniffi")]
-pub mod ffi;
 use events::{DepositConfirmed, SendPaymentEvent};
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
@@ -41,15 +36,15 @@ use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakId
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
-    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
-    TransactionBuilder, max_affordable_send_amount,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
+    max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -94,46 +89,6 @@ use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct BitcoinTransactionData {
-    /// The bitcoin transaction is saved as soon as we see it so the transaction
-    /// can be re-transmitted if it's evicted from the mempool.
-    pub btc_transaction: bitcoin::Transaction,
-    /// Index of the deposit output
-    pub out_idx: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum DepositStateV1 {
-    WaitingForTransaction,
-    WaitingForConfirmation(BitcoinTransactionData),
-    Confirmed(BitcoinTransactionData),
-    Claimed(BitcoinTransactionData),
-    Failed(String),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-pub enum DepositStateV2 {
-    WaitingForTransaction,
-    WaitingForConfirmation {
-        #[serde(with = "bitcoin::amount::serde::as_sat")]
-        btc_deposited: bitcoin::Amount,
-        btc_out_point: bitcoin::OutPoint,
-    },
-    Confirmed {
-        #[serde(with = "bitcoin::amount::serde::as_sat")]
-        btc_deposited: bitcoin::Amount,
-        btc_out_point: bitcoin::OutPoint,
-    },
-    Claimed {
-        #[serde(with = "bitcoin::amount::serde::as_sat")]
-        btc_deposited: bitcoin::Amount,
-        btc_out_point: bitcoin::OutPoint,
-    },
-    Failed(String),
-}
 
 /// State of a single on-chain receive (peg-in of one UTXO), as streamed by
 /// [`WalletClientModule::subscribe_receive`].
@@ -223,7 +178,6 @@ pub enum AllocateDepositOutcome {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum WithdrawState {
     Created,
     Succeeded(bitcoin::Txid),
@@ -469,10 +423,6 @@ impl ClientModuleInit for WalletClientInit {
         })
     }
 
-    fn recovery_mode(&self) -> RecoveryMode {
-        RecoveryMode::Unusable
-    }
-
     /// Wallet recovery
     ///
     /// Uses slice-based recovery if supported by the federation, otherwise
@@ -633,7 +583,6 @@ impl WalletClientModuleData {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct WalletClientModule {
     data: WalletClientModuleData,
     db: Database,
@@ -841,12 +790,6 @@ pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(PegInRequest, String, {
-    lower: |v| serde_json::to_string(&v).expect("PegInRequest serialization cannot fail"),
-    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!("Failed to parse PegInRequest: {e}")),
-});
-
 #[derive(Deserialize)]
 struct SubscribeReceiveRequest {
     operation_id: OperationId,
@@ -858,14 +801,12 @@ struct SubscribeWithdrawRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegInResponse {
     pub deposit_address: Address<NetworkUnchecked>,
     pub operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutRequest {
     pub amount_sat: u64,
     pub destination_address: Address<NetworkUnchecked>,
@@ -873,7 +814,6 @@ pub struct PegOutRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutResponse {
     pub operation_id: OperationId,
 }
@@ -1107,46 +1047,13 @@ impl WalletClientModule {
             .await
     }
 
-    /// Finds the largest amount that can be withdrawn in full out of
-    /// `balance` — the amount a "withdraw everything" sweep should use —
-    /// together with the peg-out fees to submit it with.
-    ///
-    /// Withdrawing `amount` submits a peg-out output worth `amount +
-    /// peg_out_fees` (the on-chain miner fee is carried inside the output, see
-    /// [`WalletOutputV0::amount`]) and funding that output costs an additional
-    /// federation fee — the peg-out output fee, the mint input fees on the
-    /// funding notes, any mint change output fees and sub-denomination dust —
-    /// as quoted by [`Self::send_fee_quote`].
-    ///
-    /// Both returned values must be passed to [`Self::withdraw`] together. The
-    /// federation rebuilds the peg-out for the exact amount submitted and
-    /// rejects it unless the declared `total_weight` matches what it computed
-    /// (`WalletOutputError::TxWeightIncorrect`), so the fees are re-quoted here
-    /// at the amount being returned rather than at the balance.
-    ///
-    /// This costs exactly two [`Self::get_withdraw_fees`] round trips. The
-    /// first, at the full balance, is an upper bound on the miner fee — the
-    /// federation selects UTXOs until they cover the amount, so the weight is
-    /// monotone in it — and sizing the withdrawal against that upper bound can
-    /// only leave the result more affordable once the true, smaller fee
-    /// replaces it. The maximum itself is then found by binary search over the
-    /// real fee quote (see [`max_affordable_send_amount`]), which needs no
-    /// further round trips because [`Self::send_fee_quote`] is a local dry-run.
-    ///
-    /// Sizing against the upper bound means a sweep may leave a small
-    /// remainder behind. The quote is point-in-time: if the federation's UTXO
-    /// set or feerate moves before the peg-out is processed it is rejected, and
-    /// the caller should retry with a fresh quote.
-    ///
-    /// Returns an error if the balance cannot cover the destination's dust
-    /// limit plus fees.
+    /// Finds the largest whole-satoshi amount that can be withdrawn from
+    /// `balance`, together with the matching peg-out fee quote.
     pub async fn max_withdrawable_amount(
         &self,
         address: &bitcoin::Address,
         balance: fedimint_core::Amount,
     ) -> anyhow::Result<(bitcoin::Amount, PegOutFees)> {
-        // Upper bound on the miner fee: the weight only grows as the federation
-        // has to reach for more UTXOs, so no smaller withdrawal costs more.
         let max_fees = self
             .get_withdraw_fees(
                 address,
@@ -1159,9 +1066,6 @@ impl WalletClientModule {
             balance,
             fedimint_core::Amount::from_sats(address.script_pubkey().minimal_non_dust().to_sat()),
             balance,
-            // A peg-out funds a whole number of sats, so round the probe up to
-            // the next sat before adding the miner fee; the solver searches
-            // millisatoshis.
             |amount: fedimint_core::Amount| {
                 fedimint_core::Amount::from_sats(amount.msats.div_ceil(1000)) + max_fee_msats
             },
@@ -1172,14 +1076,7 @@ impl WalletClientModule {
         .await
         .ok_or_else(|| anyhow!("Balance is too low to withdraw any amount after fees"))?;
 
-        // `gross_up` rounded up to whole satoshis, so the largest affordable
-        // amount already sits on a satoshi boundary; no value is lost here.
         let amount = bitcoin::Amount::from_sat(max.msats.div_ceil(1000));
-
-        // Re-quote at the amount actually being withdrawn. This is the fee the
-        // federation recomputes for that amount, so the declared weight
-        // matches; it is at most `max_fees`, which is what keeps `amount`
-        // affordable.
         let fees = self.get_withdraw_fees(address, amount).await?;
 
         Ok((amount, fees))
@@ -1722,65 +1619,33 @@ impl WalletClientModule {
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
-        let WalletOperationMetaVariant::Receive {
-            claim_operation_id,
-            tweak_idx,
-            btc_out_point,
-            btc_deposited,
-            ..
-        } = operation_meta.variant
-        else {
-            bail!("Operation is not a receive operation");
-        };
-
-        Ok(self.client_ctx.outcome_or_updates(
-            &operation,
-            operation_id,
-            |state| matches!(
-                state,
-                ReceiveState::Claimed { .. }
-                    | ReceiveState::IgnoredDust { .. }
-                    | ReceiveState::Failed(_)
+        match operation_meta.variant {
+            WalletOperationMetaVariant::Receive { .. } => receive_updates_for_operation(
+                &self.client_ctx,
+                &operation,
+                operation_id,
+                &operation_meta.variant,
             ),
-            {
-            let stream_client_ctx = self.client_ctx.clone();
-            move || {
-
-            stream! {
-                let claimed_peg_in_key = ClaimedPegInKey {
-                    peg_in_index: tweak_idx,
-                    btc_out_point,
-                };
-
-                yield ReceiveState::WaitingForConfirmation {
-                    btc_deposited,
-                    btc_out_point
-                };
-
-                let claim_data = stream_client_ctx.module_db().wait_key_exists(&claimed_peg_in_key).await;
-
-                if claim_data.claim_txid == TransactionId::from_byte_array([0; 32]) && claim_data.change.is_empty() {
-                    yield ReceiveState::IgnoredDust {
-                        btc_deposited,
-                        btc_out_point
-                    };
-                    return;
-                }
-
-                yield ReceiveState::Confirmed {
-                    btc_deposited,
-                    btc_out_point
-                };
-
-                match stream_client_ctx.await_primary_module_outputs(claim_operation_id, claim_data.change).await {
-                    Ok(()) => yield ReceiveState::Claimed {
-                        btc_deposited,
-                        btc_out_point
-                    },
-                    Err(e) => yield ReceiveState::Failed(e.to_string())
-                }
+            WalletOperationMetaVariant::DepositAddress {
+                tweak_idx: Some(tweak_idx),
+                ..
+            } => Ok(UpdateStreamOrOutcome::UpdateStream(Box::pin(
+                bridge_deposit_address_to_receive_updates(
+                    self.client_ctx.clone(),
+                    self.db.clone(),
+                    self.pegin_monitor_wakeup_sender.clone(),
+                    self.pegin_claimed_receiver.clone(),
+                    operation_id,
+                    tweak_idx,
+                ),
+            ))),
+            WalletOperationMetaVariant::DepositAddress {
+                tweak_idx: None, ..
+            } => {
+                bail!("Deposit address operation has no tweak index and cannot be subscribed to")
             }
-        }}))
+            _ => bail!("Operation is not a receive operation"),
+        }
     }
 
     /// Reads the final outcome of a *legacy* deposit operation — a
@@ -2035,38 +1900,12 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        let db_key = PegInTweakIndexKey(tweak_idx);
-                        let db_val = dbtx
-                            .get_value(&db_key)
-                            .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
-
-                        dbtx.insert_entry(
-                            &db_key,
-                            &PegInTweakIndexData {
-                                next_check_time: Some(fedimint_core::time::now()),
-                                ..db_val
-                            },
-                        )
-                        .await;
-
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
-
-                        Ok::<_, anyhow::Error>(())
-                    })
-                },
-                Some(100),
-            )
-            .await?;
-
-        Ok(())
+        schedule_pegin_recheck(
+            &self.db,
+            self.pegin_monitor_wakeup_sender.clone(),
+            tweak_idx,
+        )
+        .await
     }
 
     /// Await for num deposit by [`OperationId`]
@@ -2381,6 +2220,216 @@ async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> T
     dbtx.insert_entry(&NextPegInTweakIndexKey, &(index.next()))
         .await;
     index
+}
+
+async fn schedule_pegin_recheck(
+    db: &Database,
+    pegin_monitor_wakeup_sender: watch::Sender<()>,
+    tweak_idx: TweakIdx,
+) -> anyhow::Result<()> {
+    db.autocommit(
+        |dbtx, _| {
+            let pegin_monitor_wakeup_sender = pegin_monitor_wakeup_sender.clone();
+            Box::pin(async move {
+                let db_key = PegInTweakIndexKey(tweak_idx);
+                let db_val = dbtx
+                    .get_value(&db_key)
+                    .await
+                    .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+
+                dbtx.insert_entry(
+                    &db_key,
+                    &PegInTweakIndexData {
+                        next_check_time: Some(fedimint_core::time::now()),
+                        ..db_val
+                    },
+                )
+                .await;
+
+                dbtx.on_commit(move || {
+                    pegin_monitor_wakeup_sender.send_replace(());
+                });
+
+                Ok::<_, anyhow::Error>(())
+            })
+        },
+        Some(100),
+    )
+    .await?;
+
+    Ok(())
+}
+
+fn receive_updates_for_operation(
+    client_ctx: &ClientContext<WalletClientModule>,
+    operation: &OperationLogEntry,
+    operation_id: OperationId,
+    operation_meta_variant: &WalletOperationMetaVariant,
+) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveState>> {
+    let &WalletOperationMetaVariant::Receive {
+        claim_operation_id,
+        tweak_idx,
+        btc_out_point,
+        btc_deposited,
+        ..
+    } = operation_meta_variant
+    else {
+        bail!("Operation is not a receive operation");
+    };
+
+    Ok(client_ctx.outcome_or_updates(
+        operation,
+        operation_id,
+        |state| matches!(
+            state,
+            ReceiveState::Claimed { .. }
+                | ReceiveState::IgnoredDust { .. }
+                | ReceiveState::Failed(_)
+        ),
+        {
+            let stream_client_ctx = client_ctx.clone();
+            move || {
+            stream! {
+                let claimed_peg_in_key = ClaimedPegInKey {
+                    peg_in_index: tweak_idx,
+                    btc_out_point,
+                };
+
+                yield ReceiveState::WaitingForConfirmation {
+                    btc_deposited,
+                    btc_out_point,
+                };
+
+                let claim_data = stream_client_ctx
+                    .module_db()
+                    .wait_key_exists(&claimed_peg_in_key)
+                    .await;
+
+                if claim_data.claim_txid == TransactionId::from_byte_array([0; 32])
+                    && claim_data.change.is_empty()
+                {
+                    yield ReceiveState::IgnoredDust {
+                        btc_deposited,
+                        btc_out_point,
+                    };
+                    return;
+                }
+
+                yield ReceiveState::Confirmed {
+                    btc_deposited,
+                    btc_out_point,
+                };
+
+                match stream_client_ctx
+                    .await_primary_module_outputs(claim_operation_id, claim_data.change)
+                    .await
+                {
+                    Ok(()) => yield ReceiveState::Claimed {
+                        btc_deposited,
+                        btc_out_point,
+                    },
+                    Err(e) => yield ReceiveState::Failed(e.to_string()),
+                }
+            }
+            }
+        },
+    ))
+}
+
+async fn first_receive_operation_for_address(
+    client_ctx: &ClientContext<WalletClientModule>,
+    db: &Database,
+    address_operation_id: OperationId,
+    tweak_idx: TweakIdx,
+) -> Option<OperationId> {
+    let claimed = db
+        .begin_transaction_nc()
+        .await
+        .get_value(&PegInTweakIndexKey(tweak_idx))
+        .await
+        .map(|data| data.claimed)
+        .unwrap_or_default();
+
+    for btc_out_point in claimed {
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, btc_out_point);
+        if client_ctx
+            .operation_log_entry_exists(receive_operation_id)
+            .await
+        {
+            return Some(receive_operation_id);
+        }
+    }
+
+    None
+}
+
+fn bridge_deposit_address_to_receive_updates(
+    client_ctx: ClientContext<WalletClientModule>,
+    db: Database,
+    pegin_monitor_wakeup_sender: watch::Sender<()>,
+    mut pegin_claimed_receiver: watch::Receiver<()>,
+    address_operation_id: OperationId,
+    tweak_idx: TweakIdx,
+) -> BoxStream<'static, ReceiveState> {
+    Box::pin(stream! {
+        let receive_operation_id = loop {
+            if let Some(receive_operation_id) = first_receive_operation_for_address(
+                &client_ctx,
+                &db,
+                address_operation_id,
+                tweak_idx,
+            )
+            .await
+            {
+                break receive_operation_id;
+            }
+
+            if let Err(error) = schedule_pegin_recheck(
+                &db,
+                pegin_monitor_wakeup_sender.clone(),
+                tweak_idx,
+            )
+            .await
+            {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+
+            if pegin_claimed_receiver.changed().await.is_err() {
+                yield ReceiveState::Failed(
+                    "Peg-in monitor stopped before receive was found".to_owned(),
+                );
+                return;
+            }
+        };
+
+        let operation = match client_ctx.get_operation(receive_operation_id).await {
+            Ok(operation) => operation,
+            Err(error) => {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+        };
+        let operation_meta = operation.meta::<WalletOperationMeta>();
+
+        let updates = match receive_updates_for_operation(
+            &client_ctx,
+            &operation,
+            receive_operation_id,
+            &operation_meta.variant,
+        ) {
+            Ok(updates) => updates,
+            Err(error) => {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+        };
+
+        for await update in updates.into_stream() {
+            yield update;
+        }
+    })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
