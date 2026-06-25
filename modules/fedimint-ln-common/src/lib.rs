@@ -14,6 +14,9 @@
 //! If this module is active the consensus' conflict filter must ensure that at
 //! most one operation (spend, funding) happens per contract per round
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub mod client;
 pub mod config;
 pub mod contracts;
@@ -318,6 +321,7 @@ impl LightningGatewayRegistration {
 /// Should only be serialized and deserialized in formats that can ignore
 /// additional fields as this struct may be extended in the future.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LightningGatewayAnnouncement {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
@@ -342,6 +346,7 @@ impl LightningGatewayAnnouncement {
 
 /// Information a gateway registers with a federation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LightningGateway {
     /// Unique per-federation identifier assigned by the gateway.
     /// All clients in this federation should use this value as
@@ -368,6 +373,29 @@ pub struct LightningGateway {
     /// Indicates if the gateway supports private payments
     pub supports_private_payments: bool,
 }
+
+#[cfg(feature = "uniffi")]
+#[derive(uniffi::Record)]
+pub struct RoutingFeesFfi {
+    /// Flat routing fee in millisatoshis.
+    pub base_msat: u32,
+    /// Liquidity-based routing fee in millionths of a routed amount.
+    /// In other words, 10000 is 1%.
+    pub proportional_millionths: u32,
+}
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(RoutingFees, RoutingFeesFfi, {
+    remote,
+    lower: |fees| RoutingFeesFfi {
+        base_msat: fees.base_msat,
+        proportional_millionths: fees.proportional_millionths,
+    },
+    try_lift: |fees_ffi| Ok(RoutingFees {
+        base_msat: fees_ffi.base_msat,
+        proportional_millionths: fees_ffi.proportional_millionths,
+    }),
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub enum LightningConsensusItem {
@@ -425,12 +453,16 @@ plugin_types_trait_impl_common!(
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
+    #[cfg(feature = "uniffi")]
+    use std::str::FromStr;
+
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::secp256k1::PublicKey;
     use lightning_invoice::RoutingFees;
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+    #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
     pub struct RouteHintHop {
         /// The `node_id` of the non-target end of the route
         pub src_node_id: PublicKey,
@@ -449,10 +481,20 @@ pub mod route_hints {
         pub htlc_maximum_msat: Option<u64>,
     }
 
+    #[cfg(feature = "uniffi")]
+    uniffi::custom_type!(PublicKey, String, {
+    remote,
+    lower: |pk| pk.to_string(),
+    try_lift: |s| PublicKey::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
+    });
+
     /// A list of hops along a payment path terminating with a channel to the
     /// recipient.
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
     pub struct RouteHint(pub Vec<RouteHintHop>);
+
+    #[cfg(feature = "uniffi")]
+    uniffi::custom_newtype!(RouteHint, Vec<RouteHintHop>);
 
     impl RouteHint {
         pub fn to_ldk_route_hint(&self) -> lightning_invoice::RouteHint {

@@ -175,7 +175,6 @@ esplora-client = { version = "0.12.3", default-features = false, features = [
     "async",
     "tokio",
 ] }
-tor-rtcompat = { version = "0.38.0", features = ["tokio", "rustls"] }
 
 fedimint-aead = { path = "./crypto/aead", version = "=0.12.0-alpha" }
 fedimint-api-client = { path = "./fedimint-api-client", version = "=0.12.0-alpha" }
@@ -349,6 +348,7 @@ tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
 ] }
+tor-rtcompat = { version = "0.38.0", features = ["tokio", "rustls"] }
 tower = { version = "0.4.13", default-features = false }
 tower-http = { version = "0.6.8", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.12.0-alpha" }
@@ -356,6 +356,7 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.29.0"
 tracing-subscriber = "0.3.22"
 tracing-test = "0.2.6"
+uniffi = "0.32.0"
 url = "2.5.4"
 wasm-bindgen = "=0.2.106" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.56"

@@ -15,6 +15,9 @@ normal = ["aquamarine"]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
+
 [lib]
 name = "fedimint_ln_common"
 path = "src/lib.rs"
@@ -37,6 +40,7 @@ thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
 
 [lints]
 workspace = true

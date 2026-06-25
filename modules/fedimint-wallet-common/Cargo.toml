@@ -11,6 +11,9 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+uniffi = ["dep:uniffi"]
+
 [lib]
 name = "fedimint_wallet_common"
 path = "src/lib.rs"
@@ -25,6 +28,7 @@ miniscript = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log = { workspace = true }

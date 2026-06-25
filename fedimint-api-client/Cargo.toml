@@ -13,6 +13,7 @@ development = ["tokio-test"]
 
 [features]
 tor = ["fedimint-connectors/tor"]
+uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
 
 [lib]
 name = "fedimint_api_client"
@@ -38,6 +39,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

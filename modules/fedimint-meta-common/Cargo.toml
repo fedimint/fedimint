@@ -11,6 +11,9 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+uniffi = ["dep:uniffi"]
+
 [lib]
 name = "fedimint_meta_common"
 path = "src/lib.rs"
@@ -24,6 +27,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true }
 
 [lints]
 workspace = true

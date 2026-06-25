@@ -18,6 +18,7 @@ normal = ["aquamarine"]
 [features]
 cli = ["dep:clap"]
 default = []
+uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
 
 [lib]
 name = "fedimint_mint_client"
@@ -63,6 +64,7 @@ threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [dev-dependencies]
 criterion = { workspace = true }

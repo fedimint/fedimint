@@ -1077,6 +1077,8 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 pub trait IClientModule: Debug {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn std::any::Any));
 
+    fn as_any_arc(self: Arc<Self>) -> Arc<maybe_add_send_sync!(dyn std::any::Any + 'static)>;
+
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
@@ -1135,6 +1137,10 @@ where
     T: ClientModule,
 {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
+        self
+    }
+
+    fn as_any_arc(self: Arc<Self>) -> Arc<maybe_add_send_sync!(dyn Any + 'static)> {
         self
     }
 
@@ -1262,6 +1268,12 @@ dyn_newtype_define!(
     #[derive(Clone)]
     pub DynClientModule(Arc<IClientModule>)
 );
+
+impl DynClientModule {
+    pub fn as_any_arc(&self) -> Arc<maybe_add_send_sync!(dyn Any + 'static)> {
+        self.inner.clone().as_any_arc()
+    }
+}
 
 impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModule {
     fn as_ref(&self) -> &maybe_add_send_sync!(dyn IClientModule + 'static) {

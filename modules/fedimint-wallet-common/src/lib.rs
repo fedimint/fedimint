@@ -6,11 +6,16 @@
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::return_self_not_must_use)]
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 use std::hash::Hasher;
+#[cfg(feature = "uniffi")]
+use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
-use bitcoin::{Address, Amount, BlockHash, TxOut, Txid, secp256k1};
+use bitcoin::{Address, Amount, BlockHash, OutPoint, TxOut, Txid, secp256k1};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
@@ -109,11 +114,26 @@ pub struct SpendableUTXO {
 
 /// A transaction output, either unspent or consumed
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TxOutputSummary {
-    pub outpoint: bitcoin::OutPoint,
+    pub outpoint: OutPoint,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    pub amount: Amount,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(OutPoint, String, {
+    remote,
+    lower: |out_point| out_point.to_string(),
+    try_lift: |s| OutPoint::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OutPoint: {e}")),
+});
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(Amount, u64, {
+    remote,
+    lower: |amount| amount.to_sat(),
+    try_lift: |s| Ok(Amount::from_sat(s)),
+});
 
 /// Summary of the coins within the wallet.
 ///
@@ -124,6 +144,7 @@ pub struct TxOutputSummary {
 /// This summary provides the most granular view possible of coins in the
 /// wallet.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct WalletSummary {
     /// All UTXOs available as inputs for transactions
     pub spendable_utxos: Vec<TxOutputSummary>,

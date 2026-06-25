@@ -185,6 +185,7 @@ impl_db_record!(
 
 /// Key used to lookup operation log entries in chronological order
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ChronologicalOperationLogKey {
     pub creation_time: std::time::SystemTime,
     pub operation_id: OperationId,

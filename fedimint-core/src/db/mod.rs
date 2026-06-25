@@ -2133,6 +2133,8 @@ impl DecodingError {
 
 /// Error type for database operations
 #[derive(Debug, Error)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
+#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 pub enum DatabaseError {
     /// Write-write conflict during optimistic transaction commit.
     /// This occurs when two transactions attempt to modify the same key.
