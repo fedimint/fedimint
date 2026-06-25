@@ -39,6 +39,11 @@ enum Opts {
         /// `dev next-event-log-id` or a prior `await-receive`.
         position: EventLogId,
     },
+    /// Query this client's own guardian (selected via `--our-id`) for its local
+    /// FROST finalization stat for `txid`. Returns `null` if that guardian is
+    /// offline or hasn't recorded a stat for `txid`. Requires admin auth
+    /// (`--our-id` + `--password`).
+    FrostFinalizationStats { txid: bitcoin::Txid },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -86,6 +91,7 @@ pub(crate) async fn handle_cli_command(
         ),
         Opts::Receive => json(wallet.receive().await),
         Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
+        Opts::FrostFinalizationStats { txid } => json(wallet.frost_finalization_stats(txid).await?),
     };
 
     Ok(value)

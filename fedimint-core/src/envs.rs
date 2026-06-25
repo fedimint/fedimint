@@ -38,6 +38,10 @@ pub const FM_DISABLE_BASE_FEES_ENV: &str = "FM_DISABLE_BASE_FEES";
 /// setup to fail rather than silently default.
 pub const FM_WALLETV2_DESCRIPTOR_ENV: &str = "FM_WALLETV2_DESCRIPTOR";
 
+/// Target size of each guardian's local FROST nonce buffer in the walletv2
+/// module.
+pub const FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV: &str = "FM_WALLETV2_FROST_NONCE_BUFFER_TARGET";
+
 /// Print sensitive secrets without redacting them. Use only for debugging.
 pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
 

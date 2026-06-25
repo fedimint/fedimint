@@ -507,7 +507,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn setup_status(&self, auth: ApiAuth) -> FederationResult<SetupStatus>;
 
-    #[allow(clippy::too_many_arguments)]
     async fn set_local_params(
         &self,
         name: String,
