@@ -3,6 +3,7 @@
 //! These wrap the `fedimint-cli` walletv2 subcommands and the common polling
 //! patterns used across the test binaries so they don't have to be duplicated.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
@@ -12,9 +13,12 @@ use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_12_0_ALPHA;
 use devimint::{cmd, util};
+use fedimint_core::PeerId;
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
 use fedimint_eventlog::EventLogId;
+use fedimint_walletv2_common::TxInfo;
+use fedimint_walletv2_common::taproot::frost::FrostFinalizationStat;
 use serde::Deserialize;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -229,4 +233,158 @@ pub async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, Ev
 
         Ok((address, EventLogId::LOG_START))
     }
+}
+
+/// Client-computed aggregate of the per-guardian [`FrostFinalizationStat`]s for
+/// a single `txid`, collected by querying each guardian's authenticated
+/// finalization-stats endpoint individually. Offline guardians simply don't
+/// appear in `per_guardian`, so the median/mean are taken over the guardians
+/// that responded.
+#[derive(Debug)]
+pub struct FrostFinalizationStatsSummary {
+    pub txid: Txid,
+    /// Number of guardians that returned a finalization stat for `txid`.
+    pub responses: usize,
+    /// Number of adaptive-ROAST attempts before finalization. Derived from the
+    /// consensus log, so it's identical across guardians; taken from any
+    /// responder (`None` if none responded).
+    pub attempts: Option<u32>,
+    /// Median of the responding guardians' `duration_millis` (even counts take
+    /// the mean of the two middle values), or `None` if none responded.
+    pub median_duration_millis: Option<u64>,
+    /// Mean of the responding guardians' `duration_millis` (integer millis), or
+    /// `None` if none responded.
+    pub mean_duration_millis: Option<u64>,
+    /// The raw per-guardian stats the summary was computed from.
+    pub per_guardian: BTreeMap<PeerId, FrostFinalizationStat>,
+}
+
+/// Median of an already-sorted slice of millisecond durations. Returns `None`
+/// for an empty slice; for an even count, averages the two middle values.
+fn median(sorted: &[u64]) -> Option<u64> {
+    if sorted.is_empty() {
+        return None;
+    }
+
+    let mid = sorted.len() / 2;
+    Some(if sorted.len() % 2 == 1 {
+        sorted[mid]
+    } else {
+        u64::midpoint(sorted[mid - 1], sorted[mid])
+    })
+}
+
+/// Queries a single guardian (`peer`) for its FROST finalization stat for
+/// `txid` via the authenticated CLI command, using that guardian's own admin
+/// auth (`--our-id <peer> --password pass`; all devimint guardians share the
+/// password `pass`). Returns `None` if the guardian is offline or hasn't
+/// recorded a stat for `txid`.
+async fn frost_finalization_stat_for_guardian(
+    client: &Client,
+    peer: PeerId,
+    txid: Txid,
+) -> anyhow::Result<Option<FrostFinalizationStat>> {
+    let value = cmd!(
+        client,
+        "--our-id",
+        peer.to_string(),
+        "--password",
+        "pass",
+        "module",
+        "walletv2",
+        "frost-finalization-stats",
+        txid.to_string()
+    )
+    .out_json()
+    .await?;
+
+    Ok(serde_json::from_value(value)?)
+}
+
+/// Queries every guardian of a `fed_size`-guardian federation for its FROST
+/// finalization stat for `txid` (each via its own per-guardian admin auth) and
+/// returns the client-computed median/mean summary over the guardians that
+/// responded. Guardians taken offline simply don't respond and are omitted from
+/// the summary.
+pub async fn frost_finalization_stats(
+    client: &Client,
+    txid: Txid,
+    fed_size: usize,
+) -> anyhow::Result<FrostFinalizationStatsSummary> {
+    let mut per_guardian = BTreeMap::new();
+
+    for index in 0..fed_size {
+        let peer = PeerId::new(index as u16);
+
+        if let Some(stat) = frost_finalization_stat_for_guardian(client, peer, txid).await? {
+            per_guardian.insert(peer, stat);
+        }
+    }
+
+    let mut durations: Vec<u64> = per_guardian
+        .values()
+        .map(|stat| stat.duration_millis)
+        .collect();
+    durations.sort_unstable();
+
+    let responses = durations.len();
+    let mean_duration_millis =
+        (!durations.is_empty()).then(|| durations.iter().sum::<u64>() / durations.len() as u64);
+
+    Ok(FrostFinalizationStatsSummary {
+        txid,
+        responses,
+        // Consensus-driven, so identical across guardians; any responder's value
+        // is representative.
+        attempts: per_guardian.values().next().map(|stat| stat.attempts),
+        median_duration_millis: median(&durations),
+        mean_duration_millis,
+        per_guardian,
+    })
+}
+
+/// Returns the federation's chain of bitcoin transactions, oldest first.
+pub async fn tx_chain(client: &Client) -> anyhow::Result<Vec<TxInfo>> {
+    let value = cmd!(client, "module", "walletv2", "info", "tx-chain")
+        .out_json()
+        .await?;
+
+    Ok(serde_json::from_value(value)?)
+}
+
+/// Queries every guardian for its FROST finalization stat for `txid`, asserts
+/// that all online guardians (`fed_size - offline_nodes`) responded, and logs
+/// the median/mean finalization latency plus the (consensus-driven) attempt
+/// count under `label`. Call only once the transaction has finalized (e.g.
+/// after [`await_no_pending_txs`]).
+pub async fn report_frost_finalization_stats(
+    client: &Client,
+    label: &str,
+    txid: Txid,
+    fed_size: usize,
+    offline_nodes: usize,
+) -> anyhow::Result<()> {
+    let expected_online = fed_size - offline_nodes;
+    let summary = frost_finalization_stats(client, txid, fed_size).await?;
+
+    ensure!(
+        summary.responses == expected_online,
+        "Expected FROST finalization stats for {label} from all {expected_online} online \
+         guardians, but only {} responded",
+        summary.responses,
+    );
+
+    tracing::info!(
+        label,
+        txid = %txid,
+        fed_size,
+        offline_nodes,
+        guardians_reporting = summary.responses,
+        attempts = ?summary.attempts,
+        median_ms = ?summary.median_duration_millis,
+        mean_ms = ?summary.mean_duration_millis,
+        "FROST finalization latency"
+    );
+
+    Ok(())
 }

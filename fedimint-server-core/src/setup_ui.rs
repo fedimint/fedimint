@@ -34,7 +34,6 @@ pub trait ISetupApi {
     async fn reset_setup_codes(&self);
 
     /// Set local guardian parameters
-    #[allow(clippy::too_many_arguments)]
     async fn set_local_parameters(
         &self,
         name: String,

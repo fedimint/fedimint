@@ -1,13 +1,17 @@
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
-use fedimint_core::module::ApiRequestErased;
+use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::util::FmtCompact;
 use fedimint_core::{OutPoint, apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    FROST_FINALIZATION_STATS_ENDPOINT, OUTPUT_INFO_SLICE_ENDPOINT,
+    PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
+use fedimint_walletv2_common::taproot::frost::FrostFinalizationStat;
 use fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
+use tracing::debug;
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
@@ -32,6 +36,15 @@ pub trait WalletFederationApi {
     ) -> FederationResult<Vec<OutputInfo>>;
 
     async fn tx_id(&self, outpoint: OutPoint) -> Option<bitcoin::Txid>;
+
+    /// Query this client's own guardian for its locally-measured FROST
+    /// finalization stat for `txid`. Returns `None` if the guardian is offline
+    /// or hasn't recorded a stat for `txid`.
+    async fn frost_finalization_stats(
+        &self,
+        auth: ApiAuth,
+        txid: bitcoin::Txid,
+    ) -> Option<FrostFinalizationStat>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -107,5 +120,29 @@ where
             ApiRequestErased::new(outpoint),
         )
         .await
+    }
+
+    async fn frost_finalization_stats(
+        &self,
+        auth: ApiAuth,
+        txid: bitcoin::Txid,
+    ) -> Option<FrostFinalizationStat> {
+        match self
+            .request_admin::<Option<FrostFinalizationStat>>(
+                FROST_FINALIZATION_STATS_ENDPOINT,
+                ApiRequestErased::new(txid),
+                auth,
+            )
+            .await
+        {
+            Ok(stat) => stat,
+            Err(err) => {
+                debug!(
+                    err = %err.fmt_compact(),
+                    "Local guardian did not return a FROST finalization stat (likely offline)"
+                );
+                None
+            }
+        }
     }
 }
