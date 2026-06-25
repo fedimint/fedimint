@@ -40,7 +40,7 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
@@ -1580,56 +1580,33 @@ impl WalletClientModule {
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
-        let WalletOperationMetaVariant::Receive {
-            claim_operation_id,
-            tweak_idx,
-            btc_out_point,
-            btc_deposited,
-            ..
-        } = operation_meta.variant
-        else {
-            bail!("Operation is not a receive operation");
-        };
-
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, {
-            let stream_client_ctx = self.client_ctx.clone();
-            move || {
-
-            stream! {
-                let claimed_peg_in_key = ClaimedPegInKey {
-                    peg_in_index: tweak_idx,
-                    btc_out_point,
-                };
-
-                yield ReceiveState::WaitingForConfirmation {
-                    btc_deposited,
-                    btc_out_point
-                };
-
-                let claim_data = stream_client_ctx.module_db().wait_key_exists(&claimed_peg_in_key).await;
-
-                if claim_data.claim_txid == TransactionId::from_byte_array([0; 32]) && claim_data.change.is_empty() {
-                    yield ReceiveState::IgnoredDust {
-                        btc_deposited,
-                        btc_out_point
-                    };
-                    return;
-                }
-
-                yield ReceiveState::Confirmed {
-                    btc_deposited,
-                    btc_out_point
-                };
-
-                match stream_client_ctx.await_primary_module_outputs(claim_operation_id, claim_data.change).await {
-                    Ok(()) => yield ReceiveState::Claimed {
-                        btc_deposited,
-                        btc_out_point
-                    },
-                    Err(e) => yield ReceiveState::Failed(e.to_string())
-                }
+        match operation_meta.variant {
+            WalletOperationMetaVariant::Receive { .. } => receive_updates_for_operation(
+                &self.client_ctx,
+                operation,
+                operation_id,
+                &operation_meta.variant,
+            ),
+            WalletOperationMetaVariant::DepositAddress {
+                tweak_idx: Some(tweak_idx),
+                ..
+            } => Ok(UpdateStreamOrOutcome::UpdateStream(Box::pin(
+                bridge_deposit_address_to_receive_updates(
+                    self.client_ctx.clone(),
+                    self.db.clone(),
+                    self.pegin_monitor_wakeup_sender.clone(),
+                    self.pegin_claimed_receiver.clone(),
+                    operation_id,
+                    tweak_idx,
+                ),
+            ))),
+            WalletOperationMetaVariant::DepositAddress {
+                tweak_idx: None, ..
+            } => {
+                bail!("Deposit address operation has no tweak index and cannot be subscribed to")
             }
-        }}))
+            _ => bail!("Operation is not a receive operation"),
+        }
     }
 
     /// Reads the final outcome of a *legacy* deposit operation — a
@@ -1884,38 +1861,12 @@ impl WalletClientModule {
 
     /// Schedule given address for immediate re-check for deposits
     pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        let db_key = PegInTweakIndexKey(tweak_idx);
-                        let db_val = dbtx
-                            .get_value(&db_key)
-                            .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
-
-                        dbtx.insert_entry(
-                            &db_key,
-                            &PegInTweakIndexData {
-                                next_check_time: Some(fedimint_core::time::now()),
-                                ..db_val
-                            },
-                        )
-                        .await;
-
-                        let sender = self.pegin_monitor_wakeup_sender.clone();
-                        dbtx.on_commit(move || {
-                            sender.send_replace(());
-                        });
-
-                        Ok::<_, anyhow::Error>(())
-                    })
-                },
-                Some(100),
-            )
-            .await?;
-
-        Ok(())
+        schedule_pegin_recheck(
+            &self.db,
+            self.pegin_monitor_wakeup_sender.clone(),
+            tweak_idx,
+        )
+        .await
     }
 
     /// Await for num deposit by [`OperationId`]
@@ -2224,6 +2175,206 @@ async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> T
     dbtx.insert_entry(&NextPegInTweakIndexKey, &(index.next()))
         .await;
     index
+}
+
+async fn schedule_pegin_recheck(
+    db: &Database,
+    pegin_monitor_wakeup_sender: watch::Sender<()>,
+    tweak_idx: TweakIdx,
+) -> anyhow::Result<()> {
+    db.autocommit(
+        |dbtx, _| {
+            let pegin_monitor_wakeup_sender = pegin_monitor_wakeup_sender.clone();
+            Box::pin(async move {
+                let db_key = PegInTweakIndexKey(tweak_idx);
+                let db_val = dbtx
+                    .get_value(&db_key)
+                    .await
+                    .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+
+                dbtx.insert_entry(
+                    &db_key,
+                    &PegInTweakIndexData {
+                        next_check_time: Some(fedimint_core::time::now()),
+                        ..db_val
+                    },
+                )
+                .await;
+
+                dbtx.on_commit(move || {
+                    pegin_monitor_wakeup_sender.send_replace(());
+                });
+
+                Ok::<_, anyhow::Error>(())
+            })
+        },
+        Some(100),
+    )
+    .await?;
+
+    Ok(())
+}
+
+fn receive_updates_for_operation(
+    client_ctx: &ClientContext<WalletClientModule>,
+    operation: OperationLogEntry,
+    operation_id: OperationId,
+    operation_meta_variant: &WalletOperationMetaVariant,
+) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveState>> {
+    let &WalletOperationMetaVariant::Receive {
+        claim_operation_id,
+        tweak_idx,
+        btc_out_point,
+        btc_deposited,
+        ..
+    } = operation_meta_variant
+    else {
+        bail!("Operation is not a receive operation");
+    };
+
+    Ok(client_ctx.outcome_or_updates(operation, operation_id, {
+        let stream_client_ctx = client_ctx.clone();
+        move || {
+            stream! {
+                let claimed_peg_in_key = ClaimedPegInKey {
+                    peg_in_index: tweak_idx,
+                    btc_out_point,
+                };
+
+                yield ReceiveState::WaitingForConfirmation {
+                    btc_deposited,
+                    btc_out_point,
+                };
+
+                let claim_data = stream_client_ctx
+                    .module_db()
+                    .wait_key_exists(&claimed_peg_in_key)
+                    .await;
+
+                if claim_data.claim_txid == TransactionId::from_byte_array([0; 32])
+                    && claim_data.change.is_empty()
+                {
+                    yield ReceiveState::IgnoredDust {
+                        btc_deposited,
+                        btc_out_point,
+                    };
+                    return;
+                }
+
+                yield ReceiveState::Confirmed {
+                    btc_deposited,
+                    btc_out_point,
+                };
+
+                match stream_client_ctx
+                    .await_primary_module_outputs(claim_operation_id, claim_data.change)
+                    .await
+                {
+                    Ok(()) => yield ReceiveState::Claimed {
+                        btc_deposited,
+                        btc_out_point,
+                    },
+                    Err(e) => yield ReceiveState::Failed(e.to_string()),
+                }
+            }
+        }
+    }))
+}
+
+async fn first_receive_operation_for_address(
+    client_ctx: &ClientContext<WalletClientModule>,
+    db: &Database,
+    address_operation_id: OperationId,
+    tweak_idx: TweakIdx,
+) -> Option<OperationId> {
+    let claimed = db
+        .begin_transaction_nc()
+        .await
+        .get_value(&PegInTweakIndexKey(tweak_idx))
+        .await
+        .map(|data| data.claimed)
+        .unwrap_or_default();
+
+    for btc_out_point in claimed {
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, btc_out_point);
+        if client_ctx
+            .operation_log_entry_exists(receive_operation_id)
+            .await
+        {
+            return Some(receive_operation_id);
+        }
+    }
+
+    None
+}
+
+fn bridge_deposit_address_to_receive_updates(
+    client_ctx: ClientContext<WalletClientModule>,
+    db: Database,
+    pegin_monitor_wakeup_sender: watch::Sender<()>,
+    mut pegin_claimed_receiver: watch::Receiver<()>,
+    address_operation_id: OperationId,
+    tweak_idx: TweakIdx,
+) -> BoxStream<'static, ReceiveState> {
+    Box::pin(stream! {
+        let receive_operation_id = loop {
+            if let Some(receive_operation_id) = first_receive_operation_for_address(
+                &client_ctx,
+                &db,
+                address_operation_id,
+                tweak_idx,
+            )
+            .await
+            {
+                break receive_operation_id;
+            }
+
+            if let Err(error) = schedule_pegin_recheck(
+                &db,
+                pegin_monitor_wakeup_sender.clone(),
+                tweak_idx,
+            )
+            .await
+            {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+
+            if pegin_claimed_receiver.changed().await.is_err() {
+                yield ReceiveState::Failed(
+                    "Peg-in monitor stopped before receive was found".to_owned(),
+                );
+                return;
+            }
+        };
+
+        let operation = match client_ctx.get_operation(receive_operation_id).await {
+            Ok(operation) => operation,
+            Err(error) => {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+        };
+        let operation_meta = operation.meta::<WalletOperationMeta>();
+
+        let updates = match receive_updates_for_operation(
+            &client_ctx,
+            operation,
+            receive_operation_id,
+            &operation_meta.variant,
+        ) {
+            Ok(updates) => updates,
+            Err(error) => {
+                yield ReceiveState::Failed(error.to_string());
+                return;
+            }
+        };
+
+        for await update in updates.into_stream() {
+            yield update;
+        }
+    })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

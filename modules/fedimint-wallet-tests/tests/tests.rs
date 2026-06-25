@@ -123,6 +123,35 @@ async fn peg_in<'a>(
     Ok((balance_sub, tx))
 }
 
+async fn receive_operation_id_for_tx(
+    client: &ClientHandleArc,
+    txid: bitcoin::Txid,
+) -> anyhow::Result<fedimint_core::core::OperationId> {
+    retry(
+        "waiting for receive operation",
+        fedimint_core::util::backoff_util::aggressive_backoff(),
+        || async {
+            let operations = client
+                .operation_log()
+                .paginate_operations_rev(10, None)
+                .await;
+            operations
+                .iter()
+                .find(|(_, operation)| {
+                    operation.operation_module_kind() == "wallet"
+                        && matches!(
+                            operation.meta::<WalletOperationMeta>().variant,
+                            WalletOperationMetaVariant::Receive { btc_out_point, .. }
+                                if btc_out_point.txid == txid
+                        )
+                })
+                .map(|(key, _)| key.operation_id)
+                .ok_or_else(|| anyhow!("receive operation not found yet"))
+        },
+    )
+    .await
+}
+
 async fn await_consensus_to_catch_up(
     client: &ClientHandleArc,
     block_count: u64,
@@ -301,21 +330,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         .await;
 
     wallet_module.recheck_pegin_address_by_op_id(op).await?;
-    let operations = client
-        .operation_log()
-        .paginate_operations_rev(10, None)
-        .await;
-    let (receive_operation_id, _) = operations
-        .iter()
-        .find(|(_, operation)| {
-            matches!(
-                operation.meta::<WalletOperationMeta>().variant,
-                WalletOperationMetaVariant::Receive { btc_out_point, .. }
-                    if btc_out_point.txid == tx.compute_txid()
-            )
-        })
-        .map(|(key, operation)| (key.operation_id, operation))
-        .expect("receive operation exists");
+    let receive_operation_id = receive_operation_id_for_tx(&client, tx.compute_txid()).await?;
 
     let mut receive_updates = wallet_module
         .subscribe_receive(receive_operation_id)
@@ -369,6 +384,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
 
     assert_eq!(receive_updates.next().await, None);
+
+    let mut address_receive_updates = wallet_module.subscribe_receive(op).await?.into_stream();
+    assert_matches!(
+        address_receive_updates.next().await.unwrap(),
+        ReceiveState::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    );
+    assert_eq!(address_receive_updates.next().await, None);
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
@@ -908,21 +930,7 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
         .await_num_deposits_by_operation_id(op, 1)
         .await?;
 
-    let operations = client
-        .operation_log()
-        .paginate_operations_rev(10, None)
-        .await;
-    let (receive_operation_id, _) = operations
-        .iter()
-        .find(|(_, operation)| {
-            matches!(
-                operation.meta::<WalletOperationMeta>().variant,
-                WalletOperationMetaVariant::Receive { btc_out_point, .. }
-                    if btc_out_point.txid == tx.compute_txid()
-            )
-        })
-        .map(|(key, operation)| (key.operation_id, operation))
-        .expect("receive operation exists");
+    let receive_operation_id = receive_operation_id_for_tx(&client, tx.compute_txid()).await?;
 
     let mut receive_updates = wallet_module
         .subscribe_receive(receive_operation_id)
