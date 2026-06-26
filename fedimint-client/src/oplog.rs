@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
@@ -16,7 +17,7 @@ use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio::sync::OnceCell;
+use tokio::sync::RwLock;
 use tracing::{error, instrument, warn};
 
 use crate::db::{ChronologicalOperationLogKey, OperationLogKey};
@@ -27,14 +28,14 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct OperationLog {
     db: Database,
-    oldest_entry: tokio::sync::OnceCell<ChronologicalOperationLogKey>,
+    oldest_entry: Arc<RwLock<Option<ChronologicalOperationLogKey>>>,
 }
 
 impl OperationLog {
     pub fn new(db: Database) -> Self {
         Self {
             db,
-            oldest_entry: OnceCell::new(),
+            oldest_entry: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -42,19 +43,23 @@ impl OperationLog {
     /// result. If no entry exists yet the DB will be queried on each call till
     /// an entry is present.
     async fn get_oldest_operation_log_key(&self) -> Option<ChronologicalOperationLogKey> {
+        if let Some(oldest_entry) = *self.oldest_entry.read().await {
+            return Some(oldest_entry);
+        }
+
         let mut dbtx = self.db.begin_transaction_nc().await;
-        self.oldest_entry
-            .get_or_try_init(move || async move {
-                dbtx.find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
-                    .await
-                    .map(|(key, ())| key)
-                    .next()
-                    .await
-                    .ok_or(())
-            })
+        let oldest_entry = dbtx
+            .find_by_prefix(&crate::db::ChronologicalOperationLogKeyPrefix)
             .await
-            .ok()
-            .copied()
+            .map(|(key, ())| key)
+            .next()
+            .await;
+
+        if let Some(oldest_entry) = oldest_entry {
+            *self.oldest_entry.write().await = Some(oldest_entry);
+        }
+
+        oldest_entry
     }
 
     pub async fn add_operation_log_entry_dbtx(
@@ -63,6 +68,24 @@ impl OperationLog {
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
+    ) {
+        self.add_operation_log_entry_dbtx_with_creation_time(
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            now(),
+        )
+        .await;
+    }
+
+    pub async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
     ) {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
@@ -76,14 +99,22 @@ impl OperationLog {
             ),
         )
         .await;
-        dbtx.insert_new_entry(
-            &ChronologicalOperationLogKey {
-                creation_time: now(),
-                operation_id,
-            },
-            &(),
-        )
-        .await;
+        let chronological_operation_log_key = ChronologicalOperationLogKey {
+            creation_time,
+            operation_id,
+        };
+        dbtx.insert_new_entry(&chronological_operation_log_key, &())
+            .await;
+
+        let mut oldest_entry = self.oldest_entry.write().await;
+        if let Some(oldest_entry_key) = &mut *oldest_entry
+            && chronological_operation_log_key_is_older(
+                &chronological_operation_log_key,
+                oldest_entry_key,
+            )
+        {
+            *oldest_entry_key = chronological_operation_log_key;
+        }
     }
 
     #[deprecated(since = "0.6.0", note = "Use `paginate_operations_rev` instead")]
@@ -288,6 +319,14 @@ impl IOperationLog for OperationLog {
         }
     }
 }
+
+fn chronological_operation_log_key_is_older(
+    lhs: &ChronologicalOperationLogKey,
+    rhs: &ChronologicalOperationLogKey,
+) -> bool {
+    (lhs.creation_time, lhs.operation_id) < (rhs.creation_time, rhs.operation_id)
+}
+
 /// Returns an iterator over the ranges of operation log keys, starting from the
 /// most recent range and going backwards in time till slightly later than
 /// `last_entry`.
