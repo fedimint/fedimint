@@ -451,7 +451,7 @@ in
         // (lib.optionalAttrs (pname != null) { inherit pname; })
         // {
           cargoArtifacts = deps;
-          meta = { inherit mainProgram; };
+          meta = lib.optionalAttrs (mainProgram != null) { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${extraArgs}";
 
