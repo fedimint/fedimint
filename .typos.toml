@@ -21,6 +21,9 @@ tpe = "tpe"
 # appears in bitcoin test addresses
 nd = "nd"
 
+# upstream lightning trait name
+Writeable = "Writeable"
+
 [files]
 extend-exclude = [
   "db/**",

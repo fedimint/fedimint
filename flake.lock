@@ -400,17 +400,17 @@
         "systems": "systems_7"
       },
       "locked": {
-        "lastModified": 1779594164,
-        "narHash": "sha256-HE2rTCVOKSb3KpQZXfXmV86bMkFu/0U1WJhG40hfQJY=",
-        "owner": "dpc",
+        "lastModified": 1781465020,
+        "narHash": "sha256-h7MBe0piW9jTYOR3jXWpLh+hvQvEaG8Y6+sNGkU4nqY=",
+        "owner": "rustshop",
         "repo": "flakebox",
-        "rev": "34701639bceb5b12e81e2fff913797c0891c919d",
+        "rev": "088fdf3ec0c434f0429e8b2e5061920d1f00000e",
         "type": "github"
       },
       "original": {
-        "owner": "dpc",
+        "owner": "rustshop",
         "repo": "flakebox",
-        "rev": "34701639bceb5b12e81e2fff913797c0891c919d",
+        "rev": "088fdf3ec0c434f0429e8b2e5061920d1f00000e",
         "type": "github"
       }
     },

@@ -138,7 +138,7 @@ impl ClientBackup {
     /// the backup, temporarily going over the limit is not a big problem.
     pub const PER_MODULE_SIZE_LIMIT_BYTES: usize = 32 * 1024;
 
-    /// Align an ecoded message size up for better privacy
+    /// Align an encoded message size up for better privacy
     fn get_alignment_size(len: usize) -> usize {
         let padding_alignment = Self::PADDING_ALIGNMENT;
         ((len.saturating_sub(1) / padding_alignment) + 1) * padding_alignment
