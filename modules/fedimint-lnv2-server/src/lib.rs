@@ -857,9 +857,17 @@ impl Lightning {
         db: Database,
         outpoint: OutPoint,
     ) -> Option<(ContractId, u64)> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        // Long-poll until the outgoing contract has been accepted. The contract is
+        // written atomically when its funding output is accepted, so a client can
+        // fire this request the instant it submits the funding transaction and be
+        // woken the moment the contract is confirmed, rather than polling and
+        // backing off. This mirrors the AWAIT_INCOMING_CONTRACT and AWAIT_PREIMAGE
+        // endpoints. There is no expiration to bound the wait on before the contract
+        // exists; a client whose funding transaction is ultimately rejected tears the
+        // request down instead by racing it against funding-transaction acceptance.
+        let contract = db.wait_key_exists(&OutgoingContractKey(outpoint)).await;
 
-        let contract = dbtx.get_value(&OutgoingContractKey(outpoint)).await?;
+        let mut dbtx = db.begin_transaction_nc().await;
 
         let consensus_block_count = self.consensus_block_count(&mut dbtx).await;
 
