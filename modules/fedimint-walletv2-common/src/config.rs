@@ -4,6 +4,7 @@ use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::FeeRate;
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vbytes};
 use secp256k1::{PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -45,7 +46,7 @@ pub struct WalletConfigConsensus {
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
 }
@@ -76,7 +77,7 @@ impl WalletConfigConsensus {
     /// | 20        | 565  | 991     |
     pub fn new(
         bitcoin_pks: BTreeMap<PeerId, PublicKey>,
-        fee_consensus: FeeConsensus,
+        fee_consensus: FeeConfig,
         network: Network,
     ) -> Self {
         let tx_overhead_weight = 4 * 4 // nVersion
@@ -133,12 +134,37 @@ impl WalletConfigConsensus {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub base: Amount,
     pub parts_per_million: u64,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub peg_in: FeeRate,
+    pub peg_out: FeeRate,
+}
+
 impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        let fee_rate = FeeRate::new(config.base, config.parts_per_million)?;
+
+        Ok(Self {
+            peg_in: fee_rate,
+            peg_out: fee_rate,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
+}
+
+impl FeeConfig {
     /// The wallet module will charge a non-configurable base fee of one hundred
     /// satoshis per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -176,7 +202,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(10_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(10_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(99)),
@@ -227,7 +253,7 @@ pub struct WalletClientConfig {
     /// The minimum amount a user can send on chain
     pub dust_limit: bitcoin::Amount,
     /// Fees taken by the guardians to process wallet inputs and outputs
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
 }

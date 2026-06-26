@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{AmountUnit, serde_json};
+use fedimint_core::module::{AmountUnit, FeeRate, serde_json};
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
@@ -11,7 +11,7 @@ use crate::{Denomination, MintCommonInit};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParams {
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
 }
 
 pub fn consensus_denominations() -> impl DoubleEndedIterator<Item = Denomination> {
@@ -32,7 +32,7 @@ pub struct MintConfig {
 pub struct MintConfigConsensus {
     pub tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
     pub tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub amount_unit: AmountUnit,
 }
 
@@ -45,7 +45,7 @@ pub struct MintConfigPrivate {
 pub struct MintClientConfig {
     pub tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
     pub tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub amount_unit: AmountUnit,
 }
 
@@ -69,12 +69,37 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     base: Amount,
     parts_per_million: u64,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub input: FeeRate,
+    pub output: FeeRate,
+}
+
 impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        let fee_rate = FeeRate::new(config.base, config.parts_per_million)?;
+
+        Ok(Self {
+            input: fee_rate,
+            output: fee_rate,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
+}
+
+impl FeeConfig {
     /// The mint module will charge a non-configurable base fee of one hundred
     /// millisatoshis per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -124,7 +149,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(1_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(1_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(999)),

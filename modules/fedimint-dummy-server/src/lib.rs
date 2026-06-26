@@ -181,11 +181,15 @@ pub struct Dummy {
 impl ServerModule for Dummy {
     /// Define the consensus types
     type Common = DummyModuleTypes;
+    type FeeConsensus = ();
     type Init = DummyInit;
+
+    fn initial_fee_consensus(&self) {}
 
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<DummyConsensusItem> {
         Vec::new()
     }
@@ -195,6 +199,7 @@ impl ServerModule for Dummy {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: DummyConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         // WARNING: `process_consensus_item` should return an `Err` for items that do
         // not change any internal consensus state. Failure to do so, will result in an
@@ -209,6 +214,7 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DummyInput,
         in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DummyInputError> {
         dbtx.insert_entry(&DummyInputAuditKey(in_point), &input.amount)
             .await;
@@ -227,6 +233,7 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DummyOutputError> {
         dbtx.insert_entry(&DummyOutputAuditKey(out_point), &output.amount)
             .await;
@@ -250,6 +257,7 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         // Inputs are assets (positive)
         audit

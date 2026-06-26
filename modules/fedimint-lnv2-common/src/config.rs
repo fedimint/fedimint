@@ -4,6 +4,7 @@ pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::module::FeeRate;
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config};
 use group::Curve;
 use serde::{Deserialize, Serialize};
@@ -26,7 +27,7 @@ pub struct LightningConfigLocal {
 pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: Network,
 }
 
@@ -39,7 +40,7 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: Network,
 }
 
@@ -59,12 +60,41 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub base: Amount,
     pub parts_per_million: u64,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub incoming_contract_input: FeeRate,
+    pub incoming_contract_output: FeeRate,
+    pub outgoing_contract_input: FeeRate,
+    pub outgoing_contract_output: FeeRate,
+}
+
 impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        let fee_rate = FeeRate::new(config.base, config.parts_per_million)?;
+
+        Ok(Self {
+            incoming_contract_input: fee_rate,
+            incoming_contract_output: fee_rate,
+            outgoing_contract_input: fee_rate,
+            outgoing_contract_output: fee_rate,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
+}
+
+impl FeeConfig {
     /// The lightning module will charge a non-configurable base fee of one
     /// satoshi per transaction input and output to account for the costs
     /// incurred by the federation for processing the transaction. On top of
@@ -109,7 +139,7 @@ impl FeeConsensus {
 
 #[test]
 fn test_fee_consensus() {
-    let fee_consensus = FeeConsensus::new(1_000).expect("Relative fee is within range");
+    let fee_consensus = FeeConfig::new(1_000).expect("Relative fee is within range");
 
     assert_eq!(
         fee_consensus.fee(Amount::from_msats(999)),
@@ -159,7 +189,7 @@ fn migrate_config_consensus(
                 )
             })
             .collect(),
-        fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
+        fee_consensus: FeeConfig::new(1000).expect("Relative fee is within range"),
         network: config.network.0,
     }
 }

@@ -23,16 +23,17 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
-    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
+    CoreConsensusVersion, FeeCharge, FeeComponent, FeeConsensusSchedule, FeePriority, FeeRate,
+    InputMeta, InputMetaWithFees, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees, api_endpoint,
 };
 use fedimint_core::{
     Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
     async_trait_maybe_send, push_db_key_items, push_db_pair_items,
 };
 use fedimint_mintv2_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
-    consensus_denominations,
+    FeeConfig, FeeConsensus as MintFeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus,
+    MintConfigPrivate, consensus_denominations,
 };
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
@@ -64,6 +65,8 @@ use crate::db::{
     BlindedSignatureShareRecoveryPrefix, DbKeyPrefix, IssuanceCounterKey, IssuanceCounterPrefix,
     NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
 };
+
+const MINT_FEE_PRIORITY: FeePriority = FeePriority(0);
 
 #[derive(Debug, Clone)]
 pub struct MintInit;
@@ -175,9 +178,9 @@ impl ServerModuleInit for MintInit {
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let fee_consensus = if args.disable_base_fees {
-            FeeConsensus::zero()
+            FeeConfig::zero()
         } else {
-            FeeConsensus::new(0).expect("Relative fee is within range")
+            FeeConfig::new(0).expect("Relative fee is within range")
         };
 
         let tbs_agg_pks = consensus_denominations()
@@ -233,9 +236,9 @@ impl ServerModuleInit for MintInit {
         args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
         let fee_consensus = if args.disable_base_fees {
-            FeeConsensus::zero()
+            FeeConfig::zero()
         } else {
-            FeeConsensus::new(0).expect("Relative fee is within range")
+            FeeConfig::new(0).expect("Relative fee is within range")
         };
 
         let mut tbs_sks = BTreeMap::new();
@@ -338,6 +341,46 @@ fn coefficient(amount: Amount, index: u64) -> Scalar {
     ))
 }
 
+fn minimum_mint_fee_rate(
+    fee_consensus: &[FeeConsensusSchedule<MintFeeConsensus>],
+    amount: Amount,
+    select_fee_rate: impl Fn(&MintFeeConsensus) -> FeeRate,
+) -> FeeRate {
+    FeeRate::min_total_fee_rate(
+        fee_consensus
+            .iter()
+            .map(|schedule| select_fee_rate(&schedule.fee_consensus)),
+        amount,
+    )
+}
+
+fn mint_transaction_item_fees(
+    amount_unit: AmountUnit,
+    amount: Amount,
+    legacy_fee: Amounts,
+    fee_consensus: &[FeeConsensusSchedule<MintFeeConsensus>],
+    select_fee_rate: impl Fn(&MintFeeConsensus) -> FeeRate,
+) -> TransactionItemFees {
+    let fee_rate = minimum_mint_fee_rate(fee_consensus, amount, select_fee_rate);
+
+    TransactionItemFees {
+        dynamic: vec![
+            FeeComponent {
+                fees: Amounts::new_custom(amount_unit, fee_rate.base_fee()),
+                charge: FeeCharge::Always,
+            },
+            FeeComponent {
+                fees: Amounts::new_custom(amount_unit, fee_rate.proportional_fee(amount)),
+                charge: FeeCharge::IfMaxPriority(MINT_FEE_PRIORITY),
+            },
+        ],
+        legacy_floor: vec![FeeComponent {
+            fees: legacy_fee,
+            charge: FeeCharge::Always,
+        }],
+    }
+}
+
 #[derive(Debug)]
 pub struct Mint {
     cfg: MintConfig,
@@ -361,11 +404,18 @@ impl Mint {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
+    type FeeConsensus = MintFeeConsensus;
     type Init = MintInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        MintFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
@@ -375,6 +425,7 @@ impl ServerModule for Mint {
         _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         bail!("Mint does not process consensus items");
     }
@@ -384,6 +435,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b MintInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, MintInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -438,11 +490,47 @@ impl ServerModule for Mint {
         })
     }
 
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b MintInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, MintInputError> {
+        let processed = self
+            .process_input(dbtx, input, in_point, module_consensus_version)
+            .await?;
+        let unit = self.cfg.consensus.amount_unit;
+        let amount = processed
+            .amount
+            .amounts
+            .get(&unit)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        let fees = mint_transaction_item_fees(
+            unit,
+            amount,
+            processed.amount.fees,
+            fee_consensus,
+            |fee_consensus| fee_consensus.input,
+        );
+
+        Ok(InputMetaWithFees {
+            amount: TransactionItemAmountsWithFees {
+                amounts: processed.amount.amounts,
+                fees,
+            },
+            pub_key: processed.pub_key,
+        })
+    }
+
     async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -493,6 +581,37 @@ impl ServerModule for Mint {
         })
     }
 
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a MintOutput,
+        outpoint: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, MintOutputError> {
+        let processed = self
+            .process_output(dbtx, output, outpoint, module_consensus_version)
+            .await?;
+        let unit = self.cfg.consensus.amount_unit;
+        let amount = processed
+            .amounts
+            .get(&unit)
+            .copied()
+            .unwrap_or(Amount::ZERO);
+        let fees = mint_transaction_item_fees(
+            unit,
+            amount,
+            processed.fees,
+            fee_consensus,
+            |fee_consensus| fee_consensus.output,
+        );
+
+        Ok(TransactionItemAmountsWithFees {
+            amounts: processed.amounts,
+            fees,
+        })
+    }
+
     async fn output_status(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -506,6 +625,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(dbtx, module_instance_id, &IssuanceCounterPrefix, |k, v| {

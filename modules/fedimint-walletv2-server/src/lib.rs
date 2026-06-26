@@ -45,9 +45,10 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
-    api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    FeeCharge, FeeComponent, FeeConsensusSchedule, FeePriority, FeeRate, InputMeta,
+    InputMetaWithFees, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees, api_endpoint,
 };
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
@@ -65,7 +66,8 @@ use fedimint_server_core::{
 };
 pub use fedimint_walletv2_common as common;
 use fedimint_walletv2_common::config::{
-    FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
+    FeeConfig, FeeConsensus as WalletFeeConsensus, WalletClientConfig, WalletConfig,
+    WalletConfigPrivate,
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
@@ -90,6 +92,8 @@ use crate::db::{
     TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
 
+const WALLET_FEE_PRIORITY: FeePriority = FeePriority(2);
+
 /// Number of confirmations required for a transaction to be considered as
 /// final by the federation. The block that mines the transaction does
 /// not count towards the number of confirmations.
@@ -106,6 +110,45 @@ const TEST_MAX_BLOCK_COUNT_INCREMENT: u64 = 100;
 /// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
 /// below what Bitcoin Core will relay.
 const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
+
+fn minimum_wallet_fee_rate(
+    fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
+    amount: fedimint_core::Amount,
+    select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
+) -> FeeRate {
+    FeeRate::min_total_fee_rate(
+        fee_consensus
+            .iter()
+            .map(|schedule| select_fee_rate(&schedule.fee_consensus)),
+        amount,
+    )
+}
+
+fn wallet_transaction_item_fees(
+    amount: fedimint_core::Amount,
+    legacy_fee: Amounts,
+    fee_consensus: &[FeeConsensusSchedule<WalletFeeConsensus>],
+    select_fee_rate: impl Fn(&WalletFeeConsensus) -> FeeRate,
+) -> TransactionItemFees {
+    let fee_rate = minimum_wallet_fee_rate(fee_consensus, amount, select_fee_rate);
+
+    TransactionItemFees {
+        dynamic: vec![
+            FeeComponent {
+                fees: Amounts::new_bitcoin(fee_rate.base_fee()),
+                charge: FeeCharge::Always,
+            },
+            FeeComponent {
+                fees: Amounts::new_bitcoin(fee_rate.proportional_fee(amount)),
+                charge: FeeCharge::IfMaxPriority(WALLET_FEE_PRIORITY),
+            },
+        ],
+        legacy_floor: vec![FeeComponent {
+            fees: legacy_fee,
+            charge: FeeCharge::Always,
+        }],
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
@@ -309,7 +352,7 @@ impl ServerModuleInit for WalletInit {
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let fee_consensus = FeeConsensus::new(0).expect("Relative fee is within range");
+        let fee_consensus = FeeConfig::new(0).expect("Relative fee is within range");
 
         let bitcoin_sks = peers
             .iter()
@@ -343,7 +386,7 @@ impl ServerModuleInit for WalletInit {
         peers: &(dyn PeerHandleOps + Send + Sync),
         args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let fee_consensus = FeeConsensus::new(0).expect("Relative fee is within range");
+        let fee_consensus = FeeConfig::new(0).expect("Relative fee is within range");
 
         let (bitcoin_sk, bitcoin_pk) = secp256k1::generate_keypair(&mut OsRng);
 
@@ -409,11 +452,18 @@ impl ServerModuleInit for WalletInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
     type Common = WalletModuleTypes;
+    type FeeConsensus = WalletFeeConsensus;
     type Init = WalletInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        WalletFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&UnsignedTxPrefix)
@@ -474,6 +524,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
         peer: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
@@ -500,6 +551,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b WalletInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, WalletInputError> {
         let input = input.ensure_v0_ref()?;
 
@@ -651,11 +703,45 @@ impl ServerModule for Wallet {
         })
     }
 
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b WalletInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, WalletInputError> {
+        let processed = self
+            .process_input(dbtx, input, in_point, module_consensus_version)
+            .await?;
+        let amount = processed
+            .amount
+            .amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or(fedimint_core::Amount::ZERO);
+        let fees = wallet_transaction_item_fees(
+            amount,
+            processed.amount.fees,
+            fee_consensus,
+            |fee_consensus| fee_consensus.peg_in,
+        );
+
+        Ok(InputMetaWithFees {
+            amount: TransactionItemAmountsWithFees {
+                amounts: processed.amount.amounts,
+                fees,
+            },
+            pub_key: processed.pub_key,
+        })
+    }
+
     async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -781,6 +867,33 @@ impl ServerModule for Wallet {
         })
     }
 
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a WalletOutput,
+        outpoint: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, WalletOutputError> {
+        let processed = self
+            .process_output(dbtx, output, outpoint, module_consensus_version)
+            .await?;
+        let amount = processed
+            .amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or(fedimint_core::Amount::ZERO);
+        let fees =
+            wallet_transaction_item_fees(amount, processed.fees, fee_consensus, |fee_consensus| {
+                fee_consensus.peg_out
+            });
+
+        Ok(TransactionItemAmountsWithFees {
+            amounts: processed.amounts,
+            fees,
+        })
+    }
+
     async fn output_status(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -794,6 +907,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         audit
             .add_items(

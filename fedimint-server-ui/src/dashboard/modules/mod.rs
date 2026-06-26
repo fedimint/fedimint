@@ -1,3 +1,4 @@
+pub mod fees;
 pub mod lnv2;
 pub mod meta;
 pub mod mintv2;

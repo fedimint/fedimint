@@ -43,13 +43,17 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
+use fedimint_core::endpoint_constants::{
+    CLIENT_CONFIG_ENDPOINT, CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT, VERSION_ENDPOINT,
+};
 use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::epoch::{CurrentFeeConsensus, ModuleFeeConsensusRequest};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiRequestErased, ApiVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
+    TransactionItemFees,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::runtime::sleep;
@@ -84,7 +88,8 @@ use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, CachedModuleFeeConsensus,
+    CachedModuleFeeConsensusKey, CachedModuleFeeConsensusKeyPrefix, ChainIdKey,
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
@@ -108,6 +113,14 @@ pub(crate) mod handle;
 /// `minor` version is the one required (for given `major` version).
 const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
     &[ApiVersion { major: 0, minor: 0 }];
+const FEE_CONSENSUS_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+const FEE_CONSENSUS_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct FeeConsensusSyncState {
+    unsupported: bool,
+    last_updated: BTreeMap<ModuleInstanceId, SystemTime>,
+}
 
 struct FinalizedTransaction {
     transaction: Transaction,
@@ -174,6 +187,7 @@ pub struct Client {
     /// Receiver for events fired every time (ordered) log event is added.
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
+    fee_consensus_sync_tx: watch::Sender<FeeConsensusSyncState>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
     /// User-provided Bitcoin RPC client for modules to use
@@ -558,38 +572,217 @@ impl Client {
         self.modules.get(instance).is_some()
     }
 
+    pub(crate) async fn load_fee_consensus_sync_state(db: &Database) -> FeeConsensusSyncState {
+        let mut dbtx = db.begin_transaction_nc().await;
+        let last_updated = dbtx
+            .find_by_prefix(&CachedModuleFeeConsensusKeyPrefix)
+            .await
+            .map(|(key, cached)| (key.module_instance_id, cached.last_updated))
+            .collect()
+            .await;
+
+        FeeConsensusSyncState {
+            unsupported: false,
+            last_updated,
+        }
+    }
+
+    fn fee_consensus_sync_is_fresh(
+        &self,
+        sync_state: &FeeConsensusSyncState,
+        now: SystemTime,
+    ) -> bool {
+        if sync_state.unsupported {
+            return true;
+        }
+
+        self.modules
+            .iter_modules()
+            .all(|(module_instance_id, _, _)| {
+                sync_state
+                    .last_updated
+                    .get(&module_instance_id)
+                    .is_some_and(|last_updated| {
+                        now.duration_since(*last_updated)
+                            .map_or(true, |age| age <= FEE_CONSENSUS_MAX_AGE)
+                    })
+            })
+    }
+
+    pub async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
+        let mut sync_state_rx = self.fee_consensus_sync_tx.subscribe();
+
+        loop {
+            if self.fee_consensus_sync_is_fresh(&sync_state_rx.borrow(), fedimint_core::time::now())
+            {
+                return Ok(());
+            }
+
+            match self.refresh_fee_consensus_cache().await {
+                Ok(sync_state) => {
+                    self.fee_consensus_sync_tx.send_replace(sync_state);
+                    continue;
+                }
+                Err(error) => {
+                    warn!(
+                        target: LOG_CLIENT_NET_API,
+                        err = %error.fmt_compact_anyhow(),
+                        "Failed to refresh fee consensus while waiting for current fees"
+                    );
+                }
+            }
+
+            sync_state_rx
+                .changed()
+                .await
+                .context("client fee consensus refresh task stopped")?;
+        }
+    }
+
+    pub(crate) async fn run_fee_consensus_refresh_task(&self) {
+        loop {
+            match self.refresh_fee_consensus_cache().await {
+                Ok(sync_state) => {
+                    self.fee_consensus_sync_tx.send_replace(sync_state);
+                }
+                Err(error) => {
+                    warn!(
+                        target: LOG_CLIENT_NET_API,
+                        err = %error.fmt_compact_anyhow(),
+                        "Failed to refresh fee consensus"
+                    );
+                }
+            }
+
+            sleep(FEE_CONSENSUS_REFRESH_INTERVAL).await;
+        }
+    }
+
+    async fn refresh_fee_consensus_cache(&self) -> anyhow::Result<FeeConsensusSyncState> {
+        let now = fedimint_core::time::now();
+        let mut refreshed = BTreeMap::new();
+        let mut current_fee_consensus = BTreeMap::new();
+
+        for (module_instance_id, _, _) in self.modules.iter_modules() {
+            match self
+                .api
+                .request_current_consensus::<CurrentFeeConsensus>(
+                    CURRENT_MODULE_FEE_CONSENSUS_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(ModuleFeeConsensusRequest { module_instance_id }),
+                )
+                .await
+            {
+                Ok(fee_consensus) => {
+                    refreshed.insert(module_instance_id, now);
+                    current_fee_consensus.insert(module_instance_id, fee_consensus);
+                }
+                Err(error) if error.any_peer_error_method_not_found() => {
+                    return Ok(FeeConsensusSyncState {
+                        unsupported: true,
+                        last_updated: BTreeMap::new(),
+                    });
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+
+        let mut dbtx = self.db.begin_transaction().await;
+        for (module_instance_id, current) in current_fee_consensus {
+            dbtx.insert_entry(
+                &CachedModuleFeeConsensusKey { module_instance_id },
+                &CachedModuleFeeConsensus {
+                    current,
+                    last_updated: now,
+                },
+            )
+            .await;
+        }
+        dbtx.commit_tx_result()
+            .await
+            .context("failed to commit fee consensus cache")?;
+
+        Ok(FeeConsensusSyncState {
+            unsupported: false,
+            last_updated: refreshed,
+        })
+    }
+
     /// Returns the input amount and output amount of a transaction
     ///
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_get_balance(&self, builder: &TransactionBuilder) -> (Amounts, Amounts) {
+    async fn cached_fee_consensus(&self) -> BTreeMap<ModuleInstanceId, Vec<CurrentFeeConsensus>> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+
+        dbtx.find_by_prefix(&CachedModuleFeeConsensusKeyPrefix)
+            .await
+            .map(|(key, cached)| (key.module_instance_id, vec![cached.current]))
+            .collect()
+            .await
+    }
+
+    fn transaction_builder_get_balance(
+        &self,
+        builder: &TransactionBuilder,
+        fee_consensus: &BTreeMap<ModuleInstanceId, Vec<CurrentFeeConsensus>>,
+    ) -> (Amounts, Amounts) {
         // FIXME: prevent overflows, currently not suitable for untrusted input
         let mut in_amounts = Amounts::ZERO;
         let mut out_amounts = Amounts::ZERO;
-        let mut fee_amounts = Amounts::ZERO;
+        let mut fees = Vec::new();
 
         for input in builder.inputs() {
-            let module = self.get_module(input.input.module_instance_id());
+            let module_instance_id = input.input.module_instance_id();
+            let module = self.get_module(module_instance_id);
 
-            let item_fees = module.input_fee(&input.amounts, &input.input).expect(
+            let item_fees = module.input_fees(
+                &input.amounts,
+                &input.input,
+                fee_consensus
+                    .get(&module_instance_id)
+                    .map_or(&[], Vec::as_slice),
+            ).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 
             in_amounts.checked_add_mut(&input.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            fees.push(item_fees);
         }
 
         for output in builder.outputs() {
-            let module = self.get_module(output.output.module_instance_id());
+            let module_instance_id = output.output.module_instance_id();
+            let module = self.get_module(module_instance_id);
 
-            let item_fees = module.output_fee(&output.amounts, &output.output).expect(
+            let item_fees = module.output_fees(
+                &output.amounts,
+                &output.output,
+                fee_consensus
+                    .get(&module_instance_id)
+                    .map_or(&[], Vec::as_slice),
+            ).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
             out_amounts.checked_add_mut(&output.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            fees.push(item_fees);
         }
+
+        let max_priority = fees
+            .iter()
+            .map(TransactionItemFees::max_priority)
+            .max()
+            .unwrap_or_default();
+        let fee_amounts = fees.into_iter().fold(Amounts::ZERO, |mut total, fees| {
+            total
+                .checked_add_mut(
+                    &fees
+                        .try_dynamic_fee(max_priority)
+                        .expect("client transaction fee total overflow"),
+                )
+                .expect("client transaction fee total overflow");
+            total
+        });
 
         out_amounts.checked_add_mut(&fee_amounts);
         (in_amounts, out_amounts)
@@ -660,7 +853,9 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<FinalizedTransaction> {
-        let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
+        let fee_consensus = self.cached_fee_consensus().await;
+        let (in_amounts, out_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction, &fee_consensus);
 
         let mut added_inputs_bundles = vec![];
         let mut added_outputs_bundles = vec![];
@@ -722,7 +917,7 @@ impl Client {
         }
 
         let (input_amounts, output_amounts) =
-            self.transaction_builder_get_balance(&partial_transaction);
+            self.transaction_builder_get_balance(&partial_transaction, &fee_consensus);
 
         for (unit, output_amount) in output_amounts {
             let input_amount = input_amounts.get(&unit).copied().unwrap_or_default();
@@ -915,6 +1110,8 @@ impl Client {
         F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
+        self.await_current_fee_consensus().await?;
+
         let operation_type = operation_type.to_owned();
 
         let autocommit_res = self
@@ -965,6 +1162,8 @@ impl Client {
         F: FnOnce(OutPointRange) -> M + MaybeSend,
         M: serde::Serialize + MaybeSend,
     {
+        self.await_current_fee_consensus().await?;
+
         if Client::operation_exists_dbtx(dbtx, operation_id).await {
             bail!("There already exists an operation with id {operation_id:?}")
         }
@@ -991,6 +1190,8 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
+        self.await_current_fee_consensus().await?;
+
         let FinalizedTransaction {
             transaction,
             mut states,
@@ -2557,6 +2758,10 @@ impl ClientContextIface for Client {
     }
     fn decoders(&self) -> &ModuleDecoderRegistry {
         Client::decoders(self)
+    }
+
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
+        Client::await_current_fee_consensus(self).await
     }
 
     async fn finalize_and_submit_transaction(

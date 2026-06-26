@@ -1,5 +1,8 @@
 use fedimint_core::Amount;
-use fedimint_core::module::{AmountUnit, Amounts, CoreConsensusVersion, TransactionItemAmounts};
+use fedimint_core::module::{
+    AmountUnit, Amounts, CoreConsensusVersion, FeeCharge, FeeComponent, FeePriority, FeeRate,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees,
+};
 
 const VERIFIER_OLD: CoreConsensusVersion = CoreConsensusVersion::new(0, 0);
 const VERIFIER_NEW: CoreConsensusVersion = CoreConsensusVersion::new(2, 1);
@@ -102,4 +105,95 @@ fn funding_verifier_rejects_output_plus_fee_overflow() {
     .unwrap();
 
     assert!(v.verify_funding(VERIFIER_NEW).is_err());
+}
+
+#[test]
+fn funding_verifier_reduces_fee_components_by_max_priority() {
+    let mut v = super::FundingVerifier::default();
+
+    v.add_input_with_fees(TransactionItemAmountsWithFees {
+        amounts: Amounts::new_bitcoin_msats(10),
+        fees: TransactionItemFees {
+            dynamic: vec![
+                FeeComponent {
+                    fees: Amounts::new_bitcoin_msats(1),
+                    charge: FeeCharge::Always,
+                },
+                FeeComponent {
+                    fees: Amounts::new_bitcoin_msats(2),
+                    charge: FeeCharge::IfMaxPriority(FeePriority(0)),
+                },
+            ],
+            legacy_floor: Vec::new(),
+        },
+    })
+    .unwrap()
+    .add_output_with_fees(TransactionItemAmountsWithFees {
+        amounts: Amounts::new_bitcoin_msats(5),
+        fees: TransactionItemFees {
+            dynamic: vec![FeeComponent {
+                fees: Amounts::new_bitcoin_msats(4),
+                charge: FeeCharge::IfMaxPriority(FeePriority(1)),
+            }],
+            legacy_floor: Vec::new(),
+        },
+    })
+    .unwrap();
+
+    let (dynamic_fees, legacy_floor_fees) = v.fee_totals().unwrap();
+
+    assert_eq!(dynamic_fees, Amounts::new_bitcoin_msats(5));
+    assert_eq!(legacy_floor_fees, Amounts::ZERO);
+}
+
+#[test]
+fn funding_verifier_accepts_legacy_floor_during_dynamic_fee_transition() {
+    let mut v = super::FundingVerifier::default();
+
+    v.add_input_with_fees(TransactionItemAmountsWithFees {
+        amounts: Amounts::new_bitcoin_msats(101),
+        fees: TransactionItemFees::ZERO,
+    })
+    .unwrap()
+    .add_output_with_fees(TransactionItemAmountsWithFees {
+        amounts: Amounts::new_bitcoin_msats(100),
+        fees: TransactionItemFees {
+            dynamic: vec![FeeComponent {
+                fees: Amounts::new_bitcoin_msats(10),
+                charge: FeeCharge::Always,
+            }],
+            legacy_floor: vec![FeeComponent {
+                fees: Amounts::new_bitcoin_msats(1),
+                charge: FeeCharge::Always,
+            }],
+        },
+    })
+    .unwrap();
+
+    assert!(
+        v.verify_funding(CoreConsensusVersion::new(2, 2)).is_ok(),
+        "legacy fee floor should be accepted until the tightening consensus version"
+    );
+}
+
+#[test]
+fn dynamic_fee_minimum_uses_a_real_schedule() {
+    let priority = FeePriority(1);
+    let amount = Amount::from_msats(1_000);
+    let fees = TransactionItemFees::from_bitcoin_rate(
+        [
+            FeeRate::new(Amount::from_msats(10), 10_000).expect("fee rate is below sanity limit"),
+            FeeRate::new(Amount::from_msats(1), 100_000).expect("fee rate is below sanity limit"),
+        ],
+        amount,
+        priority,
+        Amount::ZERO,
+    );
+
+    assert_eq!(
+        fees.try_dynamic_fee(priority)
+            .expect("fee calculation should not overflow"),
+        Amounts::new_bitcoin_msats(20),
+        "minimum must be picked from a complete voted schedule"
+    );
 }

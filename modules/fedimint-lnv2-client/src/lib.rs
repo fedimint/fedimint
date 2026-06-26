@@ -24,7 +24,9 @@ use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
-use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModule, OutPointRange, decode_current_fee_consensus,
+};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
@@ -35,8 +37,11 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiAuth, ApiVersion, CommonModuleInit, FeePriority, ModuleCommon, ModuleInit,
+    MultiApiVersion, TransactionItemFees,
 };
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
@@ -44,15 +49,15 @@ use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_lnv2_common::config::LightningClientConfig;
+use fedimint_lnv2_common::config::{FeeConsensus as LightningFeeConsensus, LightningClientConfig};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
-    lnurl, tweak,
+    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInputV0,
+    LightningInvoice, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    MINIMUM_INCOMING_CONTRACT_AMOUNT, lnurl, tweak,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -72,6 +77,7 @@ use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can refund it unilaterally
 const EXPIRATION_DELTA_LIMIT: u64 = 1440;
+const LN_FEE_PRIORITY: FeePriority = FeePriority(1);
 
 /// A two hour buffer in case either the client or gateway go offline
 const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
@@ -348,6 +354,36 @@ impl ClientModule for LightningClientModule {
         ))
     }
 
+    fn input_fees(
+        &self,
+        amounts: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let amount = amounts.get_bitcoin();
+        let legacy_fee = <Self as ClientModule>::input_fee(self, amounts, input)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<LightningFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        let fee_rate = match input.maybe_v0_ref()? {
+            LightningInputV0::Incoming(_, _) => fee_consensus.incoming_contract_input,
+            LightningInputV0::Outgoing(_, _) => fee_consensus.outgoing_contract_input,
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_rate],
+            amount,
+            LN_FEE_PRIORITY,
+            legacy_fee,
+        ))
+    }
+
     fn output_fee(
         &self,
         amounts: &Amounts,
@@ -355,6 +391,40 @@ impl ClientModule for LightningClientModule {
     ) -> Option<Amounts> {
         Some(Amounts::new_bitcoin(
             self.cfg.fee_consensus.fee(amounts.expect_only_bitcoin()),
+        ))
+    }
+
+    fn output_fees(
+        &self,
+        amounts: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        let legacy_fee = <Self as ClientModule>::output_fee(self, amounts, output)?.get_bitcoin();
+        let Some(fee_consensus) = decode_current_fee_consensus::<LightningFeeConsensus>(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        ) else {
+            return Some(TransactionItemFees::from_legacy_amounts(
+                Amounts::new_bitcoin(legacy_fee),
+            ));
+        };
+
+        let (fee_rate, amount) = match output.maybe_v0_ref()? {
+            LightningOutputV0::Incoming(contract) => (
+                fee_consensus.incoming_contract_output,
+                contract.commitment.amount,
+            ),
+            LightningOutputV0::Outgoing(contract) => {
+                (fee_consensus.outgoing_contract_output, contract.amount)
+            }
+        };
+
+        Some(TransactionItemFees::from_bitcoin_rate(
+            [fee_rate],
+            amount,
+            LN_FEE_PRIORITY,
+            legacy_fee,
         ))
     }
 

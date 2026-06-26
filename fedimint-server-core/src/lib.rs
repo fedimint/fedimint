@@ -13,28 +13,47 @@ pub mod migration;
 pub mod setup_ui;
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use fedimint_core::core::{
     Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome, ModuleInstanceId, ModuleKind,
 };
 use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-    ModuleInit, TransactionItemAmounts,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, FeeConsensusSchedule,
+    InputMeta, InputMetaWithFees, ModuleCommon, ModuleConsensusVersion, ModuleInit,
+    TransactionItemAmounts, TransactionItemAmountsWithFees,
 };
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
     type Init: ServerModuleInit;
+
+    type FeeConsensus: Clone
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Encodable
+        + Decodable
+        + MaybeSend
+        + MaybeSync
+        + 'static;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
@@ -54,6 +73,24 @@ pub trait ServerModule: Debug + Sized {
         Self::Common::decoder_builder().build()
     }
 
+    /// Returns the config-derived initial fee consensus schedule.
+    ///
+    /// TODO: Remove this together with the legacy fee floor when the 0.16
+    /// tightening consensus-version bump no longer accepts old-client fees.
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus;
+
+    /// Returns module-local consensus-version votes that predate core-level
+    /// module consensus-version voting.
+    ///
+    /// This is a compatibility hook for modules that used to maintain their own
+    /// version voting state. New modules should leave the default empty.
+    async fn legacy_consensus_version_votes(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion> {
+        BTreeMap::new()
+    }
+
     /// This module's contribution to the next consensus proposal. This method
     /// is only guaranteed to be called once every few seconds. Consensus items
     /// are not meant to be latency critical; do not create them as
@@ -71,6 +108,7 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -85,6 +123,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()>;
 
     // Use this function to parallelise stateless cryptographic verification of
@@ -93,6 +132,7 @@ pub trait ServerModule: Debug + Sized {
     fn verify_input(
         &self,
         _input: &<Self::Common as ModuleCommon>::Input,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
         Ok(())
     }
@@ -106,7 +146,27 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
+
+    /// Structured-fee variant of [`Self::process_input`].
+    ///
+    /// The default preserves the legacy fee behavior. Modules with dynamic fee
+    /// components should override this method and keep `process_input` as a
+    /// compatibility wrapper until the legacy fee floor is removed.
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b <Self::Common as ModuleCommon>::Input,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, <Self::Common as ModuleCommon>::InputError> {
+        let _ = fee_consensus;
+        self.process_input(dbtx, input, in_point, module_consensus_version)
+            .await
+            .map(Into::into)
+    }
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -121,7 +181,27 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, <Self::Common as ModuleCommon>::OutputError>;
+
+    /// Structured-fee variant of [`Self::process_output`].
+    ///
+    /// The default preserves the legacy fee behavior. Modules with dynamic fee
+    /// components should override this method and keep `process_output` as a
+    /// compatibility wrapper until the legacy fee floor is removed.
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a <Self::Common as ModuleCommon>::Output,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, <Self::Common as ModuleCommon>::OutputError> {
+        let _ = fee_consensus;
+        self.process_output(dbtx, output, out_point, module_consensus_version)
+            .await
+            .map(Into::into)
+    }
 
     /// **Deprecated**: Modules should not be using it. Instead, they should
     /// implement their own custom endpoints with semantics, versioning,
@@ -159,6 +239,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b <Self::Common as ModuleCommon>::Input,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
         Ok(())
     }
@@ -172,6 +253,7 @@ pub trait ServerModule: Debug + Sized {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a <Self::Common as ModuleCommon>::Output,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), <Self::Common as ModuleCommon>::OutputError> {
         Ok(())
     }
@@ -186,6 +268,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     );
 
     /// Returns a list of custom API endpoints defined by the module. These are
@@ -207,11 +290,28 @@ pub trait IServerModule: Debug {
 
     fn module_kind(&self) -> ModuleKind;
 
+    fn supported_consensus_version(&self) -> ModuleConsensusVersion;
+
+    fn initial_fee_consensus(&self) -> Vec<u8>;
+
+    fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()>;
+
+    fn fee_consensus_to_json(&self, fee_consensus: &[u8]) -> anyhow::Result<Value>;
+
+    fn fee_consensus_from_json(&self, fee_consensus: Value) -> anyhow::Result<Vec<u8>>;
+
+    /// See [`ServerModule::legacy_consensus_version_votes`]
+    async fn legacy_consensus_version_votes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion>;
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<DynModuleConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -222,12 +322,17 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()>;
 
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError>;
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError>;
 
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
@@ -238,7 +343,18 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError>;
+
+    /// See [`ServerModule::process_input_with_fees`]
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<InputMetaWithFees, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -253,7 +369,18 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DynOutputError>;
+
+    /// See [`ServerModule::process_output_with_fees`]
+    async fn process_output_with_fees<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<TransactionItemAmountsWithFees, DynOutputError>;
 
     /// See [`ServerModule::verify_input_submission`]
     #[doc(hidden)]
@@ -261,6 +388,7 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynInputError>;
 
     /// See [`ServerModule::verify_output_submission`]
@@ -270,6 +398,7 @@ pub trait IServerModule: Debug {
         _dbtx: &mut DatabaseTransaction<'a>,
         _output: &DynOutput,
         _out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynOutputError>;
 
     /// See [`ServerModule::output_status`]
@@ -291,6 +420,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     );
 
     /// Returns a list of custom API endpoints defined by the module. These are
@@ -304,6 +434,25 @@ dyn_newtype_define!(
     #[derive(Clone)]
     pub DynServerModule(Arc<IServerModule>)
 );
+
+fn decode_fee_consensus_schedules<T>(
+    fee_consensus: &[CurrentFeeConsensus],
+) -> Vec<FeeConsensusSchedule<T::FeeConsensus>>
+where
+    T: ServerModule,
+{
+    fee_consensus
+        .iter()
+        .map(|schedule| FeeConsensusSchedule {
+            fee_consensus: T::FeeConsensus::consensus_decode_whole(
+                &schedule.fee_consensus,
+                &ModuleDecoderRegistry::default(),
+            )
+            .expect("stored fee consensus must decode as module fee consensus"),
+            active_since: schedule.active_since,
+        })
+        .collect()
+}
 
 #[apply(async_trait_maybe_send!)]
 impl<T> IServerModule for T
@@ -322,13 +471,51 @@ where
         <Self as ServerModule>::module_kind()
     }
 
+    fn supported_consensus_version(&self) -> ModuleConsensusVersion {
+        <<T::Init as ModuleInit>::Common as CommonModuleInit>::CONSENSUS_VERSION
+    }
+
+    fn initial_fee_consensus(&self) -> Vec<u8> {
+        <Self as ServerModule>::initial_fee_consensus(self).consensus_encode_to_vec()
+    }
+
+    fn decode_fee_consensus(&self, fee_consensus: &[u8]) -> anyhow::Result<()> {
+        <Self as ServerModule>::FeeConsensus::consensus_decode_whole(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        )?;
+        Ok(())
+    }
+
+    fn fee_consensus_to_json(&self, fee_consensus: &[u8]) -> anyhow::Result<Value> {
+        let fee_consensus = <Self as ServerModule>::FeeConsensus::consensus_decode_whole(
+            fee_consensus,
+            &ModuleDecoderRegistry::default(),
+        )?;
+        serde_json::to_value(fee_consensus).context("failed to encode fee consensus as JSON")
+    }
+
+    fn fee_consensus_from_json(&self, fee_consensus: Value) -> anyhow::Result<Vec<u8>> {
+        let fee_consensus: <Self as ServerModule>::FeeConsensus =
+            serde_json::from_value(fee_consensus).context("failed to decode fee consensus JSON")?;
+        Ok(fee_consensus.consensus_encode_to_vec())
+    }
+
+    async fn legacy_consensus_version_votes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<PeerId, ModuleConsensusVersion> {
+        <Self as ServerModule>::legacy_consensus_version_votes(self, dbtx).await
+    }
+
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<DynModuleConsensusItem> {
-        <Self as ServerModule>::consensus_proposal(self, dbtx)
+        <Self as ServerModule>::consensus_proposal(self, dbtx, module_consensus_version)
             .await
             .into_iter()
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
@@ -343,6 +530,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         <Self as ServerModule>::process_consensus_item(
             self,
@@ -352,7 +540,8 @@ where
                     .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::ConsensusItem>()
                     .expect("incorrect consensus item type passed to module plugin"),
             ),
-            peer_id
+            peer_id,
+            module_consensus_version,
         )
         .await
     }
@@ -360,13 +549,18 @@ where
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError> {
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input(
             self,
             input
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
+            module_consensus_version,
         )
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
@@ -380,6 +574,7 @@ where
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
@@ -389,6 +584,32 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             in_point,
+            module_consensus_version,
+        )
+        .await
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
+    }
+
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<InputMetaWithFees, DynInputError> {
+        let fee_consensus = decode_fee_consensus_schedules::<Self>(fee_consensus);
+
+        <Self as ServerModule>::process_input_with_fees(
+            self,
+            dbtx,
+            input
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
+                .expect("incorrect input type passed to module plugin"),
+            in_point,
+            module_consensus_version,
+            &fee_consensus,
         )
         .await
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
@@ -407,6 +628,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,
@@ -416,6 +638,32 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
+            module_consensus_version,
+        )
+        .await
+        .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
+    }
+
+    async fn process_output_with_fees<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Result<TransactionItemAmountsWithFees, DynOutputError> {
+        let fee_consensus = decode_fee_consensus_schedules::<Self>(fee_consensus);
+
+        <Self as ServerModule>::process_output_with_fees(
+            self,
+            dbtx,
+            output
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
+                .expect("incorrect output type passed to module plugin"),
+            out_point,
+            module_consensus_version,
+            &fee_consensus,
         )
         .await
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
@@ -425,6 +673,7 @@ where
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input_submission(
             self,
@@ -433,6 +682,7 @@ where
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
@@ -443,6 +693,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
     ) -> Result<(), DynOutputError> {
         <Self as ServerModule>::verify_output_submission(
             self,
@@ -452,6 +703,7 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
+            module_consensus_version,
         )
         .await
         .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
@@ -480,8 +732,16 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        module_consensus_version: ModuleConsensusVersion,
     ) {
-        <Self as ServerModule>::audit(self, dbtx, audit, module_instance_id).await;
+        <Self as ServerModule>::audit(
+            self,
+            dbtx,
+            audit,
+            module_instance_id,
+            module_consensus_version,
+        )
+        .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {

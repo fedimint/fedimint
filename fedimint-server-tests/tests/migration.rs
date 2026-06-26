@@ -24,7 +24,10 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AlephUnitsKey, AlephUnitsPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
+    AlephUnitsKey, AlephUnitsPrefix, ConsensusUnixTimePrefix, CoreUnixTimeVotePrefix,
+    ModuleConsensusVersionVoteFullPrefix, ModuleConsensusVersionVotingActivationPrefix,
+    ModuleFeeConsensusDesiredPrefix, ModuleFeeConsensusScheduleFullPrefix,
+    ModuleFeeConsensusVoteFullPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
     SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
@@ -224,6 +227,63 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // Guardian metadata is optional, just verify we can query it
                         let _metadata = dbtx
                             .find_by_prefix(&GuardianMetadataPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ModuleConsensusVersionVote => {
+                        // Consensus version votes are optional, just verify we can query them.
+                        let _votes = dbtx
+                            .find_by_prefix(&ModuleConsensusVersionVoteFullPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ModuleConsensusVersionVotingActivation => {
+                        // Consensus version voting activations are optional, just verify we can
+                        // query them.
+                        let _activations = dbtx
+                            .find_by_prefix(&ModuleConsensusVersionVotingActivationPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::CoreUnixTimeVote => {
+                        // Unix time votes are optional, just verify we can query them.
+                        let _votes = dbtx
+                            .find_by_prefix(&CoreUnixTimeVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ConsensusUnixTime => {
+                        // Consensus unix time is optional, just verify we can query it.
+                        let _times = dbtx
+                            .find_by_prefix(&ConsensusUnixTimePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ModuleFeeConsensusVote => {
+                        // Fee consensus votes are optional, just verify we can query them.
+                        let _votes = dbtx
+                            .find_by_prefix(&ModuleFeeConsensusVoteFullPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ModuleFeeConsensusDesired => {
+                        // Desired fee consensus votes are optional, just verify we can query them.
+                        let _desired = dbtx
+                            .find_by_prefix(&ModuleFeeConsensusDesiredPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ModuleFeeConsensusSchedule => {
+                        // Fee consensus schedules are optional, just verify we can query them.
+                        let _schedules = dbtx
+                            .find_by_prefix(&ModuleFeeConsensusScheduleFullPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

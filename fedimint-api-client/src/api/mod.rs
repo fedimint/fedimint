@@ -22,6 +22,7 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, ModuleKind, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::CurrentFeeConsensusJson;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -600,6 +601,18 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Returns the chain ID (bitcoin block hash at height 1) from the
     /// federation
     async fn chain_id(&self) -> FederationResult<ChainId>;
+
+    async fn current_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> FederationResult<CurrentFeeConsensusJson>;
+
+    async fn set_module_fee_consensus_json(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        fee_consensus: serde_json::Value,
+        auth: ApiAuth,
+    ) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(

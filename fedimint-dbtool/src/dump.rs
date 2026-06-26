@@ -271,6 +271,10 @@ impl DatabaseDump {
         dbtx: &mut DatabaseTransaction<'_>,
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
+        if Self::write_serialized_dynamic_fee_consensus_range(&table, dbtx, consensus).await {
+            return;
+        }
+
         match table {
             server_db::DbKeyPrefix::AcceptedItem => {
                 push_db_pair_items_no_serde!(
@@ -313,7 +317,14 @@ impl DatabaseDump {
                 );
             }
             // Module is a global prefix for all module data
-            server_db::DbKeyPrefix::Module
+            server_db::DbKeyPrefix::ModuleConsensusVersionVote
+            | server_db::DbKeyPrefix::ModuleConsensusVersionVotingActivation
+            | server_db::DbKeyPrefix::CoreUnixTimeVote
+            | server_db::DbKeyPrefix::ConsensusUnixTime
+            | server_db::DbKeyPrefix::ModuleFeeConsensusVote
+            | server_db::DbKeyPrefix::ModuleFeeConsensusDesired
+            | server_db::DbKeyPrefix::ModuleFeeConsensusSchedule
+            | server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo
             | server_db::DbKeyPrefix::DatabaseVersion
             | server_db::DbKeyPrefix::ClientBackup => {}
@@ -339,6 +350,89 @@ impl DatabaseDump {
             }
         }
     }
+
+    async fn write_serialized_dynamic_fee_consensus_range(
+        table: &server_db::DbKeyPrefix,
+        dbtx: &mut DatabaseTransaction<'_>,
+        consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
+    ) -> bool {
+        match table {
+            server_db::DbKeyPrefix::ModuleConsensusVersionVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleConsensusVersionVoteFullPrefix,
+                    consensus_db::ModuleConsensusVersionVoteKey,
+                    fedimint_core::module::ModuleConsensusVersion,
+                    consensus,
+                    "Module Consensus Version Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleConsensusVersionVotingActivation => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleConsensusVersionVotingActivationPrefix,
+                    consensus_db::ModuleConsensusVersionVotingActivationKey,
+                    fedimint_core::module::ModuleConsensusVersion,
+                    consensus,
+                    "Module Consensus Version Voting Activations"
+                );
+            }
+            server_db::DbKeyPrefix::CoreUnixTimeVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::CoreUnixTimeVotePrefix,
+                    consensus_db::CoreUnixTimeVoteKey,
+                    fedimint_core::epoch::ConsensusUnixTime,
+                    consensus,
+                    "Core Unix Time Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ConsensusUnixTime => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ConsensusUnixTimePrefix,
+                    consensus_db::ConsensusUnixTimeKey,
+                    fedimint_core::epoch::ConsensusUnixTime,
+                    consensus,
+                    "Consensus Unix Time"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleFeeConsensusVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusVoteFullPrefix,
+                    consensus_db::ModuleFeeConsensusVoteKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleFeeConsensusDesired => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusDesiredPrefix,
+                    consensus_db::ModuleFeeConsensusDesiredKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Desired Votes"
+                );
+            }
+            server_db::DbKeyPrefix::ModuleFeeConsensusSchedule => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ModuleFeeConsensusScheduleFullPrefix,
+                    consensus_db::ModuleFeeConsensusScheduleKey,
+                    Vec<u8>,
+                    consensus,
+                    "Module Fee Consensus Schedules"
+                );
+            }
+            _ => return false,
+        }
+
+        true
+    }
+
     async fn write_serialized_client_operation_log(
         serialized: &mut BTreeMap<String, Box<dyn Serialize>>,
         dbtx: &mut DatabaseTransaction<'_>,

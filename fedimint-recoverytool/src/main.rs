@@ -239,7 +239,11 @@ async fn process_and_print_tweak_source(
                             .into_iter()
                             .filter_map(|item| match item.item {
                                 ConsensusItem::Transaction(tx) => Some(tx),
-                                ConsensusItem::Module(_) | ConsensusItem::Default { .. } => None,
+                                ConsensusItem::Module(_)
+                                | ConsensusItem::ModuleConsensusVersion(_)
+                                | ConsensusItem::CoreUnixTime(_)
+                                | ConsensusItem::ModuleFeeConsensus(_)
+                                | ConsensusItem::Default { .. } => None,
                             })
                             .collect();
 

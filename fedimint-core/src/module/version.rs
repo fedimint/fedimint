@@ -90,7 +90,11 @@ impl fmt::Display for CoreConsensusVersion {
 
 /// Globally declared core consensus version implemented/supported by this
 /// codebase
-pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 1);
+pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 2);
+
+/// Core consensus version that activates core unix-time and dynamic fee voting.
+pub const DYNAMIC_FEES_CORE_CONSENSUS_VERSION: CoreConsensusVersion =
+    CoreConsensusVersion::new(2, 2);
 
 /// Consensus version of a specific module instance
 ///

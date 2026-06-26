@@ -33,7 +33,7 @@ use fedimint_wallet_client::{
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
-use fedimint_wallet_common::{PegOutFees, Rbf, TxOutputSummary};
+use fedimint_wallet_common::{MODULE_CONSENSUS_VERSION, PegOutFees, Rbf, TxOutputSummary};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use secp256k1::rand::rngs::OsRng;
@@ -814,6 +814,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
                 txid: TransactionId::all_zeros(),
                 in_idx: 0,
             },
+            MODULE_CONSENSUS_VERSION,
         )
         .await
     {
@@ -851,6 +852,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
                     txid: TransactionId::all_zeros(),
                     in_idx: 0,
                 },
+                MODULE_CONSENSUS_VERSION,
             )
             .await,
         Ok(_)
@@ -1384,7 +1386,7 @@ async fn sync_wallet_to_block(
         let consensus_item = fedimint_wallet_common::WalletConsensusItem::BlockCount(block_count);
         let peer_id = PeerId::from(peer as u16);
         wallet
-            .process_consensus_item(dbtx, consensus_item, peer_id)
+            .process_consensus_item(dbtx, consensus_item, peer_id, MODULE_CONSENSUS_VERSION)
             .await?;
     }
     Ok(())

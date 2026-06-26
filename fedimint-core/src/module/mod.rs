@@ -32,7 +32,7 @@ use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use registry::ModuleRegistry;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use tracing::Instrument;
 
 // TODO: Make this module public and remove theDkgPeerMessage`pub use` below
@@ -47,6 +47,7 @@ use crate::db::{
     DatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::epoch::ConsensusUnixTime;
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::MaybeSend;
 use crate::util::FmtCompact;
@@ -56,6 +57,27 @@ use crate::{Amount, apply, async_trait_maybe_send, maybe_add_send, maybe_add_sen
 pub struct InputMeta {
     pub amount: TransactionItemAmounts,
     pub pub_key: secp256k1::PublicKey,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InputMetaWithFees {
+    pub amount: TransactionItemAmountsWithFees,
+    pub pub_key: secp256k1::PublicKey,
+}
+
+impl From<InputMeta> for InputMetaWithFees {
+    fn from(value: InputMeta) -> Self {
+        Self {
+            amount: value.amount.into(),
+            pub_key: value.pub_key,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct FeeConsensusSchedule<T> {
+    pub fee_consensus: T,
+    pub active_since: ConsensusUnixTime,
 }
 
 /// Unit of account for a given amount.
@@ -240,6 +262,257 @@ impl IntoIterator for Amounts {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct FeeRate {
+    pub base: Amount,
+    parts_per_million: u64,
+}
+
+impl FeeRate {
+    pub const MAX_PARTS_PER_MILLION: u64 = 210_000;
+
+    pub fn new(base: Amount, parts_per_million: u64) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            parts_per_million <= Self::MAX_PARTS_PER_MILLION,
+            "Fee rate exceeds maximum of {} parts per million",
+            Self::MAX_PARTS_PER_MILLION
+        );
+
+        Ok(Self {
+            base,
+            parts_per_million,
+        })
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            base: Amount::ZERO,
+            parts_per_million: 0,
+        }
+    }
+
+    pub fn base_fee(&self) -> Amount {
+        self.base
+    }
+
+    pub fn parts_per_million(&self) -> u64 {
+        self.parts_per_million
+    }
+
+    pub fn proportional_fee(&self, amount: Amount) -> Amount {
+        let fee_msats = amount
+            .msats
+            .saturating_mul(self.parts_per_million)
+            .saturating_add(1_000_000 - 1)
+            / 1_000_000;
+        Amount::from_msats(fee_msats)
+    }
+
+    pub fn total_fee(&self, amount: Amount) -> Amount {
+        self.base
+            .checked_add(self.proportional_fee(amount))
+            .unwrap_or(Amount::from_msats(u64::MAX))
+    }
+
+    pub fn min_total_fee_rate(rates: impl IntoIterator<Item = Self>, amount: Amount) -> Self {
+        rates
+            .into_iter()
+            .min_by_key(|fee_rate| fee_rate.total_fee(amount))
+            .unwrap_or_else(Self::zero)
+    }
+}
+
+impl<'de> Deserialize<'de> for FeeRate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct FeeRateUnchecked {
+            base: Amount,
+            parts_per_million: u64,
+        }
+
+        let fee_rate = FeeRateUnchecked::deserialize(deserializer)?;
+        Self::new(fee_rate.base, fee_rate.parts_per_million).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Encodable for FeeRate {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.base.consensus_encode(writer)?;
+        self.parts_per_million.consensus_encode(writer)
+    }
+}
+
+impl Decodable for FeeRate {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let base = Amount::consensus_decode_partial(d, modules)?;
+        let parts_per_million = u64::consensus_decode_partial(d, modules)?;
+        Self::new(base, parts_per_million).map_err(DecodeError::from)
+    }
+}
+
+#[derive(
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct FeePriority(pub u16);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum FeeCharge {
+    Always,
+    IfMaxPriority(FeePriority),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct FeeComponent {
+    pub fees: Amounts,
+    pub charge: FeeCharge,
+}
+
+impl FeeComponent {
+    pub fn fee(&self, max_priority: FeePriority) -> Amounts {
+        match self.charge {
+            FeeCharge::Always => self.fees.clone(),
+            FeeCharge::IfMaxPriority(priority) if priority == max_priority => self.fees.clone(),
+            FeeCharge::IfMaxPriority(_) => Amounts::ZERO,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TransactionItemFees {
+    pub dynamic: Vec<FeeComponent>,
+    pub legacy_floor: Vec<FeeComponent>,
+}
+
+impl TransactionItemFees {
+    pub const ZERO: Self = Self {
+        dynamic: Vec::new(),
+        legacy_floor: Vec::new(),
+    };
+
+    pub fn from_legacy_amounts(fees: Amounts) -> Self {
+        if fees == Amounts::ZERO {
+            Self::ZERO
+        } else {
+            let component = FeeComponent {
+                fees,
+                charge: FeeCharge::Always,
+            };
+            Self {
+                dynamic: vec![component.clone()],
+                legacy_floor: vec![component],
+            }
+        }
+    }
+
+    pub fn with_legacy_floor(dynamic: Vec<FeeComponent>, legacy_floor: Amounts) -> Self {
+        let legacy_floor = (legacy_floor != Amounts::ZERO)
+            .then_some(FeeComponent {
+                fees: legacy_floor,
+                charge: FeeCharge::Always,
+            })
+            .into_iter()
+            .collect();
+
+        Self {
+            dynamic,
+            legacy_floor,
+        }
+    }
+
+    pub fn from_rate(
+        unit: AmountUnit,
+        rates: impl IntoIterator<Item = FeeRate>,
+        amount: Amount,
+        priority: FeePriority,
+        legacy_floor: Amount,
+    ) -> Self {
+        let fee_rate = FeeRate::min_total_fee_rate(rates, amount);
+        Self::with_legacy_floor(
+            vec![
+                FeeComponent {
+                    fees: Amounts::new_custom(unit, fee_rate.base_fee()),
+                    charge: FeeCharge::Always,
+                },
+                FeeComponent {
+                    fees: Amounts::new_custom(unit, fee_rate.proportional_fee(amount)),
+                    charge: FeeCharge::IfMaxPriority(priority),
+                },
+            ],
+            Amounts::new_custom(unit, legacy_floor),
+        )
+    }
+
+    pub fn from_bitcoin_rate(
+        rates: impl IntoIterator<Item = FeeRate>,
+        amount: Amount,
+        priority: FeePriority,
+        legacy_floor: Amount,
+    ) -> Self {
+        Self::from_rate(AmountUnit::BITCOIN, rates, amount, priority, legacy_floor)
+    }
+
+    pub fn max_priority(&self) -> FeePriority {
+        self.dynamic
+            .iter()
+            .chain(self.legacy_floor.iter())
+            .filter_map(|fee| match fee.charge {
+                FeeCharge::Always => None,
+                FeeCharge::IfMaxPriority(priority) => Some(priority),
+            })
+            .max()
+            .unwrap_or_default()
+    }
+
+    pub fn checked_add_mut(&mut self, rhs: Self) -> Option<&mut Self> {
+        self.dynamic.try_reserve(rhs.dynamic.len()).ok()?;
+        self.legacy_floor.try_reserve(rhs.legacy_floor.len()).ok()?;
+
+        self.dynamic.extend(rhs.dynamic);
+        self.legacy_floor.extend(rhs.legacy_floor);
+
+        Some(self)
+    }
+
+    pub fn try_dynamic_fee(&self, max_priority: FeePriority) -> Option<Amounts> {
+        Self::try_fee_components(&self.dynamic, max_priority)
+    }
+
+    pub fn try_legacy_floor_fee(&self, max_priority: FeePriority) -> Option<Amounts> {
+        Self::try_fee_components(&self.legacy_floor, max_priority)
+    }
+
+    fn try_fee_components(
+        components: &[FeeComponent],
+        max_priority: FeePriority,
+    ) -> Option<Amounts> {
+        components
+            .iter()
+            .try_fold(Amounts::ZERO, |mut fees, component| {
+                let component_fee = component.fee(max_priority);
+                fees.checked_add_mut(&component_fee)?;
+                Some(fees)
+            })
+    }
+}
+
 /// Information about the amount represented by an input or output.
 ///
 /// * For **inputs** the amount is funding the transaction while the fee is
@@ -265,6 +538,34 @@ impl TransactionItemAmounts {
         amounts: Amounts::ZERO,
         fees: Amounts::ZERO,
     };
+}
+
+/// Information about the amount and structured fee components represented by
+/// an input or output.
+///
+/// * For **inputs** the amount is funding the transaction while the fee is
+///   consuming funding
+/// * For **outputs** the amount and the fee consume funding
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TransactionItemAmountsWithFees {
+    pub amounts: Amounts,
+    pub fees: TransactionItemFees,
+}
+
+impl TransactionItemAmountsWithFees {
+    pub const ZERO: Self = Self {
+        amounts: Amounts::ZERO,
+        fees: TransactionItemFees::ZERO,
+    };
+}
+
+impl From<TransactionItemAmounts> for TransactionItemAmountsWithFees {
+    fn from(value: TransactionItemAmounts) -> Self {
+        Self {
+            amounts: value.amounts,
+            fees: TransactionItemFees::from_legacy_amounts(value.fees),
+        }
+    }
 }
 
 /// All requests from client to server contain these fields

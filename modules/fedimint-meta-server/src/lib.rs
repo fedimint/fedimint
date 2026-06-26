@@ -272,7 +272,10 @@ impl Meta {
 impl ServerModule for Meta {
     /// Define the consensus types
     type Common = MetaModuleTypes;
+    type FeeConsensus = ();
     type Init = MetaInit;
+
+    fn initial_fee_consensus(&self) {}
 
     /// Check the difference between what's desired vs submitted and consensus.
     ///
@@ -281,6 +284,7 @@ impl ServerModule for Meta {
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<MetaConsensusItem> {
         let desired: Vec<_> = Self::get_desired(dbtx).await;
 
@@ -341,6 +345,7 @@ impl ServerModule for Meta {
         dbtx: &mut DatabaseTransaction<'b>,
         MetaConsensusItem { key, value, salt }: MetaConsensusItem,
         peer_id: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_META, %key, %value, %salt, "Processing consensus item proposal");
 
@@ -394,6 +399,7 @@ impl ServerModule for Meta {
         _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b MetaInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, MetaInputError> {
         Err(MetaInputError::NotSupported)
     }
@@ -403,6 +409,7 @@ impl ServerModule for Meta {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a MetaOutput,
         _out_point: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, MetaOutputError> {
         Err(MetaOutputError::NotSupported)
     }
@@ -420,6 +427,7 @@ impl ServerModule for Meta {
         _dbtx: &mut DatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
     }
 

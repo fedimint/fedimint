@@ -15,9 +15,13 @@ use fedimint_core::core::{
     OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
+use fedimint_core::encoding::Decodable;
+use fedimint_core::epoch::CurrentFeeConsensus;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
+use fedimint_core::module::{
+    AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemFees,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
@@ -48,6 +52,15 @@ pub mod recovery;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
+pub fn decode_current_fee_consensus<T: Decodable>(
+    fee_consensus: &[CurrentFeeConsensus],
+    decoders: &ModuleDecoderRegistry,
+) -> Option<T> {
+    fee_consensus
+        .last()
+        .and_then(|schedule| T::consensus_decode_whole(&schedule.fee_consensus, decoders).ok())
+}
+
 /// A fedimint-client interface exposed to client modules
 ///
 /// To break the dependency of the client modules on the whole fedimint client
@@ -61,6 +74,8 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule);
     fn api_clone(&self) -> DynGlobalApi;
     fn decoders(&self) -> &ModuleDecoderRegistry;
+    async fn await_current_fee_consensus(&self) -> anyhow::Result<()>;
+
     async fn finalize_and_submit_transaction(
         &self,
         operation_id: OperationId,
@@ -367,6 +382,10 @@ where
         S: sm::IState + 'static,
     {
         DynState::from_typed(self.module_instance_id, sm)
+    }
+
+    pub async fn await_current_fee_consensus(&self) -> anyhow::Result<()> {
+        self.client.get().await_current_fee_consensus().await
     }
 
     pub async fn finalize_and_submit_transaction<F, Meta>(
@@ -753,6 +772,7 @@ where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
     {
+        self.client.get().await_current_fee_consensus().await?;
         self.claim_inputs_dyn(dbtx, inputs.into_instanceless(), operation_id)
             .await
     }
@@ -944,6 +964,16 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amounts>;
 
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &<Self::Common as ModuleCommon>::Input,
+        _fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        self.input_fee(amount, input)
+            .map(TransactionItemFees::from_legacy_amounts)
+    }
+
     /// Returns the fee the processing of this output requires.
     ///
     /// If the semantics of a given output aren't known this function returns
@@ -957,6 +987,16 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         amount: &Amounts,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts>;
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &<Self::Common as ModuleCommon>::Output,
+        _fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        self.output_fee(amount, output)
+            .map(TransactionItemFees::from_legacy_amounts)
+    }
 
     fn supports_backup(&self) -> bool {
         false
@@ -1123,6 +1163,20 @@ pub trait IClientModule: Debug {
 
     fn output_fee(&self, amount: &Amounts, output: &DynOutput) -> Option<Amounts>;
 
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &DynInput,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees>;
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &DynOutput,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees>;
+
     fn supports_backup(&self) -> bool;
 
     async fn backup(&self, module_instance_id: ModuleInstanceId)
@@ -1211,6 +1265,40 @@ where
                 .as_any()
                 .downcast_ref()
                 .expect("Dispatched to correct module"),
+        )
+    }
+
+    fn input_fees(
+        &self,
+        amount: &Amounts,
+        input: &DynInput,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        <T as ClientModule>::input_fees(
+            self,
+            amount,
+            input
+                .as_any()
+                .downcast_ref()
+                .expect("Dispatched to correct module"),
+            fee_consensus,
+        )
+    }
+
+    fn output_fees(
+        &self,
+        amount: &Amounts,
+        output: &DynOutput,
+        fee_consensus: &[CurrentFeeConsensus],
+    ) -> Option<TransactionItemFees> {
+        <T as ClientModule>::output_fees(
+            self,
+            amount,
+            output
+                .as_any()
+                .downcast_ref()
+                .expect("Dispatched to correct module"),
+            fee_consensus,
         )
     }
 

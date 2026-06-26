@@ -3,6 +3,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::module::FeeRate;
 use fedimint_core::{Amount, msats, plugin_types_trait_impl_config};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,7 @@ pub struct LightningConfigConsensus {
     /// The threshold public keys for encrypting the LN preimage
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: NetworkLegacyEncodingWrapper,
 }
 
@@ -48,7 +49,7 @@ pub struct LightningConfigPrivate {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
-    pub fee_consensus: FeeConsensus,
+    pub fee_consensus: FeeConfig,
     pub network: NetworkLegacyEncodingWrapper,
 }
 
@@ -72,12 +73,41 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
+pub struct FeeConfig {
     pub contract_input: fedimint_core::Amount,
     pub contract_output: fedimint_core::Amount,
 }
 
-impl Default for FeeConsensus {
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub incoming_contract_input: FeeRate,
+    pub incoming_contract_output: FeeRate,
+    pub outgoing_contract_input: FeeRate,
+    pub outgoing_contract_output: FeeRate,
+    pub offer: Amount,
+}
+
+impl FeeConsensus {
+    pub fn from_config(config: &FeeConfig) -> anyhow::Result<Self> {
+        Ok(Self {
+            incoming_contract_input: FeeRate::new(config.contract_input, 0)?,
+            incoming_contract_output: FeeRate::new(config.contract_output, 0)?,
+            outgoing_contract_input: FeeRate::new(config.contract_input, 0)?,
+            outgoing_contract_output: FeeRate::new(config.contract_output, 0)?,
+            offer: Amount::ZERO,
+        })
+    }
+}
+
+impl TryFrom<FeeConfig> for FeeConsensus {
+    type Error = anyhow::Error;
+
+    fn try_from(config: FeeConfig) -> Result<Self, Self::Error> {
+        Self::from_config(&config)
+    }
+}
+
+impl Default for FeeConfig {
     fn default() -> Self {
         Self {
             contract_input: fedimint_core::Amount::ZERO,

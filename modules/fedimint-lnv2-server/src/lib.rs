@@ -25,20 +25,21 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmounts, api_endpoint,
+    FeeCharge, FeeComponent, FeeConsensusSchedule, FeePriority, FeeRate, InputMeta,
+    InputMetaWithFees, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees, api_endpoint,
 };
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
-    push_db_pair_items,
+    Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
+    async_trait_maybe_send, push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigPrivate,
+    FeeConfig, FeeConsensus as LightningFeeConsensus, LightningClientConfig, LightningConfig,
+    LightningConfigConsensus, LightningConfigPrivate,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -272,9 +273,9 @@ impl ServerModuleInit for LightningInit {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
                         fee_consensus: if args.disable_base_fees {
-                            FeeConsensus::zero()
+                            FeeConfig::zero()
                         } else {
-                            FeeConsensus::new(0).expect("Relative fee is within range")
+                            FeeConfig::new(0).expect("Relative fee is within range")
                         },
                         network: args.network,
                     },
@@ -304,9 +305,9 @@ impl ServerModuleInit for LightningInit {
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
                 fee_consensus: if args.disable_base_fees {
-                    FeeConsensus::zero()
+                    FeeConfig::zero()
                 } else {
-                    FeeConsensus::new(0).expect("Relative fee is within range")
+                    FeeConfig::new(0).expect("Relative fee is within range")
                 },
                 network: args.network,
             },
@@ -402,14 +403,87 @@ pub struct Lightning {
     server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
 }
 
+const LN_FEE_PRIORITY: FeePriority = FeePriority(1);
+
+#[derive(Debug, Clone, Copy)]
+enum ContractDirection {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ContractFeeSide {
+    Input,
+    Output,
+}
+
+fn contract_fee_rate(
+    fees: &LightningFeeConsensus,
+    direction: ContractDirection,
+    side: ContractFeeSide,
+) -> FeeRate {
+    match (direction, side) {
+        (ContractDirection::Incoming, ContractFeeSide::Input) => fees.incoming_contract_input,
+        (ContractDirection::Incoming, ContractFeeSide::Output) => fees.incoming_contract_output,
+        (ContractDirection::Outgoing, ContractFeeSide::Input) => fees.outgoing_contract_input,
+        (ContractDirection::Outgoing, ContractFeeSide::Output) => fees.outgoing_contract_output,
+    }
+}
+
+fn bitcoin_fee_component(fee: Amount, charge: FeeCharge) -> Option<FeeComponent> {
+    (fee != Amount::ZERO).then(|| FeeComponent {
+        fees: Amounts::new_bitcoin(fee),
+        charge,
+    })
+}
+
+fn contract_item_fees(
+    fee_consensus: &[FeeConsensusSchedule<LightningFeeConsensus>],
+    amount: Amount,
+    legacy_floor: Amount,
+    direction: ContractDirection,
+    side: ContractFeeSide,
+) -> TransactionItemFees {
+    let fee_rate = FeeRate::min_total_fee_rate(
+        fee_consensus
+            .iter()
+            .map(|schedule| contract_fee_rate(&schedule.fee_consensus, direction, side)),
+        amount,
+    );
+
+    let mut dynamic = Vec::new();
+    dynamic.extend(bitcoin_fee_component(
+        fee_rate.base_fee(),
+        FeeCharge::Always,
+    ));
+    dynamic.extend(bitcoin_fee_component(
+        fee_rate.proportional_fee(amount),
+        FeeCharge::IfMaxPriority(LN_FEE_PRIORITY),
+    ));
+
+    TransactionItemFees {
+        dynamic,
+        legacy_floor: bitcoin_fee_component(legacy_floor, FeeCharge::Always)
+            .into_iter()
+            .collect(),
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Lightning {
     type Common = LightningModuleTypes;
+    type FeeConsensus = LightningFeeConsensus;
     type Init = LightningInit;
+
+    fn initial_fee_consensus(&self) -> Self::FeeConsensus {
+        LightningFeeConsensus::from_config(&self.cfg.consensus.fee_consensus)
+            .expect("config fee consensus must be valid")
+    }
 
     async fn consensus_proposal(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Vec<LightningConsensusItem> {
         // We reduce the time granularity to deduplicate votes more often and not save
         // one consensus item every second.
@@ -430,6 +504,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer: PeerId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
 
@@ -465,6 +540,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
         _in_point: InPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, LightningInputError> {
         let (pub_key, amount) = match input.ensure_v0_ref()? {
             LightningInputV0::Outgoing(outpoint, outgoing_witness) => {
@@ -542,11 +618,46 @@ impl ServerModule for Lightning {
         })
     }
 
+    async fn process_input_with_fees<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b LightningInput,
+        in_point: InPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<InputMetaWithFees, LightningInputError> {
+        let direction = match input.ensure_v0_ref()? {
+            LightningInputV0::Incoming(..) => ContractDirection::Incoming,
+            LightningInputV0::Outgoing(..) => ContractDirection::Outgoing,
+        };
+
+        let input_meta = self
+            .process_input(dbtx, input, in_point, module_consensus_version)
+            .await?;
+        let amount = input_meta.amount.amounts.expect_only_bitcoin();
+        let legacy_floor = input_meta.amount.fees.expect_only_bitcoin();
+
+        Ok(InputMetaWithFees {
+            amount: TransactionItemAmountsWithFees {
+                amounts: input_meta.amount.amounts,
+                fees: contract_item_fees(
+                    fee_consensus,
+                    amount,
+                    legacy_floor,
+                    direction,
+                    ContractFeeSide::Input,
+                ),
+            },
+            pub_key: input_meta.pub_key,
+        })
+    }
+
     async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
         outpoint: OutPoint,
+        _module_consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmounts, LightningOutputError> {
         let amount = match output.ensure_v0_ref()? {
             LightningOutputV0::Outgoing(contract) => {
@@ -602,6 +713,37 @@ impl ServerModule for Lightning {
         })
     }
 
+    async fn process_output_with_fees<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a LightningOutput,
+        outpoint: OutPoint,
+        module_consensus_version: ModuleConsensusVersion,
+        fee_consensus: &[FeeConsensusSchedule<Self::FeeConsensus>],
+    ) -> Result<TransactionItemAmountsWithFees, LightningOutputError> {
+        let direction = match output.ensure_v0_ref()? {
+            LightningOutputV0::Incoming(..) => ContractDirection::Incoming,
+            LightningOutputV0::Outgoing(..) => ContractDirection::Outgoing,
+        };
+
+        let amounts = self
+            .process_output(dbtx, output, outpoint, module_consensus_version)
+            .await?;
+        let amount = amounts.amounts.expect_only_bitcoin();
+        let legacy_floor = amounts.fees.expect_only_bitcoin();
+
+        Ok(TransactionItemAmountsWithFees {
+            amounts: amounts.amounts,
+            fees: contract_item_fees(
+                fee_consensus,
+                amount,
+                legacy_floor,
+                direction,
+                ContractFeeSide::Output,
+            ),
+        })
+    }
+
     async fn output_status(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -615,6 +757,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
+        _module_consensus_version: ModuleConsensusVersion,
     ) {
         // Both incoming and outgoing contracts represent liabilities to the federation
         // since they are obligations to issue notes.
