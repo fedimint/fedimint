@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-25.11";
+      url = "github:nixos/nixpkgs/nixos-26.05";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -13,7 +13,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=34701639bceb5b12e81e2fff913797c0891c919d";
+      url = "github:rustshop/flakebox?rev=088fdf3ec0c434f0429e8b2e5061920d1f00000e";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
       inputs.fenix.follows = "fenix";
     };
@@ -339,7 +339,7 @@
                     pkgs.shellcheck
                     pkgs.nil
                     pkgs.convco
-                    pkgs.nodePackages.bash-language-server
+                    pkgs.bash-language-server
                   ]
                   ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [ pkgs.semgrep ]
                   ++ lib.optionals (!stdenv.isDarwin) [

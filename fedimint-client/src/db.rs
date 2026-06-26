@@ -694,7 +694,7 @@ pub fn get_core_client_database_migrations()
                         module_instance_id: module_id,
                     };
                     let Some(value) = dbtx.get_value(&old_key).await else {
-                        debug!(target: LOG_CLIENT_DB, %module_id, "No more ClientModuleRecovery keys found for migartion");
+                        debug!(target: LOG_CLIENT_DB, %module_id, "No more ClientModuleRecovery keys found for migration");
                         break;
                     };
 

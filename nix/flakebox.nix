@@ -135,6 +135,29 @@ let
       build_arch_underscores =
         lib.strings.replaceStrings [ "-" ] [ "_" ]
           pkgs.stdenv.buildPlatform.config;
+      sqlcipherStatic = pkgs.pkgsStatic.sqlcipher.overrideAttrs (old: {
+        configureFlags = old.configureFlags ++ [
+          "--disable-shared"
+          "--enable-static"
+        ];
+        buildFlags = [ "lib" ];
+        installTargets = [
+          "install-lib"
+          "install-headers"
+          "install-pc"
+        ];
+        postInstall = ''
+          mkdir $out/include/sqlcipher
+          mv $out/include/sqlite3.h $out/include/sqlcipher/sqlite3.h
+          mv $out/include/sqlite3ext.h $out/include/sqlcipher/sqlite3ext.h
+          mv $out/lib/lib{sqlite3,sqlcipher}.a
+          mv $out/lib/pkgconfig/{sqlite3,sqlcipher}.pc
+          substituteInPlace $out/lib/pkgconfig/sqlcipher.pc \
+            --replace-fail "-lsqlite3" "-lsqlcipher" \
+            --replace-fail "-lz" "-lz -lcrypto" \
+            --replace-fail "includedir}" "includedir}/sqlcipher"
+        '';
+      });
     in
     {
       # for cargo-deluxe
@@ -164,7 +187,7 @@ let
       "SQLITE3_${build_arch_underscores}_STATIC" = "true";
       "SQLITE3_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlite.out}/lib/";
 
-      "SQLCIPHER_${build_arch_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.sqlcipher}/lib/";
+      "SQLCIPHER_${build_arch_underscores}_LIB_DIR" = "${sqlcipherStatic}/lib/";
       "SQLCIPHER_${build_arch_underscores}_STATIC" = "true";
     }
     // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
@@ -428,7 +451,7 @@ in
         // (lib.optionalAttrs (pname != null) { inherit pname; })
         // {
           cargoArtifacts = deps;
-          meta = { inherit mainProgram; };
+          meta = lib.optionalAttrs (mainProgram != null) { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${extraArgs}";
 
