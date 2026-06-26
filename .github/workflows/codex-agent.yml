@@ -361,6 +361,8 @@ jobs:
         if: steps.validate.outputs.run == 'true'
         with:
           ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 50
+          filter: blob:none
           persist-credentials: false
 
       - name: Run Codex in Fedimint dev shell

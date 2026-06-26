@@ -188,8 +188,10 @@ Repository conventions:
 Operational rules:
 - The GitHub event payload is at `$RUNNER_TEMP/codex-agent/context/event.json`.
 - The checked out repository is at `$GITHUB_WORKSPACE`.
-- The checkout is intentionally shallow to keep CI startup fast. If you need
-  extra history, tags, or PR refs, fetch only the specific refs you need.
+- The checkout includes recent history using partial clone filtering
+  (`fetch-depth: 50` with `filter: blob:none`) to keep startup fast while
+  preserving local context for common history lookups. If you need older
+  history, tags, or PR refs, fetch only the specific refs you need.
 - First inspect the normalized `event_name` field in the event payload to
   understand whether this is an issue event, issue comment, PR comment,
   submitted PR review, or inline PR review comment. Submitted PR reviews and
