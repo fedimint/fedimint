@@ -44,7 +44,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
@@ -625,18 +625,32 @@ impl WalletClientModule {
     /// Find the next valid index starting from (and including) `start_index`.
     ///
     /// Only ~1/65536 indices are valid, so the search is CPU-bound and may scan
-    /// many indices before finding one. To avoid blocking client shutdown, the
-    /// search stops and returns `None` once the task group begins shutting
-    /// down.
-    #[allow(clippy::maybe_infinite_iter)]
-    fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
+    /// many indices before finding one. The scan runs in bounded batches and
+    /// yields to the executor between them, so it does not stall the runtime —
+    /// important on wasm, which is single-threaded. It stops and returns `None`
+    /// once the task group begins shutting down.
+    async fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
+        /// Indices to scan per batch before yielding to the executor.
+        const SCAN_BATCH: u64 = 256;
+
         let pks_hash = self.cfg.bitcoin_pks.consensus_hash();
 
-        block_in_place(|| {
-            (start_index..)
-                .take_while(|_| !handle.is_shutting_down())
-                .find(|i| is_potential_receive(&self.derive_address(*i).script_pubkey(), &pks_hash))
-        })
+        let mut index = start_index;
+
+        while !handle.is_shutting_down() {
+            for _ in 0..SCAN_BATCH {
+                if is_potential_receive(&self.derive_address(index).script_pubkey(), &pks_hash) {
+                    return Some(index);
+                }
+
+                index += 1;
+            }
+
+            // Hand control back to the executor between batches.
+            sleep(Duration::ZERO).await;
+        }
+
+        None
     }
 
     /// Issue ecash for an unspent output with a given fee.
@@ -735,7 +749,7 @@ impl WalletClientModule {
                 .await
                 .is_none()
             {
-                let Some(index) = module.next_valid_index(0, &handle) else {
+                let Some(index) = module.next_valid_index(0, &handle).await else {
                     return;
                 };
 
@@ -797,7 +811,8 @@ impl WalletClientModule {
 
                 // If we used the highest valid index, add the next valid one
                 if address_index == next_address_index {
-                    let Some(index) = self.next_valid_index(next_address_index + 1, handle) else {
+                    let Some(index) = self.next_valid_index(next_address_index + 1, handle).await
+                    else {
                         return Ok(false);
                     };
 

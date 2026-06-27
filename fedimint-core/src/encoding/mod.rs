@@ -923,14 +923,14 @@ mod tests {
         );
     }
 
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    struct TestStruct {
+        vec: Vec<u8>,
+        num: u32,
+    }
+
     #[test_log::test]
     fn test_derive_struct() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        struct TestStruct {
-            vec: Vec<u8>,
-            num: u32,
-        }
-
         let reference = TestStruct {
             vec: vec![1, 2, 3],
             num: 42,
@@ -940,25 +940,25 @@ mod tests {
         test_roundtrip_expected(&reference, &bytes);
     }
 
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    struct TestTupleStruct(Vec<u8>, u32);
+
     #[test_log::test]
     fn test_derive_tuple_struct() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        struct TestStruct(Vec<u8>, u32);
-
-        let reference = TestStruct(vec![1, 2, 3], 42);
+        let reference = TestTupleStruct(vec![1, 2, 3], 42);
         let bytes = [3, 1, 2, 3, 42];
 
         test_roundtrip_expected(&reference, &bytes);
     }
 
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    enum TestEnum {
+        Foo(Option<u64>),
+        Bar { bazz: Vec<u8> },
+    }
+
     #[test_log::test]
     fn test_derive_enum() {
-        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-        enum TestEnum {
-            Foo(Option<u64>),
-            Bar { bazz: Vec<u8> },
-        }
-
         let test_cases = [
             (TestEnum::Foo(Some(42)), vec![0, 2, 1, 42]),
             (TestEnum::Foo(None), vec![0, 1, 0]),

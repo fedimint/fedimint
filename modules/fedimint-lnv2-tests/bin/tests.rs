@@ -408,14 +408,19 @@ async fn test_fees(
 
     common::await_receive_claimed(client, receive_op).await?;
 
-    let gw_lnd_ecash_after = gw_lnd.client().ecash_balance(fed_id.clone()).await?;
-
-    almost_equal(
+    // The sending gateway claims its outgoing contract in the background after
+    // returning the preimage to the sender, so its ecash balance is credited
+    // asynchronously. Wait for the claim to settle before asserting the fee.
+    while almost_equal(
         gw_lnd_ecash_prev + expected_addition,
-        gw_lnd_ecash_after,
+        gw_lnd.client().ecash_balance(fed_id.clone()).await?,
         5000,
     )
-    .unwrap();
+    .is_err()
+    {
+        info!("Waiting for the sending gateway's outgoing claim to settle...");
+        cmd!(client, "dev", "wait", "1").out_json().await?;
+    }
 
     Ok(())
 }

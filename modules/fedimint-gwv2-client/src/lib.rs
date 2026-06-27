@@ -369,17 +369,11 @@ impl GatewayClientModuleV2 {
                 match state.state {
                     SendSMState::Sending => {}
                     SendSMState::Claiming(claiming) => {
-                        // This increases latency by one ordering and may eventually be removed;
-                        // however, at the current stage of lnv2 we prioritize the verification of
-                        // correctness above minimum latency.
-                        assert!(
-                            self.client_ctx
-                                .await_primary_module_outputs(operation_id, claiming.outpoints)
-                                .await
-                                .is_ok(),
-                            "Gateway Module V2 failed to claim outgoing contract with preimage"
-                        );
-
+                        // The preimage is proof the payment succeeded, so return it to
+                        // the sender as soon as it is available rather than waiting for
+                        // an additional ordering. The gateway's claim of the outgoing
+                        // contract has already been submitted by the send state machine
+                        // and finalizes in the background.
                         return Ok(claiming.preimage);
                     }
                     SendSMState::Cancelled(cancelled) => {

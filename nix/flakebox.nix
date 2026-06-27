@@ -1026,7 +1026,7 @@ in
       };
 
     cargoCheckWasmNoDefaultFeatures = cargoCheckCommand {
-      args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --no-default-features";
+      args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --package fedimint-mintv2-client --package fedimint-walletv2-client --no-default-features";
     };
 
     cargoWorkspacesCheckDefaultFeatures = cargoWorkspacesCommand {
