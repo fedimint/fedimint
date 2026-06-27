@@ -24,11 +24,19 @@ fedimint-escrow-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
+rand = { workspace = true }
+ring = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+bitcoin = { workspace = true }
+test-log = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

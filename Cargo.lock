@@ -3621,17 +3621,23 @@ name = "fedimint-escrow-server"
 version = "0.12.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
+ "bitcoin",
  "erased-serde",
  "fedimint-core",
  "fedimint-escrow-common",
  "fedimint-logging",
  "fedimint-server-core",
  "futures",
+ "rand 0.8.5",
+ "ring",
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "test-log",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

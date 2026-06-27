@@ -610,3 +610,6 @@ impl Escrow {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;
