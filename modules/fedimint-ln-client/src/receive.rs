@@ -121,6 +121,7 @@ pub enum LightningReceiveError {
     InvalidPreimage,
 }
 
+#[cfg(feature = "uniffi")]
 impl From<LightningReceiveError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: LightningReceiveError) -> Self {
         Self::General(e.to_string())

@@ -765,6 +765,7 @@ pub struct PegInResponse {
     pub operation_id: OperationId,
 }
 
+#[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegInResponse, String, {
     lower: |v| serde_json::to_string(&v).unwrap(),
     try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse PegInResponse: {e}"))),
@@ -777,6 +778,7 @@ pub struct PegOutRequest {
     pub extra_meta: serde_json::Value,
 }
 
+#[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegOutRequest, String, {
     lower: |v| serde_json::to_string(&v).unwrap(),
     try_lift: |s| serde_json::from_str::<PegOutRequest>(&s).map_err(|e| anyhow!(format!("Failed to parse PegOutRequest: {e}"))),

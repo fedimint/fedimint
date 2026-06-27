@@ -62,6 +62,7 @@ use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
+#[cfg(feature = "uniffi")]
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{BoxStream, FmtCompactAnyhow as _, backoff_util, retry};
@@ -736,6 +737,7 @@ pub enum PayBolt11InvoiceError {
     FundedContractAlreadyExists { contract_id: ContractId },
 }
 
+#[cfg(feature = "uniffi")]
 impl From<PayBolt11InvoiceError> for UniffiError {
     fn from(value: PayBolt11InvoiceError) -> Self {
         match value {

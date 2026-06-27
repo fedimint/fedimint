@@ -6,9 +6,6 @@
 
 pub mod endpoint;
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 use std::fmt;
 use std::str::FromStr;
 
@@ -79,12 +76,6 @@ impl FromStr for MetaKey {
 /// implementations enforcing size limit of [`Self::MAX_LEN_BYTES`].
 #[derive(Debug, Clone, Encodable, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MetaValue(Vec<u8>);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(MetaValue, Vec<u8>, {
-    lower: |v| v.0,
-    try_lift: |bytes| Ok(MetaValue(bytes)),
-});
 
 impl FromStr for MetaValue {
     type Err = anyhow::Error;
@@ -199,7 +190,6 @@ pub struct MetaConsensusItem {
 
 /// A [`MetaValue`] in a consensus (which means it has a revision number)
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct MetaConsensusValue {
     pub revision: u64,
     pub value: MetaValue,

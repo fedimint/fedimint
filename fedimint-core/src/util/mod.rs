@@ -1,6 +1,7 @@
 pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+#[cfg(feature = "uniffi")]
 pub mod ffi;
 pub mod update_merge;
 

@@ -1207,6 +1207,7 @@ impl Client {
     ///
     /// Unlike [`Self::get_first_module`], this hands out a cloned `Arc` so the
     /// caller can hold the module independently of the `Client`'s lifetime.
+    #[cfg(not(target_family = "wasm"))]
     pub fn get_first_module_arc<M: ClientModule>(&self) -> anyhow::Result<Arc<M>> {
         let module_kind = M::kind();
         let id = self

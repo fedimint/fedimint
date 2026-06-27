@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::format_err;
+#[cfg(not(target_family = "wasm"))]
 use fedimint_core::runtime;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::LOG_CLIENT;

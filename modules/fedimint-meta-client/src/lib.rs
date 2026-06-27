@@ -14,7 +14,7 @@ pub mod states;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::Context as _;
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
@@ -32,6 +32,7 @@ use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::backoff_util::FibonacciBackoff;
+#[cfg(feature = "uniffi")]
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send};
@@ -56,7 +57,7 @@ uniffi::custom_type!(MetaKey, u8, {
 uniffi::custom_type!(MetaConsensusValue, String, {
     remote,
     lower: |value| serde_json::to_string(&value).expect("MetaConsensusValue always serializes"),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse MetaConsensusValue: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("Failed to parse MetaConsensusValue: {e}"))),
 });
 
 #[derive(Debug)]
