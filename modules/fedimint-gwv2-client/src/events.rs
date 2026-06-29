@@ -1,8 +1,8 @@
 use std::time::SystemTime;
 
-use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
+use fedimint_core::{Amount, secp256k1};
 use fedimint_eventlog::{
     Event, EventKind, EventPersistence, PersistedLogEntry, StructuredPaymentEvents,
     filter_events_by_kind, join_events,
@@ -33,6 +33,13 @@ pub struct OutgoingPaymentStarted {
 
     /// The max delay of the payment in blocks.
     pub max_delay: u64,
+
+    /// The destination LN node pubkey for the outgoing payment.
+    ///
+    /// Optional with a `serde` default of `None` so older event log entries
+    /// that predate this field still deserialize.
+    #[serde(default)]
+    pub destination: Option<secp256k1::PublicKey>,
 }
 
 impl Event for OutgoingPaymentStarted {

@@ -1214,6 +1214,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             invoice_amount: Amount::from_msats(10000),
             operation_start: now(),
             max_delay: 100,
+            destination: None,
         };
         fed1_lnv2
             .client_ctx
