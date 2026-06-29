@@ -671,15 +671,15 @@ impl ServerModule for Lightning {
                 DECRYPTION_KEY_SHARE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, params: OutPoint| -> DecryptionKeyShare {
-                    let share = context
+                    // Long-poll until the decryption key share exists. The share is written
+                    // atomically when the funding transaction output is accepted, so blocking
+                    // here lets a client request the share before acceptance and receive it the
+                    // instant it becomes available, rather than polling and backing off. This
+                    // mirrors the AWAIT_INCOMING_CONTRACT and AWAIT_PREIMAGE endpoints.
+                    Ok(context
                         .db()
-                        .begin_transaction_nc()
-                        .await
-                        .get_value(&DecryptionKeyShareKey(params))
-                        .await
-                        .ok_or(ApiError::bad_request("No decryption key share found".to_string()))?;
-
-                    Ok(share)
+                        .wait_key_exists(&DecryptionKeyShareKey(params))
+                        .await)
                 }
             },
             api_endpoint! {
