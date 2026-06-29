@@ -1,15 +1,16 @@
 use assert_matches::assert_matches;
 use fedimint_core::config::{ClientModuleConfig, ServerModuleConfig};
-use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
+use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
-use fedimint_mint_common::{MintInput, Nonce, Note};
+use fedimint_mint_common::{BlindNonce, MintInput, MintOutput, Nonce, Note};
 use fedimint_server_core::{ConfigGenModuleArgs, ServerModule, ServerModuleInit};
-use tbs::blind_message;
+use tbs::{BlindingKey, Message, blind_message};
 
+use crate::db::{BlindNonceKey, RecoveryBlindNonceOutpointKey};
 use crate::{Mint, MintConfig, MintConfigConsensus, MintConfigPrivate, MintInit};
 
 const MINTS: u16 = 5;
@@ -130,5 +131,69 @@ async fn test_detect_double_spends() {
         )
         .await,
         Err(_)
+    );
+}
+
+// Regression test for #8582 / v0.11.1: when two outputs in a single consensus
+// batch share a blind nonce, `process_output` used to panic on
+// `insert_new_entry(RecoveryBlindNonceOutpointKey, _)`. The fix in #8533
+// switched both call sites to `insert_entry`, so the second writer must just
+// warn and continue. Note that `RecoveryBlindNonceOutpointKey` ends up holding
+// the *second* outpoint (last-writer wins) — the #8533 commit message claims
+// "first-writer wins" but `insert_entry` overwrites, matching #8537's "the old
+// outpoint is quietly lost from the recovery index" review note.
+#[test_log::test(tokio::test)]
+async fn test_duplicate_blind_nonce_in_process_output_does_not_panic() {
+    let (mint_server_cfg, _) = build_configs();
+    let mint = Mint::new(mint_server_cfg[0].to_typed().unwrap());
+
+    let (_, tiered) = mint
+        .cfg
+        .consensus
+        .peer_tbs_pks
+        .first_key_value()
+        .expect("mint has peers");
+    let denomination = *tiered.max_tier();
+
+    let blind_nonce = BlindNonce(blind_message(
+        Message::from_bytes(b"dup-blind-nonce-test"),
+        BlindingKey::random(),
+    ));
+    let output = MintOutput::new_v0(denomination, blind_nonce);
+
+    let out_point_first = OutPoint {
+        txid: TransactionId::all_zeros(),
+        out_idx: 0,
+    };
+    let out_point_second = OutPoint {
+        txid: TransactionId::all_zeros(),
+        out_idx: 1,
+    };
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+    let mut dbtx = db.begin_transaction().await;
+    let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
+
+    mint.process_output(&mut module_dbtx, &output, out_point_first)
+        .await
+        .expect("first output is accepted");
+
+    // Pre-fix this call would panic on `insert_new_entry`; post-fix it must
+    // succeed and just warn.
+    mint.process_output(&mut module_dbtx, &output, out_point_second)
+        .await
+        .expect("duplicate blind nonce must not panic");
+
+    assert_eq!(
+        module_dbtx.get_value(&BlindNonceKey(blind_nonce)).await,
+        Some(()),
+        "blind nonce should be marked as used"
+    );
+    assert_eq!(
+        module_dbtx
+            .get_value(&RecoveryBlindNonceOutpointKey(blind_nonce))
+            .await,
+        Some(out_point_second),
+        "recovery index is overwritten by the second writer (last-writer wins)"
     );
 }
