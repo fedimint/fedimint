@@ -985,11 +985,13 @@ pub fn supports_lnv2() -> bool {
 }
 
 pub fn supports_wallet_v2() -> bool {
-    is_env_var_set(FM_ENABLE_MODULE_WALLETV2_ENV)
+    std::env::var_os(FM_ENABLE_MODULE_WALLETV2_ENV).is_none()
+        || is_env_var_set(FM_ENABLE_MODULE_WALLETV2_ENV)
 }
 
 pub fn supports_mint_v2() -> bool {
-    is_env_var_set(FM_ENABLE_MODULE_MINTV2_ENV)
+    std::env::var_os(FM_ENABLE_MODULE_MINTV2_ENV).is_none()
+        || is_env_var_set(FM_ENABLE_MODULE_MINTV2_ENV)
 }
 
 /// Returns true if running backwards-compatibility tests
