@@ -82,6 +82,7 @@ fedimint-<module>-server/     # Server-side consensus logic
 - Database migration testing with snapshot validation
 - WASM compatibility verification
 - Real service testing against bitcoind/Lightning nodes
+- Prefer standalone test module files over inline `mod tests` blocks
 
 ### Code Organization
 - Workspace with 78+ member crates
