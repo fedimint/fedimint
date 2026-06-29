@@ -444,12 +444,16 @@ impl GatewayClientModuleV2 {
             return Err(GatewaySendPaymentError::ContractIdMismatch);
         }
 
-        let (payment_hash, amount) = match &payload.invoice {
+        let (payment_hash, amount, destination) = match &payload.invoice {
             LightningInvoice::Bolt11(invoice) => (
                 invoice.payment_hash(),
                 invoice
                     .amount_milli_satoshis()
                     .ok_or(GatewaySendPaymentError::MissingInvoiceAmount)?,
+                invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             ),
         };
 
@@ -497,6 +501,7 @@ impl GatewayClientModuleV2 {
                     min_contract_amount,
                     invoice_amount: Amount::from_msats(amount),
                     max_delay: expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2),
+                    destination: Some(destination),
                 },
             )
             .await;

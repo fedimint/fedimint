@@ -973,6 +973,8 @@ impl GatewayClientModule {
                             contract_id: payload.contract_id,
                             invoice_amount,
                             operation_id,
+                            destination: Some(payload.payment_data.destination()),
+                            route_hints: Some(payload.payment_data.route_hints()),
                         }).await;
 
                         let state_machines =
