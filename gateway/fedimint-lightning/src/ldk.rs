@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{FeeRate, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
@@ -16,10 +17,11 @@ use fedimint_gateway_common::{
     SetChannelFeesRequest,
 };
 use fedimint_ln_common::contracts::Preimage;
-use fedimint_logging::LOG_LIGHTNING;
+use fedimint_logging::{LOG_LIGHTNING, LOG_LIGHTNING_LDK};
 use ldk_node::config::ChannelConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
+use ldk_node::logger::{LogLevel, LogRecord, LogWriter};
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
@@ -28,7 +30,7 @@ use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
 use crate::{
@@ -38,6 +40,71 @@ use crate::{
     OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
+
+/// Forwards `ldk-node`'s log records into the gateway's `tracing` subscriber.
+///
+/// By default `ldk-node` writes to its own append-only `ldk_node/ldk_node.log`
+/// file, which is invisible to stdout/stderr log collectors and grows without
+/// bound. Routing the records through `tracing` (under the
+/// [`LOG_LIGHTNING_LDK`] target) puts them alongside the rest of gatewayd's
+/// logs and makes them filterable via `RUST_LOG`.
+struct LdkTracingLogger {
+    /// Whether we're running under devimint/tests. When set, some benign LDK
+    /// error logs that are expected in regtest are downgraded to avoid spamming
+    /// the test output. See [`Self::downgraded_level`].
+    in_test_env: bool,
+}
+
+impl LdkTracingLogger {
+    /// Returns the level to emit `record` at, downgrading benign-but-noisy LDK
+    /// errors when running under devimint/tests.
+    ///
+    /// In regtest there is no fee-rate history, so `ldk-node` logs "Failed to
+    /// retrieve fee rate estimates ... Falling back to default" at `Error` on
+    /// essentially every sync. This is harmless (LDK falls back to a default
+    /// feerate), so in test environments we emit it at `Debug` instead. In
+    /// production the original `Error` level is preserved, since a persistent
+    /// failure there can indicate a real problem.
+    fn downgraded_level(&self, record: &LogRecord<'_>) -> LogLevel {
+        if self.in_test_env
+            && record.level == LogLevel::Error
+            && record.module_path == "ldk_node::chain"
+            && format!("{}", record.args).contains("Failed to retrieve fee rate estimates")
+        {
+            LogLevel::Debug
+        } else {
+            record.level
+        }
+    }
+}
+
+impl LogWriter for LdkTracingLogger {
+    fn log(&self, record: LogRecord<'_>) {
+        // `tracing` requires a static level per call-site, so match each LDK level.
+        match self.downgraded_level(&record) {
+            LogLevel::Gossip | LogLevel::Trace => trace!(
+                target: LOG_LIGHTNING_LDK,
+                ldk_module = record.module_path, line = record.line, "{}", record.args,
+            ),
+            LogLevel::Debug => debug!(
+                target: LOG_LIGHTNING_LDK,
+                ldk_module = record.module_path, line = record.line, "{}", record.args,
+            ),
+            LogLevel::Info => info!(
+                target: LOG_LIGHTNING_LDK,
+                ldk_module = record.module_path, line = record.line, "{}", record.args,
+            ),
+            LogLevel::Warn => warn!(
+                target: LOG_LIGHTNING_LDK,
+                ldk_module = record.module_path, line = record.line, "{}", record.args,
+            ),
+            LogLevel::Error => error!(
+                target: LOG_LIGHTNING_LDK,
+                ldk_module = record.module_path, line = record.line, "{}", record.args,
+            ),
+        }
+    }
+}
 
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
@@ -108,6 +175,13 @@ impl GatewayLdkClient {
             node_alias,
             ..Default::default()
         });
+
+        // Route LDK's logs into the gateway's `tracing` subscriber so they land in
+        // the same place (stderr / log file) and honor `RUST_LOG`, instead of LDK's
+        // default append-only `ldk_node/ldk_node.log` file.
+        node_builder.set_custom_logger(Arc::new(LdkTracingLogger {
+            in_test_env: is_running_in_test_env(),
+        }));
 
         node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
 
