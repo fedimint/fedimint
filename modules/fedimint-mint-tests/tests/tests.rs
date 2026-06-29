@@ -999,6 +999,67 @@ async fn repair_wallet() -> anyhow::Result<()> {
         );
     }
 
+    // Check that a repair based on stale index candidates does not panic or
+    // roll back an index that was concurrently advanced while repair was doing
+    // federation API checks.
+    {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
+            NextECashNoteIndexKey(Amount::from_msats(1));
+        let old_nonce_index = dbtx
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        let stale_nonce_index = old_nonce_index
+            .checked_sub(1)
+            .expect("Amount tier index was advanced");
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &stale_nonce_index)
+            .await
+            .expect("Failed to insert test note index");
+        dbtx.commit_tx().await;
+
+        let repair_fut = client_mint.try_repair_wallet(100);
+        tokio::pin!(repair_fut);
+
+        tokio::select! {
+            biased;
+
+            repair_result = &mut repair_fut => {
+                panic!("Repair completed before concurrent index advance: {repair_result:?}");
+            }
+            () = tokio::task::yield_now() => {}
+        }
+
+        let concurrently_advanced_index = old_nonce_index + 1;
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &concurrently_advanced_index)
+            .await
+            .expect("Failed to concurrently advance test note index");
+        dbtx.commit_tx().await;
+
+        let repair_summary = repair_fut.await.expect("Repair should succeed");
+        assert!(
+            repair_summary.spent_notes.is_empty(),
+            "No spent notes should be found"
+        );
+        let repaired_index = client_mint
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        assert!(
+            concurrently_advanced_index <= repaired_index,
+            "Repair should not roll back concurrently advanced index"
+        );
+        let repaired_indices = repair_summary.used_indices.get(Amount::from_msats(1)) as u64;
+        assert!(
+            repaired_indices <= repaired_index - concurrently_advanced_index,
+            "Concurrently advanced stale index should not be counted as repaired"
+        );
+    }
+
     Ok(())
 }
 
