@@ -138,21 +138,27 @@ pub struct LnurlReceiveOperationMeta {
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Funding -- funding transaction is rejected --> Rejected
-///     Funding -- funding transaction is accepted --> Funded
-///     Funded -- payment is confirmed  --> Success
-///     Funded -- payment attempt expires --> Refunding
-///     Funded -- gateway cancels payment attempt --> Refunding
+///     Funding -- payment is confirmed  --> Success
+///     Funding -- payment attempt expires --> Refunding
+///     Funding -- gateway cancels payment attempt --> Refunding
 ///     Refunding -- payment is confirmed --> Success
 ///     Refunding -- ecash is minted --> Refunded
 ///     Refunding -- minting ecash fails --> Failure
 /// ```
+/// The gateway is asked to pay optimistically, while the funding transaction is
+/// still being confirmed, so a successful send goes straight from `Funding` to
+/// `Success` without a distinct `Funded` step. `Funded` is only ever yielded
+/// for operations that were persisted before this behavior was introduced.
+///
 /// The transition from Refunding to Success is only possible if the gateway
 /// misbehaves.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SendOperationState {
     /// We are funding the contract to incentivize the gateway.
     Funding,
-    /// We are waiting for the gateway to complete the payment.
+    /// We are waiting for the gateway to complete the payment. Only yielded for
+    /// operations persisted before optimistic send was introduced; new sends go
+    /// straight from `Funding` to a final state.
     Funded,
     /// The payment was successful.
     Success([u8; 32]),
