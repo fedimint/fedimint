@@ -571,7 +571,7 @@ where
                         key.state
                             .as_any()
                             .downcast_ref::<M::States>()
-                            .expect("incorrect output type passed to module plugin"),
+                            .expect("state downcast failed: wrong module instance"),
                     ),
                     meta,
                 )
@@ -599,7 +599,7 @@ where
                         key.state
                             .as_any()
                             .downcast_ref::<M::States>()
-                            .expect("incorrect output type passed to module plugin"),
+                            .expect("state downcast failed: wrong module instance"),
                     ),
                     meta,
                 )

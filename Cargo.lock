@@ -3655,6 +3655,7 @@ dependencies = [
  "fedimint-api-client",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-ln-common",
  "fedimint-lnv2-common",
  "fedimint-wallet-client",
  "lightning",
