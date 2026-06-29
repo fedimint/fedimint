@@ -150,6 +150,7 @@ impl LightningClientModule {
         new_code_registered: Arc<Notify>,
     ) {
         const QUERY_RETRY_DELAY: Duration = Duration::from_mins(1);
+        let federation_id = client.get_config().await.calculate_federation_id();
 
         loop {
             // We have to register the waiter before querying the DB for recurring payment
@@ -158,39 +159,53 @@ impl LightningClientModule {
             let new_code_registered_future = new_code_registered.notified();
 
             // We wait for all recurring payment codes to have an invoice in parallel
-            let all_recurring_invoice_futures = Self::get_recurring_payment_codes_static(client.module_db())
-                .await
-                .into_iter()
-                .map(|(payment_code_idx, payment_code)| Box::pin(async move {
+            let all_recurring_invoice_futures = Self::get_recurring_payment_codes_static(
+                client.module_db(),
+            )
+            .await
+            .into_iter()
+            .map(|(payment_code_idx, payment_code)| {
+                Box::pin(async move {
                     let client = RecurringdClient::new(&payment_code.recurringd_api.clone());
                     let invoice_index = payment_code.last_derivation_index + 1;
 
                     trace!(
                         target: LOG_CLIENT_RECURRING,
-                        root_key=?payment_code.root_keypair.public_key(),
+                        root_key=%payment_code.root_keypair.public_key(),
                         %invoice_index,
                         server=%payment_code.recurringd_api,
+                        federation_id=?federation_id,
                         "Waiting for new invoice from recurringd"
                     );
 
-                    match client.await_new_invoice(crate::recurring::PaymentCodeRootKey(payment_code.root_keypair.public_key()), invoice_index).await {
-                        Ok(invoice) => {Ok((payment_code_idx, payment_code, invoice_index, invoice))}
+                    match client
+                        .await_new_invoice(
+                            crate::recurring::PaymentCodeRootKey(
+                                payment_code.root_keypair.public_key(),
+                            ),
+                            invoice_index,
+                        )
+                        .await
+                    {
+                        Ok(invoice) => Ok((payment_code_idx, payment_code, invoice_index, invoice)),
                         Err(err) => {
                             debug!(
                                 target: LOG_CLIENT_RECURRING,
                                 err=%err.fmt_compact(),
-                                root_key=?payment_code.root_keypair.public_key(),
+                                root_key=%payment_code.root_keypair.public_key(),
                                 invoice_index=%invoice_index,
                                 server=%payment_code.recurringd_api,
-                                "Failed querying recurring payment code invoice, will retry in {:?}",
-                                QUERY_RETRY_DELAY,
+                                federation_id=?federation_id,
+                                retry_delay=?QUERY_RETRY_DELAY,
+                                "Failed querying recurring payment code invoice, will retry",
                             );
                             sleep(QUERY_RETRY_DELAY).await;
                             Err(err)
                         }
                     }
-                }))
-                .collect::<Vec<_>>();
+                })
+            })
+            .collect::<Vec<_>>();
 
             // TODO: isn't there some shorthand for this
             let await_any_invoice: BoxFuture<_> = if all_recurring_invoice_futures.is_empty() {
