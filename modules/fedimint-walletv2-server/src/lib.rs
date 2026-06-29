@@ -285,13 +285,13 @@ impl ServerModuleInit for WalletInit {
     }
 
     fn is_enabled_by_default(&self) -> bool {
-        is_env_var_set_opt(FM_ENABLE_MODULE_WALLETV2_ENV).unwrap_or(false)
+        is_env_var_set_opt(FM_ENABLE_MODULE_WALLETV2_ENV).unwrap_or(true)
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
         vec![EnvVarDoc {
             name: FM_ENABLE_MODULE_WALLETV2_ENV,
-            description: "Set to 1/true to enable the WalletV2 module (experimental). Disabled by default.",
+            description: "Set to 0/false to disable the WalletV2 module. Enabled by default.",
         }]
     }
 

@@ -332,14 +332,14 @@ impl ServerModuleInit for WalletInit {
     }
 
     fn is_enabled_by_default(&self) -> bool {
-        is_env_var_set_opt(FM_ENABLE_MODULE_WALLET_ENV).unwrap_or(true)
+        is_env_var_set_opt(FM_ENABLE_MODULE_WALLET_ENV).unwrap_or(false)
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
         vec![
             EnvVarDoc {
                 name: FM_ENABLE_MODULE_WALLET_ENV,
-                description: "Set to 0/false to disable the wallet (on-chain Bitcoin) module. Enabled by default.",
+                description: "Set to 1/true to enable the wallet (on-chain Bitcoin) module. Disabled by default.",
             },
             EnvVarDoc {
                 name: FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV,
