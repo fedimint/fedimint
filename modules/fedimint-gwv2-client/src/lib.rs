@@ -575,6 +575,41 @@ impl GatewayClientModuleV2 {
         }
     }
 
+    /// Return the destination LN node pubkey for an outgoing payment
+    /// operation. Looks for the `Send` state machine in the operation's active
+    /// or inactive state machines. Returns `None` if no matching state is
+    /// found (e.g., the operation does not exist or its state has been
+    /// pruned).
+    pub async fn outgoing_payment_destination(
+        &self,
+        operation_id: OperationId,
+    ) -> Option<secp256k1::PublicKey> {
+        let active = self
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let inactive = self
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let LightningInvoice::Bolt11(invoice) = active.chain(inactive).next()?;
+        let destination = invoice
+            .payee_pub_key()
+            .copied()
+            .unwrap_or_else(|| invoice.recover_payee_pub_key());
+        Some(destination)
+    }
+
     /// For the given `OperationId`, this function will wait until the Complete
     /// state machine has finished or failed.
     pub async fn await_completion(&self, operation_id: OperationId) {

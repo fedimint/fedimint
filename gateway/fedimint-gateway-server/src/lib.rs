@@ -78,11 +78,12 @@ use fedimint_gateway_common::{
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
+    OpenChannelRequest, OutgoingPaymentRouteInfoPayload, OutgoingPaymentRouteInfoResponse,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
+    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
+    PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
     WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
@@ -1722,6 +1723,50 @@ impl Gateway {
             })
     }
 
+    /// Look up the destination LN node pubkey and optional invoice route hints
+    /// for an outgoing payment by `(federation_id, operation_id)`. Reads
+    /// the operation's active and inactive state machines, so it works for
+    /// in-flight as well as completed payments until the corresponding
+    /// states are pruned from the client DB.
+    pub async fn outgoing_payment_route_info(
+        &self,
+        federation_id: FederationId,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<OutgoingPaymentRouteInfoResponse>> {
+        let client = self.select_client(federation_id).await?;
+        let client = client.value();
+
+        if let Ok(module) = client.get_first_module::<GatewayClientModuleV2>()
+            && let Some(destination) = module.outgoing_payment_destination(operation_id).await
+        {
+            return Ok(Some(OutgoingPaymentRouteInfoResponse {
+                destination,
+                route_hints: None,
+            }));
+        }
+
+        if let Ok(module) = client.get_first_module::<GatewayClientModule>()
+            && let Some((destination, route_hints)) =
+                module.outgoing_payment_route_info(operation_id).await
+        {
+            return Ok(Some(OutgoingPaymentRouteInfoResponse {
+                destination,
+                route_hints: Some(route_hints),
+            }));
+        }
+
+        Ok(None)
+    }
+
+    pub async fn handle_outgoing_payment_route_info_msg(
+        &self,
+        payload: OutgoingPaymentRouteInfoPayload,
+    ) -> AdminResult<Option<OutgoingPaymentRouteInfoResponse>> {
+        self.outgoing_payment_route_info(payload.federation_id, payload.operation_id)
+            .await
+            .map_err(AdminGatewayError::Unexpected)
+    }
+
     async fn load_mnemonic(gateway_db: &Database) -> Option<Mnemonic> {
         let secret = Client::load_decodable_client_secret::<Vec<u8>>(gateway_db)
             .await
@@ -2073,6 +2118,13 @@ impl IAdminGateway for Gateway {
             outgoing: PaymentStats::compute(&outgoing),
             incoming: PaymentStats::compute(&incoming),
         })
+    }
+
+    async fn handle_outgoing_payment_route_info_msg(
+        &self,
+        payload: OutgoingPaymentRouteInfoPayload,
+    ) -> AdminResult<Option<OutgoingPaymentRouteInfoResponse>> {
+        Self::handle_outgoing_payment_route_info_msg(self, payload).await
     }
 
     /// Handle a request to have the Gateway leave a federation. The Gateway
