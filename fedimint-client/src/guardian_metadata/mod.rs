@@ -10,9 +10,8 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
 use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
-use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
 use tracing::debug;
@@ -37,6 +36,19 @@ impl_db_lookup!(
     query_prefix = GuardianMetadataPrefix
 );
 
+#[cfg(feature = "pkarr")]
+mod pkarr;
+
+/// Extra time to wait for additional peer responses after the minimum
+/// required have been collected.
+fn extra_response_wait() -> Duration {
+    if is_running_in_test_env() {
+        Duration::from_millis(1)
+    } else {
+        Duration::from_secs(30)
+    }
+}
+
 /// Fetches guardian metadata from guardians, validates them and updates the
 /// DB if any new more up to date ones are found.
 pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>) {
@@ -48,14 +60,19 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
             let results = fetch_guardian_metadata_from_at_least_num_of_peers(
                 1,
                 api,
+                guardian_pub_keys.keys().copied().collect(),
                 &guardian_pub_keys,
-                if is_running_in_test_env() {
-                    Duration::from_millis(1)
-                } else {
-                    Duration::from_secs(30)
-                },
+                extra_response_wait(),
             )
             .await;
+
+            #[cfg(feature = "pkarr")]
+            let results = if results.is_empty() {
+                pkarr::try_pkarr_fallback(&client_inner, &guardian_pub_keys).await
+            } else {
+                results
+            };
+
             store_guardian_metadata_updates_from_peers(
                 client_inner.db(),
                 &guardian_pub_keys,
@@ -90,21 +107,19 @@ pub(crate) async fn store_guardian_metadata_updates_from_peers(
 
 pub(crate) type PeersSignedGuardianMetadata = BTreeMap<PeerId, SignedGuardianMetadata>;
 
-/// Fetch responses from at least `num_responses_required` of peers.
+/// Fetch responses from at least `num_responses_required` of the requested
+/// peers.
 ///
-/// Will wait a little bit extra in hopes of collecting more than strictly
-/// needed responses.
+/// Each requested peer is tried once. If enough responses are collected, this
+/// waits a little bit extra in hopes of collecting more than strictly needed
+/// responses.
 pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
     num_responses_required: usize,
     api: &DynGlobalApi,
+    query_peer_ids: Vec<PeerId>,
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
     extra_response_wait: Duration,
 ) -> Vec<PeersSignedGuardianMetadata> {
-    let num_peers = guardian_pub_keys.to_num_peers();
-    // Keep trying, initially somewhat aggressively, but after a while retry very
-    // slowly, because chances for response are getting lower and lower.
-    let mut backoff = custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
-
     // Make a single request to a peer after a delay
     async fn make_request(
         delay: Duration,
@@ -140,7 +155,7 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
 
     let mut requests = FuturesUnordered::new();
 
-    for peer_id in num_peers.peer_ids() {
+    for peer_id in query_peer_ids {
         requests.push(make_request(
             Duration::ZERO,
             peer_id,
@@ -177,12 +192,6 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
                     err = %err.fmt_compact_anyhow(),
                     "Failed to fetch guardian metadata from peer"
                 );
-                requests.push(make_request(
-                    backoff.next().expect("Keeps retrying"),
-                    peer_id,
-                    api,
-                    guardian_pub_keys,
-                ));
             }
             Ok(metadata) => {
                 responses.push(metadata);
