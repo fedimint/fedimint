@@ -746,7 +746,7 @@ pub struct PegInRequest {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegInRequest, String, {
     lower: |v| serde_json::to_string(&v).unwrap(),
-    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!(format!("Failed to parse PegInRequest: {e}"))),
+    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!("Failed to parse PegInRequest: {e}")),
 });
 
 #[derive(Deserialize)]
@@ -768,7 +768,7 @@ pub struct PegInResponse {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegInResponse, String, {
     lower: |v| serde_json::to_string(&v).unwrap(),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse PegInResponse: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!("Failed to parse PegInResponse: {e}")),
 });
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -781,7 +781,7 @@ pub struct PegOutRequest {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegOutRequest, String, {
     lower: |v| serde_json::to_string(&v).unwrap(),
-    try_lift: |s| serde_json::from_str::<PegOutRequest>(&s).map_err(|e| anyhow!(format!("Failed to parse PegOutRequest: {e}"))),
+    try_lift: |s| serde_json::from_str::<PegOutRequest>(&s).map_err(|e| anyhow!("Failed to parse PegOutRequest: {e}")),
 });
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

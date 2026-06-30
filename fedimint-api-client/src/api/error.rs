@@ -6,6 +6,8 @@ use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::util::FmtCompactAnyhow as _;
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::ffi::UniffiError;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use serde::Serialize;
 use thiserror::Error;
@@ -24,6 +26,13 @@ pub struct FederationError {
     /// responding with enough errors, but something more global.
     pub general: Option<anyhow::Error>,
     pub peer_errors: BTreeMap<PeerId, ServerError>,
+}
+
+#[cfg(feature = "uniffi")]
+impl From<FederationError> for UniffiError {
+    fn from(e: FederationError) -> Self {
+        UniffiError::General(e.to_string())
+    }
 }
 
 impl Display for FederationError {

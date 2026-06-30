@@ -339,8 +339,8 @@ pub struct FederationId(pub sha256::Hash);
 uniffi::custom_type!(FederationId, String, {
     lower: |obj| serde_json::to_string(&obj).expect("Serialization of valid FederationId won't fail") ,
     try_lift: |bytes| {
-        let bytes: [u8; 32] = serde_json::from_str(&bytes).map_err(|e| anyhow::anyhow!("Failed to parse FederationId from JSON: {e}"))?;
-        Ok(FederationId(sha256::Hash::from_byte_array(bytes)))
+        let obj: FederationId = serde_json::from_str(&bytes).map_err(|e| anyhow::anyhow!("Failed to parse FederationId from JSON: {e}"))?;
+        Ok(obj)
     },
 });
 

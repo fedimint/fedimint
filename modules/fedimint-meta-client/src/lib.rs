@@ -57,7 +57,7 @@ uniffi::custom_type!(MetaKey, u8, {
 uniffi::custom_type!(MetaConsensusValue, String, {
     remote,
     lower: |value| serde_json::to_string(&value).expect("MetaConsensusValue always serializes"),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("Failed to parse MetaConsensusValue: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse MetaConsensusValue: {e}")),
 });
 
 #[derive(Debug)]
@@ -133,7 +133,7 @@ impl MetaClientModule {
         self.module_api
             .get_consensus(key)
             .await
-            .map_err(|e| UniffiError::from(anyhow!(e.to_string())))
+            .map_err(|e| UniffiError::from(anyhow::anyhow!(e.to_string())))
     }
 }
 

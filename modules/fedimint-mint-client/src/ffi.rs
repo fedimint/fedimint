@@ -33,7 +33,11 @@ impl MintClientModule {
         oob_notes: OOBNotes,
         extra_meta: String,
     ) -> Result<OperationId> {
-        let extra_meta = serde_json::from_str(&extra_meta).unwrap_or(serde_json::Value::Null);
+        let extra_meta = if extra_meta.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&extra_meta)?
+        };
         let operation_id = self.reissue_external_notes(oob_notes, extra_meta).await?;
         Ok(operation_id)
     }
@@ -45,11 +49,9 @@ impl MintClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let mint = client_ctx.self_ref();
+        let updates = mint.subscribe_reissue_external_notes(operation_id).await?;
         runtime::spawn("uniffi-subscribe-reissue-external-notes", async move {
-            let mint = client_ctx.self_ref();
-            let Ok(updates) = mint.subscribe_reissue_external_notes(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {
@@ -122,11 +124,9 @@ impl MintClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let mint = client_ctx.self_ref();
+        let updates = mint.subscribe_spend_notes(operation_id).await?;
         runtime::spawn("uniffi-subscribe-spend-notes", async move {
-            let mint = client_ctx.self_ref();
-            let Ok(updates) = mint.subscribe_spend_notes(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {

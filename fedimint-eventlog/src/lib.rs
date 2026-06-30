@@ -285,7 +285,7 @@ pub struct PersistedLogEntry {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(PersistedLogEntry, String, {
     lower: |e| serde_json::to_string(&e).expect("PersistedLogEntry always serializes"),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("Failed to parse PersistedLogEntry: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse PersistedLogEntry: {e}")),
 });
 
 impl Serialize for PersistedLogEntry {

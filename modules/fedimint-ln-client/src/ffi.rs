@@ -101,11 +101,9 @@ impl LightningClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let ln = client_ctx.self_ref();
+        let updates = ln.subscribe_ln_pay(operation_id).await?;
         runtime::spawn("uniffi-subscribe-ln-pay", async move {
-            let ln = client_ctx.self_ref();
-            let Ok(updates) = ln.subscribe_ln_pay(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {
@@ -124,11 +122,9 @@ impl LightningClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let ln = client_ctx.self_ref();
+        let updates = ln.subscribe_internal_pay(operation_id).await?;
         runtime::spawn("uniffi-subscribe-internal-pay", async move {
-            let ln = client_ctx.self_ref();
-            let Ok(updates) = ln.subscribe_internal_pay(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {
@@ -151,11 +147,9 @@ impl LightningClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let ln = client_ctx.self_ref();
+        let updates = ln.subscribe_ln_receive(operation_id).await?;
         runtime::spawn("uniffi-subscribe-ln-receive", async move {
-            let ln = client_ctx.self_ref();
-            let Ok(updates) = ln.subscribe_ln_receive(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {

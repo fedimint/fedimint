@@ -2470,7 +2470,7 @@ pub struct OutgoingLightningPayment {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(OutgoingLightningPayment, String, {
     lower: |r| serde_json::to_string(&r).expect("OutgoingLightningPayment always serializes"),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to deserialize OutgoingLightningPayment: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!("Failed to deserialize OutgoingLightningPayment: {e}")),
 });
 
 async fn set_payment_result(

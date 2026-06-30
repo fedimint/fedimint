@@ -18,7 +18,7 @@ type Result<T> = std::result::Result<T, UniffiError>;
 uniffi::custom_type!(OperationLogEntry, String, {
     remote,
     lower: |e| serde_json::to_string(&e).expect("OperationLogEntry always serializes"),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse OperationLogEntry: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!("Failed to parse OperationLogEntry: {e}")),
 });
 
 #[derive(uniffi::Record)]
@@ -70,9 +70,9 @@ impl ClientHandle {
         Ok(client.federation_id())
     }
 
-    pub async fn get_invite_code(&self, peer: PeerId) -> Option<InviteCode> {
-        let client = client_for_handle(self).ok()?;
-        client.invite_code(peer).await
+    pub async fn get_invite_code(&self, peer: PeerId) -> Result<Option<InviteCode>> {
+        let client = client_for_handle(self)?;
+        Ok(client.invite_code(peer).await)
     }
 
     pub async fn get_operation(
@@ -90,11 +90,9 @@ impl ClientHandle {
         last_seen: Option<ChronologicalOperationLogKey>,
     ) -> Result<Vec<ListOperationsResponse>> {
         let client = client_for_handle(self)?;
-        let limit = if limit.is_none() && last_seen.is_none() {
-            usize::MAX
-        } else {
-            limit.unwrap_or(usize::MAX as u64) as usize
-        };
+        let limit = limit
+            .unwrap_or(client::DEFAULT_EVENT_LOG_PAGE_SIZE)
+            .min(client::MAX_EVENT_LOG_PAGE_SIZE) as usize;
         let operations = client
             .operation_log()
             .paginate_operations_rev(limit, last_seen)

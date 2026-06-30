@@ -13,7 +13,7 @@ type Result<T> = std::result::Result<T, UniffiError>;
 uniffi::custom_type!(WalletSummary, String, {
     remote,
     lower: |v| serde_json::to_string(&v).unwrap(),
-    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!(format!("Failed to parse WalletSummary: {e}"))),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!("Failed to parse WalletSummary: {e}")),
 });
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -62,11 +62,9 @@ impl WalletClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let wallet = client_ctx.self_ref();
+        let updates = wallet.subscribe_deposit(operation_id).await?;
         runtime::spawn("uniffi-subscribe-deposit", async move {
-            let wallet = client_ctx.self_ref();
-            let Ok(updates) = wallet.subscribe_deposit(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {
@@ -87,11 +85,9 @@ impl WalletClientModule {
         callback: Box<dyn UnifiedCallback>,
     ) -> Result<()> {
         let client_ctx = self.client_ctx.clone();
+        let wallet = client_ctx.self_ref();
+        let updates = wallet.subscribe_withdraw_updates(operation_id).await?;
         runtime::spawn("uniffi-subscribe-withdraw", async move {
-            let wallet = client_ctx.self_ref();
-            let Ok(updates) = wallet.subscribe_withdraw_updates(operation_id).await else {
-                return;
-            };
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 let Ok(payload_json) = serde_json::to_string(&state) else {
