@@ -191,6 +191,14 @@ function walletv2_module_frost() {
 }
 export -f walletv2_module_frost
 
+function walletv2_frost_degraded() {
+  # A 4-peer / 1-offline degraded federation exercises FROST threshold signing
+  # with a guardian offline while staying fast enough for the default test
+  # timeout (no override needed).
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/walletv2-frost-test.sh --fed-size 4 --offline-nodes 1
+}
+export -f walletv2_frost_degraded
+
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -488,6 +496,7 @@ tests_to_run_in_parallel+=(
   "lnv1_lnv2_swap"
   "walletv2_module"
   "walletv2_module_frost"
+  "walletv2_frost_degraded"
   "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"

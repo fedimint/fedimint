@@ -4,6 +4,32 @@ use frost_secp256k1_tr::keys::PublicKeyPackage;
 use frost_secp256k1_tr::round2::SignatureShare;
 use serde::{Deserialize, Serialize};
 
+/// Per-guardian, locally-measured record of how long a single transaction took
+/// to reach a finalized (threshold-aggregated) FROST signature on *this*
+/// guardian. Served, keyed by `txid`, by the authenticated
+/// `FROST_FINALIZATION_STATS_ENDPOINT`.
+///
+/// `duration_millis` is the wall-clock gap between when this guardian first
+/// observed attempt 0 of the signing session (in `consensus_proposal`) and when
+/// it aggregated the threshold signature. Because finalization is a
+/// deterministic function of the consensus log, this value differs across
+/// guardians only by clock skew and how far behind each peer is in processing
+/// the log — it is a node-local latency metric, not a blame-attribution one.
+///
+/// `attempts` is how many adaptive-ROAST attempts were created before
+/// finalization: `1` means it finalized on the first signing session, while
+/// higher counts indicate stalled sessions that had to reshuffle around
+/// unavailable signers. Together with `advance_votes` (total advance votes
+/// recorded for the tx across all attempts) this is what explains how signing
+/// latency grows as more guardians go offline.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FrostFinalizationStat {
+    pub txid: bitcoin::Txid,
+    pub duration_millis: u64,
+    pub attempts: u32,
+    pub advance_votes: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostSigningCommitments(pub frost_secp256k1_tr::round1::SigningCommitments);
 

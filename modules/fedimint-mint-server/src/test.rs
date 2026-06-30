@@ -4,7 +4,6 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
