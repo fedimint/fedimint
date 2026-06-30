@@ -22,7 +22,8 @@ use fedimint_gateway_common::{
     GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest,
     INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
     LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OUTGOING_PAYMENT_ROUTE_INFO_ENDPOINT, OpenChannelRequest,
+    OutgoingPaymentRouteInfoPayload, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
     PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
     PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
     PaymentSummaryPayload, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
@@ -481,6 +482,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        OUTGOING_PAYMENT_ROUTE_INFO_ENDPOINT,
+        outgoing_payment_route_info,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         SET_FEES_ENDPOINT,
         set_fees,
         is_authenticated,
@@ -846,6 +854,17 @@ async fn payment_summary(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let payment_summary = gateway.handle_payment_summary_msg(payload).await?;
     Ok(Json(json!(payment_summary)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn outgoing_payment_route_info(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<OutgoingPaymentRouteInfoPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let route_info = gateway
+        .handle_outgoing_payment_route_info_msg(payload)
+        .await?;
+    Ok(Json(json!(route_info)))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]

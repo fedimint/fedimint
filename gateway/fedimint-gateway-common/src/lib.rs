@@ -12,11 +12,13 @@ use envs::{
     FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_core::config::{FederationId, JsonClientConfig};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::{SafeUrl, get_average, get_median};
 use fedimint_core::{Amount, BitcoinAmountOrAll, secp256k1};
 use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry, StructuredPaymentEvents};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
@@ -45,6 +47,7 @@ pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const OPEN_CHANNEL_WITH_PUSH_ENDPOINT: &str = "/open_channel_with_push";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
+pub const OUTGOING_PAYMENT_ROUTE_INFO_ENDPOINT: &str = "/outgoing_payment_route_info";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAY_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/pay_offer_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
@@ -323,6 +326,18 @@ impl PaymentStats {
 pub struct PaymentSummaryPayload {
     pub start_millis: u64,
     pub end_millis: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OutgoingPaymentRouteInfoPayload {
+    pub federation_id: FederationId,
+    pub operation_id: OperationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct OutgoingPaymentRouteInfoResponse {
+    pub destination: PublicKey,
+    pub route_hints: Option<Vec<RouteHint>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

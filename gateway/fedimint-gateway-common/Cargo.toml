@@ -22,6 +22,7 @@ clap = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-ln-common = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 lightning-invoice = { workspace = true }
