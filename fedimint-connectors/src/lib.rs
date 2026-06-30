@@ -15,7 +15,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
+};
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
@@ -57,6 +59,8 @@ pub struct ConnectorRegistryBuilder {
     iroh_dns: Option<SafeUrl>,
     /// Enable Pkarr DHT discovery
     iroh_pkarr_dht: bool,
+    /// Enable compatible iroh-next endpoint preference from guardian metadata
+    iroh_next: bool,
 
     /// Enable Websocket API handling at all?
     ws_enable: bool,
@@ -126,6 +130,7 @@ impl ConnectorRegistryBuilder {
                 connection_overrides: self.connection_overrides,
                 initialized: SetOnce::new(),
                 path_change,
+                iroh_next: self.iroh_next,
             }
             .into(),
         })
@@ -178,6 +183,15 @@ impl ConnectorRegistryBuilder {
         }
     }
 
+    /// Enable use of compatible iroh-next endpoints advertised in guardian
+    /// metadata.
+    pub fn iroh_next(self, enable: bool) -> Self {
+        Self {
+            iroh_next: enable,
+            ..self
+        }
+    }
+
     pub fn ws_force_tor(self, enable: bool) -> Self {
         Self {
             ws_force_tor: enable,
@@ -204,6 +218,12 @@ impl ConnectorRegistryBuilder {
         // TODO: read rest of the env
         for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
             self = self.with_connection_override(k, v);
+        }
+
+        // Disable iroh-next endpoint preference in test/devimint environments
+        // where iroh-next server endpoints are not running.
+        if is_running_in_test_env() {
+            self.iroh_next = false;
         }
 
         Ok(Self { ..self })
@@ -234,6 +254,9 @@ struct ConnectorRegistryInner {
     /// Ticks whenever a connector observes a transport-level path change
     /// (e.g. iroh relay → direct). Only Iroh bumps this today.
     path_change: Arc<watch::Sender<u64>>,
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
+    iroh_next: bool,
 }
 
 /// A set of available connectivity protocols a client can use to make
@@ -258,11 +281,18 @@ impl fmt::Debug for ConnectorRegistry {
         f.debug_struct("ConnectorRegistry")
             .field("connectors_lazy", &self.inner.connectors_lazy.len())
             .field("connection_overrides", &self.inner.connection_overrides)
+            .field("iroh_next", &self.inner.iroh_next)
             .finish()
     }
 }
 
 impl ConnectorRegistry {
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
+    pub fn iroh_next_enabled(&self) -> bool {
+        self.inner.iroh_next
+    }
+
     /// Create a builder with recommended defaults intended for client-side
     /// usage
     ///
@@ -272,6 +302,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
@@ -287,6 +318,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: true,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: false,
@@ -302,6 +334,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,

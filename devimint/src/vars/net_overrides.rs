@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use fedimint_core::envs::{
     FM_GW_IROH_CONNECT_OVERRIDES_ENV, FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
     FM_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+    FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN_ENV,
 };
 use fedimint_core::{NumPeers, PeerId};
 use iroh_base::NodeAddr;
@@ -45,11 +46,15 @@ impl FedimintIrohEndpoint {
     }
 
     fn to_override(&self) -> String {
+        self.to_override_with_port(self.port)
+    }
+
+    fn to_override_with_port(&self, port: u16) -> String {
         // The override is a `<node-id>=<socket-addr>` pair. Only used for local
         // testing, so there is no relay and a single localhost address. iroh
         // 1.0 no longer ships the `NodeTicket` format, so this stays version
         // agnostic and the consumer rebuilds the address from its parts.
-        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.port));
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port));
         format!("{}={},", self.node_id, addr)
     }
 
@@ -165,6 +170,16 @@ impl FederationsNetOverrides {
             .join(",")
     }
 
+    /// Guardian iroh-next p2p overrides in the plain `<id>=<addr>` format.
+    fn overrides_next_plain(&self) -> String {
+        self.federations
+            .iter()
+            .flat_map(|f| f.peers.values())
+            .map(|peer| peer.p2p.to_override_with_port(peer.p2p.port() + 10))
+            .collect::<Vec<String>>()
+            .join(",")
+    }
+
     /// Guardian api/p2p overrides in the legacy `NodeTicket` format, for
     /// binaries older than 0.12 that still parse the override that way.
     fn overrides_legacy(&self) -> String {
@@ -196,6 +211,10 @@ impl ToEnvVar for FederationsNetOverrides {
             (
                 FM_IROH_CONNECT_OVERRIDES_ENV.to_string(),
                 self.overrides_legacy(),
+            ),
+            (
+                FM_IROH_NEXT_CONNECT_OVERRIDES_PLAIN_ENV.to_string(),
+                self.overrides_next_plain(),
             ),
         ]
         .into_iter()

@@ -72,6 +72,8 @@ aws-lc-sys = { version = "0.41", features = ["bindgen"] }
 iroh = { workspace = true, default-features = false, features = [
     "discovery-pkarr-dht",
 ] }
+iroh-mainline-address-lookup = { workspace = true }
+iroh-next = { workspace = true, default-features = false }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 

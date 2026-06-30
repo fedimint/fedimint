@@ -44,6 +44,7 @@ hyper = { workspace = true }
 iroh = { workspace = true, features = [
     "discovery-pkarr-dht",
 ], default-features = false }
+iroh-next = { workspace = true, default-features = false }
 iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }

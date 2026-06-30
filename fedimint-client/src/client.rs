@@ -176,6 +176,7 @@ pub struct Client {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
     /// User-provided Bitcoin RPC client for modules to use
     ///
     /// Stored here for potential future access; currently passed to modules
@@ -2085,7 +2086,7 @@ impl Client {
 
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
-        get_api_urls(&self.db, &self.config().await).await
+        get_api_urls(&self.db, &self.config().await, self.iroh_enable_next).await
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -2494,6 +2495,12 @@ impl Client {
 
     pub fn iroh_enable_dht(&self) -> bool {
         self.iroh_enable_dht
+    }
+
+    /// Whether compatible iroh-next endpoints from guardian metadata are
+    /// preferred.
+    pub fn iroh_enable_next(&self) -> bool {
+        self.iroh_enable_next
     }
 
     pub(crate) async fn run_core_migrations(

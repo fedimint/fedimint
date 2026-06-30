@@ -23,6 +23,9 @@ use crate::Client;
 use crate::db::DbKeyPrefix;
 use crate::guardian_metadata::GuardianMetadataPrefix;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ApiAnnouncementKey(pub PeerId);
 
@@ -228,7 +231,11 @@ pub(crate) async fn store_api_announcement_updates(
 /// 1. Guardian metadata (if available) - uses first URL from api_urls
 /// 2. API announcement (if available)
 /// 3. Configured URL (fallback)
-pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId, SafeUrl> {
+pub async fn get_api_urls(
+    db: &Database,
+    cfg: &ClientConfig,
+    client_iroh_next_enabled: bool,
+) -> BTreeMap<PeerId, SafeUrl> {
     let mut dbtx = db.begin_transaction_nc().await;
 
     // Load guardian metadata for all peers
@@ -247,13 +254,17 @@ pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId,
         .collect()
         .await;
 
-    // For each peer: prefer guardian metadata, then API announcement, then config
+    // For each peer: prefer guardian metadata, then API announcement, then config.
+    // When the client supports iroh-next and the guardian advertises an
+    // iroh-next endpoint, rewrite iroh:// URLs to point at the iroh-next node ID
+    // directly, avoiding dual-stack racing.
     cfg.global
         .api_endpoints
         .iter()
         .map(|(peer_id, peer_url)| {
-            let url = guardian_metadata
-                .get(peer_id)
+            let metadata = guardian_metadata.get(peer_id);
+
+            let mut url = metadata
                 .and_then(|m| m.guardian_metadata().api_urls.first().cloned())
                 .or_else(|| {
                     api_announcements
@@ -261,6 +272,27 @@ pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId,
                         .map(|a| a.api_announcement.api_url.clone())
                 })
                 .unwrap_or_else(|| peer_url.url.clone());
+
+            // If the resolved URL is iroh:// and iroh-next endpoint preference is
+            // enabled, swap in the advertised iroh-next endpoint.
+            if url.scheme() == "iroh"
+                && client_iroh_next_enabled
+                && let Some(m) = metadata
+            {
+                let gm = m.guardian_metadata();
+                if let Some(endpoint) = &gm.iroh_next_endpoint
+                    && let Ok(next_url) = SafeUrl::parse(&format!("iroh://{endpoint}"))
+                {
+                    debug!(
+                        target: LOG_CLIENT,
+                        %peer_id,
+                        %next_url,
+                        "Using iroh-next endpoint from guardian metadata",
+                    );
+                    url = next_url;
+                }
+            }
+
             (*peer_id, url)
         })
         .collect()

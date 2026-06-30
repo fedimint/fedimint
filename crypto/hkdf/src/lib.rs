@@ -6,8 +6,7 @@
 
 use std::cmp::min;
 
-pub use bitcoin_hashes;
-pub use bitcoin_hashes::Hash as BitcoinHash;
+pub use bitcoin_hashes::{self, Hash as BitcoinHash};
 use bitcoin_hashes::{HashEngine, Hmac, HmacEngine};
 
 pub mod hashes {
