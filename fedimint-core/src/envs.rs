@@ -160,7 +160,7 @@ pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
 /// Env var to override iroh relays server
 pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
 
-/// Env var to disable Iroh's use of DHT
+/// Env var to enable Iroh's use of DHT
 pub const FM_IROH_DHT_ENABLE_ENV: &str = "FM_IROH_DHT_ENABLE";
 
 /// Env var to disable default n0 discovery
