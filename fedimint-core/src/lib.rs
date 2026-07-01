@@ -38,6 +38,9 @@
 
 extern crate self as fedimint_core;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 use std::fmt::{self, Debug};
 use std::io::Error;
 use std::ops::{self, Range};
@@ -142,6 +145,27 @@ mod txid {
 }
 pub use txid::TransactionId;
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(TransactionId, String, {
+    lower: |txid| txid.to_string(),
+    try_lift: |s| TransactionId::from_str(&s).map_err(Into::into),
+});
+
+#[cfg(feature = "uniffi")]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct UnifiedCallbackEvent {
+    pub source: String,
+    pub topic: String,
+    pub operation_id: Option<String>,
+    pub payload_json: String,
+}
+
+#[cfg(feature = "uniffi")]
+#[uniffi::export(callback_interface)]
+pub trait UnifiedCallback: Send + Sync {
+    fn on_event(&self, event: UnifiedCallbackEvent);
+}
+
 pub struct TransactionIdShortFmt<'a>(&'a TransactionId);
 pub struct TransactionIdFullFmt<'a>(&'a TransactionId);
 
@@ -183,6 +207,12 @@ impl std::fmt::Display for TransactionIdFullFmt<'_> {
 /// makes the intent clearer when passing chain identifiers through APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encodable, Decodable)]
 pub struct ChainId(pub bitcoin::BlockHash);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ChainId, String, {
+    lower: |c| c.to_string(),
+    try_lift: |s| ChainId::from_str(&s).map_err(Into::into),
+});
 
 impl ChainId {
     /// Create a new `ChainId` from a `BlockHash`
@@ -382,6 +412,7 @@ impl std::fmt::Display for InPoint {
     Encodable,
     Decodable,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OutPoint {
     /// The referenced transaction ID
     pub txid: TransactionId,

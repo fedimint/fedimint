@@ -14,6 +14,9 @@
 //! If this module is active the consensus' conflict filter must ensure that at
 //! most one operation (spend, funding) happens per contract per round
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub mod client;
 pub mod config;
 pub mod contracts;
@@ -328,6 +331,12 @@ pub struct LightningGatewayAnnouncement {
     pub ttl: Duration,
 }
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(LightningGatewayAnnouncement, String, {
+    lower: |a| serde_json::to_string(&a).expect("LightningGatewayAnnouncement always serializes"),
+    try_lift: |s| serde_json::from_str(&s).map_err(Into::into),
+});
+
 impl LightningGatewayAnnouncement {
     /// Create a registration from this announcement that is anchored to the
     /// local system time.
@@ -368,6 +377,12 @@ pub struct LightningGateway {
     /// Indicates if the gateway supports private payments
     pub supports_private_payments: bool,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(LightningGateway, String, {
+    lower: |g| serde_json::to_string(&g).expect("LightningGateway always serializes"),
+    try_lift: |s| serde_json::from_str(&s).map_err(Into::into),
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub enum LightningConsensusItem {

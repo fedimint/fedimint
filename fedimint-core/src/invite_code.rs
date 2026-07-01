@@ -27,6 +27,12 @@ use crate::{NumPeersExt, PeerId};
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
 pub struct InviteCode(Vec<InviteCodePart>);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(InviteCode, String, {
+    lower: |i| i.to_string(),
+    try_lift: |s| s.parse().map_err(|e: anyhow::Error| e),
+});
+
 impl Decodable for InviteCode {
     fn consensus_decode_partial<R: Read>(
         r: &mut R,

@@ -165,6 +165,7 @@ impl fmt::Display for ModuleConsensusVersion {
 /// user client devices receiving updates at a pace hard to control, and
 /// technical and coordination challenges of upgrading servers.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Decodable, Encodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ApiVersion {
     /// Major API version
     ///

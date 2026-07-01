@@ -23,6 +23,12 @@ use crate::encoding::{Decodable, Encodable};
 )]
 pub struct PeerId(u16);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(PeerId, u16, {
+    lower: |p| p.0,
+    try_lift: |id| Ok(PeerId(id)),
+});
+
 impl PeerId {
     pub fn new(id: u16) -> Self {
         Self(id)

@@ -6,6 +6,9 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 // Backup and restore logic
 pub mod backup;
 /// Modularized Cli for sending and receiving out-of-band ecash
@@ -13,6 +16,9 @@ pub mod backup;
 mod cli;
 /// Database keys used throughout the mint client module
 pub mod client_db;
+/// FFI for the mint client module
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 /// State machines for mint inputs
 mod input;
 /// State machines for out-of-band transmitted e-cash notes
@@ -211,6 +217,12 @@ async fn download_slice_with_hash(
 /// * Has to contain at least one `FederationIdPrefix` item
 #[derive(Clone, Debug, Encodable, PartialEq, Eq)]
 pub struct OOBNotes(Vec<OOBNotesPart>);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(OOBNotes, String, {
+    lower: |n| n.to_string(),
+    try_lift: |s| OOBNotes::from_str(&s),
+});
 
 /// For extendability [`OOBNotes`] consists of parts, where client can ignore
 /// ones they don't understand.
@@ -878,6 +890,7 @@ impl ClientModuleInit for MintClientInit {
 /// spend the e-cash note. Only the client that possesses the `DerivableSecret`
 /// can derive the correct spend key to spend the e-cash note. This ensures that
 /// only the owner of the e-cash note can spend it.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct MintClientModule {
     federation_id: FederationId,
     cfg: MintClientConfig,
@@ -2671,6 +2684,7 @@ pub fn spendable_notes_to_operation_id(
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
     /// Empty when the spend disabled automatic refunds and no refund was

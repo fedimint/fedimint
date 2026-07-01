@@ -6,6 +6,8 @@ use std::future::Future;
 use fedimint_logging::LOG_RUNTIME;
 pub use n0_future::task::{JoinError, JoinHandle};
 pub use n0_future::time::{Duration, Elapsed, Instant, sleep, sleep_until, timeout};
+#[cfg(not(target_family = "wasm"))]
+use tokio::runtime::RuntimeFlavor;
 use tracing::{Instrument, Span};
 
 use crate::task::MaybeSend;
@@ -40,6 +42,15 @@ pub fn block_in_place<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
+    // Some embedders (notably mobile UniFFI integrations) execute async calls
+    // on a current-thread runtime where Tokio's block_in_place panics. In that
+    // case, execute the closure directly instead of panicking.
+    if tokio::runtime::Handle::try_current()
+        .is_ok_and(|handle| handle.runtime_flavor() == RuntimeFlavor::CurrentThread)
+    {
+        return f();
+    }
+
     // nosemgrep: ban-raw-block-in-place
     tokio::task::block_in_place(f)
 }

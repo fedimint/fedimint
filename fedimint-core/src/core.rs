@@ -56,6 +56,13 @@ pub mod backup;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
 pub struct OperationId(pub [u8; 32]);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(OperationId, String, {
+    lower: |obj| obj.fmt_full().to_string(),
+    try_lift: |s| OperationId::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
+    }
+);
+
 pub struct OperationIdFullFmt<'a>(&'a OperationId);
 pub struct OperationIdShortFmt<'a>(&'a OperationId);
 

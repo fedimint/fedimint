@@ -6,6 +6,9 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::too_many_lines)]
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub use fedimint_ln_common as common;
 
 pub mod api;
@@ -13,6 +16,8 @@ pub mod api;
 pub mod cli;
 pub mod db;
 pub mod events;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
@@ -57,6 +62,8 @@ use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{BoxStream, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
@@ -446,6 +453,7 @@ impl ClientModuleInit for LightningClientInit {
 ///
 /// Note that lightning gateways use a different version
 /// of client side module.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug)]
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
@@ -727,6 +735,26 @@ pub enum PayBolt11InvoiceError {
     NoLnGatewayAvailable,
     #[error("Funded contract already exists: {}", .contract_id)]
     FundedContractAlreadyExists { contract_id: ContractId },
+}
+
+#[cfg(feature = "uniffi")]
+impl From<PayBolt11InvoiceError> for UniffiError {
+    fn from(value: PayBolt11InvoiceError) -> Self {
+        match value {
+            PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress { operation_id } => {
+                UniffiError::General(format!(
+                    "Previous payment attempt({}) still in progress",
+                    operation_id.fmt_full()
+                ))
+            }
+            PayBolt11InvoiceError::NoLnGatewayAvailable => {
+                UniffiError::General("No LN gateway available".to_string())
+            }
+            PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id } => {
+                UniffiError::General(format!("Funded contract already exists: {}", contract_id))
+            }
+        }
+    }
 }
 
 impl LightningClientModule {
@@ -2432,12 +2460,18 @@ pub async fn create_incoming_contract_output(
     Ok((incoming_output, offer.amount, contract_id))
 }
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
+#[derive(Debug, Encodable, Decodable, Serialize, Deserialize)]
 pub struct OutgoingLightningPayment {
     pub payment_type: PayType,
     pub contract_id: ContractId,
     pub fee: Amount,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(OutgoingLightningPayment, String, {
+    lower: |r| serde_json::to_string(&r).expect("OutgoingLightningPayment always serializes"),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow!("Failed to deserialize OutgoingLightningPayment: {e}")),
+});
 
 async fn set_payment_result(
     dbtx: &mut DatabaseTransaction<'_>,

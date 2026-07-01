@@ -99,6 +99,7 @@ impl JsonWithKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PeerUrl {
     /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: SafeUrl,
@@ -127,6 +128,15 @@ pub struct ClientConfig {
     #[serde(deserialize_with = "de_int_key")]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ClientConfig, String, {
+    lower: |obj| serde_json::to_string(&obj).expect("Serialization of valid ClientConfig won't fail") ,
+    try_lift: |bytes| {
+        let obj: ClientConfig = serde_json::from_str(&bytes).map_err(|e| anyhow::anyhow!("Failed to parse ClientConfig from JSON: {e}"))?;
+        Ok(obj)
+    },
+});
 
 // FIXME: workaround for https://github.com/serde-rs/json/issues/989
 fn de_int_key<'de, D, K, V>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
@@ -324,6 +334,15 @@ impl ClientConfig {
     PartialOrd,
 )]
 pub struct FederationId(pub sha256::Hash);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(FederationId, String, {
+    lower: |obj| serde_json::to_string(&obj).expect("Serialization of valid FederationId won't fail") ,
+    try_lift: |bytes| {
+        let obj: FederationId = serde_json::from_str(&bytes).map_err(|e| anyhow::anyhow!("Failed to parse FederationId from JSON: {e}"))?;
+        Ok(obj)
+    },
+});
 
 #[derive(
     Debug,

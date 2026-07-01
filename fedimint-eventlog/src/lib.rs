@@ -11,6 +11,10 @@
 //! all events and react to ones it is interested in (and understands),
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
+
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -133,6 +137,12 @@ impl UnordedEventLogId {
     Deserialize,
 )]
 pub struct EventLogId(u64);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(EventLogId, u64, {
+    lower: |id| id.0,
+    try_lift: |v| Ok(EventLogId(v)),
+});
 
 impl EventLogId {
     pub const LOG_START: EventLogId = EventLogId(0);
@@ -271,6 +281,12 @@ pub struct PersistedLogEntry {
     id: EventLogId,
     inner: EventLogEntry,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(PersistedLogEntry, String, {
+    lower: |e| serde_json::to_string(&e).expect("PersistedLogEntry always serializes"),
+    try_lift: |s| serde_json::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse PersistedLogEntry: {e}")),
+});
 
 impl Serialize for PersistedLogEntry {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

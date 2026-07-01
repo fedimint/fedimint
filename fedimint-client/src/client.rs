@@ -196,8 +196,8 @@ struct ListOperationsParams {
     last_seen: Option<ChronologicalOperationLogKey>,
 }
 
-const DEFAULT_EVENT_LOG_PAGE_SIZE: u64 = 100;
-const MAX_EVENT_LOG_PAGE_SIZE: u64 = 10_000;
+pub const DEFAULT_EVENT_LOG_PAGE_SIZE: u64 = 100;
+pub const MAX_EVENT_LOG_PAGE_SIZE: u64 = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GetEventLogRequest {
@@ -1203,6 +1203,26 @@ impl Client {
         })
     }
 
+    /// Returns an owned `Arc` to a typed module client instance by kind.
+    ///
+    /// Unlike [`Self::get_first_module`], this hands out a cloned `Arc` so the
+    /// caller can hold the module independently of the `Client`'s lifetime.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn get_first_module_arc<M: ClientModule>(&self) -> anyhow::Result<Arc<M>> {
+        let module_kind = M::kind();
+        let id = self
+            .get_first_instance(&module_kind)
+            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
+        let dyn_module = self
+            .modules
+            .get(id)
+            .ok_or_else(|| format_err!("Unknown module instance {id}"))?;
+        dyn_module
+            .as_any_arc()
+            .downcast::<M>()
+            .map_err(|_| format_err!("Module is not of type {}", std::any::type_name::<M>()))
+    }
+
     pub fn get_module_client_dyn(
         &self,
         instance_id: ModuleInstanceId,
@@ -2147,7 +2167,7 @@ impl Client {
         }
     }
 
-    async fn fetch_session_count(&self) -> FederationResult<u64> {
+    pub async fn fetch_session_count(&self) -> FederationResult<u64> {
         self.api.session_count().await
     }
 
