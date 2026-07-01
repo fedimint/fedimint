@@ -660,6 +660,14 @@ impl Wallet {
         peer: PeerId,
         commitments: FrostSigningCommitments,
     ) -> anyhow::Result<()> {
+        // Only FROST federations sign via nonce commitments. Reject before
+        // storing, otherwise a Byzantine peer could accumulate unused
+        // commitments in a Wsh/Tr wallet.
+        ensure!(
+            matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)),
+            "FrostSigningCommitments on non-FROST federation",
+        );
+
         // Reject duplicates so they're not stored in `AcceptedItemKey`
         // and replayed on recovery. Mirrors the `Feerate` redundancy
         // handling.
@@ -1735,8 +1743,9 @@ impl Decodable for FrostSigningNonces {
 
 impl serde::Serialize for FrostSigningNonces {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let bytes = self.0.serialize().map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&fedimint_core::hex::encode(bytes))
+        // Secret signing material: a leaked nonce plus its signature share
+        // reveals this guardian's FROST signing share. Always redact.
+        serializer.serialize_str("<redacted>")
     }
 }
 
