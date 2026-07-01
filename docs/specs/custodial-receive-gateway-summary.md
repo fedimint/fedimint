@@ -45,14 +45,15 @@ seconds, not an ongoing balance.
   fresh observed consensus time from existing signed session outcomes by tracking `UnixTimeVote`s
   and applying the same threshold rule as the LNv2 server. If the observer is stale or lacks fresh
   threshold votes, custodial receive quote creation is unavailable for that federation. The gateway
-  advertises its deadline policy in `RoutingInfo` before the wallet builds the contract, and repeats
-  the exact terms in the signed quote.
+  advertises its custodial fee and deadline policy in `RoutingInfo` before the wallet builds the
+  contract, and repeats the exact terms in the signed quote.
 - **Gateway-signed quote.** The gateway returns a signed receipt binding the backend
   invoice hash to the federation, contract, amounts, gateway keys, invoice expiry, and
   funding deadline, and records the gateway-observed LNv2 consensus time used for deadline
   validation. The quote embeds `CustodialReceiveTerms`, with `terms_hash` equal to the canonical
-  hash of those terms, so the receipt is self-contained. The gateway persists that signed quote in
-  its `AwaitingPayment` record before returning, and the receiver stores the full quote as
+  hash of those terms, so the receipt is self-contained. The gateway persists a `QuoteDraft` before
+  calling the backend, then persists the signed quote in its `AwaitingPayment` record before returning,
+  and the receiver stores the full quote as
   dispute/support evidence of what the gateway committed to do, not as a guarantee that lost gateway
   state can be safely rebuilt.
 - **Dispute evidence is contract-level.** A third party with the signed quote and federation session
@@ -92,8 +93,9 @@ seconds, not an ongoing balance.
   custodial-only gateways must not appear on the legacy `GATEWAYS_ENDPOINT`, since old
   clients cannot distinguish send and receive capability. MVP does **not** add a
   `CUSTODIAL_GATEWAYS_ENDPOINT`; custodial candidate URLs are wallet-supplied out-of-band
-  (for example by operator config, app policy, or a future Nostr-style announcement), and the wallet
-  then verifies live custodial support through `RoutingInfo`.
+  (for example by operator config, app policy, a future Nostr-style announcement, or explicit user
+  consent). The URL source is the authorization input; `RoutingInfo` is only the live capability/key
+  check.
 - **Separate operator binary.** The preferred MVP implementation is a new `custodial-gatewayd`
   binary. Existing `gatewayd` remains the legacy-compatible trustless gateway; `custodial-gatewayd`
   owns the custodial receive endpoint, state machine, backend observer, reconciliation,
@@ -103,12 +105,12 @@ seconds, not an ongoing balance.
   deployment mode and must share the custodial receive registry with the send/direct-swap path.
 - **Accounting.** The receiver gets exactly `commitment.amount`. The gateway spends
   `commitment.amount + module fees` and absorbs backend liquidity skim. Size
-  `receive_fee` and float against the full spend. Unpaid issued invoices are contingent exposure:
-  track and alert on them, but do not reject new receives solely because they exist. Once an invoice
-  settles, it is a debt. If federation ecash is short, the MVP alerts and can drive or prompt a pegin
-  from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out, or
-  backend-specific liquidity actions. The MVP keeps the existing `PaymentFee::RECEIVE_FEE_LIMIT`. A
-  higher custodial fee cap would need separate explicit consent.
+  the advertised custodial `receive_fee` and float against the full spend. Unpaid issued invoices are
+  contingent exposure: track and alert on them, but do not reject new receives solely because they
+  exist. Once an invoice settles, it is a debt. If federation ecash is short, the MVP alerts and can
+  drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel
+  close, splice, swap-out, or backend-specific liquidity actions. The MVP keeps the existing
+  `PaymentFee::RECEIVE_FEE_LIMIT`. A higher custodial fee cap would need separate explicit consent.
 - **MVP observability.** The gateway must expose minimal metrics for issued-unpaid exposure,
   settled-but-unfunded debt, unresolved liabilities, ecash float, liquidity shortfall, funding
   deadline slack, backend cursor lag / retention margin, consensus-time observer freshness, and

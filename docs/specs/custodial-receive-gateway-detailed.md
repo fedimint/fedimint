@@ -115,7 +115,7 @@ Receiver                              Gateway                  Backend        Fe
    │ 2. build IncomingContract           │
    │    (own preimage P, claim_pk,       │
    │     refund_pk=gateway, TPE→agg)     │
-   │ 3. create_custodial_bolt11_invoice ▶│ 4. reserve InvoiceCreating, then
+   │ 3. create_custodial_bolt11_invoice ▶│ 4. reserve InvoiceCreating(QuoteDraft),
    │    (contract, amount)               │    createinvoice(externalId) ─▶│ (own hash H′,
    │                                     │    ◀── invoice ────────────────│  preimage P′)
    │                                     │ 5. sign quote, then commit AwaitingPayment
@@ -179,6 +179,7 @@ pub struct ReceiveCapabilities {
 }
 
 pub struct CustodialReceiveCapability {
+    pub receive_fee: PaymentFee,              // pre-request fee used to size the contract
     pub max_receive_amount: Amount,           // per-receive cap (§9)
     pub max_in_flight: Amount,                // aggregate settled/funding liability target (§9)
     pub min_invoice_to_funding_deadline_delta_secs: u64, // invoice-expiry to funding-deadline gap (§8)
@@ -200,20 +201,32 @@ A capability struct (not a binary `Trustless | Custodial` mode) lets a gateway a
 trustless receive, custodial fallback, or custodial-only receive, and carries the limits the
 client needs to size and select, not just a flag. `RoutingInfo` derives only
 `Serialize`/`Deserialize`, not Fedimint `Encodable`/`Decodable` (`gateway_api.rs:142`), so this
-is a `#[serde(default)]` add. The deadline-policy fields intentionally duplicate fields later
-embedded in `CustodialReceiveTerms`: `RoutingInfo` is the pre-request policy the wallet needs before
-it builds an `IncomingContract`, while the signed quote is the exact per-receive commitment the
-client verifies and stores.
+is a `#[serde(default)]` add. `CustodialReceiveCapability.receive_fee` is the fee the client uses to
+size the custodial contract before requesting the backend invoice. The top-level legacy
+`RoutingInfo.receive_fee` remains the trustless-receive fee for existing clients. A dual-capable
+gateway may set the two equal, but the custodial client must use the mode-specific custodial fee and
+must reject a quote whose `terms.receive_fee` differs from the advertised fee it used to construct
+the contract. If the gateway changes fees between selection and request, the request is rejected
+before backend invoice creation and the client reselects/retries with fresh `RoutingInfo`. The
+deadline-policy fields intentionally duplicate fields later embedded in `CustodialReceiveTerms`:
+`RoutingInfo` is the pre-request policy the wallet needs before it builds an `IncomingContract`,
+while the signed quote is the exact per-receive commitment the client verifies and stores.
 
 Selection becomes **policy-driven**, not a reuse of the generic reachability-based
 `select_gateway` (`modules/fedimint-lnv2-client/src/lib.rs:481`):
 
 - New wallets build a **gateway candidate set** as the union of:
   - federation-provided legacy `GATEWAYS_ENDPOINT` URLs, which remain trustless-receive compatible;
-  - wallet/app/operator-supplied custodial gateway URLs, which are never trusted until live-probed via
-    `/routing_info` for the target federation.
+  - wallet/app/operator-supplied custodial gateway URLs, which are authorized only by that trusted
+    source or by explicit user consent, then live-probed via `/routing_info` for the target federation.
   Each candidate is annotated with its source (`LegacyFederationList` or `OutOfBandCustodial`) and
   live `RoutingInfo`.
+
+The live `/routing_info` probe is a capability and key-consistency check, not an authorization
+source. A custodial-only URL learned from an untrusted channel must not become eligible merely
+because it responds. The client stores the candidate source with the operation metadata and surfaces
+it in consent / support UI.
+
 - `select_gateway_for_receive(policy)`: trustless receive **skips** any custodial-only gateway
   (`custodial.is_some() && trustless.is_none()`) and continues to the next reachable trustless
   gateway, so a normal receive never strands on a custodial-only gateway. Custodial receive
@@ -348,29 +361,58 @@ New `custodial-gatewayd` logic, per connected federation:
    The gateway derives a stable `client_request_id =
    H("custodial-receive-v1" || federation_id || contract_id || gateway_module_pk)` **from the
    request's own contract identity** (not a trusted supplied value, and it binds the gateway's
-   durable module key, not the mutable URL). It **atomically reserves** the contract as
-   `InvoiceCreating`, keyed for uniqueness on **`(federation_id, contract_id)`** so there's never
-   more than one outstanding backend invoice per contract. While that record persists, a repeat
-   returns the stored invoice and quote rather than creating a second, and a **different**
-   `client_request_id` for an already-reserved contract is **rejected**. The gateway then calls
-   `create_plain_invoice` with an opaque `backend_correlation_id` as the backend `externalId` (so no
-   raw federation or contract IDs leak into backend-visible metadata), after confirming its
+   durable module key, not the mutable URL). It confirms its
    `gateway_observed_lnv2_consensus_time` is fresh enough and the requested contract is not too close
-   to expiry (§8). It uses an invoice expiry **strictly earlier than the contract's funding
-   deadline** (§8), constructs and signs the quote, and
-   **commits the full `AwaitingPayment` record including `signed_quote` before returning**,
-   advancing `InvoiceCreating → AwaitingPayment`. A crash after backend invoice creation but before
-   the record commits is recovered by querying the backend by
-   `externalId` (`get_invoice_by_external_id`), so a backend that can't look up unpaid invoices by
-   external id can't support crash-safe custodial invoice creation. If the **authoritative
-   federation client DB prefix itself is lost or rolled back**, the receive record is gone. That is
-   operator data loss and out of scope for this spec (§10, §16), not a path that creates a fresh
-   receive from a client-supplied quote.
+   to expiry (§8), then builds and **atomically reserves** an `InvoiceCreating` quote draft keyed for
+   uniqueness on **`(federation_id, contract_id)`** so there's never more than one outstanding backend
+   invoice per contract. While that record persists, a duplicate request must not create a second
+   backend invoice; after `AwaitingPayment` exists, a duplicate returns the stored invoice and quote,
+   while an in-flight `InvoiceCreating` continues/retries recovery from the stored draft. A
+   **different** `client_request_id` for an already-reserved contract is **rejected**. The gateway then
+   calls `create_plain_invoice` with the draft's opaque `backend_correlation_id` as the backend
+   `externalId` (so no raw federation or contract IDs leak into backend-visible metadata). It uses an
+   invoice expiry **strictly earlier than the contract's funding deadline** (§8), signs the quote using
+   the stored draft plus the returned backend invoice hash, and **commits the full `AwaitingPayment`
+   record including `signed_quote` before returning**, advancing `InvoiceCreating → AwaitingPayment`.
+   A crash after backend invoice creation but before the `AwaitingPayment` commit is recovered by
+   querying the backend by `externalId` (`get_invoice_by_external_id`), then signing the recovered
+   backend invoice hash against the already-persisted quote draft. A backend that can't look up unpaid
+   invoices by external id can't support crash-safe custodial invoice creation. If the
+   **authoritative federation client DB prefix itself is lost or rolled back**, the receive record is
+   gone. That is operator data loss and out of scope for this spec (§10, §16), not a path that creates
+   a fresh receive from a client-supplied quote.
 
    The record is **state-variant**: its fields are populated progressively as `status` advances, not
-   all at once. `InvoiceCreating` holds only `{ client_request_id, backend_correlation_id,
-   federation_id, contract, status }` (no `quote_id` or `backend_invoice_hash` yet, since the backend
-   invoice doesn't exist). The `AwaitingPayment` commit adds
+   all at once. `InvoiceCreating` is not just a lock; it persists a **quote draft** before the backend
+   call:
+
+   ```rust
+   struct CustodialReceiveQuoteDraft {
+       quote_id: sha256::Hash,
+       client_request_id: sha256::Hash,
+       backend_correlation_id: String,
+       federation_id: FederationId,
+       contract_id: ContractId,
+       contract: IncomingContract,
+       invoice_amount: Amount,
+       backend_requested_sat: u64,
+       contract_amount: Amount,
+       invoice_expiry: u64,
+       funding_deadline: u64,
+       observed_lnv2_consensus_time: u64,
+       terms: CustodialReceiveTerms,
+       terms_hash: sha256::Hash,
+       gateway_api: SafeUrl,
+       gateway_module_pk: PublicKey,
+       gateway_ln_pk: PublicKey,
+       created_at: u64,
+   }
+   ```
+
+   `InvoiceCreating` holds `{ quote_draft, status }` and **no `backend_invoice_hash` yet**, since the
+   backend invoice does not exist until `create_plain_invoice` returns. The draft is the durable
+   policy decision: retries and crash recovery must use it rather than recomputing fees, deadlines,
+   terms, keys, URLs, or observed consensus time from current config. The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
    invoice_expiry, funding_deadline, terms_hash, signed_quote, created_at }` (`invoice_expiry` and
    `funding_deadline` drive `InvoiceExpiredUnpaid`, retention, and late-settlement handling, §7.3
@@ -382,8 +424,9 @@ New `custodial-gatewayd` logic, per connected federation:
    `{ quote_id, client_request_id, backend_correlation_id, backend_invoice_hash, backend_requested_sat,
    federation_id, contract, invoice_amount, contract_amount, invoice_expiry, funding_deadline,
    terms_hash, signed_quote, created_at, status }`. A crash after backend invoice creation
-   but before storing the invoice hash is recovered by querying the backend by `externalId`. A
-   backend that can't look up unpaid invoices by external id can't support crash-safe custodial
+   but before storing the invoice hash is recovered by querying the backend by `externalId` and
+   completing the quote from the stored `quote_draft`. A backend that can't look up unpaid invoices
+   by external id can't support crash-safe custodial
    invoice creation. **Uniqueness is the gateway's `(federation_id, contract_id)` reservation, not
    the backend**: phoenixd documents `externalId` as lookup metadata, not a unique or idempotent
    key, so the adapter treats a lookup that returns **more than one** invoice for a single
@@ -574,13 +617,18 @@ New `custodial-gatewayd` logic, per connected federation:
 
    **Cross-path receive namespace invariant.** On any gateway process or deployment that can serve
    both trustless and custodial receive for the same federation/module key, there is exactly one
-   active owner for each `(federation_id, contract_id)` and each `PaymentImage`:
+   active owner for each `(federation_id, contract_id)`, each contract `PaymentImage`, and each
+   same-gateway direct-swap payment hash:
    `TrustlessRegistered` or `CustodialPending`, never both. The normal
    `create_bolt11_invoice_v2` path must reject a contract/payment image already reserved by
    custodial receive, and `create_custodial_bolt11_invoice` must reject a contract/payment image
    already registered for trustless receive. The rejection is `DuplicateContractConflict` if the full
    contract collides, and an operator-visible invariant violation if only the payment image collides
-   with a different contract.
+   with a different contract. After the backend returns a custodial invoice, the gateway must also
+   reserve `backend_invoice_hash` in the shared direct-swap namespace before returning the invoice. If
+   that hash collides with an active trustless registration or another custodial pending receive, the
+   gateway must not return the invoice; it records a backend-invariant violation and disables new
+   custodial invoice creation until reviewed.
 
    This invariant must be enforced by the same transaction/registry used for direct-swap detection in
    dual-capable mode. A separate custodial-only binary that does not share such a registry must not
@@ -642,8 +690,10 @@ mode flag on `receive`:
   Pass the two deadlines separately rather than the single `expiry_secs` used today
   (`lib.rs:943` for the contract expiration and `:972` for the invoice expiry currently
   reuse one value). The client chooses the funding deadline using the selected gateway's advertised
-  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice; the returned
-  signed quote repeats the terms actually used and must still pass the checks below.
+  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice, and sizes
+  `contract.commitment.amount` using that same capability's `receive_fee`, not the legacy top-level
+  trustless receive fee. The returned signed quote repeats the terms actually used and must still pass
+  the checks below.
 - Request the invoice, and **skip** the `invoice.payment_hash() == preimage hash`
   check (`lib.rs:977`): the invoice is deliberately the backend's own hash. Keep the **amount**
   check (`lib.rs:981`). The requested amount must also be compatible with
@@ -673,6 +723,20 @@ mode flag on `receive`:
   contract_amount == terms.receive_fee.subtract_from(invoice_amount.msats)
   contract.commitment.amount == contract_amount
   ```
+
+  Because `PaymentFee::subtract_from` saturates, the client also enforces its own lower bound before
+  requesting the invoice, using the advertised `CustodialReceiveCapability.receive_fee`, and again
+  during quote verification, using `terms.receive_fee`:
+
+  ```text
+  invoice_amount.msats > receive_fee.fee(invoice_amount.msats).msats
+  contract_amount >= client_min_incoming_contract_amount
+  ```
+
+  `client_min_incoming_contract_amount` is at least the existing
+  `MINIMUM_INCOMING_CONTRACT_AMOUNT` used by trustless receive, unless wallet policy is stricter. The
+  client rejects a quote whose `terms.receive_fee` differs from the advertised custodial fee it used to
+  build the contract.
 
   It must also verify that the quote's
   `observed_lnv2_consensus_time` satisfies the §8 deadline rules:
@@ -1250,7 +1314,10 @@ those come first.
    - an **operation-log divergence with the record intact** (authoritative prefix survives): the
      gateway re-drives the exact stored `prepared_tx`, never a second different tx, even when a
      lookup reads "not funded" mid-flight (§7.3, §10)
-   - **crash after backend invoice creation but before the gateway record commits**
+   - crash after `InvoiceCreating(quote_draft)` commits and the backend invoice is created, but before
+     `AwaitingPayment(signed_quote)` commits: recovery looks up by `backend_correlation_id` and signs
+     the recovered invoice hash using the exact stored draft, even if gateway fee/deadline config
+     changed while it was down
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
    - logical root-index loss with the authoritative client-prefix records intact: indexes rebuild
@@ -1271,6 +1338,9 @@ those come first.
      custodial receive, custodial creation rejects a contract/payment image already owned by trustless
      receive, and a dual-capable direct-swap lookup returns the custodial forfeit-signature outcome
      rather than falling through to the trustless registered-contract table
+   - backend invoice hash collision: a custodial backend invoice hash that matches an active trustless
+     registered payment hash is not returned to the client and disables new custodial issuance for
+     operator review
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by itself
    - a settled invoice with short ecash float remains a debt, waits for liquidity, and funds after
@@ -1280,7 +1350,10 @@ those come first.
      backend-retention-margin, and consensus-time-observer-age metrics
    - **non-satoshi amounts rejected** before invoice creation on a sat-only backend
    - amount-too-small cases where `PaymentFee::subtract_from` would saturate to zero or below the
-     minimum incoming contract amount reject before backend invoice creation
+     minimum incoming contract amount reject before backend invoice creation, both before request and
+     during client quote verification
+   - client contract sizing uses `CustodialReceiveCapability.receive_fee`, rejects quotes whose
+     `terms.receive_fee` differs, and does not accidentally use the legacy trustless receive fee
 
 ## 16. Out of scope
 
