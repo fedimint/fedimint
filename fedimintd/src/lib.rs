@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use bitcoin::Network;
+use clap::builder::BoolishValueParser;
 use clap::{ArgGroup, CommandFactory, FromArgMatches, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
@@ -177,7 +178,7 @@ struct ServerOpts {
     #[arg(long, env = FM_API_URL_ENV)]
     api_url: Option<SafeUrl>,
 
-    #[arg(long, env = FM_ENABLE_IROH_ENV)]
+    #[arg(long, env = FM_ENABLE_IROH_ENV, value_parser = BoolishValueParser::new())]
     enable_iroh: bool,
 
     /// Optional URL of the Iroh DNS server
@@ -516,4 +517,48 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     }
 
     server_gens
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
+        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            std::env::set_var(FM_ENABLE_IROH_ENV, value);
+        }
+
+        let opts = ServerOpts::try_parse_from([
+            "fedimintd",
+            "--data-dir",
+            "/tmp/fedimintd-test",
+            "--bitcoind-url",
+            "http://127.0.0.1:18443",
+            "--bitcoind-username",
+            "user",
+            "--bitcoind-password",
+            "pass",
+        ]);
+
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            if let Some(previous) = previous {
+                std::env::set_var(FM_ENABLE_IROH_ENV, previous);
+            } else {
+                std::env::remove_var(FM_ENABLE_IROH_ENV);
+            }
+        }
+
+        opts.expect("server opts should parse")
+    }
+
+    #[test]
+    fn enable_iroh_env_accepts_numeric_booleans() {
+        assert!(parse_server_opts_with_enable_iroh_env("1").enable_iroh);
+        assert!(!parse_server_opts_with_enable_iroh_env("0").enable_iroh);
+    }
 }
