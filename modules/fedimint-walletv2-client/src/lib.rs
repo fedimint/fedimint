@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
+use fedimint_walletv2_common::taproot::{descriptor_tr, descriptor_tr_single_peer, nums_point};
 
 mod api;
 #[cfg(feature = "cli")]
@@ -18,10 +19,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, ScriptBuf};
+use bitcoin::{Address, ScriptBuf, Txid};
 use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
@@ -42,14 +43,16 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
-use fedimint_walletv2_common::config::WalletClientConfig;
+use fedimint_walletv2_common::config::{WalletClientConfig, WalletDescriptor};
+use fedimint_walletv2_common::taproot::frost::FrostFinalizationStat;
 use fedimint_walletv2_common::{
     KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
     WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
@@ -122,6 +125,7 @@ pub struct WalletClientModule {
     client_ctx: ClientContext<Self>,
     db: Database,
     module_api: DynModuleApi,
+    admin_auth: Option<ApiAuth>,
 }
 
 #[derive(Debug, Clone)]
@@ -208,6 +212,7 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
             module_api: args.module_api().clone(),
+            admin_auth: args.admin_auth().cloned(),
         };
 
         module.spawn_output_scanner(args.task_group(), args.client_span());
@@ -256,6 +261,21 @@ impl WalletClientModule {
     /// Display log of bitcoin transactions.
     pub async fn tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
         self.module_api.tx_chain().await
+    }
+
+    /// Query this client's own guardian (the one selected via `--our-id`) for
+    /// its locally-measured FROST finalization stat for `txid`. Returns `None`
+    /// if that guardian is offline or hasn't recorded a stat for `txid`.
+    pub async fn frost_finalization_stats(
+        &self,
+        txid: Txid,
+    ) -> anyhow::Result<Option<FrostFinalizationStat>> {
+        let auth = self
+            .admin_auth
+            .clone()
+            .context("Admin auth not set; pass --our-id and --password")?;
+
+        Ok(self.module_api.frost_finalization_stats(auth, txid).await)
     }
 
     /// Fetch the current fee required to send an onchain payment.
@@ -609,11 +629,21 @@ impl WalletClientModule {
     }
 
     fn derive_address(&self, index: u64) -> Address {
-        descriptor(
-            &self.cfg.bitcoin_pks,
-            &self.derive_tweak(index).public_key().consensus_hash(),
-        )
-        .address(self.cfg.network)
+        let tweak = self.derive_tweak(index).public_key().consensus_hash();
+        match self.cfg.descriptor {
+            WalletDescriptor::Wsh => {
+                descriptor(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
+            }
+            WalletDescriptor::Tr => {
+                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, nums_point()).address(self.cfg.network)
+            }
+            WalletDescriptor::SinglePeer(peer_xonly) => {
+                descriptor_tr_single_peer(peer_xonly, &tweak).address(self.cfg.network)
+            }
+            WalletDescriptor::Frost(internal_key) => {
+                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, internal_key).address(self.cfg.network)
+            }
+        }
     }
 
     fn derive_tweak(&self, index: u64) -> Keypair {
