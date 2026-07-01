@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use clap::builder::BoolishValueParser;
 use clap::{Args, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -50,11 +51,11 @@ pub(crate) struct Opts {
 
     #[cfg(feature = "tor")]
     /// Activate usage of Tor as the Connector when building the Client
-    #[arg(long, env = FM_USE_TOR_ENV)]
+    #[arg(long, env = FM_USE_TOR_ENV, value_parser = BoolishValueParser::new())]
     pub use_tor: bool,
 
     // Enable using DHT name resolution in Iroh
-    #[arg(long, env = FM_IROH_ENABLE_DHT_ENV)]
+    #[arg(long, env = FM_IROH_ENABLE_DHT_ENV, value_parser = BoolishValueParser::new())]
     pub iroh_enable_dht: Option<bool>,
 
     /// Database backend to use.

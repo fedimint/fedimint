@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use bitcoin::Network;
+use clap::builder::BoolishValueParser;
 use clap::{ArgGroup, Parser};
 use fedimint_core::envs::{FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV};
 use fedimint_core::util::SafeUrl;
@@ -132,7 +133,12 @@ pub struct GatewayOpts {
     #[arg(long, env = FM_IROH_RELAY_ENV, value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
 
-    #[arg(long, env = FM_GATEWAY_SKIP_SETUP_ENV, default_value_t = false)]
+    #[arg(
+        long,
+        env = FM_GATEWAY_SKIP_SETUP_ENV,
+        default_value_t = false,
+        value_parser = BoolishValueParser::new()
+    )]
     skip_setup: bool,
 }
 
