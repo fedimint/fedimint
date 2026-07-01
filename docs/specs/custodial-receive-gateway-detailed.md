@@ -367,13 +367,23 @@ New `custodial-gatewayd` logic, per connected federation:
    uniqueness on **`(federation_id, contract_id)`** so there's never more than one outstanding backend
    invoice per contract. While that record persists, a duplicate request must not create a second
    backend invoice; after `AwaitingPayment` exists, a duplicate returns the stored invoice and quote,
-   while an in-flight `InvoiceCreating` continues/retries recovery from the stored draft. A
-   **different** `client_request_id` for an already-reserved contract is **rejected**. The gateway then
-   calls `create_plain_invoice` with the draft's opaque `backend_correlation_id` as the backend
-   `externalId` (so no raw federation or contract IDs leak into backend-visible metadata). It uses an
-   invoice expiry **strictly earlier than the contract's funding deadline** (§8), signs the quote using
-   the stored draft plus the returned backend invoice hash, and **commits the full `AwaitingPayment`
-   record including `signed_quote` before returning**, advancing `InvoiceCreating → AwaitingPayment`.
+   while an in-flight `InvoiceCreating` is handled by a **single-flight backend-create lease**. A
+   handler may call `create_plain_invoice` only after atomically acquiring or renewing the
+   `backend_create_lease` for the draft. A duplicate request that finds an unexpired lease waits,
+   returns "in progress", or polls the stored record; it must not call the backend. If the lease
+   expired after a crash, recovery first calls `get_invoice_by_external_id`. Only if no backend
+   invoice exists and the draft is still fresh may one handler acquire a new lease and retry
+   `create_plain_invoice`. A duplicate request whose request fingerprint differs from the stored
+   draft is rejected with `DuplicateContractConflict` (or an operator-visible invariant violation if
+   it suggests corruption). The gateway then calls `create_plain_invoice` with the draft's opaque
+   `backend_correlation_id` as the backend `externalId` (so no raw federation or contract IDs leak
+   into backend-visible metadata). It uses an invoice expiry **strictly earlier than the contract's
+   funding deadline** (§8). For backends that take relative expiry, the adapter derives the relative
+   value from the draft's absolute `invoice_expiry` at the moment it holds the backend-create lease;
+   if the derived relative expiry is below the minimum safe value, the draft is stale and no backend
+   invoice is created. It signs the quote using the stored draft plus the returned backend invoice
+   hash, and **commits the full `AwaitingPayment` record including `signed_quote` before returning**,
+   advancing `InvoiceCreating → AwaitingPayment`.
    A crash after backend invoice creation but before the `AwaitingPayment` commit is recovered by
    querying the backend by `externalId` (`get_invoice_by_external_id`), then signing the recovered
    backend invoice hash against the already-persisted quote draft. A backend that can't look up unpaid
@@ -396,6 +406,8 @@ New `custodial-gatewayd` logic, per connected federation:
        contract: IncomingContract,
        invoice_amount: Amount,
        backend_requested_sat: u64,
+       invoice_description_hash: sha256::Hash,
+       backend_invoice_expiry_request: BackendInvoiceExpiryRequest,
        contract_amount: Amount,
        invoice_expiry: u64,
        funding_deadline: u64,
@@ -406,13 +418,35 @@ New `custodial-gatewayd` logic, per connected federation:
        gateway_module_pk: PublicKey,
        gateway_ln_pk: PublicKey,
        created_at: u64,
+       backend_create_attempt: u64,
+       backend_create_lease_until: Option<u64>,
+       request_fingerprint: sha256::Hash,
    }
    ```
 
    `InvoiceCreating` holds `{ quote_draft, status }` and **no `backend_invoice_hash` yet**, since the
    backend invoice does not exist until `create_plain_invoice` returns. The draft is the durable
    policy decision: retries and crash recovery must use it rather than recomputing fees, deadlines,
-   terms, keys, URLs, or observed consensus time from current config. The `AwaitingPayment` commit adds
+   terms, keys, URLs, or observed consensus time from current config.
+   `request_fingerprint` is the canonical hash of the duplicate-sensitive request envelope: contract,
+   invoice amount, invoice description hash, requested quote API version, selected custodial
+   fee/policy fields, and backend invoice expiry request shape. It is how the gateway distinguishes an
+   idempotent duplicate from a conflicting request for the same contract.
+
+   The draft is still bounded by freshness. If no backend invoice exists yet, a handler may call
+   `create_plain_invoice` only while the draft still satisfies the create-time safety checks:
+   the invoice expiry is in the future with enough client/payment slack, the funding deadline still
+   satisfies the consensus-time deadline rule, and the observer is fresh enough. If those checks no
+   longer hold, the gateway tombstones the draft as `InvoiceCreationExpired` / rejected and asks the
+   client to build a fresh contract. It must not create a backend invoice from a stale draft.
+
+   If a backend invoice already exists but `AwaitingPayment` was not committed, recovery completes the
+   signed quote from the draft only if the invoice is still safe to return. If it is expired or too
+   close to the funding deadline, the gateway keeps a retained tombstone for late-settlement
+   reconciliation (`BackendInvoiceRejected` / `InvoiceExpiredUnreturned`) and returns a typed rejection
+   instead of exposing a stale invoice to the client.
+
+   The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
    invoice_expiry, funding_deadline, terms_hash, signed_quote, created_at }` (`invoice_expiry` and
    `funding_deadline` drive `InvoiceExpiredUnpaid`, retention, and late-settlement handling, §7.3
@@ -426,8 +460,8 @@ New `custodial-gatewayd` logic, per connected federation:
    terms_hash, signed_quote, created_at, status }`. A crash after backend invoice creation
    but before storing the invoice hash is recovered by querying the backend by `externalId` and
    completing the quote from the stored `quote_draft`. A backend that can't look up unpaid invoices
-   by external id can't support crash-safe custodial
-   invoice creation. **Uniqueness is the gateway's `(federation_id, contract_id)` reservation, not
+   by external id can't support crash-safe custodial invoice creation. **Uniqueness is the gateway's
+   `(federation_id, contract_id)` reservation, not
    the backend**: phoenixd documents `externalId` as lookup metadata, not a unique or idempotent
    key, so the adapter treats a lookup that returns **more than one** invoice for a single
    `backend_correlation_id` as a backend-invariant violation (`BackendDuplicateExternalId`) that
@@ -503,10 +537,11 @@ New `custodial-gatewayd` logic, per connected federation:
    HTLC-driven and has no equivalent.) A confirmed record still in `AwaitingPayment` then funds
    the `IncomingContract` for its **full `commitment.amount`** (the amount is fixed, partial
    funding is impossible, §8) from gateway ecash. A record already past `AwaitingPayment` starts no
-   new funding and routes by state: `FundingReserved` / `FundingPrepared` / `FundingSubmitted` wait
-   or re-drive (§10), `Funded` is a no-op, a settlement matching an `InvoiceExpiredUnpaid` tombstone
-   is a late settlement to the liability path (§7.7), and an absent authoritative record is an
-   operator data-loss / corruption case out of scope for this spec (§10, §16). A
+   new funding and routes by state: `SettledAwaitingLiquidity` waits for float, `FundingReserved` /
+   `FundingPrepared` / `FundingSubmitted` wait or re-drive (§10), `Funded` is a no-op, a settlement
+   matching an `InvoiceExpiredUnpaid` tombstone is a late settlement to the liability path (§7.7), and
+   an absent authoritative record is an operator data-loss / corruption case out of scope for this
+   spec (§10, §16). A
    **settled-but-mismatched** record is **not**
    ignored: a deviation within expected backend skim still funds the full contract and records the
    loss (§8), while a gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) and
@@ -533,19 +568,24 @@ New `custodial-gatewayd` logic, per connected federation:
    - `submit_prepared_custodial_funding(prepared)` submits that exact prepared tx and **refuses
      to rebuild** a transaction for any record already past `FundingReserved`.
 
-   The durable, ordered status machine is `InvoiceCreating → AwaitingPayment → FundingReserved →
-   FundingPrepared(prepared_tx) → FundingSubmitted(prepared_tx, operation_id, txid) → Funded(outpoint)`,
-   marking **`Funded` only on federation acceptance**. Several terminal branches leave this path.
+   The durable, ordered status machine is `InvoiceCreating → AwaitingPayment →
+   SettledAwaitingLiquidity → FundingReserved → FundingPrepared(prepared_tx) →
+   FundingSubmitted(prepared_tx, operation_id, txid) → Funded(outpoint)`, with
+   `SettledAwaitingLiquidity` skipped when float is already sufficient and marking **`Funded` only on
+   federation acceptance**. Several terminal branches leave this path.
    `AwaitingPayment` goes to `InvoiceExpiredUnpaid` (the **funding deadline** passed, never settled,
    §7.3 limits) or to `UnresolvedLiability` (settled-but-overdue, or gross `BackendMismatch`). An
    `InvoiceExpiredUnpaid` tombstone goes to `UnresolvedLiability` on a late settlement. Any funding
    state goes to `UnresolvedLiability` (§11). The record **retains `prepared_tx`** from
    `FundingPrepared` onward (the `operation_id` and `txid` are added markers, not a replacement),
    so a later state re-drives the exact transaction with its pinned inputs, not just a txid.
-   `FundingReserved` is committed first, before settlement handling forks, so duplicate hints or
-   concurrent handlers can't both proceed. Funding then commits in **two atomic phases**, both
-   inside the **federation client DB prefix** (alongside the mint notes), so no partial state is
-   possible:
+   A short-float receive commits `SettledAwaitingLiquidity`: backend settled, actual debt exists, but
+   no ecash inputs are reserved and no prepared transaction exists. When liquidity becomes available,
+   one funding worker atomically claims it into `FundingReserved`. A liquid receive can move directly
+   from `AwaitingPayment` to `FundingReserved`. `FundingReserved` means the funding worker owns the
+   record and may prepare a tx, so duplicate hints or concurrent handlers can't both proceed. Funding
+   then commits in **two atomic phases**, both inside the **federation client DB prefix** (alongside
+   the mint notes), so no partial state is possible:
    - **Prepare** commits `FundingPrepared(prepared_tx)` together with the **ecash-input
      reservation**, atomically. No operation or submission state machine exists yet.
    - **Submit** commits `FundingSubmitted` together with the **operation log and submission state
@@ -572,10 +612,11 @@ New `custodial-gatewayd` logic, per connected federation:
    only if the tx is **proven dead** (e.g. `ExpiredBeforeFunding` before any submission). A
    `FundingTxInconclusive` liability **quarantines** the inputs (never released, never reused) until
    the prior tx is accepted, rejected, or proven impossible, so a late landing can't race manual
-   resolution (§7.7, §10). So
-   `FundingReserved` (no prepared tx) is
-   the **only** state that may build a fresh tx, and any record at `FundingPrepared` or later holds
-   the exact tx and can only re-drive it, never build a new one. On restart, the gateway re-derives that same `operation_id` and checks
+   resolution (§7.7, §10). So `SettledAwaitingLiquidity` records wait for ecash and never build a tx.
+   A `FundingReserved` record has been claimed by a funding worker but has no prepared tx and never
+   submitted, so it is the **only** state that may prepare a fresh tx. Any record at
+   `FundingPrepared` or later holds the exact tx and can only re-drive it, never build a new one. On
+   restart, the gateway re-derives that same `operation_id` and checks
    `operation_exists` (`modules/fedimint-gwv2-client/src/lib.rs:483-485`). If the operation
    already exists the gateway **never resubmits**: it subscribes to that operation's
    outcome and advances to `Funded` on acceptance. This is fedimint's built-in
@@ -583,8 +624,10 @@ New `custodial-gatewayd` logic, per connected federation:
    atomically at submit time: `finalize_and_submit_transaction` re-checks `operation_exists`
    inside its `autocommit` database transaction (`fedimint-client/src/client.rs:968`), so two
    concurrent submissions sharing the id can't both land. The no-operation branch
-   **splits by state**: a `FundingReserved` record has no prepared tx and never submitted, so
-   when no operation exists and the contract is still fundable it builds and submits fresh. A
+   **splits by state**: `SettledAwaitingLiquidity` records wait for ecash and never build a tx. A
+   `FundingReserved` record has been claimed by a funding worker but has no prepared tx and never
+   submitted, so when no operation exists and the contract is still fundable it prepares and submits
+   fresh. A
    `FundingPrepared` or `FundingSubmitted` record holds the exact `prepared_tx` (a `FundingPrepared`
    tx was not yet submitted, a `FundingSubmitted` one may already have landed), so on a missing
    operation the gateway re-drives that exact tx and must **not** build a fresh funding tx. A point-in-time
@@ -607,8 +650,9 @@ New `custodial-gatewayd` logic, per connected federation:
    claim both → gateway double-loss). So the gateway must make exactly-once explicit:
    one outstanding backend invoice per contract, atomic status transitions, serialized
    per-`contract_id` settlement handling, and a notification arriving in
-   `FundingReserved`, `FundingPrepared`, or `FundingSubmitted` **waits** on the stored
-   reservation / prepared tx / operation rather than resubmitting. The deterministic funding `operation_id` plus
+   `SettledAwaitingLiquidity`, `FundingReserved`, `FundingPrepared`, or `FundingSubmitted` **waits**
+   on liquidity, the stored reservation, prepared tx, or operation rather than resubmitting. The
+   deterministic funding `operation_id` plus
    `operation_exists` carries this across restarts: re-deriving the id from the contract
    and finding the operation already present blocks any second funding tx, while the
    operation's own outcome (not `operation_exists` alone) confirms federation acceptance.
@@ -627,8 +671,9 @@ New `custodial-gatewayd` logic, per connected federation:
    with a different contract. After the backend returns a custodial invoice, the gateway must also
    reserve `backend_invoice_hash` in the shared direct-swap namespace before returning the invoice. If
    that hash collides with an active trustless registration or another custodial pending receive, the
-   gateway must not return the invoice; it records a backend-invariant violation and disables new
-   custodial invoice creation until reviewed.
+   gateway must not return the invoice; it records a retained `BackendInvoiceRejected` tombstone keyed
+   by `backend_correlation_id` / `backend_invoice_hash`, disables new custodial invoice creation until
+   reviewed, and continues ledger reconciliation for that invoice through the retention window.
 
    This invariant must be enforced by the same transaction/registry used for direct-swap detection in
    dual-capable mode. A separate custodial-only binary that does not share such a registry must not
@@ -647,9 +692,10 @@ New `custodial-gatewayd` logic, per connected federation:
 5. **Float and liabilities:** the gateway must hold enough federation ecash to front contracts.
    The backend Lightning receipt reimburses it. Expose ecash float, settled-but-unfunded debt, and
    headroom in balances. Once the backend ledger confirms settlement, the receive is an actual debt:
-   the gateway must fund the contract if it still can. If ecash float is short, the record stays in a
-   settled-awaiting-liquidity state (`FundingReserved` with no prepared tx, or an explicit
-   `SettledAwaitingLiquidity` variant) and funds when liquidity becomes available. The MVP can make
+   the gateway must fund the contract if it still can. If ecash float is short, the record moves to
+   explicit `SettledAwaitingLiquidity`: backend settled, actual debt exists, but no ecash inputs are
+   reserved and no prepared transaction exists. When liquidity becomes available, one funding worker
+   atomically claims it into `FundingReserved`, then prepares and submits the exact tx. The MVP can make
    liquidity replenishment semi-automatic: alert the operator and, when configured on-chain wallet
    funds are available, drive or prompt a pegin to create federation ecash. Post-MVP automation can
    add loop-out, channel close, splice, swap-out, or backend-specific liquidity actions before
@@ -1117,18 +1163,26 @@ loss, loss of the authoritative federation client DB prefix, and restore-from-st
 operator data-loss events outside this spec's recovery model (§16).
 
 - **Durable record** (§7.3) of every `PendingCustodialReceive` with its explicit
-  status (`InvoiceCreating → AwaitingPayment → FundingReserved → FundingPrepared(prepared_tx) →
-  FundingSubmitted(prepared_tx, operation_id, txid) → Funded(outpoint)`), with terminal branches
-  `InvoiceExpiredUnpaid` (tombstoned) and `UnresolvedLiability`.
+  status (`InvoiceCreating → AwaitingPayment → SettledAwaitingLiquidity → FundingReserved →
+  FundingPrepared(prepared_tx) → FundingSubmitted(prepared_tx, operation_id, txid) →
+  Funded(outpoint)`), with terminal branches `InvoiceExpiredUnpaid` (tombstoned),
+  `InvoiceCreationExpired` (no backend invoice created), `BackendInvoiceRejected` /
+  `InvoiceExpiredUnreturned` (retained tombstones for unreturned backend invoices), and
+  `UnresolvedLiability`.
 - **Idempotent invoice creation** (§7.3): a record stuck in `InvoiceCreating` after a crash is
   resolved by `get_invoice_by_external_id(backend_correlation_id, include_unpaid = true)`. If the
-  backend invoice exists, complete the `AwaitingPayment` record. If not, the request can be safely
-  retried or dropped. A duplicate `create_custodial_bolt11_invoice` with the same
-  `client_request_id` never creates a second backend invoice.
+  backend invoice exists, complete the `AwaitingPayment` record if the invoice is still safe to
+  return, otherwise retain an unreturned-invoice tombstone for reconciliation. If no backend invoice
+  exists, the request can be retried only by a handler holding the durable backend-create lease, and
+  only if the draft is still fresh enough to expose to a client. Otherwise it is dropped/tombstoned
+  without creating a backend invoice. A duplicate `create_custodial_bolt11_invoice` whose
+  `request_fingerprint` matches the stored draft never creates a second backend invoice; a duplicate
+  with mismatched amount, description hash, quote API version, or selected custodial fee/policy is
+  rejected against the stored draft.
 - **Idempotent funding** keyed on `backend_invoice_hash` / `contract_id`: fund each
-  contract exactly once. A hint arriving in `FundingReserved`, `FundingPrepared`, or
-  `FundingSubmitted` waits on the stored reservation / prepared tx / operation result rather
-  than building a second tx. One in `Funded` is a no-op.
+  contract exactly once. A hint arriving in `SettledAwaitingLiquidity` waits for float; one in
+  `FundingReserved`, `FundingPrepared`, or `FundingSubmitted` waits on the stored reservation /
+  prepared tx / operation result rather than building a second tx. One in `Funded` is a no-op.
 - **Startup reconciliation:** on boot, the `CustodialSettlementObserver` polls the backend's
   authenticated ledger from its durable cursor (phoenixd `GET /payments/incoming` /
   `list_settled_invoices`), matching by `backend_correlation_id` first and `backend_invoice_hash`
@@ -1144,9 +1198,12 @@ operator data-loss events outside this spec's recovery model (§16).
   is set at the deadline, §7.3), so it's unfundable and transitions
   `InvoiceExpiredUnpaid → UnresolvedLiability`, never a silent miss. This closes the crash gap for an
   honest operator.
-- **Reserved/submitted reconciliation:** on boot, every `FundingReserved`, `FundingPrepared`, or
-  `FundingSubmitted` record re-derives its deterministic funding `operation_id` and
-  checks `operation_exists`. If the operation is present the gateway never resubmits: it
+- **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
+  deadline and float. If the contract is still fundable and liquidity is available, one worker
+  atomically claims it into `FundingReserved`; otherwise it remains a debt waiting for liquidity or
+  escalates to `UnresolvedLiability` if the deadline has passed. Every `FundingReserved`,
+  `FundingPrepared`, or `FundingSubmitted` record re-derives its deterministic funding `operation_id`
+  and checks `operation_exists`. If the operation is present the gateway never resubmits: it
   awaits that operation's outcome and advances to `Funded` on acceptance, or to
   `UnresolvedLiability` if the contract expired in the meantime. The no-operation branch
   **splits by state**. A `FundingReserved` record never submitted a tx, so no operation is
@@ -1183,7 +1240,7 @@ operator data-loss events outside this spec's recovery model (§16).
 | **Receiver offline** at claim time | Fine. The funded contract persists. Contract expiry is a **funding** deadline, not a claim deadline: the incoming spend has no expiry check (`modules/fedimint-lnv2-server/src/lib.rs:508`), so a funded contract stays claimable after expiry **unless already spent**. |
 | **Underpayment / amount mismatch** | The backend enforces the fixed invoice amount, so this shouldn't occur. A deviation within expected skim funds the full contract and records the loss (§8). A gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) instead of funding, consistent with §7.3. It **cannot** under-fund the fixed-amount contract, and **cannot** refund the payer. |
 | **Overpayment** | Fund the quoted `commitment.amount`. Treat surplus per fee policy. |
-| **Settled but gateway float momentarily short** (not expiry) | This is a debt, not a failed receive. Hold in `FundingReserved` / `SettledAwaitingLiquidity`, alert the operator, and fund when ecash float recovers. The MVP can drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. Escalate to `UnresolvedLiability` only if the contract expires before liquidity arrives (§7.3). |
+| **Settled but gateway float momentarily short** (not expiry) | This is a debt, not a failed receive. Hold in explicit `SettledAwaitingLiquidity` with no reserved inputs or prepared tx, alert the operator, and fund when ecash float recovers by transitioning `SettledAwaitingLiquidity → FundingReserved → FundingPrepared`. The MVP can drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. Escalate to `UnresolvedLiability` only if the contract expires before liquidity arrives (§7.3). |
 | **Receiver says they were not paid** | Resolve by contract-level evidence (§9): not funded → gateway liability if backend settled; funded but unclaimed → receiver can still claim; claimed through `claim_pk` → gateway paid at the protocol level; refunded through `refund_pk` → receiver was not paid and the gateway records a liability. A third party cannot verify the receiver's private wallet balance or local note persistence. |
 | **Webhook redelivery / double settle** | Gateway-side exactly-once (explicit-status idempotency, serialized per `contract_id`) prevents double-funding. **Consensus does not dedupe** (§7.3, §10). |
 | **Crash after funding acceptance but before DB update** | With the client DB intact the re-derived `operation_id` still exists, so the gateway awaits its outcome and marks `Funded` on acceptance, never resubmitting. A missing operation lets the gateway build a fresh tx only for a `FundingReserved` record (no prepared tx). A missing operation on a `FundingPrepared` record is expected (operation is created at submit). On a `FundingSubmitted` record it's an operation-log divergence and the tx may already have landed. Either way the gateway re-drives its exact stored `prepared_tx` (consensus-idempotent on its pinned inputs) rather than building a new one, escalating to unresolved-liability if it can't (§7.3, §10). |
@@ -1318,8 +1375,17 @@ those come first.
      `AwaitingPayment(signed_quote)` commits: recovery looks up by `backend_correlation_id` and signs
      the recovered invoice hash using the exact stored draft, even if gateway fee/deadline config
      changed while it was down
+   - duplicate create requests while the first backend create call is in flight: the second handler
+     observes the unexpired durable create lease and does not call the backend, proving the gateway
+     itself cannot create two invoices for one `backend_correlation_id`
+   - stale draft recovery: if no backend invoice exists and the draft is no longer within freshness /
+     deadline margins, no backend invoice is created; if a backend invoice exists but is no longer safe
+     to return, the gateway retains a tombstone for late-settlement reconciliation and returns a typed
+     rejection
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
+   - duplicate create with the same contract but different amount, description hash, quote API version,
+     or selected custodial fee/policy is rejected against the stored `request_fingerprint`
    - logical root-index loss with the authoritative client-prefix records intact: indexes rebuild
      from surviving records and backend-ledger confirmation
    - a **forged webhook ignored** unless the backend ledger confirms settlement
@@ -1340,11 +1406,12 @@ those come first.
      rather than falling through to the trustless registered-contract table
    - backend invoice hash collision: a custodial backend invoice hash that matches an active trustless
      registered payment hash is not returned to the client and disables new custodial issuance for
-     operator review
+     operator review while retaining a `BackendInvoiceRejected` tombstone for reconciliation
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by itself
-   - a settled invoice with short ecash float remains a debt, waits for liquidity, and funds after
-     float or a pegin replenishes the gateway
+   - a settled invoice with short ecash float remains a debt, waits in `SettledAwaitingLiquidity`, and
+     after float or a pegin replenishes the gateway transitions
+     `SettledAwaitingLiquidity → FundingReserved → FundingPrepared`
    - required MVP gauges are recomputed from durable DB state after restart, including
      issued-unpaid, settled-unfunded, unresolved-liability, liquidity-shortfall, deadline-slack,
      backend-retention-margin, and consensus-time-observer-age metrics
