@@ -208,16 +208,27 @@ client verifies and stores.
 Selection becomes **policy-driven**, not a reuse of the generic reachability-based
 `select_gateway` (`modules/fedimint-lnv2-client/src/lib.rs:481`):
 
+- New wallets build a **gateway candidate set** as the union of:
+  - federation-provided legacy `GATEWAYS_ENDPOINT` URLs, which remain trustless-receive compatible;
+  - wallet/app/operator-supplied custodial gateway URLs, which are never trusted until live-probed via
+    `/routing_info` for the target federation.
+  Each candidate is annotated with its source (`LegacyFederationList` or `OutOfBandCustodial`) and
+  live `RoutingInfo`.
 - `select_gateway_for_receive(policy)`: trustless receive **skips** any custodial-only gateway
   (`custodial.is_some() && trustless.is_none()`) and continues to the next reachable trustless
   gateway, so a normal receive never strands on a custodial-only gateway. Custodial receive
   requires explicit opt-in (§7.4), starts from wallet-supplied candidate gateway URLs, and selects
   only gateways whose live `RoutingInfo` has `custodial.is_some()`.
 - `select_gateway_for_send(invoice, policy)`: a sender can't reliably tell from a Bolt11 invoice
-  that it's custodial, so it doesn't pre-classify. If the selected payee gateway detects the
-  invoice's `backend_invoice_hash` in `PendingCustodialReceive`, it returns a **forfeit signature**
-  so the sender refunds the funded contract (the **required** behavior, §7.6). **(Optional, post-MVP)**
-  a `select_gateway_for_send(avoid_payee_gateway = true)` reselection, done **pre-funding** so the
+  that it's custodial, so it doesn't pre-classify arbitrary invoices. It considers the same union
+  candidate set. If the invoice payee key matches a trustless-capable candidate, preserve today's
+  direct-swap preference. If it matches only a known custodial-only candidate, do not select that
+  candidate to pay its own invoice; choose another send-capable candidate or fail before funding with
+  a typed local "no non-self gateway" error. If the payee key matches a dual-capable candidate, or a
+  caller explicitly chooses a same-payee gateway, the selected gateway detects the invoice's
+  `backend_invoice_hash` in `PendingCustodialReceive` and returns a **forfeit signature** so the
+  sender refunds the funded contract (the **required** behavior, §7.6). **(Optional, post-MVP)** a
+  `select_gateway_for_send(avoid_payee_gateway = true)` reselection, done **pre-funding** so the
   alternate gateway is the contract's `claim_pk` from the start (there's no in-place reroute after
   funding, §7.6). The MVP refunds and the caller reselects.
 
@@ -249,6 +260,26 @@ metrics. A custodial-only instance MUST NOT register in the legacy `GATEWAYS_END
 learn its URL out-of-band and must verify custodial support through `RoutingInfo`. Shared startup,
 config, client, or key-management helpers may be factored out if needed, but the MVP goal is to avoid
 changing existing `gatewayd` behavior and legacy discovery semantics.
+
+**Deployment modes are load-bearing.** The MVP must distinguish two modes:
+
+1. **Custodial-only, out-of-band mode.** `custodial-gatewayd` is not registered in the legacy
+   `GATEWAYS_ENDPOINT`, and new wallets reach it only through wallet/app/operator-supplied candidate
+   URLs. This is the preferred MVP shape and can avoid changing existing `gatewayd` request handling.
+   If this process also exposes trustless send for new wallets, that send handler must be able to
+   inspect its own custodial pending-receive registry; otherwise new-wallet send selection must avoid
+   routing same-payee custodial invoices to it before funding.
+2. **Dual-capable mode.** A gateway that advertises both trustless and custodial receive and remains
+   in `GATEWAYS_ENDPOINT` must run the send/direct-swap path with access to the custodial pending
+   receive registry. That can be one process, a shared DB-backed receive registry, or a local service
+   call from `gatewayd` to `custodial-gatewayd`, but it must be atomic enough for the direct-swap path
+   to detect `backend_invoice_hash` and return the forfeit signature (§7.6). A dual-capable gateway
+   is not the "no existing gatewayd behavior change" path.
+
+A deployment MUST NOT share one Lightning node key and gateway module key between a legacy-listed
+`gatewayd` and a separate `custodial-gatewayd` unless the legacy-listed send path can query the
+custodial pending-receive registry. Otherwise same-gateway custodial invoices fail as ordinary
+registration errors instead of the specified forfeit-refund outcome.
 
 ### 7.2 Backend abstraction: notify-only receive
 
@@ -310,7 +341,10 @@ New `custodial-gatewayd` logic, per connected federation:
    `refund_pk == module_public_key`) as today.
    It must also **bind the amounts before issuing the invoice or signing the quote**: reject unless
    `contract.commitment.amount == receive_fee.subtract_from(invoice_amount)` (§8), so a small backend
-   invoice can never later fund an oversized contract.
+   invoice can never later fund an oversized contract. Because `PaymentFee::subtract_from` saturates,
+   this check must be preceded by an explicit lower-bound check that does not rely on equality after
+   saturation: a zero-valued or below-minimum incoming contract is rejected with `AmountTooSmall`
+   before backend invoice creation.
    The gateway derives a stable `client_request_id =
    H("custodial-receive-v1" || federation_id || contract_id || gateway_module_pk)` **from the
    request's own contract identity** (not a trusted supplied value, and it binds the gateway's
@@ -537,6 +571,21 @@ New `custodial-gatewayd` logic, per connected federation:
    operation's own outcome (not `operation_exists` alone) confirms federation acceptance.
    (Consensus-level dedup would be a server change, breaking the no-consensus-change
    property.)
+
+   **Cross-path receive namespace invariant.** On any gateway process or deployment that can serve
+   both trustless and custodial receive for the same federation/module key, there is exactly one
+   active owner for each `(federation_id, contract_id)` and each `PaymentImage`:
+   `TrustlessRegistered` or `CustodialPending`, never both. The normal
+   `create_bolt11_invoice_v2` path must reject a contract/payment image already reserved by
+   custodial receive, and `create_custodial_bolt11_invoice` must reject a contract/payment image
+   already registered for trustless receive. The rejection is `DuplicateContractConflict` if the full
+   contract collides, and an operator-visible invariant violation if only the payment image collides
+   with a different contract.
+
+   This invariant must be enforced by the same transaction/registry used for direct-swap detection in
+   dual-capable mode. A separate custodial-only binary that does not share such a registry must not
+   share the same gateway module key and Lightning node key with a legacy-listed trustless gateway.
+
 4. **Post-funding invalid-contract audit (never blocks the receiver).** The custodial funding
    helper skips the gateway receive state machine, so it also skips that machine's invalid-contract
    detection. The gateway therefore starts a **non-blocking** `CustodialContractAuditSM` after
@@ -756,12 +805,15 @@ export, operator-signed resolutions, receiver-supplied replacement contracts). D
 tooling for physical gateway DB loss is out of scope for this spec (§16). The MVP keeps the
 liability record in the same authoritative federation client DB prefix as the funding state.
 
-**(Optional, post-MVP):** a `custodial_receive_status(quote_id)` query so a receiver can ask "what
-happened?" without blocking on `await_incoming_contract`. It's a UX/support aid, not correctness:
-the receiver's own receive state machine drives claiming, and DB-intact gateway recovery drives
-funding. The held quote remains useful evidence, but it does not make physical gateway DB loss
-recoverable. Note the gateway knows `Funded`, not `Claimed` (the receiver claims independently with
-its own key).
+**(Optional, post-MVP):** a `custodial_receive_status` query so a receiver can ask "what happened?"
+without blocking on `await_incoming_contract`. It must authenticate with the full signed
+`CustodialReceiveQuote` or a MACed status token derived from it, not a bare `quote_id`. Responses
+must avoid leaking `backend_correlation_id`, raw invoice hashes, or user-identifying labels unless
+the caller already supplied the signed quote containing that data, and the endpoint must be
+rate-limited. It's a UX/support aid, not correctness: the receiver's own receive state machine drives
+claiming, and DB-intact gateway recovery drives funding. The held quote remains useful evidence, but
+it does not make physical gateway DB loss recoverable. Note the gateway knows `Funded`, not `Claimed`
+(the receiver claims independently with its own key).
 
 ### 7.8 Health gates
 
@@ -844,6 +896,7 @@ enum CustodialReceiveRejectionReason {
     UnsupportedQuoteVersion,           // Client requested an unsupported quote API version.
     InvalidContract,                   // Contract verification failed.
     WrongRefundKey,                    // Contract refund key is not the gateway module key.
+    AmountTooSmall,                    // Receive fee would make the contract amount below minimum.
     AmountTooLarge,                    // Request exceeds the gateway's per-receive cap.
     NonSatoshiAmount,                  // Backend granularity cannot represent the amount exactly.
     DeadlineTooNear,                   // Deadline rule in §8 fails or consensus-time observer is stale.
@@ -1137,8 +1190,8 @@ surface without preventing a double-fund, double-spend, lost-funds, or trust hol
 - **Rich operator workflow** (full reason/resolution taxonomy, evidence-bundle export,
   operator-signed resolutions, receiver-supplied replacement contracts). The MVP keeps a minimal
   in-prefix liability record (§7.7).
-- **`custodial_receive_status` query**, rich dashboards, and soft health gates beyond the required
-  MVP metrics (§7.7, §7.8).
+- **Quote-authenticated `custodial_receive_status` query**, rich dashboards, and soft health gates
+  beyond the required MVP metrics (§7.7, §7.8).
 - **Two-window tombstone model** (separate settlement-finality vs ledger-retention bounds) and a
   richer late-settlement finality model (§7.3 limits).
 - **A second concrete backend and a richer backend capability matrix** beyond the phoenixd reference
@@ -1161,6 +1214,10 @@ those come first.
 2. **Public API semantics**: `RoutingInfo` receive capabilities, the custodial-receive result enums,
    the same-gateway send **forfeit-signature** rejection that ride successful domain responses
    (§7.6, §7.9), plus the rule that legacy `GATEWAYS_ENDPOINT` remains trustless-compatible only.
+   If dual-capable mode is included in MVP, this phase also adds the direct-swap receive-registry hook
+   in the legacy-listed gateway process. If MVP is custodial-only/out-of-band only, that hook is
+   deferred and same-gateway protection is limited to send handlers that can inspect the custodial
+   pending-receive registry.
 3. **Backend**: `LightningMode::Phoenixd` + notify-only backend adapter (send + `create_plain_invoice`
    with `external_id` + `subscribe_invoice_settled` hints + `list_settled_invoices` /
    `get_invoice_by_hash` / `get_invoice_by_external_id` ledger queries, the declared retention
@@ -1210,6 +1267,10 @@ those come first.
      double-counted
    - a **duplicate `create_custodial_bolt11_invoice` retry** while the authoritative record persists
      returning the same invoice and quote, **never** a second backend invoice
+   - cross-path collisions: trustless registration rejects a contract/payment image already owned by
+     custodial receive, custodial creation rejects a contract/payment image already owned by trustless
+     receive, and a dual-capable direct-swap lookup returns the custodial forfeit-signature outcome
+     rather than falling through to the trustless registered-contract table
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by itself
    - a settled invoice with short ecash float remains a debt, waits for liquidity, and funds after
@@ -1218,6 +1279,8 @@ those come first.
      issued-unpaid, settled-unfunded, unresolved-liability, liquidity-shortfall, deadline-slack,
      backend-retention-margin, and consensus-time-observer-age metrics
    - **non-satoshi amounts rejected** before invoice creation on a sat-only backend
+   - amount-too-small cases where `PaymentFee::subtract_from` would saturate to zero or below the
+     minimum incoming contract amount reject before backend invoice creation
 
 ## 16. Out of scope
 

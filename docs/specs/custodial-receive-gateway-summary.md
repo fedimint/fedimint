@@ -81,8 +81,9 @@ seconds, not an ongoing balance.
 - **Direct-swap exclusion.** A custodial invoice is signed by the gateway's own node
   key, which would trip LNv2's intra-federation direct-swap. The gateway must never
   register custodial invoices as trustless incoming contracts. If a same-gateway sender
-  hits the custodial invoice, the gateway returns a forfeit signature so the sender refunds
-  immediately. Alternate-gateway routing is a post-MVP optimization.
+  hits the custodial invoice, the selected send path must be able to see the custodial
+  pending-receive registry and return a forfeit signature so the sender refunds immediately.
+  Alternate-gateway routing is a post-MVP optimization.
 - **Not transparent to legacy clients.** Custodial receive needs an explicit opt-in
   entrypoint and a *separate* gateway endpoint. Capability advertisement alone is
   insufficient for legacy clients, because gateway selection is reachability-based. New clients use
@@ -98,7 +99,8 @@ seconds, not an ongoing balance.
   owns the custodial receive endpoint, state machine, backend observer, reconciliation,
   exactly-once funding, liabilities, quote signing, and metrics. A custodial-only instance stays off
   legacy `GATEWAYS_ENDPOINT`; shared helpers may be factored out, but the goal is to avoid changing
-  existing `gatewayd` behavior.
+  existing `gatewayd` behavior. A dual-capable gateway that remains in the legacy list is a separate
+  deployment mode and must share the custodial receive registry with the send/direct-swap path.
 - **Accounting.** The receiver gets exactly `commitment.amount`. The gateway spends
   `commitment.amount + module fees` and absorbs backend liquidity skim. Size
   `receive_fee` and float against the full spend. Unpaid issued invoices are contingent exposure:
@@ -119,8 +121,10 @@ seconds, not an ongoing balance.
 
 Choose custodial receive when the operator wants phoenixd-grade simplicity and the
 federation accepts a bounded operator-honesty trust on receive. Otherwise prefer a
-trustless gateway (LND/LDK, optionally LSP-backed). **Send** stays trustless on the
-same backend (`/payinvoice` returns the preimage).
+trustless gateway (LND/LDK, optionally LSP-backed). **Send** can stay trustless on the
+same backend (`/payinvoice` returns the preimage), but a custodial-only gateway is not
+legacy-discoverable through `GATEWAYS_ENDPOINT`; new wallets must include the out-of-band
+custodial URL in their send candidate set if they want to use that gateway for send.
 
 ## Status
 
