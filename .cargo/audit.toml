@@ -43,6 +43,11 @@ ignore = [
   "RUSTSEC-2026-0118",
   # hickory-proto O(n²) name compression on message encoding; only affects encoding large DNS messages, which we do not do (we are a resolver consumer). Fix is in 0.26.1; transitive via iroh, can't update yet.
   "RUSTSEC-2026-0119",
+  # quick-xml duplicate-attribute and namespace DoS; transitive through
+  # netdev -> plist. Updated plist to the newest compatible release, but plist
+  # still pins quick-xml to ^0.39 and the advisory requires >=0.41.0.
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
 ]
 
 [output]
