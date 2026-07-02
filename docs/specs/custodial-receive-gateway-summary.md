@@ -106,14 +106,16 @@ seconds, not an ongoing balance.
   legacy `GATEWAYS_ENDPOINT`; shared helpers may be factored out, but the goal is to avoid changing
   existing `gatewayd` behavior. A dual-capable gateway that remains in the legacy list is a separate
   deployment mode and must share the custodial receive registry with the send/direct-swap path.
-- **Accounting.** The receiver gets exactly `commitment.amount`. The gateway spends
-  `commitment.amount + module fees` and absorbs backend liquidity skim. Size
-  the advertised custodial `receive_fee` and float against the full spend. Unpaid issued invoices are
-  contingent exposure: track and alert on them, but do not reject new receives solely because they
-  exist. Once an invoice settles, it is a debt. If federation ecash is short, the MVP alerts and can
-  drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel
-  close, splice, swap-out, or backend-specific liquidity actions. The MVP keeps the existing
-  `PaymentFee::RECEIVE_FEE_LIMIT`. A higher custodial fee cap would need separate explicit consent.
+- **Accounting.** The payer amount equals `commitment.amount + receive_fee`. After backend settlement,
+  the gateway fronts `commitment.amount + module fees` from ecash float, while the backend credits the
+  payer amount minus any backend skim. The gateway's net margin is the advertised custodial
+  `receive_fee` minus module fees, backend skim, and liquidity/rebalance costs, so operators must size
+  `receive_fee` and float against that full outgoing funding leg. Unpaid issued invoices are contingent
+  exposure: track and alert on them, but do not reject new receives solely because they exist. Once an
+  invoice settles, it is a debt. If federation ecash is short, the MVP alerts and can drive or prompt a
+  pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out,
+  or backend-specific liquidity actions. The MVP keeps the existing `PaymentFee::RECEIVE_FEE_LIMIT`. A
+  higher custodial fee cap would need separate explicit consent.
 - **MVP observability.** The gateway must expose minimal metrics for issued-unpaid exposure,
   settled-but-unfunded debt, unresolved liabilities, ecash float, liquidity shortfall, funding
   deadline slack, backend cursor lag / retention margin, consensus-time observer freshness, and

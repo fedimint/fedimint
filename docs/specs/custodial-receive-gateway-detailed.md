@@ -1060,31 +1060,36 @@ Internal terminal states and gates map to public rejections as follows:
 
 ## 8. Fee & amount accounting
 
-The face amount `A` is what the payer pays. A notify-only backend may **skim a
-liquidity fee** `F` from the receipt (e.g. phoenixd splicing in inbound), so the
-gateway receives `A − F`. Because the gateway funds the contract **after** settlement,
-it knows the exact `A − F`.
+The face amount `A` is what the payer pays. The quoted custodial receive fee `Q` sizes the receiver's
+contract amount `R = A - Q`. A notify-only backend may **skim a liquidity fee** `S` from the receipt
+(e.g. phoenixd splicing in inbound), so the backend credits the gateway `A - S`. Because the gateway
+funds the contract **after** settlement, it knows the exact backend credit before funding.
 
 - **No-abort constraint (critical):** once the backend auto-settles, the payer is
   **irrevocably paid**: there is **no cancel/refund path** on this receive. The
   gateway is committed to crediting the receiver. This is the sharpest consequence
   of a notify-only backend and shapes every edge case in §11.
 - **Fixed contract amount: no partial funding.** A contract's value is fixed in
-  `commitment.amount`. The **receiver** receives exactly that. Funding it costs the
-  gateway `commitment.amount + module transaction fees`. `process_output` returns the
+  `commitment.amount = R`. The **receiver** receives exactly that. Funding it costs the gateway
+  `R + M`, where `M` is the federation module / transaction fee. `process_output` returns the
   contract amount (`contract.commitment.amount`, `contracts.rs:31`,
   `modules/fedimint-lnv2-server/src/lib.rs:595`) and adds module fees on top in the returned
-  `TransactionItemAmounts` (`:599`), so the gateway cannot "fund what it can". It
-  always funds the full fixed amount. Size `receive_fee` and float headroom against the
-  full ecash spend (amount + fees), not just the amount.
-- **Policy: gateway absorbs skim.** It quotes a `receive_fee` sized to
-  cover expected backend cost, keeps inbound headroom so most receives have `F = 0`,
-  and funds the full `contract_amount = receive_fee.subtract_from(A)`. If an
-  unexpected skim makes `A − F` fall short of `contract_amount`, the gateway **still
-  funds the full amount and eats the loss** (it can neither stiff the payer, which is
-  impossible, nor under-fund the fixed-amount contract). Large/abnormal skim is
-  alerted, and the per-receive cap (§9) bounds the worst case. `receive_fee`
-  semantics: "covers gateway + backend liquidity cost". Tune from observed skim.
+  `TransactionItemAmounts` (`:599`), so the gateway cannot "fund what it can". It always funds the
+  full fixed amount. Size float headroom against the full ecash funding leg (`R + M`), not just `R`.
+- **Policy: gateway prices skim into the receive fee.** The gateway quotes `Q` to cover expected module
+  fees, backend skim, liquidity/rebalance cost, and operator margin. The operation's margin is:
+
+  ```text
+  gateway_net = (A - S) - (R + M)
+              = Q - S - M
+  ```
+
+  So the operation is profitable or break-even when `Q` covers `S + M` plus any desired liquidity /
+  operator margin. The receiver still gets `R`: if unexpected skim makes `Q < S + M`, the gateway
+  funds the full contract and records the loss (it can neither stiff the payer, which is impossible,
+  nor under-fund the fixed-amount contract). Large/abnormal skim is alerted, and the per-receive cap
+  (§9) bounds the worst case. `receive_fee` semantics: "covers gateway + backend liquidity cost". Tune
+  from observed skim.
 - **Custodial fee-cap decision.** The MVP uses the existing client
   `PaymentFee::RECEIVE_FEE_LIMIT` for custodial receive too, so the gateway must quote
   backend liquidity cost within that cap and absorb excess variance. A higher or
