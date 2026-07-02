@@ -318,9 +318,10 @@ offset pagination, the adapter uses a high-watermark (`completed_at_ms`) plus an
 and de-dupes by `backend_invoice_hash` / `backend_correlation_id`. Offset alone is not a valid
 durable cursor (newer payments can shift offsets, missing or duplicating records). The cursor is
 **rebuildable**, not a source of truth: on loss the gateway point-looks-up **every nonterminal
-authoritative record and every retained `InvoiceExpiredUnpaid` tombstone** (the `AwaitingPayment`
-and other nonterminal `PendingCustodialReceive` entries, plus tombstones, that persist in the
-federation client DB prefix) by `backend_correlation_id` /
+authoritative record and every retained `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or
+`InvoiceExpiredUnreturned` tombstone** (the `AwaitingPayment` and other nonterminal
+`PendingCustodialReceive` entries, plus tombstones, that persist in the federation client DB prefix)
+by `backend_correlation_id` /
 `backend_invoice_hash`, driven by the records themselves rather than a fixed time window (downtime
 can exceed any window). This works **within backend ledger retention**, which is a **hard
 prerequisite**, not just something to monitor: ledger-first recovery is only as good as the ledger's
@@ -369,21 +370,30 @@ New `custodial-gatewayd` logic, per connected federation:
    backend invoice; after `AwaitingPayment` exists, a duplicate returns the stored invoice and quote,
    while an in-flight `InvoiceCreating` is handled by a **single-flight backend-create lease**. A
    handler may call `create_plain_invoice` only after atomically acquiring or renewing the
-   `backend_create_lease` for the draft. A duplicate request that finds an unexpired lease waits,
-   returns "in progress", or polls the stored record; it must not call the backend. If the lease
-   expired after a crash, recovery first calls `get_invoice_by_external_id`. Only if no backend
-   invoice exists and the draft is still fresh may one handler acquire a new lease and retry
-   `create_plain_invoice`. A duplicate request whose request fingerprint differs from the stored
-   draft is rejected with `DuplicateContractConflict` (or an operator-visible invariant violation if
-   it suggests corruption). The gateway then calls `create_plain_invoice` with the draft's opaque
-   `backend_correlation_id` as the backend `externalId` (so no raw federation or contract IDs leak
-   into backend-visible metadata). It uses an invoice expiry **strictly earlier than the contract's
-   funding deadline** (§8). For backends that take relative expiry, the adapter derives the relative
-   value from the draft's absolute `invoice_expiry` at the moment it holds the backend-create lease;
-   if the derived relative expiry is below the minimum safe value, the draft is stale and no backend
-   invoice is created. It signs the quote using the stored draft plus the returned backend invoice
-   hash, and **commits the full `AwaitingPayment` record including `signed_quote` before returning**,
-   advancing `InvoiceCreating → AwaitingPayment`.
+   `backend_create_lease` and marking the draft `backend_create_maybe_sent = true` before the backend
+   request can leave the process. A duplicate request that finds an unexpired lease waits, returns
+   "in progress", or polls the stored record; it must not call the backend. If the lease expired
+   after a crash, recovery first calls `get_invoice_by_external_id`. If no backend invoice exists, a
+   retry is allowed only when the draft is still fresh **and** the backend adapter can make that lookup
+   authoritative for the prior maybe-sent attempt, for example after a declared create-visibility
+   deadline or barrier. Without that backend-visible proof, the record becomes
+   `InvoiceCreateInconclusive` for operator review and the gateway must not issue a second backend
+   invoice for the same contract. A duplicate request whose request fingerprint differs from the
+   stored draft is rejected with `DuplicateContractConflict` (or an operator-visible invariant
+   violation if it suggests corruption). The gateway then calls `create_plain_invoice` with the
+   draft's opaque `backend_correlation_id` as the backend `externalId` (so no raw federation or
+   contract IDs leak into backend-visible metadata). It uses an invoice expiry **strictly earlier than
+   the contract's funding deadline** (§8). For backends that take relative expiry, the adapter derives
+   the relative value from the draft's absolute `invoice_expiry` at the moment it holds the
+   backend-create lease; if the derived relative expiry is below the minimum safe value, the draft is
+   stale and no backend invoice is created. Before signing, the gateway parses and validates the
+   returned BOLT11 invoice against the persisted draft: amount, payee, expiry within the adapter's
+   tolerance, description hash / direct description, payment hash, and backend granularity/kind
+   assumptions must all match. If validation fails, the gateway retains a `BackendInvoiceRejected`
+   tombstone for reconciliation, disables new custodial invoice creation if the mismatch indicates
+   backend corruption, and does not return the invoice. Otherwise it signs the quote using the stored
+   draft plus the returned backend invoice hash, and **commits the full `AwaitingPayment` record
+   including `signed_quote` before returning**, advancing `InvoiceCreating → AwaitingPayment`.
    A crash after backend invoice creation but before the `AwaitingPayment` commit is recovered by
    querying the backend by `externalId` (`get_invoice_by_external_id`), then signing the recovered
    backend invoice hash against the already-persisted quote draft. A backend that can't look up unpaid
@@ -420,6 +430,8 @@ New `custodial-gatewayd` logic, per connected federation:
        created_at: u64,
        backend_create_attempt: u64,
        backend_create_lease_until: Option<u64>,
+       backend_create_maybe_sent: bool,
+       backend_create_visibility_deadline: Option<u64>,
        request_fingerprint: sha256::Hash,
    }
    ```
@@ -432,6 +444,12 @@ New `custodial-gatewayd` logic, per connected federation:
    invoice amount, invoice description hash, requested quote API version, selected custodial
    fee/policy fields, and backend invoice expiry request shape. It is how the gateway distinguishes an
    idempotent duplicate from a conflicting request for the same contract.
+   `backend_create_maybe_sent` records that a non-idempotent backend create request may have reached
+   the backend; an expired local lease alone is not proof that it did not. The visibility deadline is
+   the adapter's declared point after which a no-result `get_invoice_by_external_id(include_unpaid =
+   true)` is authoritative for that maybe-sent attempt. Backends that cannot provide such a
+   visibility guarantee must not retry a maybe-sent create; they leave the record
+   `InvoiceCreateInconclusive`.
 
    The draft is still bounded by freshness. If no backend invoice exists yet, a handler may call
    `create_plain_invoice` only while the draft still satisfies the create-time safety checks:
@@ -445,6 +463,12 @@ New `custodial-gatewayd` logic, per connected federation:
    close to the funding deadline, the gateway keeps a retained tombstone for late-settlement
    reconciliation (`BackendInvoiceRejected` / `InvoiceExpiredUnreturned`) and returns a typed rejection
    instead of exposing a stale invoice to the client.
+
+   A settlement matching a `BackendInvoiceRejected` or `InvoiceExpiredUnreturned` tombstone never
+   disappears. It transitions to `UnresolvedLiability` with reason `UnreturnedInvoiceSettled` unless a
+   receiver/operator resolution explicitly proves that funding the original quoted contract is still
+   correct. The MVP default is manual resolution, not automatic funding, because the client may have
+   been told the invoice was rejected and may not be watching that contract.
 
    The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
@@ -539,9 +563,9 @@ New `custodial-gatewayd` logic, per connected federation:
    funding is impossible, §8) from gateway ecash. A record already past `AwaitingPayment` starts no
    new funding and routes by state: `SettledAwaitingLiquidity` waits for float, `FundingReserved` /
    `FundingPrepared` / `FundingSubmitted` wait or re-drive (§10), `Funded` is a no-op, a settlement
-   matching an `InvoiceExpiredUnpaid` tombstone is a late settlement to the liability path (§7.7), and
-   an absent authoritative record is an operator data-loss / corruption case out of scope for this
-   spec (§10, §16). A
+   matching an `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned`
+   tombstone is a late settlement to the liability path (§7.7), and an absent authoritative record is
+   an operator data-loss / corruption case out of scope for this spec (§10, §16). A
    **settled-but-mismatched** record is **not**
    ignored: a deviation within expected backend skim still funds the full contract and records the
    loss (§8), while a gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) and
@@ -575,7 +599,9 @@ New `custodial-gatewayd` logic, per connected federation:
    federation acceptance**. Several terminal branches leave this path.
    `AwaitingPayment` goes to `InvoiceExpiredUnpaid` (the **funding deadline** passed, never settled,
    §7.3 limits) or to `UnresolvedLiability` (settled-but-overdue, or gross `BackendMismatch`). An
-   `InvoiceExpiredUnpaid` tombstone goes to `UnresolvedLiability` on a late settlement. Any funding
+   `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` tombstone goes to
+   `UnresolvedLiability` on a late settlement, while `InvoiceCreateInconclusive` requires operator
+   review because the gateway cannot safely prove whether a backend invoice was created. Any funding
    state goes to `UnresolvedLiability` (§11). The record **retains `prepared_tx`** from
    `FundingPrepared` onward (the `operation_id` and `txid` are added markers, not a replacement),
    so a later state re-drives the exact transaction with its pinned inputs, not just a txid.
@@ -897,7 +923,7 @@ struct CustodialReceiveLiability {
     contract_id: ContractId,
     amount_owed: Amount,
     reason: LiabilityReason,         // ExpiredThenSettled | InvalidContract | FundingTxInconclusive
-                                     // | BackendMismatch
+                                     // | BackendMismatch | UnreturnedInvoiceSettled
     evidence: LiabilityEvidence,     // { signed_quote, backend_ledger_proof, funding_txid? }
     resolution: LiabilityResolution, // Open | Resolved (richer taxonomy deferred, §14)
 }
@@ -997,8 +1023,8 @@ the same-gateway send signal is the **forfeit signature** in the existing
 `Result<[u8; 32], Signature>` send response (§7.6), not an error. Genuine transport/server failures
 stay on the error channel and stay retryable. Only client-actionable domain outcomes move into `Ok`.
 
-The MVP custodial-receive creation rejection enum is deliberately small and covers only pre-invoice /
-pre-quote refusal:
+The MVP custodial-receive creation rejection enum is deliberately small and covers refusal before the
+client receives a usable invoice and quote:
 
 ```rust
 enum CustodialReceiveRejectionReason {
@@ -1013,6 +1039,7 @@ enum CustodialReceiveRejectionReason {
     BackendInvoiceCreationUnavailable, // Backend cannot currently create the invoice.
     BackendLedgerUnavailable,          // Backend cannot provide required ledger/reconciliation support.
     DuplicateContractConflict,         // Existing reservation conflicts with this request.
+    CreateInProgress,                  // Same request is already creating an invoice; retry/poll.
 }
 ```
 
@@ -1020,6 +1047,16 @@ This enum is the stable client-facing API surface. The richer operator liability
 deferred (§14). There is intentionally no unpaid-invoice or float-shortage rejection: unpaid invoice
 buildup only alerts the operator (§7.3), and post-settlement float shortage is handled as a debt /
 liquidity problem (§8, §11), not as create-invoice admission control.
+
+Internal terminal states and gates map to public rejections as follows:
+
+| Internal state / gate | Public rejection | Client action |
+|---|---|---|
+| `InvoiceCreationExpired` before backend invoice exists | `DeadlineTooNear` | Build a fresh contract after refreshing `RoutingInfo`. |
+| Safe duplicate while a create lease is live | `CreateInProgress` or wait/poll response | Retry/poll the same request; do not build a new contract yet. |
+| `InvoiceCreateInconclusive` | `BackendInvoiceCreationUnavailable` | Choose another gateway or retry later; the same contract remains reserved until operator review. |
+| `BackendInvoiceRejected` before return | `BackendInvoiceCreationUnavailable` | Choose another gateway or retry later; do not assume this backend invoice is usable. |
+| `InvoiceExpiredUnreturned` before return | `DeadlineTooNear` | Build a fresh contract after refreshing `RoutingInfo`. |
 
 ## 8. Fee & amount accounting
 
@@ -1166,16 +1203,19 @@ operator data-loss events outside this spec's recovery model (§16).
   status (`InvoiceCreating → AwaitingPayment → SettledAwaitingLiquidity → FundingReserved →
   FundingPrepared(prepared_tx) → FundingSubmitted(prepared_tx, operation_id, txid) →
   Funded(outpoint)`), with terminal branches `InvoiceExpiredUnpaid` (tombstoned),
-  `InvoiceCreationExpired` (no backend invoice created), `BackendInvoiceRejected` /
-  `InvoiceExpiredUnreturned` (retained tombstones for unreturned backend invoices), and
-  `UnresolvedLiability`.
+  `InvoiceCreationExpired` (no backend invoice created), `InvoiceCreateInconclusive` (maybe-sent
+  backend create cannot be proven absent), `BackendInvoiceRejected` / `InvoiceExpiredUnreturned`
+  (retained tombstones for unreturned backend invoices), and `UnresolvedLiability`.
 - **Idempotent invoice creation** (§7.3): a record stuck in `InvoiceCreating` after a crash is
   resolved by `get_invoice_by_external_id(backend_correlation_id, include_unpaid = true)`. If the
   backend invoice exists, complete the `AwaitingPayment` record if the invoice is still safe to
   return, otherwise retain an unreturned-invoice tombstone for reconciliation. If no backend invoice
-  exists, the request can be retried only by a handler holding the durable backend-create lease, and
-  only if the draft is still fresh enough to expose to a client. Otherwise it is dropped/tombstoned
-  without creating a backend invoice. A duplicate `create_custodial_bolt11_invoice` whose
+  exists, the request can be retried only by a handler holding the durable backend-create lease, only
+  if the draft is still fresh enough to expose to a client, and only if no prior maybe-sent create
+  attempt remains inconclusive under the backend adapter's visibility guarantee. Otherwise it is
+  dropped/tombstoned without creating a backend invoice, or held as `InvoiceCreateInconclusive` for
+  operator review if a prior maybe-sent attempt cannot be proven absent. A duplicate
+  `create_custodial_bolt11_invoice` whose
   `request_fingerprint` matches the stored draft never creates a second backend invoice; a duplicate
   with mismatched amount, description hash, quote API version, or selected custodial fee/policy is
   rejected against the stored draft.
@@ -1186,7 +1226,8 @@ operator data-loss events outside this spec's recovery model (§16).
 - **Startup reconciliation:** on boot, the `CustodialSettlementObserver` polls the backend's
   authenticated ledger from its durable cursor (phoenixd `GET /payments/incoming` /
   `list_settled_invoices`), matching by `backend_correlation_id` first and `backend_invoice_hash`
-  second against **every nonterminal record and every retained `InvoiceExpiredUnpaid` tombstone**.
+  second against **every nonterminal record and every retained `InvoiceExpiredUnpaid`,
+  `BackendInvoiceRejected`, and `InvoiceExpiredUnreturned` tombstone**.
   For each `AwaitingPayment` record, **first re-check its funding deadline against fresh
   `gateway_observed_lnv2_consensus_time`**, since a record can still read `AwaitingPayment` only
   because the gateway was offline when it should have terminalized. Deadline-based terminalization
@@ -1196,8 +1237,10 @@ operator data-loss events outside this spec's recovery model (§16).
   `UnresolvedLiability`, unpaid-and-overdue → `InvoiceExpiredUnpaid`. A settlement matching an
   `InvoiceExpiredUnpaid` tombstone is a **late settlement past the funding deadline** (that terminal
   is set at the deadline, §7.3), so it's unfundable and transitions
-  `InvoiceExpiredUnpaid → UnresolvedLiability`, never a silent miss. This closes the crash gap for an
-  honest operator.
+  `InvoiceExpiredUnpaid → UnresolvedLiability`, never a silent miss. A settlement matching
+  `BackendInvoiceRejected` or `InvoiceExpiredUnreturned` transitions to `UnresolvedLiability` with
+  reason `UnreturnedInvoiceSettled` unless manual resolution proves the original contract should still
+  be funded. This closes the crash gap for an honest operator.
 - **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
   deadline and float. If the contract is still fundable and liquidity is available, one worker
   atomically claims it into `FundingReserved`; otherwise it remains a debt waiting for liquidity or
@@ -1378,10 +1421,16 @@ those come first.
    - duplicate create requests while the first backend create call is in flight: the second handler
      observes the unexpired durable create lease and does not call the backend, proving the gateway
      itself cannot create two invoices for one `backend_correlation_id`
+   - expired create lease after a maybe-sent backend request: if backend lookup cannot prove no invoice
+     was created, the record becomes `InvoiceCreateInconclusive` and no second backend invoice is
+     created
    - stale draft recovery: if no backend invoice exists and the draft is no longer within freshness /
      deadline margins, no backend invoice is created; if a backend invoice exists but is no longer safe
      to return, the gateway retains a tombstone for late-settlement reconciliation and returns a typed
      rejection
+   - backend invoice validation before quote signing: amount, payee, expiry tolerance, description
+     hash/direct description, payment hash, and backend kind/granularity assumptions must match the
+     persisted draft, otherwise the invoice is retained as `BackendInvoiceRejected` and not returned
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
    - duplicate create with the same contract but different amount, description hash, quote API version,
@@ -1407,6 +1456,9 @@ those come first.
    - backend invoice hash collision: a custodial backend invoice hash that matches an active trustless
      registered payment hash is not returned to the client and disables new custodial issuance for
      operator review while retaining a `BackendInvoiceRejected` tombstone for reconciliation
+   - settlement of a `BackendInvoiceRejected` / `InvoiceExpiredUnreturned` tombstone transitions to an
+     `UnreturnedInvoiceSettled` unresolved liability rather than being silently dropped or
+     automatically funded
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by itself
    - a settled invoice with short ecash float remains a debt, waits in `SettledAwaitingLiquidity`, and

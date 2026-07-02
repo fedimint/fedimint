@@ -52,8 +52,8 @@ seconds, not an ongoing balance.
   funding deadline, and records the gateway-observed LNv2 consensus time used for deadline
   validation. The quote embeds `CustodialReceiveTerms`, with `terms_hash` equal to the canonical
   hash of those terms, so the receipt is self-contained. The gateway persists a `QuoteDraft` before
-  calling the backend, then persists the signed quote in its `AwaitingPayment` record before returning,
-  and the receiver stores the full quote as
+  calling the backend, validates the returned backend invoice before signing, then persists the signed
+  quote in its `AwaitingPayment` record before returning, and the receiver stores the full quote as
   dispute/support evidence of what the gateway committed to do, not as a guarantee that lost gateway
   state can be safely rebuilt.
 - **Dispute evidence is contract-level.** A third party with the signed quote and federation session
@@ -67,6 +67,9 @@ seconds, not an ongoing balance.
   the authoritative client DB prefix survives, re-driving the exact stored prepared tx if only the
   client operation log diverged). If that prefix is lost or rolled back, this spec does not try to
   reconstruct funding from the signed quote.
+- **Non-idempotent backend create stays conservative.** If a backend invoice create request may have
+  been sent but the gateway cannot prove whether the backend created it, the receive goes to operator
+  review instead of retrying and risking a second backend invoice for the same contract.
 - **Prepared transaction persistence is required.** MVP needs a generic `fedimint-client`
   prepare/submit split so the gateway can finalize, lock inputs for, and persist the exact funding
   transaction before broadcast. After `FundingPrepared`, recovery must re-drive that exact stored tx,
