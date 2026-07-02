@@ -32,7 +32,10 @@ use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, trace, warn};
 
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
+use super::{
+    ChannelInfo, ILnRpcClient, LightningPaymentBackend, LightningPaymentFailure, LightningRpcError,
+    ListChannelsResponse, RouteHtlcStream,
+};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
@@ -135,11 +138,22 @@ pub struct GatewayLdkClient {
         Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
 
     /// Waiters for outgoing LDK payments that are woken by terminal payment
-    /// events (`PaymentSuccessful` / `PaymentFailed`). This lets `pay()` block
-    /// until the payment resolves instead of polling `node.payment()`. The
-    /// actual result is still read from `node.payment()` after the wakeup; this
-    /// map only signals that a terminal event has arrived.
-    pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
+    /// events (`PaymentSuccessful` / `PaymentFailed`) and failure reasons that
+    /// arrived before a waiter was registered.
+    ///
+    /// This lets `pay()` block until the payment resolves instead of polling
+    /// `node.payment()`. The actual result is still read from `node.payment()`
+    /// after the wakeup; for failed payments the event reason is carried here
+    /// because `PaymentDetails` does not retain it.
+    pending_payments: PendingPayments,
+}
+
+type PendingPaymentSender = oneshot::Sender<Option<String>>;
+type PendingPayments = Arc<RwLock<HashMap<PaymentId, PendingPaymentCompletion>>>;
+
+enum PendingPaymentCompletion {
+    Waiting(PendingPaymentSender),
+    Failed { failure_reason: String },
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -266,7 +280,7 @@ impl GatewayLdkClient {
         pending_channels: Arc<
             RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
         >,
-        pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
+        pending_payments: PendingPayments,
     ) {
         // We manually check for task termination in case we receive a payment while the
         // task is shutting down. In that case, we want to finish the payment
@@ -346,12 +360,28 @@ impl GatewayLdkClient {
             ldk_node::Event::PaymentSuccessful {
                 payment_id: Some(payment_id),
                 ..
+            } => {
+                Self::wake_pending_payment(&pending_payments, payment_id, None, false).await;
             }
-            | ldk_node::Event::PaymentFailed {
+            ldk_node::Event::PaymentFailed {
                 payment_id: Some(payment_id),
+                payment_hash,
+                reason,
                 ..
             } => {
-                Self::wake_pending_payment(&pending_payments, payment_id).await;
+                let cache_failure_reason = payment_hash
+                    .is_some_and(|payment_hash| PaymentId(payment_hash.0) == payment_id);
+                Self::wake_pending_payment(
+                    &pending_payments,
+                    payment_id,
+                    Some(
+                        reason
+                            .map(|reason| format!("{reason:?}"))
+                            .unwrap_or_else(|| "LDK payment failed".to_string()),
+                    ),
+                    cache_failure_reason,
+                )
+                .await;
             }
             _ => {}
         }
@@ -367,20 +397,78 @@ impl GatewayLdkClient {
 
     /// Wakes the `pay()` waiter (if any) for `payment_id` once a terminal
     /// payment event has been observed. The actual payment result is read from
-    /// `node.payment()` by the woken waiter.
+    /// `node.payment()` by the woken waiter, but `PaymentFailed`'s reason is
+    /// delivered through the wakeup because `ldk-node` does not expose it in
+    /// `PaymentDetails`.
     async fn wake_pending_payment(
-        pending_payments: &Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
+        pending_payments: &PendingPayments,
         payment_id: PaymentId,
+        failure_reason: Option<String>,
+        cache_failure_reason: bool,
     ) -> PendingPaymentWakeup {
-        let Some(sender) = pending_payments.write().await.remove(&payment_id) else {
+        let mut pending_payments = pending_payments.write().await;
+        let Some(completion) = pending_payments.remove(&payment_id) else {
+            if cache_failure_reason && let Some(failure_reason) = failure_reason {
+                pending_payments.insert(
+                    payment_id,
+                    PendingPaymentCompletion::Failed { failure_reason },
+                );
+            }
             return PendingPaymentWakeup::NoWaiter;
         };
 
-        if sender.send(()).is_ok() {
+        let PendingPaymentCompletion::Waiting(sender) = completion else {
+            warn!(
+                ?payment_id,
+                "LDK payment terminal event found cached payment completion"
+            );
+            if cache_failure_reason && let Some(failure_reason) = failure_reason {
+                pending_payments.insert(
+                    payment_id,
+                    PendingPaymentCompletion::Failed { failure_reason },
+                );
+            }
+            return PendingPaymentWakeup::NoWaiter;
+        };
+
+        if sender.send(failure_reason).is_ok() {
             PendingPaymentWakeup::Woken
         } else {
             PendingPaymentWakeup::ReceiverDropped
         }
+    }
+
+    async fn register_pending_payment(
+        &self,
+        payment_id: PaymentId,
+        sender: PendingPaymentSender,
+    ) -> Option<String> {
+        let mut pending_payments = self.pending_payments.write().await;
+        match pending_payments.remove(&payment_id) {
+            Some(PendingPaymentCompletion::Failed { failure_reason }) => Some(failure_reason),
+            Some(PendingPaymentCompletion::Waiting(_)) => {
+                warn!(
+                    ?payment_id,
+                    "Replacing unexpected existing LDK payment waiter"
+                );
+                pending_payments.insert(payment_id, PendingPaymentCompletion::Waiting(sender));
+                None
+            }
+            None => {
+                pending_payments.insert(payment_id, PendingPaymentCompletion::Waiting(sender));
+                None
+            }
+        }
+    }
+
+    async fn take_cached_payment_failure(&self, payment_id: PaymentId) -> Option<String> {
+        let mut pending_payments = self.pending_payments.write().await;
+        let Some(PendingPaymentCompletion::Failed { failure_reason }) =
+            pending_payments.remove(&payment_id)
+        else {
+            return None;
+        };
+        Some(failure_reason)
     }
 
     /// Reads the result of an outgoing payment from `node.payment()`.
@@ -390,6 +478,7 @@ impl GatewayLdkClient {
     fn ldk_payment_result(
         &self,
         payment_id: PaymentId,
+        event_failure_reason: Option<String>,
     ) -> Option<Result<PayInvoiceResponse, LightningRpcError>> {
         let payment_details = self.node.payment(&payment_id)?;
         match payment_details.status {
@@ -409,9 +498,14 @@ impl GatewayLdkClient {
                     }))
                 }
             }
-            PaymentStatus::Failed => Some(Err(LightningRpcError::FailedPayment {
-                failure_reason: "LDK payment failed".to_string(),
-            })),
+            PaymentStatus::Failed => {
+                let failure_reason =
+                    event_failure_reason.unwrap_or_else(|| "LDK payment failed".to_string());
+                Some(Err(LightningRpcError::FailedPaymentWithDetails {
+                    payment_failure: ldk_payment_failure(Some(&failure_reason)),
+                    failure_reason,
+                }))
+            }
         }
     }
 }
@@ -488,14 +582,32 @@ impl ILnRpcClient for GatewayLdkClient {
             .async_lock(payment_id)
             .await;
 
+        // If a resumed payment was already terminal before this call registered
+        // for completion events, there is no event reason left for us to wait
+        // on. Return the persisted payment result as-is in that case.
+        let preexisting_terminal_payment = self
+            .node
+            .payment(&payment_id)
+            .is_some_and(|payment| payment.status != PaymentStatus::Pending);
+        if preexisting_terminal_payment {
+            let failure_reason = self.take_cached_payment_failure(payment_id).await;
+            return self.ldk_payment_result(payment_id, failure_reason).expect(
+                "payment was present and checked to be terminal immediately before reading result",
+            );
+        }
+
         // Register a waiter before initiating the payment so that a terminal
         // payment event firing immediately after `send()` returns still wakes
         // us, rather than racing ahead of the registration.
         let (payment_sender, payment_receiver) = oneshot::channel();
-        self.pending_payments
-            .write()
+        if let Some(failure_reason) = self
+            .register_pending_payment(payment_id, payment_sender)
             .await
-            .insert(payment_id, payment_sender);
+        {
+            return self
+                .ldk_payment_result(payment_id, Some(failure_reason))
+                .expect("payment failure event was cached before registering a waiter");
+        }
 
         // If a payment is not known to the node we can initiate it, and if it is known
         // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
@@ -526,27 +638,35 @@ impl ILnRpcClient for GatewayLdkClient {
             assert_eq!(sent_payment_id, payment_id);
         }
 
-        // The payment may already be in a terminal state (a known/resumed
-        // payment, or an event that fired before we registered the waiter), so
-        // check once up front before waiting.
-        if let Some(result) = self.ldk_payment_result(payment_id) {
+        // The payment may have succeeded after the pre-waiter check above but
+        // before the waiter was registered. A failed payment in the same window
+        // is not handled here because the event handler caches failure reasons
+        // when no waiter exists; otherwise, we wait below for the event reason.
+        if self
+            .node
+            .payment(&payment_id)
+            .is_some_and(|payment| payment.status == PaymentStatus::Succeeded)
+        {
             self.pending_payments.write().await.remove(&payment_id);
-            return result;
+            return self.ldk_payment_result(payment_id, None).expect(
+                "payment was present and checked to be succeeded immediately before reading result",
+            );
         }
 
         // Otherwise wait for the event handler to wake us when a terminal
         // `PaymentSuccessful` / `PaymentFailed` event arrives, instead of
         // polling. A wakeup is delivered exactly once; the payment status is
         // terminal by the time it fires.
-        let _ = payment_receiver.await;
+        let event_failure_reason = payment_receiver.await.unwrap_or(None);
 
         self.pending_payments.write().await.remove(&payment_id);
-        self.ldk_payment_result(payment_id).unwrap_or_else(|| {
-            Err(LightningRpcError::FailedPayment {
-                failure_reason: "LDK payment event fired without terminal payment status"
-                    .to_string(),
+        self.ldk_payment_result(payment_id, event_failure_reason)
+            .unwrap_or_else(|| {
+                Err(LightningRpcError::FailedPayment {
+                    failure_reason: "LDK payment event fired without terminal payment status"
+                        .to_string(),
+                })
             })
-        })
     }
 
     async fn route_htlcs<'a>(
@@ -1208,6 +1328,16 @@ fn get_preimage_and_payment_hash(
             fedimint_gateway_common::PaymentKind::Bolt11,
         ),
         PaymentKind::Onchain { .. } => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
+    }
+}
+
+// `ldk-node` currently exposes only the high-level failure reason through its
+// public event API, so per-attempt route details are intentionally unavailable.
+fn ldk_payment_failure(reason: Option<&str>) -> LightningPaymentFailure {
+    LightningPaymentFailure {
+        backend: LightningPaymentBackend::Ldk,
+        failure_reason: reason.map(ToOwned::to_owned),
+        attempts: vec![],
     }
 }
 
