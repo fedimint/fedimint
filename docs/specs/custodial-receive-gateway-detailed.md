@@ -152,17 +152,17 @@ once the contract is funded, and it still works when the gateway funds it outsid
 HTLC flow.
 
 **Two deadlines (step 3):** the backend invoice's expiry must be **strictly earlier**
-than the contract's funding deadline, with a conservative margin, so a settled payment
-is **normally** still fundable. The funding deadline is the contract's
-`expiration_or_fee`, interpreted against the LNv2 server's `consensus_unix_time`
-(`modules/fedimint-lnv2-server/src/lib.rs:563`). For MVP, the gateway does **not**
-require a new federation endpoint for this value: it derives a
-`gateway_observed_lnv2_consensus_time` by watching existing signed session outcomes,
-tracking the latest `UnixTimeVote` per guardian, and applying the same threshold-time
-selection used by the LNv2 server. If that observer has not seen fresh threshold votes,
-custodial receive quote creation is unavailable. This is a mitigation, not a guarantee.
-Notification delay, observer staleness, or downtime can still leave a
-settled-but-unfundable payment, which becomes a gateway liability (§8, §11).
+than the contract's funding deadline. Invoice expiry bounds the unpaid contingent exposure; once the
+backend invoice settles, the gateway owes the receiver until the original contract is funded. The
+funding deadline is the contract's `expiration_or_fee`, interpreted against the LNv2 server's
+`consensus_unix_time` (`modules/fedimint-lnv2-server/src/lib.rs:563`), and is only the federation's
+admission check for funding the original contract. For custodial receive the client chooses a
+long-lived funding deadline so settled invoices remain automatically fundable. For MVP, the gateway
+does **not** require a new federation endpoint for this value: it derives a
+`gateway_observed_lnv2_consensus_time` by watching existing signed session outcomes, tracking the
+latest `UnixTimeVote` per guardian, and applying the same threshold-time selection used by the LNv2
+server. If that observer has not seen fresh threshold votes, custodial receive quote creation is
+unavailable.
 
 ## 7. Component changes
 
@@ -323,16 +323,16 @@ federation client DB prefix) by `backend_correlation_id` /
 `backend_invoice_hash`, driven by the records themselves rather than a fixed time window (downtime
 can exceed any window). This works **within backend ledger retention**, which is a **hard
 prerequisite**, not just something to monitor: ledger-first recovery is only as good as the ledger's
-historical horizon. The backend adapter must **declare** that retained settlement history covers at
-least the **max funding deadline** (the longest a record or tombstone stays recovery-relevant) plus
-a safety margin, and if it can't establish coverage of all nonterminal records and retained
-tombstones, **new custodial invoice creation is disabled** (distinct from the optional *runtime*
-retention monitoring in §7.8). phoenixd documents listing and point lookup of incoming payments but
-**no retention SLA**, so phoenixd support treats retention as an operator-configured, monitored
-assumption rather than a backend guarantee. A record whose invoice predates available retention (an
-outage longer than retention) **can't be confirmed** and goes to the unresolved-liability path (§7.7,
-§11), never a silently missed settlement. So losing the cursor (a rebuildable index) to logical
-corruption stays a recoverable rebuild from the surviving records and ledger (§11).
+historical horizon. The backend adapter must **declare** that retained settlement history covers every
+record that could still affect a liability: unpaid records until invoice expiry plus late-settlement
+finality, and settled records until the receiver is funded. If it can't establish coverage of all
+nonterminal records and retained tombstones, **new custodial invoice creation is disabled** (distinct
+from the optional *runtime* retention monitoring in §7.8). phoenixd documents listing and point lookup
+of incoming payments but **no retention SLA**, so phoenixd support treats retention as an
+operator-configured, monitored assumption rather than a backend guarantee. A recovery-relevant record
+whose invoice predates available retention **can't be confirmed** and goes to the unresolved-liability
+path (§7.7, §11), never a silently missed settlement. So losing the cursor (a rebuildable index) to
+logical corruption stays a recoverable rebuild from the surviving records and ledger (§11).
 
 For phoenixd: `create_plain_invoice` → `POST /createinvoice` carrying `externalId` and an optional
 per-invoice `webhookUrl`. `get_invoice_by_external_id` and `list_settled_invoices` /
@@ -465,10 +465,10 @@ New `custodial-gatewayd` logic, per connected federation:
    instead of exposing a stale invoice to the client.
 
    A settlement matching a `BackendInvoiceRejected` or `InvoiceExpiredUnreturned` tombstone never
-   disappears. It transitions to `UnresolvedLiability` with reason `UnreturnedInvoiceSettled` unless a
-   receiver/operator resolution explicitly proves that funding the original quoted contract is still
-   correct. The MVP default is manual resolution, not automatic funding, because the client may have
-   been told the invoice was rejected and may not be watching that contract.
+   disappears. It transitions back to the automatic funding path for the original quoted contract, with
+   reason `UnreturnedInvoiceSettled` recorded as liability evidence until the receiver is funded. The
+   client may have been told the invoice was rejected, but if the backend ledger proves settlement the
+   gateway still owes the receiver and must fund the original contract.
 
    The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
@@ -597,14 +597,18 @@ New `custodial-gatewayd` logic, per connected federation:
    FundingSubmitted(prepared_tx, operation_id, txid) → Funded(outpoint)`, with
    `SettledAwaitingLiquidity` skipped when float is already sufficient and marking **`Funded` only on
    federation acceptance**. Several terminal branches leave this path.
-   `AwaitingPayment` goes to `InvoiceExpiredUnpaid` (the **funding deadline** passed, never settled,
-   §7.3 limits) or to `UnresolvedLiability` (settled-but-overdue, or gross `BackendMismatch`). An
-   `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` tombstone goes to
-   `UnresolvedLiability` on a late settlement. `InvoiceCreateInconclusive` requires operator review
-   because the gateway cannot safely prove whether a backend invoice was created, but it is still
-   retained in ledger reconciliation; a matching settlement transitions to `UnresolvedLiability` with
-   reason `UnreturnedInvoiceSettled`. Any funding state goes to `UnresolvedLiability` (§11). The
-   record **retains `prepared_tx`** from
+   `AwaitingPayment` goes to `InvoiceExpiredUnpaid` only after the backend invoice has expired and the
+   backend ledger/finality window proves it did not settle. A settled invoice remains a debt and stays
+   on the funding path (`SettledAwaitingLiquidity` if float is short), unless there is a gross
+   `BackendMismatch` or another invariant failure that requires an `UnresolvedLiability` marker. An
+   `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` retained record that
+   later matches a settlement transitions back to the automatic funding path with reason
+   `UnreturnedInvoiceSettled` recorded as evidence. `InvoiceCreateInconclusive` requires operator
+   review because the gateway cannot safely prove whether a backend invoice was created, but it is
+   still retained in ledger reconciliation; a matching settlement also returns to the automatic funding
+   path with `UnreturnedInvoiceSettled` evidence. Any funding state goes to `UnresolvedLiability` only
+   for funding-tx inconclusiveness or another invariant failure (§11). The record **retains
+   `prepared_tx`** from
    `FundingPrepared` onward (the `operation_id` and `txid` are added markers, not a replacement),
    so a later state re-drives the exact transaction with its pinned inputs, not just a txid.
    A short-float receive commits `SettledAwaitingLiquidity`: backend settled, actual debt exists, but
@@ -639,8 +643,8 @@ New `custodial-gatewayd` logic, per connected federation:
    submission or network error keeps them locked and re-driven. For a terminal liability they release
    only if the tx is **proven dead** (e.g. `ExpiredBeforeFunding` before any submission). A
    `FundingTxInconclusive` liability **quarantines** the inputs (never released, never reused) until
-   the prior tx is accepted, rejected, or proven impossible, so a late landing can't race manual
-   resolution (§7.7, §10). So `SettledAwaitingLiquidity` records wait for ecash and never build a tx.
+   the prior tx is accepted, rejected, or proven impossible, so a late landing can't race an alternate
+   payout/resolution (§7.7, §10). So `SettledAwaitingLiquidity` records wait for ecash and never build a tx.
    A `FundingReserved` record has been claimed by a funding worker but has no prepared tx and never
    submitted, so it is the **only** state that may prepare a fresh tx. Any record at
    `FundingPrepared` or later holds the exact tx and can only re-drive it, never build a new one. On
@@ -668,9 +672,9 @@ New `custodial-gatewayd` logic, per connected federation:
    gateway can't re-drive that exact tx, or can't otherwise prove no prior submission can still
    land, the record is **inconclusive** and goes to the unresolved-liability path (§11), never a
    fresh second tx and never a silent strand. A proven-**funded** lookup just advances to `Funded`.
-   If funding is rejected (e.g. the contract expired, §11),
-   the record moves to a terminal **`UnresolvedLiability`** status that drives an
-   explicit operator / receiver-cooperation workflow (§11), never a silent drop.
+   If funding is rejected, the record moves to a terminal **`UnresolvedLiability`** status that drives
+   explicit liability handling (§11), never a silent drop. Rejection because the long-lived contract
+   expired is a critical policy/invariant failure, not a normal expiry path.
 3. **Exactly-once funding is load-bearing: consensus does not protect it.** The server
    stores incoming contracts by `OutPoint` and only overwrites the `contract_id →
    outpoint` index (`modules/fedimint-lnv2-server/src/lib.rs:567-584`). Funding the **same**
@@ -731,9 +735,9 @@ New `custodial-gatewayd` logic, per connected federation:
    atomically claims it into `FundingReserved`, then prepares and submits the exact tx. The MVP can make
    liquidity replenishment semi-automatic: alert the operator and, when configured on-chain wallet
    funds are available, drive or prompt a pegin to create federation ecash. Post-MVP automation can
-   add loop-out, channel close, splice, swap-out, or backend-specific liquidity actions before
-   falling back to operator intervention. If the contract expires before liquidity arrives, the debt
-   does not disappear: it moves to `UnresolvedLiability` (§11).
+   add loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. The contract
+   funding deadline is chosen long-lived enough that liquidity shortage is expected to resolve by
+   funding the original contract after liquidity recovers.
 6. **Limits and unpaid invoices:** enforce the per-receive cap from the gateway's advertised
    `CustodialReceiveCapability` (§7.1, §9) to bound single-receive blast radius. The aggregate
    `max_in_flight` value is an operating target for actual settled/funding liabilities, not a hard
@@ -744,17 +748,17 @@ New `custodial-gatewayd` logic, per connected federation:
    authentication policy, and database-size limits remain deployment concerns, not custodial receive
    capability semantics.
 
-   Late settlements are unavoidable because a notify-only backend auto-settles even an expired
-   invoice, so the record is **retained in full** (contract, amounts, `invoice_expiry`,
-   `funding_deadline`, `quote_id`, `backend_invoice_hash`) across this window. At the funding
-   deadline it terminalizes: settled-and-funded → `Funded`; settled-but-unfundable →
-   `UnresolvedLiability`; never settled → **`InvoiceExpiredUnpaid`** (the terminal that keeps
-   `AwaitingPayment` from being nonterminal forever). The full record (now a tombstone) is retained
-   for a **conservative window** past the funding deadline, long enough that a late settlement can no
-   longer land or appear, then pruned. A late settlement against a tombstone is by definition past
-   the funding deadline, so it's unfundable and opens an `UnresolvedLiability` (the tombstone still
-   carries the data to do so), never a silent miss. Splitting that window into separate
-   settlement-finality and ledger-retention bounds is deferred to §14.
+   Late settlements are possible because a notify-only backend can report settlement after local
+   invoice expiry, so the record is **retained in full** (contract, amounts, `invoice_expiry`,
+   `funding_deadline`, `quote_id`, `backend_invoice_hash`) until the backend ledger/finality window
+   proves no settlement occurred. Then it terminalizes: settled-and-funded → `Funded`; settled but not
+   yet funded → stays on the funding/liquidity path; never settled → **`InvoiceExpiredUnpaid`** (the
+   terminal that keeps `AwaitingPayment` from being nonterminal forever). If a supposedly unpaid
+   retained record later matches a settlement, the gateway treats that as a backend/finality surprise
+   and returns it to the automatic funding path, never a silent miss. If the invoice never settled and
+   the contract was never funded, there is no on-federation contract to cancel: the `IncomingContract`
+   was only a quoted object until the gateway funds it. Splitting the backend finality and ledger
+   retention bounds is deferred to §14.
 
 ### 7.4 Client custodial-receive variant
 
@@ -764,15 +768,16 @@ mode flag on `receive`:
 - **Select via policy, with explicit opt-in.** Use `select_gateway_for_receive` with a custodial
   policy (§7.1), reachable only when the app/user has opted into custodial receive. It picks only
   a gateway advertising `custodial.is_some()`, and surfaces that the gateway is custodial.
-- Build the `IncomingContract` exactly as today (receiver owns preimage), but set the
-  **contract funding deadline later than the invoice expiry** the gateway will use.
+- Build the `IncomingContract` exactly as today (receiver owns preimage), but set a **long-lived
+  contract funding deadline later than the invoice expiry** the gateway will use.
   Pass the two deadlines separately rather than the single `expiry_secs` used today
   (`lib.rs:943` for the contract expiration and `:972` for the invoice expiry currently
   reuse one value). The client chooses the funding deadline using the selected gateway's advertised
-  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice, and sizes
-  `contract.commitment.amount` using that same capability's `receive_fee`, not the legacy top-level
-  trustless receive fee. The returned signed quote repeats the terms actually used and must still pass
-  the checks below.
+  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice. This funding
+  deadline is not the invoice's UX expiry and not a liability cutoff; it only keeps the original
+  contract fundable after any backend settlement. The client sizes `contract.commitment.amount` using
+  that same capability's `receive_fee`, not the legacy top-level trustless receive fee. The returned
+  signed quote repeats the terms actually used and must still pass the checks below.
 - Request the invoice, and **skip** the `invoice.payment_hash() == preimage hash`
   check (`lib.rs:977`): the invoice is deliberately the backend's own hash. Keep the **amount**
   check (`lib.rs:981`). The requested amount must also be compatible with
@@ -923,8 +928,8 @@ Tested in §15.
 
 ### 7.7 Liability record and status
 
-A settlement the gateway can't safely fund (an expired-then-settled invoice, an unclaimable contract
-refunded to the gateway, an inconclusive funding tx) leaves an obligation, so it keeps a **durable
+A settlement the gateway can't safely fund (an unclaimable contract refunded to the gateway, an
+inconclusive funding tx, or a gross backend mismatch) leaves an obligation, so it keeps a **durable
 liability record** rather than losing it to a support ticket. The MVP needs a minimal marker, stored
 in the **federation client DB prefix** alongside the funding record so terminalizing to
 `UnresolvedLiability` and writing the liability are one **atomic** commit:
@@ -935,24 +940,24 @@ struct CustodialReceiveLiability {
     federation_id: FederationId,
     contract_id: ContractId,
     amount_owed: Amount,
-    reason: LiabilityReason,         // ExpiredThenSettled | InvalidContract | FundingTxInconclusive
-                                     // | BackendMismatch | UnreturnedInvoiceSettled
+    reason: LiabilityReason,         // InvalidContract | FundingTxInconclusive | BackendMismatch
     evidence: LiabilityEvidence,     // { signed_quote, backend_ledger_proof, funding_txid? }
     resolution: LiabilityResolution, // Open | Resolved (richer taxonomy deferred, §14)
 }
 ```
 
-The **load-bearing rule** is the no-double-pay gate. For `FundingTxInconclusive`, a pay-out
-resolution must wait until the original funding is proven terminal: confirmed funded means the
-receiver was already paid (no payout), or it's proven impossible past the funding deadline. Resolving
-while a prior tx can still land would double-pay. For an `InvalidContract` refund the receiver got
-nothing, so a payout **is** the resolution once the refund is terminal. Other reasons resolve
-directly.
+The **load-bearing rule** is the no-double-pay gate. For `FundingTxInconclusive`, any alternate
+automatic payout must wait until the original funding is proven terminal: confirmed funded means the
+receiver was already paid (no payout), while a prior tx that can still land must be quarantined.
+Resolving while a prior tx can still land would double-pay. For an `InvalidContract` refund the
+receiver got nothing, so the automatic payout/resolution path starts once the refund is terminal.
+Other reasons resolve directly.
 
-**Deferred (§14):** the richer operator workflow (a full reason/resolution taxonomy, evidence-bundle
-export, operator-signed resolutions, receiver-supplied replacement contracts). Disaster-recovery
-tooling for physical gateway DB loss is out of scope for this spec (§16). The MVP keeps the
-liability record in the same authoritative federation client DB prefix as the funding state.
+**Deferred (§14):** richer liability tooling (a full reason/resolution taxonomy, evidence-bundle
+export, operator-visible audit records, automated resolution integrations). Disaster-recovery tooling
+for physical gateway DB loss is out of scope for this spec (§16). The MVP keeps the liability record
+in the same authoritative federation client DB prefix as the funding state and does not define a
+manual or receiver-cooperative resolution path.
 
 **(Optional, post-MVP):** a `custodial_receive_status` query so a receiver can ask "what happened?"
 without blocking on `await_incoming_contract`. It must authenticate with the full signed
@@ -1007,7 +1012,8 @@ gateway_custodial_receive_settlement_to_funding_seconds
 settled, but the contract is not yet accepted as funded. `liquidity_shortfall_msats =
 max(0, settled_unfunded_msats - usable_ecash_float_msats)` and should drive operator action such as
 pegin / liquidity replenishment. `min_funding_deadline_slack_seconds` is the minimum seconds until
-funding deadline among settled-but-unfunded records; negative means at least one debt is overdue.
+funding deadline among settled-but-unfunded records; approaching zero is a critical invariant failure
+because settled debts must remain automatically fundable through the original contract.
 `backend_retention_margin_seconds` measures how long the oldest recovery-relevant record remains
 inside backend ledger retention. `consensus_time_observer_age_seconds` backs the §8 rule that stale
 LNv2 consensus-time observation disables new quote creation.
@@ -1108,21 +1114,22 @@ funds the contract **after** settlement, it knows the exact backend credit befor
   backend liquidity cost within that cap and absorb excess variance. A higher or
   differently-shaped custodial fee cap would require a separate explicit-consent client
   policy, not a silent reuse of normal receive selection.
-- **Two deadlines (mitigation, not guarantee).** The backend invoice expiry must be
-  **strictly earlier** than the contract funding deadline, with a conservative margin,
-  so a settled payment is **normally** still fundable. The contract funding deadline is
-  evaluated by the federation against LNv2 `consensus_unix_time`
-  (`modules/fedimint-lnv2-server/src/lib.rs:563`), so the gateway must not issue a quote
-  using only its local wall clock. For MVP, without any new Fedimint module endpoint, the
-  gateway observes existing signed session outcomes, tracks the latest `UnixTimeVote` per
-  guardian, and computes `gateway_observed_lnv2_consensus_time` with the same threshold
-  rule as the server (`times[threshold - 1]` after sorting descending). Quote creation is
-  unavailable until that observer is fresh enough. The signed quote records this value as
-  `observed_lnv2_consensus_time` so the deadline calculation is auditable (§7.3), but the quote does
-  not itself prove observer freshness; that remains a gateway-enforced hard gate and metric (§7.8).
-  The client also checks this quoted value against its own latest locally-observed LNv2 consensus time
-  (§7.4) so a stale or dishonest gateway cannot make an already-doomed funding deadline look valid by
-  reporting an old observation.
+- **Two deadlines.** The backend invoice expiry is the user/payment expiry and bounds unpaid
+  contingent exposure. The contract funding deadline is the LNv2 `IncomingContract.expiration_or_fee`,
+  evaluated by the federation against `consensus_unix_time`
+  (`modules/fedimint-lnv2-server/src/lib.rs:563`), and is only the admission check for funding the
+  original contract. For custodial receive it must be **strictly later** than the backend invoice
+  expiry and long-lived enough that a settled invoice can be funded automatically under realistic
+  downtime and liquidity-replenishment delays. The gateway must not issue a quote using only its local
+  wall clock. For MVP, without any new Fedimint module endpoint, the gateway observes existing signed
+  session outcomes, tracks the latest `UnixTimeVote` per guardian, and computes
+  `gateway_observed_lnv2_consensus_time` with the same threshold rule as the server (`times[threshold -
+  1]` after sorting descending). Quote creation is unavailable until that observer is fresh enough. The
+  signed quote records this value as `observed_lnv2_consensus_time` so the deadline calculation is
+  auditable (§7.3), but the quote does not itself prove observer freshness; that remains a
+  gateway-enforced hard gate and metric (§7.8). The client also checks this quoted value against its
+  own latest locally-observed LNv2 consensus time (§7.4) so a stale or dishonest gateway cannot make an
+  unsafe funding deadline look valid by reporting an old observation.
 
   The gateway rejects custodial invoice creation unless:
 
@@ -1140,11 +1147,11 @@ funds the contract **after** settlement, it knows the exact backend credit befor
   invoice_expiry + min_invoice_to_funding_deadline_delta_secs <= funding_deadline
   ```
 
-  If the observer is stale or lacks fresh threshold votes, the gateway disables custodial
-  receive quote creation for that federation rather than falling back to a small local-clock
-  margin. Notification delay, observer staleness, or downtime can still produce a
-  settled-but-unfundable payment, so the late-settlement **unresolved-liability path remains
-  mandatory** (§11), not exceptional.
+  If the observer is stale or lacks fresh threshold votes, the gateway disables custodial receive
+  quote creation for that federation rather than falling back to a small local-clock margin. If a
+  record's funding-deadline slack approaches the safety margin, the gateway treats that as a critical
+  operational fault, disables new custodial invoice creation, and prioritizes funding/replenishment;
+  the deadline is not used to erase or downgrade a settled invoice debt.
 
 ## 9. Trust & security analysis
 
@@ -1186,8 +1193,9 @@ receive handoff**, not over an ongoing balance.
 the gateway's ability to durably persist its local state across the handoff. The primary recovery
 path is the durable authoritative funding state (the federation client DB prefix, §7.3). The
 client-held signed quote is auditable evidence of the gateway's commitment, but it is not a
-cryptographic enforcement mechanism and does not make physical gateway DB loss recoverable. Both
-trust assumptions are bounded in time (seconds, if the gateway is online) and in amount (§9 limits).
+cryptographic enforcement mechanism and does not make physical gateway DB loss recoverable. The
+intended handoff is seconds when the gateway is online, and per-receive caps bound the amount (§9),
+but a settled backend invoice remains a gateway debt until the receiver is funded.
 This is strictly weaker than trustless receive but much narrower than a custodial wallet holding
 balances indefinitely.
 
@@ -1197,7 +1205,7 @@ output, and signed federation session history, an auditor can verify the contrac
 
 | State | Third-party evidence |
 |---|---|
-| **Not funded** | No accepted `IncomingContract` output matches the quoted `contract_id` / full contract before the funding deadline. The gateway still owes the receiver if the backend ledger shows settlement. |
+| **Not funded** | No accepted `IncomingContract` output matches the quoted `contract_id` / full contract. The gateway still owes the receiver if the backend ledger shows settlement. |
 | **Funded but unclaimed** | An accepted funding outpoint exists for the quoted contract and no later `LightningInputV0::Incoming(outpoint, ...)` spend consumes it. The receiver can still claim; the gateway did its funding job. |
 | **Claimed** | A later accepted `LightningInputV0::Incoming(outpoint, agg_decryption_key)` consumes the funding outpoint, the aggregate decryption key verifies, and decrypting the quoted contract succeeds, routing the spend through `claim_pk` (`modules/fedimint-lnv2-server/src/lib.rs:508-532`). Protocol-level evidence says the receiver-side claim path succeeded. |
 | **Refunded / invalid** | A later accepted `LightningInputV0::Incoming(outpoint, agg_decryption_key)` consumes the funding outpoint, but decrypting the quoted contract fails and routes value through `refund_pk`. The receiver did not get paid; the gateway records an auditable liability (§7.7). |
@@ -1250,27 +1258,23 @@ operator data-loss events outside this spec's recovery model (§16).
   `list_settled_invoices`), matching by `backend_correlation_id` first and `backend_invoice_hash`
   second against **every nonterminal record and every retained `InvoiceCreateInconclusive`,
   `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, and `InvoiceExpiredUnreturned` tombstone**.
-  For each `AwaitingPayment` record, **first re-check its funding deadline against fresh
-  `gateway_observed_lnv2_consensus_time`**, since a record can still read `AwaitingPayment` only
-  because the gateway was offline when it should have terminalized. Deadline-based terminalization
-  waits until the observer is fresh enough. A record still before its deadline that settled while
-  down is funded (exactly-once permitting); an **overdue** one is terminalized now:
-  settled-but-overdue →
-  `UnresolvedLiability`, unpaid-and-overdue → `InvoiceExpiredUnpaid`. A settlement matching an
-  `InvoiceExpiredUnpaid` tombstone is a **late settlement past the funding deadline** (that terminal
-  is set at the deadline, §7.3), so it's unfundable and transitions
-  `InvoiceExpiredUnpaid → UnresolvedLiability`, never a silent miss. A settlement matching
-  `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` transitions to
-  `UnresolvedLiability` with reason `UnreturnedInvoiceSettled` unless manual resolution proves the
-  original contract should still be funded. This closes the crash gap for an honest operator.
+  For each `AwaitingPayment` record, ledger-confirmed settlement moves to the funding path
+  (exactly-once permitting). If the invoice is expired and the backend's declared finality/retention
+  window proves no settlement occurred, the record becomes `InvoiceExpiredUnpaid`. Contract funding
+  deadline slack is still checked as a critical health condition, but it is not the unpaid/paid
+  terminalization rule. A settlement matching an `InvoiceExpiredUnpaid` tombstone is a
+  backend/finality surprise and returns to the automatic funding path, never a silent miss. A
+  settlement matching `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
+  `InvoiceExpiredUnreturned` also returns to the automatic funding path with
+  `UnreturnedInvoiceSettled` recorded as evidence until the receiver is funded. This closes the crash
+  gap for an honest operator.
 - **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
-  deadline and float. If the contract is still fundable and liquidity is available, one worker
-  atomically claims it into `FundingReserved`; otherwise it remains a debt waiting for liquidity or
-  escalates to `UnresolvedLiability` if the deadline has passed. Every `FundingReserved`,
+  deadline slack and float. If liquidity is available, one worker atomically claims it into
+  `FundingReserved`; otherwise it remains a debt waiting for liquidity and triggers liquidity
+  replenishment / critical slack alerts. Every `FundingReserved`,
   `FundingPrepared`, or `FundingSubmitted` record re-derives its deterministic funding `operation_id`
   and checks `operation_exists`. If the operation is present the gateway never resubmits: it
-  awaits that operation's outcome and advances to `Funded` on acceptance, or to
-  `UnresolvedLiability` if the contract expired in the meantime. The no-operation branch
+  awaits that operation's outcome and advances to `Funded` on acceptance. The no-operation branch
   **splits by state**. A `FundingReserved` record never submitted a tx, so no operation is
   expected: if the contract is still fundable it builds and prepares a fresh tx, transitioning
   through `FundingPrepared` and `FundingSubmitted`. A
@@ -1287,9 +1291,10 @@ operator data-loss events outside this spec's recovery model (§16).
   may be built only for `FundingReserved`. If the **authoritative federation client DB prefix** is
   gone, the stored tx is unrecoverable and the case is out of scope for automatic recovery.
 - **Funding-tx monitoring:** track acceptance, retry on transient federation/tx
-  errors, advance to `Funded` **only on acceptance**. If funding is rejected (e.g. the
-  contract expired during downtime), surface it as an unresolved liability (§11),
-  never a silent drop.
+  errors, advance to `Funded` **only on acceptance**. If funding is rejected, surface it as an
+  unresolved liability (§11), never a silent drop. A rejection due to contract expiration is a critical
+  policy/invariant failure because custodial receive is supposed to use a long-lived funding deadline
+  that keeps settled invoices automatically fundable.
 - **Out-of-scope local data loss:** if the authoritative federation client DB prefix is missing,
   corrupt, or rolled back, then `operation_exists`, the stored `prepared_tx`, input reservations,
   liabilities, and the funding state are gone with it. The gateway must not treat a receiver-held
@@ -1301,11 +1306,11 @@ operator data-loss events outside this spec's recovery model (§16).
 
 | Case | Policy |
 |---|---|
-| **Contract expiry vs funding** | Mitigation (not guarantee): invoice expiry **strictly before** the funding deadline with a conservative margin, and MVP quote creation requires a fresh gateway-observed LNv2 consensus-time view derived from signed session outcomes (§8). Observer staleness / downtime can still produce a late settlement. The gateway **cannot** re-issue a fresh claimable contract from `claim_pk` alone (it lacks the receiver's secret + `ephemeral_pk`). So a settled-but-unfundable payment is a **mandatory unresolved-liability path** requiring receiver cooperation / manual resolution, never a silent loss. |
+| **Contract expiry vs funding** | The contract funding deadline is an LNv2 funding-admission check, not a liability boundary. Custodial receive uses a long-lived funding deadline, strictly after invoice expiry, so settled invoices remain automatically fundable through the original contract. If the invoice expired and never settled, there is no funded on-federation contract to cancel; the quoted `IncomingContract` is just local/gateway state until funded. If a settled record approaches the funding deadline, that is a critical operational fault: disable new invoice creation, replenish liquidity, and fund before expiry. |
 | **Receiver offline** at claim time | Fine. The funded contract persists. Contract expiry is a **funding** deadline, not a claim deadline: the incoming spend has no expiry check (`modules/fedimint-lnv2-server/src/lib.rs:508`), so a funded contract stays claimable after expiry **unless already spent**. |
 | **Underpayment / amount mismatch** | The backend enforces the fixed invoice amount, so this shouldn't occur. A deviation within expected skim funds the full contract and records the loss (§8). A gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) instead of funding, consistent with §7.3. It **cannot** under-fund the fixed-amount contract, and **cannot** refund the payer. |
 | **Overpayment** | Fund the quoted `commitment.amount`. Treat surplus per fee policy. |
-| **Settled but gateway float momentarily short** (not expiry) | This is a debt, not a failed receive. Hold in explicit `SettledAwaitingLiquidity` with no reserved inputs or prepared tx, alert the operator, and fund when ecash float recovers by transitioning `SettledAwaitingLiquidity → FundingReserved → FundingPrepared`. The MVP can drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. Escalate to `UnresolvedLiability` only if the contract expires before liquidity arrives (§7.3). |
+| **Settled but gateway float momentarily short** | This is a debt, not a failed receive. Hold in explicit `SettledAwaitingLiquidity` with no reserved inputs or prepared tx, alert the operator, and fund when ecash float recovers by transitioning `SettledAwaitingLiquidity → FundingReserved → FundingPrepared`. The MVP can drive or prompt a pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. The long-lived funding deadline is chosen so liquidity recovery resolves by funding the original contract after liquidity recovers. |
 | **Receiver says they were not paid** | Resolve by contract-level evidence (§9): not funded → gateway liability if backend settled; funded but unclaimed → receiver can still claim; claimed through `claim_pk` → gateway paid at the protocol level; refunded through `refund_pk` → receiver was not paid and the gateway records a liability. A third party cannot verify the receiver's private wallet balance or local note persistence. |
 | **Webhook redelivery / double settle** | Gateway-side exactly-once (explicit-status idempotency, serialized per `contract_id`) prevents double-funding. **Consensus does not dedupe** (§7.3, §10). |
 | **Crash after funding acceptance but before DB update** | With the client DB intact the re-derived `operation_id` still exists, so the gateway awaits its outcome and marks `Funded` on acceptance, never resubmitting. A missing operation lets the gateway build a fresh tx only for a `FundingReserved` record (no prepared tx). A missing operation on a `FundingPrepared` record is expected (operation is created at submit). On a `FundingSubmitted` record it's an operation-log divergence and the tx may already have landed. Either way the gateway re-drives its exact stored `prepared_tx` (consensus-idempotent on its pinned inputs) rather than building a new one, escalating to unresolved-liability if it can't (§7.3, §10). |
@@ -1373,9 +1378,10 @@ reference backend is a complete gateway.
 because DB-intact recovery (§10) or simpler choices already cover correctness, and they add build/test
 surface without preventing a double-fund, double-spend, lost-funds, or trust hole:
 
-- **Rich operator workflow** (full reason/resolution taxonomy, evidence-bundle export,
-  operator-signed resolutions, receiver-supplied replacement contracts). The MVP keeps a minimal
-  in-prefix liability record (§7.7).
+- **Rich liability tooling** (full reason/resolution taxonomy, evidence-bundle export,
+  operator-visible audit records, automated resolution integrations). The MVP keeps a minimal
+  in-prefix liability record (§7.7) and does not define a manual or receiver-cooperative resolution
+  path.
 - **Quote-authenticated `custodial_receive_status` query**, rich dashboards, and soft health gates
   beyond the required MVP metrics (§7.7, §7.8).
 - **Two-window tombstone model** (separate settlement-finality vs ledger-retention bounds) and a
@@ -1486,8 +1492,8 @@ those come first.
      registered payment hash is not returned to the client and disables new custodial issuance for
      operator review while retaining a `BackendInvoiceRejected` tombstone for reconciliation
    - settlement of an `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
-     `InvoiceExpiredUnreturned` retained record transitions to an `UnreturnedInvoiceSettled`
-     unresolved liability rather than being silently dropped or automatically funded
+     `InvoiceExpiredUnreturned` retained record returns to the automatic funding path with
+     `UnreturnedInvoiceSettled` evidence rather than being silently dropped
    - client quote verification rejects a quote whose `observed_lnv2_consensus_time` is too far behind
      the client's own locally-observed LNv2 consensus time, or whose deadline rule fails under the
      client's own observed time

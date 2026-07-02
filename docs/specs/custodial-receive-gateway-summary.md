@@ -32,23 +32,26 @@ seconds, not an ongoing balance.
 
 - **No abort once settled.** The payer is irrevocably paid the instant the backend
   settles. The gateway is then committed to crediting the receiver, with no
-  cancel/refund path. This shapes every edge case.
+  cancel/refund path. If the backend invoice expires unpaid, no federation contract
+  has been funded, so there is no on-federation contract to cancel. This shapes every
+  edge case.
 - **Custodial handoff window.** Trust = operator honesty + DB durability between settle
   and funding, bounded by per-receive caps, liability tracking, and liquidity replenishment, and
   **normally** crash-recoverable via durable status + ledger-first startup reconciliation using
-  backend correlation IDs while the gateway DB survives (crashed ≠ lost, only delayed). But if the
-  funding deadline passes before acceptance (observer staleness / extended downtime), it becomes a
-  mandatory unresolved-liability path requiring manual / receiver-cooperative resolution. Physical
+  backend correlation IDs while the gateway DB survives (crashed ≠ lost, only delayed). Once an
+  invoice settles, the gateway owes the receiver until the original contract is funded. Physical
   gateway DB loss, rollback, or key loss is out of scope.
 - **MVP consensus-time handling.** The funding deadline is the contract `expiration_or_fee` under
-  LNv2 `consensus_unix_time`. MVP requires no new Fedimint module endpoint: the gateway derives a
-  fresh observed consensus time from existing signed session outcomes by tracking `UnixTimeVote`s
-  and applying the same threshold rule as the LNv2 server. If the observer is stale or lacks fresh
-  threshold votes, custodial receive quote creation is unavailable for that federation. The gateway
-  advertises its custodial fee and deadline policy in `RoutingInfo` before the wallet builds the
-  contract, and repeats the exact terms in the signed quote. The wallet also checks the quote's
-  observed consensus time against its own latest observed federation time, so a stale gateway cannot
-  make an already-doomed funding deadline look valid.
+  LNv2 `consensus_unix_time`; it is a Fedimint funding-admission check, not a liability boundary.
+  Custodial receive uses a long-lived funding deadline, strictly after invoice expiry, so automatic
+  funding of settled invoices remains possible. MVP requires no new Fedimint module endpoint: the
+  gateway derives a fresh observed consensus time from existing signed session outcomes by tracking
+  `UnixTimeVote`s and applying the same threshold rule as the LNv2 server. If the observer is stale or
+  lacks fresh threshold votes, custodial receive quote creation is unavailable for that federation.
+  The gateway advertises its custodial fee and deadline policy in `RoutingInfo` before the wallet
+  builds the contract, and repeats the exact terms in the signed quote. The wallet also checks the
+  quote's observed consensus time against its own latest observed federation time, so a stale gateway
+  cannot make an unsafe funding deadline look valid.
 - **Gateway-signed quote.** The gateway returns a signed receipt binding the backend
   invoice hash to the federation, contract, amounts, gateway keys, invoice expiry, and
   funding deadline, and records the gateway-observed LNv2 consensus time used for deadline
@@ -113,8 +116,9 @@ seconds, not an ongoing balance.
   payer amount minus any backend skim. The gateway's net margin is the advertised custodial
   `receive_fee` minus module fees, backend skim, and liquidity/rebalance costs, so operators must size
   `receive_fee` and float against that full outgoing funding leg. Unpaid issued invoices are contingent
-  exposure: track and alert on them, but do not reject new receives solely because they exist. Once an
-  invoice settles, it is a debt. If federation ecash is short, the MVP alerts and can drive or prompt a
+  exposure: track and alert on them, but do not reject new receives solely because they exist. Invoice
+  expiry bounds unpaid contingent exposure; once an invoice settles, it is a debt until funded. If
+  federation ecash is short, the MVP alerts and can drive or prompt a
   pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out,
   or backend-specific liquidity actions. The MVP keeps the existing `PaymentFee::RECEIVE_FEE_LIMIT`. A
   higher custodial fee cap would need separate explicit consent.
@@ -142,5 +146,5 @@ changes, but this is still pre-implementation and under review. Open items:
 `receive_fee` sizing within the existing cap, two-deadline / observer values, authenticated
 settlement confirmation details, canonical quote/terms encoding, limit / metric-alert thresholds,
 backend-trait shape, richer backend capability typing, out-of-band gateway discovery UX, consent UX,
-the prepared-transaction API shape, audit timing, and richer operator-liability taxonomy. See the detailed spec for the full protocol, trust analysis,
+the prepared-transaction API shape, audit timing, and richer liability taxonomy. See the detailed spec for the full protocol, trust analysis,
 failure modes, and implementation plan.
