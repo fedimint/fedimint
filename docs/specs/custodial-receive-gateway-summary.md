@@ -46,7 +46,9 @@ seconds, not an ongoing balance.
   and applying the same threshold rule as the LNv2 server. If the observer is stale or lacks fresh
   threshold votes, custodial receive quote creation is unavailable for that federation. The gateway
   advertises its custodial fee and deadline policy in `RoutingInfo` before the wallet builds the
-  contract, and repeats the exact terms in the signed quote.
+  contract, and repeats the exact terms in the signed quote. The wallet also checks the quote's
+  observed consensus time against its own latest observed federation time, so a stale gateway cannot
+  make an already-doomed funding deadline look valid.
 - **Gateway-signed quote.** The gateway returns a signed receipt binding the backend
   invoice hash to the federation, contract, amounts, gateway keys, invoice expiry, and
   funding deadline, and records the gateway-observed LNv2 consensus time used for deadline
@@ -85,9 +87,9 @@ seconds, not an ongoing balance.
 - **Direct-swap exclusion.** A custodial invoice is signed by the gateway's own node
   key, which would trip LNv2's intra-federation direct-swap. The gateway must never
   register custodial invoices as trustless incoming contracts. If a same-gateway sender
-  hits the custodial invoice, the selected send path must be able to see the custodial
-  pending-receive registry and return a forfeit signature so the sender refunds immediately.
-  Alternate-gateway routing is a post-MVP optimization.
+  hits the custodial invoice, the selected send path must detect
+  `backend_invoice_hash -> CustodialPending` in the shared registry and return a forfeit signature so
+  the sender refunds immediately. Pre-funding alternate-gateway routing is a post-MVP optimization.
 - **Not transparent to legacy clients.** Custodial receive needs an explicit opt-in
   entrypoint and a *separate* gateway endpoint. Capability advertisement alone is
   insufficient for legacy clients, because gateway selection is reachability-based. New clients use

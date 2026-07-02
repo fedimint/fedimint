@@ -235,15 +235,13 @@ it in consent / support UI.
 - `select_gateway_for_send(invoice, policy)`: a sender can't reliably tell from a Bolt11 invoice
   that it's custodial, so it doesn't pre-classify arbitrary invoices. It considers the same union
   candidate set. If the invoice payee key matches a trustless-capable candidate, preserve today's
-  direct-swap preference. If it matches only a known custodial-only candidate, do not select that
-  candidate to pay its own invoice; choose another send-capable candidate or fail before funding with
-  a typed local "no non-self gateway" error. If the payee key matches a dual-capable candidate, or a
-  caller explicitly chooses a same-payee gateway, the selected gateway detects the invoice's
-  `backend_invoice_hash` in `PendingCustodialReceive` and returns a **forfeit signature** so the
-  sender refunds the funded contract (the **required** behavior, §7.6). **(Optional, post-MVP)** a
-  `select_gateway_for_send(avoid_payee_gateway = true)` reselection, done **pre-funding** so the
-  alternate gateway is the contract's `claim_pk` from the start (there's no in-place reroute after
-  funding, §7.6). The MVP refunds and the caller reselects.
+  direct-swap preference. MVP does **not** add pre-funding custodial self-pay classification or
+  alternate-gateway reselection. If the selected same-payee gateway sees its own
+  `backend_invoice_hash` in the custodial pending-receive registry, it returns a **forfeit signature**
+  so the sender refunds the funded contract (the **required** behavior, §7.6). **(Optional,
+  post-MVP)** a `select_gateway_for_send(avoid_payee_gateway = true)` reselection can avoid this
+  wasted funding/refund round-trip, but it must happen **pre-funding** so the alternate gateway is the
+  contract's `claim_pk` from the start (there's no in-place reroute after funding, §7.6).
 
 Custodial receive is still exposed via a **separate endpoint** (e.g.
 `create_custodial_bolt11_invoice`) gated behind an API version, with a custodial-only gateway
@@ -280,8 +278,8 @@ changing existing `gatewayd` behavior and legacy discovery semantics.
    `GATEWAYS_ENDPOINT`, and new wallets reach it only through wallet/app/operator-supplied candidate
    URLs. This is the preferred MVP shape and can avoid changing existing `gatewayd` request handling.
    If this process also exposes trustless send for new wallets, that send handler must be able to
-   inspect its own custodial pending-receive registry; otherwise new-wallet send selection must avoid
-   routing same-payee custodial invoices to it before funding.
+   inspect its own custodial pending-receive registry and return the forfeit signature for same-payee
+   custodial invoices.
 2. **Dual-capable mode.** A gateway that advertises both trustless and custodial receive and remains
    in `GATEWAYS_ENDPOINT` must run the send/direct-swap path with access to the custodial pending
    receive registry. That can be one process, a shared DB-backed receive registry, or a local service
@@ -318,10 +316,10 @@ offset pagination, the adapter uses a high-watermark (`completed_at_ms`) plus an
 and de-dupes by `backend_invoice_hash` / `backend_correlation_id`. Offset alone is not a valid
 durable cursor (newer payments can shift offsets, missing or duplicating records). The cursor is
 **rebuildable**, not a source of truth: on loss the gateway point-looks-up **every nonterminal
-authoritative record and every retained `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or
-`InvoiceExpiredUnreturned` tombstone** (the `AwaitingPayment` and other nonterminal
-`PendingCustodialReceive` entries, plus tombstones, that persist in the federation client DB prefix)
-by `backend_correlation_id` /
+authoritative record and every retained `InvoiceCreateInconclusive`, `InvoiceExpiredUnpaid`,
+`BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` tombstone** (the `AwaitingPayment` and other
+nonterminal `PendingCustodialReceive` entries, plus retained terminal records, that persist in the
+federation client DB prefix) by `backend_correlation_id` /
 `backend_invoice_hash`, driven by the records themselves rather than a fixed time window (downtime
 can exceed any window). This works **within backend ledger retention**, which is a **hard
 prerequisite**, not just something to monitor: ledger-first recovery is only as good as the ledger's
@@ -449,7 +447,9 @@ New `custodial-gatewayd` logic, per connected federation:
    the adapter's declared point after which a no-result `get_invoice_by_external_id(include_unpaid =
    true)` is authoritative for that maybe-sent attempt. Backends that cannot provide such a
    visibility guarantee must not retry a maybe-sent create; they leave the record
-   `InvoiceCreateInconclusive`.
+   `InvoiceCreateInconclusive`. That retained record remains in ledger reconciliation by
+   `backend_correlation_id`: if the maybe-sent invoice later appears or settles, the gateway records an
+   unresolved liability instead of silently missing the payment.
 
    The draft is still bounded by freshness. If no backend invoice exists yet, a handler may call
    `create_plain_invoice` only while the draft still satisfies the create-time safety checks:
@@ -600,9 +600,11 @@ New `custodial-gatewayd` logic, per connected federation:
    `AwaitingPayment` goes to `InvoiceExpiredUnpaid` (the **funding deadline** passed, never settled,
    §7.3 limits) or to `UnresolvedLiability` (settled-but-overdue, or gross `BackendMismatch`). An
    `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` tombstone goes to
-   `UnresolvedLiability` on a late settlement, while `InvoiceCreateInconclusive` requires operator
-   review because the gateway cannot safely prove whether a backend invoice was created. Any funding
-   state goes to `UnresolvedLiability` (§11). The record **retains `prepared_tx`** from
+   `UnresolvedLiability` on a late settlement. `InvoiceCreateInconclusive` requires operator review
+   because the gateway cannot safely prove whether a backend invoice was created, but it is still
+   retained in ledger reconciliation; a matching settlement transitions to `UnresolvedLiability` with
+   reason `UnreturnedInvoiceSettled`. Any funding state goes to `UnresolvedLiability` (§11). The
+   record **retains `prepared_tx`** from
    `FundingPrepared` onward (the `operation_id` and `txid` are added markers, not a replacement),
    so a later state re-drives the exact transaction with its pinned inputs, not just a txid.
    A short-float receive commits `SettledAwaitingLiquidity`: backend settled, actual debt exists, but
@@ -689,7 +691,9 @@ New `custodial-gatewayd` logic, per connected federation:
    both trustless and custodial receive for the same federation/module key, there is exactly one
    active owner for each `(federation_id, contract_id)`, each contract `PaymentImage`, and each
    same-gateway direct-swap payment hash:
-   `TrustlessRegistered` or `CustodialPending`, never both. The normal
+   `TrustlessRegistered` or `CustodialPending`, never both. Concretely, the direct-swap registry has a
+   `backend_invoice_hash -> CustodialPending { federation_id, contract_id, quote_id, invoice_amount }`
+   entry for each returned custodial backend invoice. The normal
    `create_bolt11_invoice_v2` path must reject a contract/payment image already reserved by
    custodial receive, and `create_custodial_bolt11_invoice` must reject a contract/payment image
    already registered for trustless receive. The rejection is `DuplicateContractConflict` if the full
@@ -702,8 +706,11 @@ New `custodial-gatewayd` logic, per connected federation:
    reviewed, and continues ledger reconciliation for that invoice through the retention window.
 
    This invariant must be enforced by the same transaction/registry used for direct-swap detection in
-   dual-capable mode. A separate custodial-only binary that does not share such a registry must not
-   share the same gateway module key and Lightning node key with a legacy-listed trustless gateway.
+   dual-capable mode. Recovery of any post-create custodial record must re-derive and atomically
+   reassert the `backend_invoice_hash -> CustodialPending` entry before the record is treated as
+   active or the quote/invoice is returned. A separate custodial-only binary that does not share such a
+   registry must not share the same gateway module key and Lightning node key with a legacy-listed
+   trustless gateway.
 
 4. **Post-funding invalid-contract audit (never blocks the receiver).** The custodial funding
    helper skips the gateway receive state machine, so it also skips that machine's invalid-contract
@@ -824,8 +831,13 @@ mode flag on `receive`:
   ```
 
   These checks verify the deadline arithmetic against the quoted observed consensus time. They do
-  not prove that the gateway's observer was fresh when it signed; MVP treats freshness as a gateway
-  hard gate and operational metric, not as quote-carried evidence.
+  not prove that the gateway's observer was fresh when it signed, so the client also sanity-checks the
+  quote against its own latest locally-observed LNv2 consensus time from signed session outcomes. The
+  client rejects the quote if `observed_lnv2_consensus_time` lags the client's latest observed
+  consensus time by more than `terms.consensus_time_observation_max_age_secs`, or if applying the same
+  funding-deadline rule to the client's own observed consensus time would fail. This client check is a
+  malicious/stale-gateway defense; the gateway remains responsible for not signing when its observer
+  is stale (§7.8).
 
   The client must also confirm the contract's own `refund_pk` equals
   `gateway_module_pk`, so the unclaimable-contract windfall (§9, §11) can only route back
@@ -871,14 +883,14 @@ which does not satisfy the sender's outgoing contract keyed to `H′`.
 The gateway therefore MUST:
 - **Never** register a custodial pending-receive as if it were a trustless incoming
   contract keyed on the invoice hash.
-- Detect its own custodial invoice on the send/direct-swap path (its `H′` is in
-  `PendingCustodialReceive`) and handle it explicitly. Same-gateway self-pay of a
-  custodial invoice cannot complete over Lightning either (a node cannot route to its
+- Detect its own custodial invoice on the send/direct-swap path by looking up `H′` in the shared
+  `backend_invoice_hash -> CustodialPending` registry (§7.3) and handle it explicitly. Same-gateway
+  self-pay of a custodial invoice cannot complete over Lightning either (a node cannot route to its
   own invoice), so the gateway returns a **forfeit signature** so the sender refunds the funded
   contract (the domain outcome, since a typed error would be redacted or retried forever, §7.6, §7.9)
   rather than the confusing `RegistrationError` / wrong-preimage behavior. A future version may add an
-  internal custodial self-pay that funds the receiver's contract directly from the
-  sender's outgoing contract.
+  internal custodial self-pay that funds the receiver's contract directly from the sender's outgoing
+  contract.
 
 For the common case (sender and receiver use *different* gateways), the custodial
 invoice's payee is not the sender-gateway's key, so direct swap never triggers and the
@@ -891,8 +903,8 @@ key matches the invoice payee (`select_gateway` with the invoice,
 custodial invoice's payee is the custodial gateway itself, which can neither direct-swap it nor
 route to its own node. The send path must **not** require the sender to pre-classify the invoice as
 custodial, since a Bolt11 invoice doesn't carry that fact. Instead the payee gateway detects its
-own `backend_invoice_hash` in `PendingCustodialReceive` and, because it can neither direct-swap nor
-route to its own node, **returns a forfeit signature** (the existing `Err(Signature)` half of the
+own `backend_invoice_hash` in the `CustodialPending` registry and, because it can neither direct-swap
+nor route to its own node, **returns a forfeit signature** (the existing `Err(Signature)` half of the
 send response, `modules/fedimint-lnv2-common/src/gateway_api.rs:48`), so the sender refunds the
 just-funded `OutgoingContract` immediately via `OutgoingWitness::Cancel`
 (`modules/fedimint-lnv2-client/src/send_sm.rs:238-266`). This is the **required** MVP behavior. A
@@ -901,7 +913,8 @@ to one generic string, `gateway/fedimint-gateway-server/src/error.rs:81-84`) nor
 error (the send SM retries those forever, `send_sm.rs:193-216`), so the forfeit signature is the
 domain outcome that drives the refund (§7.9).
 
-There is **no in-place retry** through another gateway: by the time the gateway is contacted the
+There is **no MVP pre-funding custodial self-pay avoidance** and no in-place retry through another
+gateway: by the time the gateway is contacted the
 `OutgoingContract` is already funded with `claim_pk` = the payee gateway's module key
 (`modules/fedimint-lnv2-client/src/lib.rs:597-639`), so re-routing means a fresh send funded to the
 alternate gateway. Doing that automatically without a wasted funding round-trip needs a
@@ -1107,6 +1120,9 @@ funds the contract **after** settlement, it knows the exact backend credit befor
   unavailable until that observer is fresh enough. The signed quote records this value as
   `observed_lnv2_consensus_time` so the deadline calculation is auditable (§7.3), but the quote does
   not itself prove observer freshness; that remains a gateway-enforced hard gate and metric (§7.8).
+  The client also checks this quoted value against its own latest locally-observed LNv2 consensus time
+  (§7.4) so a stale or dishonest gateway cannot make an already-doomed funding deadline look valid by
+  reporting an old observation.
 
   The gateway rejects custodial invoice creation unless:
 
@@ -1208,9 +1224,10 @@ operator data-loss events outside this spec's recovery model (§16).
   status (`InvoiceCreating → AwaitingPayment → SettledAwaitingLiquidity → FundingReserved →
   FundingPrepared(prepared_tx) → FundingSubmitted(prepared_tx, operation_id, txid) →
   Funded(outpoint)`), with terminal branches `InvoiceExpiredUnpaid` (tombstoned),
-  `InvoiceCreationExpired` (no backend invoice created), `InvoiceCreateInconclusive` (maybe-sent
-  backend create cannot be proven absent), `BackendInvoiceRejected` / `InvoiceExpiredUnreturned`
-  (retained tombstones for unreturned backend invoices), and `UnresolvedLiability`.
+  `InvoiceCreationExpired` (no backend invoice created), `InvoiceCreateInconclusive` (retained
+  maybe-sent backend create cannot be proven absent), `BackendInvoiceRejected` /
+  `InvoiceExpiredUnreturned` (retained tombstones for unreturned backend invoices), and
+  `UnresolvedLiability`.
 - **Idempotent invoice creation** (§7.3): a record stuck in `InvoiceCreating` after a crash is
   resolved by `get_invoice_by_external_id(backend_correlation_id, include_unpaid = true)`. If the
   backend invoice exists, complete the `AwaitingPayment` record if the invoice is still safe to
@@ -1231,8 +1248,8 @@ operator data-loss events outside this spec's recovery model (§16).
 - **Startup reconciliation:** on boot, the `CustodialSettlementObserver` polls the backend's
   authenticated ledger from its durable cursor (phoenixd `GET /payments/incoming` /
   `list_settled_invoices`), matching by `backend_correlation_id` first and `backend_invoice_hash`
-  second against **every nonterminal record and every retained `InvoiceExpiredUnpaid`,
-  `BackendInvoiceRejected`, and `InvoiceExpiredUnreturned` tombstone**.
+  second against **every nonterminal record and every retained `InvoiceCreateInconclusive`,
+  `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, and `InvoiceExpiredUnreturned` tombstone**.
   For each `AwaitingPayment` record, **first re-check its funding deadline against fresh
   `gateway_observed_lnv2_consensus_time`**, since a record can still read `AwaitingPayment` only
   because the gateway was offline when it should have terminalized. Deadline-based terminalization
@@ -1243,9 +1260,9 @@ operator data-loss events outside this spec's recovery model (§16).
   `InvoiceExpiredUnpaid` tombstone is a **late settlement past the funding deadline** (that terminal
   is set at the deadline, §7.3), so it's unfundable and transitions
   `InvoiceExpiredUnpaid → UnresolvedLiability`, never a silent miss. A settlement matching
-  `BackendInvoiceRejected` or `InvoiceExpiredUnreturned` transitions to `UnresolvedLiability` with
-  reason `UnreturnedInvoiceSettled` unless manual resolution proves the original contract should still
-  be funded. This closes the crash gap for an honest operator.
+  `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` transitions to
+  `UnresolvedLiability` with reason `UnreturnedInvoiceSettled` unless manual resolution proves the
+  original contract should still be funded. This closes the crash gap for an honest operator.
 - **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
   deadline and float. If the contract is still fundable and liquidity is available, one worker
   atomically claims it into `FundingReserved`; otherwise it remains a debt waiting for liquidity or
@@ -1365,10 +1382,11 @@ surface without preventing a double-fund, double-spend, lost-funds, or trust hol
   richer late-settlement finality model (§7.3 limits).
 - **A second concrete backend and a richer backend capability matrix** beyond the phoenixd reference
   path (the generic notify-only *design* stands, §7.2, and only additional backends and a fuller
-  capability matrix are post-MVP), and **automatic pre-funding alternate-gateway routing** for a
-  same-gateway custodial invoice (a pre-funding classification step so the alternate gateway is the
-  contract `claim_pk` from the start). The MVP forfeit-refunds and the caller reselects (§7.6), and
-  the optimization only saves a wasted funding round-trip, so it's deferred.
+  capability matrix are post-MVP).
+- **Automatic pre-funding alternate-gateway routing** for a same-gateway custodial invoice. This needs
+  a pre-funding classification step so the alternate gateway is the contract `claim_pk` from the
+  start. The MVP forfeit-refunds and the caller reselects (§7.6); the optimization only saves a wasted
+  funding/refund round-trip, so it is deferred.
 
 ## 15. Implementation phases
 
@@ -1385,8 +1403,8 @@ those come first.
    (§7.6, §7.9), plus the rule that legacy `GATEWAYS_ENDPOINT` remains trustless-compatible only.
    If dual-capable mode is included in MVP, this phase also adds the direct-swap receive-registry hook
    in the legacy-listed gateway process. If MVP is custodial-only/out-of-band only, that hook is
-   deferred and same-gateway protection is limited to send handlers that can inspect the custodial
-   pending-receive registry.
+   needed only for send handlers that share the custodial gateway's payee key; handlers that do not
+   share that key never receive the same-gateway self-pay case.
 3. **Backend**: `LightningMode::Phoenixd` + notify-only backend adapter (send + `create_plain_invoice`
    with `external_id` + `subscribe_invoice_settled` hints + `list_settled_invoices` /
    `get_invoice_by_hash` / `get_invoice_by_external_id` ledger queries, the declared retention
@@ -1429,6 +1447,9 @@ those come first.
    - expired create lease after a maybe-sent backend request: if backend lookup cannot prove no invoice
      was created, the record becomes `InvoiceCreateInconclusive` and no second backend invoice is
      created
+   - an `InvoiceCreateInconclusive` record remains in ledger reconciliation by
+     `backend_correlation_id`; if the maybe-sent invoice later settles, it transitions to
+     `UnreturnedInvoiceSettled` unresolved liability rather than being silently missed
    - stale draft recovery: if no backend invoice exists and the draft is no longer within freshness /
      deadline margins, no backend invoice is created; if a backend invoice exists but is no longer safe
      to return, the gateway retains a tombstone for late-settlement reconciliation and returns a typed
@@ -1449,6 +1470,9 @@ those come first.
    - a **same-federation sender paying a custodial invoice via a non-payee gateway** (§7.6), and a
      same-gateway custodial self-pay where the gateway **returns a forfeit signature** so the sender
      refunds the funded contract immediately and never retries it as an infinite transport error (§7.6)
+   - crash after backend invoice creation but before `backend_invoice_hash -> CustodialPending`
+     reservation: recovery re-derives and atomically reasserts the registry entry before the quote is
+     returned or the receive is treated as active
    - an **invalid contract opening a liability after the gateway refund audit** (§7.3, §7.7)
    - **offset-pagination recovery** with overlap + dedupe, proving no settled invoice is missed or
      double-counted
@@ -1461,9 +1485,12 @@ those come first.
    - backend invoice hash collision: a custodial backend invoice hash that matches an active trustless
      registered payment hash is not returned to the client and disables new custodial issuance for
      operator review while retaining a `BackendInvoiceRejected` tombstone for reconciliation
-   - settlement of a `BackendInvoiceRejected` / `InvoiceExpiredUnreturned` tombstone transitions to an
-     `UnreturnedInvoiceSettled` unresolved liability rather than being silently dropped or
-     automatically funded
+   - settlement of an `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
+     `InvoiceExpiredUnreturned` retained record transitions to an `UnreturnedInvoiceSettled`
+     unresolved liability rather than being silently dropped or automatically funded
+   - client quote verification rejects a quote whose `observed_lnv2_consensus_time` is too far behind
+     the client's own locally-observed LNv2 consensus time, or whose deadline rule fails under the
+     client's own observed time
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by itself
    - a settled invoice with short ecash float remains a debt, waits in `SettledAwaitingLiquidity`, and
