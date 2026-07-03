@@ -88,6 +88,11 @@ pub struct ProvisionalCustodialReceive {
     pub client_request_id: sha256::Hash,
     pub request_fingerprint: sha256::Hash,  // computed identically to gateway (§7.3)
     pub invoice_amount: Amount,
+    pub description: Bolt11InvoiceDescription, // needed to rebuild the identical payload on retry
+    pub quote_api_version: u16,                // ditto
+    pub selected_capability: CustodialReceiveCapability, // capability snapshot used to size the
+                                            // contract; restart-deterministic verification of
+                                            // terms.receive_fee (§3.3.4) reads THIS, not a fresh probe
     pub requested_invoice_expiry: u64,      // absolute
     pub funding_deadline: u64,              // absolute
     pub pruning_policy: PruningPolicy,      // persisted capability fields (§7.4): max_age + safety_margin
@@ -108,8 +113,9 @@ test). `Expired` watcher outcome does not delete the record; pruning does (§3.4
    `invoice.recover_payee_pub_key() == gateway_ln_pk == RoutingInfo.lightning_public_key`
    (replaces the skipped hash check, §7.4); invoice amount == `quote.invoice_amount` == requested
    `amount` (keep `:981` check); invoice expiry consistent with `quote.invoice_expiry`.
-4. Terms: compatible with advertised capability; `terms.receive_fee` equals the fee used to size
-   the contract (else reject, §7.1); `terms.receive_fee.le(&RECEIVE_FEE_LIMIT)`.
+4. Terms: compatible with the **stored** `selected_capability` snapshot (restart-safe — never a
+   fresh probe); `terms.receive_fee == selected_capability.receive_fee` (the fee used to size the
+   contract, else reject, §7.1); `terms.receive_fee.le(&RECEIVE_FEE_LIMIT)`.
 5. Amount binding (both §7.4 inequalities + exact `subtract_from` equality).
 6. Deadline arithmetic (§7.4 text block, incl. upper bounds) against
    `quote.observed_lnv2_consensus_time`; then the independent time-reference sanity check
@@ -132,7 +138,9 @@ the record and lets the watcher's `Expired` path finalize the operation.
 - Gateway returns `Created` twice (retry): verification is deterministic; second upgrade is a
   no-op.
 - Wallet restart mid-flow: provisional record + armed watcher survive; a stored
-  `AwaitingResponse` phase may re-send the identical request (fingerprint match ⇒ idempotent).
+  `AwaitingResponse` phase re-sends the identical request rebuilt entirely from the record
+  (contract, amount, `description`, `requested_invoice_expiry`, `quote_api_version` — fingerprint
+  match ⇒ idempotent), and verifies any response against the stored `selected_capability`.
 - Amount edge: `amount` such that `subtract_from` saturates ⇒ rejected at step 2 (§15 bullet).
 
 ## 5. Test plan

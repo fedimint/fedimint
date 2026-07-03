@@ -13,8 +13,10 @@ any federation endpoint (none is added, §7.5).
 
 ## 2. Grounding in current code (verified)
 
-- `RoutingInfo` derives only serde traits (`gateway_api.rs:142`), so additive fields with
-  `#[serde(default)]` are backward-compatible on the HTTP JSON surface.
+- `RoutingInfo` derives no Fedimint `Encodable`/`Decodable` — only std traits plus
+  `Serialize`/`Deserialize` (`Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize`,
+  `gateway_api.rs:142`) — so additive fields with `#[serde(default)]` are backward-compatible on
+  the HTTP JSON surface.
 - `CreateBolt11InvoicePayload { federation_id, contract, amount, description, expiry_secs }`
   (`gateway_api.rs:125`), `SendPaymentPayload { federation_id, outpoint, contract, invoice, auth }`
   (`:134`); send response is `Result<Result<[u8; 32], Signature>, ServerError>` (`:48`).

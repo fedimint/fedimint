@@ -202,8 +202,9 @@ pub struct CustodialReceiveCapability {
 
 A capability struct (not a binary `Trustless | Custodial` mode) lets a gateway advertise
 trustless receive, custodial fallback, or custodial-only receive, and carries the limits the
-client needs to size and select, not just a flag. `RoutingInfo` derives only
-`Serialize`/`Deserialize`, not Fedimint `Encodable`/`Decodable` (`gateway_api.rs:142`), so this
+client needs to size and select, not just a flag. `RoutingInfo` derives no Fedimint
+`Encodable`/`Decodable` — its wire surface is serde JSON (plus std traits including `Hash`,
+`gateway_api.rs:142`) — so this
 is a `#[serde(default)]` add. `CustodialReceiveCapability.receive_fee` is the fee the client uses to
 size the custodial contract before requesting the backend invoice. The top-level legacy
 `RoutingInfo.receive_fee` remains the trustless-receive fee for existing clients. A dual-capable

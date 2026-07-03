@@ -126,13 +126,25 @@ a backend invoice exists, violating the §7.9 pre-create invariant; the parent e
 a persisted duplicate to get the stored invoice+quote back even while new issuance is disabled):
 
 1. compute `contract_id` + `request_fingerprint` (shared lnv2-common function, spec 02 — payload
-   fields only, never current config); look up the stored record:
-   same fingerprint + `AwaitingPayment` → return stored `Created{invoice, quote}` if still safe,
-   else `BackendInvoiceUnreturnable`; live lease → `CreateInProgress`; retained maybe-create
-   states → `BackendInvoiceUnreturnable`; different fingerprint → `DuplicateContractConflict`
-   (validated against the *stored draft*, §7.3)
-2. issuance enabled for NEW requests? (`IssuanceDisabled`, coverage gate §7.2, health gates §7.8)
-   → `CustodialReceiveDisabled` / `BackendInvoiceCreationUnavailable`
+   fields only, never current config); look up the stored record and, on a same-fingerprint
+   match, answer from it — for **every** post-create state, not just `AwaitingPayment`:
+   - `AwaitingPayment` → stored `Created{invoice, quote}` if the invoice is still safe to
+     return, else `BackendInvoiceUnreturnable`;
+   - `SettledAwaitingLiquidity` / `FundingReserved` / `FundingPrepared` / `FundingSubmitted` /
+     `Funded` → stored `Created{invoice, quote}` unconditionally (the invoice is paid; the quote
+     is the durable receipt the client needs, and invoice staleness is moot once settled);
+   - live lease (`InvoiceCreating`) → `CreateInProgress`;
+   - retained maybe-create / tombstone states (`InvoiceCreateInconclusive`,
+     `BackendInvoiceRejected`, `InvoiceExpiredUnreturned`, `InvoiceExpiredUnpaid`) →
+     `BackendInvoiceUnreturnable`;
+   - different fingerprint (any state) → `DuplicateContractConflict` (validated against the
+     *stored draft*, §7.3).
+   No same-contract lookup result may fall through to the new-request gates below — that is what
+   keeps the §7.9 pre-create invariant airtight for every record state.
+2. issuance enabled for NEW requests? Mapping is reason-specific: feature/policy disabled →
+   `CustodialReceiveDisabled`; backend cannot provide authenticated ledger confirmation or the
+   declared retention-coverage gate fails (§7.2) → `BackendLedgerUnavailable`; internal
+   persistence/abuse/health gates (§7.8) → `BackendInvoiceCreationUnavailable`
 3. `quote_api_version` supported → `UnsupportedQuoteVersion`
 4. `contract.verify()` → `InvalidContract`; `refund_pk == module key` → `WrongRefundKey`
 5. amount granularity (§7.4) → `NonSatoshiAmount`
@@ -157,7 +169,11 @@ issuance, §7.3) → sign quote → commit `AwaitingPayment` → return `Created
 ## 6. Settlement observation & funding
 
 - **Observer loop** per federation: wake on authenticated hint or poll tick; pull ledger pages
-  from `LedgerCursor` with overlap; for each settled invoice: match by correlation id then hash
+  from `LedgerCursor` with overlap. On cursor loss or corruption, do **not** trust any time
+  window: rebuild by point-looking-up every nonterminal record and every retained tombstone by
+  `backend_correlation_id` / `backend_invoice_hash` (record-driven, §7.2), then re-seed the
+  watermark from the newest confirmed settlement. For each settled invoice: match by correlation
+  id then hash
   against (a) nonterminal records, (b) retained tombstones (apply `fund_on_settlement` +
   deadline branch §7.3), (c) else `UnmatchedSettlement` (record, alert, disable issuance).
   Advance a matched `AwaitingPayment` only after `get_settled_invoice_by_hash` /

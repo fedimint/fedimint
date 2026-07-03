@@ -58,6 +58,10 @@ pub struct PreparedTransaction {
     pub change_range: IdxRange,
     pub fees: Amounts,
     pub txid: TransactionId,
+    /// Operation-log creation time, fixed at prepare. Submit and every re-drive
+    /// use THIS value for the op-log chronological index key (see §3.4.9), so all
+    /// submit-tail writes are deterministic and idempotent across re-drives.
+    pub oplog_creation_time: u64,
 }
 ```
 
@@ -179,7 +183,14 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
    `client.rs:1048`, `oplog.rs:67`). `submit_prepared_transaction(_dbtx)` therefore MUST use
    insert-if-absent semantics for the fees key and op-log entry — verifying an existing value is
    equal to what it would write (mismatch ⇒ invariant error, never overwrite) — and re-installs
-   state machines only when absent. It must not call `insert_new_entry` for these keys.
+   state machines only when absent. It must not call `insert_new_entry` for these keys. The op
+   log is TWO keys — `OperationLogKey` plus a chronological index keyed by creation time
+   (`oplog.rs:67`, `fedimint-client/src/db.rs:187`) — and today's write stamps `now()`. Submit
+   must instead pass the stored `oplog_creation_time` (fixed at prepare) through an idempotent
+   op-log helper (`add_operation_log_entry_idempotent_dbtx(..., creation_time)`), so a re-drive
+   writes byte-identical keys for both rows: if `OperationLogKey` exists, both writes are
+   skipped after verify-equal; a fresh `now()` on re-drive would duplicate or orphan the
+   chronological index row.
 
 ### 3.5 Crash matrix
 

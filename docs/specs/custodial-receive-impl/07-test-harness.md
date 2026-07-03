@@ -80,6 +80,7 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | duplicate externalId disables issuance | `duplicate_external_id_halts_issuance` | G |
 | conflicting duplicate vs fingerprint | `fingerprint_conflict_rejected`, client retains claim material `conflict_retains_claim_material` | G+C |
 | root-index loss rebuild | `root_index_rebuild_from_prefix` | G |
+| cursor loss rebuild (§7.2, record-driven) | `cursor_loss_point_lookups_every_record` (delete `LedgerCursor`; assert every nonterminal + retained record is point-looked-up and no settlement is missed, incl. one older than any polling window) | G |
 | forged webhook ignored | `forged_hint_ignored_until_ledger_confirms` | G |
 | payee-binding + quote verification | `quote_verification_matrix` (every §3.3 check of spec 06) | C |
 | legacy list excludes custodial-only; trustless selection skips | `legacy_list_and_selection_policy` | C |
