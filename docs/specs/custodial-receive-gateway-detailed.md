@@ -157,7 +157,8 @@ backend invoice settles, the gateway owes the receiver until the original contra
 funding deadline is the contract's `expiration_or_fee`, interpreted against the LNv2 server's
 `consensus_unix_time` (`modules/fedimint-lnv2-server/src/lib.rs:563`), and is only the federation's
 admission check for funding the original contract. For custodial receive the client chooses a
-long-lived funding deadline so settled invoices remain automatically fundable. For MVP, the gateway
+long-lived funding deadline, within the gateway's advertised minimum and maximum bounds (§7.1, §8),
+so settled invoices remain automatically fundable. For MVP, the gateway
 does **not** require a new federation endpoint for this value: it derives a
 `gateway_observed_lnv2_consensus_time` by watching existing signed session outcomes, tracking the
 latest `UnixTimeVote` per guardian, and applying the same threshold-time selection used by the LNv2
@@ -181,9 +182,11 @@ pub struct ReceiveCapabilities {
 pub struct CustodialReceiveCapability {
     pub receive_fee: PaymentFee,              // pre-request fee used to size the contract
     pub max_receive_amount: Amount,           // per-receive cap (§9)
-    pub max_in_flight: Amount,                // aggregate settled/funding liability target (§9)
+    pub max_in_flight: Amount,                // aggregate settled/funding liability target, per federation (§9)
     pub min_invoice_to_funding_deadline_delta_secs: u64, // invoice-expiry to funding-deadline gap (§8)
     pub min_contract_lifetime_secs: u64,      // minimum lifetime from observed consensus time (§8)
+    pub max_invoice_expiry_secs: u64,         // upper bound on requested invoice lifetime (§8)
+    pub max_funding_deadline_secs: u64,       // upper bound on funding deadline past observed consensus time (§8)
     pub consensus_time_observation_max_age_secs: u64, // stale-observer budget (§8)
     pub safety_margin_secs: u64,              // extra gateway policy margin (§8)
     pub invoice_amount_granularity_msats: u64, // phoenixd = 1000 (sat-only backend, §7.4)
@@ -207,7 +210,8 @@ size the custodial contract before requesting the backend invoice. The top-level
 gateway may set the two equal, but the custodial client must use the mode-specific custodial fee and
 must reject a quote whose `terms.receive_fee` differs from the advertised fee it used to construct
 the contract. If the gateway changes fees between selection and request, the request is rejected
-before backend invoice creation and the client reselects/retries with fresh `RoutingInfo`. The
+with `FeeOrAmountBindingMismatch` (§7.9) before backend invoice creation and the client
+reselects/retries with fresh `RoutingInfo`. The
 deadline-policy fields intentionally duplicate fields later embedded in `CustodialReceiveTerms`:
 `RoutingInfo` is the pre-request policy the wallet needs before it builds an `IncomingContract`,
 while the signed quote is the exact per-receive commitment the client verifies and stores.
@@ -236,9 +240,10 @@ it in consent / support UI.
   that it's custodial, so it doesn't pre-classify arbitrary invoices. It considers the same union
   candidate set. If the invoice payee key matches a trustless-capable candidate, preserve today's
   direct-swap preference. MVP does **not** add pre-funding custodial self-pay classification or
-  alternate-gateway reselection. If the selected same-payee gateway sees its own
-  `backend_invoice_hash` in the custodial pending-receive registry, it returns a **forfeit signature**
-  so the sender refunds the funded contract (the **required** behavior, §7.6). **(Optional,
+  alternate-gateway reselection. A same-payee gateway hitting its own custodial invoice returns a
+  **forfeit signature** so the sender refunds the funded contract (the **required outcome**, which
+  already emerges from the failed registered-contract lookup; the custodial pending-receive registry
+  lookup labels it, §7.6). **(Optional,
   post-MVP)** a `select_gateway_for_send(avoid_payee_gateway = true)` reselection can avoid this
   wasted funding/refund round-trip, but it must happen **pre-funding** so the alternate gateway is the
   contract's `claim_pk` from the start (there's no in-place reroute after funding, §7.6).
@@ -277,20 +282,28 @@ changing existing `gatewayd` behavior and legacy discovery semantics.
 1. **Custodial-only, out-of-band mode.** `custodial-gatewayd` is not registered in the legacy
    `GATEWAYS_ENDPOINT`, and new wallets reach it only through wallet/app/operator-supplied candidate
    URLs. This is the preferred MVP shape and can avoid changing existing `gatewayd` request handling.
-   If this process also exposes trustless send for new wallets, that send handler must be able to
-   inspect its own custodial pending-receive registry and return the forfeit signature for same-payee
-   custodial invoices.
+   If this process also exposes trustless send for new wallets, a same-payee custodial invoice
+   already cancels with a forfeit signature when the registered-contract lookup fails (§7.6);
+   inspecting the custodial pending-receive registry lets the handler label that cancellation as
+   custodial self-pay instead of a generic registration error.
 2. **Dual-capable mode.** A gateway that advertises both trustless and custodial receive and remains
    in `GATEWAYS_ENDPOINT` must run the send/direct-swap path with access to the custodial pending
    receive registry. That can be one process, a shared DB-backed receive registry, or a local service
-   call from `gatewayd` to `custodial-gatewayd`, but it must be atomic enough for the direct-swap path
-   to detect `backend_invoice_hash` and return the forfeit signature (§7.6). A dual-capable gateway
+   call from `gatewayd` to `custodial-gatewayd`, but it must be atomic enough for invoice creation on
+   either path to enforce the cross-path namespace invariant (§7.3) and for the direct-swap path to
+   label a same-payee custodial invoice precisely; the forfeit-refund outcome itself already emerges
+   from the failed registered-contract lookup (§7.6). A dual-capable gateway
    is not the "no existing gatewayd behavior change" path.
 
-A deployment MUST NOT share one Lightning node key and gateway module key between a legacy-listed
-`gatewayd` and a separate `custodial-gatewayd` unless the legacy-listed send path can query the
-custodial pending-receive registry. Otherwise same-gateway custodial invoices fail as ordinary
-registration errors instead of the specified forfeit-refund outcome.
+A deployment SHOULD NOT share one Lightning node key and gateway module key between a legacy-listed
+`gatewayd` and a separate `custodial-gatewayd` unless the two processes share the custodial receive
+registry. The failure mode is **not** a stuck sender: an unregistered same-gateway custodial invoice
+already cancels through `Cancelled::RegistrationError`
+(`modules/fedimint-gwv2-client/src/send_sm.rs:203`), and every `Cancelled` outcome already returns
+the forfeit signature that refunds the sender (`modules/fedimint-gwv2-client/src/lib.rs:379-388`).
+What is lost without a shared registry is the creation-time cross-path namespace enforcement (§7.3)
+and custodial-aware reason reporting — and the refund outcome comes to depend silently on the
+registered-contract lookup continuing to fail with an error for unknown hashes.
 
 ### 7.2 Backend abstraction: notify-only receive
 
@@ -329,7 +342,10 @@ finality, and settled records until the receiver is funded. If it can't establis
 nonterminal records and retained tombstones, **new custodial invoice creation is disabled** (distinct
 from the optional *runtime* retention monitoring in §7.8). phoenixd documents listing and point lookup
 of incoming payments but **no retention SLA**, so phoenixd support treats retention as an
-operator-configured, monitored assumption rather than a backend guarantee. A recovery-relevant record
+operator-configured, monitored assumption rather than a backend guarantee. The advertised
+`max_invoice_expiry_secs` / `max_funding_deadline_secs` bounds (§7.1, §8) exist partly to keep this
+coverage obligation finite: without them, a single long-dated request could make declared coverage
+unsatisfiable and shut off all new issuance through this gate. A recovery-relevant record
 whose invoice predates available retention **can't be confirmed** and goes to the unresolved-liability
 path (§7.7, §11), never a silently missed settlement. So losing the cursor (a rebuildable index) to
 logical corruption stays a recoverable rebuild from the surviving records and ledger (§11).
@@ -346,17 +362,17 @@ since they can do trustless receive.)
 
 New `custodial-gatewayd` logic, per connected federation:
 
-1. **On `create_custodial_bolt11_invoice`**: the
-   `client_request_id = H("custodial-receive-v1" || federation_id || contract_id || gateway_module_pk)` is
-   **recomputed by the gateway from the request's own contract identity**, not trusted as a supplied
-   value, so a forged or mismatched id is rejected. Validate the contract (`contract.verify()`,
+1. **On `create_custodial_bolt11_invoice`**: validate the contract (`contract.verify()`,
    `refund_pk == module_public_key`) as today.
    It must also **bind the amounts before issuing the invoice or signing the quote**: reject unless
    `contract.commitment.amount == receive_fee.subtract_from(invoice_amount)` (§8), so a small backend
    invoice can never later fund an oversized contract. Because `PaymentFee::subtract_from` saturates,
    this check must be preceded by an explicit lower-bound check that does not rely on equality after
    saturation: a zero-valued or below-minimum incoming contract is rejected with `AmountTooSmall`
-   before backend invoice creation.
+   before backend invoice creation. A binding failure at or above the minimum — including a contract
+   sized with a stale advertised fee — is rejected with `FeeOrAmountBindingMismatch` (§7.9), so the
+   client knows to refresh `RoutingInfo` and rebuild; both rejections happen before backend invoice
+   creation.
    The gateway derives a stable `client_request_id =
    H("custodial-receive-v1" || federation_id || contract_id || gateway_module_pk)` **from the
    request's own contract identity** (not a trusted supplied value, and it binds the gateway's
@@ -365,18 +381,23 @@ New `custodial-gatewayd` logic, per connected federation:
    to expiry (§8), then builds and **atomically reserves** an `InvoiceCreating` quote draft keyed for
    uniqueness on **`(federation_id, contract_id)`** so there's never more than one outstanding backend
    invoice per contract. While that record persists, a duplicate request must not create a second
-   backend invoice; after `AwaitingPayment` exists, a duplicate returns the stored invoice and quote,
-   while an in-flight `InvoiceCreating` is handled by a **single-flight backend-create lease**. A
+   backend invoice; after `AwaitingPayment` exists, a duplicate returns the stored invoice and quote
+   if the invoice is still safe to return under the same staleness rules recovery applies (an
+   expired or otherwise unsafe stored invoice yields `BackendInvoiceUnreturnable` while the record
+   stays in reconciliation), while an in-flight `InvoiceCreating` is handled by a **single-flight
+   backend-create lease**. A
    handler may call `create_plain_invoice` only after atomically acquiring or renewing the
    `backend_create_lease` and marking the draft `backend_create_maybe_sent = true` before the backend
    request can leave the process. A duplicate request that finds an unexpired lease waits, returns
    "in progress", or polls the stored record; it must not call the backend. If the lease expired
-   after a crash, recovery first calls `get_invoice_by_external_id`. If no backend invoice exists, a
-   retry is allowed only when the draft is still fresh **and** the backend adapter can make that lookup
-   authoritative for the prior maybe-sent attempt, for example after a declared create-visibility
-   deadline or barrier. Without that backend-visible proof, the record becomes
+   after a crash, recovery first calls `get_invoice_by_external_id`. If the backend invoice exists,
+   recovery proceeds through the validation below. If it does not, and the draft was ever marked
+   `backend_create_maybe_sent`, the MVP treats the attempt as unprovable: the record becomes
    `InvoiceCreateInconclusive` for operator review and the gateway must not issue a second backend
-   invoice for the same contract. A duplicate request whose request fingerprint differs from the
+   invoice for the same contract. (A backend-declared create-visibility barrier that would make a
+   not-found lookup authoritative and allow a safe retry is deferred, §14: phoenixd declares no such
+   guarantee, so that branch would be dead code in the MVP.) A retry without operator review is
+   allowed only when the draft is still fresh and no create attempt was ever marked maybe-sent. A duplicate request whose request fingerprint differs from the
    stored draft is rejected with `DuplicateContractConflict` (or an operator-visible invariant
    violation if it suggests corruption). The gateway then calls `create_plain_invoice` with the
    draft's opaque `backend_correlation_id` as the backend `externalId` (so no raw federation or
@@ -449,7 +470,6 @@ New `custodial-gatewayd` logic, per connected federation:
        funding_deadline: u64,
        observed_lnv2_consensus_time: u64,
        terms: CustodialReceiveTerms,
-       terms_hash: sha256::Hash,
        gateway_api: SafeUrl,
        gateway_module_pk: PublicKey,
        gateway_ln_pk: PublicKey,
@@ -457,7 +477,6 @@ New `custodial-gatewayd` logic, per connected federation:
        backend_create_attempt: u64,
        backend_create_lease_until: Option<u64>,
        backend_create_maybe_sent: bool,
-       backend_create_visibility_deadline: Option<u64>,
        request_fingerprint: sha256::Hash,
    }
    ```
@@ -471,10 +490,8 @@ New `custodial-gatewayd` logic, per connected federation:
    fee/policy fields, and backend invoice expiry request shape. It is how the gateway distinguishes an
    idempotent duplicate from a conflicting request for the same contract.
    `backend_create_maybe_sent` records that a non-idempotent backend create request may have reached
-   the backend; an expired local lease alone is not proof that it did not. The visibility deadline is
-   the adapter's declared point after which a no-result `get_invoice_by_external_id(include_unpaid =
-   true)` is authoritative for that maybe-sent attempt. Backends that cannot provide such a
-   visibility guarantee must not retry a maybe-sent create; they leave the record
+   the backend; an expired local lease alone is not proof that it did not, and the MVP never retries
+   a maybe-sent create whose invoice a lookup cannot find — such a record becomes
    `InvoiceCreateInconclusive`. That retained record remains in ledger reconciliation by
    `backend_correlation_id`: if the maybe-sent invoice later appears or settles, the recovered invoice
    must pass the same draft validation and direct-swap namespace reservation as the original create
@@ -490,8 +507,8 @@ New `custodial-gatewayd` logic, per connected federation:
    If a backend invoice already exists but `AwaitingPayment` was not committed, recovery completes the
    signed quote from the draft only if the invoice is still safe to return. If it is expired or too
    close to the funding deadline, the gateway keeps a retained tombstone for late-settlement
-   reconciliation (`BackendInvoiceRejected` / `InvoiceExpiredUnreturned`) and returns a typed rejection
-   instead of exposing a stale invoice to the client.
+   reconciliation (`BackendInvoiceRejected` / `InvoiceExpiredUnreturned`) and returns
+   `BackendInvoiceUnreturnable` instead of exposing a stale invoice to the client.
 
    A settlement matching a retained unreturned-invoice tombstone never disappears. It follows the
    tombstone's `fund_on_settlement` policy: safe stale/unreturned invoices transition back to the
@@ -504,7 +521,7 @@ New `custodial-gatewayd` logic, per connected federation:
 
    The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
-   invoice_expiry, funding_deadline, terms_hash, signed_quote, created_at }` (`invoice_expiry` and
+   invoice_expiry, funding_deadline, signed_quote, created_at }` (`invoice_expiry` and
    `funding_deadline` drive `InvoiceExpiredUnpaid`, retention, and late-settlement handling, §7.3
    limits, and the **`signed_quote`** is stored with embedded `terms` so a retry can return the
    original self-contained quote, §7.3, and a liability carries its evidence, §7.7). The funding
@@ -513,7 +530,7 @@ New `custodial-gatewayd` logic, per connected federation:
    authoritative and committed atomically with `FundingPrepared`, §7.3) and finally `outpoint` (§7.3). So the full `PendingCustodialReceive` at `AwaitingPayment` is
    `{ quote_id, client_request_id, backend_correlation_id, backend_invoice_hash, backend_requested_sat,
    federation_id, contract, invoice_amount, contract_amount, invoice_expiry, funding_deadline,
-   terms_hash, signed_quote, created_at, status }`. A crash after backend invoice creation
+   signed_quote, created_at, status }`. A crash after backend invoice creation
    but before storing the invoice hash is recovered by querying the backend by `externalId` and
    completing the quote from the stored `quote_draft`. A backend that can't look up unpaid invoices
    by external id can't support crash-safe custodial invoice creation. **Uniqueness is the gateway's
@@ -522,7 +539,10 @@ New `custodial-gatewayd` logic, per connected federation:
    key, so the adapter treats a lookup that returns **more than one** invoice for a single
    `backend_correlation_id` as a backend-invariant violation (`BackendDuplicateExternalId`) that
    disables new custodial invoice creation and routes the record to operator review, never silently
-   picking one. Return the backend invoice plus a gateway-signed custodial receive quote:
+   picking one. (Halting issuance rather than quarantining the one record is deliberate: duplicate
+   external ids mean correlation-id aliasing, and reconciliation relies on correlation ids for
+   settlement attribution, so continuing to issue against an aliasing backend risks misattributing
+   settlements beyond the affected record.) Return the backend invoice plus a gateway-signed custodial receive quote:
 
    ```rust
    struct CustodialReceiveQuote {
@@ -542,7 +562,6 @@ New `custodial-gatewayd` logic, per connected federation:
        funding_deadline: u64,
        observed_lnv2_consensus_time: u64, // gateway_observed_lnv2_consensus_time used for §8
        terms: CustodialReceiveTerms,    // self-contained fee/limit/backend terms in effect
-       terms_hash: sha256::Hash,        // sha256(canonical_encoding(terms))
        gateway_api: SafeUrl,
        gateway_module_pk: PublicKey,
        gateway_ln_pk: PublicKey,
@@ -552,9 +571,11 @@ New `custodial-gatewayd` logic, per connected federation:
    struct CustodialReceiveTerms {
        receive_fee: PaymentFee,
        max_receive_amount: Amount,
-       max_in_flight: Amount, // aggregate settled/funding liability target, not unpaid gating
+       max_in_flight: Amount, // aggregate settled/funding liability target per federation, not unpaid gating
        min_invoice_to_funding_deadline_delta_secs: u64,
        min_contract_lifetime_secs: u64,
+       max_invoice_expiry_secs: u64,
+       max_funding_deadline_secs: u64,
        consensus_time_observation_max_age_secs: u64,
        safety_margin_secs: u64,
        invoice_amount_granularity_msats: u64,
@@ -563,10 +584,10 @@ New `custodial-gatewayd` logic, per connected federation:
    ```
 
    `quote_id` is a unique handle for one receive (the MVP doesn't re-issue quotes, so it needn't be
-   deterministic). `terms_hash` is checked as
-   `sha256(canonical_encoding(terms))`, and the signature covers both `terms` and `terms_hash` via
+   deterministic). The signature covers the embedded `terms` along with every other field via
    `"fedimint-custodial-receive-quote-v1" || canonical_encoding_without_signature`, using
-   `gateway_module_pk`. The domain tag stops the signature being reused in another context, and
+   `gateway_module_pk`. (A separate `terms_hash` field was deliberately dropped: it would only be a
+   checksum of data already embedded and signed in the same struct, §14.) The domain tag stops the signature being reused in another context, and
    `created_at` plus the signature give replay protection. `observed_lnv2_consensus_time` records
    the gateway-observed federation time used for the deadline rule in §8, so the quote's deadline
    arithmetic is auditable against the advertised terms. It does **not** prove observer freshness by
@@ -601,7 +622,18 @@ New `custodial-gatewayd` logic, per connected federation:
    **settled-but-mismatched** record is **not**
    ignored: a deviation within expected backend skim still funds the full contract and records the
    loss (§8), while a gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) and
-   alerts, never a silent drop.
+   alerts, never a silent drop. A ledger settlement whose `externalId` lies in the gateway's
+   correlation-id namespace but matches **no** authoritative record and no retained tombstone
+   indicates record loss or correlation-id aliasing: it is durably recorded as an
+   `UnmatchedSettlement`, alerts, and disables new custodial invoice creation until reviewed, never
+   silently skipped. The MVP `UnmatchedSettlement` record is a minimal audit marker in the same
+   federation client DB prefix as the receive records:
+   `{ backend_correlation_id, backend_invoice_hash, received_msat, completed_at_ms,
+   backend_ledger_proof, resolution: Open | Resolved }`. It is deliberately **not** a
+   `CustodialReceiveLiability` (§7.7): with no matching quote or contract there is no known
+   receiver or amount owed, so resolution is operator investigation, not an automatic payout path.
+   Settlements without a gateway correlation id are outside custodial
+   reconciliation (other operator activity on a shared backend).
 
    **Fund via a new client-core prepare-then-submit API.** Exactly-once recovery depends on the
    exact transaction being durable **before** it can land. This is **not** just a
@@ -753,9 +785,11 @@ New `custodial-gatewayd` logic, per connected federation:
    This invariant must be enforced by the same transaction/registry used for direct-swap detection in
    dual-capable mode. Recovery of any post-create custodial record must re-derive and atomically
    reassert the `backend_invoice_hash -> CustodialPending` entry before the record is treated as
-   active or the quote/invoice is returned. A separate custodial-only binary that does not share such a
-   registry must not share the same gateway module key and Lightning node key with a legacy-listed
-   trustless gateway.
+   active or the quote/invoice is returned. A separate custodial-only binary that does not share such
+   a registry SHOULD NOT share the same gateway module key and Lightning node key with a
+   legacy-listed trustless gateway (§7.1): the forfeit-refund outcome still emerges from the failed
+   registered-contract lookup, but this creation-time invariant becomes unenforceable across the two
+   processes, degrading it from a guaranteed property to a hash-collision-improbable one.
 
 4. **Post-funding invalid-contract audit (never blocks the receiver).** The custodial funding
    helper skips the gateway receive state machine, so it also skips that machine's invalid-contract
@@ -773,7 +807,10 @@ New `custodial-gatewayd` logic, per connected federation:
    the gateway must fund the contract if it still can. If ecash float is short, the record moves to
    explicit `SettledAwaitingLiquidity`: backend settled, actual debt exists, but no ecash inputs are
    reserved and no prepared transaction exists. When liquidity becomes available, one funding worker
-   atomically claims it into `FundingReserved`, then prepares and submits the exact tx. The MVP can make
+   atomically claims it into `FundingReserved`, then prepares and submits the exact tx. When several
+   settled records are waiting, workers claim them in minimum-funding-deadline-slack-first order, so
+   recovered float protects the tightest deadline (this backs the
+   `min_funding_deadline_slack_seconds` invariant, §7.8). The MVP can make
    liquidity replenishment semi-automatic: alert the operator and, when configured on-chain wallet
    funds are available, drive or prompt a pegin to create federation ecash. Post-MVP automation can
    add loop-out, channel close, splice, swap-out, or backend-specific liquidity actions. The contract
@@ -784,7 +821,10 @@ New `custodial-gatewayd` logic, per connected federation:
    `max_in_flight` value is a hard gate for actual obligations, not a reservation against every issued
    unpaid invoice: if open settled-but-unfunded debt plus open unresolved liabilities plus records in
    funding states is at or above `max_in_flight`, new custodial invoice creation is disabled until the
-   operator reduces the debt. An issued unpaid invoice is **contingent exposure**, not debt. The
+   operator reduces the debt. `max_in_flight` is advertised, tracked, and enforced **per federation**
+   (the obligations live in that federation's client DB prefix); an operator serving several
+   federations must size total ecash float and alert thresholds across all of them. An issued unpaid
+   invoice is **contingent exposure**, not debt. The
    gateway tracks issued-unpaid count and face value for metrics and operator alerts, but unpaid
    invoice **face value** is not reserved against `max_in_flight`.
 
@@ -810,6 +850,18 @@ New `custodial-gatewayd` logic, per connected federation:
    was only a quoted object until the gateway funds it. Splitting the backend finality and ledger
    retention bounds is deferred to §14.
 
+   **Retained-record pruning.** A retained terminal record (`InvoiceExpiredUnpaid`,
+   `BackendInvoiceRejected`, `InvoiceExpiredUnreturned`, or a resolved `InvoiceCreateInconclusive`)
+   becomes prunable only once (a) its funding deadline has passed in observed consensus time, so the
+   original contract can never be funded (§8), and (b) the backend ledger/finality window has proven
+   no settlement can still surface for its invoice. Pruning releases the record's
+   `backend_invoice_hash` reservation in the direct-swap namespace (§7.3). `UnresolvedLiability`
+   records and unresolved `InvoiceCreateInconclusive` records are never pruned automatically. A
+   settlement that surfaces after pruning (a backend surprise beyond its declared finality) matches
+   no record and is handled as an `UnmatchedSettlement` (settlement observation, above), never
+   silently dropped. The `max_invoice_expiry_secs` / `max_funding_deadline_secs` bounds (§7.1, §8)
+   keep this retention horizon finite.
+
 ### 7.4 Client custodial-receive variant
 
 A new entry point in `fedimint-lnv2-client` (e.g. `receive_custodial(...)`), or a
@@ -823,7 +875,9 @@ mode flag on `receive`:
   Pass the two deadlines separately rather than the single `expiry_secs` used today
   (`lib.rs:943` for the contract expiration and `:972` for the invoice expiry currently
   reuse one value). The client chooses the funding deadline using the selected gateway's advertised
-  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice. This funding
+  `CustodialReceiveCapability` deadline-policy fields before it requests the invoice; the chosen
+  invoice expiry and funding deadline must respect both the minimum rules and the advertised
+  `max_invoice_expiry_secs` / `max_funding_deadline_secs` upper bounds (§8). This funding
   deadline is not the invoice's UX expiry and not a liability cutoff; it only keeps the original
   contract fundable after any backend settlement. The client sizes `contract.commitment.amount` using
   that same capability's `receive_fee`, not the legacy top-level trustless receive fee. The returned
@@ -838,15 +892,23 @@ mode flag on `receive`:
   claim it, selected gateway identity, `client_request_id` / request fingerprint, invoice amount,
   funding deadline, and provisional operation id in the client DB. It then starts or arms the normal
   receive watcher for that contract before calling `create_custodial_bolt11_invoice`. A successful
-  `Created { invoice, quote }` upgrades the provisional record with the signed quote and invoice. A
-  rejection only deletes the provisional record if the failure is known to be before backend invoice
-  creation or exposure: local validation failure, amount/capability rejection before `InvoiceCreating`,
-  or `InvoiceCreationExpired` before the backend create request was maybe sent. Rejections or network
-  outcomes that may correspond to a created or returned backend invoice (`CreateInProgress`,
-  `BackendInvoiceCreationUnavailable` after a maybe-sent attempt, `BackendInvoiceRejected`,
-  `InvoiceExpiredUnreturned`, timeout after the request left the process) retain the provisional
-  receive until the gateway response/retry resolves it or backend finality plus the retained-record
-  policy says the invoice could not settle.
+  `Created { invoice, quote }` upgrades the provisional record with the signed quote and invoice.
+  Deletion vs retention is keyed on the **public rejection reason**, never on gateway-internal state
+  the client cannot observe: every reason except `BackendInvoiceUnreturnable` and `CreateInProgress`
+  is defined as strictly pre-create (§7.9), so those rejections delete the provisional record —
+  except `DuplicateContractConflict`, which is pre-create for the rejected request but proves the
+  gateway holds a same-contract reservation that may be post-create under another fingerprint, so
+  the client retains the contract's claim material (§7.9). A
+  `BackendInvoiceUnreturnable` or `CreateInProgress` response — or any network outcome with no
+  definitive response after the request left the process — retains the provisional receive until a
+  later response resolves it. Retention is bounded client-side, but pruning must be
+  **conservative**, because the federation admits funding against LNv2 `consensus_unix_time`, not
+  the client clock (§8): a client whose wall clock runs ahead could otherwise delete the only claim
+  material for a contract the gateway can still fund. The client may prune only once its locally
+  observed LNv2 consensus time (if it tracks one) is past the funding deadline, or its wall clock
+  is past the deadline by a generous margin of at least
+  `terms.consensus_time_observation_max_age_secs + terms.safety_margin_secs`. Claim material is
+  small; when in doubt, retain.
 - Request the invoice, and **skip** the `invoice.payment_hash() == preimage hash`
   check (`lib.rs:977`): the invoice is deliberately the backend's own hash. Keep the **amount**
   check (`lib.rs:981`). The requested amount must also be compatible with
@@ -868,7 +930,7 @@ mode flag on `receive`:
   `contract_id`, full `contract`, `federation_id`, `backend_invoice_hash`, invoice amount,
   contract amount, `gateway_module_pk`, `gateway_ln_pk`, invoice expiry, and funding deadline match
   its selected gateway, returned invoice, and locally-built contract. It must verify
-  `terms_hash == sha256(canonical_encoding(terms))`, that the embedded `terms` are compatible with
+  that the embedded `terms` are compatible with
   the selected gateway's advertised capabilities and the client's local policy, including
   `terms.receive_fee <= PaymentFee::RECEIVE_FEE_LIMIT`, and that the amount binding is exact:
 
@@ -902,16 +964,23 @@ mode flag on `receive`:
     + terms.safety_margin_secs
 
   invoice_expiry + terms.min_invoice_to_funding_deadline_delta_secs <= funding_deadline
+
+  funding_deadline <= observed_lnv2_consensus_time + terms.max_funding_deadline_secs
+  invoice_expiry   <= observed_lnv2_consensus_time + terms.max_invoice_expiry_secs
   ```
 
   These checks verify the deadline arithmetic against the quoted observed consensus time. They do
-  not prove that the gateway's observer was fresh when it signed, so the client also sanity-checks the
-  quote against its own latest locally-observed LNv2 consensus time from signed session outcomes. The
-  client rejects the quote if `observed_lnv2_consensus_time` lags the client's latest observed
-  consensus time by more than `terms.consensus_time_observation_max_age_secs`, or if applying the same
-  funding-deadline rule to the client's own observed consensus time would fail. This client check is a
-  malicious/stale-gateway defense; the gateway remains responsible for not signing when its observer
-  is stale (§7.8).
+  not prove that the gateway's observer was fresh when it signed, so the client also sanity-checks
+  the quote against an independent time reference. The baseline reference is the client's local wall
+  clock with a generous configured margin; a wallet that already tracks LNv2 `UnixTimeVote`s from
+  signed session outcomes MAY use its own observed consensus time instead (optional hardening —
+  requiring every mobile/wasm wallet to stream session outcomes would be heavy machinery against a
+  marginal threat, since a malicious gateway can simply refuse to fund regardless of any deadline
+  excuse). The client rejects the quote if `observed_lnv2_consensus_time` lags its reference by more
+  than `terms.consensus_time_observation_max_age_secs`, or if applying the same funding-deadline
+  rule to its reference time would fail. This client check catches honest-but-stale gateways and
+  crude dishonesty; the gateway remains responsible for not signing when its observer is stale
+  (§7.8).
 
   The client must also confirm the contract's own `refund_pk` equals
   `gateway_module_pk`, so the unclaimable-contract windfall (§9, §11) can only route back
@@ -949,17 +1018,21 @@ send cancels with a `RegistrationError`. If the custodial contract were wrongly
 registered under `H′`, `relay_direct_swap` would return the receiver's preimage `P`,
 which does not satisfy the sender's outgoing contract keyed to `H′`.
 
-The gateway therefore MUST:
-- **Never** register a custodial pending-receive as if it were a trustless incoming
-  contract keyed on the invoice hash.
-- Detect its own custodial invoice on the send/direct-swap path by looking up `H′` in the shared
-  `backend_invoice_hash -> CustodialPending` registry (§7.3) and handle it explicitly. Same-gateway
-  self-pay of a custodial invoice cannot complete over Lightning either (a node cannot route to its
-  own invoice), so the gateway returns a **forfeit signature** so the sender refunds the funded
-  contract (the domain outcome, since a typed error would be redacted or retried forever, §7.6, §7.9)
-  rather than the confusing `RegistrationError` / wrong-preimage behavior. A future version may add an
-  internal custodial self-pay that funds the receiver's contract directly from the sender's outgoing
-  contract.
+The load-bearing requirement is the first of these; the second is reporting hygiene:
+- The gateway MUST **never** register a custodial pending-receive as if it were a trustless incoming
+  contract keyed on the invoice hash. This alone prevents the wrong-preimage hazard above.
+- The forfeit-refund outcome itself needs no new mechanism: a failed registered-contract lookup
+  already cancels the gateway-side send with `Cancelled::RegistrationError`
+  (`modules/fedimint-gwv2-client/src/send_sm.rs:203`), and **every** `Cancelled` outcome already
+  returns the forfeit signature to the sender (`modules/fedimint-gwv2-client/src/lib.rs:379-388`),
+  who refunds immediately. Same-gateway self-pay of a custodial invoice cannot complete over
+  Lightning either (a node cannot route to its own invoice), so the refund is the correct domain
+  outcome. The gateway SHOULD additionally detect its own custodial invoice by looking up `H′` in
+  the shared `backend_invoice_hash -> CustodialPending` registry (§7.3), so the cancellation is
+  labeled as custodial self-pay for metrics/support instead of a generic registration error, and so
+  the outcome stops depending silently on the lookup's failure semantics. A future version may add
+  an internal custodial self-pay that funds the receiver's contract directly from the sender's
+  outgoing contract.
 
 For the common case (sender and receiver use *different* gateways), the custodial
 invoice's payee is not the sender-gateway's key, so direct swap never triggers and the
@@ -971,12 +1044,15 @@ key matches the invoice payee (`select_gateway` with the invoice,
 `modules/fedimint-lnv2-client/src/lib.rs:467`, used by `send`, `:576`) to enable a direct swap. A
 custodial invoice's payee is the custodial gateway itself, which can neither direct-swap it nor
 route to its own node. The send path must **not** require the sender to pre-classify the invoice as
-custodial, since a Bolt11 invoice doesn't carry that fact. Instead the payee gateway detects its
-own `backend_invoice_hash` in the `CustodialPending` registry and, because it can neither direct-swap
-nor route to its own node, **returns a forfeit signature** (the existing `Err(Signature)` half of the
+custodial, since a Bolt11 invoice doesn't carry that fact. Instead the payee gateway, because it can
+neither direct-swap nor route to its own node, **returns a forfeit signature** (the existing
+`Err(Signature)` half of the
 send response, `modules/fedimint-lnv2-common/src/gateway_api.rs:48`), so the sender refunds the
 just-funded `OutgoingContract` immediately via `OutgoingWitness::Cancel`
-(`modules/fedimint-lnv2-client/src/send_sm.rs:238-266`). This is the **required** MVP behavior. A
+(`modules/fedimint-lnv2-client/src/send_sm.rs:238-266`). The forfeit-refund **outcome** is the
+required MVP behavior; it already emerges today from the `RegistrationError` cancellation path, and
+the `CustodialPending` registry lookup upgrades it from an accidental property of lookup-failure
+semantics to a labeled, tested one. A
 typed `CannotDirectSwapCustodialInvoice` **cannot** travel as a `PublicGatewayError` (those redact
 to one generic string, `gateway/fedimint-gateway-server/src/error.rs:81-84`) nor as a transport
 error (the send SM retries those forever, `send_sm.rs:193-216`), so the forfeit signature is the
@@ -1069,6 +1145,7 @@ gateway_custodial_receive_backend_cursor_lag_seconds
 gateway_custodial_receive_backend_retention_margin_seconds
 gateway_custodial_receive_consensus_time_observer_age_seconds
 gateway_custodial_receive_retained_record_count{state}
+gateway_custodial_receive_unmatched_settlement_count
 ```
 
 Required histogram:
@@ -1087,7 +1164,9 @@ because settled debts must remain automatically fundable through the original co
 inside backend ledger retention. `consensus_time_observer_age_seconds` backs the §8 rule that stale
 LNv2 consensus-time observation disables new quote creation. `retained_record_count` exposes
 storage/reconciliation pressure for alerts and abuse detection without turning unpaid records into
-protocol-level admission control.
+protocol-level admission control. `unmatched_settlement_count` counts ledger settlements in the
+gateway's correlation-id namespace that match no record or tombstone (§7.3); any nonzero value is an
+alert, since it implies record loss or correlation-id aliasing.
 
 Metrics must avoid high-cardinality labels. Acceptable labels are low-cardinality values such as
 `federation_id`, `backend_kind`, `reason`, and coarse `state`. They must not label by `quote_id`,
@@ -1125,14 +1204,35 @@ enum CustodialReceiveRejectionReason {
     AmountTooSmall,                    // Receive fee would make the contract amount below minimum.
     AmountTooLarge,                    // Request exceeds the gateway's per-receive cap.
     NonSatoshiAmount,                  // Backend granularity cannot represent the amount exactly.
+    FeeOrAmountBindingMismatch,        // Contract amount does not match receive_fee.subtract_from(invoice_amount) under current terms.
     DeadlineTooNear,                   // Deadline rule in §8 fails or consensus-time observer is stale.
-    BackendInvoiceCreationUnavailable, // Backend cannot currently create the invoice.
+    DeadlineTooFar,                    // Requested expiry or funding deadline exceeds the advertised maximum.
+    BackendInvoiceCreationUnavailable, // Backend cannot currently create the invoice (strictly pre-create).
     BackendLedgerUnavailable,          // Backend cannot provide required ledger/reconciliation support.
     DuplicateContractConflict,         // Existing reservation conflicts with this request.
     CreateInProgress,                  // Same request is already creating an invoice; retry/poll.
+    BackendInvoiceUnreturnable,        // A backend invoice may exist for this contract but will not be returned.
     ActualLiabilityLimitExceeded,      // Actual settled/funding/unresolved obligations exceed policy.
 }
 ```
+
+The reasons carry a hard **pre-create invariant**, scoped **per request fingerprint**: every
+variant except `CreateInProgress` and `BackendInvoiceUnreturnable` may be returned only when the
+gateway can prove no backend create attempt was ever marked maybe-sent **for the rejected
+request's own fingerprint**. Any state in which a backend invoice for that fingerprint exists,
+existed, or cannot be proven absent must map to `BackendInvoiceUnreturnable` (or
+`CreateInProgress` while the create lease is live). `DuplicateContractConflict` fits the
+invariant through this scoping: it rejects a **conflicting** request (mismatched fingerprint for
+an already-reserved contract) that never triggered its own backend create, even when the stored
+record for that contract is post-create. But because the conflict itself proves the gateway holds
+a same-contract reservation that may be post-create under another fingerprint — and the client
+keeps claim material per **contract**, not per fingerprint — the client deletes only the failed
+flow state, never the contract's claim material: a same-contract retry with a changed fingerprint
+must not be able to destroy the only claim material for an invoice that may still settle under
+the original fingerprint. This invariant is what makes the client's
+delete-vs-retain rule (§7.4) implementable from the public reason alone; without it, the same
+reason would demand contradictory client actions depending on gateway-internal state the client
+cannot observe.
 
 This enum is the stable client-facing API surface. The richer operator liability taxonomy remains
 deferred (§14). There is intentionally no unpaid-invoice **face-value** or float-shortage rejection:
@@ -1149,11 +1249,15 @@ Internal terminal states and gates map to public rejections as follows:
 | Internal state / gate | Public rejection | Client action |
 |---|---|---|
 | Local validation, amount, or capability rejection before `InvoiceCreating` | Matching typed rejection | Delete the provisional receive; build a fresh contract only after fixing the local/request issue. |
-| `InvoiceCreationExpired` before backend create was maybe sent | `DeadlineTooNear` | Delete the provisional receive; build a fresh contract after refreshing `RoutingInfo`. |
+| Amount-binding / advertised-fee mismatch before `InvoiceCreating` | `FeeOrAmountBindingMismatch` | Delete the provisional receive; refresh `RoutingInfo` and rebuild the contract with the current custodial fee. |
+| Requested expiry or deadline beyond the advertised maximum | `DeadlineTooFar` | Delete the provisional receive; rebuild within the advertised bounds. |
+| `InvoiceCreationExpired` before any create attempt was maybe sent | `DeadlineTooNear` | Delete the provisional receive; build a fresh contract after refreshing `RoutingInfo`. |
 | Safe duplicate while a create lease is live | `CreateInProgress` or wait/poll response | Keep the provisional receive; retry/poll the same request and do not build a new contract yet. |
-| `InvoiceCreateInconclusive` | `BackendInvoiceCreationUnavailable` | Retain the provisional receive; choose another gateway only with a fresh contract. |
-| `BackendInvoiceRejected` before return | `BackendInvoiceCreationUnavailable` | Retain the provisional receive if a backend invoice exists or may exist; retry with a fresh contract only for the user-visible flow. |
-| `InvoiceExpiredUnreturned` before return | `DeadlineTooNear` | Retain the provisional receive through the retained tombstone window; build a fresh contract for the user-visible retry. |
+| Conflicting request (fingerprint mismatch) against any stored record | `DuplicateContractConflict` | Treat the flow as failed and build a fresh contract for any retry, but **retain** the contract's claim material and watcher under the standard retention bound — the conflict proves a same-contract reservation exists that may be post-create under another fingerprint. |
+| `InvoiceCreateInconclusive` | `BackendInvoiceUnreturnable` | Retain the provisional receive until its funding deadline passes; build a fresh contract for any user-visible retry. |
+| `BackendInvoiceRejected` before return | `BackendInvoiceUnreturnable` | Retain the provisional receive until its funding deadline passes; build a fresh contract for any user-visible retry. |
+| `InvoiceExpiredUnreturned` before return | `BackendInvoiceUnreturnable` | Retain the provisional receive until its funding deadline passes; build a fresh contract for any user-visible retry. |
+| Stale stored invoice on an idempotent duplicate retry | `BackendInvoiceUnreturnable` | Retain the provisional receive until its funding deadline passes; build a fresh contract for any user-visible retry. |
 | Actual settled/funding/unresolved obligations at policy limit | `ActualLiabilityLimitExceeded` | Retry later or choose another gateway; no backend invoice was created for this contract. |
 | Internal resource exhaustion or abuse throttling before backend create | `BackendInvoiceCreationUnavailable` | Retry later or choose another gateway; no backend invoice was created for this contract. |
 
@@ -1184,31 +1288,45 @@ funds the contract **after** settlement, it knows the exact backend credit befor
   ```
 
   So the operation is profitable or break-even when `Q` covers `S + M` plus any desired liquidity /
-  operator margin. The receiver still gets `R`: if unexpected skim makes `Q < S + M`, the gateway
-  funds the full contract and records the loss (it can neither stiff the payer, which is impossible,
-  nor under-fund the fixed-amount contract). Large/abnormal skim is alerted, and the per-receive cap
+  operator margin. Define the absorbed per-receive loss as `F = max(0, S + M - Q)`. The receiver
+  still gets `R`: if unexpected skim makes `Q < S + M`, the gateway
+  funds the full contract and records the loss `F` (it can neither stiff the payer, which is
+  impossible, nor under-fund the fixed-amount contract). Large/abnormal skim is alerted, and the per-receive cap
   (§9) bounds the worst case. `receive_fee` semantics: "covers gateway + backend liquidity cost". Tune
   from observed skim.
 - **Custodial fee-cap decision.** The MVP uses the existing client
-  `PaymentFee::RECEIVE_FEE_LIMIT` for custodial receive too, so the gateway must quote
-  backend liquidity cost within that cap and absorb excess variance. A higher or
+  `PaymentFee::RECEIVE_FEE_LIMIT` (50 sats + 0.5%, `gateway_api.rs:223`) for custodial receive too,
+  so the gateway must quote backend liquidity cost within that cap and absorb excess variance. Be
+  explicit about what that means for the reference backend: phoenixd's auto-liquidity costs roughly
+  1% **plus an absolute mining-fee component** per splice, so any receive that triggers an inbound
+  liquidity purchase loses `F > 0` **by construction** under the cap — a structural gap, not tail
+  variance. The MVP therefore treats liquidity-purchase avoidance as an operating requirement: the
+  operator maintains pre-provisioned inbound headroom, and the gateway SHOULD refuse new custodial
+  invoice creation (surfaced as generic `BackendInvoiceCreationUnavailable`; it is an internal
+  policy gate, §7.8) when the requested amount would exceed available inbound headroom and force a
+  splice whose expected skim exceeds the quoted fee by a configured tolerance. A higher or
   differently-shaped custodial fee cap would require a separate explicit-consent client
   policy, not a silent reuse of normal receive selection.
 - **Two deadlines.** The backend invoice expiry is the user/payment expiry and bounds unpaid
   contingent exposure. The contract funding deadline is the LNv2 `IncomingContract.expiration_or_fee`,
   evaluated by the federation against `consensus_unix_time`
   (`modules/fedimint-lnv2-server/src/lib.rs:563`), and is only the admission check for funding the
-  original contract. For custodial receive it must be **strictly later** than the backend invoice
+  original contract. (The same `expiration_or_fee` field carries fee-encoded near-`u64::MAX` values
+  for LNURL receives — `fee_encoded_expiration`, `modules/fedimint-lnv2-common/src/contracts.rs` —
+  custodial deadlines are real timestamps and cannot collide with that range numerically, but any
+  logic that classifies contracts by expiration magnitude must be checked against long-lived
+  custodial contracts.) For custodial receive it must be **strictly later** than the backend invoice
   expiry and long-lived enough that a settled invoice can be funded automatically under realistic
-  downtime and liquidity-replenishment delays. The gateway must not issue a quote using only its local
+  downtime and liquidity-replenishment delays, and it is bounded above by gateway policy (below). The gateway must not issue a quote using only its local
   wall clock. For MVP, without any new Fedimint module endpoint, the gateway observes existing signed
   session outcomes, tracks the latest `UnixTimeVote` per guardian, and computes
   `gateway_observed_lnv2_consensus_time` with the same threshold rule as the server (`times[threshold -
   1]` after sorting descending). Quote creation is unavailable until that observer is fresh enough. The
   signed quote records this value as `observed_lnv2_consensus_time` so the deadline calculation is
   auditable (§7.3), but the quote does not itself prove observer freshness; that remains a
-  gateway-enforced hard gate and metric (§7.8). The client also checks this quoted value against its
-  own latest locally-observed LNv2 consensus time (§7.4) so a stale or dishonest gateway cannot make an
+  gateway-enforced hard gate and metric (§7.8). The client also checks this quoted value against an
+  independent time reference — its local wall clock with margin, or optionally its own observed LNv2
+  consensus time (§7.4) — so a stale or crudely dishonest gateway cannot make an
   unsafe funding deadline look valid by reporting an old observation.
 
   The gateway rejects custodial invoice creation unless:
@@ -1226,6 +1344,20 @@ funds the contract **after** settlement, it knows the exact backend credit befor
   ```text
   invoice_expiry + min_invoice_to_funding_deadline_delta_secs <= funding_deadline
   ```
+
+  and, symmetrically, the advertised upper bounds:
+
+  ```text
+  funding_deadline <= gateway_observed_lnv2_consensus_time + max_funding_deadline_secs
+  invoice_expiry   <= gateway_observed_lnv2_consensus_time + max_invoice_expiry_secs
+  ```
+
+  Requests beyond either bound are rejected with `DeadlineTooFar` before backend invoice creation.
+  Without an upper bound, a single request could pin the gateway's retained-record set, its
+  direct-swap namespace reservation, and the required backend retention coverage (§7.2) arbitrarily
+  far into the future — and because declared retention coverage of every nonterminal record is a
+  hard issuance gate, one absurd-deadline request could otherwise disable all new custodial
+  issuance.
 
   If the observer is stale or lacks fresh threshold votes, the gateway disables custodial receive
   quote creation for that federation rather than falling back to a small local-clock margin. If a
@@ -1249,7 +1381,7 @@ receive handoff**, not over an ongoing balance.
 
 | Party | Exposure |
 |---|---|
-| Payer | None beyond normal Lightning, but **no refund** if the gateway fails post-settle (the payer already paid). |
+| Payer | **No refund** if the gateway fails post-settle (the payer already paid), and **degraded proof-of-payment**: the settlement preimage `P′` proves payment to the gateway's node, not to the receiver's contract — only the receiver-held signed quote links `H′` to the contract, whereas trustless receive hands the payer a receiver-bound preimage. |
 | Receiver | From invoice issuance onward, trusts the gateway: it could hand back a wrong-payee invoice (mitigated by the payee-binding check, §7.4) or, after settlement, refuse/fail to fund → receiver gets nothing for a payment the payer made. |
 | Gateway | Funds the contract from its float after authenticated backend settlement, still bearing backend skim variance, liquidity, and liability risk. |
 
@@ -1268,6 +1400,14 @@ receive handoff**, not over an ongoing balance.
   that bypasses it pays for its own error.
 - **Double funding.** If exactly-once funding (§7.3) fails, the gateway double-funds and
   double-loses. Consensus will not stop it.
+- **Adversarial skim-forcing (economic griefing).** The backend skim `S` is partly
+  attacker-influenceable: a cooperating payer/receiver pair can drain the gateway's inbound
+  liquidity between receives, or size receives so each one triggers a phoenixd liquidity purchase,
+  whose absolute mining-fee component does not scale down with amount. Each cycle costs the
+  attacker roughly `Q` while costing the gateway `F = max(0, S + M - Q)` (§8), which can exceed `Q`
+  by a wide margin at high mining fees. The per-receive cap bounds a single event, not the bleed
+  rate. Mitigations: the §8 inbound-headroom issuance gate, per-receive minimums, abnormal-skim
+  alerts, and the `max_in_flight` gate on open obligations.
 
 **Trust assumption.** Users trust (a) the operator's **honesty** to fund, and (b)
 the gateway's ability to durably persist its local state across the handoff. The primary recovery
@@ -1290,7 +1430,10 @@ output, and signed federation session history, an auditor can verify the contrac
 | **Claimed** | A later accepted `LightningInputV0::Incoming(outpoint, agg_decryption_key)` consumes the funding outpoint, the aggregate decryption key verifies, and decrypting the quoted contract succeeds, routing the spend through `claim_pk` (`modules/fedimint-lnv2-server/src/lib.rs:508-532`). Protocol-level evidence says the receiver-side claim path succeeded. |
 | **Refunded / invalid** | A later accepted `LightningInputV0::Incoming(outpoint, agg_decryption_key)` consumes the funding outpoint, but decrypting the quoted contract fails and routes value through `refund_pk`. The receiver did not get paid; the gateway records an auditable liability (§7.7). |
 
-This audit does **not** prove the receiver's app persisted notes, still has spendable ecash, or did
+This audit serves the **receiver-side** dispute only: the payer holds `P′` but no quote, so a
+payer-side dispute reduces to ordinary custodial-LSP bookkeeping against the gateway's backend
+ledger (see the payer row above). The audit also does **not** prove the receiver's app persisted
+notes, still has spendable ecash, or did
 not later spend the claimed ecash. Once the claim path succeeds, any later "my balance did not show
 up" dispute is a client/local-wallet support issue, not gateway liability. The optional
 `custodial_receive_status` endpoint (§7.7) need not track `Claimed`; the gateway's obligation ends
@@ -1321,10 +1464,11 @@ operator data-loss events outside this spec's recovery model (§16).
   backend invoice exists, complete the `AwaitingPayment` record if the invoice is still safe to
   return, otherwise retain an unreturned-invoice tombstone for reconciliation. If no backend invoice
   exists, the request can be retried only by a handler holding the durable backend-create lease, only
-  if the draft is still fresh enough to expose to a client, and only if no prior maybe-sent create
-  attempt remains inconclusive under the backend adapter's visibility guarantee. Otherwise it is
+  if the draft is still fresh enough to expose to a client, and only if no prior create attempt was
+  ever marked maybe-sent. Otherwise it is
   dropped/tombstoned without creating a backend invoice, or held as `InvoiceCreateInconclusive` for
-  operator review if a prior maybe-sent attempt cannot be proven absent. A duplicate
+  operator review if a maybe-sent attempt cannot be proven absent (the MVP has no backend
+  visibility barrier that could prove it, §14). A duplicate
   `create_custodial_bolt11_invoice` whose
   `request_fingerprint` matches the stored draft never creates a second backend invoice; a duplicate
   with mismatched amount, description hash, quote API version, or selected custodial fee/policy is
@@ -1350,7 +1494,9 @@ operator data-loss events outside this spec's recovery model (§16).
   `fund_on_settlement` policy. Safe records return to the automatic funding path with
   `UnreturnedInvoiceSettled` evidence until the receiver is funded; unsafe validation, namespace,
   granularity, or backend-invariant failures become auditable `UnresolvedLiability` /
-  `BackendMismatch` records. This closes the crash gap for an honest operator without allowing a
+  `BackendMismatch` records. A settlement in the gateway's correlation-id namespace that matches no
+  record and no tombstone is recorded as an `UnmatchedSettlement`, alerts, and disables new issuance
+  pending review (§7.3). This closes the crash gap for an honest operator without allowing a
   rejected mismatched invoice to fund the wrong contract.
 - **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
   deadline slack and float. If liquidity is available, one worker atomically claims it into
@@ -1429,13 +1575,15 @@ reference backend is a complete gateway.
 
 ## 14. Open questions / decisions
 
-1. **`receive_fee` sizing within the existing cap**: how to quote so absorbed skim
-   stays bounded while staying under `PaymentFee::RECEIVE_FEE_LIMIT` (the
-   absorb-full-skim policy and MVP cap are fixed in §8, and the open part is the heuristic
-   + inbound headroom target that keeps `F` near zero). If deployments need a higher
+1. **`receive_fee` sizing within the existing cap**: how to quote so the absorbed per-receive loss
+   `F = max(0, S + M - Q)` (§8) stays near zero. The absorb-full-skim policy and MVP cap are fixed
+   in §8; the open parts are the quoting heuristic, the inbound-headroom target, and the
+   splice-avoidance gate tolerance (§8). If deployments need a higher
    fee, design a separate explicit-consent custodial fee cap.
 2. **Two-deadline / observer values**: concrete invoice-expiry vs funding-deadline gap,
-   minimum contract lifetime, consensus-time observation max age, and safety margin.
+   minimum contract lifetime, maximum invoice expiry and funding deadline
+   (`max_invoice_expiry_secs` / `max_funding_deadline_secs`), consensus-time observation max age,
+   and safety margin.
 3. **Authenticated-settlement mechanism**: the per-backend ledger-confirmation call
    (phoenixd ledger query, generalization for other notify-only backends).
 4. **Capability typing**: the `ReceiveCapabilities` struct, custodial deadline-policy fields, and
@@ -1451,7 +1599,9 @@ reference backend is a complete gateway.
 8. **Quote/receipt wire shape**: the fields, embedded `CustodialReceiveTerms`,
    domain-separated signature, and `quote_id` are chosen (§7.3). The open part is the exact
    canonical encoding, `api_version` evolution, and where the client persists the
-   `CustodialReceiveQuote`.
+   `CustodialReceiveQuote`. A separate `terms_hash` field was dropped from MVP as redundant with the
+   signed embedded terms; reintroduce a compact terms reference only if a post-MVP status API needs
+   one.
 9. **Audit timing**: how long the `CustodialContractAuditSM` (§7.3) waits for decryption shares
     before declaring a contract invalid and refunding.
 10. **Prepared transaction API shape**: how the client API exposes prepare-with-input-reservation
@@ -1477,6 +1627,13 @@ surface without preventing a double-fund, double-spend, lost-funds, or trust hol
   a pre-funding classification step so the alternate gateway is the contract `claim_pk` from the
   start. The MVP forfeit-refunds and the caller reselects (§7.6); the optimization only saves a wasted
   funding/refund round-trip, so it is deferred.
+- **Create-visibility barrier for maybe-sent backend creates**: a backend-declared point after which
+  a not-found `get_invoice_by_external_id` lookup is authoritative, turning some
+  `InvoiceCreateInconclusive` outcomes into safe retries (§7.3). phoenixd declares no such
+  guarantee, so the MVP never retries a maybe-sent create.
+- **Client-side LNv2 consensus-time observer** as the quote cross-check time reference (§7.4). The
+  MVP baseline is a wall-clock margin check; streaming session outcomes on every mobile/wasm wallet
+  is optional hardening against a marginal threat.
 
 ## 15. Implementation phases
 
@@ -1489,8 +1646,10 @@ those come first.
    reservation token without an op-log entry or submission SM, then install a stored exact tx as a
    submission SM in one autocommit dbtx, §7.3). Highest-risk, and it gates the rest.
 2. **Public API semantics**: `RoutingInfo` receive capabilities, the custodial-receive result enums
-   including `ActualLiabilityLimitExceeded` but no public resource-quota rejection, the same-gateway
-   send **forfeit-signature** rejection that ride successful domain responses (§7.6, §7.9), plus the
+   including `ActualLiabilityLimitExceeded` but no public resource-quota rejection, and the
+   same-gateway send **forfeit-signature** outcome that rides successful domain responses (§7.6,
+   §7.9; the refund outcome already emerges from the `RegistrationError` cancellation path, so this
+   phase adds the labeled registry detection, not the mechanism), plus the
    rule that legacy `GATEWAYS_ENDPOINT` remains trustless-compatible only. If dual-capable mode is
    included in MVP, this phase also adds the direct-swap receive-registry hook in the legacy-listed
    gateway process. If MVP is custodial-only/out-of-band only, that hook is needed only for send
@@ -1515,7 +1674,9 @@ those come first.
    wallet-supplied custodial candidate URLs.
 6. **Client**: `receive_custodial` variant (self-check claimability, persist provisional receive
    state before the gateway request leaves, skip hash check, verify/persist signed quote, retain
-   provisional state for maybe-created / unreturned rejections, enforce custodial fee cap, consent,
+   provisional state for `BackendInvoiceUnreturnable` / `CreateInProgress` / no-response outcomes
+   and prune it only after the funding deadline has passed conservatively in consensus-time terms
+   (§7.4), enforce custodial fee cap, consent,
    surface mode).
 7. **Tests**: a deterministic `FakeNotifyOnlyBackend` is the **primary** correctness harness. It
    creates invoices, reorders / drops hints, forges unauthenticated hints, serves ledger pages with
@@ -1539,9 +1700,9 @@ those come first.
    - duplicate create requests while the first backend create call is in flight: the second handler
      observes the unexpired durable create lease and does not call the backend, proving the gateway
      itself cannot create two invoices for one `backend_correlation_id`
-   - expired create lease after a maybe-sent backend request: if backend lookup cannot prove no invoice
-     was created, the record becomes `InvoiceCreateInconclusive` and no second backend invoice is
-     created
+   - expired create lease after a maybe-sent backend request: if backend lookup does not find the
+     invoice, the record becomes `InvoiceCreateInconclusive` and no second backend invoice is
+     created (the MVP never retries a maybe-sent create)
    - an `InvoiceCreateInconclusive` record remains in ledger reconciliation by
      `backend_correlation_id`; if the maybe-sent invoice later appears or settles, it reruns recovered
      invoice validation and follows its `fund_on_settlement` policy rather than being silently missed
@@ -1550,7 +1711,7 @@ those come first.
      to return, the gateway retains a tombstone for late-settlement reconciliation and returns a typed
      rejection
    - rejected-but-retained client receive: a backend invoice settles after the client saw
-     `BackendInvoiceCreationUnavailable` / `DeadlineTooNear`, and the provisional receiver state still
+     `BackendInvoiceUnreturnable`, and the provisional receiver state still
      claims the original contract when the gateway funds it
    - backend invoice validation before quote signing: amount, payee, expiry tolerance, description
      hash/direct description, payment hash, and backend kind/granularity assumptions must match the
@@ -1561,7 +1722,13 @@ those come first.
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
    - duplicate create with the same contract but different amount, description hash, quote API version,
-     or selected custodial fee/policy is rejected against the stored `request_fingerprint`
+     or selected custodial fee/policy is rejected against the stored `request_fingerprint`, and the
+     client's `DuplicateContractConflict` handling retains the contract's claim material, which
+     still claims the original contract when the first fingerprint's invoice settles and the
+     gateway funds it
+   - client provisional-record pruning is conservative: a wall clock running ahead of LNv2
+     consensus time does not prune claim material before the funding deadline has passed in
+     consensus time
    - logical root-index loss with the authoritative client-prefix records intact: indexes rebuild
      from surviving records and backend-ledger confirmation
    - a **forged webhook ignored** unless the backend ledger confirms settlement
@@ -1578,7 +1745,8 @@ those come first.
    - **offset-pagination recovery** with overlap + dedupe, proving no settled invoice is missed or
      double-counted
    - a **duplicate `create_custodial_bolt11_invoice` retry** while the authoritative record persists
-     returning the same invoice and quote, **never** a second backend invoice
+     returning the same invoice and quote, **never** a second backend invoice, and returning
+     `BackendInvoiceUnreturnable` instead when the stored invoice is no longer safe to return
    - cross-path collisions: trustless registration rejects a contract/payment image already owned by
      custodial receive, custodial creation rejects a contract/payment image already owned by trustless
      receive, and a dual-capable direct-swap lookup returns the custodial forfeit-signature outcome
@@ -1594,8 +1762,8 @@ those come first.
      return to the automatic funding path with `UnreturnedInvoiceSettled` evidence, while unsafe
      validation / namespace / backend-invariant failures open an auditable liability
    - client quote verification rejects a quote whose `observed_lnv2_consensus_time` is too far behind
-     the client's own locally-observed LNv2 consensus time, or whose deadline rule fails under the
-     client's own observed time
+     the client's time reference (the wall-clock margin baseline, or the optional locally-observed
+     LNv2 consensus time), or whose deadline rule fails under that reference
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
      invoice creation by face value alone; internal persistence / abuse controls surface as generic
      `BackendInvoiceCreationUnavailable`, while actual settled/funding/unresolved obligation limits
@@ -1612,6 +1780,20 @@ those come first.
      during client quote verification
    - client contract sizing uses `CustodialReceiveCapability.receive_fee`, rejects quotes whose
      `terms.receive_fee` differs, and does not accidentally use the legacy trustless receive fee
+   - a contract sized with a stale advertised fee is rejected with `FeeOrAmountBindingMismatch`
+     before backend invoice creation
+   - a request whose funding deadline or invoice expiry exceeds the advertised maximum is rejected
+     with `DeadlineTooFar` before backend invoice creation, so no prunable retained
+     invoice/tombstone record's reconciliation or namespace reservation outlives the bounded
+     retention horizon (`UnresolvedLiability` and unresolved `InvoiceCreateInconclusive` records
+     are excepted: they are never pruned automatically, §7.3)
+   - the rejection-reason pre-create invariant holds: no code path returns a reason other than
+     `CreateInProgress` or `BackendInvoiceUnreturnable` after `backend_create_maybe_sent` is set
+   - an unmatched ledger settlement in the gateway's correlation-id namespace records
+     `UnmatchedSettlement`, alerts, and disables new issuance, never a silent skip
+   - pruning a retained tombstone releases its direct-swap hash reservation only after the funding
+     deadline has passed and the ledger/finality window has closed; a post-pruning settlement
+     surfaces as `UnmatchedSettlement`
 
 ## 16. Out of scope
 

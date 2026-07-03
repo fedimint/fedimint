@@ -49,14 +49,19 @@ seconds, not an ongoing balance.
   `UnixTimeVote`s and applying the same threshold rule as the LNv2 server. If the observer is stale or
   lacks fresh threshold votes, custodial receive quote creation is unavailable for that federation.
   The gateway advertises its custodial fee and deadline policy in `RoutingInfo` before the wallet
-  builds the contract, and repeats the exact terms in the signed quote. The wallet also checks the
-  quote's observed consensus time against its own latest observed federation time, so a stale gateway
+  builds the contract, and repeats the exact terms in the signed quote. Deadlines are bounded on
+  both sides: gateway-enforced minimums keep settled invoices fundable, and gateway-enforced
+  maximums (`max_invoice_expiry_secs` / `max_funding_deadline_secs`) keep retained records,
+  namespace reservations, and required backend retention coverage finite instead of a one-request
+  DoS lever. The wallet also checks the
+  quote's observed consensus time and deadline arithmetic against an independent time reference (its
+  local wall clock with margin; optionally its own observed federation time), so a stale gateway
   cannot make an unsafe funding deadline look valid.
 - **Gateway-signed quote.** The gateway returns a signed receipt binding the backend
   invoice hash to the federation, contract, amounts, gateway keys, invoice expiry, and
   funding deadline, and records the gateway-observed LNv2 consensus time used for deadline
-  validation. The quote embeds `CustodialReceiveTerms`, with `terms_hash` equal to the canonical
-  hash of those terms, so the receipt is self-contained. The gateway persists a `QuoteDraft` before
+  validation. The quote embeds `CustodialReceiveTerms` under the quote signature, so the receipt is
+  self-contained. The gateway persists a `QuoteDraft` before
   calling the backend, validates the returned backend invoice before signing, then persists the signed
   quote in its `AwaitingPayment` record before returning. The receiver persists a provisional receive
   with claim material before the gateway request leaves, then upgrades it with the returned quote and
@@ -65,7 +70,9 @@ seconds, not an ongoing balance.
 - **Dispute evidence is contract-level.** A third party with the signed quote and federation session
   history can verify whether the quoted contract was not funded, funded but unclaimed, claimed
   through `claim_pk`, or refunded through `refund_pk`. They cannot verify the receiver's private
-  wallet balance, local note persistence, or later spending.
+  wallet balance, local note persistence, or later spending. The payer's own settlement preimage
+  proves payment to the gateway's node, not to the receiver's contract, so payer-side receiver-bound
+  proof-of-payment is weaker than under trustless receive.
 - **Exactly-once funding is load-bearing.** Consensus does **not** dedupe (funding a
   contract at two outpoints = two liabilities), so the gateway enforces single funding
   (durable status machine with a pre-submit reservation, serialized per `contract_id`,
@@ -95,10 +102,11 @@ seconds, not an ongoing balance.
   real defense.
 - **Direct-swap exclusion.** A custodial invoice is signed by the gateway's own node
   key, which would trip LNv2's intra-federation direct-swap. The gateway must never
-  register custodial invoices as trustless incoming contracts. If a same-gateway sender
-  hits the custodial invoice, the selected send path must detect
-  `backend_invoice_hash -> CustodialPending` in the shared registry and return a forfeit signature so
-  the sender refunds immediately. Retained custodial records that still own a backend invoice hash
+  register custodial invoices as trustless incoming contracts; that rule alone prevents the
+  wrong-preimage hazard. If a same-gateway sender hits the custodial invoice, the send already
+  cancels with a forfeit signature (the failed registered-contract lookup path), so the sender
+  refunds immediately; the shared `backend_invoice_hash -> CustodialPending` registry labels that
+  outcome as custodial self-pay and enforces the cross-path namespace at creation time. Retained custodial records that still own a backend invoice hash
   keep that hash reserved until pruning. Pre-funding alternate-gateway routing is a post-MVP
   optimization.
 - **Not transparent to legacy clients.** Custodial receive needs an explicit opt-in
@@ -123,13 +131,18 @@ seconds, not an ongoing balance.
   the gateway fronts `commitment.amount + module fees` from ecash float, while the backend credits the
   payer amount minus any backend skim. The gateway's net margin is the advertised custodial
   `receive_fee` minus module fees, backend skim, and liquidity/rebalance costs, so operators must size
-  `receive_fee` and float against that full outgoing funding leg. Unpaid issued invoices are contingent
+  `receive_fee` and float against that full outgoing funding leg. Note the structural gap: the MVP
+  fee cap (50 sats + 0.5%) sits below phoenixd's roughly 1%-plus-mining-fee liquidity cost, so any
+  receive that triggers an inbound liquidity purchase loses money by construction — and an attacker
+  can deliberately force such purchases. Operators must pre-provision inbound headroom, and the
+  gateway can refuse issuance that would force a liquidity purchase. Unpaid issued invoices are contingent
   exposure: track and alert on them, but do not reserve their face value against ecash float and do not
   expose public unpaid-record quotas. Such quotas are DoS-prone because an attacker can cheaply fill
   them with unpaid requests. Internal rate/storage/abuse controls still protect the service, but if
   they close before backend invoice creation the client sees generic
   `BackendInvoiceCreationUnavailable`, not a protocol quota reason. Actual
-  settled/funding/unresolved obligations gate new invoice creation via `max_in_flight`; issued-unpaid
+  settled/funding/unresolved obligations gate new invoice creation via `max_in_flight` (tracked and
+  enforced per federation); issued-unpaid
   face value does not. Invoice expiry bounds unpaid contingent exposure; once an invoice settles, it is
   a debt until funded. If federation ecash is short, the MVP alerts and can drive or prompt a
   pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out,
@@ -156,7 +169,8 @@ custodial URL in their send candidate set if they want to use that gateway for s
 
 Draft position: the "reuse the contract" design appears to require no consensus-module
 changes, but this is still pre-implementation and under review. Open items:
-`receive_fee` sizing within the existing cap, two-deadline / observer values, authenticated
+`receive_fee` sizing within the existing cap, two-deadline / observer values and the concrete
+maximum expiry/deadline bounds, authenticated
 settlement confirmation details, canonical quote/terms encoding, limit / metric-alert thresholds,
 backend-trait shape, richer backend capability typing, out-of-band gateway discovery UX, consent UX,
 the prepared-transaction API shape, audit timing, and richer liability taxonomy. See the detailed spec for the full protocol, trust analysis,
