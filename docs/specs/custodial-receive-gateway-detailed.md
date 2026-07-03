@@ -485,9 +485,13 @@ New `custodial-gatewayd` logic, per connected federation:
    backend invoice does not exist until `create_plain_invoice` returns. The draft is the durable
    policy decision: retries and crash recovery must use it rather than recomputing fees, deadlines,
    terms, keys, URLs, or observed consensus time from current config.
-   `request_fingerprint` is the canonical hash of the duplicate-sensitive request envelope: contract,
-   invoice amount, invoice description hash, requested quote API version, selected custodial
-   fee/policy fields, and backend invoice expiry request shape. It is how the gateway distinguishes an
+   `request_fingerprint` is the canonical hash of the duplicate-sensitive **request payload**:
+   contract identity, invoice amount, invoice description hash, requested invoice expiry, and
+   requested quote API version — computed by the same shared function on client and gateway from
+   payload fields only, never from either side's current fee/policy config (a config change must not
+   reclassify an identical retry as a conflict). The selected fee/policy needs no fingerprint input:
+   it is bound through the amount-binding check, and an idempotent duplicate receives the stored
+   signed quote, not a re-quote. The fingerprint is how the gateway distinguishes an
    idempotent duplicate from a conflicting request for the same contract.
    `backend_create_maybe_sent` records that a non-idempotent backend create request may have reached
    the backend; an expired local lease alone is not proof that it did not, and the MVP never retries
@@ -699,7 +703,10 @@ New `custodial-gatewayd` logic, per connected federation:
    So `operation_exists` becomes true at `FundingSubmitted`, never at `FundingPrepared`, which keeps
    the "operation exists, never resubmit" recovery path tied to submission, not preparation. The
    authoritative funding state is the `PendingCustodialReceive` record itself, carrying its funding
-   fields (`prepared_tx`, `operation_id`, input reservation) in this prefix, not a separate record.
+   fields (`prepared_tx`, `operation_id`, input reservation) in this prefix — either inline or as a
+   companion key in the **same prefix** written in the **same database transaction** (e.g. a generic
+   client prepared-transaction record referenced by operation id); never a separate physical store
+   and never a separate commit.
    The gateway DB's **root-level** secondary indexes
    (`quote_id` / `backend_invoice_hash` / `backend_correlation_id` → `federation_id`) are
    rebuildable and **not** the source of truth for whether a prepared funding tx exists. They sit at
@@ -1484,7 +1491,7 @@ operator data-loss events outside this spec's recovery model (§16).
   visibility barrier that could prove it, §14). A duplicate
   `create_custodial_bolt11_invoice` whose
   `request_fingerprint` matches the stored draft never creates a second backend invoice; a duplicate
-  with mismatched amount, description hash, quote API version, or selected custodial fee/policy is
+  with mismatched amount, description hash, requested invoice expiry, or quote API version is
   rejected against the stored draft.
 - **Idempotent funding** keyed on `backend_invoice_hash` / `contract_id`: fund each
   contract exactly once. A hint arriving in `SettledAwaitingLiquidity` waits for float; one in
@@ -1737,7 +1744,7 @@ those come first.
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
    - duplicate create with the same contract but different amount, description hash, quote API version,
-     or selected custodial fee/policy is rejected against the stored `request_fingerprint`, and the
+     or requested invoice expiry is rejected against the stored `request_fingerprint`, and the
      client's `DuplicateContractConflict` handling retains the contract's claim material, which
      still claims the original contract when the first fingerprint's invoice settles and the
      gateway funds it
