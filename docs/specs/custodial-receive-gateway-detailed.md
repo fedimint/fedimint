@@ -512,7 +512,9 @@ New `custodial-gatewayd` logic, per connected federation:
 
    A settlement matching a retained unreturned-invoice tombstone never disappears. It follows the
    tombstone's `fund_on_settlement` policy: safe stale/unreturned invoices transition back to the
-   automatic funding path for the original quoted contract with `UnreturnedInvoiceSettled` evidence;
+   automatic funding path for the original quoted contract with `UnreturnedInvoiceSettled` evidence
+   while the funding deadline has not passed in observed consensus time (after it, the settlement
+   opens an `UnresolvedLiability` instead, see the status-machine rules below);
    unsafe validation, namespace, granularity, or backend-invariant failures transition to
    `UnresolvedLiability` / `BackendMismatch` with the backend ledger proof and retained draft as
    evidence. The client may have been told the invoice was rejected, but if the backend ledger proves
@@ -668,7 +670,12 @@ New `custodial-gatewayd` logic, per connected federation:
    `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` retained record that
    later matches a settlement follows its reason-tagged `fund_on_settlement` policy. Safe retained
    records transition back to the automatic funding path with reason `UnreturnedInvoiceSettled`
-   recorded as evidence; unsafe validation, namespace, granularity, or backend-invariant failures
+   recorded as evidence — **provided the funding deadline has not yet passed in observed consensus
+   time**. A settlement that surfaces after the deadline can no longer fund the original contract
+   (the server rejects expired contracts, `modules/fedimint-lnv2-server/src/lib.rs:563`) and opens
+   an `UnresolvedLiability` with the settlement proof instead; this is a critical operator fault,
+   since the deadline bounds (§8) are sized so it cannot happen in normal operation. Unsafe
+   validation, namespace, granularity, or backend-invariant failures
    become `UnresolvedLiability` / `BackendMismatch`. `InvoiceCreateInconclusive` requires operator
    review because the gateway cannot safely prove whether a backend invoice was created, but it is
    still retained in ledger reconciliation; a matching settlement also follows the recovered invoice's
@@ -890,7 +897,10 @@ mode flag on `receive`:
 - **Persist a provisional custodial receive before the gateway request leaves.** Once the client has
   built and self-checked the contract, it stores the contract, receiver secret material needed to
   claim it, selected gateway identity, `client_request_id` / request fingerprint, invoice amount,
-  funding deadline, and provisional operation id in the client DB. It then starts or arms the normal
+  requested invoice expiry, funding deadline, the advertised deadline-policy fields used
+  (`consensus_time_observation_max_age_secs`, `safety_margin_secs` — so the pruning rule below has
+  persisted inputs even when no quote is ever returned), and provisional operation id in the client
+  DB. It then starts or arms the normal
   receive watcher for that contract before calling `create_custodial_bolt11_invoice`. A successful
   `Created { invoice, quote }` upgrades the provisional record with the signed quote and invoice.
   Deletion vs retention is keyed on the **public rejection reason**, never on gateway-internal state
@@ -906,9 +916,12 @@ mode flag on `receive`:
   the client clock (§8): a client whose wall clock runs ahead could otherwise delete the only claim
   material for a contract the gateway can still fund. The client may prune only once its locally
   observed LNv2 consensus time (if it tracks one) is past the funding deadline, or its wall clock
-  is past the deadline by a generous margin of at least
-  `terms.consensus_time_observation_max_age_secs + terms.safety_margin_secs`. Claim material is
-  small; when in doubt, retain.
+  is past the deadline by at least the **persisted** policy margin
+  (`consensus_time_observation_max_age_secs + safety_margin_secs`, from the stored provisional
+  record's capability values or from `terms` once a quote arrived) **plus the client's configured
+  maximum assumed clock skew**. Wall-clock pruning is only as safe as that skew assumption; a
+  wallet that cannot bound its clock skew must track observed consensus time or keep the record.
+  Claim material is small; when in doubt, retain.
 - Request the invoice, and **skip** the `invoice.payment_hash() == preimage hash`
   check (`lib.rs:977`): the invoice is deliberately the backend's own hash. Keep the **amount**
   check (`lib.rs:981`). The requested amount must also be compatible with
@@ -1487,7 +1500,9 @@ operator data-loss events outside this spec's recovery model (§16).
   window proves no settlement occurred, the record becomes `InvoiceExpiredUnpaid`. Contract funding
   deadline slack is still checked as a critical health condition, but it is not the unpaid/paid
   terminalization rule. A settlement matching an `InvoiceExpiredUnpaid` tombstone is a
-  backend/finality surprise and returns to the automatic funding path, never a silent miss. A
+  backend/finality surprise and returns to the automatic funding path while the funding deadline
+  has not passed in observed consensus time (after it, the contract is unfundable and the
+  settlement opens an `UnresolvedLiability`, §7.3), never a silent miss. A
   settlement matching `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
   `InvoiceExpiredUnreturned` reruns recovered-invoice validation, reasserts the direct-swap namespace
   reservation when it is safe to own the hash, and then follows the retained record's
@@ -1727,8 +1742,9 @@ those come first.
      still claims the original contract when the first fingerprint's invoice settles and the
      gateway funds it
    - client provisional-record pruning is conservative: a wall clock running ahead of LNv2
-     consensus time does not prune claim material before the funding deadline has passed in
-     consensus time
+     consensus time by up to the configured maximum assumed clock skew does not prune claim
+     material before the funding deadline has passed in consensus time, and the pruning margin is
+     computed from the persisted policy fields even when no quote was ever returned
    - logical root-index loss with the authoritative client-prefix records intact: indexes rebuild
      from surviving records and backend-ledger confirmation
    - a **forged webhook ignored** unless the backend ledger confirms settlement
