@@ -73,8 +73,8 @@ use fedimint_core::{
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
-    ConnectFedPayload, ConnectorType, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    ConnectFedPayload, ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload,
+    CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
@@ -2355,6 +2355,21 @@ impl IAdminGateway for Gateway {
                 failure_reason: format!("Received invalid channel funding txid string {e}"),
             })
         })
+    }
+
+    /// Instructs the Gateway's Lightning node to connect to a peer specified by
+    /// `pubkey`.
+    async fn handle_connect_peer_msg(&self, payload: ConnectPeerRequest) -> AdminResult<()> {
+        info!(
+            target: LOG_GATEWAY,
+            pubkey = %payload.node_address.pubkey,
+            host = %payload.node_address.host_with_port(),
+            "Connecting to Lightning peer..."
+        );
+        let context = self.get_lightning_context().await?;
+        context.lnrpc.connect_peer(payload).await?;
+        info!(target: LOG_GATEWAY, "Connected to Lightning peer");
+        Ok(())
     }
 
     /// Instructs the Gateway's Lightning node to close all channels with a peer

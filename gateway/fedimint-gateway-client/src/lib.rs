@@ -10,9 +10,10 @@ use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConfigPayload,
-    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    CONNECT_PEER_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, ChannelInfo, CloseChannelsWithPeerRequest,
+    CloseChannelsWithPeerResponse, ConfigPayload, ConnectFedPayload, ConnectPeerRequest,
+    CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
@@ -195,6 +196,16 @@ pub async fn open_channel(
 ) -> ServerResult<Txid> {
     client
         .request(base_url, Method::POST, OPEN_CHANNEL_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn connect_peer(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: ConnectPeerRequest,
+) -> ServerResult<()> {
+    client
+        .request(base_url, Method::POST, CONNECT_PEER_ENDPOINT, Some(payload))
         .await
 }
 

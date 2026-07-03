@@ -11,9 +11,9 @@ use fedimint_core::Amount;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_gateway_common::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
-    SetChannelFeesRequest,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectPeerRequest,
+    GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest,
+    SendOnchainRequest, SetChannelFeesRequest,
 };
 use fedimint_lightning::{
     CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
@@ -272,6 +272,12 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToOpenChannel {
             failure_reason: "FakeLightningTest does not support opening channels".to_string(),
+        })
+    }
+
+    async fn connect_peer(&self, _payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
+        Err(LightningRpcError::FailedToConnectToPeer {
+            failure_reason: "FakeLightningTest does not support connecting to peers".to_string(),
         })
     }
 
