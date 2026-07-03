@@ -387,14 +387,42 @@ New `custodial-gatewayd` logic, per connected federation:
    stale and no backend invoice is created. Before signing, the gateway parses and validates the
    returned BOLT11 invoice against the persisted draft: amount, payee, expiry within the adapter's
    tolerance, description hash / direct description, payment hash, and backend granularity/kind
-   assumptions must all match. If validation fails, the gateway retains a `BackendInvoiceRejected`
-   tombstone for reconciliation, disables new custodial invoice creation if the mismatch indicates
-   backend corruption, and does not return the invoice. Otherwise it signs the quote using the stored
-   draft plus the returned backend invoice hash, and **commits the full `AwaitingPayment` record
-   including `signed_quote` before returning**, advancing `InvoiceCreating → AwaitingPayment`.
+   assumptions must all match. If validation fails, the gateway retains a reason-tagged
+   `BackendInvoiceRejected` tombstone for reconciliation, disables new custodial invoice creation if
+   the mismatch indicates backend corruption, and does not return the invoice:
+
+   ```rust
+   enum BackendInvoiceRejectedReason {
+       StaleOrExpiredButOtherwiseValid,
+       AmountMismatch,
+       PayeeMismatch,
+       DescriptionMismatch,
+       ExpiryOutOfTolerance,
+       PaymentHashMismatch,
+       BackendKindOrGranularityMismatch,
+       DirectSwapNamespaceCollision,
+       BackendInvariantViolation,
+   }
+
+   enum FundOnSettlement {
+       FundOriginalContract,
+       OpenUnresolvedLiability,
+   }
+   ```
+
+   Each retained unreturned-invoice tombstone carries a `fund_on_settlement` policy. Only
+   stale/expired-but-otherwise-valid invoices and explicitly safe `InvoiceCreateInconclusive`
+   recoveries may return to automatic funding when settlement is proven. Amount, payee, payment-hash,
+   namespace, granularity, or backend-invariant failures open `UnresolvedLiability` / `BackendMismatch`
+   with the retained draft and backend ledger proof instead of blindly funding the original contract.
+   Otherwise it signs the quote using the stored draft plus the returned backend invoice hash, and
+   **commits the full `AwaitingPayment` record including `signed_quote` before returning**, advancing
+   `InvoiceCreating → AwaitingPayment`.
    A crash after backend invoice creation but before the `AwaitingPayment` commit is recovered by
-   querying the backend by `externalId` (`get_invoice_by_external_id`), then signing the recovered
-   backend invoice hash against the already-persisted quote draft. A backend that can't look up unpaid
+   querying the backend by `externalId` (`get_invoice_by_external_id`). The recovered backend invoice
+   must then pass the same draft validation and direct-swap namespace reservation as the happy path
+   before any quote is signed or any funding path is activated. Recovery must not sign or fund from an
+   invoice that would have been rejected during initial creation. A backend that can't look up unpaid
    invoices by external id can't support crash-safe custodial invoice creation. If the
    **authoritative federation client DB prefix itself is lost or rolled back**, the receive record is
    gone. That is operator data loss and out of scope for this spec (§10, §16), not a path that creates
@@ -448,8 +476,9 @@ New `custodial-gatewayd` logic, per connected federation:
    true)` is authoritative for that maybe-sent attempt. Backends that cannot provide such a
    visibility guarantee must not retry a maybe-sent create; they leave the record
    `InvoiceCreateInconclusive`. That retained record remains in ledger reconciliation by
-   `backend_correlation_id`: if the maybe-sent invoice later appears or settles, the gateway records an
-   unresolved liability instead of silently missing the payment.
+   `backend_correlation_id`: if the maybe-sent invoice later appears or settles, the recovered invoice
+   must pass the same draft validation and direct-swap namespace reservation as the original create
+   path, then follows its `fund_on_settlement` policy instead of being silently missed.
 
    The draft is still bounded by freshness. If no backend invoice exists yet, a handler may call
    `create_plain_invoice` only while the draft still satisfies the create-time safety checks:
@@ -464,11 +493,14 @@ New `custodial-gatewayd` logic, per connected federation:
    reconciliation (`BackendInvoiceRejected` / `InvoiceExpiredUnreturned`) and returns a typed rejection
    instead of exposing a stale invoice to the client.
 
-   A settlement matching a `BackendInvoiceRejected` or `InvoiceExpiredUnreturned` tombstone never
-   disappears. It transitions back to the automatic funding path for the original quoted contract, with
-   reason `UnreturnedInvoiceSettled` recorded as liability evidence until the receiver is funded. The
-   client may have been told the invoice was rejected, but if the backend ledger proves settlement the
-   gateway still owes the receiver and must fund the original contract.
+   A settlement matching a retained unreturned-invoice tombstone never disappears. It follows the
+   tombstone's `fund_on_settlement` policy: safe stale/unreturned invoices transition back to the
+   automatic funding path for the original quoted contract with `UnreturnedInvoiceSettled` evidence;
+   unsafe validation, namespace, granularity, or backend-invariant failures transition to
+   `UnresolvedLiability` / `BackendMismatch` with the backend ledger proof and retained draft as
+   evidence. The client may have been told the invoice was rejected, but if the backend ledger proves
+   settlement the gateway must either fund the original contract or retain an auditable liability for
+   why automatic funding would be unsafe.
 
    The `AwaitingPayment` commit adds
    `{ quote_id, backend_invoice_hash, backend_requested_sat, invoice_amount, contract_amount,
@@ -564,8 +596,8 @@ New `custodial-gatewayd` logic, per connected federation:
    new funding and routes by state: `SettledAwaitingLiquidity` waits for float, `FundingReserved` /
    `FundingPrepared` / `FundingSubmitted` wait or re-drive (§10), `Funded` is a no-op, a settlement
    matching an `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned`
-   tombstone is a late settlement to the liability path (§7.7), and an absent authoritative record is
-   an operator data-loss / corruption case out of scope for this spec (§10, §16). A
+   tombstone follows the retained record's `fund_on_settlement` policy, and an absent authoritative
+   record is an operator data-loss / corruption case out of scope for this spec (§10, §16). A
    **settled-but-mismatched** record is **not**
    ignored: a deviation within expected backend skim still funds the full contract and records the
    loss (§8), while a gross or abnormal mismatch opens a `BackendMismatch` liability (§7.7) and
@@ -602,11 +634,13 @@ New `custodial-gatewayd` logic, per connected federation:
    on the funding path (`SettledAwaitingLiquidity` if float is short), unless there is a gross
    `BackendMismatch` or another invariant failure that requires an `UnresolvedLiability` marker. An
    `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned` retained record that
-   later matches a settlement transitions back to the automatic funding path with reason
-   `UnreturnedInvoiceSettled` recorded as evidence. `InvoiceCreateInconclusive` requires operator
+   later matches a settlement follows its reason-tagged `fund_on_settlement` policy. Safe retained
+   records transition back to the automatic funding path with reason `UnreturnedInvoiceSettled`
+   recorded as evidence; unsafe validation, namespace, granularity, or backend-invariant failures
+   become `UnresolvedLiability` / `BackendMismatch`. `InvoiceCreateInconclusive` requires operator
    review because the gateway cannot safely prove whether a backend invoice was created, but it is
-   still retained in ledger reconciliation; a matching settlement also returns to the automatic funding
-   path with `UnreturnedInvoiceSettled` evidence. Any funding state goes to `UnresolvedLiability` only
+   still retained in ledger reconciliation; a matching settlement also follows the recovered invoice's
+   validation and `fund_on_settlement` policy. Any funding state goes to `UnresolvedLiability` only
    for funding-tx inconclusiveness or another invariant failure (§11). The record **retains
    `prepared_tx`** from
    `FundingPrepared` onward (the `operation_id` and `txid` are added markers, not a replacement),
@@ -708,6 +742,13 @@ New `custodial-gatewayd` logic, per connected federation:
    gateway must not return the invoice; it records a retained `BackendInvoiceRejected` tombstone keyed
    by `backend_correlation_id` / `backend_invoice_hash`, disables new custodial invoice creation until
    reviewed, and continues ledger reconciliation for that invoice through the retention window.
+   Retained custodial records and tombstones that own a `backend_invoice_hash` keep that hash reserved
+   in the direct-swap namespace until the retained record is pruned. A trustless receive registration
+   must reject a payment hash owned by a retained custodial record, not only by nonterminal custodial
+   receives. If the tombstone exists because the hash already collided with an active trustless owner,
+   the custodial tombstone records that unsafe collision but does **not** take ownership from the
+   existing trustless registration; any later settlement follows the unsafe `fund_on_settlement`
+   policy rather than automatic funding.
 
    This invariant must be enforced by the same transaction/registry used for direct-swap detection in
    dual-capable mode. Recovery of any post-create custodial record must re-derive and atomically
@@ -740,13 +781,22 @@ New `custodial-gatewayd` logic, per connected federation:
    funding the original contract after liquidity recovers.
 6. **Limits and unpaid invoices:** enforce the per-receive cap from the gateway's advertised
    `CustodialReceiveCapability` (§7.1, §9) to bound single-receive blast radius. The aggregate
-   `max_in_flight` value is an operating target for actual settled/funding liabilities, not a hard
-   reservation against every issued unpaid invoice. An issued unpaid invoice is **contingent
-   exposure**, not debt. The gateway tracks issued-unpaid count and face value for metrics and
-   operator alerts, but unpaid invoices **do not** change gateway behavior and do not by themselves
-   reject new custodial invoice creation. Generic service protections such as HTTP rate limits,
-   authentication policy, and database-size limits remain deployment concerns, not custodial receive
-   capability semantics.
+   `max_in_flight` value is a hard gate for actual obligations, not a reservation against every issued
+   unpaid invoice: if open settled-but-unfunded debt plus open unresolved liabilities plus records in
+   funding states is at or above `max_in_flight`, new custodial invoice creation is disabled until the
+   operator reduces the debt. An issued unpaid invoice is **contingent exposure**, not debt. The
+   gateway tracks issued-unpaid count and face value for metrics and operator alerts, but unpaid
+   invoice **face value** is not reserved against `max_in_flight`.
+
+   Public unpaid-record quotas are **not** part of the custodial receive protocol. They are
+   attacker-controlled DoS levers: a cheap stream of unpaid invoice requests could fill a public
+   `max_open_unpaid_records` / retained-record quota and force honest receivers to get rejected. The
+   gateway still needs internal durability and deployment controls (request throttling, authentication
+   policy, storage alarms, DB-size ceilings, abuse detection), but those controls are outside
+   `CustodialReceiveCapability` and are not advertised as wallet-visible selection semantics. If the
+   gateway is genuinely unable to persist or reconcile safely, it disables only **new** invoice
+   creation and reports generic `BackendInvoiceCreationUnavailable`; already-issued and
+   already-settled invoices continue through reconciliation.
 
    Late settlements are possible because a notify-only backend can report settlement after local
    invoice expiry, so the record is **retained in full** (contract, amounts, `invoice_expiry`,
@@ -778,6 +828,25 @@ mode flag on `receive`:
   contract fundable after any backend settlement. The client sizes `contract.commitment.amount` using
   that same capability's `receive_fee`, not the legacy top-level trustless receive fee. The returned
   signed quote repeats the terms actually used and must still pass the checks below.
+- **Self-check claimability before requesting the invoice.** The client must verify it can actually
+  claim the contract it built: that `recover_contract_keys` succeeds
+  (`modules/fedimint-lnv2-client/src/lib.rs:1025-1055`), confirming a valid preimage and a derivable
+  claim key. An unclaimable contract is far worse in custodial mode (§9, §11): the payer pays
+  irreversibly but the receiver can never claim.
+- **Persist a provisional custodial receive before the gateway request leaves.** Once the client has
+  built and self-checked the contract, it stores the contract, receiver secret material needed to
+  claim it, selected gateway identity, `client_request_id` / request fingerprint, invoice amount,
+  funding deadline, and provisional operation id in the client DB. It then starts or arms the normal
+  receive watcher for that contract before calling `create_custodial_bolt11_invoice`. A successful
+  `Created { invoice, quote }` upgrades the provisional record with the signed quote and invoice. A
+  rejection only deletes the provisional record if the failure is known to be before backend invoice
+  creation or exposure: local validation failure, amount/capability rejection before `InvoiceCreating`,
+  or `InvoiceCreationExpired` before the backend create request was maybe sent. Rejections or network
+  outcomes that may correspond to a created or returned backend invoice (`CreateInProgress`,
+  `BackendInvoiceCreationUnavailable` after a maybe-sent attempt, `BackendInvoiceRejected`,
+  `InvoiceExpiredUnreturned`, timeout after the request left the process) retain the provisional
+  receive until the gateway response/retry resolves it or backend finality plus the retained-record
+  policy says the invoice could not settle.
 - Request the invoice, and **skip** the `invoice.payment_hash() == preimage hash`
   check (`lib.rs:977`): the invoice is deliberately the backend's own hash. Keep the **amount**
   check (`lib.rs:981`). The requested amount must also be compatible with
@@ -848,14 +917,9 @@ mode flag on `receive`:
   `gateway_module_pk`, so the unclaimable-contract windfall (§9, §11) can only route back
   to the audited gateway. The full quote, including `terms`, is stored with the operation metadata so
   the receiver can later prove what the gateway committed to fund.
-- **Self-check claimability before requesting the invoice.** The client must verify it
-  can actually claim the contract it built: that `recover_contract_keys` succeeds
-  (`modules/fedimint-lnv2-client/src/lib.rs:1025-1055`), confirming a valid preimage and a
-  derivable claim key. An unclaimable contract is far worse in custodial mode (§9, §11):
-  the payer pays irreversibly but the receiver can never claim.
-- Start the existing `ReceiveStateMachine` (watch contract → claim) **unchanged**. It
-  claims with the receiver's locally-precomputed `agg_decryption_key`, so it needs
-  nothing from the gateway beyond the contract being funded.
+- The armed watcher uses the existing `ReceiveStateMachine` behavior (watch contract → claim)
+  **unchanged** once the contract appears. It claims with the receiver's locally-precomputed
+  `agg_decryption_key`, so it needs nothing from the gateway beyond the contract being funded.
 
 ### 7.5 Server / consensus
 
@@ -976,9 +1040,13 @@ only when it can't safely operate the handoff. The **required** hard gates that 
 invoice creation: it can't durably persist the record / input reservation, it can't make progress on
 actual settled liabilities, it can't do authenticated backend-ledger settlement confirmation, or the
 backend can't establish **declared retention coverage** of all nonterminal records and tombstones
-(§7.2). Already-settled invoices keep flowing through reconciliation and liquidity replenishment.
-Issued-unpaid invoice count or face value only drives metrics and operator alerts, never a hard
-custodial-receive breaker.
+(§7.2). Internal storage and abuse controls can also disable only new invoice creation when the
+gateway cannot persist or reconcile safely, but those controls are not advertised protocol quotas and
+must not become wallet-visible selection semantics. Exposing a public unpaid-record quota would create
+a DoS lever: an attacker could cheaply fill it with unpaid invoices and force honest receives to be
+rejected. Already-settled invoices keep flowing through reconciliation and liquidity replenishment.
+Issued-unpaid invoice count and face value drive metrics and operator alerts; they do not reserve
+ecash and do not produce a distinct protocol-level rejection reason.
 
 The MVP must expose a **minimal observability set** so operators can see contingent exposure,
 actual debts, liquidity shortfall, deadline pressure, reconciliation health, and observer freshness.
@@ -1000,6 +1068,7 @@ gateway_custodial_receive_min_funding_deadline_slack_seconds
 gateway_custodial_receive_backend_cursor_lag_seconds
 gateway_custodial_receive_backend_retention_margin_seconds
 gateway_custodial_receive_consensus_time_observer_age_seconds
+gateway_custodial_receive_retained_record_count{state}
 ```
 
 Required histogram:
@@ -1016,7 +1085,9 @@ funding deadline among settled-but-unfunded records; approaching zero is a criti
 because settled debts must remain automatically fundable through the original contract.
 `backend_retention_margin_seconds` measures how long the oldest recovery-relevant record remains
 inside backend ledger retention. `consensus_time_observer_age_seconds` backs the §8 rule that stale
-LNv2 consensus-time observation disables new quote creation.
+LNv2 consensus-time observation disables new quote creation. `retained_record_count` exposes
+storage/reconciliation pressure for alerts and abuse detection without turning unpaid records into
+protocol-level admission control.
 
 Metrics must avoid high-cardinality labels. Acceptable labels are low-cardinality values such as
 `federation_id`, `backend_kind`, `reason`, and coarse `state`. They must not label by `quote_id`,
@@ -1059,23 +1130,32 @@ enum CustodialReceiveRejectionReason {
     BackendLedgerUnavailable,          // Backend cannot provide required ledger/reconciliation support.
     DuplicateContractConflict,         // Existing reservation conflicts with this request.
     CreateInProgress,                  // Same request is already creating an invoice; retry/poll.
+    ActualLiabilityLimitExceeded,      // Actual settled/funding/unresolved obligations exceed policy.
 }
 ```
 
 This enum is the stable client-facing API surface. The richer operator liability taxonomy remains
-deferred (§14). There is intentionally no unpaid-invoice or float-shortage rejection: unpaid invoice
-buildup only alerts the operator (§7.3), and post-settlement float shortage is handled as a debt /
-liquidity problem (§8, §11), not as create-invoice admission control.
+deferred (§14). There is intentionally no unpaid-invoice **face-value** or float-shortage rejection:
+unpaid invoice buildup drives metrics / alerts and deployment-level abuse controls, while
+post-settlement float shortage is handled as a debt / liquidity problem (§8, §11), not as
+create-invoice admission control. There is no public `ResourceQuotaExceeded`: exposing a typed
+unpaid-record quota would let attackers intentionally fill it and create a wallet-visible DoS.
+Internal resource exhaustion or abuse throttling is surfaced as generic
+`BackendInvoiceCreationUnavailable` before backend invoice creation. `ActualLiabilityLimitExceeded`
+is based only on actual settled/funding/unresolved obligations, never on issued-unpaid face value.
 
 Internal terminal states and gates map to public rejections as follows:
 
 | Internal state / gate | Public rejection | Client action |
 |---|---|---|
-| `InvoiceCreationExpired` before backend invoice exists | `DeadlineTooNear` | Build a fresh contract after refreshing `RoutingInfo`. |
-| Safe duplicate while a create lease is live | `CreateInProgress` or wait/poll response | Retry/poll the same request; do not build a new contract yet. |
-| `InvoiceCreateInconclusive` | `BackendInvoiceCreationUnavailable` | Choose another gateway or retry later; the same contract remains reserved until operator review. |
-| `BackendInvoiceRejected` before return | `BackendInvoiceCreationUnavailable` | Choose another gateway or retry later; do not assume this backend invoice is usable. |
-| `InvoiceExpiredUnreturned` before return | `DeadlineTooNear` | Build a fresh contract after refreshing `RoutingInfo`. |
+| Local validation, amount, or capability rejection before `InvoiceCreating` | Matching typed rejection | Delete the provisional receive; build a fresh contract only after fixing the local/request issue. |
+| `InvoiceCreationExpired` before backend create was maybe sent | `DeadlineTooNear` | Delete the provisional receive; build a fresh contract after refreshing `RoutingInfo`. |
+| Safe duplicate while a create lease is live | `CreateInProgress` or wait/poll response | Keep the provisional receive; retry/poll the same request and do not build a new contract yet. |
+| `InvoiceCreateInconclusive` | `BackendInvoiceCreationUnavailable` | Retain the provisional receive; choose another gateway only with a fresh contract. |
+| `BackendInvoiceRejected` before return | `BackendInvoiceCreationUnavailable` | Retain the provisional receive if a backend invoice exists or may exist; retry with a fresh contract only for the user-visible flow. |
+| `InvoiceExpiredUnreturned` before return | `DeadlineTooNear` | Retain the provisional receive through the retained tombstone window; build a fresh contract for the user-visible retry. |
+| Actual settled/funding/unresolved obligations at policy limit | `ActualLiabilityLimitExceeded` | Retry later or choose another gateway; no backend invoice was created for this contract. |
+| Internal resource exhaustion or abuse throttling before backend create | `BackendInvoiceCreationUnavailable` | Retry later or choose another gateway; no backend invoice was created for this contract. |
 
 ## 8. Fee & amount accounting
 
@@ -1265,9 +1345,13 @@ operator data-loss events outside this spec's recovery model (§16).
   terminalization rule. A settlement matching an `InvoiceExpiredUnpaid` tombstone is a
   backend/finality surprise and returns to the automatic funding path, never a silent miss. A
   settlement matching `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
-  `InvoiceExpiredUnreturned` also returns to the automatic funding path with
-  `UnreturnedInvoiceSettled` recorded as evidence until the receiver is funded. This closes the crash
-  gap for an honest operator.
+  `InvoiceExpiredUnreturned` reruns recovered-invoice validation, reasserts the direct-swap namespace
+  reservation when it is safe to own the hash, and then follows the retained record's
+  `fund_on_settlement` policy. Safe records return to the automatic funding path with
+  `UnreturnedInvoiceSettled` evidence until the receiver is funded; unsafe validation, namespace,
+  granularity, or backend-invariant failures become auditable `UnresolvedLiability` /
+  `BackendMismatch` records. This closes the crash gap for an honest operator without allowing a
+  rejected mismatched invoice to fund the wrong contract.
 - **Reserved/submitted reconciliation:** on boot, every `SettledAwaitingLiquidity` record rechecks
   deadline slack and float. If liquidity is available, one worker atomically claims it into
   `FundingReserved`; otherwise it remains a debt waiting for liquidity and triggers liquidity
@@ -1357,8 +1441,8 @@ reference backend is a complete gateway.
 4. **Capability typing**: the `ReceiveCapabilities` struct, custodial deadline-policy fields, and
    policy selectors are chosen (§7.1). The open part is how richly to type the backend capability
    descriptor.
-5. **Limits / alert defaults**: concrete per-receive cap, actual-liability target, and alert
-   thresholds for the required MVP metrics (§7.1, §7.3, §7.8).
+5. **Limits / alert defaults**: concrete per-receive cap, actual-liability target, internal
+   abuse/storage-control policy, and alert thresholds for the required MVP metrics (§7.1, §7.3, §7.8).
 6. **Backend trait shape**: extend `ILnRpcClient` with capability + custodial
    primitives, vs a separate `NotifyOnlyBackend` trait.
 7. **Out-of-band discovery and consent UX**: how wallets accept custodial gateway URLs from
@@ -1404,13 +1488,14 @@ those come first.
    durable input reservations and exact-tx replay (finalize + lock inputs + return bytes and a
    reservation token without an op-log entry or submission SM, then install a stored exact tx as a
    submission SM in one autocommit dbtx, §7.3). Highest-risk, and it gates the rest.
-2. **Public API semantics**: `RoutingInfo` receive capabilities, the custodial-receive result enums,
-   the same-gateway send **forfeit-signature** rejection that ride successful domain responses
-   (§7.6, §7.9), plus the rule that legacy `GATEWAYS_ENDPOINT` remains trustless-compatible only.
-   If dual-capable mode is included in MVP, this phase also adds the direct-swap receive-registry hook
-   in the legacy-listed gateway process. If MVP is custodial-only/out-of-band only, that hook is
-   needed only for send handlers that share the custodial gateway's payee key; handlers that do not
-   share that key never receive the same-gateway self-pay case.
+2. **Public API semantics**: `RoutingInfo` receive capabilities, the custodial-receive result enums
+   including `ActualLiabilityLimitExceeded` but no public resource-quota rejection, the same-gateway
+   send **forfeit-signature** rejection that ride successful domain responses (§7.6, §7.9), plus the
+   rule that legacy `GATEWAYS_ENDPOINT` remains trustless-compatible only. If dual-capable mode is
+   included in MVP, this phase also adds the direct-swap receive-registry hook in the legacy-listed
+   gateway process. If MVP is custodial-only/out-of-band only, that hook is needed only for send
+   handlers that share the custodial gateway's payee key; handlers that do not share that key never
+   receive the same-gateway self-pay case.
 3. **Backend**: `LightningMode::Phoenixd` + notify-only backend adapter (send + `create_plain_invoice`
    with `external_id` + `subscribe_invoice_settled` hints + `list_settled_invoices` /
    `get_invoice_by_hash` / `get_invoice_by_external_id` ledger queries, the declared retention
@@ -1420,14 +1505,18 @@ those come first.
    `CustodialSettlementObserver`, fund-on-settle via the prepare/submit helper
    (`prepare_custodial_incoming_funding` / `submit_prepared_custodial_funding`, §7.3) with
    `FundingPrepared` storing the exact tx and reserving its ecash inputs, enforce **exactly-once**
-   funding, run the `CustodialContractAuditSM`, sign quotes, maintain the minimal in-prefix
-   `CustodialReceiveLiability` record (§7.7), reconcile on startup, alert on issued-unpaid records,
-   handle liquidity replenishment, and expose the required MVP metrics (§7.8).
+   funding, run the `CustodialContractAuditSM`, sign quotes, maintain reason-tagged retained
+   tombstones with `fund_on_settlement`, maintain the minimal in-prefix `CustodialReceiveLiability`
+   record (§7.7), reconcile on startup, enforce internal persistence / abuse controls without
+   exposing public unpaid-record quotas, alert on issued-unpaid records, handle liquidity
+   replenishment, and expose the required MVP metrics (§7.8).
 5. **Capability advertisement and selection**: `ReceiveCapabilities` in `RoutingInfo`, the
    `select_gateway_for_receive` / `select_gateway_for_send` policy selectors, version handling, and
    wallet-supplied custodial candidate URLs.
-6. **Client**: `receive_custodial` variant (skip hash check, verify/persist signed
-   quote, enforce custodial fee cap, consent, surface mode).
+6. **Client**: `receive_custodial` variant (self-check claimability, persist provisional receive
+   state before the gateway request leaves, skip hash check, verify/persist signed quote, retain
+   provisional state for maybe-created / unreturned rejections, enforce custodial fee cap, consent,
+   surface mode).
 7. **Tests**: a deterministic `FakeNotifyOnlyBackend` is the **primary** correctness harness. It
    creates invoices, reorders / drops hints, forges unauthenticated hints, serves ledger pages with
    duplicate or shifted offsets, simulates skim, and pauses at crash hooks around **every** durable
@@ -1444,9 +1533,9 @@ those come first.
      gateway re-drives the exact stored `prepared_tx`, never a second different tx, even when a
      lookup reads "not funded" mid-flight (§7.3, §10)
    - crash after `InvoiceCreating(quote_draft)` commits and the backend invoice is created, but before
-     `AwaitingPayment(signed_quote)` commits: recovery looks up by `backend_correlation_id` and signs
-     the recovered invoice hash using the exact stored draft, even if gateway fee/deadline config
-     changed while it was down
+     `AwaitingPayment(signed_quote)` commits: recovery looks up by `backend_correlation_id`, reruns
+     draft validation and direct-swap namespace reservation, then signs the recovered invoice hash
+     using the exact stored draft, even if gateway fee/deadline config changed while it was down
    - duplicate create requests while the first backend create call is in flight: the second handler
      observes the unexpired durable create lease and does not call the backend, proving the gateway
      itself cannot create two invoices for one `backend_correlation_id`
@@ -1454,15 +1543,21 @@ those come first.
      was created, the record becomes `InvoiceCreateInconclusive` and no second backend invoice is
      created
    - an `InvoiceCreateInconclusive` record remains in ledger reconciliation by
-     `backend_correlation_id`; if the maybe-sent invoice later settles, it transitions to
-     `UnreturnedInvoiceSettled` unresolved liability rather than being silently missed
+     `backend_correlation_id`; if the maybe-sent invoice later appears or settles, it reruns recovered
+     invoice validation and follows its `fund_on_settlement` policy rather than being silently missed
    - stale draft recovery: if no backend invoice exists and the draft is no longer within freshness /
      deadline margins, no backend invoice is created; if a backend invoice exists but is no longer safe
      to return, the gateway retains a tombstone for late-settlement reconciliation and returns a typed
      rejection
+   - rejected-but-retained client receive: a backend invoice settles after the client saw
+     `BackendInvoiceCreationUnavailable` / `DeadlineTooNear`, and the provisional receiver state still
+     claims the original contract when the gateway funds it
    - backend invoice validation before quote signing: amount, payee, expiry tolerance, description
      hash/direct description, payment hash, and backend kind/granularity assumptions must match the
      persisted draft, otherwise the invoice is retained as `BackendInvoiceRejected` and not returned
+   - recovered backend invoice validation: an invoice discovered through crash recovery or
+     `InvoiceCreateInconclusive` reconciliation must pass the same draft validation and direct-swap
+     namespace reservation as the original create path before quote signing or funding
    - a **backend lookup returning two invoices for one `externalId`** disables new issuance and never
      silently picks one (§7.3)
    - duplicate create with the same contract but different amount, description hash, quote API version,
@@ -1491,14 +1586,20 @@ those come first.
    - backend invoice hash collision: a custodial backend invoice hash that matches an active trustless
      registered payment hash is not returned to the client and disables new custodial issuance for
      operator review while retaining a `BackendInvoiceRejected` tombstone for reconciliation
+   - retained custodial tombstones that own a `backend_invoice_hash` keep the direct-swap namespace
+     reserved until pruning, while tombstones caused by an already-active trustless collision remain
+     unsafe and do not steal ownership from that trustless registration
    - settlement of an `InvoiceCreateInconclusive`, `BackendInvoiceRejected`, or
-     `InvoiceExpiredUnreturned` retained record returns to the automatic funding path with
-     `UnreturnedInvoiceSettled` evidence rather than being silently dropped
+     `InvoiceExpiredUnreturned` retained record follows its `fund_on_settlement` policy: safe records
+     return to the automatic funding path with `UnreturnedInvoiceSettled` evidence, while unsafe
+     validation / namespace / backend-invariant failures open an auditable liability
    - client quote verification rejects a quote whose `observed_lnv2_consensus_time` is too far behind
      the client's own locally-observed LNv2 consensus time, or whose deadline rule fails under the
      client's own observed time
    - issued-unpaid invoice buildup increments metrics / alerts but does **not** reject new custodial
-     invoice creation by itself
+     invoice creation by face value alone; internal persistence / abuse controls surface as generic
+     `BackendInvoiceCreationUnavailable`, while actual settled/funding/unresolved obligation limits
+     return `ActualLiabilityLimitExceeded`
    - a settled invoice with short ecash float remains a debt, waits in `SettledAwaitingLiquidity`, and
      after float or a pegin replenishes the gateway transitions
      `SettledAwaitingLiquidity → FundingReserved → FundingPrepared`

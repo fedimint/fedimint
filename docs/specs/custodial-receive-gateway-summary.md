@@ -58,9 +58,10 @@ seconds, not an ongoing balance.
   validation. The quote embeds `CustodialReceiveTerms`, with `terms_hash` equal to the canonical
   hash of those terms, so the receipt is self-contained. The gateway persists a `QuoteDraft` before
   calling the backend, validates the returned backend invoice before signing, then persists the signed
-  quote in its `AwaitingPayment` record before returning, and the receiver stores the full quote as
-  dispute/support evidence of what the gateway committed to do, not as a guarantee that lost gateway
-  state can be safely rebuilt.
+  quote in its `AwaitingPayment` record before returning. The receiver persists a provisional receive
+  with claim material before the gateway request leaves, then upgrades it with the returned quote and
+  invoice. The full quote is dispute/support evidence of what the gateway committed to do, not a
+  guarantee that lost gateway state can be safely rebuilt.
 - **Dispute evidence is contract-level.** A third party with the signed quote and federation session
   history can verify whether the quoted contract was not funded, funded but unclaimed, claimed
   through `claim_pk`, or refunded through `refund_pk`. They cannot verify the receiver's private
@@ -75,6 +76,11 @@ seconds, not an ongoing balance.
 - **Non-idempotent backend create stays conservative.** If a backend invoice create request may have
   been sent but the gateway cannot prove whether the backend created it, the receive goes to operator
   review instead of retrying and risking a second backend invoice for the same contract.
+- **Recovered invoices are not a weaker path.** Any backend invoice discovered through crash recovery,
+  inconclusive-create reconciliation, or tombstone reconciliation must pass the same draft validation
+  and direct-swap namespace reservation as the happy path. Retained unreturned-invoice records carry a
+  `fund_on_settlement` policy: safe stale/unreturned invoices fund automatically if settled; unsafe
+  validation or namespace failures become auditable liabilities.
 - **Prepared transaction persistence is required.** MVP needs a generic `fedimint-client`
   prepare/submit split so the gateway can finalize, lock inputs for, and persist the exact funding
   transaction before broadcast. After `FundingPrepared`, recovery must re-drive that exact stored tx,
@@ -92,7 +98,9 @@ seconds, not an ongoing balance.
   register custodial invoices as trustless incoming contracts. If a same-gateway sender
   hits the custodial invoice, the selected send path must detect
   `backend_invoice_hash -> CustodialPending` in the shared registry and return a forfeit signature so
-  the sender refunds immediately. Pre-funding alternate-gateway routing is a post-MVP optimization.
+  the sender refunds immediately. Retained custodial records that still own a backend invoice hash
+  keep that hash reserved until pruning. Pre-funding alternate-gateway routing is a post-MVP
+  optimization.
 - **Not transparent to legacy clients.** Custodial receive needs an explicit opt-in
   entrypoint and a *separate* gateway endpoint. Capability advertisement alone is
   insufficient for legacy clients, because gateway selection is reachability-based. New clients use
@@ -116,17 +124,22 @@ seconds, not an ongoing balance.
   payer amount minus any backend skim. The gateway's net margin is the advertised custodial
   `receive_fee` minus module fees, backend skim, and liquidity/rebalance costs, so operators must size
   `receive_fee` and float against that full outgoing funding leg. Unpaid issued invoices are contingent
-  exposure: track and alert on them, but do not reject new receives solely because they exist. Invoice
-  expiry bounds unpaid contingent exposure; once an invoice settles, it is a debt until funded. If
-  federation ecash is short, the MVP alerts and can drive or prompt a
+  exposure: track and alert on them, but do not reserve their face value against ecash float and do not
+  expose public unpaid-record quotas. Such quotas are DoS-prone because an attacker can cheaply fill
+  them with unpaid requests. Internal rate/storage/abuse controls still protect the service, but if
+  they close before backend invoice creation the client sees generic
+  `BackendInvoiceCreationUnavailable`, not a protocol quota reason. Actual
+  settled/funding/unresolved obligations gate new invoice creation via `max_in_flight`; issued-unpaid
+  face value does not. Invoice expiry bounds unpaid contingent exposure; once an invoice settles, it is
+  a debt until funded. If federation ecash is short, the MVP alerts and can drive or prompt a
   pegin from available on-chain funds. Post-MVP can automate loop-out, channel close, splice, swap-out,
   or backend-specific liquidity actions. The MVP keeps the existing `PaymentFee::RECEIVE_FEE_LIMIT`. A
   higher custodial fee cap would need separate explicit consent.
 - **MVP observability.** The gateway must expose minimal metrics for issued-unpaid exposure,
   settled-but-unfunded debt, unresolved liabilities, ecash float, liquidity shortfall, funding
   deadline slack, backend cursor lag / retention margin, consensus-time observer freshness, and
-  settlement-to-funding latency. These metrics drive alerts and operator action; they do not add new
-  create-invoice behavior beyond the specified hard gates.
+  settlement-to-funding latency, plus retained-record pressure. These metrics drive alerts, abuse
+  detection, and operator action; they do not add a public resource-quota rejection.
 - **Generic.** Any notify-only backend with these primitives (external-id unpaid lookup,
   authenticated settled-ledger lookup, retention) can reuse the same path, not just phoenixd.
 
