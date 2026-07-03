@@ -133,7 +133,17 @@ a persisted duplicate to get the stored invoice+quote back even while new issuan
    - `SettledAwaitingLiquidity` / `FundingReserved` / `FundingPrepared` / `FundingSubmitted` /
      `Funded` → stored `Created{invoice, quote}` unconditionally (the invoice is paid; the quote
      is the durable receipt the client needs, and invoice staleness is moot once settled);
-   - live lease (`InvoiceCreating`) → `CreateInProgress`;
+   - `InvoiceCreating` with a live lease → `CreateInProgress`;
+   - `InvoiceCreating` with an **expired lease** → run the §7.3 recovery ladder inline before
+     answering: `get_invoices_by_external_id(draft.backend_correlation_id, include_unpaid)`;
+     (a) invoice found → recovered-invoice validation; safe → complete `AwaitingPayment` and
+     return stored `Created`, unsafe/stale → tombstone → `BackendInvoiceUnreturnable`;
+     (b) not found and `backend_create_maybe_sent` → tombstone `InvoiceCreateInconclusive`,
+     return `BackendInvoiceUnreturnable`;
+     (c) not found, never maybe-sent, draft still fresh → this request acquires the lease and
+     proceeds with creation (the normal create tail below);
+     (d) not found, never maybe-sent, draft stale → tombstone `InvoiceCreationExpired`, return
+     `DeadlineTooNear` (pre-create is provable: maybe-sent was never set);
    - retained maybe-create / tombstone states (`InvoiceCreateInconclusive`,
      `BackendInvoiceRejected`, `InvoiceExpiredUnreturned`, `InvoiceExpiredUnpaid`) →
      `BackendInvoiceUnreturnable`;
@@ -146,7 +156,9 @@ a persisted duplicate to get the stored invoice+quote back even while new issuan
    declared retention-coverage gate fails (§7.2) → `BackendLedgerUnavailable`; internal
    persistence/abuse/health gates (§7.8) → `BackendInvoiceCreationUnavailable`
 3. `quote_api_version` supported → `UnsupportedQuoteVersion`
-4. `contract.verify()` → `InvalidContract`; `refund_pk == module key` → `WrongRefundKey`
+4. `contract.verify()` fails → `InvalidContract`; `refund_pk != module key` → `WrongRefundKey`
+   (validity REQUIRES the refund key to be the gateway module key, parent §7.3 /
+   `gateway/fedimint-gateway-server/src/lib.rs:3066`)
 5. amount granularity (§7.4) → `NonSatoshiAmount`
 6. lower bound (saturation guard, §7.3) → `AmountTooSmall`; per-receive cap → `AmountTooLarge`
 7. amount binding `commitment.amount == receive_fee.subtract_from(amount)` → `FeeOrAmountBindingMismatch`

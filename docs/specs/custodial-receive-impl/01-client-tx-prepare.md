@@ -191,6 +191,16 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
    writes byte-identical keys for both rows: if `OperationLogKey` exists, both writes are
    skipped after verify-equal; a fresh `now()` on re-drive would duplicate or orphan the
    chronological index row.
+10. **Partial intra-operation state survival is detected, not repaired.** `operation_exists`
+   returns true if ANY active/inactive state remains for the operation (`client.rs:1081`), so a
+   corruption that loses only the `TxSubmissionStatesSM` row while module input SMs survive
+   would otherwise make submit treat the operation as existing and wait forever for a broadcast
+   SM that is gone. Normal crashes cannot produce this (all states install in one dbtx), so it
+   indicates DB corruption: when `submit_prepared_transaction(_dbtx)` takes the
+   operation-exists branch, it MUST verify a `TxSubmissionStatesSM` exists (active or inactive)
+   for the operation and return a typed invariant error if not — the caller escalates
+   (unresolved-liability path in the custodial gateway), never a silent wait and never an
+   automatic reinstall.
 
 ### 3.5 Crash matrix
 
