@@ -88,12 +88,17 @@ pub struct CustodialReceiveQuote { /* fields exactly as design §7.3 (no terms_h
 ```
 
 **Canonical encoding = fedimint `Encodable`.** The signature is BIP-340 Schnorr by
-`gateway_module_pk` over:
+`gateway_module_pk` over a BIP-340-style tagged hash, byte-exact:
 
 ```text
-tagged_hash("fedimint-custodial-receive-quote-v1",
-            consensus_encode(quote_without_signature))
+tag  = "fedimint-custodial-receive-quote-v1"           (ASCII, no NUL)
+msg  = consensus_encode(quote_without_signature)       (fields in declaration order)
+sign = schnorr_sign(sha256(sha256(tag) || sha256(tag) || msg))
 ```
+
+This is the normative byte-level construction for golden vectors; the parent design's
+"domain tag || canonical encoding" phrasing is realized as this tagged hash (parent §7.3 is
+amended to say so).
 
 Implement as `CustodialReceiveQuote::signing_message()` (encodes every field in declaration
 order with the `signature` field excluded — model on `OutgoingContract::forfeit_message()`), plus
@@ -112,7 +117,11 @@ pub struct CreateCustodialBolt11InvoicePayload {
     pub contract: IncomingContract, // funding deadline rides in contract.commitment.expiration_or_fee
     pub amount: Amount,             // invoice face amount A (msats)
     pub description: Bolt11InvoiceDescription,
-    pub invoice_expiry_secs: u32,   // requested backend-invoice expiry (relative)
+    /// ABSOLUTE requested backend-invoice expiry (unix seconds). Absolute so the
+    /// fingerprint is stable across retries from a stored provisional record and
+    /// so spec-03's call-time relative derivation has a fixed target (a relative
+    /// value here would silently re-anchor on every retry).
+    pub requested_invoice_expiry: u64,
     pub quote_api_version: u16,
 }
 
@@ -134,7 +143,7 @@ config, so a gateway fee/policy change can never reclassify an identical retry a
 ```rust
 impl CreateCustodialBolt11InvoicePayload {
     /// tagged_hash("fedimint-custodial-receive-fingerprint-v1",
-    ///     contract_id || amount || sha256(description) || invoice_expiry_secs || quote_api_version)
+    ///     contract_id || amount || sha256(description) || requested_invoice_expiry || quote_api_version)
     pub fn request_fingerprint(&self) -> sha256::Hash { ... }
 }
 ```

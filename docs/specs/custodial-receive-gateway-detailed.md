@@ -590,9 +590,10 @@ New `custodial-gatewayd` logic, per connected federation:
    ```
 
    `quote_id` is a unique handle for one receive (the MVP doesn't re-issue quotes, so it needn't be
-   deterministic). The signature covers the embedded `terms` along with every other field via
-   `"fedimint-custodial-receive-quote-v1" || canonical_encoding_without_signature`, using
-   `gateway_module_pk`. (A separate `terms_hash` field was deliberately dropped: it would only be a
+   deterministic). The signature covers the embedded `terms` along with every other field: a BIP-340-style
+   tagged hash (tag `"fedimint-custodial-receive-quote-v1"`) of the canonical encoding without the
+   signature field, signed by `gateway_module_pk` (byte-exact construction in the implementation
+   specs). (A separate `terms_hash` field was deliberately dropped: it would only be a
    checksum of data already embedded and signed in the same struct, §14.) The domain tag stops the signature being reused in another context, and
    `created_at` plus the signature give replay protection. `observed_lnv2_consensus_time` records
    the gateway-observed federation time used for the deadline rule in §8, so the quote's deadline

@@ -76,8 +76,10 @@ consent/support surfacing, §7.1).
 
 - A URL in both sets: treat as `LegacyFederationList` (stronger provenance), capabilities from
   the live probe decide eligibility per mode.
-- Probe returns `custodial: Some` on a legacy-list gateway: eligible for both modes (dual-capable
-  gateway, §7.1 mode 2).
+- Probe returns `custodial: Some` on a legacy-list gateway (dual-capable, §7.1 mode 2): eligible
+  for trustless mode; eligible for custodial mode **only** if the same URL was also supplied
+  out-of-band, or `custodial_allows_legacy_list` is enabled (non-default, §6/§7) — consistent
+  with the MVP rule that the legacy list authorizes nothing custodial.
 - All custodial candidates unreachable: `NoCustodialCandidates` — never silently fall back to
   trustless (mode is an explicit user opt-in, §7.4).
 - Stored URLs are per-federation (`FederationId`-keyed), since capability is per federation.

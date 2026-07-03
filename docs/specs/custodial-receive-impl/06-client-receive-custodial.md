@@ -33,7 +33,10 @@ pub async fn receive_custodial(
     &self,
     amount: Amount,                       // invoice face amount A
     description: Bolt11InvoiceDescription,
-    invoice_expiry_secs: u32,             // requested backend-invoice expiry
+    invoice_expiry_secs: u32,             // caller-relative; converted ONCE to the absolute
+                                          // requested_invoice_expiry at step 3 — the payload and
+                                          // fingerprint carry the absolute value (spec 02), so a
+                                          // retry from the stored record never re-anchors it
     funding_deadline_secs: u64,           // relative; must satisfy §8 bounds for selected gateway
     extra_meta: Value,
     custodial_gateway_override: Option<SafeUrl>, // else spec-05 stored URLs

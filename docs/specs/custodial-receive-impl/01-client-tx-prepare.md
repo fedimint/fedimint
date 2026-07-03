@@ -173,6 +173,13 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
 8. **`operation_exists` semantics.** The idempotency gate is implemented over the operation's
    active/inactive *state-machine* entries (`client.rs:1071-1090`), not the operation-log table.
    Divergence scenarios and tests must manipulate state entries, not (only) op-log entries.
+9. **Re-drive tolerates partial survivors.** A divergence can lose state entries while
+   `TransactionFeesKey`, the op-log entry, or event-log rows survive. The current submission tail
+   uses `insert_new_entry`, which panics on overwrite (`fedimint-core/src/db/mod.rs:1124`,
+   `client.rs:1048`, `oplog.rs:67`). `submit_prepared_transaction(_dbtx)` therefore MUST use
+   insert-if-absent semantics for the fees key and op-log entry — verifying an existing value is
+   equal to what it would write (mismatch ⇒ invariant error, never overwrite) — and re-installs
+   state machines only when absent. It must not call `insert_new_entry` for these keys.
 
 ### 3.5 Crash matrix
 
@@ -181,7 +188,7 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
 | Before prepare commit | nothing | caller retries prepare (fresh inputs) |
 | After prepare commit, before submit | inputs consumed, `PreparedTransactionKey`, caller record | caller calls `submit_prepared_transaction` (installs + broadcasts exact tx) |
 | After submit commit, before broadcast | operation + `Created(tx)` SM exist | executor resumes the submission SM; no API call needed; `submit_prepared_transaction` is a safe no-op |
-| Operation log diverged but key survives | `PreparedTransactionKey` present, `operation_exists` false | `submit_prepared_transaction` re-installs the exact tx (consensus-idempotent on pinned inputs) |
+| Operation log diverged but key survives | `PreparedTransactionKey` present, `operation_exists` false (state entries lost; fees/op-log rows may survive) | `submit_prepared_transaction` re-installs the exact tx with insert-if-absent semantics (§3.4.9; consensus-idempotent on pinned inputs) |
 
 ## 4. Edge cases
 

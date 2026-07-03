@@ -68,7 +68,7 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | duplicate funding across restart + webhook redelivery | `no_double_fund_across_restart_and_redelivery` (CP5–CP8 × duplicate hints; assert one outpoint per contract on the federation) | G |
 | FundingPrepared re-drives identical bytes; missing prepared never rebuilds | `funding_prepared_redrive_exact_bytes`, `missing_prepared_never_rebuilds` (spec 01 §5.1/.6 + CP6) | G+U |
 | reserved inputs not consumed concurrently | `reserved_inputs_survive_concurrent_ops` (spec 01 §5.5) | U |
-| operation-log divergence re-drive | `oplog_divergence_redrives_exact_tx` (delete op-log entry between CP7/CP8) | G |
+| operation-log divergence re-drive | `state_divergence_redrives_exact_tx` (delete the operation's active/inactive state entries between CP7/CP8 — `operation_exists` is state-based, spec 01 §3.4.8; variant with surviving fees/op-log rows exercises insert-if-absent re-drive, spec 01 §3.4.9) | G |
 | crash between create and AwaitingPayment; recovery signs from stored draft under changed config | `cp3_recovery_signs_stored_draft` (flip gateway fee config before restart) | G |
 | duplicate create while lease live | `duplicate_create_waits_on_lease` | G |
 | expired lease + maybe-sent ⇒ inconclusive, no second invoice | `maybe_sent_inconclusive_no_second_invoice` (`SentButNoResponse`) | G |
