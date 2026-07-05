@@ -50,7 +50,8 @@ pub trait NotifyOnlyLightningClient: ILnRpcClient {
     ) -> Result<Bolt11Invoice, LightningRpcError>;
 
     /// include_unpaid lookup by our correlation id. Returns ALL matches — the
-    /// caller treats >1 as BackendDuplicateExternalId (§7.3), never picks one.
+    /// caller treats >1 as a duplicate-externalId backend-invariant violation
+    /// (§7.3, recorded as BackendInvariantViolation), never picks one.
     async fn get_invoices_by_external_id(
         &self,
         external_id: &str,
@@ -142,10 +143,19 @@ rebuildable: on loss, spec 04 point-looks-up every nonterminal record and retain
 
 ### 3.4 Hints and authentication
 
-- Websocket events and webhooks are hints only. Webhook handler verifies `X-Phoenix-Signature`
-  (constant-time compare) before waking reconciliation; websocket authenticates at connect via
+- Websocket events and webhooks are hints only. The webhook **HTTP route is hosted by
+  custodial-gatewayd** (spec 04 mounts `POST /phoenixd_webhook` and forwards the raw body +
+  `X-Phoenix-Signature` header); the **adapter owns verification and parsing** via
+  `verify_and_parse_webhook(body, signature) -> Option<SettlementHint>` (HMAC-SHA256 over the
+  body with the webhook secret, constant-time compare). Websocket authenticates at connect via
   the API password. Unauthenticated hints are dropped and counted
   (`gateway_custodial_receive_forged_hint_total` — internal counter, not in the §7.8 required set).
+- **Webhook configuration is explicit, never silently degraded:** `phoenixd_webhook_secret: None`
+  means webhooks are **not configured** — the hint stream is websocket + polling only and spec 04
+  does not mount the webhook route. Configuring a webhook delivery URL (per-invoice
+  `webhookUrl` via `phoenixd_webhook_public_url`, or phoenixd-side global webhook config) while
+  the secret is `None` is a **startup error**: it would silently convert every real delivery into
+  a dropped "forged" hint.
 - A hint never advances a record: it only triggers `get_settled_invoice_by_hash` /
   ledger reconciliation (§7.3.2).
 
@@ -156,7 +166,10 @@ rebuildable: on loss, spec 04 point-looks-up every nonterminal record and retain
 LightningMode::Phoenixd {
     phoenixd_api_url: SafeUrl,        // FM_PHOENIXD_API_URL
     phoenixd_api_password: String,    // FM_PHOENIXD_API_PASSWORD (http-password)
-    phoenixd_webhook_secret: Option<String>, // FM_PHOENIXD_WEBHOOK_SECRET
+    phoenixd_webhook_secret: Option<String>, // FM_PHOENIXD_WEBHOOK_SECRET; None ⇒ webhooks not configured (§3.4)
+    phoenixd_webhook_public_url: Option<SafeUrl>, // externally reachable URL of spec 04's webhook route;
+                                      // passed as per-invoice `webhookUrl` on every create when set;
+                                      // Some(_) requires Some(secret) or startup error (§3.4)
     phoenixd_retention_secs: u64,     // operator-declared retention (§7.2; no backend SLA)
     phoenixd_finality_secs: u64,      // late-settlement finality window
 }
@@ -164,6 +177,12 @@ LightningMode::Phoenixd {
 
 Retention is operator-declared for phoenixd (no upstream SLA, §7.2); the adapter surfaces it via
 `declared_retention_secs` and spec 04 enforces the coverage gate against it.
+
+Adding the variant makes legacy `gatewayd`'s `LightningMode` match non-exhaustive. Legacy
+`gatewayd` MUST refuse to start on `LightningMode::Phoenixd` with a typed startup error:
+trustless receive is impossible on a notify-only backend (§4) and a started instance would
+register on `GATEWAYS_ENDPOINT`, violating §7.1's legacy-list rule. The variant is consumed only
+by `custodial-gatewayd` (spec 04).
 
 ## 4. Edge cases
 
@@ -173,7 +192,7 @@ Retention is operator-declared for phoenixd (no upstream SLA, §7.2); the adapte
   and derives `expirySeconds` at call time under the lease; below-minimum ⇒ typed
   `StaleDraft` error, no backend call (§7.3).
 - **Duplicate externalId:** `get_invoices_by_external_id` returning >1 is surfaced verbatim; the
-  adapter never filters (§7.3 `BackendDuplicateExternalId` handling is spec 04's).
+  adapter never filters (the §7.3 duplicate-externalId invariant handling is spec 04's).
 - **Amountless/zero-amount invoices:** never created; adapter asserts request amount > 0.
 - **Clock:** `completed_at_ms` is backend time; only used for cursor/watermark, never for
   deadline decisions (§8 uses observed consensus time).

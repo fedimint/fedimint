@@ -18,7 +18,9 @@ actions beyond pegin prompting, rich liability tooling (§14).
 
 - Gateway physical DB with per-federation *logical client prefixes*:
   `GatewayDbExt::get_client_database(federation_id)` prefixes `DbKeyPrefix::ClientDatabase=0x10`
-  (`gateway/fedimint-gateway-server-db/src/lib.rs:30-40`). Root prefixes 0x04–0x12 are taken.
+  (`gateway/fedimint-gateway-server-db/src/lib.rs:30-40`). Root prefixes assigned today: 0x04,
+  0x06–0x09, 0x10–0x12 (`gateway-server-db/src/lib.rs:288-297`); 0x05 and 0x0a–0x0f are
+  unassigned but not ours to take — new custodial root prefixes start at 0x13.
 - Funding-side building blocks in `modules/fedimint-gwv2-client/src/lib.rs`:
   `relay_direct_swap` (`:476`) shows the exact funding output construction
   (`ClientOutput { output: LightningOutput::V0(LightningOutputV0::Incoming(contract)), amounts }`),
@@ -39,7 +41,7 @@ actions beyond pegin prompting, rich liability tooling (§14).
 gateway/fedimint-custodial-gatewayd/
   src/lib.rs            // CustodialGateway struct, wiring
   src/bin/main.rs       // binary: config, backend, federations, serve
-  src/api.rs            // axum routes: /routing_info, /create_custodial_bolt11_invoice, (/send_payment)
+  src/api.rs            // axum routes: /routing_info, /create_custodial_bolt11_invoice, /phoenixd_webhook (spec 03 §3.4), (/send_payment)
   src/db.rs             // record types + key prefixes (below)
   src/receive.rs        // create-invoice handler, lease, validation, quote signing
   src/observer.rs       // CustodialSettlementObserver (hints + ledger polling + reconciliation)
@@ -51,40 +53,97 @@ gateway/fedimint-custodial-gatewayd/
   src/prune.rs          // retained-record pruning
 ```
 
-The binary joins federations exactly like `gatewayd` does (federation client per invite, gwv2
-client module for ecash float + funding), but never registers on `GATEWAYS_ENDPOINT` and refuses
-a config that asks it to (§7.1 mode 1; assert at startup).
+The binary joins federations the way `gatewayd` does conceptually (federation client per invite,
+gwv2 client module for ecash float + funding), but never registers on `GATEWAYS_ENDPOINT` and
+refuses a config that asks it to (§7.1 mode 1; assert at startup).
+
+### 3.1 Federation client wiring (owned work, not free reuse)
+
+- **`IGatewayClientV2` must be implemented by this binary.** Attaching the gwv2 client module
+  requires `GatewayClientInitV2 { gateway: Arc<dyn IGatewayClientV2> }`
+  (`modules/fedimint-gwv2-client/src/lib.rs:66-68`; trait at `:608-657`). Dispositions:
+  `is_direct_swap` consults the `registry.rs` `CustodialPending` map first (this is where the
+  §7.6 self-pay labeling lives) and otherwise reports no swap; `complete_htlc` is unreachable on
+  a notify-only backend (typed error); the LNv1 methods (`is_lnv1_invoice`, `relay_lnv1_swap`,
+  …) return typed unsupported errors — never `todo!()`.
+- **`GatewayClientBuilder` is not reusable:** it takes the concrete `Arc<Gateway>`
+  (`gateway/fedimint-gateway-server/src/client.rs:65-80`). This crate builds its own client init
+  (mnemonic/`RootSecret` derivation, connectors, module registry) following that code as a
+  template. The module set attaches gwv2 + mint (+ core); the LNv1 gateway client module is NOT
+  attached (nothing here serves LNv1).
+- **Funding-output composition:** the funding tx uses a **bare**
+  `ClientOutput { output: LightningOutput::V0(LightningOutputV0::Incoming(contract)), .. }` via
+  the public `make_client_outputs` — explicitly NOT the full `relay_direct_swap` pattern, whose
+  `ClientOutputSM` installs the gwv2 `ReceiveStateMachine`; that SM's post-funding branch
+  auto-refunds non-decrypting contracts (`gwv2-client/src/receive_sm.rs:234-286`) and would race
+  `audit.rs`, which owns invalid-contract refunds here (§7.3.4).
+- **Audit refund path:** `audit.rs` awaits decryption shares via the lnv2 module API and, for a
+  non-decrypting contract, submits the refund input via the public
+  `ClientModule::client_ctx.make_client_inputs` — the gwv2 crate's own federation API module is
+  private (`mod api;`) and its refund is only reachable from inside an SM transition, so it is
+  not a reusable surface.
+- **Config surface (minimum schema):** bind address; backend `LightningMode` (spec 03);
+  federation invite codes; per-federation `CustodialReceiveCapability` policy values;
+  `RoutingInfo`'s **mandatory send fields** (`send_fee_minimum/default`,
+  `expiration_delta_*` — non-optional in the wire struct, `gateway_api.rs:143-175`, so even a
+  custodial-only `/routing_info` must return valid values); webhook public URL + secret (spec
+  03); metrics bind. The crate adopts a `DatabaseVersion` + migration registry for its root
+  prefixes from day one (model: `get_gatewayd_database_migrations`,
+  `gateway-server-db/src/lib.rs:511-542`), so the 0x13–0x17 range is versioned like the rest of
+  the gateway DB.
 
 ## 4. Database design
 
-All authoritative custodial state lives **inside the per-federation client DB prefix** (design
-§7.3: one physical DB, survival is one condition). Because that prefix hosts a fedimint *client*
-database whose integrity check rejects unknown root prefixes below `UserData = 0xb0`
-(`fedimint-client/src/db.rs:81,102-110`), the custodial keyspace MUST be allocated in the
-external application range: one dedicated application prefix byte `>= ExternalReservedStart
-(0xb1)` (constant `CUSTODIAL_APP_DB_PREFIX`, exact byte chosen and documented at coding time),
-with the custodial sub-prefixes below nested under it via `Database::with_prefix`:
+All per-federation authoritative custodial state lives **inside the per-federation client DB
+prefix** (design §7.3: one physical DB, survival is one condition). Because that prefix hosts a
+fedimint *client* database whose integrity check rejects unknown root prefixes below
+`UserData = 0xb0` (`fedimint-client/src/db.rs:81,102-110`; the check runs under
+`is_running_in_test_env`, `fedimint-client/src/client.rs:2505` — but the
+`ExternalReservedStart = 0xb1` reservation applies regardless, and any integration test would
+panic on a sub-0xb0 prefix), the custodial keyspace MUST be allocated in the external application
+range: one dedicated application prefix byte `>= ExternalReservedStart (0xb1)` (constant
+`CUSTODIAL_APP_DB_PREFIX`, exact byte chosen and documented at coding time), with the custodial
+sub-prefixes below nested under it via `Database::with_prefix` — and, inside a joint dbtx, via
+`dbtx.to_ref().with_prefix(...)` (`DatabaseTransaction::with_prefix` consumes `self`,
+`fedimint-core/src/db/mod.rs:1619-1633`); every §4 atomic-commit row that mixes client-core keys
+and custodial keys relies on that transaction-scoped form:
 
 ```rust
-// db.rs — within the federation client prefix, under CUSTODIAL_APP_DB_PREFIX (>= 0xb1)
+// db.rs — within the federation client prefix, under CUSTODIAL_APP_DB_PREFIX (>= 0xb1).
+// Federation-scoped state only.
 enum CustodialDbKeyPrefix {
     PendingCustodialReceive = 0x01, // ContractId → PendingCustodialReceive
     LiabilityRecord         = 0x02, // quote_id → CustodialReceiveLiability (§7.7)
-    UnmatchedSettlement     = 0x03, // backend_invoice_hash → UnmatchedSettlement (§7.3)
-    LedgerCursor            = 0x04, // () → LedgerCursor
+    LedgerCursor            = 0x04, // () → LedgerCursor (this federation's observer watermark)
     ConsensusTimeObserver   = 0x05, // () → ObservedConsensusTime { per-peer votes, updated_at_session }
-    IssuanceDisabled        = 0x06, // () → DisabledReason (BackendDuplicateExternalId, coverage gate, …)
+    IssuanceDisabled        = 0x06, // () → DisabledReason — FEDERATION-scoped triggers only:
+                                    // funding-deadline slack breach (§8), per-federation
+                                    // reconciliation stall
 }
 
-// Root-level, REBUILDABLE indexes only (never authoritative, §7.3):
+// Root-level custodial prefixes. 0x13-0x15 are REBUILDABLE indexes (never authoritative,
+// §7.3). 0x16-0x17 are AUTHORITATIVE backend-scoped state — the deliberate exception to
+// the rebuildable-only root rule: their subjects (backend health, settlements matching no
+// record in ANY federation) belong to no federation client prefix by definition, and their
+// loss is the same physical-DB-loss event that loses every prefix (§16).
 enum CustodialRootDbKeyPrefix {
-    QuoteIdIndex        = 0x13, // quote_id → FederationId
-    InvoiceHashIndex    = 0x14, // backend_invoice_hash → CustodialPendingIndexEntry
-    CorrelationIdIndex  = 0x15, // backend_correlation_id → FederationId
+    QuoteIdIndex          = 0x13, // quote_id → FederationId
+    InvoiceHashIndex      = 0x14, // backend_invoice_hash → CustodialPendingIndexEntry
+    CorrelationIdIndex    = 0x15, // backend_correlation_id → FederationId
+    BackendIssuanceHealth = 0x16, // () → DisabledReason — BACKEND-scoped triggers: duplicate
+                                  // externalId aliasing, retention-coverage failure, unmatched
+                                  // settlement, persistence failure. One phoenixd serving
+                                  // several federations is one blast radius: a backend known
+                                  // to alias correlation ids must stop issuance for ALL
+                                  // federations, not just the one that noticed (§7.3).
+    UnmatchedSettlement   = 0x17, // backend_invoice_hash → UnmatchedSettlement (§7.3) — an
+                                  // unmatched settlement matches no record in any federation,
+                                  // so it cannot live in a federation prefix.
 }
-// 0x13-0x15 must be added to gateway-server-db's DbKeyPrefix enum space check
-// (0x04..0x12 taken today); collision with future gatewayd prefixes is avoided by
-// reserving the range in that enum's doc comment.
+// New issuance is allowed only when NEITHER the federation flag (0x06) NOR the backend
+// flag (0x16) is set. 0x13-0x17 must be added to gateway-server-db's DbKeyPrefix enum
+// space check; collision with future gatewayd prefixes is avoided by reserving the range
+// in that enum's doc comment.
 ```
 
 `PendingCustodialReceive` is the state-variant record from design §7.3 (draft fields, then
@@ -110,7 +169,7 @@ enum CustodialReceiveStatus {
 |---|---|
 | reserve draft | record@`InvoiceCreating` (quote draft) + root indexes |
 | lease acquire/renew | `backend_create_lease_until`, `backend_create_maybe_sent`, `backend_create_attempt` on the record |
-| quote commit | record@`AwaitingPayment` (invoice hash, signed_quote) + `InvoiceHashIndex` + `CustodialPending` registry entry |
+| quote commit | record@`AwaitingPayment` (full bolt11 invoice, invoice hash, signed_quote — the stored invoice is what answers every later duplicate, §7.3) + `InvoiceHashIndex` + `CustodialPending` registry entry |
 | settle confirm | record@`SettledAwaitingLiquidity` or `FundingReserved` (+ evidence fields) |
 | prepare | record@`FundingPrepared` + spec-01 `PreparedTransactionKey` (inputs consumed) |
 | submit | record@`FundingSubmitted` + spec-01 `submit_prepared_transaction_dbtx` (op-log + submission SMs) in one dbtx |
@@ -122,8 +181,9 @@ enum CustodialReceiveStatus {
 Ordered validation (each rejection is a §7.9 `Rejected{reason}`). **Existing-record handling
 comes FIRST** — before any issuance/health gate — because a duplicate of a post-create record
 must never receive a strictly-pre-create reason (the client would delete provisional state while
-a backend invoice exists, violating the §7.9 pre-create invariant; the parent explicitly requires
-a persisted duplicate to get the stored invoice+quote back even while new issuance is disabled):
+a backend invoice exists, violating the §7.9 pre-create invariant; the parent requires a
+persisted duplicate to get the stored invoice+quote back even while new issuance is disabled,
+§7.3 — answered from the stored `backend_invoice` field, never a backend fetch):
 
 1. compute `contract_id` + `request_fingerprint` (shared lnv2-common function, spec 02 — payload
    fields only, never current config); look up the stored record and, on a same-fingerprint
@@ -164,7 +224,10 @@ a persisted duplicate to get the stored invoice+quote back even while new issuan
 7. amount binding `commitment.amount == receive_fee.subtract_from(amount)` → `FeeOrAmountBindingMismatch`
 8. deadline rules §8 (lower bounds, observer freshness) → `DeadlineTooNear`; upper bounds → `DeadlineTooFar`
 9. actual-obligation gate (`max_in_flight`, per federation) → `ActualLiabilityLimitExceeded`
-10. cross-path namespace: contract/payment-image not owned elsewhere → `DuplicateContractConflict` / invariant alarm (image collision, §7.3)
+10. custodial namespace: contract/payment-image not owned by another custodial record →
+   `DuplicateContractConflict` (also for image-only collisions — the image is client-chosen, so
+   this is attacker-reachable: alarm/metric, but NEVER an issuance halt, §7.3; halts are reserved
+   for backend/operator-producible conditions)
 
 `client_request_id` is recomputed server-side per design §7.3; `request_fingerprint` is the
 shared payload-derived function (spec 02) — the fee/policy the gateway *would* select today never
@@ -176,7 +239,11 @@ granularity; failure ⇒ retained `BackendInvoiceRejected` tombstone with `fund_
 policy, §7.3) → reserve `backend_invoice_hash` in registry (collision ⇒ tombstone + disable
 issuance, §7.3) → sign quote → commit `AwaitingPayment` → return `Created`.
 
-`backend_correlation_id` is 32 random bytes hex (opaque, no federation/contract data).
+`backend_correlation_id` is the constant namespace prefix `"fmcr1-"` followed by 32 random bytes
+hex (opaque, no federation/contract data). The prefix makes correlation-id-namespace membership
+decidable on a shared backend (§7.3): the observer's `UnmatchedSettlement` branch applies only to
+settlements whose `externalId` bears the prefix; everything else is other operator activity and
+outside custodial reconciliation.
 
 ## 6. Settlement observation & funding
 
@@ -187,7 +254,10 @@ issuance, §7.3) → sign quote → commit `AwaitingPayment` → return `Created
   watermark from the newest confirmed settlement. For each settled invoice: match by correlation
   id then hash
   against (a) nonterminal records, (b) retained tombstones (apply `fund_on_settlement` +
-  deadline branch §7.3), (c) else `UnmatchedSettlement` (record, alert, disable issuance).
+  deadline branch §7.3), (c) else — only for `externalId`s bearing the `fmcr1-` namespace prefix
+  (§5) — `UnmatchedSettlement` at root 0x17 (record, alert, set the backend-scoped
+  `BackendIssuanceHealth` flag); non-prefixed settlements are other operator activity and are
+  skipped without recording (§7.3).
   Advance a matched `AwaitingPayment` only after `get_settled_invoice_by_hash` /
   page-entry authenticated confirmation, capturing `received_msat`, `fees_msat`,
   `completed_at_ms` as evidence. Skim within tolerance funds fully and records loss `F`; gross
@@ -236,14 +306,22 @@ issuance, §7.3) → sign quote → commit `AwaitingPayment` → return `Created
   client connection and gatewayd route (`gateway_api.rs:63`,
   `gateway/fedimint-gateway-server/src/rpc_server.rs:253`), so spec-05 selection reuses the
   existing `/routing_info` client path unchanged (advertises `ReceiveCapabilities` with
-  `custodial: Some(...)`, `trustless: None`) — and `POST /create_custodial_bolt11_invoice`. If the
-  binary also serves trustless **send**, mount `POST /send_payment` backed by the gwv2 send SM;
-  its `is_direct_swap`-equivalent must consult `registry.rs` first and label custodial self-pay
-  cancellations (§7.6) — outcome is the forfeit signature either way.
+  `custodial: Some(...)`, `trustless: None`) — `POST /create_custodial_bolt11_invoice`, and
+  `POST /phoenixd_webhook` when webhooks are configured (raw body + signature forwarded to the
+  adapter's `verify_and_parse_webhook`, spec 03 §3.4; not mounted when the secret is absent). If
+  the binary also serves trustless **send**, mount `POST /send_payment` backed by the gwv2 send
+  SM; the `IGatewayClientV2::is_direct_swap` impl (§3.1) consults `registry.rs` first and labels
+  custodial self-pay cancellations (§7.6) — outcome is the forfeit signature either way.
 - Reject `POST /create_bolt11_invoice` with a typed "custodial-only gateway" error (§7.1).
 - Metrics: the exact §7.8 gauge/histogram set, recomputed from durable state on startup;
-  low-cardinality labels only. Health gates that disable new issuance: persistence failure,
-  reconciliation stall, retention-coverage gate, duplicate-externalId, unmatched settlement.
+  low-cardinality labels only. Health gates that disable new issuance, split by scope (§4):
+  **backend-scoped** (root `BackendIssuanceHealth` flag — halts all federations): persistence
+  failure, retention-coverage gate, duplicate-externalId aliasing, unmatched settlement;
+  **federation-scoped** (prefix `IssuanceDisabled` flag): funding-deadline slack approaching the
+  safety margin on any settled-unfunded record (§8 — a critical operational fault, not just a
+  metric), per-federation reconciliation stall. The optional §8 inbound-headroom /
+  splice-avoidance policy gate also lives here (surfaced as
+  `BackendInvoiceCreationUnavailable`).
 
 ## 9. Implementation order within this phase
 

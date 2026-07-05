@@ -33,15 +33,26 @@ pub enum GatewayCandidateSource {
 #[derive(Debug, Clone)]
 pub struct GatewayCandidate {
     pub api: SafeUrl,
-    pub source: GatewayCandidateSource,
+    /// BOTH provenance bits — a URL present in the legacy list AND supplied
+    /// out-of-band keeps both. Collapsing to a single value would erase the
+    /// out-of-band membership that custodial eligibility is keyed on (§4).
+    pub sources: BTreeSet<GatewayCandidateSource>,
+    /// Module-key pin from the out-of-band source (§7.1). When present, the
+    /// probed RoutingInfo.module_public_key and every quote's gateway_module_pk
+    /// MUST equal it (spec 06 §3.3); mismatch disqualifies the candidate.
+    pub expected_module_pk: Option<PublicKey>,
     pub routing_info: RoutingInfo, // live probe result
 }
 ```
 
-Out-of-band URLs enter via a new module API: `LightningClientModule::set_custodial_gateways`
-persisted in the module DB (new key prefix `CustodialGatewayUrls`), plus a per-call override
-parameter on the custodial receive entry point (spec 06). The client never promotes a URL into
-the candidate set from any other source; `/routing_info` is capability/key check only (§7.1).
+Out-of-band URLs enter via a new module API:
+`LightningClientModule::set_custodial_gateways(Vec<(SafeUrl, Option<PublicKey>)>)` persisted in
+the module DB (new key prefix `CustodialGatewayUrls`), plus a per-call override parameter on the
+custodial receive entry point (spec 06). Each URL MUST be `https` (explicit exceptions:
+localhost/loopback, `.onion`, or a deliberate insecure-dev flag — §7.1); non-conforming URLs are
+rejected at `set_custodial_gateways`, never silently skipped at selection. The client never
+promotes a URL into the candidate set from any other source; `/routing_info` is capability/key
+check only (§7.1).
 
 ### 3.2 Selection functions
 
@@ -69,17 +80,20 @@ same-gateway forfeit path), then reachability. No pre-classification of invoices
 
 ### 3.3 Metadata
 
-Operations record the selected candidate's `source` in operation meta (spec 06 uses it for
-consent/support surfacing, §7.1).
+Operations record the selected candidate's `sources` (and `expected_module_pk` when present) in
+operation meta (spec 06 uses them for consent/support surfacing and pin verification, §7.1).
 
 ## 4. Edge cases
 
-- A URL in both sets: treat as `LegacyFederationList` (stronger provenance), capabilities from
-  the live probe decide eligibility per mode.
+- A URL in both sets keeps **both** provenance bits in `sources` (collapsing to "legacy wins"
+  would make the also-supplied-out-of-band case below unrepresentable); capabilities from the
+  live probe decide eligibility per mode.
 - Probe returns `custodial: Some` on a legacy-list gateway (dual-capable, §7.1 mode 2): eligible
-  for trustless mode; eligible for custodial mode **only** if the same URL was also supplied
-  out-of-band, or `custodial_allows_legacy_list` is enabled (non-default, §6/§7) — consistent
-  with the MVP rule that the legacy list authorizes nothing custodial.
+  for trustless mode; eligible for custodial mode **only** if `sources` contains
+  `OutOfBandCustodial` (the same URL was also supplied out-of-band), or
+  `custodial_allows_legacy_list` is enabled (non-default, §6/§7 — flipping it is a documented
+  authorization-semantics change, §7.1) — consistent with the MVP rule that the legacy list
+  authorizes nothing custodial.
 - All custodial candidates unreachable: `NoCustodialCandidates` — never silently fall back to
   trustless (mode is an explicit user opt-in, §7.4).
 - Stored URLs are per-federation (`FederationId`-keyed), since capability is per federation.

@@ -10,8 +10,10 @@ its inputs *without* creating an operation-log entry or submission state machine
 installs and broadcasts that exact stored transaction idempotently. This is the mechanism behind
 `FundingPrepared` / `FundingSubmitted` in the custodial gateway (design §7.3).
 
-**Non-goals:** a generic "unprepare" that re-credits consumed inputs (module-specific; the
-custodial gateway never needs it — inputs quarantine on inconclusive outcomes, §7.7); changes to
+**Non-goals:** a generic "unprepare" that re-credits consumed inputs (module-specific, deferred in
+parent §14; the custodial gateway quarantines inputs with the liability record on both
+inconclusive **and proven-dead** outcomes — a `FundingRejected` liability's inputs stay
+quarantined until a post-MVP re-credit mechanism or operator action, parent §7.7); changes to
 transaction wire format or submission consensus semantics; RBF/replacement of prepared txs.
 
 ## 2. Grounding in current code (verified)
@@ -58,10 +60,13 @@ pub struct PreparedTransaction {
     pub change_range: IdxRange,
     pub fees: Amounts,
     pub txid: TransactionId,
-    /// Operation-log creation time, fixed at prepare. Submit and every re-drive
-    /// use THIS value for the op-log chronological index key (see §3.4.9), so all
-    /// submit-tail writes are deterministic and idempotent across re-drives.
-    pub oplog_creation_time: u64,
+    /// Operation-log creation time, fixed at prepare, stored as unix **nanoseconds**
+    /// and converted via `UNIX_EPOCH + Duration::from_nanos` to the `SystemTime` that
+    /// `ChronologicalOperationLogKey.creation_time` actually is
+    /// (`fedimint-client/src/db.rs:188`). Submit and every re-drive use THIS value
+    /// for the op-log chronological index key (see §3.4.9), so all submit-tail
+    /// writes are deterministic and idempotent across re-drives.
+    pub oplog_creation_time_nanos: u64,
 }
 ```
 
@@ -136,8 +141,11 @@ where
     M: serde::Serialize + MaybeSend;
 ```
 
-Also expose both on `DynGlobalClientContext` / the `ClientHandle` surface used by gateway crates,
-mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
+Expose both on `Client` (reachable through `ClientHandleArc` deref, which is what gateway crates
+hold) and mirror them on `ClientContextIface` (`client.rs:2562` — the module-facing surface where
+`finalize_and_submit_transaction` lives today). They do NOT belong on `DynGlobalClientContext`:
+that is the state-machine *transition* context, whose methods take a
+`ClientSMDatabaseTransaction`, and nothing here prepares or submits from inside an SM transition.
 
 ### 3.4 Semantics and invariants
 
@@ -156,8 +164,13 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
    tx never builds a fresh replacement — that decision belongs to the caller's `FundingReserved`
    state, which uses the normal prepare→submit path); else perform exactly the tail of
    `finalize_and_submit_transaction_inner` from the point after finalization: size check already
-   done at prepare; push submission SM, `add_state_machines_dbtx`, `TransactionFeesKey`,
-   `TxCreatedEvent`, plus `add_operation_log_entry_dbtx`.
+   done at prepare; push submission SM, install states (per-state, see §3.4.9),
+   `TransactionFeesKey`, `TxCreatedEvent`, plus `add_operation_log_entry_dbtx`. The
+   operation-exists idempotent branch derives its return range from the retained
+   `PreparedTransaction` record; a caller that already pruned the record (§3.4.4 allows that only
+   at a terminal operation state) MUST NOT call submit again — such a call returns a typed
+   `PrunedAfterTerminal` error, never a range, and callers treat it as "already terminally
+   handled".
 4. **The record is retained after submit.** Do not delete `PreparedTransactionKey` on submit:
    re-drive after an operation-log divergence needs the exact bytes (§10 "re-drives the exact
    stored `prepared_tx`"). Deletion is the caller's choice once the operation reaches a final
@@ -190,7 +203,12 @@ mirroring how `finalize_and_submit_transaction` is exposed (`client.rs:2562`).
    op-log helper (`add_operation_log_entry_idempotent_dbtx(..., creation_time)`), so a re-drive
    writes byte-identical keys for both rows: if `OperationLogKey` exists, both writes are
    skipped after verify-equal; a fresh `now()` on re-drive would duplicate or orphan the
-   chronological index row.
+   chronological index row. The state-machine installer needs the same care: the existing
+   `add_state_machines_dbtx` is all-or-error — it returns `StateAlreadyExists` if ANY state in
+   the batch already exists (active or inactive) and also errors on already-terminal states
+   (`fedimint-client/src/sm/executor.rs:232-266`) — so "install only when absent" requires a new
+   in-crate helper that filters per state against the active/inactive key tables before adding,
+   not a direct call to the existing installer.
 10. **Partial intra-operation state survival is detected, not repaired.** `operation_exists`
    returns true if ANY active/inactive state remains for the operation (`client.rs:1081`), so a
    corruption that loses only the `TxSubmissionStatesSM` row while module input SMs survive

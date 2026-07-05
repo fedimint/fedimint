@@ -88,10 +88,10 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | CP-crash before hash-registry reassert | `registry_reasserted_before_return` (CP3/CP4) | G |
 | invalid contract audit ⇒ refund + liability | `invalid_contract_refund_liability` | G |
 | offset-pagination overlap dedupe | `ledger_offset_shift_no_miss_no_double` | G |
-| duplicate create retry returns same invoice+quote; stale ⇒ unreturnable | `idempotent_duplicate_returns_stored`, `stale_duplicate_unreturnable` | G |
-| cross-path namespace collisions | `cross_path_namespace_matrix` (trustless↔custodial, image collision alarm) | G |
-| hash collision with trustless registration | `invoice_hash_collision_tombstones_and_halts` | G |
-| tombstone keeps hash reserved until pruning; unsafe collision doesn't steal ownership | `tombstone_hash_reservation_lifecycle` | G |
+| duplicate create retry returns same invoice+quote; stale ⇒ unreturnable | `idempotent_duplicate_returns_stored` (run with the backend UNREACHABLE — the response is answered from the stored `backend_invoice` field, §7.3), `stale_duplicate_unreturnable` (pre-settlement only; a settled record returns stored `Created` unconditionally, covered by `settled_duplicate_returns_stored`) | G |
+| cross-path namespace collisions | `cross_path_namespace_matrix` — **DEFERRED with dual-capable mode** (the trustless-side rejections live in legacy gatewayd/gwv2 and have no MVP home, §7.3/§15); MVP coverage is `image_collision_rejects_without_halt`: intra-custodial image collision → `DuplicateContractConflict` + alarm, issuance stays **enabled** (client-reachable conditions never halt, §7.3) | G |
+| backend invoice-hash collision with an existing owner | `invoice_hash_collision_tombstones_and_halts` (MVP: collision with another custodial pending receive; the active-trustless-owner variant is deferred with dual-capable mode) | G |
+| tombstone keeps hash reserved until pruning | `tombstone_hash_reservation_lifecycle` (MVP, intra-custodial; the unsafe-trustless-collision ownership rules are deferred with dual-capable mode) | G |
 | retained-settlement fund_on_settlement incl. after-deadline ⇒ liability | `late_settlement_before_deadline_funds`, `late_settlement_after_deadline_liability` | G |
 | client observed-time / deadline-rule quote rejection | `quote_stale_observed_time_rejected` (wall-clock reference) | C |
 | issued-unpaid never gates; internal throttling generic; actual limit typed | `unpaid_buildup_never_rejects`, `actual_liability_limit_typed` | G |
@@ -105,6 +105,11 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | unmatched settlement records + halts | `unmatched_settlement_alerts_and_halts` | G |
 | pruning releases namespace only after deadline+finality; post-prune settle ⇒ unmatched | `prune_lifecycle_post_prune_unmatched` | G |
 | conservative client pruning under skew | `client_pruning_skew_safe` | C |
+| custodial claim takes the invoice-difference fee path, never the magnitude fallback (§8) | `custodial_claim_fee_path_no_magnitude_fallback` (receive large enough that `amount + fee_from_expiration(deadline)` would overflow; assert claim completes and the `ReceivePaymentEvent` fee equals invoice − contract amount) | G |
+| slack-based issuance halt (§8) | `slack_pressure_disables_issuance` (advance test time until a settled-unfunded record's deadline slack approaches the safety margin; assert the federation-scoped flag disables new creation while funding proceeds) | G |
+| non-prefixed settlements ignored on a shared backend | `nonprefixed_settlements_ignored` (ledger entries without the `fmcr1-` correlation prefix never record `UnmatchedSettlement` and never halt issuance) | G |
+| record deletion/pruning never removes the armed SM | `record_deletion_keeps_armed_sm_claiming` (delete the provisional record after a pre-create rejection, then fund the contract before the deadline; assert the SM still claims, §7.4) | C+G |
+| issuance-disable scoping | `backend_scoped_halt_covers_all_federations` (duplicate-externalId on one federation's record halts creation for every federation on that backend, root flag §4) | G |
 
 ## 5. Smoke test
 
@@ -114,7 +119,9 @@ everything else runs on the fake.
 
 ## 6. Acceptance criteria
 
-- [ ] Every design-§15 bullet appears in the §4 table and every named test exists and passes.
+- [ ] Every design-§15 bullet appears in the §4 table and every named test exists and passes —
+      except rows marked **DEFERRED with dual-capable mode**, which are excluded from the MVP
+      gate and ship with mode 2 (matching the §15 dual-capable markers).
 - [ ] Crash-point tests cover CP1–CP9 for at least the happy path and the maybe-sent path.
 - [ ] `FakeNotifyOnlyBackend` has no wall-clock dependence (explicit test time only).
 - [ ] CI wiring: G-tests run in the standard test matrix; the mutinynet smoke test is opt-in.

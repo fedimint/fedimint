@@ -47,7 +47,10 @@ Flow (each numbered step is a §15-testable boundary):
 
 1. **Select** via spec-05 (`ReceiveMode::Custodial`); read `CustodialReceiveCapability`.
 2. **Validate request against capability:** granularity, per-receive cap, fee-cap
-   `receive_fee.le(&RECEIVE_FEE_LIMIT)`, lower-bound `amount > fee(amount)` and
+   **component-wise** (`receive_fee.base <= RECEIVE_FEE_LIMIT.base &&
+   receive_fee.parts_per_million <= RECEIVE_FEE_LIMIT.parts_per_million` — NOT `.le()`, which is
+   the derived lexicographic `PartialOrd` and admits e.g. a 50% proportional fee, §7.4),
+   lower-bound `amount > fee(amount)` and
    `contract_amount >= max(MINIMUM_INCOMING_CONTRACT_AMOUNT, wallet_min)`, deadline min/max
    window (§8 inequalities using wall clock at this stage — final check is against the quote).
 3. **Build contract** exactly as `receive` does but with
@@ -72,6 +75,15 @@ Flow (each numbered step is a §15-testable boundary):
 9. **On transport failure / timeout:** retain; retry the identical request (same fingerprint) —
    idempotent server-side; reselecting a different gateway requires a fresh contract.
 
+**Claim-event fee arm (required, §8).** Introducing `LightningOperationMeta::ReceiveCustodial`
+REQUIRES a matching arm in `ReceiveStateMachine::transition_incoming_contract`'s fee recovery
+(`receive_sm.rs:141-154`): today every meta other than `Receive` falls into
+`fee_from_expiration(expiration_or_fee)` = `u64::MAX - expiration`, which for a custodial
+contract's real timestamp yields a ~1.8e19-msat garbage fee and overflows the unchecked
+`amount + fee` at `receive_sm.rs:163` whenever the contract amount exceeds the timestamp's msat
+value. `ReceiveCustodial` carries the invoice amount in its meta and takes the invoice-difference
+fee path exactly like `Receive`. A test pins this with a large custodial receive (spec 07).
+
 ### 3.2 Provisional record (module DB, new key prefix)
 
 ```rust
@@ -84,11 +96,15 @@ pub struct ProvisionalCustodialReceive {
     pub gateway_api: SafeUrl,
     pub gateway_module_pk: PublicKey,
     pub gateway_ln_pk: PublicKey,
-    pub candidate_source: GatewayCandidateSource,
+    pub candidate_sources: BTreeSet<GatewayCandidateSource>, // both provenance bits (spec 05)
+    pub expected_module_pk: Option<PublicKey>, // pin snapshot from the candidate (spec 05);
+                                            // §3.3 step 2 verifies against THIS, restart-safe
     pub client_request_id: sha256::Hash,
     pub request_fingerprint: sha256::Hash,  // computed identically to gateway (§7.3)
     pub invoice_amount: Amount,
     pub description: Bolt11InvoiceDescription, // needed to rebuild the identical payload on retry
+                                            // (requires the Encodable/Decodable derives spec 02
+                                            // adds to this enum — it is serde-only today)
     pub quote_api_version: u16,                // ditto
     pub selected_capability: CustodialReceiveCapability, // capability snapshot used to size the
                                             // contract; restart-deterministic verification of
@@ -108,14 +124,18 @@ test). `Expired` watcher outcome does not delete the record; pruning does (§3.4
 
 1. `quote.verify(gateway_module_pk)` (domain-tagged signature, spec 02); `api_version` known.
 2. Identity binding: `federation_id`, `contract_id`, full `contract`, `gateway_module_pk`,
-   `gateway_ln_pk` match selection + local contract; contract `refund_pk == gateway_module_pk`.
+   `gateway_ln_pk` match selection + local contract; contract `refund_pk == gateway_module_pk`;
+   when the candidate carries an `expected_module_pk` pin (spec 05), `gateway_module_pk` MUST
+   equal the pin.
 3. Invoice binding: `quote.backend_invoice_hash == invoice.payment_hash()`;
    `invoice.recover_payee_pub_key() == gateway_ln_pk == RoutingInfo.lightning_public_key`
    (replaces the skipped hash check, §7.4); invoice amount == `quote.invoice_amount` == requested
    `amount` (keep `:981` check); invoice expiry consistent with `quote.invoice_expiry`.
-4. Terms: compatible with the **stored** `selected_capability` snapshot (restart-safe — never a
-   fresh probe); `terms.receive_fee == selected_capability.receive_fee` (the fee used to size the
-   contract, else reject, §7.1); `terms.receive_fee.le(&RECEIVE_FEE_LIMIT)`.
+4. Terms: compatible with the **stored** `selected_capability` snapshot — every terms field with
+   a capability counterpart equals the snapshot value (restart-safe — never a fresh probe, §7.4);
+   `terms.receive_fee == selected_capability.receive_fee` (the fee used to size the contract,
+   else reject, §7.1); fee cap **component-wise** (base AND parts_per_million within
+   `RECEIVE_FEE_LIMIT` — never `.le()`, §7.4).
 5. Amount binding (both §7.4 inequalities + exact `subtract_from` equality).
 6. Deadline arithmetic (§7.4 text block, incl. upper bounds) against
    `quote.observed_lnv2_consensus_time`; then the independent time-reference sanity check
@@ -129,7 +149,11 @@ Any failure ⇒ `QuoteVerificationFailed` with the failing check identified (sup
 `local_reference_time > funding_deadline + pruning_policy.margin + assumed_max_clock_skew` where
 `local_reference_time` is wall clock (baseline) or observed consensus time (if the wallet tracks
 one; then no skew term). Default `assumed_max_clock_skew`: 1 hour, configurable. Pruning removes
-the record and lets the watcher's `Expired` path finalize the operation.
+the **record only** and lets the watcher's `Expired` path finalize the operation. Neither pruning
+nor step-8 deletion touches the armed SM (there is no abort API): the SM's own state carries
+`claim_keypair` + `agg_decryption_key` and resolves against the *federation's* consensus-time
+view of the deadline, so any contract funded before its deadline is still claimed even after the
+record is gone (§7.4). This is the client's claim-safety backstop; do not "optimize" it away.
 
 ## 4. Edge cases
 
@@ -142,6 +166,12 @@ the record and lets the watcher's `Expired` path finalize the operation.
   (contract, amount, `description`, `requested_invoice_expiry`, `quote_api_version` — fingerprint
   match ⇒ idempotent), and verifies any response against the stored `selected_capability`.
 - Amount edge: `amount` such that `subtract_from` saturates ⇒ rejected at step 2 (§15 bullet).
+- **Rejected attempts leave a long-lived pending operation (accepted MVP cost):** the step-5
+  watcher long-polls `await_incoming_contract(contract_id, funding_deadline)` until the deadline
+  (days) and cannot be aborted, so every rejected or failed attempt leaves one Pending operation
+  until then. Bounded by the number of attempts a user actually makes; do NOT attempt to cancel
+  the SM (that would reopen the claim-safety hole §3.4 closes). A post-MVP SM-abort API may
+  revisit this.
 
 ## 5. Test plan
 

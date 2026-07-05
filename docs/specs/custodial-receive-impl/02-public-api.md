@@ -22,8 +22,16 @@ any federation endpoint (none is added, §7.5).
   (`:134`); send response is `Result<Result<[u8; 32], Signature>, ServerError>` (`:48`).
 - Endpoint constants live in `modules/fedimint-lnv2-common/src/endpoint_constants.rs`
   (gateway HTTP endpoints are the `/`-prefixed ones, e.g. `CREATE_BOLT11_INVOICE_ENDPOINT:13`).
-- `PaymentFee { base, parts_per_million }` with `le`, `add_to`, `subtract_from` (saturating),
-  `RECEIVE_FEE_LIMIT` = 50 sats + 0.5% (`gateway_api.rs:200-247`).
+- `PaymentFee { base, parts_per_million }` with `add_to`, `subtract_from` (saturating) and
+  `RECEIVE_FEE_LIMIT` = 50 sats + 0.5% (`gateway_api.rs:187-247`). There is **no inherent `le`**
+  method: `.le()` resolves to the *derived lexicographic* `PartialOrd` (derive at `:192`), under
+  which `{ base: 0, ppm: 500_000 }` (a 50% fee) passes `.le(&RECEIVE_FEE_LIMIT)` because
+  `0 < 50` sats. Custodial fee-cap checks are therefore **component-wise** (§7.4; specs 04/06),
+  never `.le()`.
+- `Bolt11InvoiceDescription` derives only std + serde traits today (`lib.rs:36-40`) — **no**
+  `Encodable`/`Decodable`. This spec adds those derives (needed for the fingerprint below and for
+  spec 06's stored provisional record); the enum encoding's variant tag gives `Direct(s)` and
+  `Hash(sha256(s))` distinct encodings, so they cannot collide.
 
 ## 3. Design
 
@@ -56,6 +64,8 @@ pub struct CustodialReceiveCapability {
     pub consensus_time_observation_max_age_secs: u64,
     pub safety_margin_secs: u64,
     pub invoice_amount_granularity_msats: u64,
+    pub backend_retention_secs: u64, // declared backend ledger retention (§7.2); ensures every
+                                     // terms field has an advertised counterpart (§7.4 compat rule)
     pub quote_api_version: u16,
 }
 
@@ -145,7 +155,11 @@ config, so a gateway fee/policy change can never reclassify an identical retry a
 ```rust
 impl CreateCustodialBolt11InvoicePayload {
     /// tagged_hash("fedimint-custodial-receive-fingerprint-v1",
-    ///     contract_id || amount || sha256(description) || requested_invoice_expiry || quote_api_version)
+    ///     contract_id || amount || sha256(consensus_encode(description)) ||
+    ///     requested_invoice_expiry || quote_api_version)
+    /// The description is hashed over its fedimint consensus encoding (variant tag
+    /// included — via the Encodable derive this spec adds, §2), so Direct(s) and
+    /// Hash(sha256(s)) can never produce the same fingerprint input.
     pub fn request_fingerprint(&self) -> sha256::Hash { ... }
 }
 ```
