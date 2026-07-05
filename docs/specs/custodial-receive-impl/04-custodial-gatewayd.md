@@ -63,9 +63,13 @@ refuses a config that asks it to (§7.1 mode 1; assert at startup).
   requires `GatewayClientInitV2 { gateway: Arc<dyn IGatewayClientV2> }`
   (`modules/fedimint-gwv2-client/src/lib.rs:66-68`; trait at `:608-657`). Dispositions:
   `is_direct_swap` consults the `registry.rs` `CustodialPending` map first (this is where the
-  §7.6 self-pay labeling lives) and otherwise reports no swap; `complete_htlc` is unreachable on
-  a notify-only backend (typed error); the LNv1 methods (`is_lnv1_invoice`, `relay_lnv1_swap`,
-  …) return typed unsupported errors — never `todo!()`.
+  §7.6 self-pay labeling lives) and otherwise returns `Ok(None)`; `complete_htlc` returns `()`
+  (`gwv2-client/src/lib.rs:610`), so it is implemented as a no-op that logs an invariant error —
+  it is unreachable because the notify-only `route_htlcs` stream never yields (spec 03);
+  `is_lnv1_invoice` returns its actual `Option<Spanned<ClientHandleArc>>` — always `None` (no
+  LNv1 module attached); `relay_lnv1_swap` returns a typed unsupported `anyhow` error; `pay` and
+  `min_contract_amount` delegate to the spec-03 adapter and the fee config (needed for the
+  trustless send companion). Never `todo!()`.
 - **`GatewayClientBuilder` is not reusable:** it takes the concrete `Arc<Gateway>`
   (`gateway/fedimint-gateway-server/src/client.rs:65-80`). This crate builds its own client init
   (mnemonic/`RootSecret` derivation, connectors, module registry) following that code as a
@@ -253,11 +257,17 @@ outside custodial reconciliation.
   `backend_correlation_id` / `backend_invoice_hash` (record-driven, §7.2), then re-seed the
   watermark from the newest confirmed settlement. For each settled invoice: match by correlation
   id then hash
-  against (a) nonterminal records, (b) retained tombstones (apply `fund_on_settlement` +
-  deadline branch §7.3), (c) else — only for `externalId`s bearing the `fmcr1-` namespace prefix
-  (§5) — `UnmatchedSettlement` at root 0x17 (record, alert, set the backend-scoped
-  `BackendIssuanceHealth` flag); non-prefixed settlements are other operator activity and are
-  skipped without recording (§7.3).
+  against (a) this federation's nonterminal records, (b) its retained tombstones (apply
+  `fund_on_settlement` + deadline branch §7.3), (c) else — only for `externalId`s bearing the
+  `fmcr1-` namespace prefix (§5) — resolve against **all** federations before declaring it
+  unmatched: consult the root `CorrelationIdIndex` / `InvoiceHashIndex`, and on an index miss
+  point-look-up every other federation's records (the root indexes are rebuildable, so a miss
+  there is not proof of absence). A settlement belonging to another federation is left to that
+  federation's observer, never marked unmatched. Only a prefixed settlement matching no record
+  in ANY federation becomes `UnmatchedSettlement` at root 0x17 (record, alert, set the
+  backend-scoped `BackendIssuanceHealth` flag) — unmatched is a backend-wide statement (§4), so
+  a single-federation check may never make it. Non-prefixed settlements are other operator
+  activity and are skipped without recording (§7.3).
   Advance a matched `AwaitingPayment` only after `get_settled_invoice_by_hash` /
   page-entry authenticated confirmation, capturing `received_msat`, `fees_msat`,
   `completed_at_ms` as evidence. Skim within tolerance funds fully and records loss `F`; gross
@@ -277,7 +287,9 @@ outside custodial reconciliation.
   dual mode).
 - **Startup reconciliation** (§10): re-drive by status exactly as the design table; the
   no-operation branch splits by state; only `FundingReserved` may prepare fresh; rejection ⇒
-  `UnresolvedLiability` (+ quarantined inputs for `FundingTxInconclusive`).
+  `UnresolvedLiability` with reason `FundingRejected` — inputs stay quarantined with the
+  liability for both `FundingRejected` and `FundingTxInconclusive` (the MVP has no re-credit,
+  §7.7/§14).
 - **Liquidity:** `SettledAwaitingLiquidity` when the gwv2 client's spendable ecash <
   `commitment.amount + fee headroom`; recheck on balance-change notifications; alert + optional
   pegin prompt (operator CLI hook, not automated).
@@ -292,8 +304,10 @@ outside custodial reconciliation.
   quote creation disabled (`DeadlineTooNear` per §7.9 mapping). Metric: observer age (§7.8).
 - **`audit.rs`:** after `Funded`, spawn non-blocking audit per contract: await the federation's
   decryption-share availability (same module API the gwv2 receive SM uses); if contract decrypts
-  → mark `Claimable`, done; if not → submit refund spend to `refund_pk` via the gwv2 client
-  input path, record `InvalidContractRefunded`, open `InvalidContract` liability (§7.3.4, §7.7).
+  → mark `Claimable`, done; if not → submit the refund spend to `refund_pk` via
+  `make_client_inputs` (§3.1 — the gwv2 crate's own refund path is not a public surface) and
+  open the `InvalidContract` liability in the same commit (§7.3.4, §7.7; the refund spend plus
+  the liability record ARE the durable outcome — there is no separate status variant).
   Audit never delays marking `Funded`. Wait budget: configurable, default generous (§14.9).
 - **`prune.rs`:** a retained terminal record is prunable only when funding deadline passed in
   *observed consensus time* AND ledger/finality window closed (§7.3); pruning removes root

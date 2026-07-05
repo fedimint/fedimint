@@ -24,7 +24,7 @@ federation-side discovery endpoint (§16).
 ### 3.1 Candidate model
 
 ```rust
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)] // Ord: lives in a BTreeSet
 pub enum GatewayCandidateSource {
     LegacyFederationList,   // federation GATEWAYS_ENDPOINT
     OutOfBandCustodial,     // wallet/app/operator-supplied (§7.1: URL source IS the authorization)
