@@ -63,7 +63,10 @@ Flow (each numbered step is a §15-testable boundary):
    `ReceiveStateMachine { state: Pending }` under a deterministic
    `operation_id = OperationId::from_encodable(&("custodial-receive", contract_id))` with an
    operation-log entry (meta: `LightningOperationMeta::ReceiveCustodial` variant carrying
-   candidate source, amounts, deadlines, fingerprint).
+   candidate source, amounts, deadlines, fingerprint). This is a **new start path** (built on
+   `manual_operation_start_dbtx` so the record and operation commit together): the existing
+   `receive` helper cannot be reused because it hardcodes its own
+   `OperationId::from_encodable(&contract)` derivation internally (`lnv2-client/src/lib.rs:996`).
 6. **Request** `CREATE_CUSTODIAL_BOLT11_INVOICE_ENDPOINT`.
 7. **On `Created { invoice, quote }`:** run the §3.3 verification; on success upgrade the
    provisional record with invoice+quote (one dbtx) and return. Verification failure ⇒ treat like

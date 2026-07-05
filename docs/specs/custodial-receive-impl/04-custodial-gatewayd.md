@@ -225,7 +225,11 @@ persisted duplicate to get the stored invoice+quote back even while new issuance
    `gateway/fedimint-gateway-server/src/lib.rs:3066`)
 5. amount granularity (§7.4) → `NonSatoshiAmount`
 6. lower bound (saturation guard, §7.3) → `AmountTooSmall`; per-receive cap → `AmountTooLarge`
-7. amount binding `commitment.amount == receive_fee.subtract_from(amount)` → `FeeOrAmountBindingMismatch`
+7. amount binding `commitment.amount == receive_fee.subtract_from(amount)` →
+   `FeeOrAmountBindingMismatch`; the quoted `receive_fee` itself must be within
+   `RECEIVE_FEE_LIMIT` **component-wise** (base AND parts_per_million, §7.4/spec 02 §2) — a
+   config invariant asserted at startup and re-checked here, because a gateway must never sign
+   terms a compliant client will reject
 8. deadline rules §8 (lower bounds, observer freshness) → `DeadlineTooNear`; upper bounds → `DeadlineTooFar`
 9. actual-obligation gate (`max_in_flight`, per federation) → `ActualLiabilityLimitExceeded`
 10. custodial namespace: contract/payment-image not owned by another custodial record →

@@ -1703,8 +1703,9 @@ reference backend is a complete gateway.
    non-protocol sources, remember operator/app policy, and surface "this gateway is custodial for
    receive."
 8. **Quote/receipt wire shape**: the fields, embedded `CustodialReceiveTerms`,
-   domain-separated signature, and `quote_id` are chosen (§7.3). The open part is the exact
-   canonical encoding, `api_version` evolution, and where the client persists the
+   domain-separated signature, `quote_id`, and the exact canonical encoding (BIP-340-style
+   tagged hash over the fedimint consensus encoding, normative in impl spec 02) are chosen
+   (§7.3). The open part is `api_version` evolution and where the client persists the
    `CustodialReceiveQuote`. A separate `terms_hash` field was dropped from MVP as redundant with the
    signed embedded terms; reintroduce a compact terms reference only if a post-MVP status API needs
    one.
