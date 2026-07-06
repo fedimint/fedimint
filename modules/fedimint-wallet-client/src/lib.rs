@@ -75,14 +75,15 @@ use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::api::WalletFederationApi;
 use crate::backup::{FEDERATION_RECOVER_MAX_GAP, RecoveryStateV2, WalletRecovery};
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInPoolCursorKey, PegInTweakIndexData, PegInTweakIndexPrefix, ReceiveOperationsBackfilledKey,
-    RecoveryFinalizedKey, RecoveryStateKey, SupportsSafeDepositPrefix,
+    PegInPoolCursorKey, PegInTweakIndexData, PegInTweakIndexPrefix, ReceiveOperationPrefix,
+    ReceiveOperationsBackfilledKey, RecoveryFinalizedKey, RecoveryStateKey,
+    SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -109,6 +110,18 @@ pub enum ReceiveState {
         btc_out_point: bitcoin::OutPoint,
     },
     IgnoredDust {
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
+    },
+    /// The transaction disappeared from watched script history before claim.
+    ///
+    /// This state is recoverable: if the same transaction/outpoint later
+    /// reappears the stream returns to
+    /// [`ReceiveState::WaitingForConfirmation`], and if it gets claimed the
+    /// stream continues to [`ReceiveState::Confirmed`] /
+    /// [`ReceiveState::Claimed`].
+    OutOfMempool {
         #[serde(with = "bitcoin::amount::serde::as_sat")]
         btc_deposited: bitcoin::Amount,
         btc_out_point: bitcoin::OutPoint,
@@ -343,6 +356,16 @@ impl ModuleInit for WalletClientInit {
                         wallet_client_items
                             .insert("ReceiveOperationsBackfilled".to_string(), Box::new(val));
                     }
+                }
+                DbKeyPrefix::ReceiveOperation => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ReceiveOperationPrefix,
+                        crate::client_db::ReceiveOperationKey,
+                        SystemTime,
+                        wallet_client_items,
+                        "Receive Operation"
+                    );
                 }
                 DbKeyPrefix::RecoveryState
                 | DbKeyPrefix::ExternalReservedStart
@@ -1579,10 +1602,15 @@ impl WalletClientModule {
         }
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
+        let receive_update_context = ReceiveUpdateContext {
+            client_ctx: self.client_ctx.clone(),
+            rpc: self.rpc.clone(),
+            network: self.cfg().network.0,
+        };
 
         match operation_meta.variant {
             WalletOperationMetaVariant::Receive { .. } => receive_updates_for_operation(
-                &self.client_ctx,
+                &receive_update_context,
                 operation,
                 operation_id,
                 &operation_meta.variant,
@@ -1592,7 +1620,7 @@ impl WalletClientModule {
                 ..
             } => Ok(UpdateStreamOrOutcome::UpdateStream(Box::pin(
                 bridge_deposit_address_to_receive_updates(
-                    self.client_ctx.clone(),
+                    receive_update_context,
                     self.db.clone(),
                     self.pegin_monitor_wakeup_sender.clone(),
                     self.pegin_claimed_receiver.clone(),
@@ -2215,13 +2243,61 @@ async fn schedule_pegin_recheck(
     Ok(())
 }
 
+#[derive(Clone)]
+struct ReceiveUpdateContext {
+    client_ctx: ClientContext<WalletClientModule>,
+    rpc: DynBitcoindRpc,
+    network: Network,
+}
+
+fn history_contains_outpoint(
+    history: &[bitcoin::Transaction],
+    script_pubkey: &ScriptBuf,
+    btc_out_point: bitcoin::OutPoint,
+) -> bool {
+    history.iter().any(|tx| {
+        tx.compute_txid() == btc_out_point.txid
+            && tx
+                .output
+                .get(btc_out_point.vout as usize)
+                .is_some_and(|output| output.script_pubkey == *script_pubkey)
+    })
+}
+
+fn receive_history_transition(
+    reported_out_of_mempool: &mut bool,
+    still_in_history: bool,
+    btc_deposited: bitcoin::Amount,
+    btc_out_point: bitcoin::OutPoint,
+) -> Option<ReceiveState> {
+    if still_in_history {
+        if *reported_out_of_mempool {
+            *reported_out_of_mempool = false;
+            return Some(ReceiveState::WaitingForConfirmation {
+                btc_deposited,
+                btc_out_point,
+            });
+        }
+    } else if !*reported_out_of_mempool {
+        *reported_out_of_mempool = true;
+        return Some(ReceiveState::OutOfMempool {
+            btc_deposited,
+            btc_out_point,
+        });
+    }
+
+    None
+}
+
+#[allow(clippy::too_many_lines)]
 fn receive_updates_for_operation(
-    client_ctx: &ClientContext<WalletClientModule>,
+    context: &ReceiveUpdateContext,
     operation: OperationLogEntry,
     operation_id: OperationId,
     operation_meta_variant: &WalletOperationMetaVariant,
 ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveState>> {
     let &WalletOperationMetaVariant::Receive {
+        ref address,
         claim_operation_id,
         tweak_idx,
         btc_out_point,
@@ -2232,8 +2308,19 @@ fn receive_updates_for_operation(
         bail!("Operation is not a receive operation");
     };
 
-    Ok(client_ctx.outcome_or_updates(operation, operation_id, {
-        let stream_client_ctx = client_ctx.clone();
+    let script_pubkey = address
+        .clone()
+        .require_network(context.network)?
+        .script_pubkey();
+    let poll_interval = if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(30)
+    };
+
+    Ok(context.client_ctx.outcome_or_updates(operation, operation_id, {
+        let stream_client_ctx = context.client_ctx.clone();
+        let stream_rpc = context.rpc.clone();
         move || {
             stream! {
                 let claimed_peg_in_key = ClaimedPegInKey {
@@ -2246,10 +2333,63 @@ fn receive_updates_for_operation(
                     btc_out_point,
                 };
 
-                let claim_data = stream_client_ctx
-                    .module_db()
-                    .wait_key_exists(&claimed_peg_in_key)
-                    .await;
+                let mut script_history_watched = false;
+                let mut reported_out_of_mempool = false;
+
+                let claim_data = loop {
+                    if let Some(claim_data) = stream_client_ctx
+                        .module_db()
+                        .begin_transaction_nc()
+                        .await
+                        .get_value(&claimed_peg_in_key)
+                        .await
+                    {
+                        break claim_data;
+                    }
+
+                    if !script_history_watched {
+                        match stream_rpc.watch_script_history(&script_pubkey).await {
+                            Ok(()) => {
+                                script_history_watched = true;
+                            }
+                            Err(error) => {
+                                warn!(
+                                    target: LOG_CLIENT_MODULE_WALLET,
+                                    err = %error.fmt_compact_anyhow(),
+                                    %btc_out_point,
+                                    "Failed to watch script history while waiting for receive confirmation"
+                                );
+                                sleep(poll_interval).await;
+                                continue;
+                            }
+                        }
+                    }
+
+                    match stream_rpc.get_script_history(&script_pubkey).await {
+                        Ok(history) => {
+                            let still_in_history =
+                                history_contains_outpoint(&history, &script_pubkey, btc_out_point);
+                            if let Some(state) = receive_history_transition(
+                                &mut reported_out_of_mempool,
+                                still_in_history,
+                                btc_deposited,
+                                btc_out_point,
+                            ) {
+                                yield state;
+                            }
+                        }
+                        Err(error) => {
+                            warn!(
+                                target: LOG_CLIENT_MODULE_WALLET,
+                                err = %error.fmt_compact_anyhow(),
+                                %btc_out_point,
+                                "Failed to refresh script history while waiting for receive confirmation"
+                            );
+                        }
+                    }
+
+                    sleep(poll_interval).await;
+                };
 
                 if claim_data.claim_txid == TransactionId::from_byte_array([0; 32])
                     && claim_data.change.is_empty()
@@ -2287,6 +2427,28 @@ async fn first_receive_operation_for_address(
     address_operation_id: OperationId,
     tweak_idx: TweakIdx,
 ) -> Option<OperationId> {
+    let mut indexed_receives = db
+        .begin_transaction_nc()
+        .await
+        .find_by_prefix(&ReceiveOperationPrefix)
+        .await
+        .filter(|(key, _creation_time)| futures::future::ready(key.peg_in_index == tweak_idx))
+        .collect::<Vec<_>>()
+        .await;
+
+    indexed_receives.sort_by_key(|(_key, creation_time)| *creation_time);
+
+    for (key, _creation_time) in indexed_receives.into_iter().rev() {
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, key.btc_out_point);
+        if client_ctx
+            .operation_log_entry_exists(receive_operation_id)
+            .await
+        {
+            return Some(receive_operation_id);
+        }
+    }
+
     let claimed = db
         .begin_transaction_nc()
         .await
@@ -2310,7 +2472,7 @@ async fn first_receive_operation_for_address(
 }
 
 fn bridge_deposit_address_to_receive_updates(
-    client_ctx: ClientContext<WalletClientModule>,
+    context: ReceiveUpdateContext,
     db: Database,
     pegin_monitor_wakeup_sender: watch::Sender<()>,
     mut pegin_claimed_receiver: watch::Receiver<()>,
@@ -2320,7 +2482,7 @@ fn bridge_deposit_address_to_receive_updates(
     Box::pin(stream! {
         let receive_operation_id = loop {
             if let Some(receive_operation_id) = first_receive_operation_for_address(
-                &client_ctx,
+                &context.client_ctx,
                 &db,
                 address_operation_id,
                 tweak_idx,
@@ -2349,7 +2511,7 @@ fn bridge_deposit_address_to_receive_updates(
             }
         };
 
-        let operation = match client_ctx.get_operation(receive_operation_id).await {
+        let operation = match context.client_ctx.get_operation(receive_operation_id).await {
             Ok(operation) => operation,
             Err(error) => {
                 yield ReceiveState::Failed(error.to_string());
@@ -2359,7 +2521,7 @@ fn bridge_deposit_address_to_receive_updates(
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
         let updates = match receive_updates_for_operation(
-            &client_ctx,
+            &context,
             operation,
             receive_operation_id,
             &operation_meta.variant,
@@ -2432,6 +2594,66 @@ mod tests {
     use crate::backup::{
         RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
     };
+
+    #[test]
+    fn receive_history_transition_is_recoverable() {
+        let btc_deposited = bitcoin::Amount::from_sat(42);
+        let btc_out_point = bitcoin::OutPoint {
+            txid: bitcoin::Txid::from_byte_array([1; 32]),
+            vout: 0,
+        };
+        let mut reported_out_of_mempool = false;
+
+        assert_eq!(
+            receive_history_transition(
+                &mut reported_out_of_mempool,
+                true,
+                btc_deposited,
+                btc_out_point,
+            ),
+            None
+        );
+        assert!(!reported_out_of_mempool);
+
+        assert_eq!(
+            receive_history_transition(
+                &mut reported_out_of_mempool,
+                false,
+                btc_deposited,
+                btc_out_point,
+            ),
+            Some(ReceiveState::OutOfMempool {
+                btc_deposited,
+                btc_out_point,
+            })
+        );
+        assert!(reported_out_of_mempool);
+
+        assert_eq!(
+            receive_history_transition(
+                &mut reported_out_of_mempool,
+                false,
+                btc_deposited,
+                btc_out_point,
+            ),
+            None
+        );
+        assert!(reported_out_of_mempool);
+
+        assert_eq!(
+            receive_history_transition(
+                &mut reported_out_of_mempool,
+                true,
+                btc_deposited,
+                btc_out_point,
+            ),
+            Some(ReceiveState::WaitingForConfirmation {
+                btc_deposited,
+                btc_out_point,
+            })
+        );
+        assert!(!reported_out_of_mempool);
+    }
 
     #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
     #[tokio::test(flavor = "multi_thread")]

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, bail};
-use bitcoin::Txid;
+use bitcoin::{Address, Txid};
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -619,12 +619,12 @@ pub struct UpgradeClients {
 /// on-chain receive operation backfill after upgrading the client binary.
 struct WalletReceiveUpgradeClients {
     allocated_client: Client,
-    allocated_operation_id: String,
-    allocated_address: String,
+    allocated_operation_id: OperationId,
+    allocated_address: Address,
     claimed_client: Client,
-    claimed_operation_id: String,
+    claimed_operation_id: OperationId,
     pending_client: Client,
-    pending_operation_id: String,
+    pending_operation_id: OperationId,
 }
 
 async fn prepare_wallet_receive_upgrade_clients(
@@ -635,12 +635,18 @@ async fn prepare_wallet_receive_upgrade_clients(
         .new_joined_client("wallet-upgrade-allocated-client")
         .await?;
     let (allocated_address, allocated_operation_id) = allocated_client.get_deposit_addr().await?;
+    let allocated_address =
+        Address::from_str(&allocated_address)?.require_network(bitcoin::Network::Regtest)?;
+    let allocated_operation_id = OperationId::from_str(&allocated_operation_id)?;
 
     let claimed_client = dev_fed
         .fed
         .new_joined_client("wallet-upgrade-claimed-client")
         .await?;
     let (claimed_address, claimed_operation_id) = claimed_client.get_deposit_addr().await?;
+    let claimed_address =
+        Address::from_str(&claimed_address)?.require_network(bitcoin::Network::Regtest)?;
+    let claimed_operation_id = OperationId::from_str(&claimed_operation_id)?;
     fund_deposit_address_no_wait(dev_fed, &claimed_address).await?;
     fund_deposit_address_no_wait(dev_fed, &claimed_address).await?;
     cmd!(
@@ -649,7 +655,7 @@ async fn prepare_wallet_receive_upgrade_clients(
         "wallet",
         "await-deposit",
         "--operation-id",
-        &claimed_operation_id,
+        operation_id_arg(claimed_operation_id),
         "--num",
         "2"
     )
@@ -664,6 +670,7 @@ async fn prepare_wallet_receive_upgrade_clients(
         .fed
         .pegin_client_no_wait(10_000, &pending_client)
         .await?;
+    let pending_operation_id = OperationId::from_str(&pending_operation_id)?;
 
     Ok(WalletReceiveUpgradeClients {
         allocated_client,
@@ -682,7 +689,7 @@ async fn wallet_receive_upgrade_test(
 ) -> anyhow::Result<()> {
     assert_wallet_receive_operations(
         &clients.claimed_client,
-        &clients.claimed_operation_id,
+        clients.claimed_operation_id,
         false,
         2,
     )
@@ -695,7 +702,7 @@ async fn wallet_receive_upgrade_test(
         "wallet",
         "legacy-deposit-outcome",
         "--operation-id",
-        &clients.claimed_operation_id,
+        operation_id_arg(clients.claimed_operation_id),
     )
     .out_json()
     .await?;
@@ -706,7 +713,7 @@ async fn wallet_receive_upgrade_test(
 
     assert_wallet_receive_operations(
         &clients.allocated_client,
-        &clients.allocated_operation_id,
+        clients.allocated_operation_id,
         true,
         0,
     )
@@ -716,28 +723,30 @@ async fn wallet_receive_upgrade_test(
     fund_deposit_address_no_wait(dev_fed, &clients.allocated_address)
         .await
         .context("funding legacy allocated address after upgrade")?;
+    let allocated_operation_id = operation_id_arg(clients.allocated_operation_id);
     clients
         .allocated_client
-        .await_deposit(&clients.allocated_operation_id)
+        .await_deposit(&allocated_operation_id)
         .await
         .context("claiming legacy allocated address after upgrade")?;
     assert_wallet_receive_operations(
         &clients.allocated_client,
-        &clients.allocated_operation_id,
+        clients.allocated_operation_id,
         true,
         1,
     )
     .await
     .context("post-upgrade funding should create a live receive operation")?;
 
+    let pending_operation_id = operation_id_arg(clients.pending_operation_id);
     clients
         .pending_client
-        .await_deposit(&clients.pending_operation_id)
+        .await_deposit(&pending_operation_id)
         .await
         .context("claiming pre-upgrade funded deposit after upgrade")?;
     assert_wallet_receive_operations(
         &clients.pending_client,
-        &clients.pending_operation_id,
+        clients.pending_operation_id,
         true,
         1,
     )
@@ -747,7 +756,11 @@ async fn wallet_receive_upgrade_test(
     Ok(())
 }
 
-async fn fund_deposit_address_no_wait(dev_fed: &DevFed, address: &str) -> anyhow::Result<()> {
+fn operation_id_arg(operation_id: OperationId) -> String {
+    operation_id.fmt_full().to_string()
+}
+
+async fn fund_deposit_address_no_wait(dev_fed: &DevFed, address: &Address) -> anyhow::Result<()> {
     let deposit_fees_msat = dev_fed.fed.deposit_fees()?.msats;
     assert_eq!(
         deposit_fees_msat % 1000,
@@ -757,7 +770,7 @@ async fn fund_deposit_address_no_wait(dev_fed: &DevFed, address: &str) -> anyhow
 
     dev_fed
         .bitcoind
-        .send_to(address.to_owned(), 10_000 + deposit_fees_msat / 1000)
+        .send_to(address.to_string(), 10_000 + deposit_fees_msat / 1000)
         .await?;
     dev_fed.bitcoind.mine_blocks(21).await?;
     Ok(())
@@ -765,23 +778,20 @@ async fn fund_deposit_address_no_wait(dev_fed: &DevFed, address: &str) -> anyhow
 
 async fn assert_wallet_receive_operations(
     client: &Client,
-    address_operation_id: &str,
+    address_operation_id: OperationId,
     claim_owned_by_receive_operation: bool,
     expected_count: usize,
 ) -> anyhow::Result<()> {
     let receives = wallet_receive_operations_for_address(client, address_operation_id).await?;
     anyhow::ensure!(
         receives.len() == expected_count,
-        "expected {expected_count} receive operation(s) for address operation {address_operation_id}, found {receives:?}"
+        "expected {expected_count} receive operation(s) for address operation {}, found {receives:?}",
+        address_operation_id.fmt_full()
     );
 
-    for (receive_operation_id, receive) in receives {
-        let claim_operation_id = receive["claim_operation_id"]
-            .as_str()
-            .context("receive operation must have claim_operation_id")?;
-
+    for (receive_operation_id, _receive, claim_operation_id) in receives {
         let expected_claim_operation_id = if claim_owned_by_receive_operation {
-            receive_operation_id.as_str()
+            receive_operation_id
         } else {
             address_operation_id
         };
@@ -796,8 +806,8 @@ async fn assert_wallet_receive_operations(
 
 async fn wallet_receive_operations_for_address(
     client: &Client,
-    address_operation_id: &str,
-) -> anyhow::Result<Vec<(String, serde_json::Value)>> {
+    address_operation_id: OperationId,
+) -> anyhow::Result<Vec<(OperationId, serde_json::Value, OperationId)>> {
     let operations = cmd!(client, "list-operations", "--limit", "100")
         .out_json()
         .await?;
@@ -808,14 +818,16 @@ async fn wallet_receive_operations_for_address(
         .iter()
         .filter_map(|operation| {
             let receive = operation["operation_meta"]["variant"]["receive"].as_object()?;
-            if receive
-                .get("address_operation_id")
-                .and_then(|id| id.as_str())
-                == Some(address_operation_id)
-            {
+            let receive_address_operation_id =
+                OperationId::from_str(receive.get("address_operation_id")?.as_str()?).ok()?;
+            if receive_address_operation_id == address_operation_id {
+                let receive_operation_id = OperationId::from_str(operation["id"].as_str()?).ok()?;
+                let claim_operation_id =
+                    OperationId::from_str(receive.get("claim_operation_id")?.as_str()?).ok()?;
                 Some((
-                    operation["id"].as_str()?.to_owned(),
+                    receive_operation_id,
                     serde_json::Value::Object(receive.clone()),
+                    claim_operation_id,
                 ))
             } else {
                 None

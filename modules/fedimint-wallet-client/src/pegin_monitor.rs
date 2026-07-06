@@ -28,7 +28,7 @@ use tracing::{debug, instrument, trace, warn};
 use crate::api::WalletFederationApi as _;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
-    PegInTweakIndexPrefix, TweakIdx,
+    PegInTweakIndexPrefix, ReceiveOperationKey, TweakIdx,
 };
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
 use crate::{
@@ -390,9 +390,6 @@ async fn check_idx_pegins(
             txid,
             vout: out_idx,
         };
-        let receive_operation_id =
-            WalletClientModuleData::receive_operation_id(address_operation_id, outpoint);
-
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
             btc_out_point: outpoint,
@@ -410,6 +407,8 @@ async fn check_idx_pegins(
             continue;
         }
 
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, outpoint);
         let mut dbtx = db.begin_transaction().await;
         ensure_receive_operation(
             &mut dbtx.to_ref_nc(),
@@ -480,6 +479,25 @@ pub(crate) async fn ensure_receive_operation(
     variant: WalletOperationMetaVariant,
     creation_time: SystemTime,
 ) {
+    if let WalletOperationMetaVariant::Receive {
+        tweak_idx,
+        btc_out_point,
+        ..
+    } = &variant
+    {
+        // Maintain the receive index even if the operation log entry already
+        // exists, so older receive entries or interrupted writes can be
+        // rediscovered by the address-operation compatibility bridge.
+        dbtx.insert_entry(
+            &ReceiveOperationKey {
+                peg_in_index: *tweak_idx,
+                btc_out_point: *btc_out_point,
+            },
+            &creation_time,
+        )
+        .await;
+    }
+
     if client_ctx
         .operation_log_entry_exists_dbtx(dbtx, receive_operation_id)
         .await

@@ -332,6 +332,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     wallet_module.recheck_pegin_address_by_op_id(op).await?;
     let receive_operation_id = receive_operation_id_for_tx(&client, tx.compute_txid()).await?;
 
+    let mut address_receive_updates = wallet_module.subscribe_receive(op).await?.into_stream();
+    assert_matches!(
+        address_receive_updates.next().await.unwrap(),
+        ReceiveState::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    );
+    drop(address_receive_updates);
+
     let mut receive_updates = wallet_module
         .subscribe_receive(receive_operation_id)
         .await?
@@ -1936,6 +1943,7 @@ mod fedimint_migration_tests {
                         client_db::DbKeyPrefix::SupportsSafeDeposit => {}
                         client_db::DbKeyPrefix::PegInPoolCursor => {}
                         client_db::DbKeyPrefix::ReceiveOperationsBackfilled => {}
+                        client_db::DbKeyPrefix::ReceiveOperation => {}
                         client_db::DbKeyPrefix::ExternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedStart
                         | client_db::DbKeyPrefix::CoreInternalReservedEnd => {}
