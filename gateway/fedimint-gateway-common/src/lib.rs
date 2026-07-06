@@ -776,6 +776,35 @@ mod tests {
     }
 
     #[test]
+    fn node_address_handles_bracketed_ipv6_address() {
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(
+            node_address.host_with_port(),
+            "[0000:0000:0000:0000:0000:0000:0000:0001]:9735"
+        );
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]")
+        );
+
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]:9736")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(
+            node_address.host_with_port(),
+            "[0000:0000:0000:0000:0000:0000:0000:0001]:9736"
+        );
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]:9736")
+        );
+    }
+
+    #[test]
     fn node_address_serde_uses_display_format() {
         let request = ConnectPeerRequest {
             node_address: format!("{NODE_PUBKEY}@127.0.0.1:9735")
