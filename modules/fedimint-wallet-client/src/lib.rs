@@ -39,12 +39,14 @@ use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
-use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModule, ClientModulePreStartMigrationContext, IClientModule, OutPointRange,
+};
 use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
-    max_affordable_send_amount,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
+    TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -642,15 +644,18 @@ impl ClientModule for WalletClientModule {
         }
     }
 
-    async fn start(&self) {
-        if let Err(error) = self.backfill_receive_operations().await {
-            tracing::warn!(
-                target: LOG_CLIENT_MODULE_WALLET,
-                err = %error.fmt_compact_anyhow(),
-                "Failed to backfill wallet receive operation log entries"
-            );
-        }
+    async fn pre_start_migration(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+    ) -> anyhow::Result<()> {
+        self.backfill_receive_operations(pre_start_ctx)
+            .await
+            .context("failed to backfill wallet receive operation log entries")?;
 
+        Ok(())
+    }
+
+    async fn start(&self) {
         self.task_group
             .spawn_cancellable_with_span(self.client_span.clone(), "peg-in monitor", {
                 let client_ctx = self.client_ctx.clone();
@@ -881,7 +886,10 @@ impl WalletClientModule {
     /// [`WalletOperationMetaVariant::Receive`] operation-log entry for deposits
     /// that were already claimed before receive operations were tracked
     /// individually.
-    async fn backfill_receive_operations(&self) -> anyhow::Result<()> {
+    async fn backfill_receive_operations(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+    ) -> anyhow::Result<()> {
         /// Scans the event log for [`DepositConfirmed`] events, returning the
         /// deposited amount and confirmation time keyed by the on-chain
         /// outpoint. Walking the whole (potentially large) event log is
@@ -969,6 +977,7 @@ impl WalletClientModule {
                 pegin_monitor::ensure_receive_operation(
                     &mut dbtx.to_ref_nc(),
                     &self.client_ctx,
+                    Some(pre_start_ctx),
                     receive_operation_id,
                     WalletOperationMetaVariant::Receive {
                         address_operation_id: peg_in_data.operation_id,
