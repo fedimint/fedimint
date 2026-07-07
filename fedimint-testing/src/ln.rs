@@ -26,7 +26,7 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
+    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentHash, PaymentSecret,
 };
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
@@ -75,7 +75,7 @@ impl FakeLightningTest {
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(payment_hash)
+            .payment_hash(PaymentHash(payment_hash.to_byte_array()))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -102,7 +102,7 @@ impl FakeLightningTest {
         InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description("INVALID INVOICE DESCRIPTION".to_string())
-            .payment_hash(payment_hash)
+            .payment_hash(PaymentHash(payment_hash.to_byte_array()))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -225,7 +225,7 @@ impl ILnRpcClient for FakeLightningTest {
         let invoice = match create_invoice_request.payment_hash {
             Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
                 .description(String::new())
-                .payment_hash(payment_hash)
+                .payment_hash(PaymentHash(payment_hash.to_byte_array()))
                 .current_timestamp()
                 .min_final_cltv_expiry_delta(0)
                 .payment_secret(PaymentSecret([0; 32]))

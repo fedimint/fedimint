@@ -901,9 +901,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_chain"
-version = "0.23.2"
+version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b5d691fd092aacec7e05046b7d04897d58d6d65ed3152cb6cf65dababcfabed"
+checksum = "c290eff038799a8ac0c5a82b6160a9ca456baa299a6f22b262c771342d2846c0"
 dependencies = [
  "bdk_core",
  "bitcoin",
@@ -913,9 +913,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_core"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dbbe4aad0c898bfeb5253c222be3ea3dccfb380a07e72c87e3e4ed6664a6753"
+checksum = "cb3028782f6bf14a6df987244333d34e6b272b5a40a53e4879ec2dfd82275a3a"
 dependencies = [
  "bitcoin",
  "hashbrown 0.14.5",
@@ -924,9 +924,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_electrum"
-version = "0.23.2"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b59a3f7fbe678874fa34354097644a171276e02a49934c13b3d61c54610ddf39"
+checksum = "00a9846105bf6e751adbb6946b000ff919ce24a15a941cbfe68485549b552a9c"
 dependencies = [
  "bdk_core",
  "electrum-client",
@@ -934,9 +934,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_esplora"
-version = "0.22.0"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b9bf0bcfc01d6d67f2515b1fd4eab77b220726ed2ade09f9b6c90c286e0b767"
+checksum = "83986307ea92997c3d051e8c306af8115a05add601e22acb7c1903008e6b614e"
 dependencies = [
  "async-trait",
  "bdk_core",
@@ -946,9 +946,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_wallet"
-version = "2.3.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b03f1e31ccc562f600981f747d2262b84428cbff52c9c9cdf14d15fb15bd2286"
+checksum = "1284fb23acc3e3022673712b55f4d5ce7e38aadc2c49bbef830dc3935f0a3289"
 dependencies = [
  "bdk_chain",
  "bip39",
@@ -1068,6 +1068,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b47c4ab7a93edb0c7198c5535ed9b52b63095f4e9b45279c6736cec4b856baf"
 
 [[package]]
+name = "bitcoin-payment-instructions"
+version = "0.6.0"
+source = "git+https://github.com/tnull/bitcoin-payment-instructions?rev=ff09ce9401afa448549a8f101172700bcd14d7bb#ff09ce9401afa448549a8f101172700bcd14d7bb"
+dependencies = [
+ "bitcoin",
+ "dnssec-prover",
+ "getrandom 0.3.3",
+ "lightning",
+ "lightning-invoice",
+]
+
+[[package]]
 name = "bitcoin-units"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1129,6 +1141,21 @@ name = "bitmaps"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d084b0137aaa901caf9f1e8b21daa6aa24d41cd806e111335541eff9683bd6"
+
+[[package]]
+name = "bitreq"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65c2e1ab98050c93cc9ada070d5070e014329c65196d03f6f8f1f75c2666f37"
+dependencies = [
+ "rustls",
+ "rustls-webpki 0.103.13",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-rustls",
+ "webpki-roots 1.0.8",
+]
 
 [[package]]
 name = "bitvec"
@@ -1418,6 +1445,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b4b0fc281743d80256607bd65e8beedc42cb0787ea119c85b81b4c0eab85e5f"
 
 [[package]]
+name = "chacha20-poly1305"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bad28386ab70dd960294556a76aaab6da2994fec47d650fd725b3012f062052a"
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1430,12 +1463,6 @@ dependencies = [
  "wasm-bindgen",
  "windows-link 0.2.1",
 ]
-
-[[package]]
-name = "chunked_transfer"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
 name = "ciborium"
@@ -2195,7 +2222,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -2628,6 +2655,11 @@ name = "dnssec-prover"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48f9e1163868b86c37d43c586af9d917e699c87f1266ebfdf356ad1003458118"
+dependencies = [
+ "bitcoin_hashes",
+ "hex_lit",
+ "tokio",
+]
 
 [[package]]
 name = "document-features"
@@ -2744,9 +2776,9 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "electrum-client"
-version = "0.24.1"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5059f13888a90486e7268bbce59b175f5f76b1c55e5b9c568ceaa42d2b8507c"
+checksum = "1970c5d7bd9de6d4041cbfc3e46faa3e85fe7efcea2b0eb06750d3ae1ef577b7"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -3802,10 +3834,10 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ldk-node"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24c7188eff7c6c28895f638e8d9ec7c9fbe3db64d88b0323ba080f885af7cfd8"
+version = "0.8.0+git"
+source = "git+https://github.com/m1sterc001guy/ldk-node?rev=6afe3b2bae33050bc21ca332d68bd437ae651f3c#6afe3b2bae33050bc21ca332d68bd437ae651f3c"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "bdk_chain",
  "bdk_electrum",
@@ -3814,13 +3846,17 @@ dependencies = [
  "bip21",
  "bip39",
  "bitcoin",
+ "bitcoin-payment-instructions",
+ "bitreq",
  "chrono",
  "electrum-client",
  "esplora-client",
+ "getrandom 0.3.3",
  "libc",
  "lightning",
  "lightning-background-processor",
  "lightning-block-sync",
+ "lightning-dns-resolver",
  "lightning-invoice",
  "lightning-liquidity",
  "lightning-macros",
@@ -3831,8 +3867,6 @@ dependencies = [
  "lightning-types",
  "log",
  "prost 0.11.9",
- "rand 0.9.2",
- "reqwest 0.12.28",
  "rusqlite",
  "rustls",
  "serde",
@@ -7317,12 +7351,12 @@ dependencies = [
 
 [[package]]
 name = "lightning"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4342d07db2b3fe7c9a73849e94d012ebcfa3588c25097daf0b5ff2857c04e0e1"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bech32",
  "bitcoin",
+ "chacha20-poly1305 0.2.0",
  "dnssec-prover",
  "hashbrown 0.13.2",
  "libm",
@@ -7334,9 +7368,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-background-processor"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abdc5450264184deba88b1dc61fa8d2ca905e21748bad556915757ac73d91103"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
  "bitcoin-io",
@@ -7349,22 +7382,31 @@ dependencies = [
 
 [[package]]
 name = "lightning-block-sync"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee5069846b07a62aaecdaf25233e067bc69f245b7c8fd00cc9c217053221f875"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
- "chunked_transfer",
+ "bitreq",
  "lightning",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
+name = "lightning-dns-resolver"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
+dependencies = [
+ "dnssec-prover",
+ "lightning",
+ "lightning-types",
+ "tokio",
+]
+
+[[package]]
 name = "lightning-invoice"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b85e5e14bcdb30d746e9785b04f27938292e8944f78f26517e01e91691f6b3f2"
+version = "0.35.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -7374,11 +7416,11 @@ dependencies = [
 
 [[package]]
 name = "lightning-liquidity"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58a6480d4d7726c49b4cd170b18a39563bbe897d0b8960be11d5e4a0cebd43b0"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
+ "bitreq",
  "chrono",
  "lightning",
  "lightning-invoice",
@@ -7390,9 +7432,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80bd6063f4d0c34320f1db9193138c878e64142e6d1c42bd5f0124936e8764ec"
+version = "0.2.2+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7401,9 +7442,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-net-tokio"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8055737e3d2d06240a3fdf10e26b2716110fcea90011a0839e8e82fc6e58ff5e"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
  "lightning",
@@ -7412,9 +7452,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-persister"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6d78990de56ca75c5535c3f8e6f86b183a1aa8f521eb32afb9e8181f3bd91d7"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
  "lightning",
@@ -7424,9 +7463,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-rapid-gossip-sync"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b094f79f22713aa95194a166c77b2f6c7d68f9d76622a43552a29b8fe6fa92d0"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
  "bitcoin-io",
@@ -7436,9 +7474,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-transaction-sync"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f16c2cc74a73e29295bb5c0de61f4a0e6fe7151562ebdd48ee9935fcaa59bd8"
+version = "0.3.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
  "electrum-client",
@@ -7450,9 +7487,8 @@ dependencies = [
 
 [[package]]
 name = "lightning-types"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5681708d3075bdff3a1b4daa400590e2703e7871bdc14e94ee7334fb6314ae40"
+version = "0.4.0+git"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "bitcoin",
 ]
@@ -7735,9 +7771,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.4"
+version = "12.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1eeb3bbebc87062b99fbb8c9067d30dab85469f4cf12248a2667777cc86b282"
+checksum = "b8343cc1ef1408bd9bdbf69f7aef47017dfab7e6349ec26fddf62e0e9fb5a4cf"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -9249,8 +9285,7 @@ dependencies = [
 [[package]]
 name = "possiblyrandom"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b122a615d72104fb3d8b26523fdf9232cd8ee06949fb37e4ce3ff964d15dffd"
+source = "git+https://github.com/lightningdevkit/rust-lightning?rev=3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c#3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c"
 dependencies = [
  "getrandom 0.2.16",
 ]
@@ -13150,24 +13185,23 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "vss-client-ng"
-version = "0.4.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c05f61751537ec3e7cf744e6ed8a56830b8d048f9862871cb4b9c239e3d23b45"
+checksum = "49dae7224f498977c17c2ac85d5377d6a2b7290102add15070db257b86a519d6"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bitcoin",
  "bitcoin_hashes",
- "chacha20-poly1305",
+ "bitreq",
+ "chacha20-poly1305 0.1.2",
  "log",
  "prost 0.11.9",
  "prost-build 0.11.9",
  "rand 0.8.5",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
- "url",
 ]
 
 [[package]]
@@ -14022,8 +14056,8 @@ dependencies = [
  "log",
  "serde",
  "thiserror 2.0.18",
- "windows 0.61.3",
- "windows-core 0.61.2",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

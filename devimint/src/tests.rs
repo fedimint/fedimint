@@ -8,6 +8,7 @@ use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
+use bitcoin::hashes::{Hash, sha256};
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -184,7 +185,10 @@ pub async fn latency_tests(
                 let start_time = Instant::now();
                 ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
                 gw_ldk
-                    .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+                    .wait_bolt11_invoice(
+                        sha256::Hash::from_byte_array(invoice.payment_hash().0)
+                            .consensus_encode_to_vec(),
+                    )
                     .await?;
                 ln_sends.push(start_time.elapsed());
 
@@ -893,7 +897,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let invoice = gw_ldk.create_invoice(1_200_000).await?;
     lnd.pay_bolt11_invoice(invoice.to_string()).await?;
     gw_ldk
-        .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+        .wait_bolt11_invoice(
+            sha256::Hash::from_byte_array(invoice.payment_hash().0).consensus_encode_to_vec(),
+        )
         .await?;
 
     // LDK can pay LND directly
@@ -1020,7 +1026,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         let invoice = gw_ldk.create_invoice(2_000_000).await?;
         ln_pay(&client, invoice.to_string(), iroh_gw_id.clone()).await?;
         gw_ldk
-            .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+            .wait_bolt11_invoice(
+                sha256::Hash::from_byte_array(invoice.payment_hash().0).consensus_encode_to_vec(),
+            )
             .await?;
 
         // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
@@ -1063,7 +1071,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
     let fed_id = fed.calculate_federation_id();
     gw_ldk
-        .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+        .wait_bolt11_invoice(
+            sha256::Hash::from_byte_array(invoice.payment_hash().0).consensus_encode_to_vec(),
+        )
         .await?;
 
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)

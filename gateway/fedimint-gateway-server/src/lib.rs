@@ -35,7 +35,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context, anyhow, ensure};
 use async_trait::async_trait;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{Address, Network, Txid, secp256k1};
 use clap::Parser;
 use client::GatewayClientBuilder;
@@ -3303,7 +3303,7 @@ impl IGatewayClientV2 for Gateway {
         if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
             let (contract, client) = self
                 .get_registered_incoming_contract_and_client_v2(
-                    PaymentImage::Hash(*invoice.payment_hash()),
+                    PaymentImage::Hash(sha256::Hash::from_byte_array(invoice.payment_hash().0)),
                     invoice
                         .amount_milli_satoshis()
                         .expect("The amount invoice has been previously checked"),
@@ -3368,7 +3368,7 @@ impl IGatewayClientV2 for Gateway {
         invoice: &Bolt11Invoice,
     ) -> anyhow::Result<FinalReceiveState> {
         let swap_params = SwapParameters {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: sha256::Hash::from_byte_array(invoice.payment_hash().0),
             amount_msat: Amount::from_msats(
                 invoice
                     .amount_milli_satoshis()

@@ -297,7 +297,7 @@ impl LightningClientModule {
         let invoice_key =
             tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
 
-        let operation_id = OperationId(*invoice.payment_hash().as_ref());
+        let operation_id = OperationId(invoice.payment_hash().0);
         debug!(
             target: LOG_CLIENT_RECURRING,
             ?operation_id,

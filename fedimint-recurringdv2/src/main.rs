@@ -240,7 +240,7 @@ async fn create_contract_and_fetch_invoice(
         .await?;
 
     ensure!(
-        invoice.payment_hash() == &preimage.consensus_hash(),
+        sha256::Hash::from_byte_array(invoice.payment_hash().0) == preimage.consensus_hash(),
         "Invalid invoice payment hash"
     );
 

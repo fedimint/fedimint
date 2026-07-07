@@ -1,5 +1,5 @@
 use anyhow::ensure;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash, sha256};
 use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
@@ -752,7 +752,10 @@ fn verify_preimage(response: &VerifyResponse, invoice: &Bolt11Invoice) {
 
     let payment_hash = preimage.consensus_hash::<sha256::Hash>();
 
-    assert_eq!(payment_hash, *invoice.payment_hash());
+    assert_eq!(
+        payment_hash,
+        sha256::Hash::from_byte_array(invoice.payment_hash().0)
+    );
 }
 
 async fn verify_payment(verify_url: &str) -> anyhow::Result<VerifyResponse> {

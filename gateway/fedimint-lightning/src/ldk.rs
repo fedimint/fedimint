@@ -19,6 +19,7 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::{LOG_LIGHTNING, LOG_LIGHTNING_LDK};
 use ldk_node::config::ChannelConfig;
+use ldk_node::entropy::NodeEntropy;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
 use ldk_node::logger::{LogLevel, LogRecord, LogWriter};
@@ -191,7 +192,7 @@ impl GatewayLdkClient {
             in_test_env: is_running_in_test_env(),
         }));
 
-        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
+        let node_entropy = NodeEntropy::from_bip39_mnemonic(mnemonic, None);
         node_builder.set_runtime(runtime.handle().clone());
 
         match chain_source.clone() {
@@ -210,6 +211,7 @@ impl GatewayLdkClient {
                         .expect("Could not retrieve port from bitcoind RPC url"),
                     username,
                     password,
+                    None,
                 );
             }
             ChainSource::Esplora { server_url } => {
@@ -222,7 +224,7 @@ impl GatewayLdkClient {
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
-        let node = Arc::new(node_builder.build()?);
+        let node = Arc::new(node_builder.build(node_entropy)?);
         node.start().map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
             LightningRpcError::FailedToConnect
@@ -478,7 +480,7 @@ impl ILnRpcClient for GatewayLdkClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let payment_id = PaymentId(*invoice.payment_hash().as_byte_array());
+        let payment_id = PaymentId(invoice.payment_hash().0);
 
         // Lock by the payment hash to prevent multiple simultaneous calls with the same
         // invoice from executing. This prevents `ldk-node::Bolt11Payment::send()` from
@@ -811,7 +813,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .node
             .list_channels()
             .iter()
-            .filter(|channel| channel.counterparty_node_id == pubkey)
+            .filter(|channel| channel.counterparty.node_id == pubkey)
         {
             if force {
                 match self.node.force_close_channel(
@@ -857,7 +859,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .collect();
 
         for channel_details in self.node.list_channels().iter() {
-            let node_id = NodeId::from_pubkey(&channel_details.counterparty_node_id);
+            let node_id = NodeId::from_pubkey(&channel_details.counterparty.node_id);
             let node_info = network_graph.node(&node_id);
 
             // Look up peer alias from network graph
@@ -869,11 +871,11 @@ impl ILnRpcClient for GatewayLdkClient {
             });
 
             let remote_address = peer_addresses
-                .get(&channel_details.counterparty_node_id)
+                .get(&channel_details.counterparty.node_id)
                 .cloned();
 
             channels.push(ChannelInfo {
-                remote_pubkey: channel_details.counterparty_node_id,
+                remote_pubkey: channel_details.counterparty.node_id,
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,
@@ -939,7 +941,7 @@ impl ILnRpcClient for GatewayLdkClient {
         self.node
             .update_channel_config(
                 &channel.user_channel_id,
-                channel.counterparty_node_id,
+                channel.counterparty.node_id,
                 new_config,
             )
             .map_err(|e| LightningRpcError::FailedToSetChannelFees {
@@ -1160,17 +1162,7 @@ fn get_preimage_and_payment_hash(
             hash,
             preimage,
             secret: _,
-        } => (
-            preimage.map(|p| Preimage(p.0)),
-            Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
-            fedimint_gateway_common::PaymentKind::Bolt11,
-        ),
-        PaymentKind::Bolt11Jit {
-            hash,
-            preimage,
-            secret: _,
-            lsp_fee_limits: _,
-            ..
+            counterparty_skimmed_fee_msat: _,
         } => (
             preimage.map(|p| Preimage(p.0)),
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),

@@ -15,7 +15,7 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, Paymen
 use fedimint_lnv2_common::gateway_api::{GatewayConnection, PaymentFee, RoutingInfo};
 use fedimint_lnv2_common::{Bolt11InvoiceDescription, LightningInvoice};
 use lightning_invoice::{
-    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
+    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentHash, PaymentSecret,
 };
 
 const GATEWAY_SECRET: [u8; 32] = [1; 32];
@@ -56,7 +56,7 @@ fn bolt_11_invoice(payment_secret: [u8; 32], currency: Currency) -> Bolt11Invoic
 
     InvoiceBuilder::new(currency)
         .description(String::new())
-        .payment_hash(payment_hash)
+        .payment_hash(PaymentHash(payment_hash.to_byte_array()))
         .current_timestamp()
         .min_final_cltv_expiry_delta(0)
         .payment_secret(PaymentSecret(payment_secret))
@@ -118,7 +118,7 @@ impl GatewayConnection for MockGatewayConnection {
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(payment_hash)
+            .payment_hash(PaymentHash(payment_hash.to_byte_array()))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
