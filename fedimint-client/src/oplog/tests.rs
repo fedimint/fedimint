@@ -295,26 +295,17 @@ async fn test_pagination_empty_then_not() {
     let page = op_log.paginate_operations_rev(10, None).await;
     assert_eq!(page.len(), 1);
 }
-
 #[tokio::test]
-async fn test_pagination_sees_historical_insert_after_oldest_cache_is_initialized() {
+async fn test_pagination_sees_newer_insert_after_oldest_cache_is_initialized() {
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let op_log = OperationLog::new(db.clone());
 
-    let recent_op_id = OperationId([1; 32]);
-    let older_op_id = OperationId([2; 32]);
-    let recent_time = SystemTime::UNIX_EPOCH + Duration::from_secs(60 * 60 * 24 * 14);
-    let older_time = SystemTime::UNIX_EPOCH + Duration::from_secs(60 * 60 * 24 * 7);
+    let first_op_id = OperationId([1; 32]);
+    let second_op_id = OperationId([2; 32]);
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx_with_creation_time(
-            &mut dbtx.to_ref_nc(),
-            recent_op_id,
-            "foo",
-            "recent",
-            recent_time,
-        )
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), first_op_id, "foo", "first")
         .await;
     dbtx.commit_tx().await;
 
@@ -323,13 +314,7 @@ async fn test_pagination_sees_historical_insert_after_oldest_cache_is_initialize
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx_with_creation_time(
-            &mut dbtx.to_ref_nc(),
-            older_op_id,
-            "foo",
-            "older",
-            older_time,
-        )
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), second_op_id, "foo", "second")
         .await;
     dbtx.commit_tx().await;
 
@@ -338,6 +323,6 @@ async fn test_pagination_sees_historical_insert_after_oldest_cache_is_initialize
         page.iter()
             .map(|(key, _entry)| key.operation_id)
             .collect::<Vec<_>>(),
-        vec![recent_op_id, older_op_id]
+        vec![second_op_id, first_op_id]
     );
 }

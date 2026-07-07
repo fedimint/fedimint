@@ -5,7 +5,9 @@ use anyhow::anyhow;
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModulePreStartMigrationContext, OutPointRange,
+};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
@@ -413,6 +415,7 @@ async fn check_idx_pegins(
         ensure_receive_operation(
             &mut dbtx.to_ref_nc(),
             client_ctx,
+            None,
             receive_operation_id,
             WalletOperationMetaVariant::Receive {
                 address_operation_id,
@@ -475,6 +478,7 @@ async fn check_idx_pegins(
 pub(crate) async fn ensure_receive_operation(
     dbtx: &mut DatabaseTransaction<'_>,
     client_ctx: &ClientContext<WalletClientModule>,
+    pre_start_ctx: Option<&ClientModulePreStartMigrationContext<'_>>,
     receive_operation_id: OperationId,
     variant: WalletOperationMetaVariant,
     creation_time: SystemTime,
@@ -498,25 +502,56 @@ pub(crate) async fn ensure_receive_operation(
         .await;
     }
 
-    if client_ctx
-        .operation_log_entry_exists_dbtx(dbtx, receive_operation_id)
-        .await
-    {
+    let operation_exists = match pre_start_ctx {
+        Some(pre_start_ctx) => {
+            client_ctx
+                .pre_start_operation_log_entry_exists_dbtx(
+                    pre_start_ctx,
+                    dbtx,
+                    receive_operation_id,
+                )
+                .await
+        }
+        None => {
+            client_ctx
+                .operation_log_entry_exists_dbtx(dbtx, receive_operation_id)
+                .await
+        }
+    };
+
+    if operation_exists {
         return;
     }
 
-    client_ctx
-        .add_operation_log_entry_dbtx_with_creation_time(
-            dbtx,
-            receive_operation_id,
-            fedimint_wallet_common::KIND.as_str(),
-            WalletOperationMeta {
-                variant,
-                extra_meta: serde_json::Value::Null,
-            },
-            creation_time,
-        )
-        .await;
+    let operation_meta = WalletOperationMeta {
+        variant,
+        extra_meta: serde_json::Value::Null,
+    };
+
+    if let Some(pre_start_ctx) = pre_start_ctx {
+        client_ctx
+            .pre_start_add_operation_log_entry_dbtx_with_creation_time(
+                pre_start_ctx,
+                dbtx,
+                receive_operation_id,
+                fedimint_wallet_common::KIND.as_str(),
+                operation_meta,
+                creation_time,
+            )
+            .await;
+    } else {
+        // Live receive operations are created immediately, so they use the
+        // normal operation-log insertion path. Only pre-start backfill uses
+        // historical creation times.
+        client_ctx
+            .add_operation_log_entry_dbtx(
+                dbtx,
+                receive_operation_id,
+                fedimint_wallet_common::KIND.as_str(),
+                operation_meta,
+            )
+            .await;
+    }
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]

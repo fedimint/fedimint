@@ -615,8 +615,10 @@ pub struct UpgradeClients {
     fm_pay_client: Client,
 }
 
-/// Wallet clients/data prepared with an old `fedimint-cli` to exercise the
-/// on-chain receive operation backfill after upgrading the client binary.
+/// Wallet clients/data that an old `fedimint-cli` creates before upgrade.
+///
+/// The upgrade test reopens these clients with the new binary to exercise
+/// on-chain receive operation backfill.
 struct WalletReceiveUpgradeClients {
     allocated_client: Client,
     allocated_operation_id: OperationId,

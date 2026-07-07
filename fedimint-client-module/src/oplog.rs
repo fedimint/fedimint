@@ -70,6 +70,11 @@ pub trait IOperationLog {
         operation_meta: serde_json::Value,
     );
 
+    /// Add an operation-log entry with a historical creation time.
+    ///
+    /// This should only be used by startup migrations/backfills that run before
+    /// operation-log pagination can cache the oldest entry. Runtime operation
+    /// creation should use [`IOperationLog::add_operation_log_entry_dbtx`].
     async fn add_operation_log_entry_dbtx_with_creation_time(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
