@@ -118,10 +118,11 @@ pub enum ReceiveState {
     },
     /// The transaction disappeared from watched script history before claim.
     ///
-    /// This state is recoverable: if the same transaction/outpoint later
-    /// reappears the stream returns to
-    /// [`ReceiveState::WaitingForConfirmation`], and if it gets claimed the
-    /// stream continues to [`ReceiveState::Confirmed`] /
+    /// This state is recoverable and non-terminal. While out of mempool the
+    /// subscription parks on peg-in monitor notifications instead of polling
+    /// Bitcoin RPC itself. If the same transaction/outpoint later reappears the
+    /// stream returns to [`ReceiveState::WaitingForConfirmation`], and if it
+    /// gets claimed the stream continues to [`ReceiveState::Confirmed`] /
     /// [`ReceiveState::Claimed`].
     OutOfMempool {
         #[serde(with = "bitcoin::amount::serde::as_sat")]
@@ -424,7 +425,7 @@ impl ClientModuleInit for WalletClientInit {
 
         let module_api = args.module_api().clone();
 
-        let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());
+        let (pegin_monitor_update_sender, pegin_monitor_update_receiver) = watch::channel(());
         let (pegin_monitor_wakeup_sender, pegin_monitor_wakeup_receiver) = watch::channel(());
 
         Ok(WalletClientModule {
@@ -436,8 +437,8 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             pegin_monitor_wakeup_sender,
             pegin_monitor_wakeup_receiver,
-            pegin_claimed_receiver,
-            pegin_claimed_sender,
+            pegin_monitor_update_receiver,
+            pegin_monitor_update_sender,
             task_group: args.task_group().clone(),
             client_span: args.client_span().clone(),
             admin_auth: args.admin_auth().cloned(),
@@ -614,9 +615,13 @@ pub struct WalletClientModule {
     /// Updated to wake up pegin monitor
     pegin_monitor_wakeup_sender: watch::Sender<()>,
     pegin_monitor_wakeup_receiver: watch::Receiver<()>,
-    /// Called every time a peg-in was claimed
-    pegin_claimed_sender: watch::Sender<()>,
-    pegin_claimed_receiver: watch::Receiver<()>,
+    /// Notifies receive subscriptions after the peg-in monitor checks deposits.
+    ///
+    /// This is broader than claim notifications: out-of-mempool receive streams
+    /// park on this channel and re-check their operation when the monitor makes
+    /// progress.
+    pegin_monitor_update_sender: watch::Sender<()>,
+    pegin_monitor_update_receiver: watch::Receiver<()>,
     task_group: TaskGroup,
     client_span: tracing::Span,
     admin_auth: Option<ApiAuth>,
@@ -659,7 +664,7 @@ impl ClientModule for WalletClientModule {
                 let btc_rpc = self.rpc.clone();
                 let module_api = self.module_api.clone();
                 let data = self.data.clone();
-                let pegin_claimed_sender = self.pegin_claimed_sender.clone();
+                let pegin_monitor_update_sender = self.pegin_monitor_update_sender.clone();
                 let pegin_monitor_wakeup_receiver = self.pegin_monitor_wakeup_receiver.clone();
                 pegin_monitor::run_peg_in_monitor(
                     client_ctx,
@@ -667,7 +672,7 @@ impl ClientModule for WalletClientModule {
                     btc_rpc,
                     module_api,
                     data,
-                    pegin_claimed_sender,
+                    pegin_monitor_update_sender,
                     pegin_monitor_wakeup_receiver,
                 )
             });
@@ -1615,6 +1620,7 @@ impl WalletClientModule {
             client_ctx: self.client_ctx.clone(),
             rpc: self.rpc.clone(),
             network: self.cfg().network.0,
+            pegin_monitor_update_receiver: self.pegin_monitor_update_receiver.clone(),
         };
 
         match operation_meta.variant {
@@ -1632,7 +1638,7 @@ impl WalletClientModule {
                     receive_update_context,
                     self.db.clone(),
                     self.pegin_monitor_wakeup_sender.clone(),
-                    self.pegin_claimed_receiver.clone(),
+                    self.pegin_monitor_update_receiver.clone(),
                     operation_id,
                     tweak_idx,
                 ),
@@ -1933,7 +1939,7 @@ impl WalletClientModule {
     ) -> anyhow::Result<()> {
         let operation_id = self.get_pegin_tweak_idx(tweak_idx).await?.operation_id;
 
-        let mut receiver = self.pegin_claimed_receiver.clone();
+        let mut receiver = self.pegin_monitor_update_receiver.clone();
         let mut backoff = backoff_util::aggressive_backoff();
 
         loop {
@@ -2257,6 +2263,7 @@ struct ReceiveUpdateContext {
     client_ctx: ClientContext<WalletClientModule>,
     rpc: DynBitcoindRpc,
     network: Network,
+    pegin_monitor_update_receiver: watch::Receiver<()>,
 }
 
 fn history_contains_outpoint(
@@ -2330,6 +2337,7 @@ fn receive_updates_for_operation(
     Ok(context.client_ctx.outcome_or_updates(operation, operation_id, {
         let stream_client_ctx = context.client_ctx.clone();
         let stream_rpc = context.rpc.clone();
+        let mut stream_pegin_monitor_update_receiver = context.pegin_monitor_update_receiver.clone();
         move || {
             stream! {
                 let claimed_peg_in_key = ClaimedPegInKey {
@@ -2397,7 +2405,24 @@ fn receive_updates_for_operation(
                         }
                     }
 
-                    sleep(poll_interval).await;
+                    if reported_out_of_mempool {
+                        // Once a receive transaction disappears, do not keep one
+                        // Bitcoin RPC polling loop per subscriber alive. The
+                        // peg-in monitor already owns the persisted, decaying
+                        // recheck schedule for deposit addresses, so park this
+                        // recoverable operation until the monitor reports that
+                        // it checked peg-ins again. This keeps `OutOfMempool`
+                        // non-terminal without turning it into permanent
+                        // per-subscription polling.
+                        if stream_pegin_monitor_update_receiver.changed().await.is_err() {
+                            yield ReceiveState::Failed(
+                                "Peg-in monitor stopped before receive was claimed".to_owned(),
+                            );
+                            return;
+                        }
+                    } else {
+                        sleep(poll_interval).await;
+                    }
                 };
 
                 if claim_data.claim_txid == TransactionId::from_byte_array([0; 32])
@@ -2484,7 +2509,7 @@ fn bridge_deposit_address_to_receive_updates(
     context: ReceiveUpdateContext,
     db: Database,
     pegin_monitor_wakeup_sender: watch::Sender<()>,
-    mut pegin_claimed_receiver: watch::Receiver<()>,
+    mut pegin_monitor_update_receiver: watch::Receiver<()>,
     address_operation_id: OperationId,
     tweak_idx: TweakIdx,
 ) -> BoxStream<'static, ReceiveState> {
@@ -2512,7 +2537,7 @@ fn bridge_deposit_address_to_receive_updates(
                 return;
             }
 
-            if pegin_claimed_receiver.changed().await.is_err() {
+            if pegin_monitor_update_receiver.changed().await.is_err() {
                 yield ReceiveState::Failed(
                     "Peg-in monitor stopped before receive was found".to_owned(),
                 );

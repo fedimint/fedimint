@@ -99,7 +99,7 @@ pub(crate) async fn run_peg_in_monitor(
     btc_rpc: DynBitcoindRpc,
     module_api: DynModuleApi,
     data: WalletClientModuleData,
-    pegin_claimed_sender: watch::Sender<()>,
+    pegin_monitor_update_sender: watch::Sender<()>,
     mut wakeup_receiver: watch::Receiver<()>,
 ) {
     let min_sleep: Duration = if is_running_in_test_env() {
@@ -137,7 +137,7 @@ pub(crate) async fn run_peg_in_monitor(
             &btc_rpc,
             &module_api,
             &client_ctx,
-            &pegin_claimed_sender,
+            &pegin_monitor_update_sender,
         )
         .await
         {
@@ -175,7 +175,7 @@ async fn check_for_deposits(
     btc_rpc: &DynBitcoindRpc,
     module_api: &DynModuleApi,
     client_ctx: &ClientContext<WalletClientModule>,
-    pengin_claimed_sender: &watch::Sender<()>,
+    pegin_monitor_update_sender: &watch::Sender<()>,
 ) -> Result<(), anyhow::Error> {
     let due = NextActions::from_db_state(db).await.due;
     trace!(target: LOG_CLIENT_MODULE_WALLET, ?due, "Checking for deposists");
@@ -188,7 +188,7 @@ async fn check_for_deposits(
             db,
             client_ctx,
             due_val,
-            pengin_claimed_sender,
+            pegin_monitor_update_sender,
         )
         .await?;
     }
@@ -205,7 +205,7 @@ async fn check_and_claim_idx_pegins(
     db: &Database,
     client_ctx: &ClientContext<WalletClientModule>,
     due_val: PegInTweakIndexData,
-    pengin_claimed_sender: &watch::Sender<()>,
+    pegin_monitor_update_sender: &watch::Sender<()>,
 ) -> Result<(), anyhow::Error> {
     let now = time::now();
     match check_idx_pegins(data, due_key.0, btc_rpc, module_api, db, client_ctx).await {
@@ -244,9 +244,12 @@ async fn check_and_claim_idx_pegins(
 
                             let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
-                            let claimed_sender = pengin_claimed_sender.clone();
+                            // Notify receive subscriptions after every successful check,
+                            // even when no claim was created. Out-of-mempool
+                            // subscriptions park on this instead of polling RPC.
+                            let monitor_update_sender = pegin_monitor_update_sender.clone();
                             dbtx.on_commit(move || {
-                                claimed_sender.send_replace(());
+                                monitor_update_sender.send_replace(());
                             });
 
                             let peg_in_tweak_index_data = PegInTweakIndexData {
