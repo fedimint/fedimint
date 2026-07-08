@@ -32,11 +32,12 @@ use fedimint_gateway_common::{
     CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
-    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
+    OpenChannelRequest, OutgoingPaymentRouteInfoPayload, OutgoingPaymentRouteInfoResponse,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
+    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
+    ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload, SetMnemonicPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_GATEWAY_UI;
@@ -143,6 +144,11 @@ pub trait IAdminGateway {
             end_millis,
         }: PaymentSummaryPayload,
     ) -> Result<PaymentSummaryResponse, Self::Error>;
+
+    async fn handle_outgoing_payment_route_info_msg(
+        &self,
+        payload: OutgoingPaymentRouteInfoPayload,
+    ) -> Result<Option<OutgoingPaymentRouteInfoResponse>, Self::Error>;
 
     async fn handle_leave_federation(
         &self,

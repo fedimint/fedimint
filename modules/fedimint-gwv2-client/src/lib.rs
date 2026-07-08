@@ -300,12 +300,16 @@ impl GatewayClientModuleV2 {
             "Contract Id returned by the federation does not match contract in request"
         );
 
-        let (payment_hash, amount) = match &payload.invoice {
+        let (payment_hash, amount, destination) = match &payload.invoice {
             LightningInvoice::Bolt11(invoice) => (
                 invoice.payment_hash(),
                 invoice
                     .amount_milli_satoshis()
                     .ok_or(anyhow!("Invoice is missing amount"))?,
+                invoice
+                    .payee_pub_key()
+                    .copied()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             ),
         };
 
@@ -353,6 +357,7 @@ impl GatewayClientModuleV2 {
                     min_contract_amount,
                     invoice_amount: Amount::from_msats(amount),
                     max_delay: expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2),
+                    destination: Some(destination),
                 },
             )
             .await;
@@ -568,6 +573,41 @@ impl GatewayClientModuleV2 {
                 }
             }
         }
+    }
+
+    /// Return the destination LN node pubkey for an outgoing payment
+    /// operation. Looks for the `Send` state machine in the operation's active
+    /// or inactive state machines. Returns `None` if no matching state is
+    /// found (e.g., the operation does not exist or its state has been
+    /// pruned).
+    pub async fn outgoing_payment_destination(
+        &self,
+        operation_id: OperationId,
+    ) -> Option<secp256k1::PublicKey> {
+        let active = self
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let inactive = self
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .into_iter()
+            .filter_map(|(state, _)| match state {
+                GatewayClientStateMachinesV2::Send(sm) => Some(sm.common.invoice),
+                _ => None,
+            });
+        let LightningInvoice::Bolt11(invoice) = active.chain(inactive).next()?;
+        let destination = invoice
+            .payee_pub_key()
+            .copied()
+            .unwrap_or_else(|| invoice.recover_payee_pub_key());
+        Some(destination)
     }
 
     /// For the given `OperationId`, this function will wait until the Complete
