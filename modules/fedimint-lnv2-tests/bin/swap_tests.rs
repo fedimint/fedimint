@@ -1,8 +1,5 @@
-use devimint::federation::Client;
-use devimint::{cmd, util};
-use fedimint_core::core::OperationId;
+use devimint::util;
 use fedimint_lnv2_client::FinalSendOperationState;
-use lightning_invoice::Bolt11Invoice;
 use tracing::info;
 
 #[path = "common.rs"]
@@ -33,76 +30,19 @@ async fn main() -> anyhow::Result<()> {
             info!("Testing LNv1 client can pay LNv2 invoice...");
             let lnd_gw_id = gw_lnd.gateway_id.clone();
             let (invoice, receive_op) = common::receive(&client, &gw_lnd.addr, 1_000_000).await?;
-            send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
+            common::send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
             common::await_receive_claimed(&client, receive_op).await?;
 
             info!("Testing LNv2 client can pay LNv1 invoice...");
-            let (invoice, receive_op) = receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
+            let (invoice, receive_op) =
+                common::receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
             let state = common::send(&client, &gw_lnd.addr, &invoice.to_string()).await?;
             assert!(matches!(state, FinalSendOperationState::Success(_)));
-            await_receive_lnv1(&client, receive_op).await?;
+            common::await_receive_lnv1(&client, receive_op).await?;
 
             info!("LNv1 <-> LNv2 swap tests complete!");
 
             Ok(())
         })
         .await
-}
-
-async fn receive_lnv1(
-    client: &Client,
-    gateway_id: &String,
-    amount_msats: u64,
-) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
-    let invoice_response = cmd!(
-        client,
-        "module",
-        "ln",
-        "invoice",
-        amount_msats,
-        "--gateway-id",
-        gateway_id
-    )
-    .out_json()
-    .await?;
-    let invoice = serde_json::from_value::<Bolt11Invoice>(
-        invoice_response
-            .get("invoice")
-            .expect("Invoice should be present")
-            .clone(),
-    )?;
-    let operation_id = serde_json::from_value::<OperationId>(
-        invoice_response
-            .get("operation_id")
-            .expect("OperationId should be present")
-            .clone(),
-    )?;
-    Ok((invoice, operation_id))
-}
-
-async fn send_lnv1(client: &Client, gateway_id: &str, invoice: &str) -> anyhow::Result<()> {
-    let payment_result = cmd!(
-        client,
-        "module",
-        "ln",
-        "pay",
-        invoice,
-        "--gateway-id",
-        gateway_id
-    )
-    .out_json()
-    .await?;
-    assert!(
-        payment_result.get("Success").is_some() || payment_result.get("preimage").is_some(),
-        "LNv1 payment failed: {payment_result:?}"
-    );
-    Ok(())
-}
-
-async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
-    let lnv1_response = cmd!(client, "await-invoice", operation_id.fmt_full())
-        .out_json()
-        .await?;
-    assert!(lnv1_response.get("total_amount_msat").is_some());
-    Ok(())
 }

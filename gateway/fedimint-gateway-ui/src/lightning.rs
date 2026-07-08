@@ -266,6 +266,20 @@ where
                                     }
                                 }
                             }
+                            LightningMode::None => {
+                                div id="node-type" class="alert alert-warning" {
+                                    "Node Type: " strong { "None (Lightning disabled)" }
+                                    " — only federation-to-federation swaps are supported."
+                                }
+                                table class="table table-sm mb-0" {
+                                    tbody {
+                                        tr {
+                                            th { "Network" }
+                                            td { (network) }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 

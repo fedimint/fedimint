@@ -272,7 +272,9 @@ impl Global {
                     .unwrap(),
             )?
         };
-        let num_gateways: usize = 3;
+        // 3 are used by DevFed (lnd, ldk-0, ldk-second); cross-fed swap tests
+        // spawn two additional `LightningMode::None` gateways.
+        let num_gateways: usize = 5;
         let this = Self::init(
             test_dir,
             num_feds,

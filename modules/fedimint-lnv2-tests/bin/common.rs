@@ -96,3 +96,64 @@ pub async fn await_receive_claimed(
 
     Ok(())
 }
+
+#[allow(dead_code)]
+pub async fn receive_lnv1(
+    client: &Client,
+    gateway_id: &str,
+    amount_msats: u64,
+) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
+    let invoice_response = cmd!(
+        client,
+        "module",
+        "ln",
+        "invoice",
+        amount_msats,
+        "--gateway-id",
+        gateway_id
+    )
+    .out_json()
+    .await?;
+    let invoice = serde_json::from_value::<Bolt11Invoice>(
+        invoice_response
+            .get("invoice")
+            .expect("Invoice should be present")
+            .clone(),
+    )?;
+    let operation_id = serde_json::from_value::<OperationId>(
+        invoice_response
+            .get("operation_id")
+            .expect("OperationId should be present")
+            .clone(),
+    )?;
+    Ok((invoice, operation_id))
+}
+
+#[allow(dead_code)]
+pub async fn send_lnv1(client: &Client, gateway_id: &str, invoice: &str) -> anyhow::Result<()> {
+    let payment_result = cmd!(
+        client,
+        "module",
+        "ln",
+        "pay",
+        invoice,
+        "--gateway-id",
+        gateway_id
+    )
+    .out_json()
+    .await?;
+    assert!(
+        payment_result.get("Success").is_some() || payment_result.get("preimage").is_some(),
+        "LNv1 payment failed: {payment_result:?}"
+    );
+    Ok(())
+}
+
+#[allow(dead_code)]
+pub async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
+    let lnv1_response = cmd!(client, "await-invoice", operation_id.fmt_full())
+        .out_json()
+        .await?;
+    assert!(lnv1_response.get("total_amount_msat").is_some());
+    Ok(())
+}
