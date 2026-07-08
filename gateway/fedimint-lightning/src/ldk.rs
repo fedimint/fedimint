@@ -13,8 +13,8 @@ use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
 use fedimint_gateway_common::{
-    ChainSource, GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse,
-    SetChannelFeesRequest,
+    ChainSource, ConnectPeerRequest, GetInvoiceRequest, GetInvoiceResponse,
+    ListTransactionsResponse, NodeAddress, SetChannelFeesRequest,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::{LOG_LIGHTNING, LOG_LIGHTNING_LDK};
@@ -788,6 +788,15 @@ impl ILnRpcClient for GatewayLdkClient {
                 failure_reason: err.to_string(),
             }),
         }
+    }
+
+    async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
+        let NodeAddress { pubkey, address } = payload.node_address;
+        self.node.connect(pubkey, address, false).map_err(|e| {
+            LightningRpcError::FailedToConnectToPeer {
+                failure_reason: e.to_string(),
+            }
+        })
     }
 
     async fn close_channels_with_peer(

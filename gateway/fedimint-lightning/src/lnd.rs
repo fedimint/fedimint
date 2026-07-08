@@ -13,7 +13,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
 use fedimint_gateway_common::{
-    ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
+    ConnectPeerRequest, ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
 };
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
@@ -34,10 +34,11 @@ use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
 use tonic_lnd::lnrpc::{
-    ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    FeeReportRequest, GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress,
-    ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
-    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
+    ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
+    InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
+    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PolicyUpdateRequest,
+    SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -133,6 +134,46 @@ impl GatewayLndClient {
         };
 
         Ok(client)
+    }
+
+    async fn connect_peer_if_needed(
+        &self,
+        client: &mut LndClient,
+        pubkey: PublicKey,
+        host: String,
+    ) -> Result<(), LightningRpcError> {
+        let peers = client
+            .lightning()
+            .list_peers(ListPeersRequest { latest_error: true })
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Could not list peers: {e:?}"),
+            })?
+            .into_inner();
+
+        if peers.peers.into_iter().any(|peer| {
+            PublicKey::from_str(&peer.pub_key).expect("LND returned invalid peer public key")
+                == pubkey
+        }) {
+            return Ok(());
+        }
+
+        client
+            .lightning()
+            .connect_peer(LndConnectPeerRequest {
+                addr: Some(LightningAddress {
+                    pubkey: pubkey.to_string(),
+                    host,
+                }),
+                perm: false,
+                timeout: 10,
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Failed to connect to peer {e:?}"),
+            })?;
+
+        Ok(())
     }
 
     /// Spawns a new background task that subscribes to updates of a specific
@@ -1287,34 +1328,8 @@ impl ILnRpcClient for GatewayLndClient {
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
-        let peers = client
-            .lightning()
-            .list_peers(ListPeersRequest { latest_error: true })
-            .await
-            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
-                failure_reason: format!("Could not list peers: {e:?}"),
-            })?
-            .into_inner();
-
-        // Connect to the peer first if we are not connected already
-        if !peers.peers.into_iter().any(|peer| {
-            PublicKey::from_str(&peer.pub_key).expect("could not parse public key") == pubkey
-        }) {
-            client
-                .lightning()
-                .connect_peer(ConnectPeerRequest {
-                    addr: Some(LightningAddress {
-                        pubkey: pubkey.to_string(),
-                        host,
-                    }),
-                    perm: false,
-                    timeout: 10,
-                })
-                .await
-                .map_err(|e| LightningRpcError::FailedToConnectToPeer {
-                    failure_reason: format!("Failed to connect to peer {e:?}"),
-                })?;
-        }
+        self.connect_peer_if_needed(&mut client, pubkey, host)
+            .await?;
 
         // Build the request, leaving unspecified fee fields at their
         // protobuf defaults so LND falls back to its own configuration.
@@ -1354,6 +1369,16 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to open channel {e:?}"),
             }),
         }
+    }
+
+    async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+        self.connect_peer_if_needed(
+            &mut client,
+            payload.node_address.pubkey,
+            payload.node_address.host_with_port(),
+        )
+        .await
     }
 
     async fn close_channels_with_peer(
