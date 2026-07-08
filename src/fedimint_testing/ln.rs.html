@@ -11,9 +11,9 @@
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::util::BoxStream;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_gateway_common::{
-<a href=#14 id=14 data-nosnippet>14</a>    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-<a href=#15 id=15 data-nosnippet>15</a>    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
-<a href=#16 id=16 data-nosnippet>16</a>    SetChannelFeesRequest,
+<a href=#14 id=14 data-nosnippet>14</a>    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectPeerRequest,
+<a href=#15 id=15 data-nosnippet>15</a>    GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest,
+<a href=#16 id=16 data-nosnippet>16</a>    SendOnchainRequest, SetChannelFeesRequest,
 <a href=#17 id=17 data-nosnippet>17</a>};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_lightning::{
 <a href=#19 id=19 data-nosnippet>19</a>    CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
@@ -275,85 +275,91 @@
 <a href=#275 id=275 data-nosnippet>275</a>        })
 <a href=#276 id=276 data-nosnippet>276</a>    }
 <a href=#277 id=277 data-nosnippet>277</a>
-<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">async fn </span>close_channels_with_peer(
-<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#280 id=280 data-nosnippet>280</a>        _payload: CloseChannelsWithPeerRequest,
-<a href=#281 id=281 data-nosnippet>281</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToCloseChannelsWithPeer {
-<a href=#283 id=283 data-nosnippet>283</a>            failure_reason: <span class="string">"FakeLightningTest does not support closing channels by peer"
-<a href=#284 id=284 data-nosnippet>284</a>                </span>.to_string(),
-<a href=#285 id=285 data-nosnippet>285</a>        })
-<a href=#286 id=286 data-nosnippet>286</a>    }
-<a href=#287 id=287 data-nosnippet>287</a>
-<a href=#288 id=288 data-nosnippet>288</a>    <span class="kw">async fn </span>list_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListChannelsResponse, LightningRpcError&gt; {
-<a href=#289 id=289 data-nosnippet>289</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListChannels {
-<a href=#290 id=290 data-nosnippet>290</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing active channels"
-<a href=#291 id=291 data-nosnippet>291</a>                </span>.to_string(),
-<a href=#292 id=292 data-nosnippet>292</a>        })
-<a href=#293 id=293 data-nosnippet>293</a>    }
-<a href=#294 id=294 data-nosnippet>294</a>
-<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">async fn </span>set_channel_fees(
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#297 id=297 data-nosnippet>297</a>        _payload: SetChannelFeesRequest,
-<a href=#298 id=298 data-nosnippet>298</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToSetChannelFees {
-<a href=#300 id=300 data-nosnippet>300</a>            failure_reason: <span class="string">"FakeLightningTest does not support updating channel fees"</span>.to_string(),
-<a href=#301 id=301 data-nosnippet>301</a>        })
-<a href=#302 id=302 data-nosnippet>302</a>    }
-<a href=#303 id=303 data-nosnippet>303</a>
-<a href=#304 id=304 data-nosnippet>304</a>    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="prelude-val">Ok</span>(GetBalancesResponse {
-<a href=#306 id=306 data-nosnippet>306</a>            onchain_balance_sats: <span class="number">0</span>,
-<a href=#307 id=307 data-nosnippet>307</a>            lightning_balance_msats: <span class="number">0</span>,
-<a href=#308 id=308 data-nosnippet>308</a>            inbound_lightning_liquidity_msats: <span class="number">0</span>,
-<a href=#309 id=309 data-nosnippet>309</a>        })
-<a href=#310 id=310 data-nosnippet>310</a>    }
-<a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a>    <span class="kw">async fn </span>get_invoice(
-<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#314 id=314 data-nosnippet>314</a>        _get_invoice_request: GetInvoiceRequest,
-<a href=#315 id=315 data-nosnippet>315</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
-<a href=#316 id=316 data-nosnippet>316</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetInvoice {
-<a href=#317 id=317 data-nosnippet>317</a>            failure_reason: <span class="string">"FakeLightningTest does not support getting invoices"</span>.to_string(),
-<a href=#318 id=318 data-nosnippet>318</a>        })
-<a href=#319 id=319 data-nosnippet>319</a>    }
-<a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">async fn </span>list_transactions(
-<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#323 id=323 data-nosnippet>323</a>        _start_secs: u64,
-<a href=#324 id=324 data-nosnippet>324</a>        _end_secs: u64,
-<a href=#325 id=325 data-nosnippet>325</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
-<a href=#326 id=326 data-nosnippet>326</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListTransactions {
-<a href=#327 id=327 data-nosnippet>327</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing transactions"</span>.to_string(),
-<a href=#328 id=328 data-nosnippet>328</a>        })
-<a href=#329 id=329 data-nosnippet>329</a>    }
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">fn </span>create_offer(
-<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#333 id=333 data-nosnippet>333</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
-<a href=#334 id=334 data-nosnippet>334</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#335 id=335 data-nosnippet>335</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
-<a href=#336 id=336 data-nosnippet>336</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#337 id=337 data-nosnippet>337</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
-<a href=#339 id=339 data-nosnippet>339</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
-<a href=#340 id=340 data-nosnippet>340</a>        })
-<a href=#341 id=341 data-nosnippet>341</a>    }
-<a href=#342 id=342 data-nosnippet>342</a>
-<a href=#343 id=343 data-nosnippet>343</a>    <span class="kw">async fn </span>pay_offer(
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#345 id=345 data-nosnippet>345</a>        _offer: String,
-<a href=#346 id=346 data-nosnippet>346</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#347 id=347 data-nosnippet>347</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
-<a href=#348 id=348 data-nosnippet>348</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#349 id=349 data-nosnippet>349</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
-<a href=#350 id=350 data-nosnippet>350</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
-<a href=#351 id=351 data-nosnippet>351</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
-<a href=#352 id=352 data-nosnippet>352</a>        })
-<a href=#353 id=353 data-nosnippet>353</a>    }
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">fn </span>sync_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="prelude-val">Ok</span>(())
-<a href=#357 id=357 data-nosnippet>357</a>    }
-<a href=#358 id=358 data-nosnippet>358</a>}
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">async fn </span>connect_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: ConnectPeerRequest) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToConnectToPeer {
+<a href=#280 id=280 data-nosnippet>280</a>            failure_reason: <span class="string">"FakeLightningTest does not support connecting to peers"</span>.to_string(),
+<a href=#281 id=281 data-nosnippet>281</a>        })
+<a href=#282 id=282 data-nosnippet>282</a>    }
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>    <span class="kw">async fn </span>close_channels_with_peer(
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#286 id=286 data-nosnippet>286</a>        _payload: CloseChannelsWithPeerRequest,
+<a href=#287 id=287 data-nosnippet>287</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToCloseChannelsWithPeer {
+<a href=#289 id=289 data-nosnippet>289</a>            failure_reason: <span class="string">"FakeLightningTest does not support closing channels by peer"
+<a href=#290 id=290 data-nosnippet>290</a>                </span>.to_string(),
+<a href=#291 id=291 data-nosnippet>291</a>        })
+<a href=#292 id=292 data-nosnippet>292</a>    }
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">async fn </span>list_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListChannelsResponse, LightningRpcError&gt; {
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListChannels {
+<a href=#296 id=296 data-nosnippet>296</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing active channels"
+<a href=#297 id=297 data-nosnippet>297</a>                </span>.to_string(),
+<a href=#298 id=298 data-nosnippet>298</a>        })
+<a href=#299 id=299 data-nosnippet>299</a>    }
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">async fn </span>set_channel_fees(
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#303 id=303 data-nosnippet>303</a>        _payload: SetChannelFeesRequest,
+<a href=#304 id=304 data-nosnippet>304</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToSetChannelFees {
+<a href=#306 id=306 data-nosnippet>306</a>            failure_reason: <span class="string">"FakeLightningTest does not support updating channel fees"</span>.to_string(),
+<a href=#307 id=307 data-nosnippet>307</a>        })
+<a href=#308 id=308 data-nosnippet>308</a>    }
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="prelude-val">Ok</span>(GetBalancesResponse {
+<a href=#312 id=312 data-nosnippet>312</a>            onchain_balance_sats: <span class="number">0</span>,
+<a href=#313 id=313 data-nosnippet>313</a>            lightning_balance_msats: <span class="number">0</span>,
+<a href=#314 id=314 data-nosnippet>314</a>            inbound_lightning_liquidity_msats: <span class="number">0</span>,
+<a href=#315 id=315 data-nosnippet>315</a>        })
+<a href=#316 id=316 data-nosnippet>316</a>    }
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">async fn </span>get_invoice(
+<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#320 id=320 data-nosnippet>320</a>        _get_invoice_request: GetInvoiceRequest,
+<a href=#321 id=321 data-nosnippet>321</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetInvoice {
+<a href=#323 id=323 data-nosnippet>323</a>            failure_reason: <span class="string">"FakeLightningTest does not support getting invoices"</span>.to_string(),
+<a href=#324 id=324 data-nosnippet>324</a>        })
+<a href=#325 id=325 data-nosnippet>325</a>    }
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">async fn </span>list_transactions(
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#329 id=329 data-nosnippet>329</a>        _start_secs: u64,
+<a href=#330 id=330 data-nosnippet>330</a>        _end_secs: u64,
+<a href=#331 id=331 data-nosnippet>331</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListTransactions {
+<a href=#333 id=333 data-nosnippet>333</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing transactions"</span>.to_string(),
+<a href=#334 id=334 data-nosnippet>334</a>        })
+<a href=#335 id=335 data-nosnippet>335</a>    }
+<a href=#336 id=336 data-nosnippet>336</a>
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">fn </span>create_offer(
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#339 id=339 data-nosnippet>339</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#340 id=340 data-nosnippet>340</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#341 id=341 data-nosnippet>341</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#342 id=342 data-nosnippet>342</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#343 id=343 data-nosnippet>343</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#345 id=345 data-nosnippet>345</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
+<a href=#346 id=346 data-nosnippet>346</a>        })
+<a href=#347 id=347 data-nosnippet>347</a>    }
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>    <span class="kw">async fn </span>pay_offer(
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#351 id=351 data-nosnippet>351</a>        _offer: String,
+<a href=#352 id=352 data-nosnippet>352</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#353 id=353 data-nosnippet>353</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#354 id=354 data-nosnippet>354</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#355 id=355 data-nosnippet>355</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#357 id=357 data-nosnippet>357</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
+<a href=#358 id=358 data-nosnippet>358</a>        })
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="kw">fn </span>sync_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="prelude-val">Ok</span>(())
+<a href=#363 id=363 data-nosnippet>363</a>    }
+<a href=#364 id=364 data-nosnippet>364</a>}
 </code></pre></div></section></main></body></html>
