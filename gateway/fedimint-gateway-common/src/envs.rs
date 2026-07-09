@@ -17,6 +17,11 @@ pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
 /// The alias for the LDK Node
 pub const FM_LDK_ALIAS_ENV: &str = "FM_LDK_ALIAS";
 
+/// Optional wallet birthday block height for the LDK Node to rescan from on
+/// first startup (e.g. after restoring from seed). If unset, the wallet
+/// checkpoints at the current chain tip and does not rescan history.
+pub const FM_LDK_WALLET_RESCAN_FROM_HEIGHT_ENV: &str = "FM_LDK_WALLET_RESCAN_FROM_HEIGHT";
+
 /// Environment variable for overriding the iroh secret key
 pub const FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV: &str = "FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE";
 

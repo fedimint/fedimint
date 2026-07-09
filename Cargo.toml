@@ -274,7 +274,7 @@ jsonrpsee-core = "0.24.9"
 jsonrpsee-types = "0.24.8"
 jsonrpsee-wasm-client = "0.24.9"
 jsonrpsee-ws-client = { version = "0.24.9", default-features = false }
-ldk-node = { package = "fedimint-ldk-node", git = "https://github.com/m1sterc001guy/ldk-node", rev = "6afe3b2bae33050bc21ca332d68bd437ae651f3c" }
+ldk-node = { package = "fedimint-ldk-node", git = "https://github.com/m1sterc001guy/ldk-node", rev = "401cdc68a57ad3f766e78ab0f2b7386efb38f5b6" }
 leptos = { version = "0.7.8", default-features = false }
 lightning = { git = "https://github.com/lightningdevkit/rust-lightning", rev = "3dfcc4cca1866c5e5d4d4eaf3b82e09584e2ce5c", features = [
     "std",

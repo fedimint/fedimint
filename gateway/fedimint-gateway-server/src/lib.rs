@@ -1939,6 +1939,7 @@ impl Gateway {
             LightningMode::Ldk {
                 lightning_port,
                 alias,
+                wallet_rescan_from_height,
             } => {
                 let mnemonic = Self::load_mnemonic(&self.gateway_db)
                     .await
@@ -1950,6 +1951,7 @@ impl Gateway {
                     ldk::GatewayLdkClient::new(
                         &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
                         self.chain_source.clone(),
+                        wallet_rescan_from_height,
                         self.network,
                         lightning_port,
                         alias.clone(),

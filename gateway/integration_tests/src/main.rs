@@ -135,6 +135,15 @@ async fn stop_and_recover_gateway(
     let seed = mnemonic.join(" ");
     // TODO: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("FM_GATEWAY_MNEMONIC", seed) };
+    if gw_type == LightningNodeType::Ldk {
+        // The restored LDK node starts from a fresh wallet (its database was
+        // deleted above), so it must rescan from before the on-chain funds were
+        // received to rediscover them. Without this the wallet checkpoints at
+        // the current chain tip and reports a zero on-chain balance. Rescanning
+        // from genesis is cheap on regtest.
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_LDK_WALLET_RESCAN_FROM_HEIGHT", "0") };
+    }
     let new_gw = Gatewayd::new(&process_mgr, new_ln, old_gw_index).await?;
     let new_mnemonic = new_gw.client().get_mnemonic().await?.mnemonic;
     assert_eq!(mnemonic, new_mnemonic);

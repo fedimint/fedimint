@@ -9,8 +9,8 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TIME_PREF_ENV,
-    FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LDK_WALLET_RESCAN_FROM_HEIGHT_ENV, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TIME_PREF_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -684,6 +684,13 @@ pub enum LightningMode {
         /// LDK's Alias
         #[arg(long = "ldk-alias", env = FM_LDK_ALIAS_ENV)]
         alias: String,
+
+        /// Optional wallet birthday block height to rescan from on first
+        /// startup (e.g. after restoring from seed). If unset, the wallet
+        /// checkpoints at the current chain tip and syncs quickly without
+        /// rescanning history. Set to `0` to rescan from genesis.
+        #[arg(long = "ldk-wallet-rescan-from-height", env = FM_LDK_WALLET_RESCAN_FROM_HEIGHT_ENV)]
+        wallet_rescan_from_height: Option<u32>,
     },
 }
 

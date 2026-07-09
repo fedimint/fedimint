@@ -155,9 +155,11 @@ impl GatewayLdkClient {
     /// lightning node. All resources, including the lightning node, will be
     /// cleaned up when the returned `GatewayLdkClient` instance is dropped.
     /// There's no need to manually stop the node.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         data_dir: &Path,
         chain_source: ChainSource,
+        wallet_rescan_from_height: Option<u32>,
         network: Network,
         lightning_port: u16,
         alias: String,
@@ -211,7 +213,7 @@ impl GatewayLdkClient {
                         .expect("Could not retrieve port from bitcoind RPC url"),
                     username,
                     password,
-                    None,
+                    wallet_rescan_from_height,
                 );
             }
             ChainSource::Esplora { server_url } => {
