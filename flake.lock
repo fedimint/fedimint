@@ -400,17 +400,17 @@
         "systems": "systems_7"
       },
       "locked": {
-        "lastModified": 1779594164,
-        "narHash": "sha256-HE2rTCVOKSb3KpQZXfXmV86bMkFu/0U1WJhG40hfQJY=",
+        "lastModified": 1783553592,
+        "narHash": "sha256-PUMFsnGJww1Pg4oyu0zF6L4S9KGoADlRg2jmKU7RU9o=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "34701639bceb5b12e81e2fff913797c0891c919d",
+        "rev": "d80cccdee77ca61b035777e0d7dc9a682cdf80fa",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "34701639bceb5b12e81e2fff913797c0891c919d",
+        "rev": "d80cccdee77ca61b035777e0d7dc9a682cdf80fa",
         "type": "github"
       }
     },
