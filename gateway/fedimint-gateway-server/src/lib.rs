@@ -1909,6 +1909,7 @@ impl Gateway {
                 lnd_tls_cert,
                 lnd_macaroon,
                 lnd_time_pref,
+                lnd_payment_timeout_secs,
             } => {
                 // The LND backend uses this to ignore HOLD invoices on the
                 // shared LND node that aren't federation-bound. Returns true
@@ -1932,6 +1933,7 @@ impl Gateway {
                     lnd_tls_cert,
                     lnd_macaroon,
                     lnd_time_pref,
+                    lnd_payment_timeout_secs,
                     None,
                     lnv2_filter,
                 ))

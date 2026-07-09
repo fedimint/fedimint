@@ -153,9 +153,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// This is more private than [`ILnRpcClient::pay`], as it does not require
     /// the invoice description. If this is implemented,
     /// [`ILnRpcClient::supports_private_payments`] must return true.
-    ///
-    /// Note: This is only used for outbound LNv1 payments and will be removed
-    /// when we switch to LNv2.
     async fn pay_private(
         &self,
         _invoice: PrunedInvoice,
