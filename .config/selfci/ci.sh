@@ -51,6 +51,7 @@ case "$SELFCI_JOB_NAME" in
     selfci job wait "lint"
     selfci job wait "cargo"
 
+    selfci job start "cargo-crap"
     selfci job start "cargo-udeps"
     ;;
 
@@ -64,6 +65,14 @@ case "$SELFCI_JOB_NAME" in
 
   cargo-udeps)
     nix build -L .#nightly.test.workspaceCargoUdeps
+    ;;
+
+  cargo-crap)
+    selfci step start "cargo-crap"
+    if ! nix build -L .#ci.crap ; then
+      >&2 echo "cargo-crap: failed - CRAP-score regression above 1000 detected"
+      selfci step fail
+    fi
     ;;
 
   check-flake)
