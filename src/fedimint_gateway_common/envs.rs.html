@@ -24,4 +24,10 @@
 <a href=#24 id=24 data-nosnippet>24</a>/// `SendPaymentRequest`. Must parse as an f64 in the range [-1.0, 1.0], where
 <a href=#25 id=25 data-nosnippet>25</a>/// -1 optimizes for fees and 1 optimizes for reliability.
 <a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub const </span>FM_LND_TIME_PREF_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_TIME_PREF"</span>;
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="doccomment">/// Environment variable that specifies how long (in seconds) LND will keep
+<a href=#29 id=29 data-nosnippet>29</a>/// trying to route an outgoing payment before giving up. Passed as
+<a href=#30 id=30 data-nosnippet>30</a>/// `timeout_seconds` in LND `SendPaymentRequest`. Must parse as an i32 in the
+<a href=#31 id=31 data-nosnippet>31</a>/// range [1, 600].
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="kw">pub const </span>FM_LND_PAYMENT_TIMEOUT_SECS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_PAYMENT_TIMEOUT_SECS"</span>;
 </code></pre></div></section></main></body></html>
