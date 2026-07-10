@@ -654,6 +654,9 @@ impl WalletClientModule {
     }
 
     /// Issue ecash for an unspent output with a given fee.
+    ///
+    /// Returns `None` if the output value cannot cover the fee, or if the
+    /// remainder is too small to fund the claim transaction's fees.
     async fn receive_output(
         &self,
         output_index: u64,
@@ -661,7 +664,7 @@ impl WalletClientModule {
         address_index: u64,
         fee: bitcoin::Amount,
         outpoint: Option<bitcoin::OutPoint>,
-    ) -> (OperationId, TransactionId) {
+    ) -> Option<(OperationId, TransactionId)> {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -671,7 +674,7 @@ impl WalletClientModule {
                 tweak: self.derive_tweak(address_index).public_key(),
             }),
             keys: vec![self.derive_tweak(address_index)],
-            amounts: Amounts::new_bitcoin(Amount::from_sats((value - fee).to_sat())),
+            amounts: Amounts::new_bitcoin(Amount::from_sats(value.checked_sub(fee)?.to_sat())),
         };
 
         let client_input_sm = ClientInputSM::<WalletClientStateMachines> {
@@ -713,7 +716,7 @@ impl WalletClientModule {
                 TransactionBuilder::new().with_inputs(client_input_bundle),
             )
             .await
-            .expect("Input amount is sufficient to finalize transaction");
+            .ok()?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -732,7 +735,7 @@ impl WalletClientModule {
 
         dbtx.commit_tx().await;
 
-        (operation_id, range.txid())
+        Some((operation_id, range.txid()))
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -885,24 +888,16 @@ impl WalletClientModule {
             .await?
             .ok_or(anyhow!("No consensus feerate is available"))?;
 
-        if receive_fee < output.value {
-            debug!(
-                target: LOG_CLIENT_MODULE_WALLETV2,
-                output_index = output.index,
-                value_sat = output.value.to_sat(),
-                fee_sat = receive_fee.to_sat(),
-                "Submitting walletv2 receive claim"
-            );
-            let (operation_id, txid) = self
-                .receive_output(
-                    output.index,
-                    output.value,
-                    address_index,
-                    receive_fee,
-                    output.outpoint,
-                )
-                .await;
-
+        if let Some((operation_id, txid)) = self
+            .receive_output(
+                output.index,
+                output.value,
+                address_index,
+                receive_fee,
+                output.outpoint,
+            )
+            .await
+        {
             debug!(
                 target: LOG_CLIENT_MODULE_WALLETV2,
                 output_index = output.index,
@@ -929,7 +924,7 @@ impl WalletClientModule {
                 output_index = output.index,
                 value_sat = output.value.to_sat(),
                 fee_sat = receive_fee.to_sat(),
-                "Skipping walletv2 receive output because fee meets or exceeds value"
+                "Skipping walletv2 receive claim; value cannot cover the claim fees"
             );
         }
 
