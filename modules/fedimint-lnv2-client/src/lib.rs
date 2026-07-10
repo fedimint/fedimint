@@ -556,7 +556,14 @@ impl LightningClientModule {
             });
         }
 
-        let operation_id = self.get_next_operation_id(&invoice).await?;
+        // The attempt index is fixed at `0` so the operation id matches the one
+        // older clients derived for the first payment attempt, ensuring an
+        // already-paid or in-flight invoice is still detected after an upgrade.
+        let operation_id = OperationId::from_encodable(&(invoice.clone(), 0u64));
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Err(SendPaymentError::DuplicatePaymentAttempt(operation_id));
+        }
 
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
 
@@ -669,39 +676,6 @@ impl LightningClientModule {
         dbtx.commit_tx().await;
 
         Ok(operation_id)
-    }
-
-    async fn get_next_operation_id(
-        &self,
-        invoice: &Bolt11Invoice,
-    ) -> Result<OperationId, SendPaymentError> {
-        for payment_attempt in 0..u64::MAX {
-            let operation_id = OperationId::from_encodable(&(invoice.clone(), payment_attempt));
-
-            if !self.client_ctx.operation_exists(operation_id).await {
-                return Ok(operation_id);
-            }
-
-            if self.client_ctx.has_active_states(operation_id).await {
-                return Err(SendPaymentError::PaymentInProgress(operation_id));
-            }
-
-            let mut stream = self
-                .subscribe_send_operation_state_updates(operation_id)
-                .await
-                .expect("operation_id exists")
-                .into_stream();
-
-            // This will not block since we checked for active states and there were none,
-            // so by definition a final state has to have been assumed already.
-            while let Some(state) = stream.next().await {
-                if let SendOperationState::Success(_) = state {
-                    return Err(SendPaymentError::InvoiceAlreadyPaid(operation_id));
-                }
-            }
-        }
-
-        panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
     /// Subscribe to all state updates of the send operation.
@@ -1233,10 +1207,8 @@ pub enum SendPaymentError {
     InvoiceMissingAmount,
     #[error("Invoice has expired")]
     InvoiceExpired,
-    #[error("A payment for this invoice is already in progress")]
-    PaymentInProgress(OperationId),
-    #[error("This invoice has already been paid")]
-    InvoiceAlreadyPaid(OperationId),
+    #[error("Payment attempt is duplicate")]
+    DuplicatePaymentAttempt(OperationId),
     #[error(transparent)]
     SelectGateway(SelectGatewayError),
     #[error("Failed to connect to gateway")]
