@@ -17,7 +17,10 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_common::{ChainSource, LND_DEFAULT_TIME_PREF, LightningInfo, LightningMode};
+use fedimint_gateway_common::{
+    ChainSource, LND_DEFAULT_PAYMENT_TIMEOUT_SECS, LND_DEFAULT_TIME_PREF, LightningInfo,
+    LightningMode,
+};
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
 use fedimint_gateway_server::config::DatabaseBackend;
@@ -272,6 +275,7 @@ impl Fixtures {
                 lnd_tls_cert: "FakeTlsCert".to_string(),
                 lnd_macaroon: "FakeMacaroon".to_string(),
                 lnd_time_pref: LND_DEFAULT_TIME_PREF,
+                lnd_payment_timeout_secs: LND_DEFAULT_PAYMENT_TIMEOUT_SECS,
             },
             client_builder,
             gateway_db,

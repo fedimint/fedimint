@@ -9,8 +9,8 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TIME_PREF_ENV,
-    FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_PAYMENT_TIMEOUT_SECS_ENV, FM_LND_RPC_ADDR_ENV,
+    FM_LND_TIME_PREF_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -649,6 +649,23 @@ fn parse_lnd_time_pref(s: &str) -> Result<f64, String> {
     Ok(parsed)
 }
 
+/// Default value for LND's `SendPaymentRequest::timeout_seconds`, i.e. how long
+/// LND keeps trying to route an outgoing payment before giving up. This does
+/// not cancel an HTLC that is already in flight; it bounds pathfinding/retry.
+pub const LND_DEFAULT_PAYMENT_TIMEOUT_SECS: i32 = 180;
+pub const LND_PAYMENT_TIMEOUT_SECS_MIN: i32 = 1;
+pub const LND_PAYMENT_TIMEOUT_SECS_MAX: i32 = 600;
+
+fn parse_lnd_payment_timeout_secs(s: &str) -> Result<i32, String> {
+    let parsed: i32 = s.parse().map_err(|e| format!("invalid i32: {e}"))?;
+    if !(LND_PAYMENT_TIMEOUT_SECS_MIN..=LND_PAYMENT_TIMEOUT_SECS_MAX).contains(&parsed) {
+        return Err(format!(
+            "must be an integer in [{LND_PAYMENT_TIMEOUT_SECS_MIN}, {LND_PAYMENT_TIMEOUT_SECS_MAX}]"
+        ));
+    }
+    Ok(parsed)
+}
+
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize, PartialEq)]
 pub enum LightningMode {
     #[clap(name = "lnd")]
@@ -674,6 +691,17 @@ pub enum LightningMode {
             value_parser = parse_lnd_time_pref,
         )]
         lnd_time_pref: f64,
+
+        /// How long (in seconds) LND keeps trying to route an outgoing payment
+        /// before giving up. Passed as `timeout_seconds` to LND
+        /// `SendPaymentRequest`. Must be in [1, 600].
+        #[arg(
+            long = "lnd-payment-timeout",
+            env = FM_LND_PAYMENT_TIMEOUT_SECS_ENV,
+            default_value_t = LND_DEFAULT_PAYMENT_TIMEOUT_SECS,
+            value_parser = parse_lnd_payment_timeout_secs,
+        )]
+        lnd_payment_timeout_secs: i32,
     },
     #[clap(name = "ldk")]
     Ldk {

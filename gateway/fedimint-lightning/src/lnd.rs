@@ -64,8 +64,6 @@ use crate::{
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
-const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
-
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -73,6 +71,9 @@ pub struct GatewayLndClient {
     tls_cert: String,
     macaroon: String,
     time_pref: f64,
+    /// How long (in seconds) LND keeps trying to route an outgoing payment
+    /// before giving up. Passed as `timeout_seconds` in `SendPaymentRequest`.
+    payment_timeout_secs: i32,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
     /// Predicate used to distinguish HOLD invoices the gateway created
     /// (federation-bound) from unrelated HOLD invoices on the same LND node.
@@ -88,6 +89,7 @@ impl GatewayLndClient {
         tls_cert: String,
         macaroon: String,
         time_pref: f64,
+        payment_timeout_secs: i32,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
         lnv2_filter: Lnv2HoldInvoiceFilter,
     ) -> Self {
@@ -97,6 +99,7 @@ impl GatewayLndClient {
             tls_cert_path = %tls_cert,
             macaroon = %macaroon,
             time_pref,
+            payment_timeout_secs,
             "Gateway configured to connect to LND LnRpcClient",
         );
         GatewayLndClient {
@@ -104,6 +107,7 @@ impl GatewayLndClient {
             tls_cert,
             macaroon,
             time_pref,
+            payment_timeout_secs,
             lnd_sender,
             lnv2_filter,
         }
@@ -991,7 +995,7 @@ impl ILnRpcClient for GatewayLndClient {
                         final_cltv_delta,
                         cltv_limit,
                         no_inflight_updates: false,
-                        timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
+                        timeout_seconds: self.payment_timeout_secs,
                         fee_limit_msat,
                         time_pref: self.time_pref,
                         ..Default::default()
@@ -1113,6 +1117,7 @@ impl ILnRpcClient for GatewayLndClient {
             tls_cert: self.tls_cert.clone(),
             macaroon: self.macaroon.clone(),
             time_pref: self.time_pref,
+            payment_timeout_secs: self.payment_timeout_secs,
             lnd_sender: Some(lnd_sender.clone()),
             lnv2_filter: self.lnv2_filter.clone(),
         });
