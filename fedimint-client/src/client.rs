@@ -1910,14 +1910,12 @@ impl Client {
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
+        // Sourced from the config rather than `self.modules`, since modules
+        // currently being recovered are not yet initialized in the registry.
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
-        let module_kinds: BTreeMap<ModuleInstanceId, String> = self
-            .modules
-            .iter_modules_id_kind()
-            .map(|(id, kind)| (id, kind.to_string()))
-            .collect();
         self.spawn("module recoveries", |_task_handle| async {
             Self::run_module_recoveries_task(
                 db,
@@ -1943,7 +1941,7 @@ impl Client {
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
-        module_kinds: BTreeMap<ModuleInstanceId, String>,
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
 
@@ -2024,6 +2022,7 @@ impl Client {
                     None,
                     ModuleRecoveryCompleted {
                         module_id: module_instance_id,
+                        kind: module_kinds.get(&module_instance_id).cloned(),
                         amount: recovered_amount,
                     },
                 )
@@ -2032,7 +2031,7 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
-                    kind = module_kinds.get(&module_instance_id).map(String::as_str).unwrap_or("unknown"),
+                    kind = ?module_kinds.get(&module_instance_id),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery progress"
                 );

@@ -1136,10 +1136,21 @@ impl ClientBuilder {
         final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
+            // Sourced from the config so recovering modules (which aren't yet in
+            // the module registry) still get their kind attached to the
+            // `ModuleRecoveryCompleted` event.
+            let module_kinds = client_arc
+                .config()
+                .await
+                .modules
+                .iter()
+                .map(|(id, module_config)| (*id, module_config.kind().clone()))
+                .collect();
             client_arc.spawn_module_recoveries_task(
                 client_recovery_progress_sender,
                 module_recoveries,
                 module_recovery_progress_receivers,
+                module_kinds,
             );
         }
 

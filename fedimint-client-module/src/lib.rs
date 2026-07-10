@@ -120,6 +120,14 @@ impl Event for ModuleRecoveryStarted {
 #[derive(Serialize, Deserialize)]
 pub struct ModuleRecoveryCompleted {
     pub module_id: ModuleInstanceId,
+    /// The kind of the module that finished recovering.
+    ///
+    /// This lets consumers match on the module without cross-referencing
+    /// `module_id` against the federation config. `#[serde(default)]` keeps it
+    /// backwards-compatible with events persisted before it was added, which
+    /// deserialize as `None`.
+    #[serde(default)]
+    pub kind: Option<ModuleKind>,
     /// The total amount recovered from this module, if the module tracks it.
     ///
     /// Modules like the mint know the exact value of the ecash notes they

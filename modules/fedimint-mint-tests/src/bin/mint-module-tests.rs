@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
 use devimint::cmd;
-use devimint::federation::Federation;
-use devimint::util::almost_equal;
+use devimint::federation::{Client, Federation};
+use devimint::util::{FedimintCli, almost_equal};
+use devimint::version_constants::VERSION_0_12_0_ALPHA;
+use fedimint_client_module::ModuleRecoveryCompleted;
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng;
 use tokio::try_join;
@@ -156,6 +158,68 @@ async fn mint_recovery_test() -> anyhow::Result<()> {
 
 const PEGIN_SATS: u64 = 1_000_000;
 
+/// Find the mint module's `ModuleRecoveryCompleted` event in a
+/// `dev show-event-log` JSON dump.
+///
+/// Recovery runs for every module, so the mint is matched via the event's
+/// `kind`. Only `ModuleRecoveryCompleted` payloads carry a `kind`, so other
+/// events deserialize with `kind == None` and are filtered out.
+fn mint_recovery_completed(event_log: &serde_json::Value) -> Option<ModuleRecoveryCompleted> {
+    event_log.as_array()?.iter().find_map(|entry| {
+        let payload = entry.get("payload")?;
+
+        // `show-event-log` renders the payload as its JSON object, or (on older
+        // clients) as hex-encoded JSON bytes.
+        let event: ModuleRecoveryCompleted = match payload.as_str() {
+            Some(hex) => serde_json::from_slice(&hex::decode(hex).ok()?).ok()?,
+            None => serde_json::from_value(payload.clone()).ok()?,
+        };
+
+        (event.kind.as_ref() == Some(&fedimint_mint_common::KIND)).then_some(event)
+    })
+}
+
+/// Assert the mint module's recovery-completed event reports the amount that
+/// was recovered.
+///
+/// Version-gated: clients older than 0.12 emit this event without the `amount`
+/// field (and lack the `dev show-event-log` command), so the check is skipped
+/// for them.
+async fn assert_recovery_event_amount(restored: &Client, recovered_balance: u64) -> Result<()> {
+    if FedimintCli::version_or_default().await < *VERSION_0_12_0_ALPHA {
+        return Ok(());
+    }
+
+    // The event is ordered into the log asynchronously after recovery, so poll
+    // for it rather than reading once.
+    for attempt in 0..20 {
+        let event_log = cmd!(restored, "dev", "show-event-log", "--limit", "1000")
+            .out_json()
+            .await?;
+
+        if let Some(event) = mint_recovery_completed(&event_log) {
+            let amount = event
+                .amount
+                .expect("recovery-completed event must carry the recovered amount");
+
+            almost_equal(recovered_balance, amount.msats, 25_000)
+                .map_err(|err| anyhow::anyhow!("recovery event amount mismatch: {err}"))?;
+
+            return Ok(());
+        }
+
+        if attempt + 1 < 20 {
+            fedimint_core::task::sleep_in_test(
+                "waiting for the recovery-completed event to be ordered into the log",
+                std::time::Duration::from_millis(250),
+            )
+            .await;
+        }
+    }
+
+    anyhow::bail!("mint module did not emit a recovery-completed event");
+}
+
 async fn test_recovery_with_backup(fed: &Federation) -> Result<()> {
     info!(target: LOG_DEVIMINT, "### Test mint recovery with backup");
     let client = fed.new_joined_client("mint-recovery-backup").await?;
@@ -175,6 +239,7 @@ async fn test_recovery_with_backup(fed: &Federation) -> Result<()> {
     let post_balance = restored.balance().await?;
     info!(target: LOG_DEVIMINT, post_balance, "Balance after recovery with backup");
     almost_equal(pre_balance, post_balance, 25_000).unwrap();
+    assert_recovery_event_amount(&restored, post_balance).await?;
     Ok(())
 }
 
@@ -194,6 +259,7 @@ async fn test_recovery_without_backup(fed: &Federation) -> Result<()> {
     let post_balance = restored.balance().await?;
     info!(target: LOG_DEVIMINT, post_balance, "Balance after recovery without backup");
     almost_equal(pre_balance, post_balance, 25_000).unwrap();
+    assert_recovery_event_amount(&restored, post_balance).await?;
     Ok(())
 }
 
@@ -235,6 +301,7 @@ async fn test_recovery_after_activity(fed: &Federation) -> Result<()> {
     let post_balance = restored.balance().await?;
     info!(target: LOG_DEVIMINT, post_balance, "Balance after recovery post-activity");
     almost_equal(pre_balance, post_balance, 25_000).unwrap();
+    assert_recovery_event_amount(&restored, post_balance).await?;
     Ok(())
 }
 
@@ -268,6 +335,7 @@ async fn test_recovery_with_post_backup_activity(fed: &Federation) -> Result<()>
     let post_balance = restored.balance().await?;
     info!(target: LOG_DEVIMINT, post_balance, "Balance after recovery with post-backup activity");
     almost_equal(pre_balance, post_balance, 25_000).unwrap();
+    assert_recovery_event_amount(&restored, post_balance).await?;
     Ok(())
 }
 
