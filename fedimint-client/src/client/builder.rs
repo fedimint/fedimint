@@ -1127,11 +1127,13 @@ impl ClientBuilder {
 
         let client_arc = ClientHandle::new(client_inner);
 
+        // Must be set before starting modules: `module.start()` (e.g. the
+        // wallet's receive-operation backfill) may access the final client.
+        final_client.set(client_iface.clone());
+
         for (_, _, module) in client_arc.modules.iter_modules() {
             module.start().await;
         }
-
-        final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
             client_arc.spawn_module_recoveries_task(

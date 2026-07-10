@@ -21,6 +21,7 @@ pub enum DbKeyPrefix {
     RecoveryState = 0x30,
     SupportsSafeDeposit = 0x31,
     PegInPoolCursor = 0x32,
+    ReceiveOperationsBackfilled = 0x33,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -210,6 +211,18 @@ impl_db_record!(
 impl_db_lookup!(
     key = SupportsSafeDepositKey,
     query_prefix = SupportsSafeDepositPrefix
+);
+
+/// Marker set once the one-time backfill of per-UTXO receive operation log
+/// entries (see `WalletClientModule::backfill_receive_operations`) has
+/// completed.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveOperationsBackfilledKey;
+
+impl_db_record!(
+    key = ReceiveOperationsBackfilledKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ReceiveOperationsBackfilled,
 );
 
 /// Round-robin cursor for
