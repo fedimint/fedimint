@@ -19,7 +19,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::{NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
+use fedimint_core::{Amount, NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
 use tracing::Span;
@@ -60,7 +60,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<Option<Amount>>;
 
     #[allow(clippy::too_many_arguments)]
     async fn init(
@@ -132,7 +132,7 @@ where
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         let snapshot: Option<&<<Self as ClientModuleInit>::Module as ClientModule>::Backup> =
             snapshot.map(|s| {

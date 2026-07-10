@@ -41,7 +41,9 @@ use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSu
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
-use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
+use fedimint_core::{
+    Amount, ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send,
+};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
@@ -760,7 +762,7 @@ impl ClientBuilder {
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
+            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>,
         > = BTreeMap::new();
         let mut module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,

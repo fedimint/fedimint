@@ -16,7 +16,7 @@ use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{OutPoint, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
 use futures::{Stream, StreamExt as _};
 use rand::{Rng as _, thread_rng};
@@ -220,9 +220,16 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// This is the only place during recovery where module gets a chance to
     /// create state machines, etc.
     ///
+    /// Returns the total amount recovered from this module, if the module
+    /// tracks it (`None` otherwise), which is surfaced in the
+    /// `ModuleRecoveryCompleted` event.
+    ///
     /// Notably this function is running in a database-autocommit wrapper, so
     /// might be called again on database commit failure.
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()>;
+    async fn finalize_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> anyhow::Result<Option<Amount>>;
 }
 
 impl<Init> ClientModuleRecoverArgs<Init>
@@ -240,7 +247,7 @@ where
         &self,
         init: &Init,
         snapshot: Option<&<<Init as ClientModuleInit>::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<()>
+    ) -> anyhow::Result<Option<Amount>>
     where
         Recovery: RecoveryFromHistory<Init = Init> + std::fmt::Debug,
     {
@@ -407,7 +414,7 @@ where
                 target: LOG_CLIENT_RECOVERY,
                 "Previously finalized, exiting"
             );
-            return Ok(());
+            return Ok(None);
         }
         let current_session_count = client_ctx.global_api().session_count().await?;
         debug!(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, "Current session count");
@@ -482,23 +489,24 @@ where
             "Finalizing restore"
         );
 
-        db.autocommit(
-            |dbtx, _| {
-                let state = state.clone();
-                {
-                    Box::pin(async move {
-                        state.delete_dbtx(dbtx).await;
-                        state.finalize_dbtx(dbtx).await?;
-                        Recovery::store_finalized(dbtx, true).await;
+        let recovered_amount = db
+            .autocommit(
+                |dbtx, _| {
+                    let state = state.clone();
+                    {
+                        Box::pin(async move {
+                            state.delete_dbtx(dbtx).await;
+                            let recovered_amount = state.finalize_dbtx(dbtx).await?;
+                            Recovery::store_finalized(dbtx, true).await;
 
-                        Ok::<_, anyhow::Error>(())
-                    })
-                }
-            },
-            None,
-        )
-        .await?;
+                            Ok::<_, anyhow::Error>(recovered_amount)
+                        })
+                    }
+                },
+                None,
+            )
+            .await?;
 
-        Ok(())
+        Ok(recovered_amount)
     }
 }

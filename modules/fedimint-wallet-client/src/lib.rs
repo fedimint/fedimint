@@ -203,7 +203,7 @@ impl WalletClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -263,7 +263,10 @@ impl WalletClientInit {
 
         dbtx.commit_tx().await;
 
-        Ok(())
+        // The wallet only discovers which on-chain outputs belonged to the
+        // client during recovery; their value isn't known until the deposits
+        // are later claimed, so no amount is reported here.
+        Ok(None)
     }
 }
 
@@ -412,7 +415,7 @@ impl ClientModuleInit for WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
         // Check if V1 (session-based) recovery state exists (resuming interrupted
         // recovery)
         if args
