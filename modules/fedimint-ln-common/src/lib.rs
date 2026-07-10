@@ -666,7 +666,7 @@ impl PrunedInvoice {
                 .copied()
                 .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             destination_features,
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: sha256::Hash::from_byte_array(invoice.payment_hash().0),
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),

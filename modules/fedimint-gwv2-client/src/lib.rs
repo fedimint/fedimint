@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::Message;
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
@@ -310,7 +310,8 @@ impl GatewayClientModuleV2 {
         };
 
         ensure!(
-            PaymentImage::Hash(*payment_hash) == payload.contract.payment_image,
+            PaymentImage::Hash(sha256::Hash::from_byte_array(payment_hash.0))
+                == payload.contract.payment_image,
             "The invoices payment hash does not match the contracts payment hash"
         );
 

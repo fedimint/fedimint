@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use assert_matches::assert_matches;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
@@ -263,7 +263,7 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
-        let payment_hash = *common.invoice.payment_hash();
+        let payment_hash = sha256::Hash::from_byte_array(common.invoice.payment_hash().0);
         let success_common = common.clone();
         let success_context = context.clone();
         let timeout_common = common.clone();
@@ -648,7 +648,9 @@ impl PaymentData {
 
     pub fn payment_hash(&self) -> sha256::Hash {
         match self {
-            PaymentData::Invoice(invoice) => *invoice.payment_hash(),
+            PaymentData::Invoice(invoice) => {
+                sha256::Hash::from_byte_array(invoice.payment_hash().0)
+            }
             PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => *payment_hash,
         }
     }

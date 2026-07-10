@@ -36,7 +36,8 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
 use futures::StreamExt;
 use lightning_invoice::{
-    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentHash,
+    PaymentSecret,
 };
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
@@ -700,7 +701,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let payment_hash = sha256::Hash::hash(&[0; 32]);
     let signet_invoice = InvoiceBuilder::new(Currency::Signet)
         .description(String::new())
-        .payment_hash(payment_hash)
+        .payment_hash(PaymentHash(payment_hash.to_byte_array()))
         .current_timestamp()
         .min_final_cltv_expiry_delta(0)
         .payment_secret(PaymentSecret([0; 32]))
@@ -794,7 +795,7 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
     let invoice = InvoiceBuilder::new(Currency::Regtest)
         .amount_milli_satoshis(amount.msats)
         .description("stale receive".to_string())
-        .payment_hash(payment_hash)
+        .payment_hash(PaymentHash(payment_hash.to_byte_array()))
         .payment_secret(PaymentSecret([1; 32]))
         .duration_since_epoch(stale_timestamp)
         .min_final_cltv_expiry_delta(18)
@@ -1064,7 +1065,7 @@ mod fedimint_migration_tests {
         snapshot_db_migrations_client, validate_migrations_client, validate_migrations_server,
     };
     use futures::StreamExt;
-    use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret, RoutingFees};
+    use lightning_invoice::{Currency, InvoiceBuilder, PaymentHash, PaymentSecret, RoutingFees};
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
@@ -1299,7 +1300,7 @@ mod fedimint_migration_tests {
         let secp: Secp256k1<All> = Secp256k1::gen_new();
         let invoice = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .payment_hash(PaymentHash(sha256::Hash::hash(&BYTE_32).to_byte_array()))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()

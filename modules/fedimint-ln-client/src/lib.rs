@@ -86,7 +86,8 @@ use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentHash, PaymentSecret, RouteHint, RouteHintHop,
+    RoutingFees,
 };
 use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
@@ -857,7 +858,7 @@ impl LightningClientModule {
 
         let user_sk = Keypair::new(&self.secp, &mut rng);
 
-        let payment_hash = *invoice.payment_hash();
+        let payment_hash = sha256::Hash::from_byte_array(invoice.payment_hash().0);
         let preimage_auth = self.get_preimage_authentication(&payment_hash);
         let contract = OutgoingContract {
             hash: payment_hash,
@@ -927,7 +928,7 @@ impl LightningClientModule {
         ClientOutputSM<LightningClientStateMachines>,
         ContractId,
     )> {
-        let payment_hash = *invoice.payment_hash();
+        let payment_hash = sha256::Hash::from_byte_array(invoice.payment_hash().0);
         let invoice_amount = Amount {
             msats: invoice
                 .amount_milli_satoshis()
@@ -1066,7 +1067,7 @@ impl LightningClientModule {
         let mut invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
             .invoice_description(description)
-            .payment_hash(payment_hash)
+            .payment_hash(PaymentHash(payment_hash.to_byte_array()))
             .payment_secret(PaymentSecret(rng.r#gen()))
             .duration_since_epoch(duration_since_epoch)
             .min_final_cltv_expiry_delta(18)
@@ -1082,7 +1083,7 @@ impl LightningClientModule {
         let invoice = invoice_builder
             .build_signed(|msg| self.secp.sign_ecdsa_recoverable(msg, &node_secret_key))?;
 
-        let operation_id = OperationId(*invoice.payment_hash().as_ref());
+        let operation_id = OperationId(invoice.payment_hash().0);
 
         let sm_invoice = invoice.clone();
         let sm_gen = Arc::new(move |out_point_range: OutPointRange| {
@@ -1317,7 +1318,10 @@ impl LightningClientModule {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
-            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
+            .get_prev_payment_result(
+                &sha256::Hash::from_byte_array(invoice.payment_hash().0),
+                &mut dbtx.to_ref_nc(),
+            )
             .await;
 
         if let Some(completed_payment) = prev_payment_result.completed_payment {
@@ -1326,7 +1330,7 @@ impl LightningClientModule {
 
         // Verify that no previous payment attempt is still running
         let prev_operation_id = LightningClientModule::get_payment_operation_id(
-            invoice.payment_hash(),
+            &sha256::Hash::from_byte_array(invoice.payment_hash().0),
             prev_payment_result.index,
         );
         if self.client_ctx.has_active_states(prev_operation_id).await {
@@ -1338,8 +1342,10 @@ impl LightningClientModule {
         }
 
         let next_index = prev_payment_result.index + 1;
-        let operation_id =
-            LightningClientModule::get_payment_operation_id(invoice.payment_hash(), next_index);
+        let operation_id = LightningClientModule::get_payment_operation_id(
+            &sha256::Hash::from_byte_array(invoice.payment_hash().0),
+            next_index,
+        );
 
         let new_payment_result = PaymentResult {
             index: next_index,
@@ -1348,7 +1354,7 @@ impl LightningClientModule {
 
         dbtx.insert_entry(
             &PaymentResultKey {
-                payment_hash: *invoice.payment_hash(),
+                payment_hash: sha256::Hash::from_byte_array(invoice.payment_hash().0),
             },
             &new_payment_result,
         )

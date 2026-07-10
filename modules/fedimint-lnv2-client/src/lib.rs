@@ -595,7 +595,9 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FailedToRequestBlockCount(e.to_string()))?;
 
         let contract = OutgoingContract {
-            payment_image: PaymentImage::Hash(*invoice.payment_hash()),
+            payment_image: PaymentImage::Hash(sha256::Hash::from_byte_array(
+                invoice.payment_hash().0,
+            )),
             amount: send_fee.add_to(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.module_public_key,
@@ -974,7 +976,7 @@ impl LightningClientModule {
             .await
             .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?;
 
-        if invoice.payment_hash() != &preimage.consensus_hash() {
+        if sha256::Hash::from_byte_array(invoice.payment_hash().0) != preimage.consensus_hash() {
             return Err(ReceiveError::InvalidInvoice);
         }
 

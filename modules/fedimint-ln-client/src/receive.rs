@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
@@ -208,7 +209,7 @@ impl LightningReceiveConfirmedInvoice {
         invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
-        let contract_id = (*invoice.payment_hash()).into();
+        let contract_id = sha256::Hash::from_byte_array(invoice.payment_hash().0).into();
         loop {
             // Consider time before the api call to account for network delays
             let now_epoch = fedimint_core::time::duration_since_epoch();
@@ -419,7 +420,7 @@ impl LightningReceiveFunded {
 mod tests {
     use bitcoin::hashes::{Hash, sha256};
     use fedimint_core::secp256k1::{Secp256k1, SecretKey};
-    use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
+    use lightning_invoice::{Currency, InvoiceBuilder, PaymentHash, PaymentSecret};
 
     use super::*;
 
@@ -464,7 +465,7 @@ mod tests {
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(PaymentHash(sha256::Hash::hash(&[0; 32]).to_byte_array()))
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
