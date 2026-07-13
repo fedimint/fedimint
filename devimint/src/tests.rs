@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, bail};
-use bitcoin::Txid;
+use bitcoin::{Address, Txid};
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -615,6 +615,229 @@ pub struct UpgradeClients {
     fm_pay_client: Client,
 }
 
+/// Wallet clients/data that an old `fedimint-cli` creates before upgrade.
+///
+/// The upgrade test reopens these clients with the new binary to exercise
+/// on-chain receive operation backfill.
+struct WalletReceiveUpgradeClients {
+    allocated_client: Client,
+    allocated_operation_id: OperationId,
+    allocated_address: Address,
+    claimed_client: Client,
+    claimed_operation_id: OperationId,
+    pending_client: Client,
+    pending_operation_id: OperationId,
+}
+
+async fn prepare_wallet_receive_upgrade_clients(
+    dev_fed: &DevFed,
+) -> anyhow::Result<WalletReceiveUpgradeClients> {
+    let allocated_client = dev_fed
+        .fed
+        .new_joined_client("wallet-upgrade-allocated-client")
+        .await?;
+    let (allocated_address, allocated_operation_id) = allocated_client.get_deposit_addr().await?;
+    let allocated_address =
+        Address::from_str(&allocated_address)?.require_network(bitcoin::Network::Regtest)?;
+    let allocated_operation_id = OperationId::from_str(&allocated_operation_id)?;
+
+    let claimed_client = dev_fed
+        .fed
+        .new_joined_client("wallet-upgrade-claimed-client")
+        .await?;
+    let (claimed_address, claimed_operation_id) = claimed_client.get_deposit_addr().await?;
+    let claimed_address =
+        Address::from_str(&claimed_address)?.require_network(bitcoin::Network::Regtest)?;
+    let claimed_operation_id = OperationId::from_str(&claimed_operation_id)?;
+    fund_deposit_address_no_wait(dev_fed, &claimed_address).await?;
+    fund_deposit_address_no_wait(dev_fed, &claimed_address).await?;
+    cmd!(
+        claimed_client,
+        "module",
+        "wallet",
+        "await-deposit",
+        "--operation-id",
+        operation_id_arg(claimed_operation_id),
+        "--num",
+        "2"
+    )
+    .run()
+    .await?;
+
+    let pending_client = dev_fed
+        .fed
+        .new_joined_client("wallet-upgrade-pending-client")
+        .await?;
+    let pending_operation_id = dev_fed
+        .fed
+        .pegin_client_no_wait(10_000, &pending_client)
+        .await?;
+    let pending_operation_id = OperationId::from_str(&pending_operation_id)?;
+
+    Ok(WalletReceiveUpgradeClients {
+        allocated_client,
+        allocated_operation_id,
+        allocated_address,
+        claimed_client,
+        claimed_operation_id,
+        pending_client,
+        pending_operation_id,
+    })
+}
+
+async fn wallet_receive_upgrade_test(
+    dev_fed: &DevFed,
+    clients: &WalletReceiveUpgradeClients,
+) -> anyhow::Result<()> {
+    assert_wallet_receive_operations(
+        &clients.claimed_client,
+        clients.claimed_operation_id,
+        false,
+        2,
+    )
+    .await
+    .context("multiple claimed legacy deposits to the same address should be backfilled as receive operations")?;
+
+    let outcome = cmd!(
+        clients.claimed_client,
+        "module",
+        "wallet",
+        "legacy-deposit-outcome",
+        "--operation-id",
+        operation_id_arg(clients.claimed_operation_id),
+    )
+    .out_json()
+    .await?;
+    anyhow::ensure!(
+        outcome.is_null(),
+        "v0.11 legacy address operation should still have no cached legacy outcome after receive backfill, got {outcome}"
+    );
+
+    assert_wallet_receive_operations(
+        &clients.allocated_client,
+        clients.allocated_operation_id,
+        true,
+        0,
+    )
+    .await
+    .context("allocated-but-unfunded legacy address should not be backfilled")?;
+
+    fund_deposit_address_no_wait(dev_fed, &clients.allocated_address)
+        .await
+        .context("funding legacy allocated address after upgrade")?;
+    let allocated_operation_id = operation_id_arg(clients.allocated_operation_id);
+    clients
+        .allocated_client
+        .await_deposit(&allocated_operation_id)
+        .await
+        .context("claiming legacy allocated address after upgrade")?;
+    assert_wallet_receive_operations(
+        &clients.allocated_client,
+        clients.allocated_operation_id,
+        true,
+        1,
+    )
+    .await
+    .context("post-upgrade funding should create a live receive operation")?;
+
+    let pending_operation_id = operation_id_arg(clients.pending_operation_id);
+    clients
+        .pending_client
+        .await_deposit(&pending_operation_id)
+        .await
+        .context("claiming pre-upgrade funded deposit after upgrade")?;
+    assert_wallet_receive_operations(
+        &clients.pending_client,
+        clients.pending_operation_id,
+        true,
+        1,
+    )
+    .await
+    .context("pre-upgrade funded deposit claimed after upgrade should use receive operation")?;
+
+    Ok(())
+}
+
+fn operation_id_arg(operation_id: OperationId) -> String {
+    operation_id.fmt_full().to_string()
+}
+
+async fn fund_deposit_address_no_wait(dev_fed: &DevFed, address: &Address) -> anyhow::Result<()> {
+    let deposit_fees_msat = dev_fed.fed.deposit_fees()?.msats;
+    assert_eq!(
+        deposit_fees_msat % 1000,
+        0,
+        "Deposit fees expected to be whole sats in test suite"
+    );
+
+    dev_fed
+        .bitcoind
+        .send_to(address.to_string(), 10_000 + deposit_fees_msat / 1000)
+        .await?;
+    dev_fed.bitcoind.mine_blocks(21).await?;
+    Ok(())
+}
+
+async fn assert_wallet_receive_operations(
+    client: &Client,
+    address_operation_id: OperationId,
+    claim_owned_by_receive_operation: bool,
+    expected_count: usize,
+) -> anyhow::Result<()> {
+    let receives = wallet_receive_operations_for_address(client, address_operation_id).await?;
+    anyhow::ensure!(
+        receives.len() == expected_count,
+        "expected {expected_count} receive operation(s) for address operation {}, found {receives:?}",
+        address_operation_id.fmt_full()
+    );
+
+    for (receive_operation_id, _receive, claim_operation_id) in receives {
+        let expected_claim_operation_id = if claim_owned_by_receive_operation {
+            receive_operation_id
+        } else {
+            address_operation_id
+        };
+        anyhow::ensure!(
+            claim_operation_id == expected_claim_operation_id,
+            "unexpected receive claim operation id"
+        );
+    }
+
+    Ok(())
+}
+
+async fn wallet_receive_operations_for_address(
+    client: &Client,
+    address_operation_id: OperationId,
+) -> anyhow::Result<Vec<(OperationId, serde_json::Value, OperationId)>> {
+    let operations = cmd!(client, "list-operations", "--limit", "100")
+        .out_json()
+        .await?;
+
+    Ok(operations["operations"]
+        .as_array()
+        .context("operations must be an array")?
+        .iter()
+        .filter_map(|operation| {
+            let receive = operation["operation_meta"]["variant"]["receive"].as_object()?;
+            let receive_address_operation_id =
+                OperationId::from_str(receive.get("address_operation_id")?.as_str()?).ok()?;
+            if receive_address_operation_id == address_operation_id {
+                let receive_operation_id = OperationId::from_str(operation["id"].as_str()?).ok()?;
+                let claim_operation_id =
+                    OperationId::from_str(receive.get("claim_operation_id")?.as_str()?).ok()?;
+                Some((
+                    receive_operation_id,
+                    serde_json::Value::Object(receive.clone()),
+                    claim_operation_id,
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>())
+}
+
 async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> anyhow::Result<()> {
     use futures::FutureExt;
 
@@ -752,6 +975,21 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 ln_receive_client: dev_fed.fed.new_joined_client("ln-receive-client").await?,
                 fm_pay_client: dev_fed.fed.new_joined_client("fm-pay-client").await?,
             };
+            let mut wallet_receive_upgrade_clients = if fedimint_cli_version < *VERSION_0_12_0_ALPHA
+                && paths.len() > 1
+            {
+                Some(
+                    prepare_wallet_receive_upgrade_clients(&dev_fed)
+                        .await
+                        .context("preparing wallet receive upgrade clients")?,
+                )
+            } else {
+                info!(
+                    %fedimint_cli_version,
+                    "Skipping wallet receive upgrade test because the initial fedimint-cli version is not legacy"
+                );
+                None
+            };
 
             try_join!(
                 stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
@@ -762,6 +1000,14 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 set_fedimint_cli_path(path);
                 let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
                 info!("upgraded fedimint-cli to version: {}", fedimint_cli_version);
+                if fedimint_cli_version >= *VERSION_0_12_0_ALPHA
+                    && let Some(wallet_receive_upgrade_clients) =
+                        wallet_receive_upgrade_clients.take()
+                {
+                    wallet_receive_upgrade_test(&dev_fed, &wallet_receive_upgrade_clients)
+                        .await
+                        .context("wallet receive operation upgrade test")?;
+                }
                 try_join!(
                     stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
                     wait_session_client.wait_session()

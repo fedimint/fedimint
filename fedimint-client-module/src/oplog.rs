@@ -46,12 +46,42 @@ pub trait IOperationLog {
         operation_id: OperationId,
     ) -> Option<OperationLogEntry>;
 
+    /// Returns `true` if an operation log entry for `operation_id` exists.
+    ///
+    /// Unlike `Client::operation_exists`, this checks for the operation *log
+    /// entry* itself, not for any state machines belonging to the operation.
+    /// Operations whose log entry is written before (or without) any state
+    /// machines must use this to test for existence.
+    async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool;
+
+    /// Same as [`IOperationLog::operation_log_entry_exists`], but reads through
+    /// an existing transaction so uncommitted entries are visible.
+    async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool;
+
     async fn add_operation_log_entry_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: serde_json::Value,
+    );
+
+    /// Add an operation-log entry with a historical creation time.
+    ///
+    /// This should only be used by startup migrations/backfills that run before
+    /// operation-log pagination can cache the oldest entry. Runtime operation
+    /// creation should use [`IOperationLog::add_operation_log_entry_dbtx`].
+    async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: serde_json::Value,
+        creation_time: SystemTime,
     );
 
     fn outcome_or_updates(

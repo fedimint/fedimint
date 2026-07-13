@@ -21,6 +21,8 @@ pub enum DbKeyPrefix {
     RecoveryState = 0x30,
     SupportsSafeDeposit = 0x31,
     PegInPoolCursor = 0x32,
+    ReceiveOperationsBackfilled = 0x33,
+    ReceiveOperation = 0x34,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -171,6 +173,32 @@ impl_db_record!(
 );
 impl_db_lookup!(key = ClaimedPegInKey, query_prefix = ClaimedPegInPrefix);
 
+/// Index of receive operations observed for a peg-in address.
+///
+/// This lets the address-operation compatibility path discover receive
+/// operations before they are claimed, including mempool/non-final deposits.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveOperationKey {
+    /// Peg-in address index that observed the receive.
+    pub peg_in_index: TweakIdx,
+    /// Bitcoin outpoint identifying the receive operation.
+    pub btc_out_point: bitcoin::OutPoint,
+}
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveOperationPrefix;
+
+impl_db_record!(
+    key = ReceiveOperationKey,
+    value = SystemTime,
+    db_prefix = DbKeyPrefix::ReceiveOperation,
+);
+
+impl_db_lookup!(
+    key = ReceiveOperationKey,
+    query_prefix = ReceiveOperationPrefix
+);
+
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct RecoveryFinalizedKey;
 
@@ -210,6 +238,18 @@ impl_db_record!(
 impl_db_lookup!(
     key = SupportsSafeDepositKey,
     query_prefix = SupportsSafeDepositPrefix
+);
+
+/// Marker set once the one-time backfill of per-UTXO receive operation log
+/// entries (see `WalletClientModule::backfill_receive_operations`) has
+/// completed.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ReceiveOperationsBackfilledKey;
+
+impl_db_record!(
+    key = ReceiveOperationsBackfilledKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ReceiveOperationsBackfilled,
 );
 
 /// Round-robin cursor for

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
@@ -27,7 +27,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct OperationLog {
     db: Database,
-    oldest_entry: tokio::sync::OnceCell<ChronologicalOperationLogKey>,
+    oldest_entry: OnceCell<ChronologicalOperationLogKey>,
 }
 
 impl OperationLog {
@@ -64,6 +64,51 @@ impl OperationLog {
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
+        self.add_operation_log_entry_dbtx_inner(
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            now(),
+        )
+        .await;
+    }
+
+    /// Add an operation-log entry with a historical creation time.
+    ///
+    /// This is intended for startup migrations/backfills that run before normal
+    /// operation-log pagination can initialize the oldest-entry cache. Runtime
+    /// operation creation should use [`Self::add_operation_log_entry_dbtx`].
+    pub async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
+    ) {
+        debug_assert!(
+            self.oldest_entry.get().is_none(),
+            "historical operation-log entries must be inserted before pagination caches the oldest entry"
+        );
+        self.add_operation_log_entry_dbtx_inner(
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            creation_time,
+        )
+        .await;
+    }
+
+    async fn add_operation_log_entry_dbtx_inner(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
+    ) {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry::new(
@@ -76,14 +121,11 @@ impl OperationLog {
             ),
         )
         .await;
-        dbtx.insert_new_entry(
-            &ChronologicalOperationLogKey {
-                creation_time: now(),
-                operation_id,
-            },
-            &(),
-        )
-        .await;
+        let chronological_key = ChronologicalOperationLogKey {
+            creation_time,
+            operation_id,
+        };
+        dbtx.insert_new_entry(&chronological_key, &()).await;
     }
 
     #[deprecated(since = "0.6.0", note = "Use `paginate_operations_rev` instead")]
@@ -175,6 +217,23 @@ impl OperationLog {
         dbtx.get_value(&OperationLogKey { operation_id }).await
     }
 
+    pub async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool {
+        Self::operation_log_entry_exists_dbtx(
+            &mut self.db.begin_transaction_nc().await.into_nc(),
+            operation_id,
+        )
+        .await
+    }
+
+    pub async fn operation_log_entry_exists_dbtx(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        dbtx.get_value(&OperationLogKey { operation_id })
+            .await
+            .is_some()
+    }
+
     /// Sets the outcome of an operation
     #[instrument(target = LOG_CLIENT, skip(db), level = "debug")]
     pub async fn set_operation_outcome(
@@ -256,6 +315,18 @@ impl IOperationLog for OperationLog {
         OperationLog::get_operation_dbtx(dbtx, operation_id).await
     }
 
+    async fn operation_log_entry_exists(&self, operation_id: OperationId) -> bool {
+        OperationLog::operation_log_entry_exists(self, operation_id).await
+    }
+
+    async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        OperationLog::operation_log_entry_exists_dbtx(dbtx, operation_id).await
+    }
+
     async fn add_operation_log_entry_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -269,6 +340,25 @@ impl IOperationLog for OperationLog {
             operation_id,
             operation_type,
             operation_meta,
+        )
+        .await
+    }
+
+    async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: serde_json::Value,
+        creation_time: SystemTime,
+    ) {
+        OperationLog::add_operation_log_entry_dbtx_with_creation_time(
+            self,
+            dbtx,
+            operation_id,
+            operation_type,
+            operation_meta,
+            creation_time,
         )
         .await
     }

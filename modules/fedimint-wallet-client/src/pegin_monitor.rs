@@ -5,7 +5,9 @@ use anyhow::anyhow;
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModulePreStartMigrationContext, OutPointRange,
+};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
@@ -28,10 +30,12 @@ use tracing::{debug, instrument, trace, warn};
 use crate::api::WalletFederationApi as _;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
-    PegInTweakIndexPrefix, TweakIdx,
+    PegInTweakIndexPrefix, ReceiveOperationKey, TweakIdx,
 };
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{
+    WalletClientModule, WalletClientModuleData, WalletOperationMeta, WalletOperationMetaVariant,
+};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -95,7 +99,7 @@ pub(crate) async fn run_peg_in_monitor(
     btc_rpc: DynBitcoindRpc,
     module_api: DynModuleApi,
     data: WalletClientModuleData,
-    pegin_claimed_sender: watch::Sender<()>,
+    pegin_monitor_update_sender: watch::Sender<()>,
     mut wakeup_receiver: watch::Receiver<()>,
 ) {
     let min_sleep: Duration = if is_running_in_test_env() {
@@ -133,7 +137,7 @@ pub(crate) async fn run_peg_in_monitor(
             &btc_rpc,
             &module_api,
             &client_ctx,
-            &pegin_claimed_sender,
+            &pegin_monitor_update_sender,
         )
         .await
         {
@@ -171,7 +175,7 @@ async fn check_for_deposits(
     btc_rpc: &DynBitcoindRpc,
     module_api: &DynModuleApi,
     client_ctx: &ClientContext<WalletClientModule>,
-    pengin_claimed_sender: &watch::Sender<()>,
+    pegin_monitor_update_sender: &watch::Sender<()>,
 ) -> Result<(), anyhow::Error> {
     let due = NextActions::from_db_state(db).await.due;
     trace!(target: LOG_CLIENT_MODULE_WALLET, ?due, "Checking for deposists");
@@ -184,7 +188,7 @@ async fn check_for_deposits(
             db,
             client_ctx,
             due_val,
-            pengin_claimed_sender,
+            pegin_monitor_update_sender,
         )
         .await?;
     }
@@ -201,7 +205,7 @@ async fn check_and_claim_idx_pegins(
     db: &Database,
     client_ctx: &ClientContext<WalletClientModule>,
     due_val: PegInTweakIndexData,
-    pengin_claimed_sender: &watch::Sender<()>,
+    pegin_monitor_update_sender: &watch::Sender<()>,
 ) -> Result<(), anyhow::Error> {
     let now = time::now();
     match check_idx_pegins(data, due_key.0, btc_rpc, module_api, db, client_ctx).await {
@@ -240,9 +244,12 @@ async fn check_and_claim_idx_pegins(
 
                             let claimed_now = CheckOutcome::get_claimed_now_outpoints(&outcomes);
 
-                            let claimed_sender = pengin_claimed_sender.clone();
+                            // Notify receive subscriptions after every successful check,
+                            // even when no claim was created. Out-of-mempool
+                            // subscriptions park on this instead of polling RPC.
+                            let monitor_update_sender = pegin_monitor_update_sender.clone();
                             dbtx.on_commit(move || {
-                                claimed_sender.send_replace(());
+                                monitor_update_sender.send_replace(());
                             });
 
                             let peg_in_tweak_index_data = PegInTweakIndexData {
@@ -373,7 +380,7 @@ async fn check_idx_pegins(
     client_ctx: &ClientContext<WalletClientModule>,
 ) -> Result<Vec<CheckOutcome>, anyhow::Error> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
-    let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
+    let (script, address, tweak_key, address_operation_id) = data.derive_peg_in_script(tweak_idx);
     btc_rpc.watch_script_history(&script).await?;
 
     let history = btc_rpc.get_script_history(&script).await?;
@@ -388,7 +395,6 @@ async fn check_idx_pegins(
             txid,
             vout: out_idx,
         };
-
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
             btc_out_point: outpoint,
@@ -405,6 +411,28 @@ async fn check_idx_pegins(
             outcomes.push(CheckOutcome::AlreadyClaimed);
             continue;
         }
+
+        let receive_operation_id =
+            WalletClientModuleData::receive_operation_id(address_operation_id, outpoint);
+        let mut dbtx = db.begin_transaction().await;
+        ensure_receive_operation(
+            &mut dbtx.to_ref_nc(),
+            client_ctx,
+            None,
+            receive_operation_id,
+            WalletOperationMetaVariant::Receive {
+                address_operation_id,
+                claim_operation_id: receive_operation_id,
+                address: address.clone().into_unchecked(),
+                tweak_idx,
+                btc_out_point: outpoint,
+                btc_deposited: transaction.output[out_idx as usize].value,
+            },
+            time::now(),
+        )
+        .await;
+        dbtx.commit_tx().await;
+
         let finality_delay = u64::from(data.cfg.finality_delay);
 
         let tx_block_count =
@@ -436,7 +464,8 @@ async fn check_idx_pegins(
             tweak_idx,
             tweak_key,
             &transaction,
-            operation_id,
+            address_operation_id,
+            receive_operation_id,
             outpoint,
             tx_out_proof,
             federation_knows_utxo,
@@ -447,13 +476,95 @@ async fn check_idx_pegins(
     Ok(outcomes)
 }
 
+/// Creates the receive operation-log entry for `receive_operation_id` (with
+/// metadata `variant` and the given `creation_time`) unless it already exists.
+pub(crate) async fn ensure_receive_operation(
+    dbtx: &mut DatabaseTransaction<'_>,
+    client_ctx: &ClientContext<WalletClientModule>,
+    pre_start_ctx: Option<&ClientModulePreStartMigrationContext<'_>>,
+    receive_operation_id: OperationId,
+    variant: WalletOperationMetaVariant,
+    creation_time: SystemTime,
+) {
+    if let WalletOperationMetaVariant::Receive {
+        tweak_idx,
+        btc_out_point,
+        ..
+    } = &variant
+    {
+        // Maintain the receive index even if the operation log entry already
+        // exists, so older receive entries or interrupted writes can be
+        // rediscovered by the address-operation compatibility bridge.
+        dbtx.insert_entry(
+            &ReceiveOperationKey {
+                peg_in_index: *tweak_idx,
+                btc_out_point: *btc_out_point,
+            },
+            &creation_time,
+        )
+        .await;
+    }
+
+    let operation_exists = match pre_start_ctx {
+        Some(pre_start_ctx) => {
+            client_ctx
+                .pre_start_operation_log_entry_exists_dbtx(
+                    pre_start_ctx,
+                    dbtx,
+                    receive_operation_id,
+                )
+                .await
+        }
+        None => {
+            client_ctx
+                .operation_log_entry_exists_dbtx(dbtx, receive_operation_id)
+                .await
+        }
+    };
+
+    if operation_exists {
+        return;
+    }
+
+    let operation_meta = WalletOperationMeta {
+        variant,
+        extra_meta: serde_json::Value::Null,
+    };
+
+    if let Some(pre_start_ctx) = pre_start_ctx {
+        client_ctx
+            .pre_start_add_operation_log_entry_dbtx_with_creation_time(
+                pre_start_ctx,
+                dbtx,
+                receive_operation_id,
+                fedimint_wallet_common::KIND.as_str(),
+                operation_meta,
+                creation_time,
+            )
+            .await;
+    } else {
+        // Live receive operations are created immediately, so they use the
+        // normal operation-log insertion path. Only pre-start backfill uses
+        // historical creation times.
+        client_ctx
+            .add_operation_log_entry_dbtx(
+                dbtx,
+                receive_operation_id,
+                fedimint_wallet_common::KIND.as_str(),
+                operation_meta,
+            )
+            .await;
+    }
+}
+
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
     tweak_key: Keypair,
     transaction: &bitcoin::Transaction,
-    operation_id: OperationId,
+    address_operation_id: OperationId,
+    receive_operation_id: OperationId,
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
     federation_knows_utxo: bool,
@@ -467,7 +578,8 @@ async fn claim_peg_in(
         out_idx: u32,
         tweak_key: Keypair,
         txout_proof: TxOutProof,
-        operation_id: OperationId,
+        address_operation_id: OperationId,
+        receive_operation_id: OperationId,
         federation_knows_utxo: bool,
     ) -> Option<OutPointRange> {
         let pegin_proof = PegInProof::new(
@@ -513,7 +625,8 @@ async fn claim_peg_in(
             .log_event(
                 dbtx,
                 ReceivePaymentEvent {
-                    operation_id,
+                    address_operation_id,
+                    receive_operation_id: Some(receive_operation_id),
                     amount,
                     txid,
                 },
@@ -525,7 +638,7 @@ async fn claim_peg_in(
                 .claim_inputs(
                     dbtx,
                     ClientInputBundle::new_no_sm(vec![client_input]),
-                    operation_id,
+                    receive_operation_id,
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
@@ -548,7 +661,8 @@ async fn claim_peg_in(
                         out_point.vout,
                         tweak_key,
                         tx_out_proof.clone(),
-                        operation_id,
+                        address_operation_id,
+                        receive_operation_id,
                         federation_knows_utxo,
                     )
                     .await;
