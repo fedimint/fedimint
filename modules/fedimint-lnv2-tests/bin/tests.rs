@@ -2,9 +2,11 @@ use anyhow::ensure;
 use bitcoin::hashes::sha256;
 use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
-use devimint::federation::Client;
-use devimint::util::almost_equal;
-use devimint::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
+use devimint::federation::{Client, Federation};
+use devimint::util::{ProcessManager, almost_equal};
+use devimint::version_constants::{
+    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA,
+};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
@@ -57,14 +59,25 @@ enum Commands {
     LnurlPay,
     /// Test LNURL receives after recovery from seed
     LnurlRecovery,
+    /// Two clients racing to pay the same invoice settle exactly once
+    DuplicatePayment,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    // The duplicate-payment test needs a second federation; every other test
+    // uses a single one.
+    let num_feds = if matches!(cli.command, None | Some(Commands::DuplicatePayment)) {
+        2
+    } else {
+        1
+    };
+
     devimint::run_devfed_test()
-        .call(|dev_fed, _process_mgr| async move {
+        .num_feds(num_feds)
+        .call(|dev_fed, process_mgr| async move {
             if !devimint::util::supports_lnv2() {
                 info!("lnv2 is disabled, skipping");
                 return Ok(());
@@ -85,10 +98,15 @@ async fn main() -> anyhow::Result<()> {
                     pegin_gateways(&dev_fed).await?;
                     test_lnurl_recovery(&dev_fed).await?;
                 }
+                Some(Commands::DuplicatePayment) => {
+                    pegin_gateways(&dev_fed).await?;
+                    test_duplicate_payment(&dev_fed, &process_mgr).await?;
+                }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
                     test_payments(&dev_fed).await?;
+                    test_duplicate_payment(&dev_fed, &process_mgr).await?;
                     test_lnurl_pay(&dev_fed).await?;
                     test_lnurl_recovery(&dev_fed).await?;
                 }
@@ -388,6 +406,141 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     assert!(ldk_payment_summary.outgoing.average_latency.is_some());
     assert!(ldk_payment_summary.incoming.median_latency.is_some());
     assert!(ldk_payment_summary.incoming.average_latency.is_some());
+
+    Ok(())
+}
+
+/// Creates a fresh client and joins it to the federation identified by
+/// `invite_code`, unlike `Federation::new_joined_client` which always joins
+/// whichever federation last wrote the shared invite-code file.
+async fn join_client(name: &str, invite_code: &str) -> anyhow::Result<Client> {
+    let client = Client::create(name).await?;
+    client.join_federation(invite_code.to_string()).await?;
+    Ok(client)
+}
+
+/// Three independent clients — two in the primary federation and one in a
+/// second federation, all served by the same gateway — race to pay the *same*
+/// invoice. The gateway pays the invoice only once, so it may claim only one of
+/// the three outgoing contracts regardless of which federation funded them; the
+/// other two must be forfeited and refunded. Exactly one payment settles.
+async fn test_duplicate_payment(
+    dev_fed: &DevJitFed,
+    process_mgr: &ProcessManager,
+) -> anyhow::Result<()> {
+    info!(
+        "Testing three clients across two federations paying the same invoice settle exactly once..."
+    );
+
+    // The LDK gateway is used to send: its `pay` is idempotent per payment hash,
+    // so all contracts share a single Lightning payment and preimage.
+    let gw_send = dev_fed.gw_ldk().await?;
+    let gw_receive = dev_fed.gw_lnd().await?;
+
+    // The cross-federation dedup lives in the gateway's global database, added in
+    // 0.12. Older gateways would claim both contracts, so skip against them.
+    if gw_send.gatewayd_version < *VERSION_0_12_0_ALPHA {
+        info!(
+            gatewayd_version = %gw_send.gatewayd_version,
+            "Skipping: gateway predates cross-federation outgoing payment dedup"
+        );
+        return Ok(());
+    }
+
+    let first_federation = dev_fed.fed().await?;
+
+    // `Federation::invite_code` reads a single shared invite-code file, so
+    // capture the primary federation's invite before spawning the second one
+    // overwrites it. Clients must be joined with the right invite explicitly;
+    // `new_joined_client` would join whichever federation wrote that file last.
+    let first_invite = first_federation.invite_code()?;
+
+    // A second federation, also served by the sending gateway, covers the
+    // cross-federation case: a contract funded in one federation must still
+    // block claiming a contract for the same invoice funded in another.
+    let second_federation = Federation::new(
+        process_mgr,
+        dev_fed.bitcoind().await?.clone(),
+        false,
+        false,
+        false,
+        1,
+        "lnv2-duplicate-payment".to_string(),
+    )
+    .await?;
+    let second_invite = second_federation.invite_code()?;
+
+    assert_ne!(
+        first_federation.calculate_federation_id(),
+        second_federation.calculate_federation_id(),
+        "the second federation must be distinct from the first"
+    );
+
+    gw_send.client().connect_fed(second_invite.clone()).await?;
+    second_federation
+        .pegin_gateways(1_000_000, vec![gw_send])
+        .await?;
+
+    let client_a = join_client("lnv2-duplicate-payment-a", &first_invite).await?;
+    let client_b = join_client("lnv2-duplicate-payment-b", &first_invite).await?;
+    let client_c = join_client("lnv2-duplicate-payment-c", &second_invite).await?;
+
+    first_federation.pegin_client(10_000, &client_a).await?;
+    first_federation.pegin_client(10_000, &client_b).await?;
+    second_federation.pegin_client(10_000, &client_c).await?;
+
+    // Control: the second-federation client can pay a *different* invoice through
+    // the gateway on its own. This proves the gateway serves the second
+    // federation, so any refund of the shared invoice below is caused by the
+    // duplicate payment rather than a second-federation setup problem.
+    let control_invoice = gw_receive
+        .client()
+        .create_invoice(1_000_000)
+        .await?
+        .to_string();
+    let control = common::send(&client_c, &gw_send.addr, &control_invoice).await?;
+    assert!(
+        matches!(control, FinalSendOperationState::Success(_)),
+        "second-federation control payment must succeed, got {control:?}"
+    );
+
+    let invoice = gw_receive
+        .client()
+        .create_invoice(1_000_000)
+        .await?
+        .to_string();
+
+    // The two clients in the first federation race for the invoice; the
+    // per-federation dedup settles exactly one of them and refunds the other.
+    let (state_a, state_b) = try_join!(
+        common::send(&client_a, &gw_send.addr, &invoice),
+        common::send(&client_b, &gw_send.addr, &invoice),
+    )?;
+
+    // The second-federation client then pays the same, now-settled invoice. The
+    // gateway already holds the preimage, so without cross-federation dedup it
+    // claims this contract too, being reimbursed twice for one Lightning payment.
+    let state_c = common::send(&client_c, &gw_send.addr, &invoice).await?;
+
+    let states = [state_a, state_b, state_c];
+
+    info!("shared-invoice send states: {states:?}");
+
+    let successes = states
+        .iter()
+        .filter(|state| matches!(state, FinalSendOperationState::Success(_)))
+        .count();
+
+    let refunds = states
+        .iter()
+        .filter(|state| matches!(state, FinalSendOperationState::Refunded))
+        .count();
+
+    assert_eq!(
+        (successes, refunds),
+        (1, 2),
+        "exactly one payment must settle and the other two be refunded, got {states:?}"
+    );
 
     Ok(())
 }

@@ -654,4 +654,21 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
     ) -> anyhow::Result<FinalReceiveState>;
+
+    /// Claims the given payment image for `operation_id` in the gateway's
+    /// global database, returning `true` if this operation may claim the
+    /// outgoing contract (the image was unclaimed, or already claimed by
+    /// this same operation) and `false` if another operation already
+    /// claimed it.
+    ///
+    /// A single Lightning payment yields a single preimage, so the gateway may
+    /// claim at most one outgoing contract per payment image. Unlike the
+    /// per-federation module database, this spans all of the gateway's
+    /// federations, so two clients in different federations paying the same
+    /// invoice cannot both be claimed.
+    async fn claim_payment_image(
+        &self,
+        payment_image: &PaymentImage,
+        operation_id: OperationId,
+    ) -> bool;
 }

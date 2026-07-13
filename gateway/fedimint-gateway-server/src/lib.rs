@@ -3412,6 +3412,31 @@ impl IGatewayClientV2 for Gateway {
 
         Ok(final_state)
     }
+
+    async fn claim_payment_image(
+        &self,
+        payment_image: &PaymentImage,
+        operation_id: OperationId,
+    ) -> bool {
+        // `autocommit` retries on write-write conflicts, so concurrent claims for
+        // the same payment image are serialized: exactly one records itself as the
+        // claimer, the rest observe it and forfeit.
+        self.gateway_db
+            .autocommit(
+                |dbtx, _| {
+                    let payment_image = payment_image.clone();
+                    Box::pin(async move {
+                        let claimer = dbtx
+                            .claim_outgoing_payment_image(payment_image, operation_id)
+                            .await;
+                        Ok::<_, std::convert::Infallible>(claimer == operation_id)
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Retries until the transaction commits")
+    }
 }
 
 #[async_trait]
