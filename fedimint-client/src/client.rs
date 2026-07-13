@@ -125,6 +125,11 @@ pub(crate) struct PrimaryModuleCandidates {
     wildcard: Vec<ModuleInstanceId>,
 }
 
+/// An in-progress module recovery future, resolving to the amount recovered
+/// from the module (if it tracks one) once recovery completes.
+pub(crate) type ModuleRecoveryFuture =
+    Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+
 /// Main client type
 ///
 /// A handle and API to interacting with a single federation. End user
@@ -1902,10 +1907,7 @@ impl Client {
     fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
@@ -1933,10 +1935,7 @@ impl Client {
         db: Database,
         log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
