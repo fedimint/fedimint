@@ -3412,154 +3412,179 @@
 <a href=#3412 id=3412 data-nosnippet>3412</a>
 <a href=#3413 id=3413 data-nosnippet>3413</a>        <span class="prelude-val">Ok</span>(final_state)
 <a href=#3414 id=3414 data-nosnippet>3414</a>    }
-<a href=#3415 id=3415 data-nosnippet>3415</a>}
-<a href=#3416 id=3416 data-nosnippet>3416</a>
-<a href=#3417 id=3417 data-nosnippet>3417</a><span class="attr">#[async_trait]
-<a href=#3418 id=3418 data-nosnippet>3418</a></span><span class="kw">impl </span>IGatewayClientV1 <span class="kw">for </span>Gateway {
-<a href=#3419 id=3419 data-nosnippet>3419</a>    <span class="kw">async fn </span>verify_preimage_authentication(
-<a href=#3420 id=3420 data-nosnippet>3420</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#3421 id=3421 data-nosnippet>3421</a>        payment_hash: sha256::Hash,
-<a href=#3422 id=3422 data-nosnippet>3422</a>        preimage_auth: sha256::Hash,
-<a href=#3423 id=3423 data-nosnippet>3423</a>        contract: OutgoingContractAccount,
-<a href=#3424 id=3424 data-nosnippet>3424</a>    ) -&gt; std::result::Result&lt;(), OutgoingPaymentError&gt; {
-<a href=#3425 id=3425 data-nosnippet>3425</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-<a href=#3426 id=3426 data-nosnippet>3426</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx.load_preimage_authentication(payment_hash).<span class="kw">await </span>{
-<a href=#3427 id=3427 data-nosnippet>3427</a>            <span class="kw">if </span><span class="macro">secret_hash !</span>= preimage_auth {
-<a href=#3428 id=3428 data-nosnippet>3428</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
-<a href=#3429 id=3429 data-nosnippet>3429</a>                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
-<a href=#3430 id=3430 data-nosnippet>3430</a>                    contract_id: contract.contract.contract_id(),
-<a href=#3431 id=3431 data-nosnippet>3431</a>                    contract: <span class="prelude-val">Some</span>(contract),
-<a href=#3432 id=3432 data-nosnippet>3432</a>                });
-<a href=#3433 id=3433 data-nosnippet>3433</a>            }
-<a href=#3434 id=3434 data-nosnippet>3434</a>        } <span class="kw">else </span>{
-<a href=#3435 id=3435 data-nosnippet>3435</a>            <span class="comment">// Committing the `preimage_auth` to the database can fail if two users try to
-<a href=#3436 id=3436 data-nosnippet>3436</a>            // pay the same invoice at the same time.
-<a href=#3437 id=3437 data-nosnippet>3437</a>            </span>dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
-<a href=#3438 id=3438 data-nosnippet>3438</a>                .<span class="kw">await</span>;
-<a href=#3439 id=3439 data-nosnippet>3439</a>            <span class="kw">return </span>dbtx
-<a href=#3440 id=3440 data-nosnippet>3440</a>                .commit_tx_result()
-<a href=#3441 id=3441 data-nosnippet>3441</a>                .<span class="kw">await
-<a href=#3442 id=3442 data-nosnippet>3442</a>                </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError {
-<a href=#3443 id=3443 data-nosnippet>3443</a>                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
-<a href=#3444 id=3444 data-nosnippet>3444</a>                    contract_id: contract.contract.contract_id(),
-<a href=#3445 id=3445 data-nosnippet>3445</a>                    contract: <span class="prelude-val">Some</span>(contract),
-<a href=#3446 id=3446 data-nosnippet>3446</a>                });
-<a href=#3447 id=3447 data-nosnippet>3447</a>        }
-<a href=#3448 id=3448 data-nosnippet>3448</a>
-<a href=#3449 id=3449 data-nosnippet>3449</a>        <span class="prelude-val">Ok</span>(())
-<a href=#3450 id=3450 data-nosnippet>3450</a>    }
-<a href=#3451 id=3451 data-nosnippet>3451</a>
-<a href=#3452 id=3452 data-nosnippet>3452</a>    <span class="kw">async fn </span>verify_pruned_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_data: PaymentData) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#3453 id=3453 data-nosnippet>3453</a>        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#3454 id=3454 data-nosnippet>3454</a>
-<a href=#3455 id=3455 data-nosnippet>3455</a>        <span class="kw">if </span><span class="macro">matches!</span>(payment_data, PaymentData::PrunedInvoice { .. }) {
-<a href=#3456 id=3456 data-nosnippet>3456</a>            <span class="macro">ensure!</span>(
-<a href=#3457 id=3457 data-nosnippet>3457</a>                lightning_context.lnrpc.supports_private_payments(),
-<a href=#3458 id=3458 data-nosnippet>3458</a>                <span class="string">"Private payments are not supported by the lightning node"
-<a href=#3459 id=3459 data-nosnippet>3459</a>            </span>);
-<a href=#3460 id=3460 data-nosnippet>3460</a>        }
-<a href=#3461 id=3461 data-nosnippet>3461</a>
-<a href=#3462 id=3462 data-nosnippet>3462</a>        <span class="prelude-val">Ok</span>(())
-<a href=#3463 id=3463 data-nosnippet>3463</a>    }
-<a href=#3464 id=3464 data-nosnippet>3464</a>
-<a href=#3465 id=3465 data-nosnippet>3465</a>    <span class="kw">async fn </span>get_routing_fees(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingFees&gt; {
-<a href=#3466 id=3466 data-nosnippet>3466</a>        <span class="kw">let </span><span class="kw-2">mut </span>gateway_dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#3467 id=3467 data-nosnippet>3467</a>        gateway_dbtx
-<a href=#3468 id=3468 data-nosnippet>3468</a>            .load_federation_config(federation_id)
-<a href=#3469 id=3469 data-nosnippet>3469</a>            .<span class="kw">await
-<a href=#3470 id=3470 data-nosnippet>3470</a>            </span>.map(|c| c.lightning_fee.into())
-<a href=#3471 id=3471 data-nosnippet>3471</a>    }
-<a href=#3472 id=3472 data-nosnippet>3472</a>
-<a href=#3473 id=3473 data-nosnippet>3473</a>    <span class="kw">async fn </span>get_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
-<a href=#3474 id=3474 data-nosnippet>3474</a>        <span class="self">self</span>.federation_manager
-<a href=#3475 id=3475 data-nosnippet>3475</a>            .read()
-<a href=#3476 id=3476 data-nosnippet>3476</a>            .<span class="kw">await
-<a href=#3477 id=3477 data-nosnippet>3477</a>            </span>.client(federation_id)
-<a href=#3478 id=3478 data-nosnippet>3478</a>            .cloned()
-<a href=#3479 id=3479 data-nosnippet>3479</a>    }
-<a href=#3480 id=3480 data-nosnippet>3480</a>
-<a href=#3481 id=3481 data-nosnippet>3481</a>    <span class="kw">async fn </span>get_client_for_invoice(
-<a href=#3482 id=3482 data-nosnippet>3482</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#3483 id=3483 data-nosnippet>3483</a>        payment_data: PaymentData,
-<a href=#3484 id=3484 data-nosnippet>3484</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
-<a href=#3485 id=3485 data-nosnippet>3485</a>        <span class="kw">let </span>rhints = payment_data.route_hints();
-<a href=#3486 id=3486 data-nosnippet>3486</a>        <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
-<a href=#3487 id=3487 data-nosnippet>3487</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#3488 id=3488 data-nosnippet>3488</a>            <span class="prelude-val">Some</span>(hop) =&gt; <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
-<a href=#3489 id=3489 data-nosnippet>3489</a>                <span class="prelude-val">Ok</span>(lightning_context) =&gt; {
-<a href=#3490 id=3490 data-nosnippet>3490</a>                    <span class="kw">if </span>hop.<span class="macro">src_node_id !</span>= lightning_context.lightning_public_key {
-<a href=#3491 id=3491 data-nosnippet>3491</a>                        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#3492 id=3492 data-nosnippet>3492</a>                    }
-<a href=#3493 id=3493 data-nosnippet>3493</a>
-<a href=#3494 id=3494 data-nosnippet>3494</a>                    <span class="self">self</span>.federation_manager
-<a href=#3495 id=3495 data-nosnippet>3495</a>                        .read()
-<a href=#3496 id=3496 data-nosnippet>3496</a>                        .<span class="kw">await
-<a href=#3497 id=3497 data-nosnippet>3497</a>                        </span>.get_client_for_index(hop.short_channel_id)
-<a href=#3498 id=3498 data-nosnippet>3498</a>                }
-<a href=#3499 id=3499 data-nosnippet>3499</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#3500 id=3500 data-nosnippet>3500</a>            },
-<a href=#3501 id=3501 data-nosnippet>3501</a>        }
-<a href=#3502 id=3502 data-nosnippet>3502</a>    }
-<a href=#3503 id=3503 data-nosnippet>3503</a>
-<a href=#3504 id=3504 data-nosnippet>3504</a>    <span class="kw">async fn </span>pay(
-<a href=#3505 id=3505 data-nosnippet>3505</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#3506 id=3506 data-nosnippet>3506</a>        payment_data: PaymentData,
-<a href=#3507 id=3507 data-nosnippet>3507</a>        max_delay: u64,
-<a href=#3508 id=3508 data-nosnippet>3508</a>        max_fee: Amount,
-<a href=#3509 id=3509 data-nosnippet>3509</a>    ) -&gt; std::result::Result&lt;PayInvoiceResponse, LightningRpcError&gt; {
-<a href=#3510 id=3510 data-nosnippet>3510</a>        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#3511 id=3511 data-nosnippet>3511</a>
-<a href=#3512 id=3512 data-nosnippet>3512</a>        <span class="kw">match </span>payment_data {
-<a href=#3513 id=3513 data-nosnippet>3513</a>            PaymentData::Invoice(invoice) =&gt; {
-<a href=#3514 id=3514 data-nosnippet>3514</a>                lightning_context
-<a href=#3515 id=3515 data-nosnippet>3515</a>                    .lnrpc
-<a href=#3516 id=3516 data-nosnippet>3516</a>                    .pay(invoice, max_delay, max_fee)
-<a href=#3517 id=3517 data-nosnippet>3517</a>                    .<span class="kw">await
-<a href=#3518 id=3518 data-nosnippet>3518</a>            </span>}
-<a href=#3519 id=3519 data-nosnippet>3519</a>            PaymentData::PrunedInvoice(invoice) =&gt; {
-<a href=#3520 id=3520 data-nosnippet>3520</a>                lightning_context
-<a href=#3521 id=3521 data-nosnippet>3521</a>                    .lnrpc
-<a href=#3522 id=3522 data-nosnippet>3522</a>                    .pay_private(invoice, max_delay, max_fee)
-<a href=#3523 id=3523 data-nosnippet>3523</a>                    .<span class="kw">await
-<a href=#3524 id=3524 data-nosnippet>3524</a>            </span>}
-<a href=#3525 id=3525 data-nosnippet>3525</a>        }
-<a href=#3526 id=3526 data-nosnippet>3526</a>    }
-<a href=#3527 id=3527 data-nosnippet>3527</a>
-<a href=#3528 id=3528 data-nosnippet>3528</a>    <span class="kw">async fn </span>complete_htlc(
-<a href=#3529 id=3529 data-nosnippet>3529</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#3530 id=3530 data-nosnippet>3530</a>        htlc: InterceptPaymentResponse,
-<a href=#3531 id=3531 data-nosnippet>3531</a>    ) -&gt; std::result::Result&lt;(), LightningRpcError&gt; {
-<a href=#3532 id=3532 data-nosnippet>3532</a>        <span class="comment">// Wait until the lightning node is online to complete the HTLC.
-<a href=#3533 id=3533 data-nosnippet>3533</a>        </span><span class="kw">let </span>lightning_context = <span class="kw">loop </span>{
-<a href=#3534 id=3534 data-nosnippet>3534</a>            <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
-<a href=#3535 id=3535 data-nosnippet>3535</a>                <span class="prelude-val">Ok</span>(lightning_context) =&gt; <span class="kw">break </span>lightning_context,
-<a href=#3536 id=3536 data-nosnippet>3536</a>                <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#3537 id=3537 data-nosnippet>3537</a>                    <span class="macro">warn!</span>(target: LOG_GATEWAY, err = %err.fmt_compact(), <span class="string">"Failure trying to complete payment"</span>);
-<a href=#3538 id=3538 data-nosnippet>3538</a>                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
-<a href=#3539 id=3539 data-nosnippet>3539</a>                }
-<a href=#3540 id=3540 data-nosnippet>3540</a>            }
-<a href=#3541 id=3541 data-nosnippet>3541</a>        };
-<a href=#3542 id=3542 data-nosnippet>3542</a>
-<a href=#3543 id=3543 data-nosnippet>3543</a>        lightning_context.lnrpc.complete_htlc(htlc).<span class="kw">await
-<a href=#3544 id=3544 data-nosnippet>3544</a>    </span>}
-<a href=#3545 id=3545 data-nosnippet>3545</a>
-<a href=#3546 id=3546 data-nosnippet>3546</a>    <span class="kw">async fn </span>is_lnv2_direct_swap(
-<a href=#3547 id=3547 data-nosnippet>3547</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#3548 id=3548 data-nosnippet>3548</a>        payment_hash: sha256::Hash,
-<a href=#3549 id=3549 data-nosnippet>3549</a>        amount: Amount,
-<a href=#3550 id=3550 data-nosnippet>3550</a>    ) -&gt; anyhow::Result&lt;
-<a href=#3551 id=3551 data-nosnippet>3551</a>        <span class="prelude-ty">Option</span>&lt;(
-<a href=#3552 id=3552 data-nosnippet>3552</a>            fedimint_lnv2_common::contracts::IncomingContract,
-<a href=#3553 id=3553 data-nosnippet>3553</a>            ClientHandleArc,
-<a href=#3554 id=3554 data-nosnippet>3554</a>        )&gt;,
-<a href=#3555 id=3555 data-nosnippet>3555</a>    &gt; {
-<a href=#3556 id=3556 data-nosnippet>3556</a>        <span class="kw">let </span>(contract, client) = <span class="self">self
-<a href=#3557 id=3557 data-nosnippet>3557</a>            </span>.get_registered_incoming_contract_and_client_v2(
-<a href=#3558 id=3558 data-nosnippet>3558</a>                PaymentImage::Hash(payment_hash),
-<a href=#3559 id=3559 data-nosnippet>3559</a>                amount.msats,
-<a href=#3560 id=3560 data-nosnippet>3560</a>            )
-<a href=#3561 id=3561 data-nosnippet>3561</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#3562 id=3562 data-nosnippet>3562</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((contract, client)))
-<a href=#3563 id=3563 data-nosnippet>3563</a>    }
-<a href=#3564 id=3564 data-nosnippet>3564</a>}
+<a href=#3415 id=3415 data-nosnippet>3415</a>
+<a href=#3416 id=3416 data-nosnippet>3416</a>    <span class="kw">async fn </span>claim_payment_image(
+<a href=#3417 id=3417 data-nosnippet>3417</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3418 id=3418 data-nosnippet>3418</a>        payment_image: <span class="kw-2">&amp;</span>PaymentImage,
+<a href=#3419 id=3419 data-nosnippet>3419</a>        operation_id: OperationId,
+<a href=#3420 id=3420 data-nosnippet>3420</a>    ) -&gt; bool {
+<a href=#3421 id=3421 data-nosnippet>3421</a>        <span class="comment">// `autocommit` retries on write-write conflicts, so concurrent claims for
+<a href=#3422 id=3422 data-nosnippet>3422</a>        // the same payment image are serialized: exactly one records itself as the
+<a href=#3423 id=3423 data-nosnippet>3423</a>        // claimer, the rest observe it and forfeit.
+<a href=#3424 id=3424 data-nosnippet>3424</a>        </span><span class="self">self</span>.gateway_db
+<a href=#3425 id=3425 data-nosnippet>3425</a>            .autocommit(
+<a href=#3426 id=3426 data-nosnippet>3426</a>                |dbtx, <span class="kw">_</span>| {
+<a href=#3427 id=3427 data-nosnippet>3427</a>                    <span class="kw">let </span>payment_image = payment_image.clone();
+<a href=#3428 id=3428 data-nosnippet>3428</a>                    Box::pin(<span class="kw">async move </span>{
+<a href=#3429 id=3429 data-nosnippet>3429</a>                        <span class="kw">let </span>claimer = dbtx
+<a href=#3430 id=3430 data-nosnippet>3430</a>                            .claim_outgoing_payment_image(payment_image, operation_id)
+<a href=#3431 id=3431 data-nosnippet>3431</a>                            .<span class="kw">await</span>;
+<a href=#3432 id=3432 data-nosnippet>3432</a>                        Ok::&lt;<span class="kw">_</span>, std::convert::Infallible&gt;(claimer == operation_id)
+<a href=#3433 id=3433 data-nosnippet>3433</a>                    })
+<a href=#3434 id=3434 data-nosnippet>3434</a>                },
+<a href=#3435 id=3435 data-nosnippet>3435</a>                <span class="prelude-val">None</span>,
+<a href=#3436 id=3436 data-nosnippet>3436</a>            )
+<a href=#3437 id=3437 data-nosnippet>3437</a>            .<span class="kw">await
+<a href=#3438 id=3438 data-nosnippet>3438</a>            </span>.expect(<span class="string">"Retries until the transaction commits"</span>)
+<a href=#3439 id=3439 data-nosnippet>3439</a>    }
+<a href=#3440 id=3440 data-nosnippet>3440</a>}
+<a href=#3441 id=3441 data-nosnippet>3441</a>
+<a href=#3442 id=3442 data-nosnippet>3442</a><span class="attr">#[async_trait]
+<a href=#3443 id=3443 data-nosnippet>3443</a></span><span class="kw">impl </span>IGatewayClientV1 <span class="kw">for </span>Gateway {
+<a href=#3444 id=3444 data-nosnippet>3444</a>    <span class="kw">async fn </span>verify_preimage_authentication(
+<a href=#3445 id=3445 data-nosnippet>3445</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3446 id=3446 data-nosnippet>3446</a>        payment_hash: sha256::Hash,
+<a href=#3447 id=3447 data-nosnippet>3447</a>        preimage_auth: sha256::Hash,
+<a href=#3448 id=3448 data-nosnippet>3448</a>        contract: OutgoingContractAccount,
+<a href=#3449 id=3449 data-nosnippet>3449</a>    ) -&gt; std::result::Result&lt;(), OutgoingPaymentError&gt; {
+<a href=#3450 id=3450 data-nosnippet>3450</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+<a href=#3451 id=3451 data-nosnippet>3451</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx.load_preimage_authentication(payment_hash).<span class="kw">await </span>{
+<a href=#3452 id=3452 data-nosnippet>3452</a>            <span class="kw">if </span><span class="macro">secret_hash !</span>= preimage_auth {
+<a href=#3453 id=3453 data-nosnippet>3453</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
+<a href=#3454 id=3454 data-nosnippet>3454</a>                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
+<a href=#3455 id=3455 data-nosnippet>3455</a>                    contract_id: contract.contract.contract_id(),
+<a href=#3456 id=3456 data-nosnippet>3456</a>                    contract: <span class="prelude-val">Some</span>(contract),
+<a href=#3457 id=3457 data-nosnippet>3457</a>                });
+<a href=#3458 id=3458 data-nosnippet>3458</a>            }
+<a href=#3459 id=3459 data-nosnippet>3459</a>        } <span class="kw">else </span>{
+<a href=#3460 id=3460 data-nosnippet>3460</a>            <span class="comment">// Committing the `preimage_auth` to the database can fail if two users try to
+<a href=#3461 id=3461 data-nosnippet>3461</a>            // pay the same invoice at the same time.
+<a href=#3462 id=3462 data-nosnippet>3462</a>            </span>dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
+<a href=#3463 id=3463 data-nosnippet>3463</a>                .<span class="kw">await</span>;
+<a href=#3464 id=3464 data-nosnippet>3464</a>            <span class="kw">return </span>dbtx
+<a href=#3465 id=3465 data-nosnippet>3465</a>                .commit_tx_result()
+<a href=#3466 id=3466 data-nosnippet>3466</a>                .<span class="kw">await
+<a href=#3467 id=3467 data-nosnippet>3467</a>                </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError {
+<a href=#3468 id=3468 data-nosnippet>3468</a>                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+<a href=#3469 id=3469 data-nosnippet>3469</a>                    contract_id: contract.contract.contract_id(),
+<a href=#3470 id=3470 data-nosnippet>3470</a>                    contract: <span class="prelude-val">Some</span>(contract),
+<a href=#3471 id=3471 data-nosnippet>3471</a>                });
+<a href=#3472 id=3472 data-nosnippet>3472</a>        }
+<a href=#3473 id=3473 data-nosnippet>3473</a>
+<a href=#3474 id=3474 data-nosnippet>3474</a>        <span class="prelude-val">Ok</span>(())
+<a href=#3475 id=3475 data-nosnippet>3475</a>    }
+<a href=#3476 id=3476 data-nosnippet>3476</a>
+<a href=#3477 id=3477 data-nosnippet>3477</a>    <span class="kw">async fn </span>verify_pruned_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_data: PaymentData) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#3478 id=3478 data-nosnippet>3478</a>        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#3479 id=3479 data-nosnippet>3479</a>
+<a href=#3480 id=3480 data-nosnippet>3480</a>        <span class="kw">if </span><span class="macro">matches!</span>(payment_data, PaymentData::PrunedInvoice { .. }) {
+<a href=#3481 id=3481 data-nosnippet>3481</a>            <span class="macro">ensure!</span>(
+<a href=#3482 id=3482 data-nosnippet>3482</a>                lightning_context.lnrpc.supports_private_payments(),
+<a href=#3483 id=3483 data-nosnippet>3483</a>                <span class="string">"Private payments are not supported by the lightning node"
+<a href=#3484 id=3484 data-nosnippet>3484</a>            </span>);
+<a href=#3485 id=3485 data-nosnippet>3485</a>        }
+<a href=#3486 id=3486 data-nosnippet>3486</a>
+<a href=#3487 id=3487 data-nosnippet>3487</a>        <span class="prelude-val">Ok</span>(())
+<a href=#3488 id=3488 data-nosnippet>3488</a>    }
+<a href=#3489 id=3489 data-nosnippet>3489</a>
+<a href=#3490 id=3490 data-nosnippet>3490</a>    <span class="kw">async fn </span>get_routing_fees(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingFees&gt; {
+<a href=#3491 id=3491 data-nosnippet>3491</a>        <span class="kw">let </span><span class="kw-2">mut </span>gateway_dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+<a href=#3492 id=3492 data-nosnippet>3492</a>        gateway_dbtx
+<a href=#3493 id=3493 data-nosnippet>3493</a>            .load_federation_config(federation_id)
+<a href=#3494 id=3494 data-nosnippet>3494</a>            .<span class="kw">await
+<a href=#3495 id=3495 data-nosnippet>3495</a>            </span>.map(|c| c.lightning_fee.into())
+<a href=#3496 id=3496 data-nosnippet>3496</a>    }
+<a href=#3497 id=3497 data-nosnippet>3497</a>
+<a href=#3498 id=3498 data-nosnippet>3498</a>    <span class="kw">async fn </span>get_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+<a href=#3499 id=3499 data-nosnippet>3499</a>        <span class="self">self</span>.federation_manager
+<a href=#3500 id=3500 data-nosnippet>3500</a>            .read()
+<a href=#3501 id=3501 data-nosnippet>3501</a>            .<span class="kw">await
+<a href=#3502 id=3502 data-nosnippet>3502</a>            </span>.client(federation_id)
+<a href=#3503 id=3503 data-nosnippet>3503</a>            .cloned()
+<a href=#3504 id=3504 data-nosnippet>3504</a>    }
+<a href=#3505 id=3505 data-nosnippet>3505</a>
+<a href=#3506 id=3506 data-nosnippet>3506</a>    <span class="kw">async fn </span>get_client_for_invoice(
+<a href=#3507 id=3507 data-nosnippet>3507</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3508 id=3508 data-nosnippet>3508</a>        payment_data: PaymentData,
+<a href=#3509 id=3509 data-nosnippet>3509</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+<a href=#3510 id=3510 data-nosnippet>3510</a>        <span class="kw">let </span>rhints = payment_data.route_hints();
+<a href=#3511 id=3511 data-nosnippet>3511</a>        <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
+<a href=#3512 id=3512 data-nosnippet>3512</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#3513 id=3513 data-nosnippet>3513</a>            <span class="prelude-val">Some</span>(hop) =&gt; <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
+<a href=#3514 id=3514 data-nosnippet>3514</a>                <span class="prelude-val">Ok</span>(lightning_context) =&gt; {
+<a href=#3515 id=3515 data-nosnippet>3515</a>                    <span class="kw">if </span>hop.<span class="macro">src_node_id !</span>= lightning_context.lightning_public_key {
+<a href=#3516 id=3516 data-nosnippet>3516</a>                        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#3517 id=3517 data-nosnippet>3517</a>                    }
+<a href=#3518 id=3518 data-nosnippet>3518</a>
+<a href=#3519 id=3519 data-nosnippet>3519</a>                    <span class="self">self</span>.federation_manager
+<a href=#3520 id=3520 data-nosnippet>3520</a>                        .read()
+<a href=#3521 id=3521 data-nosnippet>3521</a>                        .<span class="kw">await
+<a href=#3522 id=3522 data-nosnippet>3522</a>                        </span>.get_client_for_index(hop.short_channel_id)
+<a href=#3523 id=3523 data-nosnippet>3523</a>                }
+<a href=#3524 id=3524 data-nosnippet>3524</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#3525 id=3525 data-nosnippet>3525</a>            },
+<a href=#3526 id=3526 data-nosnippet>3526</a>        }
+<a href=#3527 id=3527 data-nosnippet>3527</a>    }
+<a href=#3528 id=3528 data-nosnippet>3528</a>
+<a href=#3529 id=3529 data-nosnippet>3529</a>    <span class="kw">async fn </span>pay(
+<a href=#3530 id=3530 data-nosnippet>3530</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3531 id=3531 data-nosnippet>3531</a>        payment_data: PaymentData,
+<a href=#3532 id=3532 data-nosnippet>3532</a>        max_delay: u64,
+<a href=#3533 id=3533 data-nosnippet>3533</a>        max_fee: Amount,
+<a href=#3534 id=3534 data-nosnippet>3534</a>    ) -&gt; std::result::Result&lt;PayInvoiceResponse, LightningRpcError&gt; {
+<a href=#3535 id=3535 data-nosnippet>3535</a>        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#3536 id=3536 data-nosnippet>3536</a>
+<a href=#3537 id=3537 data-nosnippet>3537</a>        <span class="kw">match </span>payment_data {
+<a href=#3538 id=3538 data-nosnippet>3538</a>            PaymentData::Invoice(invoice) =&gt; {
+<a href=#3539 id=3539 data-nosnippet>3539</a>                lightning_context
+<a href=#3540 id=3540 data-nosnippet>3540</a>                    .lnrpc
+<a href=#3541 id=3541 data-nosnippet>3541</a>                    .pay(invoice, max_delay, max_fee)
+<a href=#3542 id=3542 data-nosnippet>3542</a>                    .<span class="kw">await
+<a href=#3543 id=3543 data-nosnippet>3543</a>            </span>}
+<a href=#3544 id=3544 data-nosnippet>3544</a>            PaymentData::PrunedInvoice(invoice) =&gt; {
+<a href=#3545 id=3545 data-nosnippet>3545</a>                lightning_context
+<a href=#3546 id=3546 data-nosnippet>3546</a>                    .lnrpc
+<a href=#3547 id=3547 data-nosnippet>3547</a>                    .pay_private(invoice, max_delay, max_fee)
+<a href=#3548 id=3548 data-nosnippet>3548</a>                    .<span class="kw">await
+<a href=#3549 id=3549 data-nosnippet>3549</a>            </span>}
+<a href=#3550 id=3550 data-nosnippet>3550</a>        }
+<a href=#3551 id=3551 data-nosnippet>3551</a>    }
+<a href=#3552 id=3552 data-nosnippet>3552</a>
+<a href=#3553 id=3553 data-nosnippet>3553</a>    <span class="kw">async fn </span>complete_htlc(
+<a href=#3554 id=3554 data-nosnippet>3554</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3555 id=3555 data-nosnippet>3555</a>        htlc: InterceptPaymentResponse,
+<a href=#3556 id=3556 data-nosnippet>3556</a>    ) -&gt; std::result::Result&lt;(), LightningRpcError&gt; {
+<a href=#3557 id=3557 data-nosnippet>3557</a>        <span class="comment">// Wait until the lightning node is online to complete the HTLC.
+<a href=#3558 id=3558 data-nosnippet>3558</a>        </span><span class="kw">let </span>lightning_context = <span class="kw">loop </span>{
+<a href=#3559 id=3559 data-nosnippet>3559</a>            <span class="kw">match </span><span class="self">self</span>.get_lightning_context().<span class="kw">await </span>{
+<a href=#3560 id=3560 data-nosnippet>3560</a>                <span class="prelude-val">Ok</span>(lightning_context) =&gt; <span class="kw">break </span>lightning_context,
+<a href=#3561 id=3561 data-nosnippet>3561</a>                <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#3562 id=3562 data-nosnippet>3562</a>                    <span class="macro">warn!</span>(target: LOG_GATEWAY, err = %err.fmt_compact(), <span class="string">"Failure trying to complete payment"</span>);
+<a href=#3563 id=3563 data-nosnippet>3563</a>                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+<a href=#3564 id=3564 data-nosnippet>3564</a>                }
+<a href=#3565 id=3565 data-nosnippet>3565</a>            }
+<a href=#3566 id=3566 data-nosnippet>3566</a>        };
+<a href=#3567 id=3567 data-nosnippet>3567</a>
+<a href=#3568 id=3568 data-nosnippet>3568</a>        lightning_context.lnrpc.complete_htlc(htlc).<span class="kw">await
+<a href=#3569 id=3569 data-nosnippet>3569</a>    </span>}
+<a href=#3570 id=3570 data-nosnippet>3570</a>
+<a href=#3571 id=3571 data-nosnippet>3571</a>    <span class="kw">async fn </span>is_lnv2_direct_swap(
+<a href=#3572 id=3572 data-nosnippet>3572</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#3573 id=3573 data-nosnippet>3573</a>        payment_hash: sha256::Hash,
+<a href=#3574 id=3574 data-nosnippet>3574</a>        amount: Amount,
+<a href=#3575 id=3575 data-nosnippet>3575</a>    ) -&gt; anyhow::Result&lt;
+<a href=#3576 id=3576 data-nosnippet>3576</a>        <span class="prelude-ty">Option</span>&lt;(
+<a href=#3577 id=3577 data-nosnippet>3577</a>            fedimint_lnv2_common::contracts::IncomingContract,
+<a href=#3578 id=3578 data-nosnippet>3578</a>            ClientHandleArc,
+<a href=#3579 id=3579 data-nosnippet>3579</a>        )&gt;,
+<a href=#3580 id=3580 data-nosnippet>3580</a>    &gt; {
+<a href=#3581 id=3581 data-nosnippet>3581</a>        <span class="kw">let </span>(contract, client) = <span class="self">self
+<a href=#3582 id=3582 data-nosnippet>3582</a>            </span>.get_registered_incoming_contract_and_client_v2(
+<a href=#3583 id=3583 data-nosnippet>3583</a>                PaymentImage::Hash(payment_hash),
+<a href=#3584 id=3584 data-nosnippet>3584</a>                amount.msats,
+<a href=#3585 id=3585 data-nosnippet>3585</a>            )
+<a href=#3586 id=3586 data-nosnippet>3586</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#3587 id=3587 data-nosnippet>3587</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((contract, client)))
+<a href=#3588 id=3588 data-nosnippet>3588</a>    }
+<a href=#3589 id=3589 data-nosnippet>3589</a>}
 </code></pre></div></section></main></body></html>
