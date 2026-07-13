@@ -105,6 +105,8 @@
 
         stdenv = pkgs.stdenv;
 
+        cargoCrap = flakebox.packages.${system}.cargo-crap;
+
         flakeboxLib = flakebox.lib.mkLib pkgs {
           # customizations will go here in the future
           config = {
@@ -284,6 +286,7 @@
             flakeboxLib
             advisory-db
             replaceGitHash
+            cargoCrap
             ;
 
           # Yes, you're seeing right. We're passing result of this call as an argument
