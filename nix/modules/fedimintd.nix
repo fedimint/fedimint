@@ -125,6 +125,35 @@ let
             description = "Address to bind on for Iroh endpoint for API connections";
           };
         };
+        api_iroh_next = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Enable the transitional Iroh 1.0 client API for federations
+              configured with the legacy Iroh API.
+
+              WARNING: Once this endpoint is advertised, setting this option to
+              false or omitting it makes fedimintd startup fail. The endpoint
+              must remain enabled and reachable.
+            '';
+          };
+          openFirewall = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Opens the UDP port for fedimintd's transitional Iroh 1.0 API endpoint";
+          };
+          port = mkOption {
+            type = types.port;
+            default = 8184;
+            description = "UDP port to bind the transitional Iroh 1.0 API endpoint";
+          };
+          bind = mkOption {
+            type = types.str;
+            default = "0.0.0.0";
+            description = "Address to bind the transitional Iroh 1.0 API endpoint";
+          };
+        };
         ui = {
           openFirewall = mkOption {
             type = types.bool;
@@ -292,6 +321,7 @@ in
           fedimintdName: cfg:
           (
             lib.optional cfg.api_iroh.openFirewall cfg.api_iroh.port
+            ++ lib.optional (cfg.api_iroh_next.enable && cfg.api_iroh_next.openFirewall) cfg.api_iroh_next.port
             ++ lib.optional cfg.p2p.openFirewall cfg.p2p.port
           )
         ) eachFedimintd
@@ -332,6 +362,11 @@ in
 
               (lib.optionalAttrs (cfg.api_ws.url != null) {
                 FM_API_URL = cfg.api_ws.url;
+              })
+
+              (lib.optionalAttrs cfg.api_iroh_next.enable {
+                FM_IROH_NEXT_ENABLE = "true";
+                FM_BIND_API_NEXT = "${cfg.api_iroh_next.bind}:${toString cfg.api_iroh_next.port}";
               })
 
               cfg.environment
@@ -375,7 +410,8 @@ in
                 "tcp:${builtins.toString cfg.api_ws.port}"
                 "tcp:${builtins.toString cfg.ui.port}"
                 "udp:${builtins.toString cfg.api_iroh.port}"
-              ];
+              ]
+              ++ lib.optional cfg.api_iroh_next.enable "udp:${builtins.toString cfg.api_iroh_next.port}";
               SystemCallArchitectures = "native";
               SystemCallFilter = [
                 "@system-service"
