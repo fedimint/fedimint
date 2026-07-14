@@ -53,8 +53,9 @@ use fedimintd_envs::{
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
-    FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
+    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV,
+    FM_IROH_P2P_RELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV,
+    FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
 #[cfg(all(
@@ -195,6 +196,10 @@ struct ServerOpts {
     /// Optional URLs of the Iroh relays to use for registering
     #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh", value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
+
+    /// Optional Iroh 1.0 relay URLs to use for guardian P2P
+    #[arg(long, env = FM_IROH_P2P_RELAY_ENV, value_delimiter = ',')]
+    iroh_p2p_relays: Vec<SafeUrl>,
 
     /// Number of checkpoints from the current session to retain on disk
     #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
@@ -454,7 +459,7 @@ pub async fn run(
     let task_group = root_task_group.clone();
     let code_version_hash = code_version_hash.to_string();
     root_task_group.spawn_cancellable("main", async move {
-        fedimint_server::run(
+        fedimint_server::run_with_iroh_p2p_relays(
             server_opts.data_dir,
             auth_ui,
             auth_api,
@@ -474,6 +479,7 @@ pub async fn run(
                 server_opts.iroh_api_max_connections,
                 server_opts.iroh_api_max_requests_per_connection,
             ),
+            server_opts.iroh_p2p_relays,
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
@@ -573,5 +579,26 @@ mod tests {
             parse_server_opts_with_enable_iroh_env("0").enable_iroh,
             Some(false)
         );
+    }
+
+    #[test]
+    fn p2p_relay_does_not_require_enable_iroh_or_change_api_relays() {
+        let opts = ServerOpts::try_parse_from([
+            "fedimintd",
+            "--data-dir",
+            "/tmp/fedimintd-test",
+            "--bitcoind-url",
+            "http://127.0.0.1:18443",
+            "--bitcoind-username",
+            "user",
+            "--bitcoind-password",
+            "pass",
+            "--iroh-p2p-relays",
+            "https://relay.example.com/",
+        ])
+        .expect("P2P relay should parse independently");
+
+        assert!(opts.iroh_relays.is_empty());
+        assert_eq!(opts.iroh_p2p_relays.len(), 1);
     }
 }

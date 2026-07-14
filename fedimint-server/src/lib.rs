@@ -39,6 +39,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_CONSENSUS;
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
@@ -82,6 +83,9 @@ pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>
 /// A function/closure type for handling setup UI
 pub type SetupUiRouter = Box<dyn Fn(DynSetupApi) -> axum::Router + Send>;
 
+/// Run a server without configuring custom Iroh 1.0 relays for guardian P2P.
+///
+/// Use [`run_with_iroh_p2p_relays`] to supply version-specific P2P relays.
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
@@ -101,6 +105,49 @@ pub async fn run(
     session_timeout: Duration,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
+    run_with_iroh_p2p_relays(
+        data_dir,
+        auth_ui,
+        auth_api,
+        force_api_secrets,
+        settings,
+        db,
+        code_version_str,
+        code_version_hash,
+        module_init_registry,
+        task_group,
+        bitcoin_rpc,
+        setup_ui_router,
+        dashboard_ui_router,
+        db_checkpoint_retention,
+        session_timeout,
+        iroh_api_limits,
+        Vec::new(),
+    )
+    .await
+}
+
+/// Run a server with a separate Iroh 1.0 relay list for guardian P2P.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_iroh_p2p_relays(
+    data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    force_api_secrets: ApiSecrets,
+    settings: ConfigGenSettings,
+    db: Database,
+    code_version_str: String,
+    code_version_hash: String,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: TaskGroup,
+    bitcoin_rpc: DynServerBitcoinRpc,
+    setup_ui_router: SetupUiRouter,
+    dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
+    session_timeout: Duration,
+    iroh_api_limits: ConnectionLimits,
+    iroh_p2p_relays: Vec<SafeUrl>,
+) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
             let connector = if cfg.consensus.iroh_endpoints.is_empty() {
@@ -117,7 +164,7 @@ pub async fn run(
                     cfg.private.iroh_p2p_sk.clone().unwrap(),
                     settings.p2p_bind,
                     settings.iroh_dns.clone(),
-                    settings.iroh_relays.clone(),
+                    iroh_p2p_relays.clone(),
                     cfg.consensus
                         .iroh_endpoints
                         .iter()
@@ -141,7 +188,7 @@ pub async fn run(
             (cfg, connections, p2p_status_receivers)
         }
         None => {
-            Box::pin(run_config_gen(
+            Box::pin(run_config_gen_with_iroh_p2p_relays(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
@@ -153,6 +200,7 @@ pub async fn run(
                 module_init_registry.clone(),
                 auth_ui.clone(),
                 auth_api.clone(),
+                iroh_p2p_relays,
             ))
             .await?
         }
@@ -319,6 +367,11 @@ fn restored_iroh_p2p_key(cfg: &ServerConfig) -> anyhow::Result<iroh::SecretKey> 
     Ok(iroh_p2p_sk)
 }
 
+/// Run config generation without configuring custom Iroh 1.0 relays for
+/// guardian P2P.
+///
+/// Use [`run_config_gen_with_iroh_p2p_relays`] to supply version-specific P2P
+/// relays.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_config_gen(
     data_dir: PathBuf,
@@ -332,6 +385,43 @@ pub async fn run_config_gen(
     module_init_registry: ServerModuleInitRegistry,
     auth_ui: Option<ApiAuth>,
     auth_api: Option<ApiAuth>,
+) -> anyhow::Result<(
+    ServerConfig,
+    DynP2PConnections<P2PMessage>,
+    P2PStatusReceivers,
+)> {
+    run_config_gen_with_iroh_p2p_relays(
+        data_dir,
+        settings,
+        db,
+        task_group,
+        code_version_str,
+        code_version_hash,
+        api_secrets,
+        setup_ui_handler,
+        module_init_registry,
+        auth_ui,
+        auth_api,
+        Vec::new(),
+    )
+    .await
+}
+
+/// Run config generation with a separate Iroh 1.0 relay list for guardian P2P.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_config_gen_with_iroh_p2p_relays(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    task_group: &TaskGroup,
+    code_version_str: String,
+    code_version_hash: String,
+    api_secrets: ApiSecrets,
+    setup_ui_handler: SetupUiRouter,
+    module_init_registry: ServerModuleInitRegistry,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    iroh_p2p_relays: Vec<SafeUrl>,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -426,7 +516,7 @@ pub async fn run_config_gen(
                             .expect("Iroh p2p secret key is required for iroh endpoints"),
                         settings.p2p_bind,
                         settings.iroh_dns,
-                        settings.iroh_relays,
+                        iroh_p2p_relays,
                         cg_params
                             .iroh_endpoints()
                             .iter()
@@ -509,7 +599,7 @@ pub async fn run_config_gen(
                             iroh_p2p_sk,
                             settings.p2p_bind,
                             settings.iroh_dns.clone(),
-                            settings.iroh_relays.clone(),
+                            iroh_p2p_relays.clone(),
                             cfg.consensus
                                 .iroh_endpoints
                                 .iter()

@@ -18,7 +18,7 @@ use crate::{DynServerModule, ServerModule};
 
 pub type DynDashboardApi = Arc<dyn IDashboardApi + Send + Sync + 'static>;
 
-/// Type of the connection to a peer. Mirrors iroh::endpoint::ConnectionType.
+/// Stable dashboard abstraction for the transport paths used to reach a peer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionType {
@@ -26,7 +26,7 @@ pub enum ConnectionType {
     Direct,
     /// Going through an Iroh relay
     Relay,
-    /// Both relay and direct paths available
+    /// Both relay and direct paths selected for use
     Mixed,
 }
 
