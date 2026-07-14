@@ -285,13 +285,13 @@
 <a href=#285 id=285 data-nosnippet>285</a>    }
 <a href=#286 id=286 data-nosnippet>286</a>
 <a href=#287 id=287 data-nosnippet>287</a>    <span class="kw">fn </span>is_enabled_by_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#288 id=288 data-nosnippet>288</a>        is_env_var_set_opt(FM_ENABLE_MODULE_WALLETV2_ENV).unwrap_or(<span class="bool-val">false</span>)
+<a href=#288 id=288 data-nosnippet>288</a>        is_env_var_set_opt(FM_ENABLE_MODULE_WALLETV2_ENV).unwrap_or(<span class="bool-val">true</span>)
 <a href=#289 id=289 data-nosnippet>289</a>    }
 <a href=#290 id=290 data-nosnippet>290</a>
 <a href=#291 id=291 data-nosnippet>291</a>    <span class="kw">fn </span>get_documented_env_vars(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;EnvVarDoc&gt; {
 <a href=#292 id=292 data-nosnippet>292</a>        <span class="macro">vec!</span>[EnvVarDoc {
 <a href=#293 id=293 data-nosnippet>293</a>            name: FM_ENABLE_MODULE_WALLETV2_ENV,
-<a href=#294 id=294 data-nosnippet>294</a>            description: <span class="string">"Set to 1/true to enable the WalletV2 module (experimental). Disabled by default."</span>,
+<a href=#294 id=294 data-nosnippet>294</a>            description: <span class="string">"Set to 0/false to disable the WalletV2 module. Enabled by default."</span>,
 <a href=#295 id=295 data-nosnippet>295</a>        }]
 <a href=#296 id=296 data-nosnippet>296</a>    }
 <a href=#297 id=297 data-nosnippet>297</a>

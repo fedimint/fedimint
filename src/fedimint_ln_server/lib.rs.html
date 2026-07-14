@@ -217,13 +217,13 @@
 <a href=#217 id=217 data-nosnippet>217</a>    }
 <a href=#218 id=218 data-nosnippet>218</a>
 <a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">fn </span>is_enabled_by_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#220 id=220 data-nosnippet>220</a>        is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(<span class="bool-val">true</span>)
+<a href=#220 id=220 data-nosnippet>220</a>        is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(<span class="bool-val">false</span>)
 <a href=#221 id=221 data-nosnippet>221</a>    }
 <a href=#222 id=222 data-nosnippet>222</a>
 <a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">fn </span>get_documented_env_vars(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;EnvVarDoc&gt; {
 <a href=#224 id=224 data-nosnippet>224</a>        <span class="macro">vec!</span>[EnvVarDoc {
 <a href=#225 id=225 data-nosnippet>225</a>            name: FM_ENABLE_MODULE_LNV1_ENV,
-<a href=#226 id=226 data-nosnippet>226</a>            description: <span class="string">"Set to 0/false to disable the LNv1 Lightning module. Enabled by default."</span>,
+<a href=#226 id=226 data-nosnippet>226</a>            description: <span class="string">"Set to 1/true to enable the LNv1 Lightning module. Disabled by default."</span>,
 <a href=#227 id=227 data-nosnippet>227</a>        }]
 <a href=#228 id=228 data-nosnippet>228</a>    }
 <a href=#229 id=229 data-nosnippet>229</a>

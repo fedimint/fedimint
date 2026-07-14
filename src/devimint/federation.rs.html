@@ -1166,243 +1166,252 @@
 <a href=#1166 id=1166 data-nosnippet>1166</a>    }
 <a href=#1167 id=1167 data-nosnippet>1167</a>
 <a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1169 id=1169 data-nosnippet>1169</a>        <span class="kw">let </span>start_time = Instant::now();
-<a href=#1170 id=1170 data-nosnippet>1170</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
-<a href=#1171 id=1171 data-nosnippet>1171</a>
-<a href=#1172 id=1172 data-nosnippet>1172</a>        poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
-<a href=#1173 id=1173 data-nosnippet>1173</a>            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
-<a href=#1174 id=1174 data-nosnippet>1174</a>                <span class="self">self</span>.internal_client()
-<a href=#1175 id=1175 data-nosnippet>1175</a>                    .<span class="kw">await
-<a href=#1176 id=1176 data-nosnippet>1176</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1177 id=1177 data-nosnippet>1177</a>                <span class="string">"list-gateways"
-<a href=#1178 id=1178 data-nosnippet>1178</a>            </span>)
-<a href=#1179 id=1179 data-nosnippet>1179</a>            .out_json()
-<a href=#1180 id=1180 data-nosnippet>1180</a>            .<span class="kw">await
-<a href=#1181 id=1181 data-nosnippet>1181</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-<a href=#1182 id=1182 data-nosnippet>1182</a>            </span>.as_array()
-<a href=#1183 id=1183 data-nosnippet>1183</a>            .context(<span class="string">"invalid output"</span>)
-<a href=#1184 id=1184 data-nosnippet>1184</a>            .map_err(ControlFlow::Break)<span class="question-mark">?
-<a href=#1185 id=1185 data-nosnippet>1185</a>            </span>.len();
-<a href=#1186 id=1186 data-nosnippet>1186</a>
-<a href=#1187 id=1187 data-nosnippet>1187</a>            <span class="comment">// After version v0.10.0, the LND gateway will register twice. Once for the HTTP
-<a href=#1188 id=1188 data-nosnippet>1188</a>            // server, and once for the iroh endpoint.
-<a href=#1189 id=1189 data-nosnippet>1189</a>            </span><span class="kw">let </span>expected_gateways =
-<a href=#1190 id=1190 data-nosnippet>1190</a>                <span class="kw">if </span><span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
-<a href=#1191 id=1191 data-nosnippet>1191</a>                    <span class="number">1
-<a href=#1192 id=1192 data-nosnippet>1192</a>                </span>} <span class="kw">else </span>{
-<a href=#1193 id=1193 data-nosnippet>1193</a>                    <span class="number">2
-<a href=#1194 id=1194 data-nosnippet>1194</a>                </span>};
+<a href=#1169 id=1169 data-nosnippet>1169</a>        <span class="comment">// `list-gateways` is an LNv1 concept: gateways register with the LNv1
+<a href=#1170 id=1170 data-nosnippet>1170</a>        // module and the client lists them. LNv2 instead addresses gateways
+<a href=#1171 id=1171 data-nosnippet>1171</a>        // directly and vets them via an explicit consensus item, so there is
+<a href=#1172 id=1172 data-nosnippet>1172</a>        // nothing to poll here when the LNv1 module isn't present. The gateway
+<a href=#1173 id=1173 data-nosnippet>1173</a>        // connection itself is awaited separately (via `connect_fed`).
+<a href=#1174 id=1174 data-nosnippet>1174</a>        </span><span class="kw">if </span>!<span class="kw">crate</span>::util::supports_lnv1() {
+<a href=#1175 id=1175 data-nosnippet>1175</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#1176 id=1176 data-nosnippet>1176</a>        }
+<a href=#1177 id=1177 data-nosnippet>1177</a>
+<a href=#1178 id=1178 data-nosnippet>1178</a>        <span class="kw">let </span>start_time = Instant::now();
+<a href=#1179 id=1179 data-nosnippet>1179</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
+<a href=#1180 id=1180 data-nosnippet>1180</a>
+<a href=#1181 id=1181 data-nosnippet>1181</a>        poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
+<a href=#1182 id=1182 data-nosnippet>1182</a>            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
+<a href=#1183 id=1183 data-nosnippet>1183</a>                <span class="self">self</span>.internal_client()
+<a href=#1184 id=1184 data-nosnippet>1184</a>                    .<span class="kw">await
+<a href=#1185 id=1185 data-nosnippet>1185</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1186 id=1186 data-nosnippet>1186</a>                <span class="string">"list-gateways"
+<a href=#1187 id=1187 data-nosnippet>1187</a>            </span>)
+<a href=#1188 id=1188 data-nosnippet>1188</a>            .out_json()
+<a href=#1189 id=1189 data-nosnippet>1189</a>            .<span class="kw">await
+<a href=#1190 id=1190 data-nosnippet>1190</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
+<a href=#1191 id=1191 data-nosnippet>1191</a>            </span>.as_array()
+<a href=#1192 id=1192 data-nosnippet>1192</a>            .context(<span class="string">"invalid output"</span>)
+<a href=#1193 id=1193 data-nosnippet>1193</a>            .map_err(ControlFlow::Break)<span class="question-mark">?
+<a href=#1194 id=1194 data-nosnippet>1194</a>            </span>.len();
 <a href=#1195 id=1195 data-nosnippet>1195</a>
-<a href=#1196 id=1196 data-nosnippet>1196</a>            <span class="macro">poll_eq!</span>(num_gateways, expected_gateways)
-<a href=#1197 id=1197 data-nosnippet>1197</a>        })
-<a href=#1198 id=1198 data-nosnippet>1198</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1199 id=1199 data-nosnippet>1199</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
-<a href=#1200 id=1200 data-nosnippet>1200</a>            elapsed_ms = %start_time.elapsed().as_millis(),
-<a href=#1201 id=1201 data-nosnippet>1201</a>            <span class="string">"Gateways registered"</span>);
-<a href=#1202 id=1202 data-nosnippet>1202</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1203 id=1203 data-nosnippet>1203</a>    }
+<a href=#1196 id=1196 data-nosnippet>1196</a>            <span class="comment">// After version v0.10.0, the LND gateway will register twice. Once for the HTTP
+<a href=#1197 id=1197 data-nosnippet>1197</a>            // server, and once for the iroh endpoint.
+<a href=#1198 id=1198 data-nosnippet>1198</a>            </span><span class="kw">let </span>expected_gateways =
+<a href=#1199 id=1199 data-nosnippet>1199</a>                <span class="kw">if </span><span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA {
+<a href=#1200 id=1200 data-nosnippet>1200</a>                    <span class="number">1
+<a href=#1201 id=1201 data-nosnippet>1201</a>                </span>} <span class="kw">else </span>{
+<a href=#1202 id=1202 data-nosnippet>1202</a>                    <span class="number">2
+<a href=#1203 id=1203 data-nosnippet>1203</a>                </span>};
 <a href=#1204 id=1204 data-nosnippet>1204</a>
-<a href=#1205 id=1205 data-nosnippet>1205</a>    <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1206 id=1206 data-nosnippet>1206</a>        <span class="kw">let </span>(module_name, endpoint) = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
-<a href=#1207 id=1207 data-nosnippet>1207</a>            (<span class="string">"walletv2"</span>, <span class="string">"consensus_block_count"</span>)
-<a href=#1208 id=1208 data-nosnippet>1208</a>        } <span class="kw">else </span>{
-<a href=#1209 id=1209 data-nosnippet>1209</a>            (<span class="string">"wallet"</span>, <span class="string">"block_count"</span>)
-<a href=#1210 id=1210 data-nosnippet>1210</a>        };
-<a href=#1211 id=1211 data-nosnippet>1211</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
-<a href=#1212 id=1212 data-nosnippet>1212</a>            <span class="macro">cmd!</span>(
-<a href=#1213 id=1213 data-nosnippet>1213</a>                <span class="self">self</span>.internal_client()
-<a href=#1214 id=1214 data-nosnippet>1214</a>                    .<span class="kw">await
-<a href=#1215 id=1215 data-nosnippet>1215</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1216 id=1216 data-nosnippet>1216</a>                <span class="string">"dev"</span>,
-<a href=#1217 id=1217 data-nosnippet>1217</a>                <span class="string">"api"</span>,
-<a href=#1218 id=1218 data-nosnippet>1218</a>                <span class="string">"--module"</span>,
-<a href=#1219 id=1219 data-nosnippet>1219</a>                module_name,
-<a href=#1220 id=1220 data-nosnippet>1220</a>                endpoint
-<a href=#1221 id=1221 data-nosnippet>1221</a>            )
-<a href=#1222 id=1222 data-nosnippet>1222</a>            .run()
-<a href=#1223 id=1223 data-nosnippet>1223</a>            .<span class="kw">await
-<a href=#1224 id=1224 data-nosnippet>1224</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#1225 id=1225 data-nosnippet>1225</a>            <span class="prelude-val">Ok</span>(())
-<a href=#1226 id=1226 data-nosnippet>1226</a>        })
-<a href=#1227 id=1227 data-nosnippet>1227</a>        .<span class="kw">await
-<a href=#1228 id=1228 data-nosnippet>1228</a>    </span>}
-<a href=#1229 id=1229 data-nosnippet>1229</a>
-<a href=#1230 id=1230 data-nosnippet>1230</a>    <span class="kw">pub async fn </span>await_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1231 id=1231 data-nosnippet>1231</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
-<a href=#1232 id=1232 data-nosnippet>1232</a>            <span class="macro">cmd!</span>(
-<a href=#1233 id=1233 data-nosnippet>1233</a>                <span class="self">self</span>.internal_client()
-<a href=#1234 id=1234 data-nosnippet>1234</a>                    .<span class="kw">await
-<a href=#1235 id=1235 data-nosnippet>1235</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-<a href=#1236 id=1236 data-nosnippet>1236</a>                <span class="string">"dev"</span>,
-<a href=#1237 id=1237 data-nosnippet>1237</a>                <span class="string">"api"</span>,
-<a href=#1238 id=1238 data-nosnippet>1238</a>                <span class="string">"--peer-id"</span>,
-<a href=#1239 id=1239 data-nosnippet>1239</a>                peer_id,
-<a href=#1240 id=1240 data-nosnippet>1240</a>                <span class="string">"--module"</span>,
-<a href=#1241 id=1241 data-nosnippet>1241</a>                <span class="string">"wallet"</span>,
-<a href=#1242 id=1242 data-nosnippet>1242</a>                <span class="string">"block_count"
-<a href=#1243 id=1243 data-nosnippet>1243</a>            </span>)
-<a href=#1244 id=1244 data-nosnippet>1244</a>            .run()
-<a href=#1245 id=1245 data-nosnippet>1245</a>            .<span class="kw">await
-<a href=#1246 id=1246 data-nosnippet>1246</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-<a href=#1247 id=1247 data-nosnippet>1247</a>            <span class="prelude-val">Ok</span>(())
-<a href=#1248 id=1248 data-nosnippet>1248</a>        })
-<a href=#1249 id=1249 data-nosnippet>1249</a>        .<span class="kw">await
-<a href=#1250 id=1250 data-nosnippet>1250</a>    </span>}
-<a href=#1251 id=1251 data-nosnippet>1251</a>
-<a href=#1252 id=1252 data-nosnippet>1252</a>    <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
-<a href=#1253 id=1253 data-nosnippet>1253</a>    /// federation to process finalized blocks.
-<a href=#1254 id=1254 data-nosnippet>1254</a>    ///
-<a href=#1255 id=1255 data-nosnippet>1255</a>    /// ex:
-<a href=#1256 id=1256 data-nosnippet>1256</a>    ///   tx submitted to mempool at height 100
-<a href=#1257 id=1257 data-nosnippet>1257</a>    ///   finality delay = 10
-<a href=#1258 id=1258 data-nosnippet>1258</a>    ///   mine finality delay blocks + 1 =&gt; new height 111
-<a href=#1259 id=1259 data-nosnippet>1259</a>    ///   tx included in block 101
-<a href=#1260 id=1260 data-nosnippet>1260</a>    ///   highest finalized height = 111 - 10 = 101
-<a href=#1261 id=1261 data-nosnippet>1261</a>    </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1262 id=1262 data-nosnippet>1262</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
-<a href=#1263 id=1263 data-nosnippet>1263</a>        <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
-<a href=#1264 id=1264 data-nosnippet>1264</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1265 id=1265 data-nosnippet>1265</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1266 id=1266 data-nosnippet>1266</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1267 id=1267 data-nosnippet>1267</a>    }
-<a href=#1268 id=1268 data-nosnippet>1268</a>
-<a href=#1269 id=1269 data-nosnippet>1269</a>    <span class="kw">pub async fn </span>mine_then_wait_blocks_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1272 id=1272 data-nosnippet>1272</a>        <span class="prelude-val">Ok</span>(())
-<a href=#1273 id=1273 data-nosnippet>1273</a>    }
-<a href=#1274 id=1274 data-nosnippet>1274</a>
-<a href=#1275 id=1275 data-nosnippet>1275</a>    <span class="kw">pub fn </span>num_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="self">self</span>.members.len()
-<a href=#1277 id=1277 data-nosnippet>1277</a>    }
-<a href=#1278 id=1278 data-nosnippet>1278</a>
-<a href=#1279 id=1279 data-nosnippet>1279</a>    <span class="kw">pub fn </span>member_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; + <span class="lifetime">'_ </span>{
-<a href=#1280 id=1280 data-nosnippet>1280</a>        <span class="self">self</span>.members
-<a href=#1281 id=1281 data-nosnippet>1281</a>            .keys()
-<a href=#1282 id=1282 data-nosnippet>1282</a>            .map(|<span class="kw-2">&amp;</span>peer_id| PeerId::from(peer_id <span class="kw">as </span>u16))
-<a href=#1283 id=1283 data-nosnippet>1283</a>    }
-<a href=#1284 id=1284 data-nosnippet>1284</a>}
-<a href=#1285 id=1285 data-nosnippet>1285</a>
-<a href=#1286 id=1286 data-nosnippet>1286</a><span class="attr">#[derive(Clone)]
-<a href=#1287 id=1287 data-nosnippet>1287</a></span><span class="kw">pub struct </span>Fedimintd {
-<a href=#1288 id=1288 data-nosnippet>1288</a>    _bitcoind: Bitcoind,
-<a href=#1289 id=1289 data-nosnippet>1289</a>    process: ProcessHandle,
-<a href=#1290 id=1290 data-nosnippet>1290</a>}
-<a href=#1291 id=1291 data-nosnippet>1291</a>
-<a href=#1292 id=1292 data-nosnippet>1292</a><span class="kw">impl </span>Fedimintd {
-<a href=#1293 id=1293 data-nosnippet>1293</a>    <span class="kw">pub async fn </span>new(
-<a href=#1294 id=1294 data-nosnippet>1294</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
-<a href=#1295 id=1295 data-nosnippet>1295</a>        bitcoind: Bitcoind,
-<a href=#1296 id=1296 data-nosnippet>1296</a>        peer_id: usize,
-<a href=#1297 id=1297 data-nosnippet>1297</a>        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
-<a href=#1298 id=1298 data-nosnippet>1298</a>        fed_name: String,
-<a href=#1299 id=1299 data-nosnippet>1299</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#1300 id=1300 data-nosnippet>1300</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{fed_name}-{peer_id}"</span>);
-<a href=#1301 id=1301 data-nosnippet>1301</a>        <span class="kw">let </span>process = process_mgr
-<a href=#1302 id=1302 data-nosnippet>1302</a>            .spawn_daemon(
-<a href=#1303 id=1303 data-nosnippet>1303</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{fed_name}-{peer_id}"</span>),
-<a href=#1304 id=1304 data-nosnippet>1304</a>                <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
-<a href=#1305 id=1305 data-nosnippet>1305</a>            )
-<a href=#1306 id=1306 data-nosnippet>1306</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1307 id=1307 data-nosnippet>1307</a>
-<a href=#1308 id=1308 data-nosnippet>1308</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#1309 id=1309 data-nosnippet>1309</a>            _bitcoind: bitcoind,
-<a href=#1310 id=1310 data-nosnippet>1310</a>            process,
-<a href=#1311 id=1311 data-nosnippet>1311</a>        })
-<a href=#1312 id=1312 data-nosnippet>1312</a>    }
-<a href=#1313 id=1313 data-nosnippet>1313</a>
-<a href=#1314 id=1314 data-nosnippet>1314</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1315 id=1315 data-nosnippet>1315</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
-<a href=#1316 id=1316 data-nosnippet>1316</a>    </span>}
-<a href=#1317 id=1317 data-nosnippet>1317</a>
-<a href=#1318 id=1318 data-nosnippet>1318</a>    <span class="kw">pub async fn </span>await_terminated(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="self">self</span>.process.await_terminated().<span class="kw">await
-<a href=#1320 id=1320 data-nosnippet>1320</a>    </span>}
-<a href=#1321 id=1321 data-nosnippet>1321</a>}
+<a href=#1205 id=1205 data-nosnippet>1205</a>            <span class="macro">poll_eq!</span>(num_gateways, expected_gateways)
+<a href=#1206 id=1206 data-nosnippet>1206</a>        })
+<a href=#1207 id=1207 data-nosnippet>1207</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1208 id=1208 data-nosnippet>1208</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
+<a href=#1209 id=1209 data-nosnippet>1209</a>            elapsed_ms = %start_time.elapsed().as_millis(),
+<a href=#1210 id=1210 data-nosnippet>1210</a>            <span class="string">"Gateways registered"</span>);
+<a href=#1211 id=1211 data-nosnippet>1211</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1212 id=1212 data-nosnippet>1212</a>    }
+<a href=#1213 id=1213 data-nosnippet>1213</a>
+<a href=#1214 id=1214 data-nosnippet>1214</a>    <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1215 id=1215 data-nosnippet>1215</a>        <span class="kw">let </span>(module_name, endpoint) = <span class="kw">if </span><span class="kw">crate</span>::util::supports_wallet_v2() {
+<a href=#1216 id=1216 data-nosnippet>1216</a>            (<span class="string">"walletv2"</span>, <span class="string">"consensus_block_count"</span>)
+<a href=#1217 id=1217 data-nosnippet>1217</a>        } <span class="kw">else </span>{
+<a href=#1218 id=1218 data-nosnippet>1218</a>            (<span class="string">"wallet"</span>, <span class="string">"block_count"</span>)
+<a href=#1219 id=1219 data-nosnippet>1219</a>        };
+<a href=#1220 id=1220 data-nosnippet>1220</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
+<a href=#1221 id=1221 data-nosnippet>1221</a>            <span class="macro">cmd!</span>(
+<a href=#1222 id=1222 data-nosnippet>1222</a>                <span class="self">self</span>.internal_client()
+<a href=#1223 id=1223 data-nosnippet>1223</a>                    .<span class="kw">await
+<a href=#1224 id=1224 data-nosnippet>1224</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1225 id=1225 data-nosnippet>1225</a>                <span class="string">"dev"</span>,
+<a href=#1226 id=1226 data-nosnippet>1226</a>                <span class="string">"api"</span>,
+<a href=#1227 id=1227 data-nosnippet>1227</a>                <span class="string">"--module"</span>,
+<a href=#1228 id=1228 data-nosnippet>1228</a>                module_name,
+<a href=#1229 id=1229 data-nosnippet>1229</a>                endpoint
+<a href=#1230 id=1230 data-nosnippet>1230</a>            )
+<a href=#1231 id=1231 data-nosnippet>1231</a>            .run()
+<a href=#1232 id=1232 data-nosnippet>1232</a>            .<span class="kw">await
+<a href=#1233 id=1233 data-nosnippet>1233</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#1234 id=1234 data-nosnippet>1234</a>            <span class="prelude-val">Ok</span>(())
+<a href=#1235 id=1235 data-nosnippet>1235</a>        })
+<a href=#1236 id=1236 data-nosnippet>1236</a>        .<span class="kw">await
+<a href=#1237 id=1237 data-nosnippet>1237</a>    </span>}
+<a href=#1238 id=1238 data-nosnippet>1238</a>
+<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="kw">pub async fn </span>await_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1240 id=1240 data-nosnippet>1240</a>        poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
+<a href=#1241 id=1241 data-nosnippet>1241</a>            <span class="macro">cmd!</span>(
+<a href=#1242 id=1242 data-nosnippet>1242</a>                <span class="self">self</span>.internal_client()
+<a href=#1243 id=1243 data-nosnippet>1243</a>                    .<span class="kw">await
+<a href=#1244 id=1244 data-nosnippet>1244</a>                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+<a href=#1245 id=1245 data-nosnippet>1245</a>                <span class="string">"dev"</span>,
+<a href=#1246 id=1246 data-nosnippet>1246</a>                <span class="string">"api"</span>,
+<a href=#1247 id=1247 data-nosnippet>1247</a>                <span class="string">"--peer-id"</span>,
+<a href=#1248 id=1248 data-nosnippet>1248</a>                peer_id,
+<a href=#1249 id=1249 data-nosnippet>1249</a>                <span class="string">"--module"</span>,
+<a href=#1250 id=1250 data-nosnippet>1250</a>                <span class="string">"wallet"</span>,
+<a href=#1251 id=1251 data-nosnippet>1251</a>                <span class="string">"block_count"
+<a href=#1252 id=1252 data-nosnippet>1252</a>            </span>)
+<a href=#1253 id=1253 data-nosnippet>1253</a>            .run()
+<a href=#1254 id=1254 data-nosnippet>1254</a>            .<span class="kw">await
+<a href=#1255 id=1255 data-nosnippet>1255</a>            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+<a href=#1256 id=1256 data-nosnippet>1256</a>            <span class="prelude-val">Ok</span>(())
+<a href=#1257 id=1257 data-nosnippet>1257</a>        })
+<a href=#1258 id=1258 data-nosnippet>1258</a>        .<span class="kw">await
+<a href=#1259 id=1259 data-nosnippet>1259</a>    </span>}
+<a href=#1260 id=1260 data-nosnippet>1260</a>
+<a href=#1261 id=1261 data-nosnippet>1261</a>    <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
+<a href=#1262 id=1262 data-nosnippet>1262</a>    /// federation to process finalized blocks.
+<a href=#1263 id=1263 data-nosnippet>1263</a>    ///
+<a href=#1264 id=1264 data-nosnippet>1264</a>    /// ex:
+<a href=#1265 id=1265 data-nosnippet>1265</a>    ///   tx submitted to mempool at height 100
+<a href=#1266 id=1266 data-nosnippet>1266</a>    ///   finality delay = 10
+<a href=#1267 id=1267 data-nosnippet>1267</a>    ///   mine finality delay blocks + 1 =&gt; new height 111
+<a href=#1268 id=1268 data-nosnippet>1268</a>    ///   tx included in block 101
+<a href=#1269 id=1269 data-nosnippet>1269</a>    ///   highest finalized height = 111 - 10 = 101
+<a href=#1270 id=1270 data-nosnippet>1270</a>    </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
+<a href=#1272 id=1272 data-nosnippet>1272</a>        <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
+<a href=#1273 id=1273 data-nosnippet>1273</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1274 id=1274 data-nosnippet>1274</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1275 id=1275 data-nosnippet>1275</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1276 id=1276 data-nosnippet>1276</a>    }
+<a href=#1277 id=1277 data-nosnippet>1277</a>
+<a href=#1278 id=1278 data-nosnippet>1278</a>    <span class="kw">pub async fn </span>mine_then_wait_blocks_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1279 id=1279 data-nosnippet>1279</a>        <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1280 id=1280 data-nosnippet>1280</a>        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1281 id=1281 data-nosnippet>1281</a>        <span class="prelude-val">Ok</span>(())
+<a href=#1282 id=1282 data-nosnippet>1282</a>    }
+<a href=#1283 id=1283 data-nosnippet>1283</a>
+<a href=#1284 id=1284 data-nosnippet>1284</a>    <span class="kw">pub fn </span>num_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#1285 id=1285 data-nosnippet>1285</a>        <span class="self">self</span>.members.len()
+<a href=#1286 id=1286 data-nosnippet>1286</a>    }
+<a href=#1287 id=1287 data-nosnippet>1287</a>
+<a href=#1288 id=1288 data-nosnippet>1288</a>    <span class="kw">pub fn </span>member_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; + <span class="lifetime">'_ </span>{
+<a href=#1289 id=1289 data-nosnippet>1289</a>        <span class="self">self</span>.members
+<a href=#1290 id=1290 data-nosnippet>1290</a>            .keys()
+<a href=#1291 id=1291 data-nosnippet>1291</a>            .map(|<span class="kw-2">&amp;</span>peer_id| PeerId::from(peer_id <span class="kw">as </span>u16))
+<a href=#1292 id=1292 data-nosnippet>1292</a>    }
+<a href=#1293 id=1293 data-nosnippet>1293</a>}
+<a href=#1294 id=1294 data-nosnippet>1294</a>
+<a href=#1295 id=1295 data-nosnippet>1295</a><span class="attr">#[derive(Clone)]
+<a href=#1296 id=1296 data-nosnippet>1296</a></span><span class="kw">pub struct </span>Fedimintd {
+<a href=#1297 id=1297 data-nosnippet>1297</a>    _bitcoind: Bitcoind,
+<a href=#1298 id=1298 data-nosnippet>1298</a>    process: ProcessHandle,
+<a href=#1299 id=1299 data-nosnippet>1299</a>}
+<a href=#1300 id=1300 data-nosnippet>1300</a>
+<a href=#1301 id=1301 data-nosnippet>1301</a><span class="kw">impl </span>Fedimintd {
+<a href=#1302 id=1302 data-nosnippet>1302</a>    <span class="kw">pub async fn </span>new(
+<a href=#1303 id=1303 data-nosnippet>1303</a>        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+<a href=#1304 id=1304 data-nosnippet>1304</a>        bitcoind: Bitcoind,
+<a href=#1305 id=1305 data-nosnippet>1305</a>        peer_id: usize,
+<a href=#1306 id=1306 data-nosnippet>1306</a>        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
+<a href=#1307 id=1307 data-nosnippet>1307</a>        fed_name: String,
+<a href=#1308 id=1308 data-nosnippet>1308</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#1309 id=1309 data-nosnippet>1309</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{fed_name}-{peer_id}"</span>);
+<a href=#1310 id=1310 data-nosnippet>1310</a>        <span class="kw">let </span>process = process_mgr
+<a href=#1311 id=1311 data-nosnippet>1311</a>            .spawn_daemon(
+<a href=#1312 id=1312 data-nosnippet>1312</a>                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{fed_name}-{peer_id}"</span>),
+<a href=#1313 id=1313 data-nosnippet>1313</a>                <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
+<a href=#1314 id=1314 data-nosnippet>1314</a>            )
+<a href=#1315 id=1315 data-nosnippet>1315</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1316 id=1316 data-nosnippet>1316</a>
+<a href=#1317 id=1317 data-nosnippet>1317</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#1318 id=1318 data-nosnippet>1318</a>            _bitcoind: bitcoind,
+<a href=#1319 id=1319 data-nosnippet>1319</a>            process,
+<a href=#1320 id=1320 data-nosnippet>1320</a>        })
+<a href=#1321 id=1321 data-nosnippet>1321</a>    }
 <a href=#1322 id=1322 data-nosnippet>1322</a>
-<a href=#1323 id=1323 data-nosnippet>1323</a><span class="kw">pub async fn </span>run_cli_dkg_v2(endpoints: BTreeMap&lt;PeerId, String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1324 id=1324 data-nosnippet>1324</a>    <span class="comment">// Parallelize setup status checks
-<a href=#1325 id=1325 data-nosnippet>1325</a>    </span><span class="kw">let </span>status_futures = endpoints.values().map(|endpoint| {
-<a href=#1326 id=1326 data-nosnippet>1326</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1327 id=1327 data-nosnippet>1327</a>        <span class="kw">async move </span>{
-<a href=#1328 id=1328 data-nosnippet>1328</a>            <span class="kw">let </span>status = poll(<span class="string">"awaiting-setup-status-awaiting-local-params"</span>, || <span class="kw">async </span>{
-<a href=#1329 id=1329 data-nosnippet>1329</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1330 id=1330 data-nosnippet>1330</a>                    .setup_status(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1331 id=1331 data-nosnippet>1331</a>                    .<span class="kw">await
-<a href=#1332 id=1332 data-nosnippet>1332</a>                    </span>.map_err(ControlFlow::Continue)
-<a href=#1333 id=1333 data-nosnippet>1333</a>            })
-<a href=#1334 id=1334 data-nosnippet>1334</a>            .<span class="kw">await
-<a href=#1335 id=1335 data-nosnippet>1335</a>            </span>.unwrap();
-<a href=#1336 id=1336 data-nosnippet>1336</a>
-<a href=#1337 id=1337 data-nosnippet>1337</a>            <span class="macro">assert_eq!</span>(status, SetupStatus::AwaitingLocalParams);
-<a href=#1338 id=1338 data-nosnippet>1338</a>        }
-<a href=#1339 id=1339 data-nosnippet>1339</a>    });
-<a href=#1340 id=1340 data-nosnippet>1340</a>    join_all(status_futures).<span class="kw">await</span>;
-<a href=#1341 id=1341 data-nosnippet>1341</a>
-<a href=#1342 id=1342 data-nosnippet>1342</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting local parameters..."</span>);
-<a href=#1343 id=1343 data-nosnippet>1343</a>
-<a href=#1344 id=1344 data-nosnippet>1344</a>    <span class="comment">// Parallelize setting local parameters
-<a href=#1345 id=1345 data-nosnippet>1345</a>    // --federation-size is only supported by fedimint-cli &gt;= 0.11.0-alpha
-<a href=#1346 id=1346 data-nosnippet>1346</a>    </span><span class="kw">let </span>federation_size =
-<a href=#1347 id=1347 data-nosnippet>1347</a>        <span class="kw">if </span><span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await </span>&gt;= <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
-<a href=#1348 id=1348 data-nosnippet>1348</a>            <span class="prelude-val">Some</span>(endpoints.len())
-<a href=#1349 id=1349 data-nosnippet>1349</a>        } <span class="kw">else </span>{
-<a href=#1350 id=1350 data-nosnippet>1350</a>            <span class="prelude-val">None
-<a href=#1351 id=1351 data-nosnippet>1351</a>        </span>};
-<a href=#1352 id=1352 data-nosnippet>1352</a>    <span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
-<a href=#1353 id=1353 data-nosnippet>1353</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
-<a href=#1354 id=1354 data-nosnippet>1354</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1355 id=1355 data-nosnippet>1355</a>        <span class="kw">async move </span>{
-<a href=#1356 id=1356 data-nosnippet>1356</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
-<a href=#1357 id=1357 data-nosnippet>1357</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1358 id=1358 data-nosnippet>1358</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint, federation_size)
-<a href=#1359 id=1359 data-nosnippet>1359</a>                    .<span class="kw">await
-<a href=#1360 id=1360 data-nosnippet>1360</a>            </span>} <span class="kw">else </span>{
-<a href=#1361 id=1361 data-nosnippet>1361</a>                <span class="kw">crate</span>::util::FedimintCli
-<a href=#1362 id=1362 data-nosnippet>1362</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1363 id=1363 data-nosnippet>1363</a>                    .<span class="kw">await
-<a href=#1364 id=1364 data-nosnippet>1364</a>            </span>};
-<a href=#1365 id=1365 data-nosnippet>1365</a>            info.map(|i| (peer, i))
-<a href=#1366 id=1366 data-nosnippet>1366</a>        }
-<a href=#1367 id=1367 data-nosnippet>1367</a>    });
-<a href=#1368 id=1368 data-nosnippet>1368</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
-<a href=#1369 id=1369 data-nosnippet>1369</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#1370 id=1370 data-nosnippet>1370</a>        </span>.into_iter()
-<a href=#1371 id=1371 data-nosnippet>1371</a>        .collect();
-<a href=#1372 id=1372 data-nosnippet>1372</a>
-<a href=#1373 id=1373 data-nosnippet>1373</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
-<a href=#1374 id=1374 data-nosnippet>1374</a>
-<a href=#1375 id=1375 data-nosnippet>1375</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
-<a href=#1376 id=1376 data-nosnippet>1376</a>    // operation
-<a href=#1377 id=1377 data-nosnippet>1377</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
-<a href=#1378 id=1378 data-nosnippet>1378</a>        endpoints
-<a href=#1379 id=1379 data-nosnippet>1379</a>            .iter()
-<a href=#1380 id=1380 data-nosnippet>1380</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="macro">p !</span>= peer)
-<a href=#1381 id=1381 data-nosnippet>1381</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
-<a href=#1382 id=1382 data-nosnippet>1382</a>                <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1383 id=1383 data-nosnippet>1383</a>                <span class="kw">let </span>info = info.clone();
-<a href=#1384 id=1384 data-nosnippet>1384</a>                <span class="kw">async move </span>{
-<a href=#1385 id=1385 data-nosnippet>1385</a>                    <span class="kw">crate</span>::util::FedimintCli
-<a href=#1386 id=1386 data-nosnippet>1386</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1387 id=1387 data-nosnippet>1387</a>                        .<span class="kw">await
-<a href=#1388 id=1388 data-nosnippet>1388</a>                </span>}
-<a href=#1389 id=1389 data-nosnippet>1389</a>            })
-<a href=#1390 id=1390 data-nosnippet>1390</a>    });
-<a href=#1391 id=1391 data-nosnippet>1391</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1392 id=1392 data-nosnippet>1392</a>
-<a href=#1393 id=1393 data-nosnippet>1393</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
-<a href=#1394 id=1394 data-nosnippet>1394</a>
-<a href=#1395 id=1395 data-nosnippet>1395</a>    <span class="comment">// Parallelize DKG start
-<a href=#1396 id=1396 data-nosnippet>1396</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
-<a href=#1397 id=1397 data-nosnippet>1397</a>        <span class="kw">let </span>endpoint = endpoint.clone();
-<a href=#1398 id=1398 data-nosnippet>1398</a>        <span class="kw">async move </span>{
-<a href=#1399 id=1399 data-nosnippet>1399</a>            <span class="kw">crate</span>::util::FedimintCli
-<a href=#1400 id=1400 data-nosnippet>1400</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
-<a href=#1401 id=1401 data-nosnippet>1401</a>                .<span class="kw">await
-<a href=#1402 id=1402 data-nosnippet>1402</a>        </span>}
-<a href=#1403 id=1403 data-nosnippet>1403</a>    });
-<a href=#1404 id=1404 data-nosnippet>1404</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1405 id=1405 data-nosnippet>1405</a>
-<a href=#1406 id=1406 data-nosnippet>1406</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1407 id=1407 data-nosnippet>1407</a>}
+<a href=#1323 id=1323 data-nosnippet>1323</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1324 id=1324 data-nosnippet>1324</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
+<a href=#1325 id=1325 data-nosnippet>1325</a>    </span>}
+<a href=#1326 id=1326 data-nosnippet>1326</a>
+<a href=#1327 id=1327 data-nosnippet>1327</a>    <span class="kw">pub async fn </span>await_terminated(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1328 id=1328 data-nosnippet>1328</a>        <span class="self">self</span>.process.await_terminated().<span class="kw">await
+<a href=#1329 id=1329 data-nosnippet>1329</a>    </span>}
+<a href=#1330 id=1330 data-nosnippet>1330</a>}
+<a href=#1331 id=1331 data-nosnippet>1331</a>
+<a href=#1332 id=1332 data-nosnippet>1332</a><span class="kw">pub async fn </span>run_cli_dkg_v2(endpoints: BTreeMap&lt;PeerId, String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1333 id=1333 data-nosnippet>1333</a>    <span class="comment">// Parallelize setup status checks
+<a href=#1334 id=1334 data-nosnippet>1334</a>    </span><span class="kw">let </span>status_futures = endpoints.values().map(|endpoint| {
+<a href=#1335 id=1335 data-nosnippet>1335</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1336 id=1336 data-nosnippet>1336</a>        <span class="kw">async move </span>{
+<a href=#1337 id=1337 data-nosnippet>1337</a>            <span class="kw">let </span>status = poll(<span class="string">"awaiting-setup-status-awaiting-local-params"</span>, || <span class="kw">async </span>{
+<a href=#1338 id=1338 data-nosnippet>1338</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1339 id=1339 data-nosnippet>1339</a>                    .setup_status(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1340 id=1340 data-nosnippet>1340</a>                    .<span class="kw">await
+<a href=#1341 id=1341 data-nosnippet>1341</a>                    </span>.map_err(ControlFlow::Continue)
+<a href=#1342 id=1342 data-nosnippet>1342</a>            })
+<a href=#1343 id=1343 data-nosnippet>1343</a>            .<span class="kw">await
+<a href=#1344 id=1344 data-nosnippet>1344</a>            </span>.unwrap();
+<a href=#1345 id=1345 data-nosnippet>1345</a>
+<a href=#1346 id=1346 data-nosnippet>1346</a>            <span class="macro">assert_eq!</span>(status, SetupStatus::AwaitingLocalParams);
+<a href=#1347 id=1347 data-nosnippet>1347</a>        }
+<a href=#1348 id=1348 data-nosnippet>1348</a>    });
+<a href=#1349 id=1349 data-nosnippet>1349</a>    join_all(status_futures).<span class="kw">await</span>;
+<a href=#1350 id=1350 data-nosnippet>1350</a>
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Setting local parameters..."</span>);
+<a href=#1352 id=1352 data-nosnippet>1352</a>
+<a href=#1353 id=1353 data-nosnippet>1353</a>    <span class="comment">// Parallelize setting local parameters
+<a href=#1354 id=1354 data-nosnippet>1354</a>    // --federation-size is only supported by fedimint-cli &gt;= 0.11.0-alpha
+<a href=#1355 id=1355 data-nosnippet>1355</a>    </span><span class="kw">let </span>federation_size =
+<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="kw">if </span><span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await </span>&gt;= <span class="kw-2">*</span>VERSION_0_11_0_ALPHA {
+<a href=#1357 id=1357 data-nosnippet>1357</a>            <span class="prelude-val">Some</span>(endpoints.len())
+<a href=#1358 id=1358 data-nosnippet>1358</a>        } <span class="kw">else </span>{
+<a href=#1359 id=1359 data-nosnippet>1359</a>            <span class="prelude-val">None
+<a href=#1360 id=1360 data-nosnippet>1360</a>        </span>};
+<a href=#1361 id=1361 data-nosnippet>1361</a>    <span class="kw">let </span>local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
+<a href=#1362 id=1362 data-nosnippet>1362</a>        <span class="kw">let </span>peer = <span class="kw-2">*</span>peer;
+<a href=#1363 id=1363 data-nosnippet>1363</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1364 id=1364 data-nosnippet>1364</a>        <span class="kw">async move </span>{
+<a href=#1365 id=1365 data-nosnippet>1365</a>            <span class="kw">let </span>info = <span class="kw">if </span>peer.to_usize() == <span class="number">0 </span>{
+<a href=#1366 id=1366 data-nosnippet>1366</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1367 id=1367 data-nosnippet>1367</a>                    .set_local_params_leader(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint, federation_size)
+<a href=#1368 id=1368 data-nosnippet>1368</a>                    .<span class="kw">await
+<a href=#1369 id=1369 data-nosnippet>1369</a>            </span>} <span class="kw">else </span>{
+<a href=#1370 id=1370 data-nosnippet>1370</a>                <span class="kw">crate</span>::util::FedimintCli
+<a href=#1371 id=1371 data-nosnippet>1371</a>                    .set_local_params_follower(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1372 id=1372 data-nosnippet>1372</a>                    .<span class="kw">await
+<a href=#1373 id=1373 data-nosnippet>1373</a>            </span>};
+<a href=#1374 id=1374 data-nosnippet>1374</a>            info.map(|i| (peer, i))
+<a href=#1375 id=1375 data-nosnippet>1375</a>        }
+<a href=#1376 id=1376 data-nosnippet>1376</a>    });
+<a href=#1377 id=1377 data-nosnippet>1377</a>    <span class="kw">let </span>connection_info: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = try_join_all(local_params_futures)
+<a href=#1378 id=1378 data-nosnippet>1378</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#1379 id=1379 data-nosnippet>1379</a>        </span>.into_iter()
+<a href=#1380 id=1380 data-nosnippet>1380</a>        .collect();
+<a href=#1381 id=1381 data-nosnippet>1381</a>
+<a href=#1382 id=1382 data-nosnippet>1382</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Exchanging peer connection info..."</span>);
+<a href=#1383 id=1383 data-nosnippet>1383</a>
+<a href=#1384 id=1384 data-nosnippet>1384</a>    <span class="comment">// Parallelize peer addition - flatten the nested loop into a single parallel
+<a href=#1385 id=1385 data-nosnippet>1385</a>    // operation
+<a href=#1386 id=1386 data-nosnippet>1386</a>    </span><span class="kw">let </span>add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
+<a href=#1387 id=1387 data-nosnippet>1387</a>        endpoints
+<a href=#1388 id=1388 data-nosnippet>1388</a>            .iter()
+<a href=#1389 id=1389 data-nosnippet>1389</a>            .filter(<span class="kw">move </span>|(p, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="macro">p !</span>= peer)
+<a href=#1390 id=1390 data-nosnippet>1390</a>            .map(<span class="kw">move </span>|(<span class="kw">_</span>, endpoint)| {
+<a href=#1391 id=1391 data-nosnippet>1391</a>                <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1392 id=1392 data-nosnippet>1392</a>                <span class="kw">let </span>info = info.clone();
+<a href=#1393 id=1393 data-nosnippet>1393</a>                <span class="kw">async move </span>{
+<a href=#1394 id=1394 data-nosnippet>1394</a>                    <span class="kw">crate</span>::util::FedimintCli
+<a href=#1395 id=1395 data-nosnippet>1395</a>                        .add_peer(<span class="kw-2">&amp;</span>info, <span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1396 id=1396 data-nosnippet>1396</a>                        .<span class="kw">await
+<a href=#1397 id=1397 data-nosnippet>1397</a>                </span>}
+<a href=#1398 id=1398 data-nosnippet>1398</a>            })
+<a href=#1399 id=1399 data-nosnippet>1399</a>    });
+<a href=#1400 id=1400 data-nosnippet>1400</a>    try_join_all(add_peer_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1401 id=1401 data-nosnippet>1401</a>
+<a href=#1402 id=1402 data-nosnippet>1402</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting DKG..."</span>);
+<a href=#1403 id=1403 data-nosnippet>1403</a>
+<a href=#1404 id=1404 data-nosnippet>1404</a>    <span class="comment">// Parallelize DKG start
+<a href=#1405 id=1405 data-nosnippet>1405</a>    </span><span class="kw">let </span>start_dkg_futures = endpoints.values().map(|endpoint| {
+<a href=#1406 id=1406 data-nosnippet>1406</a>        <span class="kw">let </span>endpoint = endpoint.clone();
+<a href=#1407 id=1407 data-nosnippet>1407</a>        <span class="kw">async move </span>{
+<a href=#1408 id=1408 data-nosnippet>1408</a>            <span class="kw">crate</span>::util::FedimintCli
+<a href=#1409 id=1409 data-nosnippet>1409</a>                .start_dkg(<span class="kw-2">&amp;</span>API_AUTH, <span class="kw-2">&amp;</span>endpoint)
+<a href=#1410 id=1410 data-nosnippet>1410</a>                .<span class="kw">await
+<a href=#1411 id=1411 data-nosnippet>1411</a>        </span>}
+<a href=#1412 id=1412 data-nosnippet>1412</a>    });
+<a href=#1413 id=1413 data-nosnippet>1413</a>    try_join_all(start_dkg_futures).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1414 id=1414 data-nosnippet>1414</a>
+<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1416 id=1416 data-nosnippet>1416</a>}
 </code></pre></div></section></main></body></html>
