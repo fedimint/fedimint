@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["caching_operation_update_stream","rev_epoch_ranges"],"struct":["OperationLog"]};
+window.SIDEBAR_ITEMS = {"fn":["caching_operation_update_stream","chronological_operation_log_key_is_older","rev_epoch_ranges"],"struct":["OperationLog"]};
