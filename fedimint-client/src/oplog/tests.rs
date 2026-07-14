@@ -295,3 +295,49 @@ async fn test_pagination_empty_then_not() {
     let page = op_log.paginate_operations_rev(10, None).await;
     assert_eq!(page.len(), 1);
 }
+
+#[tokio::test]
+async fn test_pagination_after_historical_insert() {
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+    let op_log = OperationLog::new(db.clone());
+
+    let recent_operation_id = OperationId([1; 32]);
+    let recent_creation_time = fedimint_core::time::now() - Duration::from_secs(60);
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx_with_creation_time(
+            &mut dbtx.to_ref_nc(),
+            recent_operation_id,
+            "foo",
+            1u8,
+            recent_creation_time,
+        )
+        .await;
+    dbtx.commit_tx().await;
+
+    let page = op_log.paginate_operations_rev(10, None).await;
+    assert_eq!(page.len(), 1);
+    assert_eq!(page[0].0.operation_id, recent_operation_id);
+
+    let historical_operation_id = OperationId([0; 32]);
+    let historical_creation_time = recent_creation_time - Duration::from_secs(60);
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx_with_creation_time(
+            &mut dbtx.to_ref_nc(),
+            historical_operation_id,
+            "foo",
+            0u8,
+            historical_creation_time,
+        )
+        .await;
+    dbtx.commit_tx().await;
+
+    let page = op_log.paginate_operations_rev(10, None).await;
+    assert_eq!(
+        page.iter()
+            .map(|(key, _)| key.operation_id)
+            .collect::<Vec<_>>(),
+        vec![recent_operation_id, historical_operation_id]
+    );
+}
