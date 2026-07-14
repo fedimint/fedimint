@@ -217,13 +217,13 @@ impl ServerModuleInit for LightningInit {
     }
 
     fn is_enabled_by_default(&self) -> bool {
-        is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(true)
+        is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(false)
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
         vec![EnvVarDoc {
             name: FM_ENABLE_MODULE_LNV1_ENV,
-            description: "Set to 0/false to disable the LNv1 Lightning module. Enabled by default.",
+            description: "Set to 1/true to enable the LNv1 Lightning module. Disabled by default.",
         }]
     }
 

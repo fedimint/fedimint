@@ -11,7 +11,11 @@ use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_DISABLE_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
+use fedimint_core::envs::{
+    FM_DISABLE_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV,
+    FM_ENABLE_MODULE_MINT_ENV, FM_ENABLE_MODULE_MINTV2_ENV, FM_ENABLE_MODULE_WALLET_ENV,
+    FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set,
+};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
@@ -2954,7 +2958,17 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2) };
+            unsafe {
+                std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2);
+                // fedimintd now defaults to the v2 module set; pin the upgrade
+                // federation to the v1 modules (matching the previous default)
+                // so upgrade paths starting from older versions stay consistent.
+                std::env::set_var(FM_ENABLE_MODULE_LNV1_ENV, "1");
+                std::env::set_var(FM_ENABLE_MODULE_MINT_ENV, "1");
+                std::env::set_var(FM_ENABLE_MODULE_MINTV2_ENV, "0");
+                std::env::set_var(FM_ENABLE_MODULE_WALLET_ENV, "1");
+                std::env::set_var(FM_ENABLE_MODULE_WALLETV2_ENV, "0");
+            }
             let (process_mgr, _) = setup(common_args).await?;
             Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }

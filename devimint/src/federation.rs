@@ -1166,6 +1166,15 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
+        // `list-gateways` is an LNv1 concept: gateways register with the LNv1
+        // module and the client lists them. LNv2 instead addresses gateways
+        // directly and vets them via an explicit consensus item, so there is
+        // nothing to poll here when the LNv1 module isn't present. The gateway
+        // connection itself is awaited separately (via `connect_fed`).
+        if !crate::util::supports_lnv1() {
+            return Ok(());
+        }
+
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
 
