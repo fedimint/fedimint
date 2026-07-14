@@ -22,6 +22,7 @@ use clap::{ArgGroup, CommandFactory, FromArgMatches, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
     FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    is_running_in_test_env,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
@@ -178,8 +179,14 @@ struct ServerOpts {
     #[arg(long, env = FM_API_URL_ENV)]
     api_url: Option<SafeUrl>,
 
+    /// Whether to use the Iroh networking stack instead of the legacy
+    /// TCP/TLS/websocket stack. Defaults to Iroh in production and to the
+    /// legacy stack in test environments (`cargo test` / `devimint`). Only
+    /// consulted at DKG / config generation time; existing federations keep the
+    /// stack baked into their config. Pass `--enable-iroh true/false` (or
+    /// `FM_ENABLE_IROH=true/false`) to override.
     #[arg(long, env = FM_ENABLE_IROH_ENV, value_parser = BoolishValueParser::new())]
-    enable_iroh: bool,
+    enable_iroh: Option<bool>,
 
     /// Optional URL of the Iroh DNS server
     #[arg(long, env = FM_IROH_DNS_ENV, requires = "enable_iroh")]
@@ -370,7 +377,7 @@ pub async fn run(
         ui_bind: server_opts.bind_ui,
         p2p_url: server_opts.p2p_url.clone(),
         api_url: server_opts.api_url.clone(),
-        enable_iroh: server_opts.enable_iroh,
+        enable_iroh: server_opts.enable_iroh.unwrap_or(!is_running_in_test_env()),
         iroh_dns: server_opts.iroh_dns.clone(),
         iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
@@ -558,7 +565,13 @@ mod tests {
 
     #[test]
     fn enable_iroh_env_accepts_numeric_booleans() {
-        assert!(parse_server_opts_with_enable_iroh_env("1").enable_iroh);
-        assert!(!parse_server_opts_with_enable_iroh_env("0").enable_iroh);
+        assert_eq!(
+            parse_server_opts_with_enable_iroh_env("1").enable_iroh,
+            Some(true)
+        );
+        assert_eq!(
+            parse_server_opts_with_enable_iroh_env("0").enable_iroh,
+            Some(false)
+        );
     }
 }
