@@ -1154,9 +1154,19 @@ impl LightningClientModule {
     }
 
     async fn receive_lnurl(&self, custom_meta: Value) {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        let stream_index = dbtx
+        // Read the stream cursor with a short-lived transaction. It must NOT stay open
+        // across the long-poll below: RocksDB's optimistic transactions validate a
+        // commit against bounded memtable history, so a transaction held open
+        // for minutes fails with a spurious `WriteConflict` once enough
+        // concurrent writes flush that history — and the panicking
+        // `commit_tx()` then killed this task permanently, silently
+        // stalling every future receive for the lifetime of the process. Long-lived
+        // clients (daemons) hit this reproducibly under concurrent lnv2 activity.
+        let stream_index = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
             .get_value(&IncomingContractStreamIndexKey)
             .await
             .unwrap_or(0);
@@ -1184,10 +1194,36 @@ impl LightningClientModule {
             }
         }
 
-        dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
-            .await;
+        // Advance the cursor in its own short transaction, retrying transient write
+        // conflicts. The closure re-reads the current value and only ever moves the
+        // cursor FORWARD, so a concurrent writer can never be rewound by a stale
+        // `next_index` (a same-key conflict makes the loser retry and re-read).
+        // Ordering is unchanged: the cursor only moves after the batch above
+        // was processed, and a crash in between re-fetches the same batch on
+        // the next iteration exactly as it did when the write shared the read's
+        // transaction.
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async move {
+                        let current = dbtx
+                            .get_value(&IncomingContractStreamIndexKey)
+                            .await
+                            .unwrap_or(0);
 
-        dbtx.commit_tx().await;
+                        if current < next_index {
+                            dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
+                                .await;
+                        }
+
+                        Result::<(), ()>::Ok(())
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Will never return an error");
     }
 }
 
