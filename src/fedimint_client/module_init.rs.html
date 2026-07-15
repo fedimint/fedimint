@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>    ApiAuth, ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 <a href=#20 id=20 data-nosnippet>20</a>};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::{NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::{Amount, NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>tokio::sync::watch;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>tracing::Span;
@@ -60,7 +60,7 @@
 <a href=#60 id=60 data-nosnippet>60</a>        client_span: Span,
 <a href=#61 id=61 data-nosnippet>61</a>        user_bitcoind_rpc: <span class="prelude-ty">Option</span>&lt;DynBitcoindRpc&gt;,
 <a href=#62 id=62 data-nosnippet>62</a>        user_bitcoind_rpc_no_chain_id: <span class="prelude-ty">Option</span>&lt;BitcoindRpcNoChainIdFactory&gt;,
-<a href=#63 id=63 data-nosnippet>63</a>    ) -&gt; anyhow::Result&lt;()&gt;;
+<a href=#63 id=63 data-nosnippet>63</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Amount&gt;&gt;;
 <a href=#64 id=64 data-nosnippet>64</a>
 <a href=#65 id=65 data-nosnippet>65</a>    <span class="attr">#[allow(clippy::too_many_arguments)]
 <a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">async fn </span>init(
@@ -132,7 +132,7 @@
 <a href=#132 id=132 data-nosnippet>132</a>        client_span: Span,
 <a href=#133 id=133 data-nosnippet>133</a>        user_bitcoind_rpc: <span class="prelude-ty">Option</span>&lt;DynBitcoindRpc&gt;,
 <a href=#134 id=134 data-nosnippet>134</a>        user_bitcoind_rpc_no_chain_id: <span class="prelude-ty">Option</span>&lt;BitcoindRpcNoChainIdFactory&gt;,
-<a href=#135 id=135 data-nosnippet>135</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#135 id=135 data-nosnippet>135</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Amount&gt;&gt; {
 <a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>typed_cfg: <span class="kw-2">&amp;</span>&lt;&lt;T <span class="kw">as </span>fedimint_core::module::ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig = cfg.cast()<span class="question-mark">?</span>;
 <a href=#137 id=137 data-nosnippet>137</a>        <span class="kw">let </span>snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt; =
 <a href=#138 id=138 data-nosnippet>138</a>            snapshot.map(|s| {

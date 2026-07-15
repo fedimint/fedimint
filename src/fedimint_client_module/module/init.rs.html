@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiVersion, CommonModuleInit, ModuleInit, MultiApiVersion};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, ShuttingDownError, TaskGroup, TaskHandle};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::{ChainId, NumPeers, apply, async_trait_maybe_send};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::{Amount, ChainId, NumPeers, apply, async_trait_maybe_send};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tokio::sync::oneshot;
@@ -382,42 +382,47 @@
 <a href=#382 id=382 data-nosnippet>382</a>    <span class="doccomment">/// Recover the state of the client module, optionally from an existing
 <a href=#383 id=383 data-nosnippet>383</a>    /// snapshot.
 <a href=#384 id=384 data-nosnippet>384</a>    ///
-<a href=#385 id=385 data-nosnippet>385</a>    /// If `Err` is returned, the higher level client/application might try
-<a href=#386 id=386 data-nosnippet>386</a>    /// again at a different time (client restarted, code version changed, etc.)
-<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">async fn </span>recover(
-<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#389 id=389 data-nosnippet>389</a>        _args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
-<a href=#390 id=390 data-nosnippet>390</a>        _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
-<a href=#391 id=391 data-nosnippet>391</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="macro">warn!</span>(
-<a href=#393 id=393 data-nosnippet>393</a>            target: LOG_CLIENT,
-<a href=#394 id=394 data-nosnippet>394</a>            kind = %&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::kind(),
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="string">"Module does not support recovery, completing without doing anything"
-<a href=#396 id=396 data-nosnippet>396</a>        </span>);
-<a href=#397 id=397 data-nosnippet>397</a>        <span class="prelude-val">Ok</span>(())
-<a href=#398 id=398 data-nosnippet>398</a>    }
-<a href=#399 id=399 data-nosnippet>399</a>
-<a href=#400 id=400 data-nosnippet>400</a>    <span class="doccomment">/// Initialize a [`ClientModule`] instance from its config
-<a href=#401 id=401 data-nosnippet>401</a>    </span><span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt;;
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a>    <span class="doccomment">/// Retrieves the database migrations from the module to be applied to the
-<a href=#404 id=404 data-nosnippet>404</a>    /// database before the module is initialized. The database migrations map
-<a href=#405 id=405 data-nosnippet>405</a>    /// is indexed on the "from" version.
-<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt; {
-<a href=#407 id=407 data-nosnippet>407</a>        BTreeMap::new()
-<a href=#408 id=408 data-nosnippet>408</a>    }
-<a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Db prefixes used by the module
-<a href=#411 id=411 data-nosnippet>411</a>    ///
-<a href=#412 id=412 data-nosnippet>412</a>    /// If `Some` is returned, it should contain list of database
-<a href=#413 id=413 data-nosnippet>413</a>    /// prefixes actually used by the module for it's keys.
-<a href=#414 id=414 data-nosnippet>414</a>    ///
-<a href=#415 id=415 data-nosnippet>415</a>    /// In (some subset of) non-production tests,
-<a href=#416 id=416 data-nosnippet>416</a>    /// module database will be scanned for presence of keys
-<a href=#417 id=417 data-nosnippet>417</a>    /// that do not belong to this list to verify integrity
-<a href=#418 id=418 data-nosnippet>418</a>    /// of data and possibly catch any unforeseen bugs.
-<a href=#419 id=419 data-nosnippet>419</a>    </span><span class="kw">fn </span>used_db_prefixes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;u8&gt;&gt; {
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="prelude-val">None
-<a href=#421 id=421 data-nosnippet>421</a>    </span>}
-<a href=#422 id=422 data-nosnippet>422</a>}
+<a href=#385 id=385 data-nosnippet>385</a>    /// On success, returns the total amount recovered from this module, if the
+<a href=#386 id=386 data-nosnippet>386</a>    /// module tracks it (`None` for modules that can't determine the amount at
+<a href=#387 id=387 data-nosnippet>387</a>    /// recovery-completion time). This is surfaced in the
+<a href=#388 id=388 data-nosnippet>388</a>    /// `ModuleRecoveryCompleted` event.
+<a href=#389 id=389 data-nosnippet>389</a>    ///
+<a href=#390 id=390 data-nosnippet>390</a>    /// If `Err` is returned, the higher level client/application might try
+<a href=#391 id=391 data-nosnippet>391</a>    /// again at a different time (client restarted, code version changed, etc.)
+<a href=#392 id=392 data-nosnippet>392</a>    </span><span class="kw">async fn </span>recover(
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#394 id=394 data-nosnippet>394</a>        _args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
+<a href=#395 id=395 data-nosnippet>395</a>        _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
+<a href=#396 id=396 data-nosnippet>396</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Amount&gt;&gt; {
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="macro">warn!</span>(
+<a href=#398 id=398 data-nosnippet>398</a>            target: LOG_CLIENT,
+<a href=#399 id=399 data-nosnippet>399</a>            kind = %&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::kind(),
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="string">"Module does not support recovery, completing without doing anything"
+<a href=#401 id=401 data-nosnippet>401</a>        </span>);
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#403 id=403 data-nosnippet>403</a>    }
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="doccomment">/// Initialize a [`ClientModule`] instance from its config
+<a href=#406 id=406 data-nosnippet>406</a>    </span><span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt;;
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Retrieves the database migrations from the module to be applied to the
+<a href=#409 id=409 data-nosnippet>409</a>    /// database before the module is initialized. The database migrations map
+<a href=#410 id=410 data-nosnippet>410</a>    /// is indexed on the "from" version.
+<a href=#411 id=411 data-nosnippet>411</a>    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt; {
+<a href=#412 id=412 data-nosnippet>412</a>        BTreeMap::new()
+<a href=#413 id=413 data-nosnippet>413</a>    }
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="doccomment">/// Db prefixes used by the module
+<a href=#416 id=416 data-nosnippet>416</a>    ///
+<a href=#417 id=417 data-nosnippet>417</a>    /// If `Some` is returned, it should contain list of database
+<a href=#418 id=418 data-nosnippet>418</a>    /// prefixes actually used by the module for it's keys.
+<a href=#419 id=419 data-nosnippet>419</a>    ///
+<a href=#420 id=420 data-nosnippet>420</a>    /// In (some subset of) non-production tests,
+<a href=#421 id=421 data-nosnippet>421</a>    /// module database will be scanned for presence of keys
+<a href=#422 id=422 data-nosnippet>422</a>    /// that do not belong to this list to verify integrity
+<a href=#423 id=423 data-nosnippet>423</a>    /// of data and possibly catch any unforeseen bugs.
+<a href=#424 id=424 data-nosnippet>424</a>    </span><span class="kw">fn </span>used_db_prefixes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;u8&gt;&gt; {
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="prelude-val">None
+<a href=#426 id=426 data-nosnippet>426</a>    </span>}
+<a href=#427 id=427 data-nosnippet>427</a>}
 </code></pre></div></section></main></body></html>
