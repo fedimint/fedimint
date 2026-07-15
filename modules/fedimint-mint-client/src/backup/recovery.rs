@@ -164,7 +164,10 @@ impl RecoveryFromHistory for MintRecovery {
     }
 
     /// Handle session outcome, adjusting the current state
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn finalize_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> anyhow::Result<Option<Amount>> {
         let finalized = self.state.clone().finalize();
 
         let restored_amount = finalized
@@ -254,7 +257,7 @@ impl RecoveryFromHistory for MintRecovery {
             "Mint module recovery finalized"
         );
 
-        Ok(())
+        Ok(Some(restored_amount))
     }
 }
 

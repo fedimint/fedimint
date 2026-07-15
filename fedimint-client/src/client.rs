@@ -125,6 +125,11 @@ pub(crate) struct PrimaryModuleCandidates {
     wildcard: Vec<ModuleInstanceId>,
 }
 
+/// An in-progress module recovery future, resolving to the amount recovered
+/// from the module (if it tracks one) once recovery completes.
+pub(crate) type ModuleRecoveryFuture =
+    Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+
 /// Main client type
 ///
 /// A handle and API to interacting with a single federation. End user
@@ -1902,22 +1907,17 @@ impl Client {
     fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
+        // Sourced from the config rather than `self.modules`, since modules
+        // currently being recovered are not yet initialized in the registry.
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
-        let module_kinds: BTreeMap<ModuleInstanceId, String> = self
-            .modules
-            .iter_modules_id_kind()
-            .map(|(id, kind)| (id, kind.to_string()))
-            .collect();
         self.spawn("module recoveries", |_task_handle| async {
             Self::run_module_recoveries_task(
                 db,
@@ -1935,24 +1935,30 @@ impl Client {
         db: Database,
         log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
-        module_kinds: BTreeMap<ModuleInstanceId, String>,
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
+
+        // A recovery update for a single module: either an intermediate progress
+        // report, or the final completion carrying the recovered amount (if the
+        // module tracks it).
+        enum RecoveryUpdate {
+            Progress(RecoveryProgress),
+            Completed(Option<Amount>),
+        }
+
         let mut completed_stream = Vec::new();
         let progress_stream = futures::stream::FuturesUnordered::new();
 
         for (module_instance_id, f) in module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
-                    Ok(()) => (module_instance_id, None),
+                    Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
                         warn!(
                             target: LOG_CLIENT,
@@ -1972,7 +1978,7 @@ impl Client {
             progress_stream.push(
                 tokio_stream::wrappers::WatchStream::new(rx)
                     .fuse()
-                    .map(move |progress| (module_instance_id, Some(progress))),
+                    .map(move |progress| (module_instance_id, RecoveryUpdate::Progress(progress))),
             );
         }
 
@@ -1981,7 +1987,7 @@ impl Client {
             futures::stream::select_all(completed_stream),
         );
 
-        while let Some((module_instance_id, progress)) = futures.next().await {
+        while let Some((module_instance_id, update)) = futures.next().await {
             let mut dbtx = db.begin_transaction().await;
 
             let prev_progress = *recovery_sender
@@ -1989,13 +1995,17 @@ impl Client {
                 .get(&module_instance_id)
                 .expect("existing progress must be present");
 
-            let progress = if prev_progress.is_done() {
+            // The recovered amount is only known once the module's recovery
+            // future resolves, which is also the only way progress transitions
+            // to "done" (modules can't report a completed `RecoveryProgress`).
+            let (progress, recovered_amount) = if prev_progress.is_done() {
                 // since updates might be out of order, once done, stick with it
-                prev_progress
-            } else if let Some(progress) = progress {
-                progress
+                (prev_progress, None)
             } else {
-                prev_progress.to_complete()
+                match update {
+                    RecoveryUpdate::Progress(progress) => (progress, None),
+                    RecoveryUpdate::Completed(amount) => (prev_progress.to_complete(), amount),
+                }
             };
 
             if !prev_progress.is_done() && progress.is_done() {
@@ -2003,6 +2013,7 @@ impl Client {
                     target: LOG_CLIENT,
                     module_instance_id,
                     progress = format!("{}/{}", progress.complete, progress.total),
+                    amount = ?recovered_amount,
                     "Recovery complete"
                 );
                 dbtx.log_event(
@@ -2010,6 +2021,8 @@ impl Client {
                     None,
                     ModuleRecoveryCompleted {
                         module_id: module_instance_id,
+                        kind: module_kinds.get(&module_instance_id).cloned(),
+                        amount: recovered_amount,
                     },
                 )
                 .await;
@@ -2017,7 +2030,7 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
-                    kind = module_kinds.get(&module_instance_id).map(String::as_str).unwrap_or("unknown"),
+                    kind = ?module_kinds.get(&module_instance_id),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery progress"
                 );

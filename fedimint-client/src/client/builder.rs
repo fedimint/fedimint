@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,7 +40,7 @@ use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSu
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
-use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
+use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
@@ -57,7 +56,7 @@ use crate::api_announcements::{
     run_api_announcement_refresh_task, store_api_announcements_updates_from_peers,
 };
 use crate::backup::{ClientBackup, Metadata};
-use crate::client::PrimaryModuleCandidates;
+use crate::client::{ModuleRecoveryFuture, PrimaryModuleCandidates};
 use crate::db::{
     self, ApiSecretKey, ChainIdKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
@@ -758,10 +757,8 @@ impl ClientBuilder {
             None
         };
 
-        let mut module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        > = BTreeMap::new();
+        let mut module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture> =
+            BTreeMap::new();
         let mut module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
@@ -1134,10 +1131,21 @@ impl ClientBuilder {
         final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
+            // Sourced from the config so recovering modules (which aren't yet in
+            // the module registry) still get their kind attached to the
+            // `ModuleRecoveryCompleted` event.
+            let module_kinds = client_arc
+                .config()
+                .await
+                .modules
+                .iter()
+                .map(|(id, module_config)| (*id, module_config.kind().clone()))
+                .collect();
             client_arc.spawn_module_recoveries_task(
                 client_recovery_progress_sender,
                 module_recoveries,
                 module_recovery_progress_receivers,
+                module_kinds,
             );
         }
 

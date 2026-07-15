@@ -1757,7 +1757,8 @@ impl FedimintCli {
                             "module_kind": module_kind,
                             "module_id": module_id,
                             "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
+                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
+                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
                         })
                     })
                     .collect();
@@ -1787,7 +1788,8 @@ impl FedimintCli {
                             "module_kind": module_kind,
                             "module_id": module_id,
                             "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
+                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
+                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
                         })
                     })
                     .collect();

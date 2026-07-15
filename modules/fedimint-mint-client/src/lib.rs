@@ -568,7 +568,7 @@ impl MintClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         // Try to load existing state or create new one if we can fetch recovery count
         let mut state = if let Some(state) = args
             .db()
@@ -590,7 +590,7 @@ impl MintClientInit {
         };
 
         if state.next_index == state.total_items {
-            return Ok(());
+            return Ok(None);
         }
 
         let peer_selector = PeerSelector::new(args.api().all_peers().clone());
@@ -644,6 +644,13 @@ impl MintClientInit {
             if state.next_index == state.total_items {
                 // Finalize recovery - create state machines for pending outputs
                 let finalized = state.finalize();
+
+                // Total value of the notes reconstructed during recovery
+                let recovered_amount = finalized
+                    .pending_notes
+                    .iter()
+                    .map(|(amount, _)| *amount)
+                    .sum::<Amount>();
 
                 // Collect blind nonces to fetch outpoints from server
                 let blind_nonces: Vec<BlindNonce> = finalized
@@ -699,7 +706,7 @@ impl MintClientInit {
 
                 dbtx.commit_tx().await;
 
-                return Ok(());
+                return Ok(Some(recovered_amount));
             }
 
             dbtx.commit_tx().await;
@@ -801,7 +808,7 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         let mut dbtx = args.db().begin_transaction_nc().await;
 
         // Check if V2 (slice-based) recovery state exists

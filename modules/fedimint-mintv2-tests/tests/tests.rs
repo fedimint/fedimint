@@ -4,7 +4,7 @@ use anyhow::ensure;
 use async_stream::stream;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{ClientHandleArc, RootSecret};
+use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::core::OperationId;
@@ -307,6 +307,44 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Wait for and return the `amount` from the mintv2 module's
+/// `ModuleRecoveryCompleted` event in `client`'s event log.
+///
+/// `ModuleRecoveryCompleted` is a core event (its module tag is unset), so
+/// unlike `mint_event_stream` it's matched by event kind and by the mintv2
+/// `kind` carried in the payload (recovery runs for the dummy module too).
+///
+/// Blocks until the event has been ordered into the log; it is emitted as
+/// recovery finishes, so this returns shortly after `wait_for_all_recoveries`.
+async fn mintv2_recovery_completed_amount(client: &ClientHandleArc) -> Option<Amount> {
+    let mut log_rx = client.log_event_added_rx();
+    let mut next_id = EventLogId::LOG_START;
+
+    loop {
+        for entry in client.get_event_log(Some(next_id), 100).await {
+            next_id = entry.id().saturating_add(1);
+
+            if entry.as_raw().kind != ModuleRecoveryCompleted::KIND {
+                continue;
+            }
+
+            let event: ModuleRecoveryCompleted = entry
+                .as_raw()
+                .to_event()
+                .expect("recovery-completed payload must decode");
+
+            if event.kind.as_ref() == Some(&KIND) {
+                return event.amount;
+            }
+        }
+
+        log_rx
+            .changed()
+            .await
+            .expect("event log notifier stays alive while the client is running");
+    }
+}
+
 async fn test_client_recovery(
     fed: &FederationTest,
     client: &ClientHandleArc,
@@ -324,6 +362,14 @@ async fn test_client_recovery(
         .await;
 
     recovering_client.wait_for_all_recoveries().await?;
+
+    // The mintv2 module's recovery-completed event reports the total value of
+    // the notes it reconstructed, which equals the pre-recovery balance.
+    let event_amount = mintv2_recovery_completed_amount(&recovering_client).await;
+    ensure!(
+        event_amount == Some(expected_balance),
+        "recovery-completed event amount mismatch: expected {expected_balance}, got {event_amount:?}"
+    );
 
     // After recovery completes, we need to reopen the client for modules to be
     // available. This is documented behavior - see gateway's client.rs:94-97

@@ -156,7 +156,7 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         let mut state = if let Some(state) = args
             .db()
             .begin_transaction_nc()
@@ -175,7 +175,7 @@ impl ClientModuleInit for MintClientInit {
         };
 
         if state.next_index == state.total_items {
-            return Ok(());
+            return Ok(None);
         }
 
         let peer_selector = PeerSelector::new(args.api().all_peers().clone());
@@ -259,6 +259,13 @@ impl ClientModuleInit for MintClientInit {
             dbtx.insert_entry(&RecoveryStateKey, &state).await;
 
             if state.next_index == state.total_items {
+                // Total value of the notes reconstructed during recovery
+                let recovered_amount = state
+                    .requests
+                    .values()
+                    .map(|request| request.denomination.amount())
+                    .sum::<Amount>();
+
                 let state_machines = args
                     .context()
                     .map_dyn(vec![MintClientStateMachines::Output(
@@ -280,7 +287,7 @@ impl ClientModuleInit for MintClientInit {
 
                 dbtx.commit_tx().await;
 
-                return Ok(());
+                return Ok(Some(recovered_amount));
             }
 
             dbtx.commit_tx().await;
