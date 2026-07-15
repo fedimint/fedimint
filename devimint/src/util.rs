@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::future::Future;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,15 +18,15 @@ use fedimint_core::envs::{
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self};
 use fedimint_core::time::now;
-use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::util::backoff_util::custom_backoff;
+use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV,
@@ -93,6 +93,7 @@ impl ProcessHandle {
 pub struct ProcessHandleInner {
     name: String,
     child: Option<Child>,
+    pid_file: Option<PathBuf>,
 }
 
 impl ProcessHandleInner {
@@ -117,6 +118,12 @@ impl ProcessHandleInner {
 
             process_reaper::kill_process(&child);
             process_reaper::reap_killed_processes();
+        }
+
+        // Best-effort: avoid leaving a stale PID file behind that could later
+        // be misread as still belonging to a since-recycled PID.
+        if let Some(pid_file) = self.pid_file.take() {
+            let _ = std::fs::remove_file(pid_file);
         }
     }
 
@@ -149,6 +156,11 @@ impl ProcessHandleInner {
 impl Drop for ProcessHandleInner {
     fn drop(&mut self) {
         if self.child.is_none() {
+            // Already reaped via `await_terminated`; still clean up the PID
+            // file so a stale entry doesn't accumulate.
+            if let Some(pid_file) = self.pid_file.take() {
+                let _ = std::fs::remove_file(pid_file);
+            }
             return;
         }
 
@@ -166,18 +178,19 @@ impl ProcessManager {
         Self { globals }
     }
 
-    /// Logs to $FM_LOGS_DIR/{name}.{out,err}
+    /// Logs to $FM_LOGS_DIR/{name}.log
     pub async fn spawn_daemon(&self, name: &str, mut cmd: Command) -> Result<ProcessHandle> {
         // Reap any recently killed processes so their resources
         // (ports, file locks) are fully released before we bind new ones.
         process_reaper::reap_killed_processes();
         debug!(target: LOG_DEVIMINT, %name, "Spawning daemon");
         let logs_dir = env::var(FM_LOGS_DIR_ENV)?;
-        let path = format!("{logs_dir}/{name}.log");
+        let log_path = format!("{logs_dir}/{name}.log");
+
         let log = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)
+            .open(&log_path)
             .await?
             .into_std()
             .await;
@@ -188,17 +201,119 @@ impl ProcessManager {
             .cmd
             .spawn()
             .with_context(|| format!("Could not spawn: {name}"))?;
+
+        let pid = child.id().expect("pid available immediately after spawn");
+        // Redact env vars that look like secrets (key material, passwords,
+        // tokens): this is printed to stdout and written to the tracing log,
+        // both of which can end up in shared/CI output.
+        let cmd_str = cmd.command_pasteable(true);
+
+        println!("# Started {name} (pid {pid})\n{cmd_str}");
+        info!(target: LOG_DEVIMINT, %name, pid, cmd = %cmd_str, "Spawned daemon");
+
+        let pid_path = PathBuf::from(format!("{logs_dir}/{name}.pid"));
+        // Record the process's observed executable basename and start time
+        // alongside the PID so `devimint kill` can confirm it's still the
+        // very same process instance before signaling a possibly stale
+        // (recycled) PID. Probe the running process for its basename rather
+        // than trusting argv[0]: for symlinked or wrapped commands the two
+        // differ, and the kill-time check probes the running process.
+        let write_pid_file = async {
+            let program = running_program_basename(pid)
+                .await?
+                .with_context(|| format!("Process {pid} exited immediately after spawn"))?;
+            let start_time = process_start_time(pid)
+                .await?
+                .with_context(|| format!("Process {pid} exited immediately after spawn"))?;
+            write_overwrite_async(&pid_path, format!("{pid}\n{program}\n{start_time}\n")).await?;
+            Ok::<(), anyhow::Error>(())
+        };
+        if let Err(err) = write_pid_file.await {
+            // Don't leave an unmanaged process running if we can't record its PID.
+            process_reaper::kill_process(&child);
+            process_reaper::reap_killed_processes();
+            return Err(err).with_context(|| format!("Could not write PID file for: {name}"));
+        }
+
         let handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
+            pid_file: Some(pid_path),
         })));
         Ok(handle)
     }
 }
 
+/// The wall-clock start time of the process currently running as `pid`, as
+/// reported by `ps -o lstart=`.
+///
+/// A basename match alone (e.g. "this pid is running `fedimintd`") isn't
+/// enough to identify *which* spawned instance a PID belongs to — a
+/// federation runs several `fedimintd`s side by side, so a PID recycled from
+/// one dead guardian could get reused by another live one. Pairing the
+/// basename with the process's start time is enough in practice to tell
+/// instances apart, since exact PID reuse landing in the same second is
+/// vanishingly unlikely.
+///
+/// Returns `Ok(None)` if no process with that pid exists; `Err` only if
+/// `ps` itself could not be run, so callers can tell "process is gone"
+/// apart from "we couldn't check".
+pub(crate) async fn process_start_time(pid: u32) -> Result<Option<String>> {
+    let output = tokio::process::Command::new("ps")
+        .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .output()
+        .await
+        .context("Failed to run `ps` to read process start time")?;
+    let start_time = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    Ok((!start_time.is_empty()).then_some(start_time))
+}
+
+/// Best-effort identity of the executable currently running as `pid`, as a
+/// basename.
+///
+/// Prefers `/proc/{pid}/exe` on Linux, since it's the kernel-resolved path
+/// to the actual binary and can't be spoofed via argv\[0\]; falls back to
+/// `ps -o comm=` elsewhere (e.g. macOS, which has no `/proc`).
+///
+/// Used both when spawning (to record the identity in the PID file) and by
+/// `devimint kill` (to verify it), so the two sides always compare values
+/// obtained the same way.
+///
+/// Returns `Ok(None)` if no process with that pid exists; `Err` only if the
+/// identity could not be determined (e.g. `ps` failed to run).
+pub(crate) async fn running_program_basename(pid: u32) -> Result<Option<String>> {
+    #[cfg(target_os = "linux")]
+    if let Ok(target) = std::fs::read_link(format!("/proc/{pid}/exe"))
+        && let Some(name) = target.file_name()
+    {
+        let name = name.to_string_lossy();
+        // The kernel appends " (deleted)" when the binary on disk was
+        // replaced after the process started (e.g. `cargo build` while the
+        // daemon is running) — it's still the same process, so strip it.
+        return Ok(Some(
+            name.strip_suffix(" (deleted)").unwrap_or(&name).to_owned(),
+        ));
+    }
+
+    let output = tokio::process::Command::new("ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .output()
+        .await
+        .context("Failed to run `ps` to verify process identity")?;
+    let comm = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if comm.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Path::new(&comm).file_name().map_or_else(
+        || comm.clone(),
+        |s| s.to_string_lossy().into_owned(),
+    )))
+}
+
 pub struct Command {
     pub cmd: tokio::process::Command,
     pub args_debug: Vec<String>,
+    pub env_debug: Vec<(String, String)>,
 }
 
 impl Command {
@@ -221,6 +336,10 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
+        self.env_debug.push((
+            key.as_ref().to_string_lossy().into_owned(),
+            val.as_ref().to_string_lossy().into_owned(),
+        ));
         self.cmd.env(key, val);
         self
     }
@@ -231,7 +350,14 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
-        self.cmd.envs(env);
+        let pairs: Vec<(K, V)> = env.into_iter().collect();
+        for (k, v) in &pairs {
+            self.env_debug.push((
+                k.as_ref().to_string_lossy().into_owned(),
+                v.as_ref().to_string_lossy().into_owned(),
+            ));
+        }
+        self.cmd.envs(pairs);
         self
     }
 
@@ -251,6 +377,91 @@ impl Command {
             .map(|x| x.replace(' ', "␣"))
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    /// Format the command as a bash-pasteable string with env vars and
+    /// single-quoted args so it can be copied and run directly in a shell.
+    ///
+    /// If `redact_secrets` is set, values of env vars whose key looks like it
+    /// holds key material or a credential (e.g. contains "secret",
+    /// "password", "token") are replaced with a placeholder. Use this when
+    /// the output may end up in stdout or logs that aren't strictly private
+    /// (e.g. shared CI output).
+    pub fn command_pasteable(&self, redact_secrets: bool) -> String {
+        fn single_quote(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+        fn looks_like_secret(key: &str) -> bool {
+            // Strip `_`/`-` separators before matching so all naming styles
+            // hit the same patterns: `API_KEY`/`--api-key` → "apikey",
+            // `FM_BITCOIN_RPC_PASS` → contains "pass". Over-redacting the
+            // occasional false positive is fine for a dev-tool log; leaking
+            // a credential to CI output is not.
+            let key: String = key
+                .to_ascii_lowercase()
+                .chars()
+                .filter(|c| !matches!(c, '_' | '-'))
+                .collect();
+            [
+                "secret", "pass", "token", "apikey", "macaroon", "mnemonic", "seed",
+            ]
+            .iter()
+            .any(|pat| key.contains(pat))
+        }
+        let env_part = self
+            .env_debug
+            .iter()
+            .map(|(k, v)| {
+                let v = if redact_secrets && looks_like_secret(k) {
+                    "<redacted>"
+                } else {
+                    v.as_str()
+                };
+                format!("{}={}", k, single_quote(v))
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        // Redact secrets passed as CLI args too, in both the `--flag=value`
+        // and separate `--flag value` forms (e.g. bitcoind/gatewayd
+        // `-rpcpassword`). This assumes secrets are always attached to a
+        // flag whose name looks sensitive — a bare positional value with no
+        // flag and no recognizable keyword in the value itself (e.g. a raw
+        // opaque token passed with no `--flag`) would slip through
+        // unredacted. No current daemon spawned by this tool passes secrets
+        // that way; if one does in the future, give it a named flag.
+        let mut args_part_tokens: Vec<String> = Vec::with_capacity(self.args_debug.len());
+        let mut redact_next_value = false;
+        for arg in &self.args_debug {
+            if redact_secrets && redact_next_value {
+                args_part_tokens.push(single_quote("<redacted>"));
+                redact_next_value = false;
+                continue;
+            }
+            if redact_secrets {
+                if let Some((flag, value)) = arg.split_once('=') {
+                    // Check the value too, not just the flag name: a flag
+                    // that doesn't itself look secret (e.g. `--config`) can
+                    // still carry a secret in its value (e.g. a nested
+                    // `rpcpassword=...` assignment).
+                    if looks_like_secret(flag) || looks_like_secret(value) {
+                        args_part_tokens.push(single_quote(&format!("{flag}=<redacted>")));
+                        continue;
+                    }
+                } else if looks_like_secret(arg) {
+                    args_part_tokens.push(single_quote(arg));
+                    redact_next_value = true;
+                    continue;
+                }
+            }
+            args_part_tokens.push(single_quote(arg));
+        }
+        let args_part = args_part_tokens.join(" ");
+        if env_part.is_empty() {
+            args_part
+        } else {
+            format!("{env_part} {args_part}")
+        }
     }
 
     /// Run the command and get its output as string.
@@ -539,6 +750,7 @@ impl ToCmdExt for &'_ str {
         Command {
             cmd: tokio::process::Command::new(self),
             args_debug: vec![self.to_owned()],
+            env_debug: vec![],
         }
     }
 }
@@ -987,6 +1199,7 @@ fn to_command(cli: Vec<String>) -> Command {
     Command {
         cmd,
         args_debug: cli,
+        env_debug: vec![],
     }
 }
 
