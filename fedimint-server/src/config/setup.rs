@@ -843,6 +843,7 @@ mod tests {
                 network,
                 available_modules: BTreeSet::new(),
                 default_modules: BTreeSet::new(),
+                override_api_urls: Vec::new(),
             },
             MemDatabase::new().into_database(),
             sender,
