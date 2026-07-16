@@ -1,7 +1,6 @@
 use std::num::ParseIntError;
 use std::str::FromStr;
 
-use anyhow::bail;
 use bitcoin::Denomination;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -90,14 +89,14 @@ impl Amount {
 
     /// Returns an error if the amount is more precise than satoshis (i.e. if it
     /// has a milli-satoshi remainder). Otherwise, returns `Ok(())`.
-    pub fn ensure_sats_precision(&self) -> anyhow::Result<()> {
+    pub fn ensure_sats_precision(&self) -> Result<(), AmountConversionError> {
         if !self.msats.is_multiple_of(1000) {
-            bail!("Amount is using a precision smaller than satoshi, cannot convert to satoshis");
+            return Err(AmountConversionError::SubSatoshiPrecision { msats: self.msats });
         }
         Ok(())
     }
 
-    pub fn try_into_sats(&self) -> anyhow::Result<u64> {
+    pub fn try_into_sats(&self) -> Result<u64, AmountConversionError> {
         self.ensure_sats_precision()?;
         Ok(self.msats / 1000)
     }
@@ -251,11 +250,20 @@ impl From<bitcoin::Amount> for Amount {
 }
 
 impl TryFrom<Amount> for bitcoin::Amount {
-    type Error = anyhow::Error;
+    type Error = AmountConversionError;
 
-    fn try_from(value: Amount) -> anyhow::Result<Self> {
+    fn try_from(value: Amount) -> Result<Self, Self::Error> {
         value.try_into_sats().map(Self::from_sat)
     }
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum AmountConversionError {
+    #[error(
+        "amount {msats}msat is using a precision smaller than satoshi, cannot convert to satoshis"
+    )]
+    SubSatoshiPrecision { msats: u64 },
 }
 
 #[derive(Error, Debug)]
