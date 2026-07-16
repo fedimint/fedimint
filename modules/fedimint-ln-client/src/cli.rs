@@ -38,8 +38,13 @@ enum Opts {
         /// Lightning invoice or lnurl
         payment_info: String,
         /// Amount to pay, used for lnurl
-        #[clap(long)]
+        #[clap(long, conflicts_with = "all")]
         amount: Option<Amount>,
+        /// Spend as much of the balance as possible after gateway and
+        /// federation fees. Only valid for LNURL/Lightning Address payments,
+        /// where the sender chooses the amount.
+        #[clap(long, default_value = "false")]
+        all: bool,
         /// Invoice comment/description, used on lnurl
         #[clap(long)]
         lnurl_comment: Option<String>,
@@ -137,13 +142,39 @@ pub(crate) async fn handle_cli_command(
         Opts::Pay {
             payment_info,
             amount,
+            all,
             lnurl_comment,
             gateway_id,
             force_internal,
         } => {
+            // Resolve the gateway up front so the same one both prices `--all`
+            // and settles the payment.
+            let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
+
+            let amount = if all {
+                if payment_info
+                    .trim()
+                    .parse::<lightning_invoice::Bolt11Invoice>()
+                    .is_ok()
+                {
+                    bail!(
+                        "--all is only valid for LNURL/Lightning Address payments, not fixed-amount invoices"
+                    );
+                }
+
+                let gateway = ln_gateway.clone().context(
+                    "--all requires a gateway to price the payment; internal payments are not supported",
+                )?;
+                let balance = module.client_ctx.get_balance_for_btc().await?;
+                let spendable = module.spendable_amount(balance, Some(gateway)).await?;
+                info!("Spending entire balance, requesting invoice for {spendable}");
+                Some(spendable)
+            } else {
+                amount
+            };
+
             let bolt11 = crate::get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
-            let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
 
             let OutgoingLightningPayment {
                 payment_type,

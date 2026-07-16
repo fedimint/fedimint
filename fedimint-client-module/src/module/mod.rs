@@ -95,6 +95,10 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         request: FeeQuoteRequest,
     ) -> anyhow::Result<FeeQuote>;
 
+    /// The client's balance for `unit`, held by the primary module. See
+    /// `Client::get_balance_for_unit`.
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount>;
+
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
 
     async fn await_primary_module_outputs(
@@ -433,6 +437,15 @@ where
         request: FeeQuoteRequest,
     ) -> anyhow::Result<FeeQuote> {
         self.client.get().fee_quote(operation_id, request).await
+    }
+
+    /// The client's Bitcoin balance, held by the primary module. See
+    /// `Client::get_balance_for_btc`.
+    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+        self.client
+            .get()
+            .get_balance_for_unit(AmountUnit::BITCOIN)
+            .await
     }
 
     pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {

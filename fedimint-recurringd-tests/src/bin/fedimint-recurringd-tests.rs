@@ -133,6 +133,58 @@ async fn main() -> anyhow::Result<()> {
             almost_equal(client_balance, 1_000_000, 5_000).unwrap();
             info!("Client balance: {client_balance}");
 
+            // Exercise LNv1 `module ln pay <lnurl> --all`: a single payment that
+            // drains (nearly) the client's whole balance to a second client's
+            // LNURL. gw_lnd both issues the invoice and settles the payment, so
+            // this is a direct ecash swap within the federation.
+            let drain_receiver = fed
+                .new_joined_client("recurringd-test-drain-receiver")
+                .await?;
+            let drain_lnurl = cmd!(
+                drain_receiver,
+                "module",
+                "ln",
+                "lnurl",
+                "register",
+                recurringd.api_url()
+            )
+            .out_json()
+            .await?["lnurl"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+
+            let balance_before_drain = client.balance().await?;
+            let drain_outcome = cmd!(
+                client,
+                "module",
+                "ln",
+                "pay",
+                &drain_lnurl,
+                "--all",
+                "--gateway-id",
+                &gw_lnd.gateway_id,
+            )
+            .out_json()
+            .await?;
+            // `LightningPaymentOutcome` is externally tagged; success serializes
+            // as `{"Success": {..}}`.
+            assert!(
+                drain_outcome.get("Success").is_some(),
+                "draining the balance with `--all` should succeed, got: {drain_outcome}"
+            );
+
+            let balance_after_drain = client.balance().await?;
+            info!(
+                "Client balance after `--all` drain: {balance_after_drain} (was {balance_before_drain})"
+            );
+            // A spend-all leaves only sub-denomination dust behind — in practice
+            // a few hundred msats out of ~1_000_000.
+            assert!(
+                balance_after_drain < 20_000,
+                "`pay --all` should have drained (nearly) the whole balance, but {balance_after_drain} of {balance_before_drain} msats remain"
+            );
+
             Ok(())
         })
         .await
