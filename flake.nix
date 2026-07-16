@@ -220,9 +220,8 @@
             git.pre-commit.trailing_newline = false;
             git.pre-commit.hooks = {
               check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
-            };
-            git.pre-commit.hooks = {
               cargo-sort = builtins.readFile ./nix/check-cargo-sort.sh;
+              repository_yaml = builtins.readFile ./nix/check-repository-yaml.sh;
             };
           };
         };
@@ -405,6 +404,8 @@
                     # Nix
                     pkgs.nixfmt
                     pkgs.shellcheck
+                    pkgs.actionlint
+                    pkgs.python3Packages.pyyaml
                     pkgs.nil
                     pkgs.convco
                     pkgs.bash-language-server
@@ -499,7 +500,10 @@
 
             lint = flakeboxLib.mkLintShell {
               nativeBuildInputs = [
+                pkgs.actionlint
                 pkgs.cargo-sort
+                pkgs.docker-compose
+                pkgs.python3Packages.pyyaml
                 pkgs.taplo
               ];
               env = {
