@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_P2P_ALPN"],"fn":["parse_p2p"],"struct":["IrohConnector"]};
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_P2P_ALPN"],"fn":["endpoint_id_stable_to_next","parse_p2p","secret_key_stable_to_next"],"mod":["endpoint"],"struct":["IrohConnector"]};
