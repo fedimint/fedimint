@@ -717,10 +717,14 @@ where
     ///
     /// `is_terminal` reports whether an update is a final state of the
     /// operation; only terminal updates are cached as the durable outcome (a
-    /// stream that ends early on a non-terminal update caches nothing). A
-    /// cached outcome that fails to deserialize into `U` (e.g. one written by
-    /// an incompatible earlier version) is discarded with a warning and the
-    /// state is rebuilt from the update stream instead of panicking.
+    /// stream that ends early on a non-terminal update caches nothing). The
+    /// same predicate also validates outcomes READ from the cache: a cached
+    /// outcome that fails to deserialize into `U` (e.g. one written by an
+    /// incompatible earlier version) or that is non-terminal (one frozen by a
+    /// previous version that cached whatever update a stream ended on) is
+    /// discarded with a warning and the state is rebuilt from the update
+    /// stream — whose terminal end then overwrites the stale cache — instead
+    /// of short-circuiting subscribers to it or panicking.
     pub fn outcome_or_updates<U, S>(
         &self,
         operation: &OperationLogEntry,
@@ -734,7 +738,16 @@ where
     {
         use futures::StreamExt;
         match operation.try_outcome::<U>() {
-            Ok(Some(outcome)) => return UpdateStreamOrOutcome::Outcome(outcome),
+            Ok(Some(outcome)) if is_terminal(&outcome) => {
+                return UpdateStreamOrOutcome::Outcome(outcome);
+            }
+            Ok(Some(_non_terminal)) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    "Cached operation outcome is not a terminal update (cached by a previous \
+                     version); rebuilding it from the update stream"
+                );
+            }
             Ok(None) => {}
             Err(err) => {
                 warn!(

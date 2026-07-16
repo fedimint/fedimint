@@ -190,6 +190,61 @@ async fn test_no_outcome_cached_for_non_terminal_stream_end() {
     assert_eq!(op.outcome::<String>(), Some("final".to_owned()));
 }
 
+/// A cached outcome that is NOT a terminal update — one frozen by a previous
+/// version that cached whatever update a stream ended on — must not
+/// short-circuit subscribers: it is discarded and the state is rebuilt from
+/// the update stream, whose terminal end then overwrites the stale cache.
+#[tokio::test]
+async fn test_non_terminal_cached_outcome_falls_back_to_update_stream() {
+    let op_id = OperationId([0x32; 32]);
+
+    let db = MemDatabase::new().into_database();
+    let op_log = OperationLog::new(db.clone());
+
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .await;
+    dbtx.commit_tx().await;
+
+    // A previous version cached a non-terminal update as the outcome.
+    OperationLog::set_operation_outcome(&db, op_id, &"pending")
+        .await
+        .unwrap();
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        || futures::stream::iter(vec!["pending".to_owned(), "final".to_owned()]),
+    );
+    assert_matches!(
+        &update_stream,
+        UpdateStreamOrOutcome::UpdateStream(_),
+        "a non-terminal cached outcome must not short-circuit subscribers"
+    );
+    let received = update_stream.into_stream().collect::<Vec<_>>().await;
+    assert_eq!(received, vec!["pending".to_owned(), "final".to_owned()]);
+
+    // The re-derived terminal has overwritten the stale cache, so the next
+    // subscriber short-circuits to the true outcome.
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    assert_eq!(op.outcome::<String>(), Some("final".to_owned()));
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        futures::stream::empty,
+    );
+    assert_matches!(
+        &update_stream,
+        UpdateStreamOrOutcome::Outcome(o) if o == "final"
+    );
+}
+
 /// A cached outcome that no longer deserializes into the expected update type
 /// (e.g. written by an older version with a different update enum) must not
 /// panic: it is discarded and the state is rebuilt from the update stream,

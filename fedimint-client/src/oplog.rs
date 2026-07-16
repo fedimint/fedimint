@@ -241,10 +241,14 @@ impl OperationLog {
     /// updates are cached as the operation's outcome — an update stream that
     /// ends early (a consumer-side error path) must not persist a
     /// non-terminal update as the durable outcome, since later subscribers
-    /// would then be short-circuited to it forever. A cached outcome that no
+    /// would then be short-circuited to it forever. The same predicate also
+    /// validates outcomes READ from the cache: a cached outcome that no
     /// longer deserializes (e.g. written by an older version with a different
-    /// update type) is discarded with a warning and the outcome is rebuilt
-    /// from the update stream instead of panicking.
+    /// update type) or that is non-terminal (frozen by a previous version
+    /// that cached whatever update a stream ended on) is discarded with a
+    /// warning and the outcome is rebuilt from the update stream — whose
+    /// terminal end then overwrites the stale cache — instead of
+    /// short-circuiting subscribers to it or panicking.
     pub fn outcome_or_updates<U, S>(
         db: &Database,
         operation_id: OperationId,
@@ -257,7 +261,16 @@ impl OperationLog {
         S: futures::Stream<Item = U> + MaybeSend + 'static,
     {
         match operation_log_entry.try_outcome::<U>() {
-            Ok(Some(outcome)) => return UpdateStreamOrOutcome::Outcome(outcome),
+            Ok(Some(outcome)) if is_terminal(&outcome) => {
+                return UpdateStreamOrOutcome::Outcome(outcome);
+            }
+            Ok(Some(_non_terminal)) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    "Cached operation outcome is not a terminal update (cached by a previous \
+                     version); rebuilding it from the update stream"
+                );
+            }
             Ok(None) => {}
             Err(err) => {
                 warn!(
