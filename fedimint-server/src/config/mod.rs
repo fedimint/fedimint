@@ -11,9 +11,10 @@ pub use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
     ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
@@ -22,7 +23,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
-use fedimint_server_core::{ConfigGenModuleArgs, DynServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, DynServerModule, DynServerModuleInit, ServerModuleInitRegistry,
+};
 use futures::future::select_all;
 use hex::{FromHex, ToHex};
 use peer_handle::PeerHandle;
@@ -81,19 +84,21 @@ impl ServerConfig {
 
     pub(crate) fn supported_api_versions_summary(
         modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-        module_inits: &ServerModuleInitRegistry,
+        module_registry: &ModuleRegistry<DynServerModule>,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: Self::supported_api_versions(),
             modules: modules
                 .iter()
                 .map(|(&id, config)| {
+                    let module = module_registry.get_expect(id);
                     (
                         id,
-                        module_inits
-                            .get(&config.kind)
-                            .expect("missing module kind gen")
-                            .supported_api_versions(),
+                        SupportedModuleApiVersions {
+                            core_consensus: CORE_CONSENSUS_VERSION,
+                            module_consensus: config.version,
+                            api: module.supported_api_versions(),
+                        },
                     )
                 })
                 .collect(),

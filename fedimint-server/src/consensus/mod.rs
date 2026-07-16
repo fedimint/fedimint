@@ -213,7 +213,7 @@ pub async fn run(
         shutdown_receiver: shutdown_receiver.clone(),
         supported_api_versions: ServerConfig::supported_api_versions_summary(
             &cfg.consensus.modules,
-            &module_init_registry,
+            &module_registry,
         ),
         auth_ui,
         auth_api,

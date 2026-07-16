@@ -14,8 +14,8 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
+    Amounts, ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    TransactionItemAmounts,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 pub use fedimint_dummy_common as common;
@@ -96,17 +96,6 @@ impl ServerModuleInit for DummyInit {
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 0)],
-        )
     }
 
     /// Initialize the module
