@@ -3,10 +3,22 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 
 pub type DynSetupApi = Arc<dyn ISetupApi + Send + Sync + 'static>;
+
+/// Local Bitcoin backend readiness during setup.
+#[derive(Clone, Debug)]
+pub enum BitcoinBackendStatus {
+    /// No enabled setup module needs the local Bitcoin backend.
+    NotRequired,
+    /// The local Bitcoin backend is reachable and matches setup network.
+    Ready { network: Network, block_count: u64 },
+    /// The local Bitcoin backend is required but not ready.
+    NotReady(String),
+}
 
 /// Interface for the web UI to interact with the config generation process
 #[async_trait]
@@ -29,6 +41,9 @@ pub trait ISetupApi {
 
     /// Get the modules that should be enabled by default in the setup UI
     fn default_modules(&self) -> BTreeSet<ModuleKind>;
+
+    /// Get local Bitcoin backend readiness for setup.
+    async fn bitcoin_backend_status(&self) -> BitcoinBackendStatus;
 
     /// Reset the set of other guardians
     async fn reset_setup_codes(&self);

@@ -27,7 +27,8 @@ use fedimint_core::module::{
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::setup_code::PeerEndpoints;
 use fedimint_core::{PeerId, base32, runtime};
-use fedimint_server_core::setup_ui::ISetupApi;
+use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, network_from_chain_id};
+use fedimint_server_core::setup_ui::{BitcoinBackendStatus, ISetupApi};
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use tokio::sync::mpsc::Sender;
@@ -141,6 +142,8 @@ pub struct SetupApi {
     auth_ui: Option<ApiAuth>,
     /// Password protecting setup admin RPCs over WS/iroh. `None` ⇒ 401.
     auth_api: Option<ApiAuth>,
+    /// Local Bitcoin backend, checked before DKG if a wallet module is enabled.
+    bitcoin_rpc: Option<DynServerBitcoinRpc>,
 }
 
 impl SetupApi {
@@ -152,6 +155,7 @@ impl SetupApi {
         code_version_hash: String,
         auth_ui: Option<ApiAuth>,
         auth_api: Option<ApiAuth>,
+        bitcoin_rpc: Option<DynServerBitcoinRpc>,
     ) -> Self {
         Self {
             settings,
@@ -162,6 +166,7 @@ impl SetupApi {
             code_version_hash,
             auth_ui,
             auth_api,
+            bitcoin_rpc,
         }
     }
 
@@ -170,6 +175,54 @@ impl SetupApi {
             Some(..) => SetupStatus::SharingConnectionCodes,
             None => SetupStatus::AwaitingLocalParams,
         }
+    }
+
+    fn enabled_modules_from_state(&self, state: &SetupState) -> BTreeSet<ModuleKind> {
+        let local_setup_code = state.local_params.as_ref().map(LocalParams::setup_code);
+        state
+            .setup_codes
+            .iter()
+            .chain(local_setup_code.iter())
+            .find_map(|info| info.enabled_modules.clone())
+            .unwrap_or_else(|| self.settings.default_modules.clone())
+    }
+
+    fn setup_uses_bitcoin_backend(enabled_modules: &BTreeSet<ModuleKind>) -> bool {
+        enabled_modules
+            .iter()
+            .any(|module| matches!(module.as_str(), "wallet" | "walletv2"))
+    }
+
+    async fn check_bitcoin_backend_ready(
+        &self,
+        network: bitcoin::Network,
+        enabled_modules: &BTreeSet<ModuleKind>,
+    ) -> anyhow::Result<Option<(bitcoin::Network, u64)>> {
+        if !Self::setup_uses_bitcoin_backend(enabled_modules) {
+            return Ok(None);
+        }
+
+        let bitcoin_rpc = self
+            .bitcoin_rpc
+            .as_ref()
+            .context("Bitcoin backend is not configured")?;
+
+        let block_count = bitcoin_rpc
+            .get_block_count()
+            .await
+            .context("Bitcoin backend block count check failed")?;
+        let chain_id = bitcoin_rpc
+            .get_chain_id()
+            .await
+            .context("Bitcoin backend chain check failed")?;
+        let bitcoin_backend_network = network_from_chain_id(chain_id);
+
+        ensure!(
+            bitcoin_backend_network == network,
+            "Bitcoin backend uses network {bitcoin_backend_network} but setup is configured for {network}"
+        );
+
+        Ok(Some((bitcoin_backend_network, block_count)))
     }
 }
 
@@ -308,6 +361,26 @@ impl ISetupApi for SetupApi {
 
     fn default_modules(&self) -> BTreeSet<ModuleKind> {
         self.settings.default_modules.clone()
+    }
+
+    async fn bitcoin_backend_status(&self) -> BitcoinBackendStatus {
+        let state = self.state.lock().await.clone();
+        let Some(local_params) = state.local_params.as_ref() else {
+            return BitcoinBackendStatus::NotRequired;
+        };
+        let enabled_modules = self.enabled_modules_from_state(&state);
+
+        match self
+            .check_bitcoin_backend_ready(local_params.network, &enabled_modules)
+            .await
+        {
+            Ok(Some((network, block_count))) => BitcoinBackendStatus::Ready {
+                network,
+                block_count,
+            },
+            Ok(None) => BitcoinBackendStatus::NotRequired,
+            Err(err) => BitcoinBackendStatus::NotReady(err.to_string()),
+        }
     }
 
     async fn reset_setup_codes(&self) {
@@ -584,6 +657,9 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.enabled_modules.clone())
             .unwrap_or_else(|| self.settings.default_modules.clone());
 
+        self.check_bitcoin_backend_ready(local_params.network, &enabled_modules)
+            .await?;
+
         let our_id = state
             .setup_codes
             .iter()
@@ -813,20 +889,111 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
 mod tests {
     use std::collections::BTreeSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::str::FromStr;
 
+    use anyhow::bail;
     use base64::Engine as _;
-    use bitcoin::Network;
+    use bitcoin::{BlockHash, Network, Transaction};
     use fedimint_core::db::IRawDatabaseExt;
     use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::envs::BitcoinRpcConfig;
+    use fedimint_core::util::SafeUrl;
+    use fedimint_core::{ChainId, Feerate};
+    use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
     use tokio::sync::mpsc;
 
     use super::*;
+
+    #[derive(Debug)]
+    struct MockBitcoinRpc {
+        network: Network,
+        fail_block_count: bool,
+    }
+
+    impl MockBitcoinRpc {
+        fn chain_id(&self) -> ChainId {
+            let chain_id = match self.network {
+                Network::Bitcoin => {
+                    "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
+                }
+                Network::Testnet | Network::Testnet4 => {
+                    "00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206"
+                }
+                Network::Signet => {
+                    "00000086d6b2636cb2a392d45edc4ec544a10024d30141c9adf4bfd9de533b53"
+                }
+                Network::Regtest => {
+                    "0000000000000000000000000000000000000000000000000000000000000001"
+                }
+            };
+
+            ChainId::from_str(chain_id).expect("test chain id should parse")
+        }
+    }
+
+    #[async_trait]
+    impl IServerBitcoinRpc for MockBitcoinRpc {
+        fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+            BitcoinRpcConfig {
+                kind: "mock".to_owned(),
+                url: "http://mock"
+                    .parse()
+                    .expect("test bitcoin rpc url should parse"),
+            }
+        }
+
+        fn get_url(&self) -> SafeUrl {
+            "http://mock"
+                .parse()
+                .expect("test bitcoin rpc url should parse")
+        }
+
+        async fn get_block_count(&self) -> anyhow::Result<u64> {
+            if self.fail_block_count {
+                bail!("mock block count failure");
+            }
+
+            Ok(42)
+        }
+
+        async fn get_block_hash(&self, _height: u64) -> anyhow::Result<BlockHash> {
+            unimplemented!("not needed by setup tests")
+        }
+
+        async fn get_block(&self, _block_hash: &BlockHash) -> anyhow::Result<bitcoin::Block> {
+            unimplemented!("not needed by setup tests")
+        }
+
+        async fn get_feerate(&self) -> anyhow::Result<Option<Feerate>> {
+            unimplemented!("not needed by setup tests")
+        }
+
+        async fn submit_transaction(&self, _transaction: Transaction) -> anyhow::Result<()> {
+            unimplemented!("not needed by setup tests")
+        }
+
+        async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
+            unimplemented!("not needed by setup tests")
+        }
+
+        async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
+            Ok(self.chain_id())
+        }
+    }
 
     fn setup_api(network: Network) -> SetupApi {
         setup_api_with_version(network, "1.2.3-alpha")
     }
 
     fn setup_api_with_version(network: Network, version: &str) -> SetupApi {
+        setup_api_with_version_and_bitcoin_rpc(network, version, None)
+    }
+
+    fn setup_api_with_version_and_bitcoin_rpc(
+        network: Network,
+        version: &str,
+        bitcoin_rpc: Option<DynServerBitcoinRpc>,
+    ) -> SetupApi {
         let (sender, _receiver) = mpsc::channel(1);
         let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
 
@@ -850,6 +1017,7 @@ mod tests {
             String::new(),
             None,
             None,
+            bitcoin_rpc,
         )
     }
 
@@ -996,6 +1164,43 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("Guardian uses Fedimint version 1.2.4 but we use 1.2.3")
+        );
+    }
+
+    #[tokio::test]
+    async fn start_dkg_checks_bitcoin_backend_when_wallet_enabled() {
+        let api = setup_api_with_version_and_bitcoin_rpc(
+            Network::Regtest,
+            "1.2.3-alpha",
+            Some(
+                MockBitcoinRpc {
+                    network: Network::Regtest,
+                    fail_block_count: true,
+                }
+                .into_dyn(),
+            ),
+        );
+
+        let wallet_modules = BTreeSet::from([ModuleKind::from_static_str("wallet")]);
+        api.set_local_parameters(
+            "local".to_string(),
+            Some("fed".to_string()),
+            None,
+            Some(wallet_modules),
+            Some(1),
+        )
+        .await
+        .expect("setting local parameters should succeed");
+
+        let err = api
+            .start_dkg()
+            .await
+            .expect_err("DKG should reject unreachable Bitcoin backend");
+
+        assert!(
+            err.to_string()
+                .contains("Bitcoin backend block count check failed"),
+            "unexpected DKG error: {err:#}"
         );
     }
 }

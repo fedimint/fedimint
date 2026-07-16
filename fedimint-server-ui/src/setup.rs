@@ -8,7 +8,7 @@ use axum::routing::{get, post};
 use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
-use fedimint_server_core::setup_ui::DynSetupApi;
+use fedimint_server_core::setup_ui::{BitcoinBackendStatus, DynSetupApi};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -54,6 +54,7 @@ fn peer_list_section(
     cfg_federation_name: &Option<String>,
     cfg_base_fees_disabled: Option<bool>,
     cfg_enabled_modules: &Option<BTreeSet<ModuleKind>>,
+    bitcoin_backend_status: &BitcoinBackendStatus,
     error: Option<&str>,
 ) -> Markup {
     let total_guardians = connected_peers.len() + 1;
@@ -67,6 +68,24 @@ fn peer_list_section(
                 p { (format!("{total_guardians} of {expected} guardians connected.")) }
             } @else {
                 p { "Add setup code for every other guardian." }
+            }
+
+            @match bitcoin_backend_status {
+                BitcoinBackendStatus::Ready { network, block_count } => {
+                    div class="alert alert-success py-2 mb-3" {
+                        "Bitcoin backend ready: " (network) ", " (block_count) " blocks"
+                    }
+                }
+                BitcoinBackendStatus::NotReady(error) => {
+                    div class="alert alert-warning py-2 mb-3" {
+                        "Bitcoin backend not ready: " (error)
+                    }
+                }
+                BitcoinBackendStatus::NotRequired => {
+                    div class="alert alert-secondary py-2 mb-3" {
+                        "Bitcoin backend not required for selected modules."
+                    }
+                }
             }
 
             @if !connected_peers.is_empty() {
@@ -595,6 +614,7 @@ async fn federation_setup(
     let cfg_federation_name = state.api.cfg_federation_name().await;
     let cfg_base_fees_disabled = state.api.cfg_base_fees_disabled().await;
     let cfg_enabled_modules = state.api.cfg_enabled_modules().await;
+    let bitcoin_backend_status = state.api.bitcoin_backend_status().await;
 
     let content = html! {
         p { "Share this with your fellow guardians." }
@@ -619,7 +639,7 @@ async fn federation_setup(
             (copiable_text(&our_connection_info))
         }
 
-        (peer_list_section(&connected_peers, federation_size, &cfg_federation_name, cfg_base_fees_disabled, &cfg_enabled_modules, None))
+        (peer_list_section(&connected_peers, federation_size, &cfg_federation_name, cfg_base_fees_disabled, &cfg_enabled_modules, &bitcoin_backend_status, None))
 
         // QR Scanner Modal
         div class="modal fade" id="qrScannerModal" tabindex="-1" aria-labelledby="qrScannerModalLabel" aria-hidden="true" {
@@ -745,6 +765,7 @@ async fn post_add_setup_code(
     let cfg_federation_name = state.api.cfg_federation_name().await;
     let cfg_base_fees_disabled = state.api.cfg_base_fees_disabled().await;
     let cfg_enabled_modules = state.api.cfg_enabled_modules().await;
+    let bitcoin_backend_status = state.api.bitcoin_backend_status().await;
 
     Html(
         peer_list_section(
@@ -753,6 +774,7 @@ async fn post_add_setup_code(
             &cfg_federation_name,
             cfg_base_fees_disabled,
             &cfg_enabled_modules,
+            &bitcoin_backend_status,
             error.as_ref().map(|e| e.to_string()).as_deref(),
         )
         .into_string(),
@@ -822,6 +844,7 @@ async fn post_start_dkg(
             let cfg_federation_name = state.api.cfg_federation_name().await;
             let cfg_base_fees_disabled = state.api.cfg_base_fees_disabled().await;
             let cfg_enabled_modules = state.api.cfg_enabled_modules().await;
+            let bitcoin_backend_status = state.api.bitcoin_backend_status().await;
 
             Html(
                 peer_list_section(
@@ -830,6 +853,7 @@ async fn post_start_dkg(
                     &cfg_federation_name,
                     cfg_base_fees_disabled,
                     &cfg_enabled_modules,
+                    &bitcoin_backend_status,
                     Some(&e.to_string()),
                 )
                 .into_string(),

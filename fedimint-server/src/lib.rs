@@ -196,6 +196,7 @@ pub async fn run_with_iroh_p2p_relays(
                 code_version_str.clone(),
                 code_version_hash.clone(),
                 force_api_secrets.clone(),
+                bitcoin_rpc.clone(),
                 setup_ui_router,
                 module_init_registry.clone(),
                 auth_ui.clone(),
@@ -381,6 +382,7 @@ pub async fn run_config_gen(
     code_version_str: String,
     code_version_hash: String,
     api_secrets: ApiSecrets,
+    bitcoin_rpc: DynServerBitcoinRpc,
     setup_ui_handler: SetupUiRouter,
     module_init_registry: ServerModuleInitRegistry,
     auth_ui: Option<ApiAuth>,
@@ -398,6 +400,7 @@ pub async fn run_config_gen(
         code_version_str,
         code_version_hash,
         api_secrets,
+        bitcoin_rpc,
         setup_ui_handler,
         module_init_registry,
         auth_ui,
@@ -417,6 +420,7 @@ pub async fn run_config_gen_with_iroh_p2p_relays(
     code_version_str: String,
     code_version_hash: String,
     api_secrets: ApiSecrets,
+    bitcoin_rpc: DynServerBitcoinRpc,
     setup_ui_handler: SetupUiRouter,
     module_init_registry: ServerModuleInitRegistry,
     auth_ui: Option<ApiAuth>,
@@ -441,6 +445,7 @@ pub async fn run_config_gen_with_iroh_p2p_relays(
         code_version_hash,
         auth_ui,
         auth_api,
+        Some(bitcoin_rpc),
     );
 
     let mut rpc_module = RpcModule::new(setup_api.clone());
