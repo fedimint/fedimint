@@ -4627,6 +4627,8 @@ dependencies = [
  "hex",
  "hyper 1.9.0",
  "iroh 0.35.0",
+ "iroh 1.0.0",
+ "iroh-mainline-address-lookup",
  "iroh-relay 0.35.0",
  "itertools 0.14.0",
  "jsonrpsee",

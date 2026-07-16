@@ -22,6 +22,9 @@ Setting up and maintaining Federation is more challenging as it
 requires better understanding of its architecture and handling of its
 server side components.
 
+Guardians maintaining an existing federation should also read the
+[networking upgrade requirements](networking.md#guardian-iroh-p2p-upgrades).
+
 In near future we expect many hosted Fedimint solutions, which should
 make setting up federations relatively easy.
 
