@@ -28,7 +28,8 @@ use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange}
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
+    TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -865,6 +866,73 @@ impl LightningClientModule {
                 },
             )
             .await
+    }
+
+    /// Computes the largest invoice amount the client can pay in full out of
+    /// `balance`, i.e. the amount to request an invoice for in order to spend
+    /// (close to) the entire balance.
+    ///
+    /// Paying an invoice deducts two kinds of fee from the balance:
+    /// - the *gateway* fee, which is added on top of the invoice amount to form
+    ///   the outgoing contract (`send_fee.add_to(invoice_amount)`), and
+    /// - the *federation* fee of funding that contract — the Lightning output
+    ///   fee, the mint input fees on the funding notes, the mint output fees on
+    ///   any change, and sub-denomination dust — as quoted by
+    ///   [`Self::send_fee_quote`].
+    ///
+    /// `balance` is the client's current Bitcoin balance (e.g. from
+    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway
+    /// whose fee schedule to use; if `None` one is selected automatically, the
+    /// same way [`Self::send`] does when no gateway is given. The gateway's
+    /// *default* send fee is used — the higher of its two send fees, applied to
+    /// a Lightning swap rather than a direct fedimint-to-fedimint swap — so the
+    /// returned amount stays payable even when the eventual invoice is routed
+    /// over Lightning.
+    ///
+    /// The maximum payable amount is found by binary search over the real fee
+    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
+    /// because the federation fee is stepwise in the amount. The quote is
+    /// point-in-time and moves with the balance, exactly like
+    /// [`Self::send_fee_quote`]; the eventual [`Self::send`] remains the source
+    /// of truth and may still fail if balance or gateway state changes in
+    /// between.
+    ///
+    /// Returns an error if the balance cannot cover even the smallest payable
+    /// amount plus fees. Any LNURL `minSendable`/`maxSendable` bounds are the
+    /// caller's responsibility to apply.
+    pub async fn spendable_amount(
+        &self,
+        balance: Amount,
+        gateway: Option<SafeUrl>,
+    ) -> anyhow::Result<Amount> {
+        let routing_info = match gateway {
+            Some(gateway) => self
+                .routing_info(&gateway)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Federation not supported by gateway"))?,
+            None => self.select_gateway(None).await?.1,
+        };
+
+        // The default (Lightning-swap) send fee is the higher of the gateway's
+        // two send fees, so using it keeps the result payable even if the
+        // eventual invoice is routed over Lightning instead of settled by a
+        // direct swap.
+        let send_fee = routing_info.send_fee_default;
+
+        anyhow::ensure!(
+            send_fee.le(&PaymentFee::SEND_FEE_LIMIT),
+            "Gateway's default send fee exceeds the limit"
+        );
+
+        max_affordable_send_amount(
+            balance,
+            Amount::from_msats(1),
+            balance,
+            |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
+            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+        )
+        .await
+        .ok_or_else(|| anyhow::anyhow!("Balance is too low to send any amount after fees"))
     }
 
     /// Create an incoming contract locked to a public key derived from the

@@ -1,9 +1,11 @@
 use std::fmt;
+use std::future::Future;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
+use fedimint_core::Amount;
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
 };
@@ -478,6 +480,102 @@ impl FeeQuote {
             .checked_add(&self.output)
             .and_then(|sum| sum.checked_add(&self.dust))
             .expect("aggregate fee components cannot overflow an Amounts")
+    }
+}
+
+/// Finds the largest send amount payable in full out of `balance` when the
+/// payment carries both an *external* per-amount fee (e.g. a Lightning gateway
+/// routing fee) and the on-federation transaction fee.
+///
+/// Sending an amount `x` requires funding a value `gross_up(x)` on the
+/// federation — the external fee grosses the amount up, e.g. the outgoing
+/// Lightning contract is `x + gateway_fee(x)` — and funding that value costs an
+/// additional federation fee reported by `fee_quote` (the module's output fee
+/// plus the primary module's funding input fees, change output fees and dust).
+/// This returns the largest `x` in `min_amount..=max_amount` satisfying
+///
+/// ```text
+/// gross_up(x) + fee_quote(gross_up(x)).total().get_bitcoin() <= balance
+/// ```
+///
+/// or `None` if even `min_amount` is unaffordable.
+///
+/// The cost is not a closed form of `x`: the federation fee is charged per
+/// note, so note selection, denomination rounding, change and dust move it in
+/// steps as `x` crosses thresholds. Rather than invert an analytic formula this
+/// evaluates the real quote via a monotonic binary search — each step a single,
+/// non-committing `fee_quote` dry-run over the current inventory — and only
+/// ever advances the lower bound to a verified-affordable amount, so the result
+/// never overestimates. A `fee_quote` error (e.g. the balance cannot fund a
+/// value that large) is treated as unaffordable.
+///
+/// The LNv2 and LNv1 send-all flows share this solver; they differ only in
+/// `gross_up` (the gateway fee model) and which `fee_quote` they pass.
+pub async fn max_affordable_send_amount<GrossUp, Quote, Fut>(
+    balance: Amount,
+    min_amount: Amount,
+    max_amount: Amount,
+    gross_up: GrossUp,
+    fee_quote: Quote,
+) -> Option<Amount>
+where
+    GrossUp: Fn(Amount) -> Amount,
+    Quote: Fn(Amount) -> Fut,
+    Fut: Future<Output = anyhow::Result<FeeQuote>>,
+{
+    // Nothing above the balance can ever be funded, so cap the upper bound.
+    let hi_bound = max_amount.msats.min(balance.msats);
+    let lo_bound = min_amount.msats;
+
+    if lo_bound > hi_bound
+        || !send_amount_affordable(Amount::from_msats(lo_bound), balance, &gross_up, &fee_quote)
+            .await
+    {
+        return None;
+    }
+
+    let mut lo = lo_bound;
+    let mut hi = hi_bound;
+
+    while lo < hi {
+        // Bias the midpoint up so the search converges toward `hi`.
+        let mid = lo + (hi - lo).div_ceil(2);
+
+        if send_amount_affordable(Amount::from_msats(mid), balance, &gross_up, &fee_quote).await {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+
+    Some(Amount::from_msats(lo))
+}
+
+/// Whether sending `amount` is payable in full out of `balance`: the funded
+/// value `gross_up(amount)` plus its federation `fee_quote` must fit within the
+/// balance. A quote error (the balance cannot fund a value this large) counts
+/// as unaffordable, making this safe as the monotone predicate for
+/// [`max_affordable_send_amount`].
+async fn send_amount_affordable<GrossUp, Quote, Fut>(
+    amount: Amount,
+    balance: Amount,
+    gross_up: &GrossUp,
+    fee_quote: &Quote,
+) -> bool
+where
+    GrossUp: Fn(Amount) -> Amount,
+    Quote: Fn(Amount) -> Fut,
+    Fut: Future<Output = anyhow::Result<FeeQuote>>,
+{
+    let funded_amount = gross_up(amount);
+
+    if funded_amount > balance {
+        return false;
+    }
+
+    match fee_quote(funded_amount).await {
+        Ok(quote) => funded_amount + quote.total().get_bitcoin() <= balance,
+        Err(_) => false,
     }
 }
 
