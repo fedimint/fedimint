@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Context, ensure};
+use thiserror::Error;
 
-use crate::encoding::{Decodable, Encodable};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 /// Lowercase RFC 4648 Base32hex alphabet (32 characters).
@@ -40,7 +40,7 @@ pub fn encode(input: &[u8]) -> String {
 
 /// Decodes a base 32 string back to raw bytes. Returns an error
 /// if any invalid character is encountered.
-pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
+pub fn decode(input: &str) -> Result<Vec<u8>, Base32DecodeError> {
     let decode_table = RFC4648
         .iter()
         .enumerate()
@@ -52,11 +52,12 @@ pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
     let mut buffer = 0;
     let mut bits = 0;
 
-    for byte in input.as_bytes() {
-        let value = decode_table
-            .get(byte)
-            .copied()
-            .context("Invalid character encountered")?;
+    for (index, ch) in input.char_indices() {
+        let value = ch
+            .is_ascii()
+            .then(|| decode_table.get(&(ch as u8)).copied())
+            .flatten()
+            .ok_or(Base32DecodeError::InvalidCharacter { ch, index })?;
 
         buffer |= value << bits;
         bits += 5;
@@ -80,17 +81,39 @@ pub fn encode_prefixed_bytes(prefix: &str, bytes: &[u8]) -> String {
     format!("{prefix}{}", encode(bytes))
 }
 
-pub fn decode_prefixed<T: Decodable>(prefix: &str, s: &str) -> anyhow::Result<T> {
+pub fn decode_prefixed<T: Decodable>(prefix: &str, s: &str) -> Result<T, PrefixedDecodeError> {
     Ok(T::consensus_decode_whole(
         &decode_prefixed_bytes(prefix, s)?,
         &ModuleDecoderRegistry::default(),
     )?)
 }
 
-pub fn decode_prefixed_bytes(prefix: &str, s: &str) -> anyhow::Result<Vec<u8>> {
+pub fn decode_prefixed_bytes(prefix: &str, s: &str) -> Result<Vec<u8>, PrefixedDecodeError> {
     let s = s.to_lowercase();
-    ensure!(s.starts_with(prefix), "Invalid Prefix");
-    decode(&s[prefix.len()..])
+    if !s.starts_with(prefix) {
+        return Err(PrefixedDecodeError::InvalidPrefix {
+            expected: prefix.to_owned(),
+        });
+    }
+    Ok(decode(&s[prefix.len()..])?)
+}
+
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Base32DecodeError {
+    #[error("invalid base32 character '{ch}' at byte index {index}")]
+    InvalidCharacter { ch: char, index: usize },
+}
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PrefixedDecodeError {
+    #[error("invalid prefix, expected '{expected}'")]
+    InvalidPrefix { expected: String },
+    #[error("error decoding base32 string: {0}")]
+    Base32Decode(#[from] Base32DecodeError),
+    #[error("error consensus decoding base32 payload: {0}")]
+    ConsensusDecode(#[from] DecodeError),
 }
 
 #[test]
