@@ -43,7 +43,7 @@ use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, watch};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
@@ -203,6 +203,14 @@ pub async fn run(
         ci_status_receivers.insert(peer, ci_receiver);
     }
 
+    let supported_api_versions =
+        ServerConfig::supported_api_versions_summary(&cfg.consensus.modules, &module_registry);
+    debug!(
+        target: LOG_CONSENSUS,
+        ?supported_api_versions,
+        "Supported API versions",
+    );
+
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
@@ -211,10 +219,7 @@ pub async fn run(
         submission_sender: submission_sender.clone(),
         shutdown_sender,
         shutdown_receiver: shutdown_receiver.clone(),
-        supported_api_versions: ServerConfig::supported_api_versions_summary(
-            &cfg.consensus.modules,
-            &module_registry,
-        ),
+        supported_api_versions,
         auth_ui,
         auth_api,
         p2p_status_receivers,
