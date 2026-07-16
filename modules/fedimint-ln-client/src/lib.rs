@@ -43,7 +43,7 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote,
-    FeeQuoteRequest, TransactionBuilder,
+    FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -1819,6 +1819,60 @@ impl LightningClientModule {
                 },
             )
             .await
+    }
+
+    /// Computes the largest invoice amount the client can pay in full out of
+    /// `balance`, i.e. the amount to request an invoice for in order to spend
+    /// (close to) the entire balance.
+    ///
+    /// Paying an invoice deducts two kinds of fee from the balance:
+    /// - the *gateway* routing fee, which is added on top of the invoice amount
+    ///   to form the outgoing contract (`invoice_amount + gateway.fees`), and
+    /// - the *federation* fee of funding that contract — the Lightning output
+    ///   fee, the mint input fees on the funding notes, the mint output fees on
+    ///   any change, and sub-denomination dust — as quoted by
+    ///   [`Self::send_fee_quote`].
+    ///
+    /// `balance` is the client's current Bitcoin balance (e.g. from
+    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway to
+    /// use; pass the same [`LightningGateway`] you intend to hand to
+    /// [`Self::pay_bolt11_invoice`] so the fee schedules match. If `None`, a
+    /// registered gateway is selected at random, the same way
+    /// [`Self::get_gateway`] does for an external payment.
+    ///
+    /// The maximum payable amount is found by binary search over the real fee
+    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
+    /// because the federation fee is stepwise in the amount. The quote is
+    /// point-in-time and moves with the balance; the eventual
+    /// [`Self::pay_bolt11_invoice`] remains the source of truth and may still
+    /// fail if balance or gateway state changes in between.
+    ///
+    /// Returns an error if no gateway is available or if the balance cannot
+    /// cover even the smallest payable amount plus fees. Any LNURL
+    /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
+    /// apply.
+    pub async fn spendable_amount(
+        &self,
+        balance: Amount,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<Amount> {
+        let gateway = match gateway {
+            Some(gateway) => gateway,
+            None => self
+                .get_gateway(None, false)
+                .await?
+                .ok_or_else(|| anyhow!("No gateway available to send the payment"))?,
+        };
+
+        max_affordable_send_amount(
+            balance,
+            Amount::from_msats(1),
+            balance,
+            |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
+            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+        )
+        .await
+        .ok_or_else(|| anyhow!("Balance is too low to send any amount after fees"))
     }
 
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
