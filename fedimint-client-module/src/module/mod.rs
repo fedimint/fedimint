@@ -19,7 +19,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::BoxStream;
+use fedimint_core::util::{BoxStream, FmtCompact as _};
 use fedimint_core::{
     Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
     maybe_add_send_sync,
@@ -712,35 +712,63 @@ where
         Ok(())
     }
 
+    /// Resolve an operation to its cached outcome, or to a caching update
+    /// stream built by `stream_gen`.
+    ///
+    /// `is_terminal` reports whether an update is a final state of the
+    /// operation; only terminal updates are cached as the durable outcome (a
+    /// stream that ends early on a non-terminal update caches nothing). A
+    /// cached outcome that fails to deserialize into `U` (e.g. one written by
+    /// an incompatible earlier version) is discarded with a warning and the
+    /// state is rebuilt from the update stream instead of panicking.
     pub fn outcome_or_updates<U, S>(
         &self,
-        operation: OperationLogEntry,
+        operation: &OperationLogEntry,
         operation_id: OperationId,
-        stream_gen: impl FnOnce() -> S + 'static,
+        is_terminal: impl Fn(&U) -> bool + MaybeSend + MaybeSync + 'static,
+        stream_gen: impl FnOnce() -> S + MaybeSend + 'static,
     ) -> UpdateStreamOrOutcome<U>
     where
         U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
         S: Stream<Item = U> + MaybeSend + 'static,
     {
         use futures::StreamExt;
-        match self.client.get().operation_log().outcome_or_updates(
-            &self.global_db(),
-            operation_id,
-            operation,
-            Box::new(move || {
-                let stream_gen = stream_gen();
-                Box::pin(
-                    stream_gen.map(move |item| serde_json::to_value(item).expect("Can't fail")),
-                )
-            }),
-        ) {
-            UpdateStreamOrOutcome::UpdateStream(stream) => UpdateStreamOrOutcome::UpdateStream(
-                Box::pin(stream.map(|u| serde_json::from_value(u).expect("Can't fail"))),
-            ),
-            UpdateStreamOrOutcome::Outcome(o) => {
-                UpdateStreamOrOutcome::Outcome(serde_json::from_value(o).expect("Can't fail"))
+        match operation.try_outcome::<U>() {
+            Ok(Some(outcome)) => return UpdateStreamOrOutcome::Outcome(outcome),
+            Ok(None) => {}
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    err = %err.fmt_compact(),
+                    "Cached operation outcome failed to deserialize; rebuilding it from the update stream"
+                );
             }
         }
+        let stream = self
+            .client
+            .get()
+            .operation_log()
+            .caching_operation_update_stream(
+                operation_id,
+                Box::new(move || {
+                    let stream_gen = stream_gen();
+                    Box::pin(
+                        stream_gen.map(move |item| serde_json::to_value(item).expect("Can't fail")),
+                    )
+                }),
+                Box::new(move |update| {
+                    // The update was serialized from a `U` moments ago in this
+                    // process, so deserialization only fails if `U` is not
+                    // round-trip-safe; treat that conservatively as non-terminal
+                    // (skip caching) rather than panicking inside the stream.
+                    serde_json::from_value::<U>(update.clone())
+                        .map(|update| is_terminal(&update))
+                        .unwrap_or(false)
+                }),
+            );
+        UpdateStreamOrOutcome::UpdateStream(Box::pin(
+            stream.map(|u| serde_json::from_value::<U>(u).expect("Can't fail")),
+        ))
     }
 
     pub async fn claim_inputs<I, S>(

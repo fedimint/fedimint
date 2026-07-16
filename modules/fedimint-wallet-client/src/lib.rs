@@ -1455,7 +1455,16 @@ impl WalletClientModule {
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                DepositStateV2::WaitingForTransaction
+                | DepositStateV2::WaitingForConfirmation { .. }
+                | DepositStateV2::Confirmed { .. } => false,
+                DepositStateV2::Claimed { .. } | DepositStateV2::Failed(_) => true,
+            },
+            {
             let stream_rpc = self.rpc.clone();
             let stream_client_ctx = self.client_ctx.clone();
             let stream_script_pub_key = address.script_pubkey();
@@ -1873,9 +1882,14 @@ impl WalletClientModule {
         let mut operation_stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                WithdrawState::Created => false,
+                WithdrawState::Succeeded(_) | WithdrawState::Failed(_) => true,
+            },
+            move || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Created(_)) => {
@@ -1909,7 +1923,8 @@ impl WalletClientModule {
                         None => {},
                     }
                 }
-            }))
+            },
+        ))
     }
 
     fn admin_auth(&self) -> anyhow::Result<ApiAuth> {

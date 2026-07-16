@@ -2059,7 +2059,14 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                ReissueExternalNotesState::Created | ReissueExternalNotesState::Issuing => false,
+                ReissueExternalNotesState::Done | ReissueExternalNotesState::Failed(_) => true,
+            },
+            move || {
             stream! {
                 yield ReissueExternalNotesState::Created;
 
@@ -2533,9 +2540,17 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                SpendOOBState::Created | SpendOOBState::UserCanceledProcessing => false,
+                SpendOOBState::UserCanceledSuccess
+                | SpendOOBState::UserCanceledFailure
+                | SpendOOBState::Success
+                | SpendOOBState::Refunded => true,
+            },
+            move || {
                 stream! {
                     yield SpendOOBState::Created;
 
@@ -2594,7 +2609,8 @@ impl MintClientModule {
                         }
                     }
                 }
-            }))
+            },
+        ))
     }
 
     async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {
