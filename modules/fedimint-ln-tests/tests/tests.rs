@@ -794,9 +794,11 @@ async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow:
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
-    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
-    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
+    // Pay FIRST, before consuming any receive-stream states: the pre-payment
+    // window against the short real-time expiry must stay minimal so a slow CI
+    // cannot expire the invoice before the first attempt. The receive stream
+    // replays all states in order, so the assertions below are unaffected.
     let OutgoingLightningPayment {
         payment_type: first_payment_type,
         contract_id: _,
@@ -811,6 +813,8 @@ async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow:
                 .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+            assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
             assert_eq!(sub1.ok().await?, LnReceiveState::AwaitingFunds);
             assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
