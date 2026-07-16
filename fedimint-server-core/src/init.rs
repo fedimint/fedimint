@@ -16,7 +16,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions,
+    ModuleInit,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
@@ -65,8 +65,6 @@ pub struct ConfigGenModuleArgs {
 #[apply(async_trait_maybe_send!)]
 pub trait IServerModuleInit: IDynCommonModuleInit {
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     /// Initialize the [`DynServerModule`] instance from its config
     #[allow(clippy::too_many_arguments)]
@@ -194,8 +192,6 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
-
     fn kind() -> ModuleKind {
         <Self as ModuleInit>::Common::KIND
     }
@@ -267,10 +263,6 @@ where
 {
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
         self
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        <Self as ServerModuleInit>::supported_api_versions(self)
     }
 
     async fn init(
