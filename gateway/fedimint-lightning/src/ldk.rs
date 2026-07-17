@@ -792,7 +792,12 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
         let NodeAddress { pubkey, address } = payload.node_address;
-        self.node.connect(pubkey, address, false).map_err(|e| {
+        // Persist the peer so ldk-node automatically reconnects after restarts
+        // and connection drops. Without this a gateway whose only channel was
+        // opened inbound (e.g. bought from an LSP) has no stored peer address
+        // and the channel stays inactive after any disconnect until an
+        // operator manually reconnects.
+        self.node.connect(pubkey, address, true).map_err(|e| {
             LightningRpcError::FailedToConnectToPeer {
                 failure_reason: e.to_string(),
             }
