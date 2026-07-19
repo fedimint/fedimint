@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -46,6 +47,61 @@ const IROH_REQUEST_TIMEOUT_DEFAULT: Duration = Duration::from_secs(60);
 /// `request_current_consensus_retry` loop will reconnect and retry.
 const IROH_REQUEST_TIMEOUT_LONG_POLL: Duration = Duration::from_secs(60 * 60);
 
+/// Shorter long-poll budget for the retry-safe lnv2 payment waits
+/// (`await_incoming_contract`, `await_incoming_contracts` and
+/// `decryption_key_share` on the receive path, `await_preimage` on the send
+/// path).
+///
+/// These block server-side until their event fires: `await_incoming_contracts`
+/// parks indefinitely on `wait_key_check`, `decryption_key_share` parks on
+/// `wait_key_exists` until the funding output is accepted, and
+/// `await_incoming_contract` and `await_preimage` poll until their contract
+/// expires — a wall-clock expiry for an incoming contract, a consensus block
+/// height for an outgoing one, and for an lnurl receive no real bound at all
+/// (its `expiration_or_fee` is fee-encoded near `u64::MAX`).
+///
+/// Either way the client's budget is effectively the bound on how long a
+/// *stalled* connection is kept before it is closed and the retry loop
+/// reconnects — a degraded path cannot deliver the expiration response any
+/// more than it can deliver a settlement. A degraded-but-not-dead
+/// QUIC path (keep-alives still pass, so the 60s idle timeout never fires, but
+/// request data no longer flows) otherwise pins the client for the full hour of
+/// [`IROH_REQUEST_TIMEOUT_LONG_POLL`] before it can recover — long enough to
+/// look like a stuck receive/send to a 24/7 client that mostly waits on these
+/// endpoints.
+///
+/// A 5-minute budget caps that degraded-path outage at ~5 min (plus the
+/// api-client retry backoff ceiling), while a *healthy* idle subscription only
+/// reconnects ~12×/hour. This tier is deliberately NOT applied to the
+/// consensus long-polls (`await_transaction`, `await_block_height`,
+/// `await_signed_session_outcome`, …): those keep the 1-hour bound so their
+/// healthy idle waits do not churn connections. Re-issuing these waits is
+/// safe — they are pure server-side reads, `await_incoming_contracts` is driven
+/// by the monotonic `IncomingContractStreamIndexKey` cursor (the client
+/// persists `next_index` only after processing a batch, so a retry replays but
+/// never skips), and a replayed incoming contract dedups on its stable
+/// operation id.
+const IROH_REQUEST_TIMEOUT_LNV2_WAIT: Duration = Duration::from_secs(5 * 60);
+
+/// The retry-safe lnv2 payment-wait endpoints that take the shorter
+/// [`IROH_REQUEST_TIMEOUT_LNV2_WAIT`] budget. Matched by exact name (not a
+/// prefix) so the shorter budget can never silently widen to an unrelated
+/// `await_*` method.
+///
+/// `decryption_key_share` is here despite not carrying an `await_`/`wait_`
+/// prefix: it long-polls on `wait_key_exists` exactly like the others (its own
+/// server-side comment says it "mirrors the AWAIT_INCOMING_CONTRACT and
+/// AWAIT_PREIMAGE endpoints"), and the gateway deliberately issues it *before*
+/// the funding output is accepted so the two overlap. It is therefore expected
+/// to block past the 60s prompt default, which without this entry closes the
+/// shared pooled connection once a minute for the whole wait.
+const IROH_LNV2_WAIT_METHODS: &[&str] = &[
+    "await_incoming_contract",
+    "await_incoming_contracts",
+    "await_preimage",
+    "decryption_key_share",
+];
+
 /// Application-level QUIC error code we use when closing a [`Connection`]
 /// after a request timeout. Recorded by the peer as the close reason; chosen
 /// arbitrarily but stable across stable and `iroh_next` impls so the two
@@ -68,10 +124,149 @@ fn request_timeout_for_method(method: &ApiMethod) -> Duration {
         ApiMethod::Core(name) => name.as_str(),
         ApiMethod::Module(_, name) => name.as_str(),
     };
-    if name.starts_with("await_") || name.starts_with("wait_") {
+    // Exact-name overrides come FIRST so the shorter budget is scoped to
+    // exactly the intended endpoints, then the generic prefix heuristic.
+    if IROH_LNV2_WAIT_METHODS.contains(&name) {
+        IROH_REQUEST_TIMEOUT_LNV2_WAIT
+    } else if name.starts_with("await_") || name.starts_with("wait_") {
         IROH_REQUEST_TIMEOUT_LONG_POLL
     } else {
         IROH_REQUEST_TIMEOUT_DEFAULT
+    }
+}
+
+/// Width of the window over which routine lnv2 wait expiries are spread. See
+/// [`request_timeout_for_method_spread`].
+const IROH_LNV2_WAIT_SPREAD: Duration = Duration::from_secs(60);
+
+/// Number of distinct millisecond slots in [`IROH_LNV2_WAIT_SPREAD`].
+const IROH_LNV2_WAIT_SPREAD_SLOTS: u64 = IROH_LNV2_WAIT_SPREAD.as_secs() * 1_000;
+
+/// Map a remote's node id to a stable spread offset in
+/// `0..IROH_LNV2_WAIT_SPREAD`.
+///
+/// The offset has to satisfy two constraints that rule out the more obvious
+/// sources:
+///
+/// - It must not depend on the ORDER waits are issued in. An issue-order
+///   counter looks like it staggers them, but the order peers re-issue in is
+///   itself the order they last expired in, so a per-rank offset step cancels
+///   against the per-rank expiry stagger and the fleet re-synchronizes.
+/// - It must not depend on the resolution of a platform facility. A sub-second
+///   wall-clock reading is nanosecond-grained only on some targets:
+///   [`fedimint_core::time::now`] is built from `js_sys::Date` on wasm
+///   (millisecond-quantised, coarser under fingerprinting resistance) and from
+///   `FILETIME` on Windows (100ns ticks, so `nanos % 60` cycles just three
+///   values). A fan-out issued inside one tick then reads one value and every
+///   peer draws the same offset — inert in exactly the case it exists for.
+///
+/// A node id has neither problem: it is a public key, so it is uniformly
+/// distributed and stable; it is known before the request is sent; and it is
+/// the same value on every platform. Each peer keeps a fixed slot in the
+/// window, and because the slot is a pure function of that id there is no
+/// feedback path from expiry order back into the offset — which is what made
+/// the counter re-synchronize.
+///
+/// This bounds clustering rather than eliminating it. Distinct offsets give
+/// distinct cycle periods (`300s - offset`), so peers that were re-issued
+/// together immediately fan out; but two periods still share a finite common
+/// multiple, so a pair does re-coincide eventually. With millisecond slots that
+/// is usually far out — random distinct pairs are typically months to years
+/// apart — while a specially aligned low-`lcm` pair (say 300.0s and 280.0s,
+/// meeting every 70min) can meet much sooner. Either way it is a transient
+/// one-cycle coincidence, not the sustained every-cycle lock the order-derived
+/// offset produced.
+///
+/// Slots are millisecond- rather than second-grained only to make exact
+/// collisions negligible: a 4-peer federation collides with p≈1e-4 over 60_000
+/// slots versus p≈0.1 over 60. Two peers that did collide share a period and so
+/// expire together indefinitely — i.e. exactly as they do with no spread at
+/// all, never worse.
+fn spread_offset_for_peer(node_id: &[u8; 32]) -> Duration {
+    // Fold the whole id through the splitmix64 finalizer rather than taking
+    // leading bytes directly. A public key should already be uniform, but that
+    // is an assumption about the key format; mixing avalanches every input bit
+    // so ids sharing a prefix still land far apart, and the spread stops
+    // depending on which bytes of the key happen to be well distributed.
+    fn mix(mut z: u64) -> u64 {
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    let slot = node_id
+        .chunks_exact(8)
+        .map(|word| u64::from_be_bytes(word.try_into().expect("chunks_exact(8) yields 8 bytes")))
+        .fold(0u64, |acc, word| mix(acc ^ word));
+    Duration::from_millis(slot % IROH_LNV2_WAIT_SPREAD_SLOTS)
+}
+
+/// [`request_timeout_for_method`], with the routine expiry of the short lnv2
+/// tier spread over [`IROH_LNV2_WAIT_SPREAD`].
+///
+/// A client waiting on several peers issues one wait per peer at the same
+/// moment, so without this their budgets expire together and every pooled
+/// per-peer connection closes on the same tick. Those connections are shared
+/// with unrelated one-shot calls, and not every caller retries (lnv2
+/// `gateways()` uses `request_with_strategy`, not the retrying variant), so a
+/// synchronized close can surface a transient failure on a perfectly healthy
+/// network. Staggering the budgets keeps the closes from clustering.
+///
+/// Only the short tier is spread: the 1-hour tier expires rarely enough that
+/// clustering is not a concern, and the prompt tier must keep its exact bound.
+///
+/// `node_id` is the remote this request is bound for. `None` (the peer identity
+/// was not available) skips the spread and keeps the exact tier bound, which is
+/// the pre-spread behaviour. That should be unreachable — a pooled connection
+/// has completed a handshake that pins the dialed key — but it would disable
+/// the spread fleet-wide, so it is logged rather than silent.
+fn request_timeout_for_method_spread(method: &ApiMethod, node_id: Option<&[u8; 32]>) -> Duration {
+    let timeout = request_timeout_for_method(method);
+    if timeout != IROH_REQUEST_TIMEOUT_LNV2_WAIT {
+        return timeout;
+    }
+    let Some(node_id) = node_id else {
+        debug!(
+            target: LOG_NET_IROH,
+            "No peer identity for an lnv2 wait, using the unspread tier bound"
+        );
+        return timeout;
+    };
+    timeout.saturating_sub(spread_offset_for_peer(node_id))
+}
+
+/// Log a request-timeout-triggered connection close, shared by the stable and
+/// `iroh_next` request paths. A long-poll (budget above the prompt default)
+/// reaching its budget with no data is expected steady state, so it logs at
+/// `debug`; a prompt request exceeding the 60s default is unusual and warns.
+fn log_request_timeout(method_str: &str, timeout: Duration) {
+    // Three tiers, three levels. The short lnv2 tier expires every cycle on a
+    // perfectly healthy idle subscription, so it is pure noise at anything
+    // above `debug`. The 1-hour tier is different: an hour of a consensus
+    // long-poll producing nothing is the very degraded-path symptom this
+    // budget exists to bound, so it stays visible at default log levels. A
+    // prompt request exceeding the 60s default is genuinely unusual.
+    if timeout <= IROH_REQUEST_TIMEOUT_DEFAULT {
+        warn!(
+            target: LOG_NET_IROH,
+            method = %method_str,
+            timeout_secs = timeout.as_secs(),
+            "iroh request timed out, retiring connection",
+        );
+    } else if timeout <= IROH_REQUEST_TIMEOUT_LNV2_WAIT {
+        debug!(
+            target: LOG_NET_IROH,
+            method = %method_str,
+            timeout_secs = timeout.as_secs(),
+            "iroh payment-wait reached its budget, retiring connection to reconnect",
+        );
+    } else {
+        info!(
+            target: LOG_NET_IROH,
+            method = %method_str,
+            timeout_secs = timeout.as_secs(),
+            "iroh long-poll reached its budget with no data, retiring connection to reconnect",
+        );
     }
 }
 use fedimint_core::task::spawn;
@@ -86,7 +281,7 @@ use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tokio::sync::watch;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
 use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
@@ -319,6 +514,7 @@ impl crate::Connector for IrohConnector {
                     self_clone
                         .make_new_connection_stable(node_id, connection_override)
                         .await
+                        .map(PooledGuardianConnection::new)
                         .map(super::IGuardianConnection::into_dyn),
                     "stable",
                 )
@@ -332,6 +528,7 @@ impl crate::Connector for IrohConnector {
                 self_clone
                     .make_new_connection_next(&endpoint_next, node_id, connection_override)
                     .await
+                    .map(PooledGuardianConnection::new)
                     .map(super::IGuardianConnection::into_dyn),
                 "next",
             )
@@ -655,6 +852,172 @@ fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::EndpointAddr 
     iroh_next::EndpointAddr::from_parts(next_node_id, relay_addrs.chain(direct_addrs))
 }
 
+/// The per-iroh-version pieces [`PooledGuardianConnection`] needs.
+///
+/// The stable and `iroh_next` connection types have the same shape but distinct
+/// concrete stream and error types, so this captures only the operations that
+/// differ and lets the pooled wrapper be written once for both.
+#[async_trait]
+trait IrohGuardianConn: fmt::Debug + Send + Sync + 'static {
+    /// The remote's 32-byte public key, if the handshake exposed one.
+    fn remote_id_bytes(&self) -> Option<[u8; 32]>;
+
+    /// Whether the underlying QUIC connection is still open.
+    fn is_open(&self) -> bool;
+
+    /// Close the underlying QUIC connection, recording our timeout as the
+    /// reason.
+    fn close_timed_out(&self);
+
+    /// Resolves once the underlying QUIC connection is closed.
+    async fn wait_closed(&self);
+
+    /// One request/response round trip on a fresh bi-stream.
+    async fn round_trip(&self, json: &[u8]) -> ServerResult<Vec<u8>>;
+}
+
+/// A pooled guardian connection that can be *retired* without being closed.
+///
+/// The pool drops an entry once [`IConnection::is_connected`] returns false,
+/// and on a bare iroh connection the only way to make that happen is to close
+/// it — which also aborts every other request in flight on that connection.
+/// Requests sharing a pooled connection are unrelated to one another, and not
+/// all of their callers retry (lnv2 `gateways()` uses `request_with_strategy`,
+/// not the retrying variant), so a routine long-poll refresh could fail a
+/// healthy one-shot call that merely overlapped it. A multi-guardian client
+/// absorbs that — losing one peer still leaves a threshold — but a
+/// single-guardian federation has no second peer to absorb anything, so the
+/// call just fails.
+///
+/// Retiring separates eviction from teardown: the entry stops being handed out
+/// for NEW requests, while requests already in flight run to completion on it.
+/// The connection is closed as soon as the last of them finishes, so it does
+/// not linger and the server-side cancellation still fires promptly.
+#[derive(Debug)]
+struct PooledGuardianConnection<C> {
+    conn: C,
+    /// Set once this connection should stop serving new requests. A watch (not
+    /// a plain flag) so [`IConnection::await_disconnection`] can wake on it.
+    retired: watch::Sender<bool>,
+    /// Requests currently in flight on `conn`.
+    in_flight: AtomicUsize,
+}
+
+/// Decrements the in-flight count on drop, closing the connection when the last
+/// request leaves a retired one.
+struct InFlightGuard<'a, C: IrohGuardianConn>(&'a PooledGuardianConnection<C>);
+
+impl<C: IrohGuardianConn> Drop for InFlightGuard<'_, C> {
+    fn drop(&mut self) {
+        // `fetch_sub` returns the PREVIOUS value, so exactly one dropping guard
+        // observes 1 and is therefore the last one out.
+        if self.0.in_flight.fetch_sub(1, Ordering::AcqRel) == 1 && *self.0.retired.borrow() {
+            self.0.conn.close_timed_out();
+        }
+    }
+}
+
+impl<C: IrohGuardianConn> PooledGuardianConnection<C> {
+    fn new(conn: C) -> Self {
+        Self {
+            conn,
+            retired: watch::Sender::new(false),
+            in_flight: AtomicUsize::new(0),
+        }
+    }
+
+    fn enter(&self) -> InFlightGuard<'_, C> {
+        self.in_flight.fetch_add(1, Ordering::AcqRel);
+        InFlightGuard(self)
+    }
+
+    /// Stop serving new requests.
+    ///
+    /// In practice the caller holds an [`InFlightGuard`], so the close happens
+    /// when that guard (or a later one) drops. The `in_flight == 0` branch is
+    /// defensive: without it a retire with nothing in flight would leave the
+    /// connection open until the pool entry was dropped.
+    ///
+    /// At least one of the two paths always closes, and the reason is subtler
+    /// than it looks. The interleaving to worry about is a last guard reading
+    /// `retired == false` while this reads `in_flight == 1`, so neither closes
+    /// and the connection leaks open. It cannot happen because
+    /// [`watch::Sender`] is `RwLock`-backed: `borrow` takes the read lock and
+    /// `send_replace` the write lock, so the two are ordered against each
+    /// other. If the guard's `borrow` reads `false` it precedes this
+    /// `send_replace`, so its `fetch_sub` also precedes the `load` below, which
+    /// therefore reads 0 and closes here.
+    ///
+    /// That means the flag may NOT be weakened to a plain `AtomicBool` with
+    /// these orderings — without the lock, the store-buffer interleaving is
+    /// real and would need `SeqCst`. Closing twice (guard drops between the
+    /// `send_replace` and the `load`) is possible and harmless; `close` is
+    /// idempotent on both iroh stacks.
+    fn retire(&self) {
+        self.retired.send_replace(true);
+        if self.in_flight.load(Ordering::Acquire) == 0 {
+            self.conn.close_timed_out();
+        }
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<C: IrohGuardianConn> IConnection for PooledGuardianConnection<C> {
+    async fn await_disconnection(&self) {
+        let closed = std::pin::pin!(self.conn.wait_closed());
+        let retired = std::pin::pin!(async {
+            let mut rx = self.retired.subscribe();
+            let _ = rx.wait_for(|retired| *retired).await;
+        });
+        futures::future::select(closed, retired).await;
+    }
+
+    fn is_connected(&self) -> bool {
+        !*self.retired.borrow() && self.conn.is_open()
+    }
+}
+
+#[async_trait]
+impl<C: IrohGuardianConn> IGuardianConnection for PooledGuardianConnection<C> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
+        let timeout =
+            request_timeout_for_method_spread(&method, self.conn.remote_id_bytes().as_ref());
+        let method_str = method.to_string();
+        let json = serde_json::to_vec(&IrohApiRequest { method, request })
+            .expect("Serialization to vec can't fail");
+
+        let response = {
+            let _guard = self.enter();
+            match fedimint_core::runtime::timeout(timeout, self.conn.round_trip(&json)).await {
+                Ok(Ok(bytes)) => bytes,
+                Ok(Err(err)) => return Err(err),
+                Err(_) => {
+                    // The bi-stream stalled past our budget. Retire the entry so
+                    // the pool stops handing it out and the upstream retry loop
+                    // gets a fresh connection, WITHOUT tearing down requests that
+                    // are still in flight on this one.
+                    //
+                    // A long-poll reaching its budget with no data is EXPECTED
+                    // steady state (idle subscription) — log it at debug. A
+                    // prompt request exceeding the 60s default is genuinely
+                    // unusual — warn.
+                    log_request_timeout(&method_str, timeout);
+                    self.retire();
+                    return Err(ServerError::Transport(anyhow::anyhow!(
+                        "iroh request {method_str} timed out after {timeout:?}"
+                    )));
+                }
+            }
+        };
+
+        // TODO: We should not be serializing Results on the wire
+        let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+
+        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 impl IConnection for Connection {
     async fn await_disconnection(&self) {
@@ -667,64 +1030,43 @@ impl IConnection for Connection {
 }
 
 #[async_trait]
-impl IGuardianConnection for Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
-        let timeout = request_timeout_for_method(&method);
-        let method_str = method.to_string();
-        let json = serde_json::to_vec(&IrohApiRequest { method, request })
-            .expect("Serialization to vec can't fail");
+impl IrohGuardianConn for Connection {
+    fn remote_id_bytes(&self) -> Option<[u8; 32]> {
+        self.remote_node_id().ok().map(|id| *id.as_bytes())
+    }
 
-        let result = fedimint_core::runtime::timeout(timeout, async {
-            let (mut sink, mut stream) = self
-                .open_bi()
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    fn is_open(&self) -> bool {
+        self.close_reason().is_none()
+    }
 
-            sink.write_all(&json)
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    fn close_timed_out(&self) {
+        self.close(
+            iroh::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
+            IROH_REQUEST_TIMEOUT_ERROR_REASON,
+        );
+    }
 
-            sink.finish()
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    async fn wait_closed(&self) {
+        self.closed().await;
+    }
 
-            stream
-                .read_to_end(IROH_MAX_RESPONSE_BYTES)
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))
-        })
-        .await;
+    async fn round_trip(&self, json: &[u8]) -> ServerResult<Vec<u8>> {
+        let (mut sink, mut stream) = self
+            .open_bi()
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        let response = match result {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(err)) => return Err(err),
-            Err(_) => {
-                // The bi-stream stalled past our budget. Close the QUIC
-                // connection so [`Self::is_connected`] (which reads
-                // `close_reason`) starts returning false; the connection
-                // pool's `get_or_init_pool_entry` will then evict this
-                // entry on the next access and the upstream retry loop
-                // will get a fresh connection.
-                warn!(
-                    target: LOG_NET_IROH,
-                    method = %method_str,
-                    timeout_secs = timeout.as_secs(),
-                    "iroh request timed out, closing connection",
-                );
-                self.close(
-                    iroh::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
-                    IROH_REQUEST_TIMEOUT_ERROR_REASON,
-                );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
-            }
-        };
+        sink.write_all(json)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        // TODO: We should not be serializing Results on the wire
-        let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        stream
+            .read_to_end(IROH_MAX_RESPONSE_BYTES)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))
     }
 }
 
@@ -740,58 +1082,43 @@ impl IConnection for iroh_next::endpoint::Connection {
 }
 
 #[async_trait]
-impl IGuardianConnection for iroh_next::endpoint::Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
-        let timeout = request_timeout_for_method(&method);
-        let method_str = method.to_string();
-        let json = serde_json::to_vec(&IrohApiRequest { method, request })
-            .expect("Serialization to vec can't fail");
+impl IrohGuardianConn for iroh_next::endpoint::Connection {
+    fn remote_id_bytes(&self) -> Option<[u8; 32]> {
+        Some(*self.remote_id().as_bytes())
+    }
 
-        let result = fedimint_core::runtime::timeout(timeout, async {
-            let (mut sink, mut stream) = self
-                .open_bi()
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    fn is_open(&self) -> bool {
+        self.close_reason().is_none()
+    }
 
-            sink.write_all(&json)
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    fn close_timed_out(&self) {
+        self.close(
+            iroh_next::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
+            IROH_REQUEST_TIMEOUT_ERROR_REASON,
+        );
+    }
 
-            sink.finish()
-                .map_err(|e| ServerError::Transport(e.into()))?;
+    async fn wait_closed(&self) {
+        self.closed().await;
+    }
 
-            stream
-                .read_to_end(IROH_MAX_RESPONSE_BYTES)
-                .await
-                .map_err(|e| ServerError::Transport(e.into()))
-        })
-        .await;
+    async fn round_trip(&self, json: &[u8]) -> ServerResult<Vec<u8>> {
+        let (mut sink, mut stream) = self
+            .open_bi()
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        let response = match result {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(err)) => return Err(err),
-            Err(_) => {
-                warn!(
-                    target: LOG_NET_IROH,
-                    method = %method_str,
-                    timeout_secs = timeout.as_secs(),
-                    "iroh request timed out, closing connection",
-                );
-                self.close(
-                    iroh_next::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
-                    IROH_REQUEST_TIMEOUT_ERROR_REASON,
-                );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
-            }
-        };
+        sink.write_all(json)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        // TODO: We should not be serializing Results on the wire
-        let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        stream
+            .read_to_end(IROH_MAX_RESPONSE_BYTES)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))
     }
 }
 
@@ -844,17 +1171,23 @@ impl IGatewayConnection for Connection {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::Ordering;
+
+    use async_trait::async_trait;
     use fedimint_core::module::ApiMethod;
 
     use super::{
-        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
+        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LNV2_WAIT,
+        IROH_REQUEST_TIMEOUT_LONG_POLL, IrohGuardianConn, request_timeout_for_method,
     };
+    use crate::{IConnection, ServerResult};
 
-    /// Every `await_*` endpoint currently exposed by fedimint modules
-    /// should be classified as long-poll. If a new endpoint is added
-    /// without the prefix it will silently fall through to the default
-    /// 60s budget — this list documents the contract and will surface
-    /// renames as test churn.
+    /// `await_*` endpoints that take the generic 1-hour long-poll budget. If a
+    /// new endpoint is added without the prefix it will silently fall through
+    /// to the default 60s budget — this list documents the contract and will
+    /// surface renames as test churn. The lnv2 receive-side waits are
+    /// deliberately absent: they take the shorter tier (see
+    /// [`LNV2_WAIT_ENDPOINTS`]).
     const AWAIT_ENDPOINTS: &[&str] = &[
         // fedimint-core
         "await_output_outcome",
@@ -868,10 +1201,18 @@ mod tests {
         "await_offer",
         "await_outgoing_contract_cancelled",
         "await_preimage_decryption",
-        // fedimint-lnv2-common
+    ];
+
+    /// The lnv2 payment waits (receive claim + send proof-of-payment) that take
+    /// the shorter budget so a degraded connection recovers in minutes, not an
+    /// hour. `decryption_key_share` carries no `await_`/`wait_` prefix, so it
+    /// is the one entry here that the generic heuristic would otherwise
+    /// drop to the 60s prompt tier despite being a genuine long-poll.
+    const LNV2_WAIT_ENDPOINTS: &[&str] = &[
         "await_incoming_contract",
         "await_incoming_contracts",
         "await_preimage",
+        "decryption_key_share",
     ];
 
     /// A representative sample of prompt endpoints — anything that is
@@ -908,6 +1249,106 @@ mod tests {
     }
 
     #[test]
+    fn lnv2_payment_waits_get_the_shorter_long_poll_timeout() {
+        // These must map to the shorter tier, NOT the generic 1-hour bound, so a
+        // stalled receiving client recovers in minutes. Exact-name matched, and
+        // checked on both Core and Module method shapes.
+        for name in LNV2_WAIT_ENDPOINTS {
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Core((*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_LNV2_WAIT,
+                "core endpoint {name} should map to the lnv2 receive long-poll timeout"
+            );
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Module(0, (*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_LNV2_WAIT,
+                "module endpoint {name} should map to the lnv2 receive long-poll timeout"
+            );
+        }
+        // The shorter tier is a strictly tighter bound than the generic one.
+        assert!(IROH_REQUEST_TIMEOUT_LNV2_WAIT < IROH_REQUEST_TIMEOUT_LONG_POLL);
+    }
+
+    #[test]
+    fn lnv2_wait_budgets_are_spread_and_other_tiers_are_not() {
+        use std::collections::BTreeSet;
+
+        use super::{
+            IROH_LNV2_WAIT_SPREAD, request_timeout_for_method_spread, spread_offset_for_peer,
+        };
+
+        // A peer id stands in for a guardian. Vary only the low byte of the
+        // leading 8, so these are as adversarially close as distinct keys get.
+        let peer = |n: u8| {
+            let mut id = [0u8; 32];
+            id[7] = n;
+            id
+        };
+        let wait = || ApiMethod::Core("await_incoming_contracts".to_owned());
+
+        // The offset is a pure function of the peer id, so a given peer's
+        // budget is the same on every cycle and on every platform — it cannot
+        // silently degrade with the resolution of a clock, which is what a
+        // wall-clock source did on wasm and Windows.
+        let id = peer(3);
+        assert_eq!(
+            request_timeout_for_method_spread(&wait(), Some(&id)),
+            request_timeout_for_method_spread(&wait(), Some(&id)),
+            "a peer's spread budget must be stable across calls"
+        );
+
+        // Distinct peers must get distinct budgets, all inside (base - spread,
+        // base]. This is the property the spread exists for: one wait per peer
+        // issued at the same instant must not expire on the same tick.
+        let budgets: BTreeSet<_> = (0..16)
+            .map(|n| request_timeout_for_method_spread(&wait(), Some(&peer(n))))
+            .collect();
+        assert_eq!(budgets.len(), 16, "distinct peers collided on one budget");
+        for budget in &budgets {
+            assert!(
+                *budget <= IROH_REQUEST_TIMEOUT_LNV2_WAIT
+                    && *budget > IROH_REQUEST_TIMEOUT_LNV2_WAIT - IROH_LNV2_WAIT_SPREAD,
+                "spread budget {budget:?} outside its window"
+            );
+        }
+
+        // The offset spans the window rather than hugging one end.
+        let offsets: BTreeSet<_> = (0..=u8::MAX)
+            .map(|n| spread_offset_for_peer(&peer(n)))
+            .collect();
+        let lo = *offsets.iter().next().expect("non-empty");
+        let hi = *offsets.iter().next_back().expect("non-empty");
+        assert!(
+            lo < IROH_LNV2_WAIT_SPREAD / 4 && hi > IROH_LNV2_WAIT_SPREAD * 3 / 4,
+            "offsets {lo:?}..{hi:?} did not span the window"
+        );
+        assert!(hi < IROH_LNV2_WAIT_SPREAD, "offset escaped the window");
+
+        // A missing peer identity falls back to the exact tier bound.
+        assert_eq!(
+            request_timeout_for_method_spread(&wait(), None),
+            IROH_REQUEST_TIMEOUT_LNV2_WAIT
+        );
+
+        // The other tiers keep their exact bounds, spread or not.
+        let id = peer(9);
+        assert_eq!(
+            request_timeout_for_method_spread(
+                &ApiMethod::Core("await_transaction".to_owned()),
+                Some(&id)
+            ),
+            IROH_REQUEST_TIMEOUT_LONG_POLL
+        );
+        assert_eq!(
+            request_timeout_for_method_spread(
+                &ApiMethod::Core("block_count".to_owned()),
+                Some(&id)
+            ),
+            IROH_REQUEST_TIMEOUT_DEFAULT
+        );
+    }
+
+    #[test]
     fn wait_prefix_also_gets_long_poll_timeout() {
         // No fedimint endpoint currently uses this prefix, but the
         // selector accepts it so future additions following the
@@ -938,5 +1379,150 @@ mod tests {
             request_timeout_for_method(&ApiMethod::Core("submit_await_thing".to_owned())),
             IROH_REQUEST_TIMEOUT_DEFAULT,
         );
+    }
+
+    /// A stand-in guardian connection that records whether it was closed, so
+    /// the retire/drain semantics can be asserted without a live QUIC endpoint.
+    #[derive(Debug, Default)]
+    struct FakeConn {
+        closed: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl IrohGuardianConn for FakeConn {
+        fn remote_id_bytes(&self) -> Option<[u8; 32]> {
+            Some([7u8; 32])
+        }
+
+        fn is_open(&self) -> bool {
+            !self.closed.load(Ordering::Acquire)
+        }
+
+        fn close_timed_out(&self) {
+            self.closed.store(true, Ordering::Release);
+        }
+
+        async fn wait_closed(&self) {
+            // Park unless the connection really is closed, so a test can tell
+            // "woke because retired" apart from "woke because closed".
+            if !self.closed.load(Ordering::Acquire) {
+                std::future::pending::<()>().await;
+            }
+        }
+
+        async fn round_trip(&self, _json: &[u8]) -> ServerResult<Vec<u8>> {
+            unreachable!("these tests exercise retirement, not the wire")
+        }
+    }
+
+    fn pooled() -> super::PooledGuardianConnection<FakeConn> {
+        super::PooledGuardianConnection::new(FakeConn::default())
+    }
+
+    #[test]
+    fn retiring_with_a_request_in_flight_does_not_close_the_connection() {
+        // The whole point: a timed-out long-poll must stop the pool handing this
+        // entry out WITHOUT aborting the unrelated requests riding on it. On a
+        // single-guardian federation there is no second peer to absorb that, so
+        // closing here would fail those calls outright.
+        let pooled = pooled();
+        let guard = pooled.enter();
+
+        pooled.retire();
+
+        assert!(!pooled.is_connected(), "a retired entry must not be reused");
+        assert!(
+            pooled.conn.is_open(),
+            "retiring must not tear down a connection with work still on it"
+        );
+
+        // ... and it closes as soon as that last request is done.
+        drop(guard);
+        assert!(
+            !pooled.conn.is_open(),
+            "the last request out of a retired connection must close it"
+        );
+    }
+
+    #[test]
+    fn a_retired_connection_closes_only_after_the_last_request_leaves() {
+        let pooled = pooled();
+        let first = pooled.enter();
+        let second = pooled.enter();
+
+        pooled.retire();
+        drop(first);
+        assert!(
+            pooled.conn.is_open(),
+            "a still-busy retired connection must stay open"
+        );
+
+        drop(second);
+        assert!(!pooled.conn.is_open(), "the last one out closes it");
+    }
+
+    #[test]
+    fn retiring_an_idle_connection_closes_it_immediately() {
+        // Defensive path: nothing in flight, so there is no guard drop coming
+        // that would otherwise close it.
+        let pooled = pooled();
+        pooled.retire();
+        assert!(!pooled.is_connected());
+        assert!(!pooled.conn.is_open());
+    }
+
+    #[test]
+    fn await_disconnection_wakes_on_retire_not_just_on_close() {
+        use std::future::Future as _;
+        use std::sync::Arc;
+        use std::task::{Context, Poll, Wake, Waker};
+
+        struct NoopWake;
+        impl Wake for NoopWake {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        let pooled = pooled();
+        // Hold a request open so `retire()` does NOT close the connection —
+        // otherwise this could pass by waking on the close instead.
+        let _guard = pooled.enter();
+
+        let waker = Waker::from(Arc::new(NoopWake));
+        let mut cx = Context::from_waker(&waker);
+        let mut disconnected = std::pin::pin!(pooled.await_disconnection());
+
+        assert!(
+            matches!(disconnected.as_mut().poll(&mut cx), Poll::Pending),
+            "a healthy connection must not report a disconnection"
+        );
+
+        // Both reconnect loops (fedimint-connectors/src/lib.rs and
+        // fedimint-client/src/client.rs) drive pool refresh off this, so it has
+        // to fire on retire; waiting for the physical close would defer the
+        // refresh until the connection finished draining.
+        pooled.retire();
+        assert!(
+            pooled.conn.is_open(),
+            "precondition: retiring with a request in flight must not close"
+        );
+        assert!(
+            matches!(disconnected.as_mut().poll(&mut cx), Poll::Ready(())),
+            "await_disconnection must wake on retire, not only on close"
+        );
+    }
+
+    #[test]
+    fn a_healthy_connection_is_usable_and_stays_open() {
+        let pooled = pooled();
+        assert!(pooled.is_connected());
+        {
+            let _guard = pooled.enter();
+            assert!(pooled.is_connected());
+        }
+        assert!(
+            pooled.conn.is_open(),
+            "an ordinary request completing must not close the connection"
+        );
+        assert!(pooled.is_connected());
     }
 }
