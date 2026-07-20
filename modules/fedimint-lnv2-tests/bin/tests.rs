@@ -1,7 +1,10 @@
+use std::path::PathBuf;
+
 use anyhow::ensure;
 use bitcoin::hashes::sha256;
 use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
+use devimint::envs::FM_CLIENT_DIR_ENV;
 use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal};
 use devimint::version_constants::{
@@ -11,7 +14,7 @@ use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{self};
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{backoff_util, retry, write_overwrite_async};
 use fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 use fedimint_lnv2_client::FinalSendOperationState;
 use lightning_invoice::Bolt11Invoice;
@@ -475,6 +478,14 @@ async fn test_duplicate_payment(
         second_federation.calculate_federation_id(),
         "the second federation must be distinct from the first"
     );
+
+    // Spawning the second federation overwrote the shared invite-code file
+    // with its own invite. Restore the primary federation's invite now that
+    // both invites are captured: `Federation::invite_code` re-reads that file,
+    // so a later `new_joined_client` on the primary federation would otherwise
+    // join the second one, which is torn down when this test returns.
+    let client_dir: PathBuf = std::env::var(FM_CLIENT_DIR_ENV)?.parse()?;
+    write_overwrite_async(client_dir.join("invite-code"), &first_invite).await?;
 
     gw_send.client().connect_fed(second_invite.clone()).await?;
     second_federation
