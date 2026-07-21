@@ -509,6 +509,12 @@ impl FeeQuote {
 /// never overestimates. A `fee_quote` error (e.g. the balance cannot fund a
 /// value that large) is treated as unaffordable.
 ///
+/// To keep those dry-runs cheap the search is *seeded near the top*: a first
+/// pass binary-searches `gross_up` alone (pure arithmetic, no quotes) for the
+/// largest fundable amount, peeling off the gateway fee for free, so the real
+/// fee quotes only probe the small window the federation fee leaves — a handful
+/// of dry-runs rather than one per bit of the balance.
+///
 /// The LNv2 and LNv1 send-all flows share this solver; they differ only in
 /// `gross_up` (the gateway fee model) and which `fee_quote` they pass.
 pub async fn max_affordable_send_amount<GrossUp, Quote, Fut>(
@@ -527,16 +533,75 @@ where
     let hi_bound = max_amount.msats.min(balance.msats);
     let lo_bound = min_amount.msats;
 
-    if lo_bound > hi_bound
-        || !send_amount_affordable(Amount::from_msats(lo_bound), balance, &gross_up, &fee_quote)
+    if lo_bound > hi_bound {
+        return None;
+    }
+
+    // The maximum is never near the bottom of `[lo_bound, hi_bound]`: it sits
+    // just below the largest amount the balance can *fund*, short by only the
+    // federation fee. `gross_up` is a pure, cheap function (no fee quote), so
+    // binary-search it for free to find that fundable ceiling and seed the real
+    // (fee-quoting) search there. This peels off the gateway fee — usually the
+    // larger of the two — for free, leaving the expensive quotes to probe only
+    // the small window the federation fee opens up, instead of the whole balance.
+    if gross_up(Amount::from_msats(lo_bound)).msats > balance.msats {
+        // The balance can't even fund the smallest amount's gross-up.
+        return None;
+    }
+    let fundable_max = {
+        let mut lo = lo_bound;
+        let mut hi = hi_bound;
+        while lo < hi {
+            let mid = lo + (hi - lo).div_ceil(2);
+            if gross_up(Amount::from_msats(mid)).msats <= balance.msats {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        lo
+    };
+
+    let mut lo = lo_bound;
+    let mut hi = fundable_max;
+    let mut lo_affordable = false;
+
+    // Probe the fee once at `fundable_max`. The send overhead (the gross-up plus
+    // the federation fee, less the amount) is monotone non-decreasing, so the
+    // overhead here is an upper bound on the overhead at the true maximum, and
+    // `balance - overhead` is therefore a proven-affordable, tight lower bound.
+    // If the quote errors — real note selection can't fund a value this large —
+    // the seed is skipped and the search falls back to the full bracket below.
+    let funded = gross_up(Amount::from_msats(fundable_max));
+    if let Ok(quote) = fee_quote(funded).await {
+        let total = funded
+            .msats
+            .saturating_add(quote.total().get_bitcoin().msats);
+        if total <= balance.msats {
+            // Even the largest fundable amount fits once the fee is included.
+            return Some(Amount::from_msats(fundable_max));
+        }
+        let overhead = total.saturating_sub(fundable_max);
+        let seed = balance
+            .msats
+            .saturating_sub(overhead)
+            .clamp(lo_bound, fundable_max);
+        if send_amount_affordable(Amount::from_msats(seed), balance, &gross_up, &fee_quote).await {
+            lo = seed;
+            lo_affordable = true;
+        }
+    }
+
+    // Without a usable seed the search must still start from a verified
+    // affordable lower bound, or give up if even `lo_bound` is unaffordable.
+    if !lo_affordable
+        && !send_amount_affordable(Amount::from_msats(lo_bound), balance, &gross_up, &fee_quote)
             .await
     {
         return None;
     }
 
-    let mut lo = lo_bound;
-    let mut hi = hi_bound;
-
+    // Exact maximum within the (now tight) `[lo, hi]` bracket.
     while lo < hi {
         // Bias the midpoint up so the search converges toward `hi`.
         let mid = lo + (hi - lo).div_ceil(2);

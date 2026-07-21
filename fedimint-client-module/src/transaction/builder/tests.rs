@@ -1,5 +1,6 @@
 use core::fmt;
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use bitcoin::key::Secp256k1;
@@ -338,4 +339,49 @@ async fn max_affordable_treats_quote_error_as_ceiling() {
     .await;
 
     assert_eq!(result, Some(Amount::from_msats(cap)));
+}
+
+#[tokio::test]
+async fn max_affordable_seeds_search_near_the_top() {
+    // A realistic split: a large proportional gateway fee, a tiny federation
+    // fee. Seeding off the free `gross_up`-only pass should peel the gateway fee
+    // off without a quote, leaving the (expensive) fee quotes to probe only the
+    // small window the federation fee opens up — so their count stays well below
+    // the ~log2(balance) a naive full-range search would need.
+    let balance = Amount::from_msats(100_000_000); // 100k sats
+    // 1000 msat base + 1% proportional gateway fee.
+    let gross_up = |invoice: Amount| Amount::from_msats(invoice.msats + 1000 + invoice.msats / 100);
+    // Tiny federation fee: 50 msat base + 0.001% of the contract.
+    let fed_fee = |contract: Amount| Amount::from_msats(50 + contract.msats / 100_000);
+    let quote_calls = AtomicUsize::new(0);
+
+    let x = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        gross_up,
+        |contract| {
+            quote_calls.fetch_add(1, Ordering::Relaxed);
+            async move { Ok(federation_fee(fed_fee(contract))) }
+        },
+    )
+    .await
+    .expect("balance covers a payment")
+    .msats;
+
+    // Still the exact maximum: `x` is payable, `x + 1` is not.
+    let cost = |v: u64| {
+        let contract = gross_up(Amount::from_msats(v));
+        contract.msats + fed_fee(contract).msats
+    };
+    assert!(cost(x) <= balance.msats);
+    assert!(cost(x + 1) > balance.msats);
+
+    // A naive binary search over the whole balance would need ~27 quotes here;
+    // seeding near the top keeps it to a handful.
+    let calls = quote_calls.load(Ordering::Relaxed);
+    assert!(
+        calls <= 16,
+        "expected a small number of fee quotes, used {calls}"
+    );
 }
