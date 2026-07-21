@@ -313,8 +313,7 @@ impl GatewayLndClient {
     ) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
 
-        // Compute the minimum `add_index` that we need to subscribe to updates for.
-        let first_index_offset = client
+        let list_response = client
             .lightning()
             .list_invoices(ListInvoiceRequest {
                 pending_only: true,
@@ -330,16 +329,7 @@ impl GatewayLndClient {
                     failure_reason: "Failed to list all invoices".to_string(),
                 }
             })?
-            .into_inner()
-            .first_index_offset;
-
-        // `SubscribeInvoices` only replays invoices with an `add_index` strictly
-        // greater than `add_index`, so subscribing from `first_index_offset`
-        // directly would skip the add event of the oldest pending invoice and we
-        // would never spawn a monitor for it. Subtract one so that oldest pending
-        // invoice is replayed. `saturating_sub` keeps this correct in the
-        // empty-list case where `first_index_offset` is 0.
-        let add_index = first_index_offset.saturating_sub(1);
+            .into_inner();
 
         let self_copy = self.clone();
         let hold_group = task_group.make_subgroup();
@@ -347,6 +337,40 @@ impl GatewayLndClient {
         // task exits unexpectedly we shut down the payment-stream subgroup so
         // the gateway transitions to `Disconnected` and reconnects.
         let subgroup = task_group.clone();
+
+        // The `SubscribeInvoices` backlog cannot replay pre-existing pending
+        // HOLD invoices reliably: an `add_index` of 0 means "no backlog" to
+        // LND, so the oldest pending invoice is skipped whenever it is the
+        // first invoice ever created on the node (`add_index == 1`), and
+        // invoices already in the `Accepted` state are never delivered to
+        // all-invoice subscribers at all. Instead, spawn a monitor task for
+        // every pending HOLD invoice (`r_preimage` empty) from the listing
+        // directly. Invoices not created by this gateway are filtered out by
+        // the monitor task once they reach the `Accepted` state.
+        for invoice in &list_response.invoices {
+            if invoice.r_preimage.is_empty() {
+                info!(
+                    target: LOG_LIGHTNING,
+                    payment_hash = %PrettyPaymentHash(&invoice.r_hash),
+                    "Monitoring pre-existing pending LNv2 invoice",
+                );
+                self.spawn_lnv2_hold_invoice_subscription(
+                    &hold_group,
+                    subgroup.clone(),
+                    gateway_sender.clone(),
+                    invoice.r_hash.clone(),
+                )
+                .await?;
+            }
+        }
+
+        // The listing above covers all pending invoices, so the subscription
+        // only needs to replay invoices added after the listing was taken.
+        // Add indices increase monotonically, so any such invoice has an
+        // `add_index` strictly greater than the listing's `last_index_offset`
+        // (0 when no invoices were listed) and `SubscribeInvoices` replays
+        // exactly those, without duplicating the invoices handled above.
+        let add_index = list_response.last_index_offset;
         task_group.spawn("LND Invoice Subscription", move |handle| async move {
             let future_stream = client.lightning().subscribe_invoices(InvoiceSubscription {
                 add_index,
