@@ -3,12 +3,14 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 
 use bitcoin::key::Secp256k1;
+use fedimint_core::Amount;
 use fedimint_core::core::{Input, IntoDynInstance, ModuleKind, Output};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 
 use super::{
-    ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote,
+    TransactionBuilder, max_affordable_send_amount,
 };
 use crate::module::OutPointRange;
 use crate::transaction::{ClientInput, ClientInputSM};
@@ -179,4 +181,161 @@ fn tx_builder_empty_bundles() {
     // This actually depends on how builder processes inputs and outputs,
     // but if it ever changes, just adjust the string.
     assert_eq!(*sm_called.lock().unwrap(), String::from("i-0,i-1,o-0,o-1,"));
+}
+
+/// A federation fee quote whose only cost is `fee` in the Bitcoin unit, so
+/// `total().get_bitcoin() == fee`.
+fn federation_fee(fee: Amount) -> FeeQuote {
+    FeeQuote {
+        input: Amounts::new_bitcoin(fee),
+        output: Amounts::ZERO,
+        dust: Amounts::ZERO,
+    }
+}
+
+#[tokio::test]
+async fn max_affordable_no_fees_spends_whole_balance() {
+    let balance = Amount::from_msats(1_000_000);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice| invoice, // no gateway fee
+        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+    )
+    .await;
+
+    assert_eq!(result, Some(balance));
+}
+
+#[tokio::test]
+async fn max_affordable_leaves_room_for_gateway_fee() {
+    // Gateway fee: 1000 msat base + 10% proportional.
+    let gross_up = |invoice: Amount| Amount::from_msats(invoice.msats + 1000 + invoice.msats / 10);
+    let balance = Amount::from_msats(1_000_000);
+
+    let x = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        gross_up,
+        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+    )
+    .await
+    .expect("balance covers a payment")
+    .msats;
+
+    // `x` is payable but `x + 1` is not: exactly the maximum.
+    assert!(gross_up(Amount::from_msats(x)).msats <= balance.msats);
+    assert!(gross_up(Amount::from_msats(x + 1)).msats > balance.msats);
+}
+
+#[tokio::test]
+async fn max_affordable_leaves_room_for_module_fee() {
+    // Federation fee: 500 msat base + 5% of the contract amount.
+    let module_fee = |contract: Amount| Amount::from_msats(500 + contract.msats / 20);
+    let balance = Amount::from_msats(1_000_000);
+
+    let x = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice| invoice, // no gateway fee, so contract == invoice
+        move |contract| async move { Ok(federation_fee(module_fee(contract))) },
+    )
+    .await
+    .expect("balance covers a payment")
+    .msats;
+
+    let cost = |v: u64| v + module_fee(Amount::from_msats(v)).msats;
+    assert!(cost(x) <= balance.msats);
+    assert!(cost(x + 1) > balance.msats);
+}
+
+#[tokio::test]
+async fn max_affordable_handles_stepwise_fee() {
+    // A fee that is NOT a linear function of the amount: it jumps once the
+    // contract crosses a threshold, as selecting an extra funding note would.
+    // A closed form assuming a linear fee would missolve this.
+    let module_fee = |contract: Amount| {
+        if contract.msats > 500_000 {
+            Amount::from_msats(100_000)
+        } else {
+            Amount::ZERO
+        }
+    };
+    let balance = Amount::from_msats(550_000);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice| invoice,
+        move |contract| async move { Ok(federation_fee(module_fee(contract))) },
+    )
+    .await;
+
+    // Above 500_000 the fee jump pushes the total over the balance, so the
+    // maximum spendable amount sits exactly at the step.
+    assert_eq!(result, Some(Amount::from_msats(500_000)));
+}
+
+#[tokio::test]
+async fn max_affordable_respects_max_bound() {
+    let balance = Amount::from_msats(1_000_000);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        Amount::from_msats(100), // cap well below the balance
+        |invoice| invoice,
+        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+    )
+    .await;
+
+    assert_eq!(result, Some(Amount::from_msats(100)));
+}
+
+#[tokio::test]
+async fn max_affordable_none_when_min_unaffordable() {
+    // Balance can't even cover the gateway base fee on the smallest send.
+    let balance = Amount::from_msats(10);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice: Amount| Amount::from_msats(invoice.msats + 1000), // 1000 msat base fee
+        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+    )
+    .await;
+
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn max_affordable_treats_quote_error_as_ceiling() {
+    // The fee quote errors once the contract exceeds what the balance can fund,
+    // exactly as real note selection does. The solver must treat that as the
+    // ceiling rather than overestimating.
+    let cap = 400_000;
+    let balance = Amount::from_msats(1_000_000);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice| invoice,
+        move |contract: Amount| async move {
+            if contract.msats > cap {
+                Err(anyhow::anyhow!("insufficient funds"))
+            } else {
+                Ok(federation_fee(Amount::ZERO))
+            }
+        },
+    )
+    .await;
+
+    assert_eq!(result, Some(Amount::from_msats(cap)));
 }

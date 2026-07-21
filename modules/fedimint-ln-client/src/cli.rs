@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::UNIX_EPOCH;
 use std::{ffi, iter};
 
-use anyhow::{Context as _, bail};
+use anyhow::{Context as _, bail, ensure};
 use clap::{Parser, Subcommand};
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
@@ -38,8 +38,14 @@ enum Opts {
         /// Lightning invoice or lnurl
         payment_info: String,
         /// Amount to pay, used for lnurl
-        #[clap(long)]
+        #[clap(long, conflicts_with = "all")]
         amount: Option<Amount>,
+        /// Spend as much of the balance as possible after gateway and
+        /// federation fees, capped at the recipient's LNURL maxSendable limit.
+        /// Only valid for LNURL/Lightning Address payments, where the sender
+        /// chooses the amount.
+        #[clap(long, default_value = "false")]
+        all: bool,
         /// Invoice comment/description, used on lnurl
         #[clap(long)]
         lnurl_comment: Option<String>,
@@ -137,13 +143,53 @@ pub(crate) async fn handle_cli_command(
         Opts::Pay {
             payment_info,
             amount,
+            all,
             lnurl_comment,
             gateway_id,
             force_internal,
         } => {
-            let bolt11 = crate::get_invoice(&payment_info, amount, lnurl_comment).await?;
-            info!("Paying invoice: {bolt11}");
+            // Resolve the gateway up front so the same one both prices `--all`
+            // and settles the payment.
             let ln_gateway = module.get_gateway(gateway_id, force_internal).await?;
+
+            let payment_info = crate::PaymentInfo::parse(&payment_info).await?;
+
+            let amount = if all {
+                let crate::PaymentInfo::Lnurl(pay_response) = &payment_info else {
+                    bail!(
+                        "--all is only valid for LNURL/Lightning Address payments, not fixed-amount invoices"
+                    );
+                };
+
+                let gateway = ln_gateway.clone().context(
+                    "--all requires a gateway to price the payment; internal payments are not supported",
+                )?;
+                let balance = module.client_ctx.get_balance_for_btc().await?;
+                let spendable = module.spendable_amount(balance, Some(gateway)).await?;
+
+                // The endpoint only issues invoices within
+                // [minSendable, maxSendable].
+                let max_sendable = Amount::from_msats(pay_response.max_sendable);
+                let min_sendable = Amount::from_msats(pay_response.min_sendable);
+                let capped = spendable.min(max_sendable);
+                ensure!(
+                    capped >= min_sendable,
+                    "--all can send at most {capped}, but the recipient requires at least {min_sendable} (LNURL minSendable)"
+                );
+                if capped < spendable {
+                    info!(
+                        "Balance supports sending {spendable}, but the recipient's LNURL maxSendable caps the payment at {capped}"
+                    );
+                } else {
+                    info!("Spending entire balance, requesting invoice for {capped}");
+                }
+                Some(capped)
+            } else {
+                amount
+            };
+
+            let bolt11 = payment_info.get_invoice(amount, lnurl_comment).await?;
+            info!("Paying invoice: {bolt11}");
 
             let OutgoingLightningPayment {
                 payment_type,

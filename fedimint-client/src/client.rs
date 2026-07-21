@@ -2626,6 +2626,10 @@ impl ClientContextIface for Client {
         Client::fee_quote(self, operation_id, request).await
     }
 
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+        Client::get_balance_for_unit(self, unit).await
+    }
+
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
         Client::transaction_updates(self, operation_id).await
     }
