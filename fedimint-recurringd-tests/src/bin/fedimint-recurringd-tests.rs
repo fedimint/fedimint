@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use devimint::tests::log_binary_versions;
-use devimint::util::{almost_equal, poll};
+use devimint::util::{FedimintCli, almost_equal, poll};
+use devimint::version_constants::VERSION_0_12_0_ALPHA;
 use devimint::{DevFed, cmd};
 use tracing::info;
 
@@ -137,53 +138,60 @@ async fn main() -> anyhow::Result<()> {
             // drains (nearly) the client's whole balance to a second client's
             // LNURL. gw_lnd both issues the invoice and settles the payment, so
             // this is a direct ecash swap within the federation.
-            let drain_receiver = fed
-                .new_joined_client("recurringd-test-drain-receiver")
+            //
+            // Version-gated: `--all` was added to `ln pay` in 0.12, older CLIs
+            // reject the flag.
+            if FedimintCli::version_or_default().await >= *VERSION_0_12_0_ALPHA {
+                let drain_receiver = fed
+                    .new_joined_client("recurringd-test-drain-receiver")
+                    .await?;
+                let drain_lnurl = cmd!(
+                    drain_receiver,
+                    "module",
+                    "ln",
+                    "lnurl",
+                    "register",
+                    recurringd.api_url()
+                )
+                .out_json()
+                .await?["lnurl"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+
+                let balance_before_drain = client.balance().await?;
+                let drain_outcome = cmd!(
+                    client,
+                    "module",
+                    "ln",
+                    "pay",
+                    &drain_lnurl,
+                    "--all",
+                    "--gateway-id",
+                    &gw_lnd.gateway_id,
+                )
+                .out_json()
                 .await?;
-            let drain_lnurl = cmd!(
-                drain_receiver,
-                "module",
-                "ln",
-                "lnurl",
-                "register",
-                recurringd.api_url()
-            )
-            .out_json()
-            .await?["lnurl"]
-                .as_str()
-                .unwrap()
-                .to_owned();
+                // `LightningPaymentOutcome` is externally tagged; success
+                // serializes as `{"Success": {..}}`.
+                assert!(
+                    drain_outcome.get("Success").is_some(),
+                    "draining the balance with `--all` should succeed, got: {drain_outcome}"
+                );
 
-            let balance_before_drain = client.balance().await?;
-            let drain_outcome = cmd!(
-                client,
-                "module",
-                "ln",
-                "pay",
-                &drain_lnurl,
-                "--all",
-                "--gateway-id",
-                &gw_lnd.gateway_id,
-            )
-            .out_json()
-            .await?;
-            // `LightningPaymentOutcome` is externally tagged; success serializes
-            // as `{"Success": {..}}`.
-            assert!(
-                drain_outcome.get("Success").is_some(),
-                "draining the balance with `--all` should succeed, got: {drain_outcome}"
-            );
-
-            let balance_after_drain = client.balance().await?;
-            info!(
-                "Client balance after `--all` drain: {balance_after_drain} (was {balance_before_drain})"
-            );
-            // A spend-all leaves only sub-denomination dust behind — in practice
-            // a few hundred msats out of ~1_000_000.
-            assert!(
-                balance_after_drain < 20_000,
-                "`pay --all` should have drained (nearly) the whole balance, but {balance_after_drain} of {balance_before_drain} msats remain"
-            );
+                let balance_after_drain = client.balance().await?;
+                info!(
+                    "Client balance after `--all` drain: {balance_after_drain} (was {balance_before_drain})"
+                );
+                // A spend-all leaves only sub-denomination dust behind — in
+                // practice a few hundred msats out of ~1_000_000.
+                assert!(
+                    balance_after_drain < 20_000,
+                    "`pay --all` should have drained (nearly) the whole balance, but {balance_after_drain} of {balance_before_drain} msats remain"
+                );
+            } else {
+                info!("Skipping `pay --all` drain test, fedimint-cli is too old");
+            }
 
             Ok(())
         })
