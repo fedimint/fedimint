@@ -1194,36 +1194,20 @@ impl LightningClientModule {
             }
         }
 
-        // Advance the cursor in its own short transaction, retrying transient write
-        // conflicts. The closure re-reads the current value and only ever moves the
-        // cursor FORWARD, so a concurrent writer can never be rewound by a stale
-        // `next_index` (a same-key conflict makes the loser retry and re-read).
-        // Ordering is unchanged: the cursor only moves after the batch above
-        // was processed, and a crash in between re-fetches the same batch on
-        // the next iteration exactly as it did when the write shared the read's
-        // transaction.
-        self.client_ctx
-            .module_db()
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async move {
-                        let current = dbtx
-                            .get_value(&IncomingContractStreamIndexKey)
-                            .await
-                            .unwrap_or(0);
+        // Advance the cursor in its own short transaction. This is the only writer of
+        // this key and it runs in a single sequential loop, so there is no concurrent
+        // writer to guard against; and because this transaction is short-lived — opened
+        // after the long-poll and committed immediately — it cannot hit the spurious
+        // `WriteConflict` that a transaction held open across the long-poll would, so a
+        // plain `commit_tx()` is safe. Ordering is unchanged: the cursor only moves
+        // after the batch above was processed, and a crash in between re-fetches the
+        // same batch on the next iteration.
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
-                        if current < next_index {
-                            dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
-                                .await;
-                        }
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
+            .await;
 
-                        Result::<(), ()>::Ok(())
-                    })
-                },
-                None,
-            )
-            .await
-            .expect("Will never return an error");
+        dbtx.commit_tx().await;
     }
 }
 
