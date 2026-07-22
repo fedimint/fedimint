@@ -216,8 +216,11 @@ impl IrohConnector {
                     .address_lookup(iroh_next::address_lookup::PkarrResolver::builder(iroh_dns));
             }
 
-            // As a client, we don't need to register on any relays
-            let mut builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
+            // Server iroh-next endpoints publish relay-only address records by
+            // default (the iroh 1.0 publishers filter out direct addresses), so
+            // the client must be able to dial via relays; `RelayMode::Disabled`
+            // would disable dialing them, not just registration.
+            let mut builder = builder.relay_mode(iroh_next::RelayMode::Default);
 
             #[cfg(not(target_family = "wasm"))]
             if iroh_enable_dht {
