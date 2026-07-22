@@ -29,7 +29,7 @@ use fedimint_core::module::{
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
@@ -37,7 +37,7 @@ use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
 use iroh::Endpoint;
-use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
+use iroh::endpoint::{ConnectionError, Incoming, RecvStream, SendStream, VarInt};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
@@ -556,7 +556,32 @@ async fn handle_incoming(
         .await;
 
         let (send_stream, recv_stream) = match accept_result {
-            Ok(streams) => streams?,
+            Ok(Ok(streams)) => streams,
+            // A peer hanging up is the ordinary end of a connection, not a
+            // failure to report: clients close a connection whose request
+            // budget elapsed (routine for a long-poll refresh), and abrupt
+            // client death surfaces the same way once QUIC's idle timeout
+            // fires. Reporting these as errors would make the guardian log a
+            // warning for every routine client reconnect.
+            //
+            // `ConnectionClosed` is deliberately NOT in this set: it means the
+            // peer's QUIC stack aborted the connection, which is a transport
+            // fault rather than a client hanging up, and is exactly the signal
+            // an operator wants to keep at `warn`.
+            Ok(Err(
+                err @ (ConnectionError::ApplicationClosed(_)
+                | ConnectionError::LocallyClosed
+                | ConnectionError::TimedOut
+                | ConnectionError::Reset),
+            )) => {
+                tracing::debug!(
+                    target: LOG_NET_API,
+                    err = %err.fmt_compact(),
+                    "Iroh API connection closed by peer"
+                );
+                return Ok(());
+            }
+            Ok(Err(err)) => return Err(err.into()),
             Err(_)
                 if parallel_requests_limit.available_permits()
                     < iroh_api_max_requests_per_connection =>
@@ -590,21 +615,57 @@ async fn handle_incoming(
             .acquire_owned()
             .await
             .expect("semaphore should not be closed");
+        // Stop handling a request as soon as its client goes away.
+        //
+        // `handle_request` awaits the endpoint to completion BEFORE it touches
+        // the stream, so for a long-poll endpoint (`await_*`) the handler is
+        // parked in `wait_key_check`/`wait_key_exists` without any dependency on
+        // the connection. Losing the client therefore does not, by itself, stop
+        // that waiter: it stays alive (holding a task and a DB subscription)
+        // until the awaited key changes, which for a pending payment can be the
+        // full invoice lifetime. A client that reconnects while a wait is
+        // outstanding — a routine long-poll refresh, or a reconnect after a
+        // stalled request — would leave the previous waiter behind on every
+        // peer and accumulate them. Racing against `closed()` bounds an
+        // in-flight handler by the connection's lifetime.
+        //
+        // Cancelling here is safe for non-long-poll endpoints too: the response
+        // can no longer be delivered, and a dbtx that has not committed is
+        // dropped atomically. Where a write HAS committed, the client sees a
+        // failed request and retries; that is already the behaviour when a
+        // connection drops mid-response, so cancellation adds no new hazard —
+        // but note it is not literally idempotent everywhere. A retried
+        // `sign_api_announcement` bumps its nonce again, and a retried meta
+        // submit draws a fresh salt, so the second write is equivalent rather
+        // than identical.
+        let connection_closed = connection.clone();
+        let request_consensus_api = consensus_api.clone();
+        let request_core_api = core_api.clone();
+        let request_module_api = module_api.clone();
         task_group.spawn_cancellable_silent(
             "handle-iroh-request",
-            handle_request(
-                consensus_api.clone(),
-                core_api.clone(),
-                module_api.clone(),
-                send_stream,
-                recv_stream,
-                permit,
-            )
-            .then(|result| async {
-                if let Err(err) = result {
-                    warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh request");
+            async move {
+                tokio::select! {
+                    result = handle_request(
+                        request_consensus_api,
+                        request_core_api,
+                        request_module_api,
+                        send_stream,
+                        recv_stream,
+                        permit,
+                    ) => {
+                        if let Err(err) = result {
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh request");
+                        }
+                    }
+                    _ = connection_closed.closed() => {
+                        tracing::debug!(
+                            target: LOG_NET_API,
+                            "Client disconnected, abandoning in-flight iroh request"
+                        );
+                    }
                 }
-            }),
+            },
         );
     }
 }
@@ -626,7 +687,30 @@ async fn handle_request(
         .with_label_values(&[&method])
         .start_timer();
 
-    let response = await_response(consensus_api, core_api, module_api, request).await;
+    // Race the endpoint against the client abandoning *this request*, not just
+    // against losing the whole connection.
+    //
+    // A client that gives up on one request drops its `RecvStream`, which quinn
+    // turns into a STOP_SENDING and surfaces here as `stopped()`. Waiting only
+    // on `Connection::closed()` would miss that whenever the client keeps the
+    // connection for its other requests — it retires a stalled connection
+    // rather than closing it, precisely so unrelated in-flight requests are not
+    // torn down — and this waiter would then survive until the last of those
+    // drained, which for a consensus long-poll is up to an hour.
+    //
+    // `stopped()` cannot fire spuriously here: it yields `None` only after the
+    // local side finishes the stream, and nothing has been written yet.
+    let response = tokio::select! {
+        response = await_response(consensus_api, core_api, module_api, request) => response,
+        _ = send_stream.stopped() => {
+            tracing::debug!(
+                target: LOG_NET_API,
+                %method,
+                "Client abandoned the request, cancelling in-flight iroh request"
+            );
+            return Ok(());
+        }
+    };
 
     timer.observe_duration();
 
