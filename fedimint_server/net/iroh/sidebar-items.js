@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["IROH_V1_API_CHILD_ID"],"fn":["build_iroh_v1_endpoint","derive_iroh_v1_api_secret_key"]};

@@ -1351,11 +1351,11 @@
 <a href=#1351 id=1351 data-nosnippet>1351</a>            Command::Admin(AdminCmd::SignGuardianMetadata { api_urls, pkarr_id }) =&gt; {
 <a href=#1352 id=1352 data-nosnippet>1352</a>                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1353 id=1353 data-nosnippet>1353</a>
-<a href=#1354 id=1354 data-nosnippet>1354</a>                <span class="kw">let </span>metadata = fedimint_core::net::guardian_metadata::GuardianMetadata {
+<a href=#1354 id=1354 data-nosnippet>1354</a>                <span class="kw">let </span>metadata = fedimint_core::net::guardian_metadata::GuardianMetadata::new(
 <a href=#1355 id=1355 data-nosnippet>1355</a>                    api_urls,
-<a href=#1356 id=1356 data-nosnippet>1356</a>                    pkarr_id_z32: pkarr_id,
-<a href=#1357 id=1357 data-nosnippet>1357</a>                    timestamp_secs: fedimint_core::time::duration_since_epoch().as_secs(),
-<a href=#1358 id=1358 data-nosnippet>1358</a>                };
+<a href=#1356 id=1356 data-nosnippet>1356</a>                    pkarr_id,
+<a href=#1357 id=1357 data-nosnippet>1357</a>                    fedimint_core::time::duration_since_epoch().as_secs(),
+<a href=#1358 id=1358 data-nosnippet>1358</a>                );
 <a href=#1359 id=1359 data-nosnippet>1359</a>
 <a href=#1360 id=1360 data-nosnippet>1360</a>                <span class="kw">let </span>signed_metadata = cli
 <a href=#1361 id=1361 data-nosnippet>1361</a>                    .admin_client(

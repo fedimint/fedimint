@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["api","p2p","p2p_connection","p2p_connector"]};
+window.SIDEBAR_ITEMS = {"mod":["api","iroh","p2p","p2p_connection","p2p_connector"]};

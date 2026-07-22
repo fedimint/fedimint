@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["insert_signed_guardian_metadata_if_not_present","start_guardian_metadata_service"],"struct":["GuardianMetadataKey","GuardianMetadataPrefix"]};
+window.SIDEBAR_ITEMS = {"fn":["ensure_iroh_next_remains_available","prepare_guardian_metadata_service","reconcile_guardian_metadata","reconcile_iroh_next_endpoint","start_guardian_metadata_service"],"struct":["GuardianMetadataKey","GuardianMetadataPrefix"]};
