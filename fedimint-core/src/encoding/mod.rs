@@ -543,6 +543,18 @@ impl Encodable for SystemTime {
     }
 }
 
+/// Conservative upper bound for a decoded [`SystemTime`]: 9999-12-31T23:59:59Z,
+/// seconds since [`UNIX_EPOCH`].
+///
+/// `SystemTime`'s actual representable range is platform-specific, so basing
+/// the accept/reject boundary directly on `checked_add`'s overflow point
+/// would make it non-deterministic across federation guardians running on
+/// different platforms - the same encoded bytes could decode fine on one
+/// guardian's target and fail on another's, breaking consensus. Rejecting
+/// anything beyond this fixed, far-future bound *before* calling
+/// `checked_add` keeps decode's verdict identical on every target.
+const MAX_DECODABLE_SECS_SINCE_EPOCH: u64 = 253_402_300_799;
+
 impl Decodable for SystemTime {
     fn consensus_decode_partial<D: std::io::Read>(
         d: &mut D,
@@ -555,6 +567,11 @@ impl Decodable for SystemTime {
         // is untrusted, adversarial input (e.g. a crafted `BackupRequest` or
         // any other consensus-encoded struct with a `SystemTime` field) must
         // not be able to crash the decoding node.
+        if duration.as_secs() > MAX_DECODABLE_SECS_SINCE_EPOCH {
+            return Err(DecodeError::from_str(
+                "SystemTime exceeds maximum decodable timestamp (9999-12-31)",
+            ));
+        }
         UNIX_EPOCH
             .checked_add(duration)
             .ok_or_else(|| DecodeError::from_str("SystemTime overflow: duration too large"))
@@ -849,6 +866,31 @@ mod tests {
             res.is_err(),
             "expected a decode error, not a panic or success"
         );
+    }
+
+    #[test]
+    fn test_systemtime_decode_rejects_beyond_fixed_bound_deterministically() {
+        // One second past the fixed cutoff must be rejected on every platform,
+        // regardless of where that particular target's own SystemTime overflow
+        // point happens to sit - the whole point of the explicit bound.
+        let over_bound = std::time::Duration::from_secs(super::MAX_DECODABLE_SECS_SINCE_EPOCH + 1);
+        let mut bytes = Vec::new();
+        over_bound.consensus_encode(&mut bytes).unwrap();
+        let res = std::time::SystemTime::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        );
+        assert!(res.is_err(), "expected rejection past the fixed bound");
+
+        // Exactly at the bound must still decode successfully.
+        let at_bound = std::time::Duration::from_secs(super::MAX_DECODABLE_SECS_SINCE_EPOCH);
+        let mut bytes = Vec::new();
+        at_bound.consensus_encode(&mut bytes).unwrap();
+        let res = std::time::SystemTime::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        );
+        assert!(res.is_ok(), "the bound itself must still be decodable");
     }
 
     #[test]
