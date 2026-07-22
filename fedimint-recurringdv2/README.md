@@ -20,11 +20,12 @@ Note that once the invoice is generated, `recurringdv2` cannot claim the funds f
 ## Command line options
 
 ```text
-Usage: fedimint-recurringdv2 [OPTIONS]
+Usage: fedimint-recurringdv2 [OPTIONS] --api-address <API_ADDRESS>
 
 Options:
-      --bind-api <BIND_API>  Address to bind the server to [env: FM_BIND_API=] [default: 0.0.0.0:8176]
-  -h, --help                 Print help
+      --bind-api <BIND_API>          Address to bind the server to [env: FM_BIND_API=] [default: 0.0.0.0:8176]
+      --api-address <API_ADDRESS>    Public base URL under which this service is reachable, e.g. `https://lnurl.example.com/` [env: FM_API_ADDRESS=]
+  -h, --help                         Print help
 ```
 
 ## Endpoints
@@ -38,3 +39,4 @@ Options:
 ### Environment Variables
 
 - `FM_BIND_API` - Address to bind the server to (default: `0.0.0.0:8176`)
+- `FM_API_ADDRESS` - Public base URL under which the service is reachable (required). It is used to construct the LNURL-pay callback URLs returned to payers and should be an `https` URL in production.

@@ -25,7 +25,13 @@ impl Recurringdv2 {
         let process = process_mgr
             .spawn_daemon(
                 "recurringdv2",
-                cmd!("fedimint-recurringdv2", "--bind-api", bind_address.clone()),
+                cmd!(
+                    "fedimint-recurringdv2",
+                    "--bind-api",
+                    bind_address.clone(),
+                    "--api-address",
+                    api_url.to_string()
+                ),
             )
             .await?;
 

@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 
 use anyhow::{bail, ensure};
 use axum::extract::{Path, Query, State};
-use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -32,7 +31,7 @@ use tokio::net::TcpListener;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
 use tpe::AggregatePublicKey;
-use tracing::info;
+use tracing::{info, warn};
 
 const MAX_SENDABLE_MSAT: u64 = 100_000_000_000;
 const MIN_SENDABLE_MSAT: u64 = 100_000;
@@ -45,10 +44,19 @@ struct CliOpts {
     /// and direct, and the port should be open in the firewall.
     #[arg(long, env = "FM_BIND_API", default_value = "0.0.0.0:8176")]
     bind_api: SocketAddr,
+    /// Public base URL under which this service is reachable, e.g.
+    /// `https://lnurl.example.com/`
+    ///
+    /// Used to construct the LNURL-pay callback URLs returned to payers, so it
+    /// must be the exact URL payers reach this service at. Should be an
+    /// `https` URL in production.
+    #[arg(long, env = "FM_API_ADDRESS")]
+    api_address: SafeUrl,
 }
 
 #[derive(Clone)]
 struct AppState {
+    api_address: SafeUrl,
     gateway_conn: RealGatewayConnection,
 }
 
@@ -63,7 +71,15 @@ async fn main() -> anyhow::Result<()> {
         .bind()
         .await?;
 
+    if cli_opts.api_address.scheme() != "https" {
+        warn!(
+            api_address = %cli_opts.api_address,
+            "Api address is not an https URL, payers may be exposed to invoice tampering"
+        );
+    }
+
     let state = AppState {
+        api_address: cli_opts.api_address.clone(),
         gateway_conn: RealGatewayConnection {
             api: GatewayApi::new(None, connector_registry),
         },
@@ -81,7 +97,11 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors)
         .with_state(state);
 
-    info!(bind_api = %cli_opts.bind_api, "recurringdv2 started");
+    info!(
+        bind_api = %cli_opts.bind_api,
+        api_address = %cli_opts.api_address,
+        "recurringdv2 started"
+    );
 
     let listener = TcpListener::bind(cli_opts.bind_api).await?;
 
@@ -90,28 +110,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health_check(headers: HeaderMap) -> impl IntoResponse {
-    format!("recurringdv2 is up and running at {}", base_url(&headers))
+async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+    format!("recurringdv2 is up and running at {}", state.api_address)
 }
 
-fn base_url(headers: &HeaderMap) -> String {
-    let host = headers
-        .get("x-forwarded-host")
-        .or_else(|| headers.get("host"))
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("localhost");
-
-    let scheme = headers
-        .get("x-forwarded-proto")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("http");
-
-    format!("{scheme}://{host}/")
-}
-
-async fn pay(headers: HeaderMap, Path(payload): Path<String>) -> Json<LnurlResponse<PayResponse>> {
+async fn pay(
+    State(state): State<AppState>,
+    Path(payload): Path<String>,
+) -> Json<LnurlResponse<PayResponse>> {
     Json(LnurlResponse::Ok(PayResponse {
-        callback: format!("{}invoice/{payload}", base_url(&headers)),
+        callback: state
+            .api_address
+            .join_path(&format!("invoice/{payload}"))
+            .to_string(),
         max_sendable: MAX_SENDABLE_MSAT,
         min_sendable: MIN_SENDABLE_MSAT,
         tag: pay_request_tag(),
