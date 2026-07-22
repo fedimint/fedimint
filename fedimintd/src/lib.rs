@@ -35,6 +35,7 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_rocksdb::RocksDb;
+use fedimint_server::IrohNextApiSettings;
 use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::core::ServerModuleInitRegistry;
@@ -48,14 +49,14 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
 use fedimintd_envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_NEXT_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV,
-    FM_IROH_P2P_RELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV,
-    FM_SESSION_TIMEOUT_SECS_ENV,
+    FM_IROH_NEXT_ENABLE_ENV, FM_IROH_P2P_RELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_API_ENV,
+    FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
 #[cfg(all(
@@ -247,6 +248,26 @@ struct ServerOpts {
     /// Maximum number of parallel requests per Iroh API connection
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
+
+    /// Enable the transitional Iroh 1.0 API endpoint alongside Iroh 0.35.
+    ///
+    /// For a federation configured with the legacy Iroh API, this is a runtime
+    /// setting independent of the DKG-only `--enable-iroh` option. It is
+    /// enabled by default. Once the endpoint is advertised, it must remain
+    /// enabled.
+    #[arg(
+        long,
+        env = FM_IROH_NEXT_ENABLE_ENV,
+        default_value_t = true,
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        default_missing_value = "true",
+    )]
+    enable_iroh_next: bool,
+
+    /// Bind address for the transitional Iroh 1.0 API endpoint
+    #[arg(long, env = FM_BIND_API_NEXT_ENV)]
+    bind_api_next: Option<SocketAddr>,
 }
 
 impl ServerOpts {
@@ -368,13 +389,20 @@ pub async fn run(
         fedimint_metrics::spawn_api_server(*bind_metrics, root_task_group.clone()).await?;
     }
 
+    let enable_iroh = server_opts.enable_iroh.unwrap_or(!is_running_in_test_env());
+    let iroh_next_api_settings = if server_opts.enable_iroh_next {
+        Some(IrohNextApiSettings::new(server_opts.bind_api_next))
+    } else {
+        None
+    };
+
     let settings = ConfigGenSettings {
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
         ui_bind: server_opts.bind_ui,
         p2p_url: server_opts.p2p_url.clone(),
         api_url: server_opts.api_url.clone(),
-        enable_iroh: server_opts.enable_iroh.unwrap_or(!is_running_in_test_env()),
+        enable_iroh,
         iroh_dns: server_opts.iroh_dns.clone(),
         iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
@@ -451,7 +479,7 @@ pub async fn run(
     let task_group = root_task_group.clone();
     let code_version_hash = code_version_hash.to_string();
     root_task_group.spawn_cancellable("main", async move {
-        fedimint_server::run_with_iroh_p2p_relays(
+        fedimint_server::run_with_iroh_p2p_relays_and_next_api(
             server_opts.data_dir,
             auth_ui,
             auth_api,
@@ -472,6 +500,7 @@ pub async fn run(
                 server_opts.iroh_api_max_requests_per_connection,
             ),
             server_opts.iroh_p2p_relays,
+            iroh_next_api_settings,
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
@@ -528,15 +557,8 @@ pub fn default_modules() -> ServerModuleInitRegistry {
 mod tests {
     use super::*;
 
-    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
-        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
-        // This test does not spawn threads while mutating the process
-        // environment.
-        unsafe {
-            std::env::set_var(FM_ENABLE_IROH_ENV, value);
-        }
-
-        let opts = ServerOpts::try_parse_from([
+    fn server_opts_args() -> Vec<&'static str> {
+        vec![
             "fedimintd",
             "--data-dir",
             "/tmp/fedimintd-test",
@@ -546,7 +568,22 @@ mod tests {
             "user",
             "--bitcoind-password",
             "pass",
-        ]);
+        ]
+    }
+
+    fn parse_server_opts() -> ServerOpts {
+        ServerOpts::try_parse_from(server_opts_args()).expect("server opts should parse")
+    }
+
+    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
+        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            std::env::set_var(FM_ENABLE_IROH_ENV, value);
+        }
+
+        let opts = parse_server_opts();
 
         // This test does not spawn threads while mutating the process
         // environment.
@@ -558,7 +595,7 @@ mod tests {
             }
         }
 
-        opts.expect("server opts should parse")
+        opts
     }
 
     #[test]
@@ -571,6 +608,21 @@ mod tests {
             parse_server_opts_with_enable_iroh_env("0").enable_iroh,
             Some(false)
         );
+    }
+
+    #[test]
+    fn iroh_next_api_defaults_to_enabled_and_accepts_false() {
+        let command = ServerOpts::command();
+        let enable_iroh_next = command
+            .get_arguments()
+            .find(|arg| arg.get_id() == "enable_iroh_next")
+            .expect("enable-iroh-next argument exists");
+        assert_eq!(enable_iroh_next.get_default_values(), ["true"]);
+
+        let mut args = server_opts_args();
+        args.push("--enable-iroh-next=false");
+        let opts = ServerOpts::try_parse_from(args).expect("explicit false should parse");
+        assert!(!opts.enable_iroh_next);
     }
 
     #[test]

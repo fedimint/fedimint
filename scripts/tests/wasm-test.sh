@@ -4,6 +4,9 @@ set -euo pipefail
 
 export RUST_LOG="${RUST_LOG:-info}"
 
+# This federation is configured with the WebSocket API only.
+export FM_IROH_NEXT_ENABLE=false
+
 source scripts/_common.sh
 build_workspace
 add_target_dir_to_path

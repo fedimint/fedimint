@@ -24,6 +24,7 @@ extern crate fedimint_core;
 pub mod connection_limits;
 pub mod db;
 
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -61,7 +62,6 @@ use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
-use crate::net::api::guardian_metadata::start_guardian_metadata_service;
 use crate::net::api::pkarr_publish::start_pkarr_publish_service;
 use crate::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
@@ -76,6 +76,26 @@ pub mod net;
 
 /// Fedimint toplevel config
 pub mod config;
+
+/// Requested settings for the transitional Iroh 1.0 API listener.
+#[derive(Debug, Clone)]
+pub struct IrohNextApiSettings {
+    /// Optional explicit socket address on which to bind the Iroh 1.0 API
+    /// endpoint.
+    bind: Option<SocketAddr>,
+}
+
+impl IrohNextApiSettings {
+    /// Request the transitional listener, optionally overriding its bind
+    /// address.
+    pub fn new(bind: Option<SocketAddr>) -> Self {
+        Self { bind }
+    }
+
+    pub(crate) fn bind_override(&self) -> Option<SocketAddr> {
+        self.bind
+    }
+}
 
 /// A function/closure type for handling dashboard UI
 pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>;
@@ -148,6 +168,51 @@ pub async fn run_with_iroh_p2p_relays(
     iroh_api_limits: ConnectionLimits,
     iroh_p2p_relays: Vec<SafeUrl>,
 ) -> anyhow::Result<()> {
+    run_with_iroh_p2p_relays_and_next_api(
+        data_dir,
+        auth_ui,
+        auth_api,
+        force_api_secrets,
+        settings,
+        db,
+        code_version_str,
+        code_version_hash,
+        module_init_registry,
+        task_group,
+        bitcoin_rpc,
+        setup_ui_router,
+        dashboard_ui_router,
+        db_checkpoint_retention,
+        session_timeout,
+        iroh_api_limits,
+        iroh_p2p_relays,
+        None,
+    )
+    .await
+}
+
+/// Run a server with explicit guardian P2P relays and an optional Iroh 1.0 API.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_iroh_p2p_relays_and_next_api(
+    data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    force_api_secrets: ApiSecrets,
+    settings: ConfigGenSettings,
+    db: Database,
+    code_version_str: String,
+    code_version_hash: String,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: TaskGroup,
+    bitcoin_rpc: DynServerBitcoinRpc,
+    setup_ui_router: SetupUiRouter,
+    dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
+    session_timeout: Duration,
+    iroh_api_limits: ConnectionLimits,
+    iroh_p2p_relays: Vec<SafeUrl>,
+    iroh_next_api_settings: Option<IrohNextApiSettings>,
+) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
             let connector = if cfg.consensus.iroh_endpoints.is_empty() {
@@ -218,7 +283,6 @@ pub async fn run_with_iroh_p2p_relays(
     initialize_gauge_metrics(&task_group, &db).await;
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
-    start_guardian_metadata_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
     start_pkarr_publish_service(&db, &task_group, &cfg).await?;
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
@@ -250,6 +314,7 @@ pub async fn run_with_iroh_p2p_relays(
         db_checkpoint_retention,
         session_timeout,
         iroh_api_limits,
+        iroh_next_api_settings.as_ref(),
     ))
     .await?;
 

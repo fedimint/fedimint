@@ -602,30 +602,13 @@ impl ConsensusApi {
         &self,
         new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
     ) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
-        use crate::net::api::guardian_metadata::GuardianMetadataKey;
-
-        let ctx = secp256k1::Secp256k1::new();
-        let signed_metadata =
-            new_metadata.sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
-
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let signed_metadata_inner = signed_metadata.clone();
-                    Box::pin(async move {
-                        dbtx.insert_entry(
-                            &GuardianMetadataKey(self.cfg.local.identity),
-                            &signed_metadata_inner,
-                        )
-                        .await;
-
-                        Result::<_, ()>::Ok(signed_metadata_inner)
-                    })
-                },
-                None,
-            )
-            .await
-            .expect("Will not terminate on error")
+        sign_guardian_metadata_preserving_iroh_endpoint(
+            &self.db,
+            self.cfg.local.identity,
+            &self.cfg.private.broadcast_secret_key,
+            new_metadata,
+        )
+        .await
     }
 
     async fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
@@ -641,6 +624,38 @@ impl ConsensusApi {
             api_secret,
         )
     }
+}
+
+async fn sign_guardian_metadata_preserving_iroh_endpoint(
+    db: &Database,
+    identity: PeerId,
+    broadcast_secret_key: &secp256k1::SecretKey,
+    new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
+    use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+    db.autocommit(
+        |dbtx, _| {
+            let mut new_metadata = new_metadata.clone();
+            Box::pin(async move {
+                new_metadata.iroh_next_endpoint = dbtx
+                    .get_value(&GuardianMetadataKey(identity))
+                    .await
+                    .and_then(|metadata| metadata.guardian_metadata().iroh_next_endpoint.clone());
+
+                let ctx = secp256k1::Secp256k1::new();
+                let signed_metadata = new_metadata.sign(&ctx, &broadcast_secret_key.keypair(&ctx));
+
+                dbtx.insert_entry(&GuardianMetadataKey(identity), &signed_metadata)
+                    .await;
+
+                Result::<_, ()>::Ok(signed_metadata)
+            })
+        },
+        None,
+    )
+    .await
+    .expect("Will not terminate on error")
 }
 
 #[async_trait]
@@ -1097,4 +1112,67 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::db::IRawDatabaseExt as _;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::net::guardian_metadata::GuardianMetadata;
+
+    use super::*;
+    use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+    #[tokio::test]
+    async fn admin_metadata_update_preserves_persisted_iroh_endpoint() {
+        let db: Database = MemDatabase::new().into_database();
+        let identity = PeerId::from(0);
+        let broadcast_secret_key =
+            secp256k1::SecretKey::from_slice(&[42; 32]).expect("valid test key");
+        let ctx = secp256k1::Secp256k1::new();
+
+        let existing = GuardianMetadata::new(
+            vec!["wss://old.example".parse().expect("valid URL")],
+            "old-pkarr".to_owned(),
+            1,
+        )
+        .with_iroh_next_endpoint("persisted-iroh-id".to_owned())
+        .sign(&ctx, &broadcast_secret_key.keypair(&ctx));
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&GuardianMetadataKey(identity), &existing)
+            .await;
+        dbtx.commit_tx().await;
+
+        let updated = GuardianMetadata::new(
+            vec!["wss://new.example".parse().expect("valid URL")],
+            "new-pkarr".to_owned(),
+            2,
+        );
+        let signed = sign_guardian_metadata_preserving_iroh_endpoint(
+            &db,
+            identity,
+            &broadcast_secret_key,
+            updated,
+        )
+        .await;
+
+        assert_eq!(
+            signed.guardian_metadata().iroh_next_endpoint.as_deref(),
+            Some("persisted-iroh-id")
+        );
+        assert_eq!(
+            signed.guardian_metadata().api_urls,
+            vec!["wss://new.example".parse().expect("valid URL")]
+        );
+        assert_eq!(signed.guardian_metadata().pkarr_id_z32, "new-pkarr");
+        assert_eq!(
+            db.begin_transaction_nc()
+                .await
+                .get_value(&GuardianMetadataKey(identity))
+                .await
+                .expect("metadata was persisted")
+                .tagged_hash(),
+            signed.tagged_hash()
+        );
+    }
 }
