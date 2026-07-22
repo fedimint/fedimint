@@ -391,19 +391,7 @@ pub async fn run(
 
     let enable_iroh = server_opts.enable_iroh.unwrap_or(!is_running_in_test_env());
     let iroh_next_api_settings = if server_opts.enable_iroh_next {
-        let bind = server_opts.bind_api_next.map_or_else(
-            || {
-                let mut bind = server_opts.bind_api;
-                bind.set_port(bind.port().checked_add(10).with_context(|| {
-                    format!(
-                        "Default Iroh 1.0 API bind port would overflow; set {FM_BIND_API_NEXT_ENV}"
-                    )
-                })?);
-                anyhow::Ok(bind)
-            },
-            anyhow::Ok,
-        )?;
-        Some(IrohNextApiSettings { bind })
+        Some(IrohNextApiSettings::new(server_opts.bind_api_next))
     } else {
         None
     };

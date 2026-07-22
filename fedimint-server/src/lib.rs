@@ -77,11 +77,24 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
-/// Runtime settings for the transitional Iroh 1.0 API listener.
+/// Requested settings for the transitional Iroh 1.0 API listener.
 #[derive(Debug, Clone)]
 pub struct IrohNextApiSettings {
-    /// Socket address on which to bind the Iroh 1.0 API endpoint.
-    pub bind: SocketAddr,
+    /// Optional explicit socket address on which to bind the Iroh 1.0 API
+    /// endpoint.
+    bind: Option<SocketAddr>,
+}
+
+impl IrohNextApiSettings {
+    /// Request the transitional listener, optionally overriding its bind
+    /// address.
+    pub fn new(bind: Option<SocketAddr>) -> Self {
+        Self { bind }
+    }
+
+    pub(crate) fn bind_override(&self) -> Option<SocketAddr> {
+        self.bind
+    }
 }
 
 /// A function/closure type for handling dashboard UI

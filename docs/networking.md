@@ -42,7 +42,8 @@ to the original API bind port plus 10. The Iroh 1.0 listener uses the default
 1.x relay set; `FM_IROH_RELAY` remains exclusive to the Iroh 0.35 API. This
 migration endpoint is only supported for a federation configured with the
 legacy Iroh API. Its runtime default is independent of the DKG-only
-`FM_ENABLE_IROH` option.
+`FM_ENABLE_IROH` option. Existing federations configured without the legacy
+Iroh API continue without either Iroh listener and log a warning.
 
 Guardian metadata advertises the new identity in an optional field ignored by
 older clients. Capable clients use the advertised identity without falling back

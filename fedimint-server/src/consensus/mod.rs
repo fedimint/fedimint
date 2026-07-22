@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::{Context as _, bail};
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
 use fedimint_api_client::api::DynGlobalApi;
@@ -63,6 +63,58 @@ struct IrohApiEndpoints {
     next: Option<iroh_next::Endpoint>,
 }
 
+fn eligible_iroh_next_api_settings(
+    has_legacy_iroh_api: bool,
+    iroh_next_api_settings: Option<&IrohNextApiSettings>,
+) -> Option<&IrohNextApiSettings> {
+    if iroh_next_api_settings.is_some() && !has_legacy_iroh_api {
+        warn!(
+            target: LOG_CONSENSUS,
+            "Not starting the transitional Iroh 1.0 API because this federation was configured \
+             without the legacy Iroh API"
+        );
+        None
+    } else {
+        iroh_next_api_settings
+    }
+}
+
+fn resolve_iroh_next_api_bind(
+    api_bind: SocketAddr,
+    iroh_next_api_settings: Option<&IrohNextApiSettings>,
+) -> anyhow::Result<Option<SocketAddr>> {
+    iroh_next_api_settings
+        .map(|settings| {
+            settings.bind_override().map_or_else(
+                || {
+                    let mut bind = api_bind;
+                    bind.set_port(
+                        bind.port()
+                            .checked_add(10)
+                            .context("Default Iroh 1.0 API bind port would overflow")?,
+                    );
+                    anyhow::Ok(bind)
+                },
+                anyhow::Ok,
+            )
+        })
+        .transpose()
+}
+
+#[cfg(test)]
+#[test]
+fn ineligible_iroh_next_api_does_not_validate_unused_default_bind() {
+    let api_bind = "127.0.0.1:65535".parse().expect("valid socket address");
+    let settings = IrohNextApiSettings::new(None);
+    let settings = eligible_iroh_next_api_settings(false, Some(&settings));
+
+    assert!(
+        resolve_iroh_next_api_bind(api_bind, settings)
+            .expect("ineligible listener should be skipped")
+            .is_none()
+    );
+}
+
 async fn prepare_iroh_api_endpoints(
     cfg: &ServerConfig,
     api_bind: SocketAddr,
@@ -70,13 +122,6 @@ async fn prepare_iroh_api_endpoints(
     iroh_relays: Vec<SafeUrl>,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> anyhow::Result<IrohApiEndpoints> {
-    if iroh_next_api_settings.is_some() && cfg.private.iroh_api_sk.is_none() {
-        bail!(
-            "The transitional Iroh 1.0 API can only be enabled for a federation configured with \
-             the legacy Iroh API"
-        );
-    }
-
     let legacy = if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
         Some(
             build_iroh_endpoint(
@@ -92,12 +137,10 @@ async fn prepare_iroh_api_endpoints(
         None
     };
 
-    let next = if let Some(next_settings) = iroh_next_api_settings {
+    let next_bind = resolve_iroh_next_api_bind(api_bind, iroh_next_api_settings)?;
+    let next = if let Some(bind) = next_bind {
         let next_api_sk = derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key);
-        Some(
-            build_iroh_v1_endpoint(next_api_sk, next_settings.bind, iroh_dns, FEDIMINT_API_ALPN)
-                .await?,
-        )
+        Some(build_iroh_v1_endpoint(next_api_sk, bind, iroh_dns, FEDIMINT_API_ALPN).await?)
     } else {
         None
     };
@@ -155,6 +198,9 @@ pub async fn run(
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
+
+    let iroh_next_api_settings =
+        eligible_iroh_next_api_settings(cfg.private.iroh_api_sk.is_some(), iroh_next_api_settings);
 
     let mut global_dbtx = db.begin_transaction().await;
     apply_migrations_server_dbtx(
