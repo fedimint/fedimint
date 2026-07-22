@@ -7,6 +7,40 @@
   fedimintdPackage,
 }:
 
+let
+  fedimintdInstance = {
+    enable = true;
+    package = fedimintdPackage;
+    passwordUi = "pass";
+    passwordApi = "pass";
+    p2p = {
+      url = "fedimint://example.com:8173";
+    };
+    api_ws = {
+      url = "wss://example.com";
+    };
+    bitcoin = {
+      network = "signet";
+      esploraUrl = "https://mutinynet.com/api";
+    };
+    environment = { };
+  };
+
+  disabledConfig =
+    (import "${pkgs.path}/nixos/lib/eval-config.nix" {
+      system = pkgs.stdenv.hostPlatform.system;
+      modules = [
+        fedimintdModule
+        {
+          disabledModules = [ "services/networking/fedimintd.nix" ];
+          services.fedimintd."mainnet" = fedimintdInstance // {
+            api_iroh_next.enable = false;
+          };
+        }
+      ];
+    }).config;
+  disabledEnvironment = disabledConfig.systemd.services."fedimintd-mainnet".environment;
+in
 pkgs.testers.runNixOSTest {
   name = "fedimintd";
 
@@ -18,30 +52,15 @@ pkgs.testers.runNixOSTest {
       # Disable the upstream nixpkgs module to avoid conflicts
       disabledModules = [ "services/networking/fedimintd.nix" ];
 
-      services.fedimintd."mainnet" = {
-        enable = true;
-        package = fedimintdPackage;
-        passwordUi = "pass";
-        passwordApi = "pass";
-        p2p = {
-          url = "fedimint://example.com:8173";
-        };
-        api_ws = {
-          url = "wss://example.com";
-        };
-        api_iroh_next.enable = true;
-        bitcoin = {
-          network = "signet";
-          esploraUrl = "https://mutinynet.com/api";
-        };
-        environment = { };
-      };
+      services.fedimintd."mainnet" = fedimintdInstance;
     };
 
   testScript =
     { nodes, ... }:
     assert builtins.elem nodes.machine.services.fedimintd.mainnet.api_iroh_next.port
       nodes.machine.networking.firewall.allowedUDPPorts;
+    assert disabledEnvironment.FM_IROH_NEXT_ENABLE == "false";
+    assert !(disabledEnvironment ? FM_BIND_API_NEXT);
     ''
       start_all()
 

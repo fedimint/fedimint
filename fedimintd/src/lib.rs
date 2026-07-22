@@ -252,9 +252,17 @@ struct ServerOpts {
     /// Enable the transitional Iroh 1.0 API endpoint alongside Iroh 0.35.
     ///
     /// For a federation configured with the legacy Iroh API, this is a runtime
-    /// setting independent of the DKG-only `--enable-iroh` option. Once the
-    /// endpoint is advertised, it must remain enabled.
-    #[arg(long, env = FM_IROH_NEXT_ENABLE_ENV)]
+    /// setting independent of the DKG-only `--enable-iroh` option. It is
+    /// enabled by default. Once the endpoint is advertised, it must remain
+    /// enabled.
+    #[arg(
+        long,
+        env = FM_IROH_NEXT_ENABLE_ENV,
+        default_value_t = true,
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        default_missing_value = "true",
+    )]
     enable_iroh_next: bool,
 
     /// Bind address for the transitional Iroh 1.0 API endpoint
@@ -561,15 +569,8 @@ pub fn default_modules() -> ServerModuleInitRegistry {
 mod tests {
     use super::*;
 
-    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
-        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
-        // This test does not spawn threads while mutating the process
-        // environment.
-        unsafe {
-            std::env::set_var(FM_ENABLE_IROH_ENV, value);
-        }
-
-        let opts = ServerOpts::try_parse_from([
+    fn server_opts_args() -> Vec<&'static str> {
+        vec![
             "fedimintd",
             "--data-dir",
             "/tmp/fedimintd-test",
@@ -579,7 +580,22 @@ mod tests {
             "user",
             "--bitcoind-password",
             "pass",
-        ]);
+        ]
+    }
+
+    fn parse_server_opts() -> ServerOpts {
+        ServerOpts::try_parse_from(server_opts_args()).expect("server opts should parse")
+    }
+
+    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
+        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            std::env::set_var(FM_ENABLE_IROH_ENV, value);
+        }
+
+        let opts = parse_server_opts();
 
         // This test does not spawn threads while mutating the process
         // environment.
@@ -591,7 +607,7 @@ mod tests {
             }
         }
 
-        opts.expect("server opts should parse")
+        opts
     }
 
     #[test]
@@ -604,6 +620,21 @@ mod tests {
             parse_server_opts_with_enable_iroh_env("0").enable_iroh,
             Some(false)
         );
+    }
+
+    #[test]
+    fn iroh_next_api_defaults_to_enabled_and_accepts_false() {
+        let command = ServerOpts::command();
+        let enable_iroh_next = command
+            .get_arguments()
+            .find(|arg| arg.get_id() == "enable_iroh_next")
+            .expect("enable-iroh-next argument exists");
+        assert_eq!(enable_iroh_next.get_default_values(), ["true"]);
+
+        let mut args = server_opts_args();
+        args.push("--enable-iroh-next=false");
+        let opts = ServerOpts::try_parse_from(args).expect("explicit false should parse");
+        assert!(!opts.enable_iroh_next);
     }
 
     #[test]

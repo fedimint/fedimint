@@ -128,14 +128,14 @@ let
         api_iroh_next = {
           enable = mkOption {
             type = types.bool;
-            default = false;
+            default = true;
             description = ''
               Enable the transitional Iroh 1.0 client API for federations
               configured with the legacy Iroh API.
 
               WARNING: Once this endpoint is advertised, setting this option to
-              false or omitting it makes fedimintd startup fail. The endpoint
-              must remain enabled and reachable.
+              false makes fedimintd startup fail. The endpoint must remain
+              enabled and reachable.
             '';
           };
           openFirewall = mkOption {
@@ -348,6 +348,7 @@ in
                 FM_BIND_API_IROH = "${cfg.api_iroh.bind}:${toString cfg.api_iroh.port}";
                 FM_BIND_UI = "${cfg.ui.bind}:${toString cfg.ui.port}";
                 FM_DATA_DIR = cfg.dataDir;
+                FM_IROH_NEXT_ENABLE = lib.boolToString cfg.api_iroh_next.enable;
                 FM_BITCOIN_NETWORK = cfg.bitcoin.network;
                 FM_BITCOIND_URL = cfg.bitcoin.bitcoindUrl;
                 FM_ESPLORA_URL = cfg.bitcoin.esploraUrl;
@@ -365,7 +366,6 @@ in
               })
 
               (lib.optionalAttrs cfg.api_iroh_next.enable {
-                FM_IROH_NEXT_ENABLE = "true";
                 FM_BIND_API_NEXT = "${cfg.api_iroh_next.bind}:${toString cfg.api_iroh_next.port}";
               })
 

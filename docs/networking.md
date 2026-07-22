@@ -35,13 +35,14 @@ the configured Pkarr service.
 ## Transitional Iroh 1.0 client API
 
 The client-facing API keeps its original identity and Iroh 0.35 listener for
-deployed clients. `FM_IROH_NEXT_ENABLE=true` additionally starts an Iroh 1.0
-listener with a separately derived identity. Its bind address is configured by
-`FM_BIND_API_NEXT` and defaults to the original API bind port plus 10. The Iroh
-1.0 listener uses the default 1.x relay set; `FM_IROH_RELAY` remains exclusive
-to the Iroh 0.35 API. This migration endpoint is only supported for a
-federation configured with the legacy Iroh API. Enabling it at runtime does not
-require setting the DKG-only `FM_ENABLE_IROH` option again.
+deployed clients. It also starts an Iroh 1.0 listener with a separately derived
+identity by default. Set `FM_IROH_NEXT_ENABLE=false` to disable it before it is
+advertised. Its bind address is configured by `FM_BIND_API_NEXT` and defaults
+to the original API bind port plus 10. The Iroh 1.0 listener uses the default
+1.x relay set; `FM_IROH_RELAY` remains exclusive to the Iroh 0.35 API. This
+migration endpoint is only supported for a federation configured with the
+legacy Iroh API. Its runtime default is independent of the DKG-only
+`FM_ENABLE_IROH` option.
 
 Guardian metadata advertises the new identity in an optional field ignored by
 older clients. Capable clients use the advertised identity without falling back
@@ -51,5 +52,5 @@ running applies it when reopened.
 This rollout is forward-only. Once a guardian advertises its Iroh 1.0 API
 identity, that listener must remain enabled and reachable. Disabling it or
 downgrading to a binary without the listener is unsupported. After
-advertisement, setting `FM_IROH_NEXT_ENABLE=false` or omitting the setting makes
-startup fail while the persisted advertisement exists.
+advertisement, setting `FM_IROH_NEXT_ENABLE=false` makes startup fail while the
+persisted advertisement exists. Omitting the setting keeps the listener enabled.
