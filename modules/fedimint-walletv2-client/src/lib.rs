@@ -807,6 +807,15 @@ impl WalletClientModule {
         for output in &outputs {
             if let Some(&address_index) = address_map.get(&output.script) {
                 matched_num += 1;
+
+                // Claim before extending the valid index list: the index search
+                // below is CPU-bound and can take longer than a short-lived
+                // client process (e.g. a cli invocation) lives. The claim is
+                // quick and the extension can be retried on the next scan.
+                if !output.spent && !self.process_unspent_output(output, address_index).await? {
+                    return Ok(false);
+                }
+
                 let next_address_index = valid_indices
                     .last()
                     .copied()
@@ -828,10 +837,6 @@ impl WalletClientModule {
                     valid_indices.push(index);
 
                     address_map.insert(self.derive_address(index).script_pubkey(), index);
-                }
-
-                if !output.spent && !self.process_unspent_output(output, address_index).await? {
-                    return Ok(false);
                 }
             }
 
