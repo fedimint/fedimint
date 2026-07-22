@@ -533,7 +533,12 @@ impl Decodable for String {
 
 impl Encodable for SystemTime {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let duration = self.duration_since(UNIX_EPOCH).expect("valid duration");
+        let duration = self.duration_since(UNIX_EPOCH).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "SystemTime is before UNIX_EPOCH",
+            )
+        })?;
         duration.consensus_encode_dyn(writer)
     }
 }
@@ -544,7 +549,15 @@ impl Decodable for SystemTime {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let duration = Duration::consensus_decode_partial(d, modules)?;
-        Ok(UNIX_EPOCH + duration)
+        // `UNIX_EPOCH + duration` panics ("overflow when adding duration to
+        // instant") instead of erroring when `duration` is large enough to
+        // overflow the platform's `SystemTime` representation. Since `duration`
+        // is untrusted, adversarial input (e.g. a crafted `BackupRequest` or
+        // any other consensus-encoded struct with a `SystemTime` field) must
+        // not be able to crash the decoding node.
+        UNIX_EPOCH
+            .checked_add(duration)
+            .ok_or_else(|| DecodeError::from_str("SystemTime overflow: duration too large"))
     }
 }
 
@@ -819,6 +832,35 @@ mod tests {
     use super::*;
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleRegistry;
+
+    #[test]
+    fn test_systemtime_decode_overflow_does_not_panic() {
+        // secs = u64::MAX via BigSize (0xff prefix + 8 big-endian bytes), nsecs = 0.
+        // An honest peer never sends this, but the wire format lets an adversary
+        // (or a garbled message) put any u64 here, so decode must reject it
+        // gracefully instead of panicking the whole process.
+        let mut bytes = vec![0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+        bytes.push(0x00);
+        let res = std::time::SystemTime::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        );
+        assert!(
+            res.is_err(),
+            "expected a decode error, not a panic or success"
+        );
+    }
+
+    #[test]
+    fn test_systemtime_encode_pre_epoch_does_not_panic() {
+        let pre_epoch = std::time::UNIX_EPOCH - std::time::Duration::from_secs(1);
+        let mut buf = Vec::new();
+        let res = pre_epoch.consensus_encode(&mut buf);
+        assert!(
+            res.is_err(),
+            "expected an encode error, not a panic or success"
+        );
+    }
 
     pub(crate) fn test_roundtrip<T>(value: &T)
     where
