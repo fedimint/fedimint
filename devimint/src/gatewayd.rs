@@ -193,6 +193,42 @@ impl<'a> GatewayClient {
         }
     }
 
+    pub async fn get_pegin_addr_with_event_log_position(
+        &self,
+        fed_id: &str,
+    ) -> Result<(String, String)> {
+        let value = cmd!(
+            self,
+            "ecash",
+            "pegin-with-event-log-position",
+            "--federation-id={fed_id}"
+        )
+        .out_json()
+        .await?;
+
+        let address = value["address"]
+            .as_str()
+            .context("address must be a string")?
+            .to_owned();
+        let position = value["position"].to_string();
+
+        Ok((address, position))
+    }
+
+    pub async fn await_pegin(&self, fed_id: &str, position: &str) -> Result<()> {
+        cmd!(
+            self,
+            "ecash",
+            "await-pegin",
+            "--federation-id={fed_id}",
+            "--position={position}"
+        )
+        .run()
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         if gateway_cli_version >= *VERSION_0_11_0_ALPHA {

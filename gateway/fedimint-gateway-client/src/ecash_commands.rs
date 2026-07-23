@@ -4,13 +4,15 @@ use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_eventlog::EventLogId;
 use fedimint_gateway_client::{
-    backup, get_deposit_address, pegin_from_onchain, receive_ecash, recheck_address, spend_ecash,
-    withdraw, withdraw_to_onchain,
+    await_deposit, backup, get_deposit_address, get_deposit_address_with_event_log_position,
+    pegin_from_onchain, receive_ecash, recheck_address, spend_ecash, withdraw, withdraw_to_onchain,
 };
 use fedimint_gateway_common::{
-    BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, PeginFromOnchainPayload,
-    ReceiveEcashPayload, SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
+    AwaitDepositPayload, BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload,
+    DepositAddressWithEventLogPositionPayload, PeginFromOnchainPayload, ReceiveEcashPayload,
+    SpendEcashPayload, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 
@@ -30,6 +32,19 @@ pub enum EcashCommands {
     Pegin {
         #[clap(long)]
         federation_id: FederationId,
+    },
+    /// Generate a new walletv2 peg-in address and event log position to wait
+    /// from.
+    PeginWithEventLogPosition {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
+    /// Wait until a walletv2 gateway peg-in receive reaches a final state.
+    AwaitPegin {
+        #[clap(long)]
+        federation_id: FederationId,
+        #[clap(long)]
+        position: EventLogId,
     },
     /// Trigger a recheck for deposits on a deposit address
     PeginRecheck {
@@ -98,6 +113,32 @@ impl EcashCommands {
                         .await?;
 
                 Ok(CliOutput::DepositAddress { address })
+            }
+            Self::PeginWithEventLogPosition { federation_id } => {
+                let response = get_deposit_address_with_event_log_position(
+                    client,
+                    base_url,
+                    DepositAddressWithEventLogPositionPayload { federation_id },
+                )
+                .await?;
+
+                Ok(CliOutput::DepositAddressWithEventLogPosition(response))
+            }
+            Self::AwaitPegin {
+                federation_id,
+                position,
+            } => {
+                let response = await_deposit(
+                    client,
+                    base_url,
+                    AwaitDepositPayload {
+                        federation_id,
+                        position,
+                    },
+                )
+                .await?;
+
+                Ok(CliOutput::AwaitDeposit(response))
             }
             Self::PeginRecheck {
                 address,

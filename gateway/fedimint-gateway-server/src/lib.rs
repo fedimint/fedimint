@@ -72,9 +72,11 @@ use fedimint_core::{
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
-    BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
-    ConnectFedPayload, ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload,
-    CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    AwaitDepositPayload, AwaitDepositResponse, BackupPayload, ChainSource,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
+    ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload, CreateOfferPayload,
+    CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    DepositAddressWithEventLogPositionPayload, DepositAddressWithEventLogPositionResponse,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
@@ -1380,6 +1382,41 @@ impl Gateway {
                 "No wallet module found"
             )))
         }
+    }
+
+    /// Returns a walletv2 deposit address and the event log position from which
+    /// callers can wait for that receive.
+    pub async fn handle_address_with_event_log_position_msg(
+        &self,
+        payload: DepositAddressWithEventLogPositionPayload,
+    ) -> AdminResult<DepositAddressWithEventLogPositionResponse> {
+        let client = self.select_client(payload.federation_id).await?;
+        let wallet_module = client
+            .value()
+            .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+            .map_err(|_| AdminGatewayError::Unexpected(anyhow!("No walletv2 module found")))?;
+
+        let position = client.value().get_next_event_log_id().await;
+        let address = wallet_module.receive().await.as_unchecked().clone();
+
+        Ok(DepositAddressWithEventLogPositionResponse { address, position })
+    }
+
+    /// Waits until the next walletv2 receive at or after the given event log
+    /// position reaches a final state.
+    pub async fn handle_await_deposit_msg(
+        &self,
+        payload: AwaitDepositPayload,
+    ) -> AdminResult<AwaitDepositResponse> {
+        let client = self.select_client(payload.federation_id).await?;
+        let wallet_module = client
+            .value()
+            .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
+            .map_err(|_| AdminGatewayError::Unexpected(anyhow!("No walletv2 module found")))?;
+
+        let (_state, next_position) = wallet_module.await_receive(payload.position).await?;
+
+        Ok(AwaitDepositResponse { next_position })
     }
 
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a

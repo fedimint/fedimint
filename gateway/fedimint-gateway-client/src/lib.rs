@@ -8,13 +8,15 @@ use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
-    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
-    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, ADDRESS_WITH_EVENT_LOG_POSITION_ENDPOINT,
+    AWAIT_DEPOSIT_ENDPOINT, AwaitDepositPayload, AwaitDepositResponse, BACKUP_ENDPOINT,
+    BackupPayload, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
     CONNECT_PEER_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, ChannelInfo, CloseChannelsWithPeerRequest,
     CloseChannelsWithPeerResponse, ConfigPayload, ConnectFedPayload, ConnectPeerRequest,
     CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
+    DepositAddressPayload, DepositAddressRecheckPayload, DepositAddressWithEventLogPositionPayload,
+    DepositAddressWithEventLogPositionResponse, FederationInfo, GATEWAY_INFO_ENDPOINT,
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
@@ -62,6 +64,36 @@ pub async fn get_deposit_address(
 ) -> ServerResult<Address<NetworkUnchecked>> {
     client
         .request(base_url, Method::POST, ADDRESS_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn get_deposit_address_with_event_log_position(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: DepositAddressWithEventLogPositionPayload,
+) -> ServerResult<DepositAddressWithEventLogPositionResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            ADDRESS_WITH_EVENT_LOG_POSITION_ENDPOINT,
+            Some(payload),
+        )
+        .await
+}
+
+pub async fn await_deposit(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: AwaitDepositPayload,
+) -> ServerResult<AwaitDepositResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            AWAIT_DEPOSIT_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 

@@ -20,10 +20,11 @@ use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerResponse, CreateOfferResponse, FederationConfig,
-    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceResponse,
-    ListTransactionsResponse, MnemonicResponse, PayOfferResponse, PaymentLogResponse,
-    PaymentSummaryResponse, ReceiveEcashResponse, SpendEcashResponse, WithdrawResponse,
+    AwaitDepositResponse, ChannelInfo, CloseChannelsWithPeerResponse, CreateOfferResponse,
+    DepositAddressWithEventLogPositionResponse, FederationConfig, FederationInfo, GatewayBalances,
+    GatewayFedConfig, GatewayInfo, GetInvoiceResponse, ListTransactionsResponse, MnemonicResponse,
+    PayOfferResponse, PaymentLogResponse, PaymentSummaryResponse, ReceiveEcashResponse,
+    SpendEcashResponse, WithdrawResponse,
 };
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_logging::TracingSetup;
@@ -71,6 +72,8 @@ pub enum CliOutput {
     DepositAddress {
         address: bitcoin::Address<NetworkUnchecked>,
     },
+    DepositAddressWithEventLogPosition(DepositAddressWithEventLogPositionResponse),
+    AwaitDeposit(AwaitDepositResponse),
     DepositRecheck(serde_json::Value),
     PeginTxid {
         txid: Txid,
