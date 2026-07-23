@@ -390,7 +390,7 @@ impl ServerModuleInit for WalletInit {
             },
             EnvVarDoc {
                 name: FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
-                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 64.",
+                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 64. Must stay well below 1024, the consensus cap on each peer's commitment pool.",
             },
         ]
     }
@@ -582,53 +582,22 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
-        let our_pk = self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1);
-
         let mut items: Vec<WalletConsensusItem> = match self.cfg.consensus.descriptor {
-            WalletDescriptor::Wsh => {
+            // FROST signing is session-based: commitments, advance votes
+            // and signature shares are proposed per signing session rather
+            // than per unsigned tx.
+            WalletDescriptor::Frost(_) => self.frost_consensus_proposal(dbtx).await,
+            // Every other descriptor signs each unsigned tx directly.
+            _ => {
                 dbtx.find_by_prefix(&UnsignedTxPrefix)
                     .await
-                    .map(|(key, unsigned_tx)| {
-                        let signatures = self.sign_tx(&unsigned_tx);
-                        self.verify_signatures(
-                            &unsigned_tx,
-                            &signatures,
-                            self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1),
-                        )
-                        .expect("Our signatures failed verification against our private key");
-                        WalletConsensusItem::Signatures(key.0, signatures)
+                    .filter_map(|(key, unsigned_tx)| {
+                        std::future::ready(self.sign_unsigned_tx(key.0, &unsigned_tx))
                     })
                     .collect()
                     .await
             }
-            WalletDescriptor::Tr => {
-                dbtx.find_by_prefix(&UnsignedTxPrefix)
-                    .await
-                    .map(|(key, unsigned_tx)| {
-                        let signatures = self.sign_tx_schnorr(&unsigned_tx);
-                        self.verify_signatures_schnorr(&unsigned_tx, &signatures, our_pk)
-                            .expect("Our signatures failed verification against our private key");
-                        WalletConsensusItem::SchnorrSignatures(key.0, signatures)
-                    })
-                    .collect()
-                    .await
-            }
-            WalletDescriptor::SinglePeer(_) => {
-                dbtx.find_by_prefix(&UnsignedTxPrefix)
-                    .await
-                    .map(|(key, unsigned_tx)| {
-                        let signatures = self.sign_tx_single_peer(&unsigned_tx);
-                        WalletConsensusItem::SchnorrSignatures(key.0, signatures)
-                    })
-                    .collect()
-                    .await
-            }
-            WalletDescriptor::Frost(_) => Vec::new(),
         };
-
-        if matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)) {
-            items.extend(self.frost_consensus_proposal(dbtx).await);
-        }
 
         if let Some(status) = self.btc_rpc.status() {
             assert_eq!(status.network, self.cfg.consensus.network);
@@ -706,14 +675,17 @@ impl ServerModule for Wallet {
                 }
             }
             WalletConsensusItem::FrostSigningCommitments(commitments) => {
+                self.ensure_frost_federation()?;
                 self.process_frost_commitments(dbtx, peer, *commitments)
                     .await
             }
-            WalletConsensusItem::FrostSignatureShare((txid, attempt, signature_shares)) => {
+            WalletConsensusItem::FrostSignatureShare(txid, attempt, signature_shares) => {
+                self.ensure_frost_federation()?;
                 self.process_frost_signature_share(dbtx, peer, txid, attempt, signature_shares)
                     .await
             }
-            WalletConsensusItem::FrostAdvanceVote((txid, attempt)) => {
+            WalletConsensusItem::FrostAdvanceVote(txid, attempt) => {
+                self.ensure_frost_federation()?;
                 self.process_frost_advance_vote(dbtx, peer, txid, attempt)
                     .await
             }
@@ -848,7 +820,7 @@ impl ServerModule for Wallet {
 
             dbtx.insert_new_entry(&UnsignedTxKey(txid), &unsigned).await;
 
-            self.start_initial_frost_signing(dbtx, &unsigned, txid, "receive")
+            self.start_initial_frost_signing(dbtx, &unsigned, txid)
                 .await;
         } else {
             dbtx.insert_new_entry(
@@ -992,7 +964,7 @@ impl ServerModule for Wallet {
 
         dbtx.insert_new_entry(&UnsignedTxKey(txid), &unsigned).await;
 
-        self.start_initial_frost_signing(dbtx, &unsigned, txid, "send")
+        self.start_initial_frost_signing(dbtx, &unsigned, txid)
             .await;
 
         let amount = output_value
@@ -1331,6 +1303,66 @@ impl Wallet {
         Ok(())
     }
 
+    /// Move a fully-signed transaction from `UnsignedTxKey` to
+    /// `UnconfirmedTxKey` and broadcast it to our bitcoin node. Shared
+    /// tail of every descriptor's finalize path; callers attach the
+    /// witnesses and clean up their per-descriptor signature state first.
+    ///
+    /// Broadcast failures are logged at debug level only — the periodic
+    /// rebroadcast task re-submits all unconfirmed transactions until
+    /// they confirm.
+    pub(crate) async fn finalize_and_broadcast(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        txid: bitcoin::Txid,
+        unsigned: FederationTx,
+    ) {
+        dbtx.remove_entry(&UnsignedTxKey(txid)).await;
+        dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
+            .await;
+
+        if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
+            debug!(
+                target: LOG_MODULE_WALLETV2,
+                err = %err.fmt_compact_anyhow(),
+                "Error broadcasting finalized transaction"
+            );
+        }
+    }
+
+    /// Sign every input of `unsigned_tx` with our key for the configured
+    /// descriptor and return the matching signature consensus item, after
+    /// verifying our own signatures against our public key. `None` for
+    /// FROST — FROST signing is session-based and proposed via
+    /// `frost_consensus_proposal` instead.
+    fn sign_unsigned_tx(
+        &self,
+        txid: bitcoin::Txid,
+        unsigned_tx: &FederationTx,
+    ) -> Option<WalletConsensusItem> {
+        let our_pk = self.cfg.private.bitcoin_sk.public_key(secp256k1::SECP256K1);
+
+        match self.cfg.consensus.descriptor {
+            WalletDescriptor::Wsh => {
+                let signatures = self.sign_tx(unsigned_tx);
+                self.verify_signatures(unsigned_tx, &signatures, our_pk)
+                    .expect("Our signatures failed verification against our private key");
+                Some(WalletConsensusItem::Signatures(txid, signatures))
+            }
+            WalletDescriptor::Tr => {
+                let signatures = self.sign_tx_schnorr(unsigned_tx);
+                self.verify_signatures_schnorr(unsigned_tx, &signatures, our_pk)
+                    .expect("Our signatures failed verification against our private key");
+                Some(WalletConsensusItem::SchnorrSignatures(txid, signatures))
+            }
+            WalletDescriptor::SinglePeer(_) => Some(WalletConsensusItem::SchnorrSignatures(
+                txid,
+                self.sign_tx_single_peer(unsigned_tx),
+            )),
+            WalletDescriptor::Frost(_) => None,
+        }
+    }
+
     async fn process_signatures(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -1368,22 +1400,11 @@ impl Wallet {
             .await;
 
         if signatures.len() == self.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
-            dbtx.remove_entry(&UnsignedTxKey(txid)).await;
-
             dbtx.remove_by_prefix(&SignaturesTxidPrefix(txid)).await;
 
             self.finalize_tx(&mut unsigned, &signatures);
 
-            dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
-                .await;
-
-            if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
-                debug!(
-                    target: LOG_MODULE_WALLETV2,
-                    err = %err.fmt_compact_anyhow(),
-                    "Error broadcasting finalized transaction"
-                );
-            }
+            self.finalize_and_broadcast(dbtx, txid, unsigned).await;
         }
 
         Ok(())

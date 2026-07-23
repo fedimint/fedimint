@@ -7,19 +7,18 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::sighash::{Prevouts, SighashCache};
 use bitcoin::{Txid, XOnlyPublicKey};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeersExt, PeerId};
 use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
-use fedimint_walletv2_common::WalletConsensusItem;
 use fedimint_walletv2_common::config::WalletDescriptor;
 use fedimint_walletv2_common::taproot::frost::{
     FrostFinalizationStat, FrostSignatureShares, FrostSigningCommitments,
 };
+use fedimint_walletv2_common::{WalletConsensusItem, impl_frost_encodable};
 use frost_secp256k1_tr as frost;
 use frost_secp256k1_tr::keys::{
     EvenY, KeyPackage, PublicKeyPackage, SigningShare, Tweak, VerifyingShare,
@@ -40,67 +39,118 @@ use crate::db::{
     FrostSigningAttemptTxidPrefix, FrostSigningCommitmentsKey, FrostSigningCommitmentsPeerPrefix,
     FrostSigningNoncesKey, FrostSigningNoncesPrefix, FrostSigningPackagesKey,
     FrostSigningPackagesTxidPrefix, LocalFrostSignatureShareKey,
-    LocalFrostSignatureShareTxidPrefix, UnconfirmedTxKey, UnsignedTxKey, UnsignedTxPrefix,
+    LocalFrostSignatureShareTxidPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
+use crate::taproot::attach_key_path_witnesses;
 use crate::{FederationTx, Wallet};
+
+/// Broadcast pacing for consensus items we've handed to a
+/// `consensus_proposal` but haven't yet seen come back through
+/// `process_consensus_item`, keyed by item with the wall-clock timestamp of
+/// the last broadcast attempt.
+///
+/// A DB-only filter is racy: at 100ms proposal cadence, the same item can be
+/// re-submitted several times before `AlephBFT` finalizes the first copy —
+/// the in-flight entry makes the filter exact. Entries older than
+/// [`FROST_REBROADCAST_INTERVAL`] become eligible for re-broadcast, because
+/// `AlephBFT` can silently drop a unit when its broadcast lands close to a
+/// session boundary (more likely in larger federations where each peer
+/// commands a smaller fraction of the per-round byte budget).
+///
+/// Local-only state, never read from or written to `dbtx` — no consensus
+/// implications.
+#[derive(Debug)]
+pub(crate) struct InFlight<K>(Mutex<BTreeMap<K, SystemTime>>);
+
+// Manual impl: `derive(Default)` would needlessly require `K: Default`.
+impl<K> Default for InFlight<K> {
+    fn default() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+}
+
+impl<K: Ord> InFlight<K> {
+    /// Record `now` as the latest broadcast attempt for `key` and return
+    /// `true` if the item should be proposed: either it has no pending
+    /// attempt, or the last attempt is at least
+    /// [`FROST_REBROADCAST_INTERVAL`] old. Returns `false` (and records
+    /// nothing) while a recent attempt is still pending.
+    fn try_claim(&self, key: K, now: SystemTime) -> bool {
+        let mut map = self.0.lock().expect("InFlight mutex poisoned");
+        match map.get(&key) {
+            Some(last)
+                if now.duration_since(*last).unwrap_or_default() < FROST_REBROADCAST_INTERVAL =>
+            {
+                false
+            }
+            _ => {
+                map.insert(key, now);
+                true
+            }
+        }
+    }
+
+    /// Drop the entry for `key` — its broadcast has been delivered through
+    /// consensus, or is no longer needed.
+    fn clear(&self, key: &K) {
+        self.0.lock().expect("InFlight mutex poisoned").remove(key);
+    }
+
+    /// Retain only the entries whose key satisfies `keep`.
+    fn retain(&self, mut keep: impl FnMut(&K) -> bool) {
+        self.0
+            .lock()
+            .expect("InFlight mutex poisoned")
+            .retain(|key, _| keep(key));
+    }
+}
 
 /// In-memory FROST tracking state. Every entry is local — never read
 /// from or written to `dbtx` — so it doesn't influence consensus.
 #[derive(Debug, Default)]
 pub(crate) struct FrostRuntime {
-    /// FROST commitments we've put into a `consensus_proposal` output but
-    /// haven't yet seen come back through `process_consensus_item`,
-    /// keyed by commitment with the wall-clock timestamp of the last
-    /// broadcast attempt. The DB filter on its own is racy: at 100ms
-    /// proposal cadence, the same commitment can be re-submitted several
-    /// times before `AlephBFT` finalizes the first copy — the timestamp
-    /// makes the filter exact. Entries older than
-    /// `FROST_REBROADCAST_INTERVAL` are eligible for re-broadcast in
-    /// case `AlephBFT` silently dropped the original unit (more likely in
-    /// larger federations near session boundaries). Cleared when our
-    /// own commitment is processed.
-    pub(crate) in_flight_commitments: Mutex<BTreeMap<FrostSigningCommitments, SystemTime>>,
+    /// Pacing for our nonce commitments; cleared when our own commitment
+    /// comes back through `process_consensus_item`.
+    pub(crate) in_flight_commitments: InFlight<FrostSigningCommitments>,
     /// Wall-clock timestamp of when we first observed each `(txid, attempt)`
     /// locally. Used to fire a per-peer advance vote when the session has
-    /// been waiting longer than `local_advance_timeout()`. Per-peer state;
+    /// been waiting longer than `LOCAL_ADVANCE_TIMEOUT`. Per-peer state;
     /// not consensus.
     pub(crate) tx_attempt_first_seen: Mutex<BTreeMap<(Txid, u32), SystemTime>>,
-    /// Same in-flight pattern as `in_flight_commitments`, but for advance
-    /// votes. Keeps us from re-broadcasting the same vote at every
-    /// `consensus_proposal` tick before the first one has been finalized.
-    pub(crate) in_flight_advance_votes: Mutex<BTreeSet<(Txid, u32)>>,
-    /// Wall-clock timestamp of our last broadcast attempt for each
-    /// `(Txid, attempt)`. We don't blindly skip already-broadcast shares
-    /// — `AlephBFT` can drop a unit when its broadcast lands close to a
-    /// session boundary, especially in larger federations where each
-    /// peer has a smaller fraction of the per-round byte budget. If our
-    /// share hasn't been delivered through consensus by
-    /// `REBROADCAST_INTERVAL` after the last try, we propose it again.
-    /// Cleared when our share comes back through `process_consensus_item`
-    /// (entry no longer needed) or when the tx finalizes.
-    pub(crate) broadcast_signature_shares: Mutex<BTreeMap<(Txid, u32), SystemTime>>,
+    /// Pacing for our advance votes; cleared when our own vote comes back
+    /// through `process_consensus_item` or the tx finalizes. The
+    /// `FrostAdvanceVoteKey` entry written on delivery keeps a cleared
+    /// vote from ever being proposed again.
+    pub(crate) in_flight_advance_votes: InFlight<(Txid, u32)>,
+    /// Pacing for our signature shares; cleared when our share is
+    /// delivered through consensus or the tx finalizes.
+    pub(crate) broadcast_signature_shares: InFlight<(Txid, u32)>,
 }
 
 impl Wallet {
-    /// Compute the BIP-341 key-path sighash for the given input of
-    /// `unsigned_tx`. This is the message that the FROST signers will
-    /// collectively sign.
-    pub(crate) fn build_frost_key_spend_message(
+    /// Compute the BIP-341 key-path sighash for every input of
+    /// `unsigned_tx`, all derived from a single `SighashCache` over the
+    /// shared prevouts. These are the messages the FROST signers
+    /// collectively sign — one per input.
+    pub(crate) fn build_frost_key_spend_messages(
         &self,
         unsigned_tx: &FederationTx,
-        input_index: usize,
-    ) -> [u8; 32] {
+    ) -> Vec<[u8; 32]> {
         let prevouts = self.build_prevouts(unsigned_tx);
         let mut sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
 
-        sighash_cache
-            .taproot_key_spend_signature_hash(
-                input_index,
-                &Prevouts::All(&prevouts),
-                bitcoin::TapSighashType::Default,
-            )
-            .expect("Failed to compute taproot key spend sighash")
-            .to_byte_array()
+        (0..unsigned_tx.tx.input.len())
+            .map(|input_index| {
+                sighash_cache
+                    .taproot_key_spend_signature_hash(
+                        input_index,
+                        &Prevouts::All(&prevouts),
+                        bitcoin::TapSighashType::Default,
+                    )
+                    .expect("Failed to compute taproot key spend sighash")
+                    .to_byte_array()
+            })
+            .collect()
     }
 
     /// Build and persist the FROST `SigningPackage` for each input of
@@ -189,9 +239,10 @@ impl Wallet {
             Vec::with_capacity(unsigned_tx.tx.input.len());
         let mut signature_shares: Vec<SignatureShare> = Vec::new();
 
-        for input_index in 0..unsigned_tx.tx.input.len() {
+        let messages = self.build_frost_key_spend_messages(unsigned_tx);
+
+        for (input_index, message) in messages.iter().enumerate() {
             let utxo = &unsigned_tx.spent_tx_outs[input_index];
-            let message = self.build_frost_key_spend_message(unsigned_tx, input_index);
 
             let commitments_map = self
                 .consume_session_commitments(dbtx, &signing_session)
@@ -201,7 +252,7 @@ impl Wallet {
                 .iter()
                 .map(|(id, commitment)| (*id, commitment.0))
                 .collect();
-            let signing_package = SigningPackage::new(signing_package_commitments, &message);
+            let signing_package = SigningPackage::new(signing_package_commitments, message);
 
             if let Some(key_package) = &key_package {
                 let nonce = self.consume_our_nonce(dbtx, &commitments_map).await?;
@@ -394,15 +445,13 @@ impl Wallet {
                     .compute_and_store_frost_signature_shares(dbtx, &unsigned_tx, target)
                     .await
             {
-                {
-                    tracing::trace!(
-                        target: LOG_MODULE_WALLETV2,
-                        ?txid,
-                        target_attempt = target,
-                        err = %err.fmt_compact_anyhow(),
-                        "Couldn't progress FROST signing for tx; will retry on next commitment"
-                    );
-                }
+                tracing::trace!(
+                    target: LOG_MODULE_WALLETV2,
+                    ?txid,
+                    target_attempt = target,
+                    err = %err.fmt_compact_anyhow(),
+                    "Couldn't progress FROST signing for tx; will retry on next commitment"
+                );
             }
         }
 
@@ -414,7 +463,7 @@ impl Wallet {
     ///
     /// - any unbroadcasted commitments from our local nonce buffer,
     /// - an advance vote for any tx whose latest attempt has been waiting
-    ///   longer than `local_advance_timeout()`,
+    ///   longer than `LOCAL_ADVANCE_TIMEOUT`,
     /// - our pre-computed signature share for each unsigned tx whose latest
     ///   attempt includes us in the signing session and whose broadcast hasn't
     ///   yet landed in `FrostSignatureShareKey`.
@@ -427,84 +476,14 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
-        let mut items: Vec<WalletConsensusItem> = Vec::new();
-
-        let my_commitments = dbtx
-            .find_by_prefix(&FrostSigningCommitmentsPeerPrefix(self.our_peer_id))
-            .await
-            .map(|c| c.0.frost_commitments)
-            .collect::<BTreeSet<_>>()
-            .await;
-
-        let my_nonces = dbtx
-            .find_by_prefix(&FrostSigningNoncesPrefix)
-            .await
-            .collect::<Vec<_>>()
-            .await;
-
-        // Snapshot the in-flight set: commitments we've already pushed to
-        // a previous proposal but that haven't yet been finalized through
-        // AlephBFT. Without this, the DB filter alone races with the
-        // proposal cadence (~100ms) vs. consensus round-trip (~150–300ms)
-        // and the same commitment goes out repeatedly. Stale entries
-        // (older than `FROST_REBROADCAST_INTERVAL`) are eligible for
-        // re-broadcast — AlephBFT can drop a unit when its broadcast
-        // lands close to a session boundary in larger federations.
         let now = fedimint_core::time::now();
-        let in_flight_snapshot: BTreeSet<FrostSigningCommitments> = self
-            .frost
-            .in_flight_commitments
-            .lock()
-            .expect("in_flight_commitments mutex poisoned")
-            .iter()
-            .filter(|(_, t)| {
-                now.duration_since(**t).unwrap_or_default() < FROST_REBROADCAST_INTERVAL
-            })
-            .map(|(c, _)| c.clone())
-            .collect();
+        let mut items = self.propose_commitments(dbtx, now).await;
 
-        let new_commitments: Vec<FrostSigningCommitments> = my_nonces
-            .into_iter()
-            .filter_map(|(commitment, _)| {
-                let c = commitment.0;
-                (!my_commitments.contains(&c) && !in_flight_snapshot.contains(&c)).then_some(c)
-            })
-            .collect();
-
-        if !new_commitments.is_empty() {
-            tracing::info!(
-                target: LOG_MODULE_WALLETV2,
-                commitment_len = %new_commitments.len(),
-                "Added commitments to be broadcasted"
-            );
-
-            {
-                let mut in_flight = self
-                    .frost
-                    .in_flight_commitments
-                    .lock()
-                    .expect("in_flight_commitments mutex poisoned");
-                for c in &new_commitments {
-                    in_flight.insert(c.clone(), now);
-                }
-            }
-
-            items.extend(
-                new_commitments
-                    .into_iter()
-                    .map(|c| WalletConsensusItem::FrostSigningCommitments(Box::new(c))),
-            );
-        }
-
-        // Broadcast our pre-computed signature share for each active signing
-        // session. We compute the share inline in `process_input` /
-        // `process_output` when the unsigned tx is created and store it
-        // locally at our own peer_id; here we surface it so the other
-        // signers can aggregate. Receivers look up the (deterministic)
-        // SigningPackage and the FederationTx in their own DB by txid.
-        // The signing_session for each tx is read from FrostSigningAttemptKey
-        // — set when the tx was created — so the choice of signers is
-        // a per-tx fact, not a global constant.
+        // Per unsigned tx: an advance vote if its latest attempt is stuck,
+        // and — when we're in that attempt's signing session — our
+        // signature share. The signing_session is read from
+        // FrostSigningAttemptKey (set when the attempt was created), so
+        // the choice of signers is a per-tx fact, not a global constant.
         let txids = dbtx
             .find_by_prefix(&UnsignedTxPrefix)
             .await
@@ -529,123 +508,194 @@ impl Wallet {
                 continue;
             };
 
-            // If the current attempt has been waiting longer than our
-            // local advance timeout, broadcast a vote to abandon it.
-            // Any peer can vote, including non-session observers — they
-            // can see whose share is missing from their own DB.
-            let timer_expired = {
-                let mut map = self
-                    .frost
-                    .tx_attempt_first_seen
-                    .lock()
-                    .expect("tx_attempt_first_seen mutex poisoned");
-                let first_seen = map
-                    .entry((txid, latest_attempt))
-                    .or_insert_with(fedimint_core::time::now);
-                fedimint_core::time::now()
-                    .duration_since(*first_seen)
-                    .unwrap_or_default()
-                    > local_advance_timeout()
-            };
-            if timer_expired {
-                let in_flight = self
-                    .frost
-                    .in_flight_advance_votes
-                    .lock()
-                    .expect("in_flight_advance_votes mutex poisoned")
-                    .contains(&(txid, latest_attempt));
-                let already_voted = dbtx
-                    .get_value(&FrostAdvanceVoteKey {
-                        txid,
-                        attempt: latest_attempt,
-                        voter: self.our_peer_id,
-                    })
-                    .await
-                    .is_some();
-                if !in_flight && !already_voted {
-                    self.frost
-                        .in_flight_advance_votes
-                        .lock()
-                        .expect("in_flight_advance_votes mutex poisoned")
-                        .insert((txid, latest_attempt));
-                    tracing::info!(
-                        target: LOG_MODULE_WALLETV2,
-                        ?txid,
-                        attempt = latest_attempt,
-                        "Broadcasting FROST advance vote for stuck signing session"
-                    );
-                    items.push(WalletConsensusItem::FrostAdvanceVote((
-                        txid,
-                        latest_attempt,
-                    )));
-                }
-            }
+            items.extend(
+                self.propose_advance_vote(dbtx, txid, latest_attempt, now)
+                    .await,
+            );
 
-            if !attempt.signing_session.contains(&self.our_peer_id) {
-                continue;
-            }
-            // Skip if our share has already been delivered through
-            // consensus — no need to re-broadcast.
-            let already_delivered = dbtx
-                .get_value(&FrostSignatureShareKey {
-                    txid,
-                    attempt: latest_attempt,
-                    peer_id: self.our_peer_id,
-                })
-                .await
-                .is_some();
-            if already_delivered {
-                self.frost
-                    .broadcast_signature_shares
-                    .lock()
-                    .expect("broadcast_signature_shares mutex poisoned")
-                    .remove(&(txid, latest_attempt));
-                continue;
-            }
-            // Otherwise broadcast at most once per
-            // `REBROADCAST_INTERVAL`. AlephBFT can drop our unit when
-            // the broadcast lands close to a session boundary; the
-            // retry recovers without spamming every proposal cycle.
-            let now = fedimint_core::time::now();
-            let should_broadcast = {
-                let map = self
-                    .frost
-                    .broadcast_signature_shares
-                    .lock()
-                    .expect("broadcast_signature_shares mutex poisoned");
-                match map.get(&(txid, latest_attempt)) {
-                    None => true,
-                    Some(last) => {
-                        now.duration_since(*last).unwrap_or_default() >= FROST_REBROADCAST_INTERVAL
-                    }
-                }
-            };
-            if !should_broadcast {
-                continue;
-            }
-            let key = LocalFrostSignatureShareKey {
-                txid,
-                attempt: latest_attempt,
-            };
-            if let Some(shares) = dbtx.get_value(&key).await {
-                self.frost
-                    .broadcast_signature_shares
-                    .lock()
-                    .expect("broadcast_signature_shares mutex poisoned")
-                    .insert((txid, latest_attempt), now);
-                tracing::info!(
-                    target: LOG_MODULE_WALLETV2,
-                    "Broadcasting our FROST signature share"
+            if attempt.signing_session.contains(&self.our_peer_id) {
+                items.extend(
+                    self.propose_signature_share(dbtx, txid, latest_attempt, now)
+                        .await,
                 );
-                items.push(WalletConsensusItem::FrostSignatureShare((
-                    txid,
-                    latest_attempt,
-                    shares,
-                )));
             }
         }
 
         items
+    }
+
+    /// Propose every nonce commitment from our local buffer that hasn't
+    /// been delivered through consensus yet (per the consensus-replicated
+    /// `FrostSigningCommitmentsKey` state) and isn't recently in flight
+    /// (see [`InFlight`] for the pacing rationale).
+    async fn propose_commitments(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        now: SystemTime,
+    ) -> Vec<WalletConsensusItem> {
+        let my_commitments = dbtx
+            .find_by_prefix(&FrostSigningCommitmentsPeerPrefix(self.our_peer_id))
+            .await
+            .map(|c| c.0.frost_commitments)
+            .collect::<BTreeSet<_>>()
+            .await;
+
+        let my_nonces = dbtx
+            .find_by_prefix(&FrostSigningNoncesPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        let new_commitments: Vec<FrostSigningCommitments> = my_nonces
+            .into_iter()
+            .map(|(key, _)| key.0)
+            .filter(|c| !my_commitments.contains(c))
+            .filter(|c| self.frost.in_flight_commitments.try_claim(c.clone(), now))
+            .collect();
+
+        if !new_commitments.is_empty() {
+            tracing::info!(
+                target: LOG_MODULE_WALLETV2,
+                commitment_len = %new_commitments.len(),
+                "Added commitments to be broadcasted"
+            );
+        }
+
+        new_commitments
+            .into_iter()
+            .map(|c| WalletConsensusItem::FrostSigningCommitments(Box::new(c)))
+            .collect()
+    }
+
+    /// Broadcast a vote to start a fresh signing attempt once `(txid,
+    /// latest_attempt)` has been waiting longer than
+    /// `LOCAL_ADVANCE_TIMEOUT`. Any peer can vote, including non-session
+    /// observers — they can see whose share is missing from their own DB.
+    /// Returns `None` while the timer hasn't expired, we've already voted
+    /// (consensus DB state), or a recent broadcast is still in flight.
+    async fn propose_advance_vote(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        txid: Txid,
+        latest_attempt: u32,
+        now: SystemTime,
+    ) -> Option<WalletConsensusItem> {
+        let timer_expired = {
+            let mut map = self
+                .frost
+                .tx_attempt_first_seen
+                .lock()
+                .expect("tx_attempt_first_seen mutex poisoned");
+            let first_seen = map
+                .entry((txid, latest_attempt))
+                .or_insert_with(fedimint_core::time::now);
+            fedimint_core::time::now()
+                .duration_since(*first_seen)
+                .unwrap_or_default()
+                > LOCAL_ADVANCE_TIMEOUT
+        };
+        if !timer_expired {
+            return None;
+        }
+
+        let already_voted = dbtx
+            .get_value(&FrostAdvanceVoteKey {
+                txid,
+                attempt: latest_attempt,
+                voter: self.our_peer_id,
+            })
+            .await
+            .is_some();
+        if already_voted
+            || !self
+                .frost
+                .in_flight_advance_votes
+                .try_claim((txid, latest_attempt), now)
+        {
+            return None;
+        }
+
+        tracing::info!(
+            target: LOG_MODULE_WALLETV2,
+            ?txid,
+            attempt = latest_attempt,
+            "Broadcasting FROST advance vote for stuck signing session"
+        );
+        Some(WalletConsensusItem::FrostAdvanceVote(txid, latest_attempt))
+    }
+
+    /// Broadcast our pre-computed signature share for `(txid,
+    /// latest_attempt)`. The share was computed inline in `process_input`
+    /// / `process_output` when the unsigned tx was created and stashed
+    /// under `LocalFrostSignatureShareKey`; here we surface it so the
+    /// other signers can aggregate. Receivers look up the (deterministic)
+    /// `SigningPackage` and the `FederationTx` in their own DB by txid.
+    /// Returns `None` when our share has already been delivered through
+    /// consensus (also clears the pacing entry), when no share is stashed
+    /// for this attempt, or while a recent broadcast is still in flight.
+    async fn propose_signature_share(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        txid: Txid,
+        latest_attempt: u32,
+        now: SystemTime,
+    ) -> Option<WalletConsensusItem> {
+        // Skip if our share has already been delivered through
+        // consensus — no need to re-broadcast.
+        let already_delivered = dbtx
+            .get_value(&FrostSignatureShareKey {
+                txid,
+                attempt: latest_attempt,
+                peer_id: self.our_peer_id,
+            })
+            .await
+            .is_some();
+        if already_delivered {
+            self.frost
+                .broadcast_signature_shares
+                .clear(&(txid, latest_attempt));
+            return None;
+        }
+
+        let shares = dbtx
+            .get_value(&LocalFrostSignatureShareKey {
+                txid,
+                attempt: latest_attempt,
+            })
+            .await?;
+
+        // Broadcast at most once per `FROST_REBROADCAST_INTERVAL`
+        // (see [`InFlight`]).
+        if !self
+            .frost
+            .broadcast_signature_shares
+            .try_claim((txid, latest_attempt), now)
+        {
+            return None;
+        }
+
+        tracing::info!(
+            target: LOG_MODULE_WALLETV2,
+            "Broadcasting our FROST signature share"
+        );
+        Some(WalletConsensusItem::FrostSignatureShare(
+            txid,
+            latest_attempt,
+            shares,
+        ))
+    }
+
+    /// Reject FROST consensus items on federations whose descriptor isn't
+    /// [`WalletDescriptor::Frost`]. Called by `process_consensus_item` for
+    /// every `Frost*` item so malicious peers can't create FROST state on
+    /// non-FROST federations. The descriptor is consensus config, so every
+    /// guardian makes the same accept/reject decision.
+    pub(crate) fn ensure_frost_federation(&self) -> anyhow::Result<()> {
+        ensure!(
+            matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)),
+            "Received FROST consensus item on a non-FROST federation"
+        );
+        Ok(())
     }
 
     /// Handle a `WalletConsensusItem::FrostSigningCommitments` from `peer`:
@@ -660,6 +710,21 @@ impl Wallet {
         peer: PeerId,
         commitments: FrostSigningCommitments,
     ) -> anyhow::Result<()> {
+        // Bound the sender's replicated commitment pool. The cap is a
+        // hard constant rather than a multiple of the (per-guardian
+        // configurable) nonce buffer target so that every guardian
+        // reaches the same accept/reject decision — see
+        // [`MAX_PEER_COMMITMENT_POOL`].
+        let commitment_count = dbtx
+            .find_by_prefix(&FrostSigningCommitmentsPeerPrefix(peer))
+            .await
+            .count()
+            .await;
+        ensure!(
+            commitment_count < MAX_PEER_COMMITMENT_POOL,
+            "FROST commitment pool for peer {peer} is full"
+        );
+
         // Reject duplicates so they're not stored in `AcceptedItemKey`
         // and replayed on recovery. Mirrors the `Feerate` redundancy
         // handling.
@@ -678,16 +743,10 @@ impl Wallet {
             return Err(anyhow!("FROST signing commitment is redundant"));
         }
 
-        let commitment_count = dbtx
-            .find_by_prefix(&FrostSigningCommitmentsPeerPrefix(peer))
-            .await
-            .count()
-            .await;
-
         tracing::info!(
             target: LOG_MODULE_WALLETV2,
             ?peer,
-            commitment_count,
+            commitment_count = commitment_count + 1,
             target = frost_nonce_buffer_target(),
             "Stored FROST signing commitment"
         );
@@ -696,11 +755,7 @@ impl Wallet {
         // the in-flight set so the next `consensus_proposal` can
         // freely propose new commitments without the race window.
         if peer == self.our_peer_id {
-            self.frost
-                .in_flight_commitments
-                .lock()
-                .expect("in_flight_commitments mutex poisoned")
-                .remove(&commitments);
+            self.frost.in_flight_commitments.clear(&commitments);
         }
 
         // A fresh commitment may have unblocked a tx that was
@@ -768,10 +823,6 @@ impl Wallet {
         // or buggy peer here (where we can reject just their consensus
         // item) instead of at aggregation time, where one bad share
         // would otherwise blow up the whole session.
-        ensure!(
-            matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)),
-            "FrostSignatureShare on non-FROST federation",
-        );
         let pubkey_package_base = self
             .cfg
             .consensus
@@ -898,7 +949,13 @@ impl Wallet {
             // packages + signing-attempt record + advance votes
             // (across all attempts), and broadcast.
             let mut unsigned = unsigned_tx;
-            finalize_tx_frost(&mut unsigned, &final_sigs);
+            attach_key_path_witnesses(
+                &mut unsigned,
+                final_sigs.iter().map(|sig| {
+                    sig.serialize()
+                        .expect("FROST signature serializes to 64-byte BIP-340 form")
+                }),
+            );
 
             // Capture this guardian's local finalization-latency stat before
             // the cleanup below removes the attempt / advance-vote records and
@@ -909,7 +966,6 @@ impl Wallet {
             // attempt that ever ran — gets cleaned up here, since
             // shares, packages, and attempt records are all keyed
             // by `(txid, attempt)`.
-            dbtx.remove_entry(&UnsignedTxKey(txid)).await;
             dbtx.remove_by_prefix(&FrostSignatureShareTxidPrefix(txid))
                 .await;
             dbtx.remove_by_prefix(&LocalFrostSignatureShareTxidPrefix(txid))
@@ -920,28 +976,21 @@ impl Wallet {
                 .await;
             dbtx.remove_by_prefix(&FrostAdvanceVoteTxidPrefix(txid))
                 .await;
-            dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
-                .await;
             // Drop in-memory broadcast guards for this tx — no more
             // shares to broadcast and no more votes to file.
             self.frost
                 .broadcast_signature_shares
-                .lock()
-                .expect("broadcast_signature_shares mutex poisoned")
-                .retain(|(t, _), _| *t != txid);
+                .retain(|(t, _)| *t != txid);
+            self.frost
+                .in_flight_advance_votes
+                .retain(|(t, _)| *t != txid);
             self.frost
                 .tx_attempt_first_seen
                 .lock()
                 .expect("tx_attempt_first_seen mutex poisoned")
                 .retain(|(t, _), _| *t != txid);
 
-            if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
-                tracing::warn!(
-                    target: LOG_MODULE_WALLETV2,
-                    err = %err.fmt_compact_anyhow(),
-                    "Error broadcasting finalized FROST transaction"
-                );
-            }
+            self.finalize_and_broadcast(dbtx, txid, unsigned).await;
         } else {
             tracing::info!(
                 target: LOG_MODULE_WALLETV2,
@@ -1084,11 +1133,7 @@ impl Wallet {
         }
 
         if peer == self.our_peer_id {
-            self.frost
-                .in_flight_advance_votes
-                .lock()
-                .expect("in_flight_advance_votes mutex poisoned")
-                .remove(&(txid, attempt));
+            self.frost.in_flight_advance_votes.clear(&(txid, attempt));
         }
 
         tracing::info!(
@@ -1200,14 +1245,12 @@ impl Wallet {
     /// FROST. Errors building the attempt (typically a thin commitment
     /// buffer) are logged at `warn` level rather than propagated — the
     /// next `FrostSigningCommitments` processing will retry via
-    /// `try_progress_pending_signings`. `kind` is "receive" or "send"
-    /// for log clarity.
+    /// `try_progress_pending_signings`.
     pub(crate) async fn start_initial_frost_signing(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         unsigned: &FederationTx,
         txid: Txid,
-        kind: &'static str,
     ) {
         if !matches!(self.cfg.consensus.descriptor, WalletDescriptor::Frost(_)) {
             return;
@@ -1223,7 +1266,7 @@ impl Wallet {
                 target: LOG_MODULE_WALLETV2,
                 ?txid,
                 err = %err.fmt_compact_anyhow(),
-                "Couldn't start initial FROST signing attempt for {kind} tx; will retry when commitments replenish"
+                "Couldn't start initial FROST signing attempt; will retry when commitments replenish"
             );
         }
     }
@@ -1236,6 +1279,20 @@ impl Wallet {
 /// broadcast as a consensus item, so this also caps the per-peer commitment
 /// bytes flowing through `AlephBFT`.
 pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 64;
+
+/// Upper bound on the number of unused commitments any single peer may hold
+/// in the replicated pool. Without a cap, a malicious or misconfigured
+/// guardian could broadcast endless unique commitments and grow every
+/// guardian's DB without bound.
+///
+/// Consensus-critical: every guardian must reach the same accept/reject
+/// decision for every commitment item, so this must stay a hard constant —
+/// never derive it from the per-guardian
+/// [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] setting, and nonce buffer
+/// targets must stay comfortably below it (a guardian whose target reaches
+/// the cap would have its excess commitments uniformly rejected by the
+/// whole federation, itself included).
+pub(crate) const MAX_PEER_COMMITMENT_POOL: usize = 1024;
 
 /// Target size of the local FROST nonce buffer (see
 /// [`spawn_initial_nonce_backfill`]).
@@ -1273,9 +1330,7 @@ pub(crate) const FROST_REBROADCAST_INTERVAL: std::time::Duration =
 /// advance votes — premature advance creates a swarm of new attempts,
 /// which inflates consensus-item volume and can push `AlephBFT` past its
 /// per-instance byte budget at different boundaries on different peers.
-pub(crate) fn local_advance_timeout() -> std::time::Duration {
-    std::time::Duration::from_secs(30)
-}
+pub(crate) const LOCAL_ADVANCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// One-shot startup backfill: top the local FROST nonce buffer up to
 /// [`frost_nonce_buffer_target()`] and exit. After this, the buffer is
@@ -1313,30 +1368,6 @@ pub(crate) fn spawn_initial_nonce_backfill(
         }
         dbtx.commit_tx().await;
     });
-}
-
-/// Attach BIP-341 key-path witnesses (one 64-byte FROST/Schnorr signature
-/// per input) to `federation_tx`. Default sighash, so the witness for
-/// each input is just the 64-byte signature with no sighash-type byte
-/// appended.
-pub(crate) fn finalize_tx_frost(
-    federation_tx: &mut FederationTx,
-    signatures: &[frost_secp256k1_tr::Signature],
-) {
-    assert_eq!(
-        federation_tx.spent_tx_outs.len(),
-        federation_tx.tx.input.len()
-    );
-    assert_eq!(signatures.len(), federation_tx.tx.input.len());
-
-    for (index, sig) in signatures.iter().enumerate() {
-        let sig_bytes = sig
-            .serialize()
-            .expect("FROST signature serializes to 64-byte BIP-340 form");
-        let mut witness = bitcoin::Witness::new();
-        witness.push(&sig_bytes);
-        federation_tx.tx.input[index].witness = witness;
-    }
 }
 
 /// Convert a `PeerId` into a FROST `Identifier`.
@@ -1523,6 +1554,35 @@ pub(crate) async fn dkg(
     Ok((key_package, xonly, pubkey_package))
 }
 
+/// Homomorphically add `tweak·G` to a compressed-serialized secp256k1 point
+/// and return the tweaked point's compressed serialization. Common step of
+/// the per-UTXO tweak applied to FROST verifying keys and shares below.
+fn add_tweak_to_point(bytes: &[u8], tweak: &Scalar) -> [u8; 33] {
+    PublicKey::from_slice(bytes)
+        .expect("FROST element is a valid secp256k1 point")
+        .add_exp_tweak(secp256k1::SECP256K1, tweak)
+        .expect("Tweaked point is non-identity")
+        .serialize()
+}
+
+/// `Q_i`' = `Q_i` + `t·G`
+fn tweak_verifying_share(verifying_share: &VerifyingShare, tweak: &Scalar) -> VerifyingShare {
+    let bytes = verifying_share
+        .serialize()
+        .expect("FROST verifying share serializes");
+    VerifyingShare::deserialize(&add_tweak_to_point(&bytes, tweak))
+        .expect("Tweaked bytes are a valid verifying share")
+}
+
+/// `Q`' = `Q` + `t·G`
+fn tweak_verifying_key(verifying_key: &VerifyingKey, tweak: &Scalar) -> VerifyingKey {
+    let bytes = verifying_key
+        .serialize()
+        .expect("FROST verifying key serializes");
+    VerifyingKey::deserialize(&add_tweak_to_point(&bytes, tweak))
+        .expect("Tweaked bytes are a valid verifying key")
+}
+
 /// Apply the per-UTXO additive tweak to a FROST `KeyPackage` homomorphically:
 ///   `s_i`' = `s_i` + `t`,   `Q_i`' = `Q_i` + `t·G`,   `Q`' = `Q` + `t·G`
 ///
@@ -1548,33 +1608,11 @@ pub(crate) fn apply_utxo_tweak_to_key_package(
     let tweaked_signing_share = SigningShare::deserialize(&tweaked_sk.secret_bytes())
         .expect("Bytes are a valid signing share");
 
-    let vs_bytes = key_package
-        .verifying_share()
-        .serialize()
-        .expect("FROST verifying share serializes");
-    let tweaked_vs_pk = secp256k1::PublicKey::from_slice(&vs_bytes)
-        .expect("FROST verifying share is a valid public key")
-        .add_exp_tweak(secp256k1::SECP256K1, &tweak_scalar)
-        .expect("Tweaked verifying share is non-identity");
-    let tweaked_verifying_share = VerifyingShare::deserialize(&tweaked_vs_pk.serialize())
-        .expect("Bytes are a valid verifying share");
-
-    let vk_bytes = key_package
-        .verifying_key()
-        .serialize()
-        .expect("FROST verifying key serializes");
-    let tweaked_vk_pk = secp256k1::PublicKey::from_slice(&vk_bytes)
-        .expect("FROST verifying key is a valid public key")
-        .add_exp_tweak(secp256k1::SECP256K1, &tweak_scalar)
-        .expect("Tweaked verifying key is non-identity");
-    let tweaked_verifying_key = VerifyingKey::deserialize(&tweaked_vk_pk.serialize())
-        .expect("Bytes are a valid verifying key");
-
     KeyPackage::new(
         *key_package.identifier(),
         tweaked_signing_share,
-        tweaked_verifying_share,
-        tweaked_verifying_key,
+        tweak_verifying_share(key_package.verifying_share(), &tweak_scalar),
+        tweak_verifying_key(key_package.verifying_key(), &tweak_scalar),
         *key_package.min_signers(),
     )
 }
@@ -1593,35 +1631,15 @@ pub(crate) fn apply_utxo_tweak_to_pubkey_package(
     let tweak_scalar =
         Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
 
-    let vk_bytes = pubkey_package
-        .verifying_key()
-        .serialize()
-        .expect("FROST verifying key serializes");
-    let tweaked_vk_pk = secp256k1::PublicKey::from_slice(&vk_bytes)
-        .expect("FROST verifying key is a valid public key")
-        .add_exp_tweak(secp256k1::SECP256K1, &tweak_scalar)
-        .expect("Tweaked verifying key is non-identity");
-    let tweaked_verifying_key = VerifyingKey::deserialize(&tweaked_vk_pk.serialize())
-        .expect("Bytes are a valid verifying key");
-
     let tweaked_verifying_shares = pubkey_package
         .verifying_shares()
         .iter()
-        .map(|(id, vs)| {
-            let vs_bytes = vs.serialize().expect("FROST verifying share serializes");
-            let tweaked_vs_pk = secp256k1::PublicKey::from_slice(&vs_bytes)
-                .expect("FROST verifying share is a valid public key")
-                .add_exp_tweak(secp256k1::SECP256K1, &tweak_scalar)
-                .expect("Tweaked verifying share is non-identity");
-            let tweaked_vs = VerifyingShare::deserialize(&tweaked_vs_pk.serialize())
-                .expect("Bytes are a valid verifying share");
-            (*id, tweaked_vs)
-        })
+        .map(|(id, vs)| (*id, tweak_verifying_share(vs, &tweak_scalar)))
         .collect();
 
     PublicKeyPackage::new(
         tweaked_verifying_shares,
-        tweaked_verifying_key,
+        tweak_verifying_key(pubkey_package.verifying_key(), &tweak_scalar),
         pubkey_package.min_signers(),
     )
 }
@@ -1670,68 +1688,23 @@ fn frost_verifying_key_to_xonly(pubkey_package: &PublicKeyPackage) -> XOnlyPubli
 #[derive(Debug, Clone)]
 struct FrostPolynomial(frost::keys::dkg::round1::Package);
 
-impl Encodable for FrostPolynomial {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostPolynomial {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        frost::keys::dkg::round1::Package::deserialize(&bytes)
-            .map(FrostPolynomial)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(FrostPolynomial, frost::keys::dkg::round1::Package);
 
 #[derive(Debug, Clone)]
 struct FrostPolynomialCommitment(frost_secp256k1_tr::keys::dkg::round2::Package);
 
-impl Encodable for FrostPolynomialCommitment {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostPolynomialCommitment {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        frost_secp256k1_tr::keys::dkg::round2::Package::deserialize(&bytes)
-            .map(FrostPolynomialCommitment)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(
+    FrostPolynomialCommitment,
+    frost_secp256k1_tr::keys::dkg::round2::Package
+);
 
 #[derive(Debug, Clone)]
 pub struct FrostSigningNonces(pub frost::round1::SigningNonces);
 
-impl Encodable for FrostSigningNonces {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostSigningNonces {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        frost_secp256k1_tr::round1::SigningNonces::deserialize(&bytes)
-            .map(FrostSigningNonces)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(
+    FrostSigningNonces,
+    frost_secp256k1_tr::round1::SigningNonces
+);
 
 impl serde::Serialize for FrostSigningNonces {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -1747,24 +1720,7 @@ impl serde::Serialize for FrostSigningNonces {
 #[derive(Debug, Clone)]
 pub struct FrostSigningPackage(pub SigningPackage);
 
-impl Encodable for FrostSigningPackage {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostSigningPackage {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        SigningPackage::deserialize(&bytes)
-            .map(FrostSigningPackage)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(FrostSigningPackage, SigningPackage);
 
 impl serde::Serialize for FrostSigningPackage {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

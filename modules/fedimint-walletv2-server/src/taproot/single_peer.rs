@@ -2,15 +2,13 @@ use anyhow::{Context, bail, ensure};
 use bitcoin::key::TapTweak;
 use bitcoin::sighash::{Prevouts, SighashCache};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{BitcoinHash, PeerId};
-use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletDescriptor;
 use fedimint_walletv2_common::taproot::tweak_xonly_public_key;
 use secp256k1::{Keypair, Scalar, schnorr};
-use tracing::debug;
 
-use crate::db::{SchnorrSignaturesKey, UnconfirmedTxKey, UnsignedTxKey};
+use crate::db::{SchnorrSignaturesKey, UnsignedTxKey};
+use crate::taproot::attach_key_path_witnesses;
 use crate::{FederationTx, Wallet};
 
 impl Wallet {
@@ -42,15 +40,18 @@ impl Wallet {
             bail!("Already received valid signatures from this peer")
         }
 
-        dbtx.remove_entry(&UnsignedTxKey(txid)).await;
+        attach_key_path_witnesses(
+            &mut unsigned,
+            signatures.iter().map(|sig| {
+                bitcoin::taproot::Signature {
+                    signature: *sig,
+                    sighash_type: bitcoin::TapSighashType::Default,
+                }
+                .to_vec()
+            }),
+        );
 
-        Self::finalize_tx_single_peer(&mut unsigned, &signatures);
-
-        dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
-            .await;
-        if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
-            debug!(target: LOG_MODULE_WALLETV2, err = %err.fmt_compact_anyhow(), "Error broadcasting finalized transaction");
-        }
+        self.finalize_and_broadcast(dbtx, txid, unsigned).await;
 
         Ok(())
     }
@@ -149,35 +150,5 @@ impl Wallet {
         }
 
         Ok(())
-    }
-
-    /// Attach the key-path witness to each input of `federation_tx`
-    /// in-place. For BIP-341 key-path spends the witness is just the
-    /// 64-byte Schnorr signature (`SIGHASH_DEFAULT` keeps it 64 bytes;
-    /// any other sighash type would append a single byte). No script,
-    /// no control block — that's the whole point of collapsing to
-    /// `SinglePeer` instead of using the script-path multisig path.
-    fn finalize_tx_single_peer(
-        federation_tx: &mut FederationTx,
-        signatures: &[schnorr::Signature],
-    ) {
-        assert_eq!(
-            federation_tx.spent_tx_outs.len(),
-            federation_tx.tx.input.len()
-        );
-        assert_eq!(federation_tx.spent_tx_outs.len(), signatures.len());
-
-        for (index, sig) in signatures.iter().enumerate() {
-            // BIP-341 key-path witness: just the schnorr signature bytes.
-            // `SIGHASH_DEFAULT` keeps the witness at 64 bytes (no trailing
-            // sighash byte).
-            let bitcoin_sig = bitcoin::taproot::Signature {
-                signature: *sig,
-                sighash_type: bitcoin::TapSighashType::Default,
-            };
-            let mut witness = bitcoin::Witness::new();
-            witness.push(bitcoin_sig.to_vec());
-            federation_tx.tx.input[index].witness = witness;
-        }
     }
 }
