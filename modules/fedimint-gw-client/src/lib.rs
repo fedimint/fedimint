@@ -624,7 +624,13 @@ impl GatewayClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                GatewayExtReceiveStates::Funding => false,
+                GatewayExtReceiveStates::Preimage(_)
+                | GatewayExtReceiveStates::RefundSuccess { .. }
+                | GatewayExtReceiveStates::RefundError { .. }
+                | GatewayExtReceiveStates::FundingFailed { .. } => true,
+            }, move || {
             stream! {
 
                 yield GatewayExtReceiveStates::Funding;
@@ -773,7 +779,13 @@ impl GatewayClientModule {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                GatewayExtPayStates::Created | GatewayExtPayStates::Preimage { .. } => false,
+                GatewayExtPayStates::Success { .. }
+                | GatewayExtPayStates::Canceled { .. }
+                | GatewayExtPayStates::Fail { .. }
+                | GatewayExtPayStates::OfferDoesNotExist { .. } => true,
+            }, move || {
             stream! {
                 yield GatewayExtPayStates::Created;
 

@@ -1525,7 +1525,14 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                InternalPayState::Funding => false,
+                InternalPayState::Preimage(_)
+                | InternalPayState::RefundSuccess { .. }
+                | InternalPayState::RefundError { .. }
+                | InternalPayState::FundingFailed { .. }
+                | InternalPayState::UnexpectedError(_) => true,
+            }, move || {
             stream! {
                 yield InternalPayState::Funding;
 
@@ -1591,7 +1598,16 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                LnPayState::Created
+                | LnPayState::Funded { .. }
+                | LnPayState::WaitingForRefund { .. }
+                | LnPayState::AwaitingChange => false,
+                LnPayState::Success { .. }
+                | LnPayState::Canceled
+                | LnPayState::Refunded { .. }
+                | LnPayState::UnexpectedError { .. } => true,
+            }, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
@@ -2151,7 +2167,13 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                LnReceiveState::Created
+                | LnReceiveState::WaitingForPayment { .. }
+                | LnReceiveState::Funded
+                | LnReceiveState::AwaitingFunds => false,
+                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
+            }, move || {
             stream! {
                 yield LnReceiveState::AwaitingFunds;
 
@@ -2187,7 +2209,13 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                LnReceiveState::Created
+                | LnReceiveState::WaitingForPayment { .. }
+                | LnReceiveState::Funded
+                | LnReceiveState::AwaitingFunds => false,
+                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
+            }, move || {
             stream! {
 
                 let self_ref = client_ctx.self_ref();

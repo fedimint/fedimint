@@ -3,12 +3,12 @@ use std::future;
 use std::time::SystemTime;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 use futures::{StreamExt, stream};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -54,13 +54,19 @@ pub trait IOperationLog {
         operation_meta: serde_json::Value,
     );
 
-    fn outcome_or_updates(
+    /// Wrap a module's operation update stream so that its last update is
+    /// cached as the operation's outcome — only when `is_terminal` reports
+    /// that update as a final state of the operation. Outcome resolution
+    /// (returning a cached outcome instead of a stream) happens in the typed
+    /// caller ([`crate::module::ClientContext::outcome_or_updates`]), which
+    /// can deserialize the cached value into the module's update type and
+    /// fall back to this stream when that fails.
+    fn caching_operation_update_stream(
         &self,
-        db: &Database,
         operation_id: OperationId,
-        operation_log_entry: OperationLogEntry,
-        stream_gen: Box<dyn FnOnce() -> BoxStream<'static, serde_json::Value>>,
-    ) -> UpdateStreamOrOutcome<serde_json::Value>;
+        stream_gen: Box<maybe_add_send!(dyn FnOnce() -> BoxStream<'static, serde_json::Value>)>,
+        is_terminal: Box<maybe_add_send_sync!(dyn Fn(&serde_json::Value) -> bool)>,
+    ) -> BoxStream<'static, serde_json::Value>;
 }
 
 /// Represents the outcome of an operation, combining both the outcome value and

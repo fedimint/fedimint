@@ -75,8 +75,13 @@ async fn test_operation_log_update() {
     assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
     assert!(op.outcome_time().is_some(), "outcome_time should be set");
 
-    let update_stream_or_outcome =
-        OperationLog::outcome_or_updates::<String, _>(&db, op_id, op, futures::stream::empty);
+    let update_stream_or_outcome = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |_| true,
+        futures::stream::empty,
+    );
 
     assert_matches!(
         &update_stream_or_outcome,
@@ -106,9 +111,13 @@ async fn test_operation_log_update_from_stream() {
     let op = op_log.get_operation(op_id).await.expect("op exists");
 
     let updates = vec!["bar".to_owned(), "bob".to_owned(), "baz".to_owned()];
-    let update_stream = OperationLog::outcome_or_updates::<String, _>(&db, op_id, op, || {
-        futures::stream::iter(updates.clone())
-    });
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |_| true,
+        || futures::stream::iter(updates.clone()),
+    );
 
     let received_updates = update_stream.into_stream().collect::<Vec<_>>().await;
     assert_eq!(received_updates, updates);
@@ -118,6 +127,163 @@ async fn test_operation_log_update_from_stream() {
     assert!(
         op_updated.outcome_time().is_some(),
         "outcome_time should be set after stream completion"
+    );
+}
+
+/// A stream that ends on a NON-terminal update must not cache that update as
+/// the operation's outcome: [`OperationLog::outcome_or_updates`]
+/// short-circuits every later subscriber to a cached outcome, so caching a
+/// non-terminal update would freeze the operation's observable state before
+/// its actual end (e.g. an error-path early return in a module's stream
+/// generator).
+#[tokio::test]
+async fn test_no_outcome_cached_for_non_terminal_stream_end() {
+    let op_id = OperationId([0x32; 32]);
+
+    let db = MemDatabase::new().into_database();
+    let op_log = OperationLog::new(db.clone());
+
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .await;
+    dbtx.commit_tx().await;
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+
+    // "pending" is not terminal, and the stream ends right after it.
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        || futures::stream::iter(vec!["created".to_owned(), "pending".to_owned()]),
+    );
+    let received = update_stream.into_stream().collect::<Vec<_>>().await;
+    assert_eq!(received, vec!["created".to_owned(), "pending".to_owned()]);
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    assert_eq!(
+        op.outcome::<String>(),
+        None,
+        "a non-terminal last update must not be cached as the outcome"
+    );
+
+    // A later subscription re-derives the full sequence and, once the stream
+    // ends on a terminal update, caches it.
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        || {
+            futures::stream::iter(vec![
+                "created".to_owned(),
+                "pending".to_owned(),
+                "final".to_owned(),
+            ])
+        },
+    );
+    let _ = update_stream.into_stream().collect::<Vec<_>>().await;
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    assert_eq!(op.outcome::<String>(), Some("final".to_owned()));
+}
+
+/// A cached outcome that is NOT a terminal update — one frozen by a previous
+/// version that cached whatever update a stream ended on — must not
+/// short-circuit subscribers: it is discarded and the state is rebuilt from
+/// the update stream, whose terminal end then overwrites the stale cache.
+#[tokio::test]
+async fn test_non_terminal_cached_outcome_falls_back_to_update_stream() {
+    let op_id = OperationId([0x32; 32]);
+
+    let db = MemDatabase::new().into_database();
+    let op_log = OperationLog::new(db.clone());
+
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .await;
+    dbtx.commit_tx().await;
+
+    // A previous version cached a non-terminal update as the outcome.
+    OperationLog::set_operation_outcome(&db, op_id, &"pending")
+        .await
+        .unwrap();
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        || futures::stream::iter(vec!["pending".to_owned(), "final".to_owned()]),
+    );
+    assert_matches!(
+        &update_stream,
+        UpdateStreamOrOutcome::UpdateStream(_),
+        "a non-terminal cached outcome must not short-circuit subscribers"
+    );
+    let received = update_stream.into_stream().collect::<Vec<_>>().await;
+    assert_eq!(received, vec!["pending".to_owned(), "final".to_owned()]);
+
+    // The re-derived terminal has overwritten the stale cache, so the next
+    // subscriber short-circuits to the true outcome.
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    assert_eq!(op.outcome::<String>(), Some("final".to_owned()));
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |update| update == "final",
+        futures::stream::empty,
+    );
+    assert_matches!(
+        &update_stream,
+        UpdateStreamOrOutcome::Outcome(o) if o == "final"
+    );
+}
+
+/// A cached outcome that no longer deserializes into the expected update type
+/// (e.g. written by an older version with a different update enum) must not
+/// panic: it is discarded and the state is rebuilt from the update stream,
+/// whose terminal end then overwrites the stale outcome.
+#[tokio::test]
+async fn test_undeserializable_outcome_falls_back_to_update_stream() {
+    let op_id = OperationId([0x32; 32]);
+
+    let db = MemDatabase::new().into_database();
+    let op_log = OperationLog::new(db.clone());
+
+    let mut dbtx = db.begin_transaction().await;
+    op_log
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .await;
+    dbtx.commit_tx().await;
+
+    // Cache an outcome of a shape the consumer type (String) cannot represent.
+    OperationLog::set_operation_outcome(&db, op_id, &serde_json::json!({"old": "schema"}))
+        .await
+        .unwrap();
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    let update_stream = OperationLog::outcome_or_updates::<String, _>(
+        &db,
+        op_id,
+        &op,
+        |_| true,
+        || futures::stream::iter(vec!["rebuilt".to_owned()]),
+    );
+    assert_matches!(&update_stream, UpdateStreamOrOutcome::UpdateStream(_));
+    let received = update_stream.into_stream().collect::<Vec<_>>().await;
+    assert_eq!(received, vec!["rebuilt".to_owned()]);
+
+    let op = op_log.get_operation(op_id).await.expect("op exists");
+    assert_eq!(
+        op.outcome::<String>(),
+        Some("rebuilt".to_owned()),
+        "the stale outcome is overwritten by the re-derived terminal"
     );
 }
 

@@ -689,7 +689,14 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let module_api = self.module_api.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                SendOperationState::Funding
+                | SendOperationState::Funded
+                | SendOperationState::Refunding => false,
+                SendOperationState::Success(_)
+                | SendOperationState::Refunded
+                | SendOperationState::Failure => true,
+            }, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
@@ -1105,7 +1112,12 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                ReceiveOperationState::Pending | ReceiveOperationState::Claiming => false,
+                ReceiveOperationState::Expired
+                | ReceiveOperationState::Claimed
+                | ReceiveOperationState::Failure => true,
+            }, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {

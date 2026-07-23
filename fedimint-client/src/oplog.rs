@@ -11,8 +11,8 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
-use fedimint_core::util::BoxStream;
-use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_core::util::{BoxStream, FmtCompact as _};
+use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use serde::Serialize;
@@ -235,24 +235,57 @@ impl OperationLog {
     /// an update stream for easier handling using
     /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
     /// shortcut the handling of final outcomes.
+    ///
+    /// `is_terminal` reports whether a given update is a final state of the
+    /// operation (no further update will ever follow it). Only terminal
+    /// updates are cached as the operation's outcome — an update stream that
+    /// ends early (a consumer-side error path) must not persist a
+    /// non-terminal update as the durable outcome, since later subscribers
+    /// would then be short-circuited to it forever. The same predicate also
+    /// validates outcomes READ from the cache: a cached outcome that no
+    /// longer deserializes (e.g. written by an older version with a different
+    /// update type) or that is non-terminal (frozen by a previous version
+    /// that cached whatever update a stream ended on) is discarded with a
+    /// warning and the outcome is rebuilt from the update stream — whose
+    /// terminal end then overwrites the stale cache — instead of
+    /// short-circuiting subscribers to it or panicking.
     pub fn outcome_or_updates<U, S>(
         db: &Database,
         operation_id: OperationId,
-        operation_log_entry: OperationLogEntry,
+        operation_log_entry: &OperationLogEntry,
+        is_terminal: impl Fn(&U) -> bool + MaybeSend + MaybeSync + 'static,
         stream_gen: impl FnOnce() -> S,
     ) -> UpdateStreamOrOutcome<U>
     where
         U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
         S: futures::Stream<Item = U> + MaybeSend + 'static,
     {
-        match operation_log_entry.outcome::<U>() {
-            Some(outcome) => UpdateStreamOrOutcome::Outcome(outcome),
-            None => UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
-                db.clone(),
-                operation_id,
-                stream_gen(),
-            )),
+        match operation_log_entry.try_outcome::<U>() {
+            Ok(Some(outcome)) if is_terminal(&outcome) => {
+                return UpdateStreamOrOutcome::Outcome(outcome);
+            }
+            Ok(Some(_non_terminal)) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    "Cached operation outcome is not a terminal update (cached by a previous \
+                     version); rebuilding it from the update stream"
+                );
+            }
+            Ok(None) => {}
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    err = %err.fmt_compact(),
+                    "Cached operation outcome failed to deserialize; rebuilding it from the update stream"
+                );
+            }
         }
+        UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
+            db.clone(),
+            operation_id,
+            stream_gen(),
+            is_terminal,
+        ))
     }
 
     /// Tries to set the outcome of an operation, but only logs an error if it
@@ -304,19 +337,13 @@ impl IOperationLog for OperationLog {
         .await
     }
 
-    fn outcome_or_updates(
+    fn caching_operation_update_stream(
         &self,
-        db: &Database,
         operation_id: OperationId,
-        operation: OperationLogEntry,
-        stream_gen: Box<dyn FnOnce() -> BoxStream<'static, serde_json::Value>>,
-    ) -> UpdateStreamOrOutcome<serde_json::Value> {
-        match OperationLog::outcome_or_updates(db, operation_id, operation, stream_gen) {
-            UpdateStreamOrOutcome::UpdateStream(pin) => UpdateStreamOrOutcome::UpdateStream(pin),
-            UpdateStreamOrOutcome::Outcome(o) => {
-                UpdateStreamOrOutcome::Outcome(serde_json::from_value(o).expect("Can't fail"))
-            }
-        }
+        stream_gen: Box<maybe_add_send!(dyn FnOnce() -> BoxStream<'static, serde_json::Value>)>,
+        is_terminal: Box<maybe_add_send_sync!(dyn Fn(&serde_json::Value) -> bool)>,
+    ) -> BoxStream<'static, serde_json::Value> {
+        caching_operation_update_stream(self.db.clone(), operation_id, stream_gen(), is_terminal)
     }
 }
 
@@ -386,11 +413,18 @@ fn rev_epoch_ranges(
 }
 
 /// Wraps an operation update stream such that the last update before it closes
-/// is tried to be written to the operation log entry as its outcome.
+/// is tried to be written to the operation log entry as its outcome — but only
+/// if `is_terminal` reports it as a final state of the operation. A stream
+/// that ends on a non-terminal update (e.g. an error-path early return in the
+/// stream generator) must not have that update cached as the outcome:
+/// [`OperationLog::outcome_or_updates`] short-circuits every later subscriber
+/// to the cached value, so caching a non-terminal update would freeze the
+/// operation's observable state before its actual end.
 pub fn caching_operation_update_stream<'a, U, S>(
     db: Database,
     operation_id: OperationId,
     stream: S,
+    is_terminal: impl Fn(&U) -> bool + MaybeSend + 'a,
 ) -> BoxStream<'a, U>
 where
     U: Clone + Serialize + Debug + MaybeSend + MaybeSync + 'static,
@@ -411,6 +445,15 @@ where
             );
             return;
         };
+
+        if !is_terminal(&last_update) {
+            warn!(
+                target: LOG_CLIENT,
+                ?last_update,
+                "Operation update stream ended on a non-terminal update; not caching an outcome"
+            );
+            return;
+        }
 
         OperationLog::optimistically_set_operation_outcome(&db, operation_id, &last_update).await;
     })
