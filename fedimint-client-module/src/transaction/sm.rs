@@ -15,7 +15,9 @@ use tokio::sync::watch;
 use tracing::{debug, warn};
 
 use crate::sm::{Context, DynContext, State, StateTransition};
-use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
+use crate::{
+    DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent, TxSubmissionStalledEvent,
+};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
@@ -268,6 +270,18 @@ impl TxSubmissionStates {
                                 %elapsed_s,
                                 "Transaction neither accepted nor rejected; still re-submitting",
                             );
+                            // Surface the same condition to integrators as a
+                            // transient (non-persisted) event, at the same cadence
+                            // as the warn. No dbtx is in scope here, so this opens
+                            // its own.
+                            context
+                                .log_event_no_dbtx(TxSubmissionStalledEvent {
+                                    txid,
+                                    operation_id,
+                                    attempt,
+                                    elapsed_s,
+                                })
+                                .await;
                         }
                     }
 
