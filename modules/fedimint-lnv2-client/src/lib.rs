@@ -679,6 +679,55 @@ impl LightningClientModule {
         Ok(operation_id)
     }
 
+    /// The status of a previous [`Self::send`] for this invoice.
+    ///
+    /// Callers deciding whether an invoice is safe to pay through another
+    /// mechanism must treat anything but [`InvoiceSendStatus::NotAttempted`]
+    /// as a potential double payment.
+    pub async fn get_invoice_send_status(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<InvoiceSendStatus> {
+        // Send only creates attempt index 0 nowadays, but older clients
+        // allocated a fresh index per retry, so scan for the latest attempt.
+        // No new attempt was ever allocated after a success, so the latest
+        // attempt alone determines the status.
+        let mut last_op = None;
+
+        for attempt in 0_u64.. {
+            let operation_id = OperationId::from_encodable(&(invoice.clone(), attempt));
+
+            if !self.client_ctx.operation_exists(operation_id).await {
+                break;
+            }
+
+            last_op = Some(operation_id);
+        }
+
+        let Some(operation_id) = last_op else {
+            return Ok(InvoiceSendStatus::NotAttempted);
+        };
+
+        if self.client_ctx.has_active_states(operation_id).await {
+            return Ok(InvoiceSendStatus::InFlight(operation_id));
+        }
+
+        // The operation is finished; replaying its (already terminated) update
+        // stream yields the cached outcome without blocking.
+        let mut stream = self
+            .subscribe_send_operation_state_updates(operation_id)
+            .await?
+            .into_stream();
+
+        while let Some(state) = stream.next().await {
+            if let SendOperationState::Success(_) = state {
+                return Ok(InvoiceSendStatus::Succeeded(operation_id));
+            }
+        }
+
+        Ok(InvoiceSendStatus::Failed(operation_id))
+    }
+
     /// Subscribe to all state updates of the send operation.
     pub async fn subscribe_send_operation_state_updates(
         &self,
@@ -1287,6 +1336,21 @@ pub enum SelectGatewayError {
     NoGatewaysAvailable,
     #[error("All gateways failed to respond")]
     GatewaysUnresponsive,
+}
+
+/// The status of the latest send attempt for an invoice, derived from the
+/// operation log.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum InvoiceSendStatus {
+    /// No payment operation exists for this invoice.
+    NotAttempted,
+    /// A payment operation is still being driven to completion.
+    InFlight(OperationId),
+    /// The payment succeeded; paying the invoice again would be a double
+    /// payment.
+    Succeeded(OperationId),
+    /// The payment failed and any funds were refunded.
+    Failed(OperationId),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
