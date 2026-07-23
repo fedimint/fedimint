@@ -112,7 +112,7 @@ pub(crate) async fn handle_cli_command(
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
             GatewaysOpts::Map => json(lightning.update_gateway_map().await),
-            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
+            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice)?.0),
             GatewaysOpts::List { peer } => json(lightning.list_gateways(peer).await?),
             GatewaysOpts::Add { gateway } => {
                 let auth = lightning
