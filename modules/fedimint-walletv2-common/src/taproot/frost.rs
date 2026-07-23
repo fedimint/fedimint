@@ -4,6 +4,37 @@ use frost_secp256k1_tr::keys::PublicKeyPackage;
 use frost_secp256k1_tr::round2::SignatureShare;
 use serde::{Deserialize, Serialize};
 
+/// Implements `Encodable`/`Decodable` for a newtype wrapping a FROST type by
+/// bridging through the FROST type's own byte serialization: encoding writes
+/// `self.0.serialize()` as a length-prefixed byte vector, decoding reads the
+/// byte vector back through `<Inner>::deserialize`.
+#[macro_export]
+macro_rules! impl_frost_encodable {
+    ($wrapper:ident, $inner:ty) => {
+        impl ::fedimint_core::encoding::Encodable for $wrapper {
+            fn consensus_encode<W: ::std::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> ::std::result::Result<(), ::std::io::Error> {
+                let bytes = self.0.serialize().map_err(::std::io::Error::other)?;
+                ::fedimint_core::encoding::Encodable::consensus_encode(&bytes, writer)
+            }
+        }
+
+        impl ::fedimint_core::encoding::Decodable for $wrapper {
+            fn consensus_decode_partial<R: ::std::io::Read>(
+                r: &mut R,
+                modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
+            ) -> ::std::result::Result<Self, ::fedimint_core::encoding::DecodeError> {
+                let bytes = <::std::vec::Vec<u8> as ::fedimint_core::encoding::Decodable>::consensus_decode_partial(r, modules)?;
+                <$inner>::deserialize(&bytes)
+                    .map($wrapper)
+                    .map_err(::fedimint_core::encoding::DecodeError::from_err)
+            }
+        }
+    };
+}
+
 /// Per-guardian, locally-measured record of how long a single transaction took
 /// to reach a finalized (threshold-aggregated) FROST signature on *this*
 /// guardian. Served, keyed by `txid`, by the authenticated
@@ -33,24 +64,10 @@ pub struct FrostFinalizationStat {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostSigningCommitments(pub frost_secp256k1_tr::round1::SigningCommitments);
 
-impl Encodable for FrostSigningCommitments {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostSigningCommitments {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        frost_secp256k1_tr::round1::SigningCommitments::deserialize(&bytes)
-            .map(FrostSigningCommitments)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(
+    FrostSigningCommitments,
+    frost_secp256k1_tr::round1::SigningCommitments
+);
 
 impl std::hash::Hash for FrostSigningCommitments {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -84,24 +101,7 @@ impl PartialOrd for FrostSigningCommitments {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostPublicKeyPackage(pub PublicKeyPackage);
 
-impl Encodable for FrostPublicKeyPackage {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let bytes = self.0.serialize().map_err(std::io::Error::other)?;
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for FrostPublicKeyPackage {
-    fn consensus_decode_partial<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode_partial(r, modules)?;
-        PublicKeyPackage::deserialize(&bytes)
-            .map(FrostPublicKeyPackage)
-            .map_err(DecodeError::from_err)
-    }
-}
+impl_frost_encodable!(FrostPublicKeyPackage, PublicKeyPackage);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostSignatureShares {

@@ -143,8 +143,8 @@ pub enum WalletConsensusItem {
     Signatures(Txid, Vec<Signature>),
     SchnorrSignatures(Txid, Vec<schnorr::Signature>),
     FrostSigningCommitments(Box<FrostSigningCommitments>),
-    FrostSignatureShare((Txid, u32, FrostSignatureShares)),
-    FrostAdvanceVote((Txid, u32)),
+    FrostSignatureShare(Txid, u32, FrostSignatureShares),
+    FrostAdvanceVote(Txid, u32),
     #[encodable_default]
     Default {
         variant: u64,
@@ -173,7 +173,7 @@ impl std::fmt::Display for WalletConsensusItem {
             WalletConsensusItem::FrostSignatureShare(..) => {
                 write!(f, "Frost Signature Shares")
             }
-            WalletConsensusItem::FrostAdvanceVote((txid, attempt)) => {
+            WalletConsensusItem::FrostAdvanceVote(txid, attempt) => {
                 write!(f, "Frost Advance Vote ({txid}, attempt {attempt})")
             }
             WalletConsensusItem::Default { variant, .. } => {
