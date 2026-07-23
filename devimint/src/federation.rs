@@ -886,8 +886,13 @@ impl Federation {
         // and we need to check balance change rather than absolute balance
         // (same approach as pegin_client).
         let uses_walletv2 = crate::util::supports_wallet_v2();
+        let walletv2_await_receive = uses_walletv2
+            && crate::util::GatewayCli::version_or_default().await >= *VERSION_0_12_0_ALPHA
+            && gateways
+                .iter()
+                .all(|gw| gw.gatewayd_version >= *VERSION_0_12_0_ALPHA);
         let mut initial_balances = Vec::new();
-        if uses_walletv2 {
+        if uses_walletv2 && !walletv2_await_receive {
             for gw in &gateways {
                 let balance = gw
                     .client()
@@ -899,20 +904,30 @@ impl Federation {
         }
 
         let mut gateway_deposit_addrs = Vec::new();
+        let mut gateway_deposit_positions = Vec::new();
         for gw in gateways.clone() {
-            let pegin_addr = gw.client().get_pegin_addr(&fed_id).await?;
+            let (pegin_addr, pegin_position) = if walletv2_await_receive {
+                gw.client()
+                    .get_pegin_addr_with_event_log_position(&fed_id)
+                    .await?
+            } else {
+                (gw.client().get_pegin_addr(&fed_id).await?, String::new())
+            };
             debug!(
                 gateway = %gw.gw_name,
                 ln = %gw.ln.ln_type(),
                 address = %pegin_addr,
+                position = %pegin_position,
                 amount_sats = amount + deposit_fees,
                 uses_walletv2,
+                walletv2_await_receive,
                 "Sending gateway pegin"
             );
             self.bitcoind
                 .send_to(pegin_addr.clone(), amount + deposit_fees)
                 .await?;
             gateway_deposit_addrs.push(pegin_addr);
+            gateway_deposit_positions.push(pegin_position);
         }
 
         let pegin_start = Instant::now();
@@ -923,6 +938,38 @@ impl Federation {
             elapsed_ms = %pegin_start.elapsed().as_millis(),
             "Mined gateway pegin blocks"
         );
+
+        if walletv2_await_receive {
+            try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
+                let fed_id = fed_id.clone();
+                let gateway_name = gw.gw_name.clone();
+                let gateway_ln = gw.ln.ln_type().to_string();
+                let deposit_address = gateway_deposit_addrs[i].clone();
+                let position = gateway_deposit_positions[i].clone();
+                async move {
+                    gw.client()
+                        .await_pegin(&fed_id, &position)
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "Waiting for gateway {gateway_name} ({gateway_ln}) pegin at deposit address {deposit_address} from event log position {position}"
+                            )
+                        })?;
+                    debug!(
+                        gateway = %gateway_name,
+                        ln = %gateway_ln,
+                        address = %deposit_address,
+                        position = %position,
+                        elapsed_ms = %pegin_start.elapsed().as_millis(),
+                        "Walletv2 gateway pegin receive completed"
+                    );
+                    Ok::<(), anyhow::Error>(())
+                }
+            }))
+            .await?;
+
+            return Ok(());
+        }
 
         try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
             let initial_balance = if uses_walletv2 {

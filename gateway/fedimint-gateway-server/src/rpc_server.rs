@@ -13,16 +13,17 @@ use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact;
 use fedimint_gateway_common::{
-    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, ADDRESS_WITH_EVENT_LOG_POSITION_ENDPOINT,
+    AWAIT_DEPOSIT_ENDPOINT, AwaitDepositPayload, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
     CONNECT_PEER_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, CloseChannelsWithPeerRequest, ConfigPayload,
     ConnectFedPayload, ConnectPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    DepositAddressPayload, DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
-    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
+    DepositAddressPayload, DepositAddressRecheckPayload, DepositAddressWithEventLogPositionPayload,
+    GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
     PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload, PeginFromOnchainPayload,
@@ -305,6 +306,20 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        ADDRESS_WITH_EVENT_LOG_POSITION_ENDPOINT,
+        address_with_event_log_position,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
+        AWAIT_DEPOSIT_ENDPOINT,
+        await_deposit,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         WITHDRAW_ENDPOINT,
         withdraw,
         is_authenticated,
@@ -562,6 +577,28 @@ async fn address(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let address = gateway.handle_address_msg(payload).await?;
     Ok(Json(json!(address)))
+}
+
+/// Generate a walletv2 deposit address with an event log position to wait from.
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn address_with_event_log_position(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<DepositAddressWithEventLogPositionPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let response = gateway
+        .handle_address_with_event_log_position_msg(payload)
+        .await?;
+    Ok(Json(json!(response)))
+}
+
+/// Wait for a walletv2 deposit to reach a final receive state.
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn await_deposit(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<AwaitDepositPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let response = gateway.handle_await_deposit_msg(payload).await?;
+    Ok(Json(json!(response)))
 }
 
 /// Pegs in funds from the gateway's onchain wallet
