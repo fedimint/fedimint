@@ -18,7 +18,7 @@ use axum::extract::{Query, State};
 use axum::http::header;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Form, Router};
+use axum::{Form, Router, middleware};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_core::bitcoin::Network;
@@ -41,7 +41,7 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::auth::{UserAuth, csrf_protection_middleware};
 use fedimint_ui_common::{
     LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, dashboard_layout,
     login_form as render_login_form, single_card_layout,
@@ -524,7 +524,8 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
             MNEMONIC_IFRAME_ROUTE,
             get(mnemonic_iframe_handler).post(mnemonic_reveal_handler),
         )
-        .with_static_routes();
+        .with_static_routes()
+        .layer(middleware::from_fn(csrf_protection_middleware));
 
     app.with_state(UiState::new(api, true))
 }

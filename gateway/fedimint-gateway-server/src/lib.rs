@@ -2877,8 +2877,14 @@ impl IAdminGateway for Gateway {
     /// Set the gateway's root mnemonic by generating a new one or using the
     /// words provided in `SetMnemonicPayload`.
     async fn handle_set_mnemonic_msg(&self, payload: SetMnemonicPayload) -> AdminResult<()> {
+        // The state lock must be held from the `NotConfigured` check until the
+        // transition to `Disconnected`, otherwise a concurrent call could pass
+        // the check, lose the race for the seed write, and leave the gateway
+        // stuck in `NotConfigured` with a seed already stored
+        let mut state_guard = self.state.write().await;
+
         // Verify the state is NotConfigured
-        let GatewayState::NotConfigured { mnemonic_sender } = self.get_state().await else {
+        let GatewayState::NotConfigured { mnemonic_sender } = state_guard.clone() else {
             return Err(AdminGatewayError::MnemonicError(anyhow!(
                 "Gateway is not is NotConfigured state"
             )));
@@ -2900,7 +2906,8 @@ impl IAdminGateway for Gateway {
             .await
             .map_err(AdminGatewayError::MnemonicError)?;
 
-        self.set_gateway_state(GatewayState::Disconnected).await;
+        *state_guard = GatewayState::Disconnected;
+        drop(state_guard);
 
         // Alert the gateway background threads that the mnemonic has been set
         let _ = mnemonic_sender.send(());
