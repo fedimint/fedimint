@@ -274,7 +274,7 @@ mod tests {
             .spend_notes_with_selector(
                 &SelectNotesWithAtleastAmount,
                 Amount::from_sats(11),
-                Duration::from_secs(10000),
+                Some(Duration::from_secs(10000)),
                 false,
                 (),
             )
@@ -309,7 +309,7 @@ mod tests {
                 .spend_notes_with_selector(
                     &SelectNotesWithAtleastAmount,
                     amount,
-                    Duration::from_secs(10000),
+                    Some(Duration::from_secs(10000)),
                     false,
                     (),
                 )

@@ -45,6 +45,10 @@ impl Event for SendPaymentUpdateEvent {
 pub struct ReceivePaymentEvent {
     pub operation_id: OperationId,
     pub amount: Amount,
+    /// Absolute fee paid to the gateway. Defaults to zero for events recorded
+    /// before this field was added.
+    #[serde(default)]
+    pub fee: Amount,
 }
 
 impl Event for ReceivePaymentEvent {

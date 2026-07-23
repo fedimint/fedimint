@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::envs::{
+    FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV, FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
     FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
     parse_kv_list_from_env,
 };
@@ -81,7 +83,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
-use iroh_base::ticket::NodeTicket;
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tokio::sync::watch;
@@ -124,16 +125,21 @@ impl IrohConnector {
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> anyhow::Result<Self> {
-        const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
-        const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES";
         let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
 
-        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v.into());
-        }
-
-        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_GW_IROH_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v.into());
+        // Overrides are `<node-id>=<socket-addr>` pairs: the node id is the key
+        // and the value is a single direct address. iroh 1.0 no longer ships
+        // the `NodeTicket` format, so we keep the override wire format version
+        // agnostic and build the (legacy) `NodeAddr` from its parts. Pre-0.12
+        // binaries read the `NodeTicket`-format `FM_IROH_CONNECT_OVERRIDES`
+        // instead; devimint emits both side by side.
+        for env_var in [
+            FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+            FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
+        ] {
+            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var)? {
+                s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
+            }
         }
 
         Ok(s)
@@ -210,8 +216,11 @@ impl IrohConnector {
                     .address_lookup(iroh_next::address_lookup::PkarrResolver::builder(iroh_dns));
             }
 
-            // As a client, we don't need to register on any relays
-            let mut builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
+            // Server iroh-next endpoints publish relay-only address records by
+            // default (the iroh 1.0 publishers filter out direct addresses), so
+            // the client must be able to dial via relays; `RelayMode::Disabled`
+            // would disable dialing them, not just registration.
+            let mut builder = builder.relay_mode(iroh_next::RelayMode::Default);
 
             #[cfg(not(target_family = "wasm"))]
             if iroh_enable_dht {
@@ -295,6 +304,12 @@ impl crate::Connector for IrohConnector {
                 source,
                 url: url.to_owned(),
             })?;
+        let next_only = crate::is_iroh_next_endpoint_url(url).map_err(|source| {
+            ServerError::InvalidPeerUrl {
+                source,
+                url: url.to_owned(),
+            }
+        })?;
         let mut futures = FuturesUnordered::<
             Pin<
                 Box<
@@ -304,6 +319,15 @@ impl crate::Connector for IrohConnector {
             >,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
+
+        // Advertised Iroh 1.0 identities carry an internal `/v1` marker so we
+        // avoid attempting the incompatible 0.35 stack for safety and efficiency.
+        if next_only {
+            return self
+                .make_new_connection_next(&self.next, node_id, connection_override)
+                .await
+                .map(super::IGuardianConnection::into_dyn);
+        }
 
         let self_clone = self.clone();
         futures.push(Box::pin({
@@ -838,11 +862,49 @@ impl IGatewayConnection for Connection {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr as _;
+
+    use fedimint_core::PeerId;
+    use fedimint_core::config::FederationId;
+    use fedimint_core::invite_code::InviteCode;
     use fedimint_core::module::ApiMethod;
+    use fedimint_core::util::SafeUrl;
 
     use super::{
         IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
     };
+    use crate::{iroh_next_endpoint_url, is_iroh_next_endpoint_url, preserve_iroh_next_marker};
+
+    const TEST_ENDPOINT_ID: &str =
+        "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+
+    #[test]
+    fn advertised_iroh_next_url_selects_only_the_next_stack() {
+        let next_url = iroh_next_endpoint_url(TEST_ENDPOINT_ID).expect("valid endpoint ID");
+        assert!(is_iroh_next_endpoint_url(&next_url).expect("valid Iroh API URL path"));
+
+        let invite = InviteCode::new(next_url, PeerId::from(0), FederationId::dummy(), None);
+        let round_tripped =
+            InviteCode::from_str(&invite.to_string()).expect("invite code round-trips");
+        assert!(is_iroh_next_endpoint_url(&round_tripped.url()).expect("valid Iroh API URL path"));
+
+        let stable_url =
+            SafeUrl::parse(&format!("iroh://{TEST_ENDPOINT_ID}")).expect("valid Iroh URL");
+        assert!(!is_iroh_next_endpoint_url(&stable_url).expect("valid Iroh API URL path"));
+
+        let replacement = SafeUrl::parse(
+            "iroh://d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        )
+        .expect("valid replacement URL");
+        let replacement = preserve_iroh_next_marker(&round_tripped.url(), &replacement);
+        assert!(is_iroh_next_endpoint_url(&replacement).expect("valid Iroh API URL path"));
+    }
+
+    #[test]
+    fn unknown_iroh_api_version_path_is_rejected() {
+        let url = SafeUrl::parse(&format!("iroh://{TEST_ENDPOINT_ID}/v2")).expect("valid Iroh URL");
+        assert!(is_iroh_next_endpoint_url(&url).is_err());
+    }
 
     /// Every `await_*` endpoint currently exposed by fedimint modules
     /// should be classified as long-poll. If a new endpoint is added

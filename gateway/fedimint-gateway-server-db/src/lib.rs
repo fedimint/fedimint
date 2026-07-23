@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
     GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
@@ -79,6 +80,17 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract>;
+
+    /// Records `operation_id` as the claimer of `payment_image`, unless another
+    /// operation already claimed it, and returns the operation id that holds
+    /// the claim. Lets the gateway claim at most one outgoing contract per
+    /// payment image across all federations while tolerating retries of the
+    /// same operation.
+    async fn claim_outgoing_payment_image(
+        &mut self,
+        payment_image: PaymentImage,
+        operation_id: OperationId,
+    ) -> OperationId;
 
     /// Reads and serializes structures from the gateway's database for the
     /// purpose for serializing to JSON for inspection.
@@ -204,6 +216,26 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             .await
     }
 
+    async fn claim_outgoing_payment_image(
+        &mut self,
+        payment_image: PaymentImage,
+        operation_id: OperationId,
+    ) -> OperationId {
+        if let Some(existing) = self
+            .get_value(&ClaimedOutgoingPaymentImageKey(payment_image.clone()))
+            .await
+        {
+            existing
+        } else {
+            self.insert_entry(
+                &ClaimedOutgoingPaymentImageKey(payment_image),
+                &operation_id,
+            )
+            .await;
+            operation_id
+        }
+    }
+
     async fn dump_database(
         &mut self,
         prefix_names: Vec<String>,
@@ -294,6 +326,7 @@ enum DbKeyPrefix {
     ClientDatabase = 0x10,
     Iroh = 0x11,
     FederationBackup = 0x12,
+    ClaimedOutgoingPaymentImage = 0x13,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -766,6 +799,20 @@ impl_db_record!(
     key = RegisteredIncomingContractKey,
     value = RegisteredIncomingContract,
     db_prefix = DbKeyPrefix::RegisteredIncomingContract,
+);
+
+/// Records which send operation claimed an outgoing contract for a given
+/// payment image. A single Lightning payment yields a single preimage, so the
+/// gateway may claim at most one outgoing contract per payment image across all
+/// of its federations; the value is the claiming operation so a retry of that
+/// same operation is not mistaken for a duplicate.
+#[derive(Debug, Encodable, Decodable)]
+struct ClaimedOutgoingPaymentImageKey(pub PaymentImage);
+
+impl_db_record!(
+    key = ClaimedOutgoingPaymentImageKey,
+    value = OperationId,
+    db_prefix = DbKeyPrefix::ClaimedOutgoingPaymentImage,
 );
 
 #[cfg(test)]

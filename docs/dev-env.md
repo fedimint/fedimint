@@ -186,7 +186,7 @@ Usage: fedimintd [OPTIONS] <DATA_DIR> [PASSWORD]
 
 Arguments:
   <DATA_DIR>  Path to folder containing federation config files
-  [PASSWORD]  Password to encrypt sensitive config files [env: FM_PASSWORD=]
+  [PASSWORD]  Password to encrypt sensitive config files [env: FM_PASSWORD_API=]
 
 Options:
   -h, --help                   Print help information

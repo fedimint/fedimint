@@ -24,3 +24,9 @@ pub const FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV: &str = "FM_GATEWAY_IROH_SECRE
 /// `SendPaymentRequest`. Must parse as an f64 in the range [-1.0, 1.0], where
 /// -1 optimizes for fees and 1 optimizes for reliability.
 pub const FM_LND_TIME_PREF_ENV: &str = "FM_LND_TIME_PREF";
+
+/// Environment variable that specifies how long (in seconds) LND will keep
+/// trying to route an outgoing payment before giving up. Passed as
+/// `timeout_seconds` in LND `SendPaymentRequest`. Must parse as an i32 in the
+/// range [1, 600].
+pub const FM_LND_PAYMENT_TIMEOUT_SECS_ENV: &str = "FM_LND_PAYMENT_TIMEOUT_SECS";

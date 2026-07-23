@@ -110,7 +110,7 @@ pub struct AmountWithUnit {
 ///
 /// Note: implementation must be careful not to add zero-amount
 /// entries, as these could mess up equality comparisons, etc.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct Amounts(BTreeMap<AmountUnit, Amount>);
 
 // Note: no `impl ops::DerefMut` as it could easily accidentally break the
@@ -180,6 +180,26 @@ impl Amounts {
         *prev = prev.checked_add(amount)?;
 
         Some(self)
+    }
+
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        let mut result = self.clone();
+
+        for (unit, amount) in &other.0 {
+            if *amount == Amount::ZERO {
+                continue;
+            }
+
+            let prev = result.0.entry(*unit).or_default();
+
+            *prev = prev.checked_sub(*amount)?;
+
+            if *prev == Amount::ZERO {
+                result.0.remove(unit);
+            }
+        }
+
+        Some(result)
     }
 
     pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
@@ -342,14 +362,10 @@ pub struct IrohGatewayResponse {
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
-// TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
-// Option<ApiAuth>`
 /// Authentication secret used to verify guardian admin API requests.
 ///
 /// The inner value is private to prevent timing leaks via direct comparison.
-/// Use [`Self::verify`] for authentication checks. [`Self::as_str`] is a
-/// temporary escape hatch for I/O that still needs the plaintext value and
-/// should be removed once passwords are hashed at rest.
+/// Use [`Self::verify`] for authentication checks.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ApiAuth(String);
 
@@ -485,7 +501,7 @@ pub trait TypedApiEndpoint {
 
     /// example: /transaction
     const PATH: &'static str;
-
+    const VERSION: ApiVersion;
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
@@ -517,8 +533,7 @@ pub use serde_json;
 macro_rules! __api_endpoint {
     (
         $path:expr_2021,
-        // Api Version this endpoint was introduced in, at the current consensus level
-        // Currently for documentation purposes only.
+        // API version this endpoint was introduced in, at the current consensus level.
         $version_introduced:expr_2021,
         async |$state:ident: &$state_ty:ty, $context:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
@@ -528,6 +543,7 @@ macro_rules! __api_endpoint {
         impl $crate::module::TypedApiEndpoint for Endpoint {
             #[allow(deprecated)]
             const PATH: &'static str = $path;
+            const VERSION: $crate::module::ApiVersion = $version_introduced;
             type State = $state_ty;
             type Param = $param_ty;
             type Response = $resp_ty;
@@ -537,10 +553,6 @@ macro_rules! __api_endpoint {
                 $context: &'context mut $crate::module::ApiEndpointContext,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
-                {
-                    // just to enforce the correct type
-                    const __API_VERSION: $crate::module::ApiVersion = $version_introduced;
-                }
                 $body
             }
         }
@@ -572,6 +584,8 @@ pub struct ApiEndpoint<M> {
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
     pub handler: HandlerFn<M>,
+    /// API version this endpoint was introduced in.
+    pub version: ApiVersion,
 }
 
 /// Global request ID used for logging
@@ -610,6 +624,7 @@ impl ApiEndpoint<()> {
 
         ApiEndpoint {
             path: E::PATH,
+            version: E::VERSION,
             handler: Box::new(|m, mut context, request| {
                 Box::pin(async move {
                     let request = request

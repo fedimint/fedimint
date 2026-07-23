@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,7 +40,7 @@ use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSu
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
-use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env, maybe_add_send};
+use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
@@ -57,7 +56,7 @@ use crate::api_announcements::{
     run_api_announcement_refresh_task, store_api_announcements_updates_from_peers,
 };
 use crate::backup::{ClientBackup, Metadata};
-use crate::client::PrimaryModuleCandidates;
+use crate::client::{ModuleRecoveryFuture, PrimaryModuleCandidates};
 use crate::db::{
     self, ApiSecretKey, ChainIdKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
@@ -125,6 +124,7 @@ pub struct ClientBuilder {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
     bitcoind_rpc_factory: Option<BitcoindRpcFactory>,
     bitcoind_rpc_no_chain_id_factory: Option<BitcoindRpcNoChainIdFactory>,
 }
@@ -148,6 +148,7 @@ impl ClientBuilder {
             log_event_added_transient_tx,
             request_hook: Arc::new(|api| api),
             iroh_enable_dht: true,
+            iroh_enable_next: true,
             bitcoind_rpc_factory: None,
             bitcoind_rpc_no_chain_id_factory: None,
         }
@@ -163,6 +164,7 @@ impl ClientBuilder {
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
+            iroh_enable_next: client.iroh_enable_next,
             // Note: bitcoind_rpc_factory is not cloned from existing client
             // since it's a one-time factory that's consumed during build
             bitcoind_rpc_factory: None,
@@ -584,6 +586,10 @@ impl ClientBuilder {
         Ok(client)
     }
 
+    fn should_enable_iroh_next(&self, connectors: &ConnectorRegistry) -> bool {
+        self.iroh_enable_next && connectors.iroh_next_enabled()
+    }
+
     // TODO: remove config argument
     /// Build a [`Client`] but do not start the executor
     #[allow(clippy::too_many_arguments)]
@@ -622,7 +628,8 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = db_no_decoders.with_decoders(decoders.clone());
-        let peer_urls = get_api_urls(&db, &config).await;
+        let iroh_enable_next = self.should_enable_iroh_next(&connectors);
+        let peer_urls = get_api_urls(&db, &config, iroh_enable_next).await;
         let api = match self.admin_creds.as_ref() {
             Some(admin_creds) => FederationApi::new(
                 connectors.clone(),
@@ -758,10 +765,8 @@ impl ClientBuilder {
             None
         };
 
-        let mut module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        > = BTreeMap::new();
+        let mut module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture> =
+            BTreeMap::new();
         let mut module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
@@ -1040,6 +1045,7 @@ impl ClientBuilder {
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
             iroh_enable_dht: self.iroh_enable_dht,
+            iroh_enable_next,
             user_bitcoind_rpc,
             user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
@@ -1134,10 +1140,21 @@ impl ClientBuilder {
         final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
+            // Sourced from the config so recovering modules (which aren't yet in
+            // the module registry) still get their kind attached to the
+            // `ModuleRecoveryCompleted` event.
+            let module_kinds = client_arc
+                .config()
+                .await
+                .modules
+                .iter()
+                .map(|(id, module_config)| (*id, module_config.kind().clone()))
+                .collect();
             client_arc.spawn_module_recoveries_task(
                 client_recovery_progress_sender,
                 module_recoveries,
                 module_recovery_progress_receivers,
+                module_kinds,
             );
         }
 

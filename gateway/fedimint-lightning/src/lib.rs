@@ -17,9 +17,9 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
 use fedimint_core::util::{FmtCompactResult as _, backoff_util, retry};
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, LightningInfo, ListTransactionsResponse, OpenChannelRequest,
-    SendOnchainRequest, SetChannelFeesRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectPeerRequest,
+    GetInvoiceRequest, GetInvoiceResponse, LightningInfo, ListTransactionsResponse,
+    OpenChannelRequest, SendOnchainRequest, SetChannelFeesRequest,
 };
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
@@ -153,9 +153,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// This is more private than [`ILnRpcClient::pay`], as it does not require
     /// the invoice description. If this is implemented,
     /// [`ILnRpcClient::supports_private_payments`] must return true.
-    ///
-    /// Note: This is only used for outbound LNv1 payments and will be removed
-    /// when we switch to LNv2.
     async fn pay_private(
         &self,
         _invoice: PrunedInvoice,
@@ -221,6 +218,9 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         payload: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError>;
+
+    /// Connects to a peer lightning node without opening a channel.
+    async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError>;
 
     /// Closes all channels with a peer lightning node.
     async fn close_channels_with_peer(
@@ -608,6 +608,10 @@ impl ILnRpcClient for LnRpcTracked {
         payload: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         tracked_call!(self, "open_channel", self.inner.open_channel(payload).await)
+    }
+
+    async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
+        tracked_call!(self, "connect_peer", self.inner.connect_peer(payload).await)
     }
 
     async fn close_channels_with_peer(

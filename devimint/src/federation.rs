@@ -23,9 +23,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_server::config::io::{
-    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
-};
+use fedimint_server::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
@@ -555,8 +553,7 @@ impl Federation {
             for path in [
                 PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
                 PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
-                PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
-                PathBuf::from(SALT_FILE),
+                PathBuf::from(PRIVATE_CONFIG).with_extension(JSON_EXT),
             ] {
                 archive
                     .append_path_with_name(data_dir.join(&path), &path)
@@ -901,6 +898,7 @@ impl Federation {
             }
         }
 
+        let mut gateway_deposit_addrs = Vec::new();
         for gw in gateways.clone() {
             let pegin_addr = gw.client().get_pegin_addr(&fed_id).await?;
             debug!(
@@ -912,8 +910,9 @@ impl Federation {
                 "Sending gateway pegin"
             );
             self.bitcoind
-                .send_to(pegin_addr, amount + deposit_fees)
+                .send_to(pegin_addr.clone(), amount + deposit_fees)
                 .await?;
+            gateway_deposit_addrs.push(pegin_addr);
         }
 
         let pegin_start = Instant::now();
@@ -933,11 +932,16 @@ impl Federation {
             };
             let gateway_name = gw.gw_name.clone();
             let gateway_ln = gw.ln.ln_type().to_string();
+            let gateway_id = gw.gateway_id.clone();
+            let gateway_index = gw.gateway_index;
+            let deposit_address = gateway_deposit_addrs[i].clone();
             let fed_id = fed_id.clone();
             poll("gateway pegin", move || {
                 let fed_id = fed_id.clone();
                 let gateway_name = gateway_name.clone();
                 let gateway_ln = gateway_ln.clone();
+                let gateway_id = gateway_id.clone();
+                let deposit_address = deposit_address.clone();
                 async move {
                     let gw_info = gw
                         .client()
@@ -965,7 +969,7 @@ impl Federation {
                             "Waiting for gateway pegin block sync"
                         );
                         return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
-                            "gateway block height is not synced"
+                            "Gateway {gateway_name} ({gateway_id}, index {gateway_index}) block height {block_height} has not reached bitcoind block height {bitcoind_block_height}"
                         )));
                     }
 
@@ -993,7 +997,7 @@ impl Federation {
                             Ok(())
                         } else {
                             Err(ControlFlow::Continue(anyhow::anyhow!(
-                                "Gateway balance {gateway_balance} has not reached expected {expected} (initial: {initial_balance})"
+                                "Gateway {gateway_name} ({gateway_id}, index {gateway_index}) balance {gateway_balance} has not reached expected {expected} for deposit address {deposit_address} (initial: {initial_balance})"
                             )))
                         }
                     } else {
@@ -1162,6 +1166,15 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
+        // `list-gateways` is an LNv1 concept: gateways register with the LNv1
+        // module and the client lists them. LNv2 instead addresses gateways
+        // directly and vets them via an explicit consensus item, so there is
+        // nothing to poll here when the LNv1 module isn't present. The gateway
+        // connection itself is awaited separately (via `connect_fed`).
+        if !crate::util::supports_lnv1() {
+            return Ok(());
+        }
+
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
 

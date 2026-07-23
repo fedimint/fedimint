@@ -15,6 +15,9 @@ pub struct GuardianMetadata {
     /// z-base32 encoded Pkarr id
     pub pkarr_id_z32: String,
     pub timestamp_secs: u64,
+    /// Iroh-next 1.0-compatible API endpoint node ID (public key) when enabled
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iroh_next_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -142,7 +145,14 @@ impl GuardianMetadata {
             api_urls,
             pkarr_id_z32,
             timestamp_secs,
+            iroh_next_endpoint: None,
         }
+    }
+
+    /// Set the iroh-next 1.0-compatible API endpoint node ID.
+    pub fn with_iroh_next_endpoint(mut self, endpoint: String) -> Self {
+        self.iroh_next_endpoint = Some(endpoint);
+        self
     }
 
     pub fn sign<C: secp256k1::Signing>(

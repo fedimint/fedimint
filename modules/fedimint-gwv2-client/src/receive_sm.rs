@@ -142,34 +142,49 @@ impl ReceiveStateMachine {
         outpoint: OutPoint,
         contract: IncomingContract,
     ) -> Result<BTreeMap<PeerId, DecryptionKeyShare>, String> {
-        global_context.await_tx_accepted(outpoint.txid).await?;
+        let num_peers = global_context.api().all_peers().to_num_peers();
+        let module_api = global_context.module_api();
 
-        Ok(global_context
-            .module_api()
-            .request_with_strategy_retry(
-                FilterMapThreshold::new(
-                    move |peer_id, share: DecryptionKeyShare| {
-                        if !contract.verify_decryption_share(
-                            tpe_pks
-                                .get(&peer_id)
-                                .ok_or(ServerError::InternalClientError(anyhow!(
-                                    "Missing TPE PK for peer {peer_id}?!"
-                                )))?,
-                            &share,
-                        ) {
-                            return Err(fedimint_api_client::api::ServerError::InvalidResponse(
-                                anyhow!("Invalid decryption share"),
-                            ));
-                        }
+        // The decryption key share endpoint long-polls until the share exists, which
+        // happens atomically when the funding transaction is accepted. We can therefore
+        // fire the request up front and let it overlap with awaiting transaction
+        // acceptance instead of serializing the two, saving a round trip on the happy
+        // path. Acceptance is still awaited to detect a rejected funding transaction.
+        let decryption_shares = module_api.request_with_strategy_retry(
+            FilterMapThreshold::new(
+                move |peer_id, share: DecryptionKeyShare| {
+                    if !contract.verify_decryption_share(
+                        tpe_pks
+                            .get(&peer_id)
+                            .ok_or(ServerError::InternalClientError(anyhow!(
+                                "Missing TPE PK for peer {peer_id}?!"
+                            )))?,
+                        &share,
+                    ) {
+                        return Err(fedimint_api_client::api::ServerError::InvalidResponse(
+                            anyhow!("Invalid decryption share"),
+                        ));
+                    }
 
-                        Ok(share)
-                    },
-                    global_context.api().all_peers().to_num_peers(),
-                ),
-                DECRYPTION_KEY_SHARE_ENDPOINT.to_owned(),
-                ApiRequestErased::new(outpoint),
-            )
-            .await)
+                    Ok(share)
+                },
+                num_peers,
+            ),
+            DECRYPTION_KEY_SHARE_ENDPOINT.to_owned(),
+            ApiRequestErased::new(outpoint),
+        );
+
+        let decryption_shares = std::pin::pin!(decryption_shares);
+        let tx_accepted = std::pin::pin!(global_context.await_tx_accepted(outpoint.txid));
+
+        match futures::future::select(decryption_shares, tx_accepted).await {
+            futures::future::Either::Left((shares, _)) => Ok(shares),
+            futures::future::Either::Right((accepted, decryption_shares)) => {
+                accepted?;
+
+                Ok(decryption_shares.await)
+            }
+        }
     }
 
     async fn transition_decryption_shares(

@@ -380,6 +380,8 @@ impl FederationTestBuilder {
                         .bind()
                         .await
                         .unwrap(),
+                    Some(ApiAuth::new("pass".to_string())),
+                    Some(ApiAuth::new("pass".to_string())),
                     connections,
                     p2p_status_receivers,
                     api_bind,
@@ -402,6 +404,7 @@ impl FederationTestBuilder {
                         max_connections: 1000,
                         max_requests_per_connection: 100,
                     },
+                    None,
                 ))
                 .await
                 .expect("Could not initialise consensus");

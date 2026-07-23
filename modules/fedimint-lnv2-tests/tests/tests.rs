@@ -130,7 +130,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
             .get_first_module::<LightningClientModule>()?
             .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
             .await,
-        Err(SendPaymentError::PaymentInProgress(operation_id)),
+        Err(SendPaymentError::DuplicatePaymentAttempt(operation_id)),
     );
 
     let mut sub = client
@@ -160,7 +160,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
             .get_first_module::<LightningClientModule>()?
             .send(invoice, Some(gateway_api), Value::Null)
             .await,
-        Err(SendPaymentError::InvoiceAlreadyPaid(operation_id)),
+        Err(SendPaymentError::DuplicatePaymentAttempt(operation_id)),
     );
 
     Ok(())
@@ -265,6 +265,14 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     };
     assert_eq!(update.operation_id, operation_id);
     assert_eq!(update.status, SendPaymentStatus::Refunded);
+
+    // Verify that fees were paid, which is always the case for LNv2
+    let operation_fees = client
+        .get_operation_fees(operation_id)
+        .await
+        .expect("Operation exists")
+        .expect("Fee data is present for new operations");
+    assert_eq!(operation_fees.get_bitcoin().msats, 2000);
 
     Ok(())
 }

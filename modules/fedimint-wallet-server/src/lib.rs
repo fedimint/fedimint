@@ -60,9 +60,8 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
-    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
+    Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::TaskGroup;
@@ -320,26 +319,15 @@ impl ServerModuleInit for WalletInit {
         &[MODULE_CONSENSUS_VERSION]
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 2)],
-        )
-    }
-
     fn is_enabled_by_default(&self) -> bool {
-        is_env_var_set_opt(FM_ENABLE_MODULE_WALLET_ENV).unwrap_or(true)
+        is_env_var_set_opt(FM_ENABLE_MODULE_WALLET_ENV).unwrap_or(false)
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
         vec![
             EnvVarDoc {
                 name: FM_ENABLE_MODULE_WALLET_ENV,
-                description: "Set to 0/false to disable the wallet (on-chain Bitcoin) module. Enabled by default.",
+                description: "Set to 1/true to enable the wallet (on-chain Bitcoin) module. Disabled by default.",
             },
             EnvVarDoc {
                 name: FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV,

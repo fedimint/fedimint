@@ -125,15 +125,34 @@ pub const FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_BAD_K
 pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIN_RPC_URL";
 pub const FM_FORCE_BITCOIN_RPC_URL_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
 
-/// Env var to override iroh connectivity
+/// Env var to override iroh connectivity, in the legacy iroh 0.35 `NodeTicket`
+/// format.
 ///
-/// Comma separated key-value list (`<node_id>=<ticket>,<node_id>=<ticket>,...`)
+/// Comma separated key-value list
+/// (`<node_id>=<ticket>,<node_id>=<ticket>,...`). Only still read by pre-0.12
+/// binaries that link iroh 0.35; current binaries
+/// read [`FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV`] instead. iroh 1.0 no longer
+/// ships the `NodeTicket` format, so the override format had to become version
+/// agnostic; rather than overload this var with two incompatible formats, the
+/// new format lives under its own name and both are emitted side by side.
 pub const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
 
-/// Env var to override iroh connectivity
-///
-/// Comma separated key-value list (`<node_id>=<ticket>,<node_id>=<ticket>,...`)
+/// Env var to override iroh connectivity, in the legacy iroh 0.35 `NodeTicket`
+/// format. Gateway counterpart of [`FM_IROH_CONNECT_OVERRIDES_ENV`].
 pub const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES";
+
+/// Env var to override iroh connectivity, in the plain `<id>=<addr>` format.
+///
+/// Comma separated key-value list (`<node_id>=<socket_addr>,...`). The value is
+/// a single direct address; the consumer rebuilds the iroh node/endpoint
+/// address from the id and address, so the format works on both iroh 0.35 and
+/// iroh 1.0. Current binaries read this; pre-0.12 binaries read the legacy
+/// [`FM_IROH_CONNECT_OVERRIDES_ENV`] instead.
+pub const FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV: &str = "FM_IROH_CONNECT_OVERRIDES_PLAIN";
+
+/// Env var to override iroh connectivity, in the plain `<id>=<addr>` format.
+/// Gateway counterpart of [`FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV`].
+pub const FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES_PLAIN";
 
 /// Env var to override iroh DNS server
 pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
@@ -141,7 +160,7 @@ pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
 /// Env var to override iroh relays server
 pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
 
-/// Env var to disable Iroh's use of DHT
+/// Env var to enable Iroh's use of DHT
 pub const FM_IROH_DHT_ENABLE_ENV: &str = "FM_IROH_DHT_ENABLE";
 
 /// Env var to disable default n0 discovery

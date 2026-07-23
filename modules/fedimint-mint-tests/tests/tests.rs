@@ -131,7 +131,13 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let client2_mint = client2.get_first_module::<MintClientModule>()?;
     info!("### SPEND NOTES");
     let (op, notes) = client1_mint
-        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            Some(TIMEOUT),
+            false,
+            (),
+        )
         .await?;
     let sub1 = &mut client1_mint.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -150,8 +156,157 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
 
+    let fees_from_balance = sats(750)
+        .checked_sub(
+            client2
+                .get_balance_for_btc()
+                .await
+                .expect("Can fetch balance"),
+        )
+        .expect("Balance higher than received amount");
+    let fees_from_operation = client2
+        .get_operation_fees(op)
+        .await
+        .expect("Operation exists")
+        .expect("Fee data is present for new operations");
+
+    assert!(
+        !client2.has_active_states(op).await,
+        "We waited for operation completion, should be final"
+    );
+    assert_eq!(
+        fees_from_balance,
+        fees_from_operation.get_bitcoin(),
+        "Operation fees differ from actual fees"
+    );
+
     assert!(client1.get_balance_for_btc().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
     assert!(client2.get_balance_for_btc().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let (client_send, client_receive) = fed.two_clients().await;
+    issue_ecash(&client_send, sats(11_000)).await?;
+
+    // Reissue several times so the receiver's note inventory — and therefore the
+    // consolidation-driven fee — differs between iterations (first into an empty
+    // wallet, then into a progressively more populated one).
+    for i in 0..5 {
+        let send_mint = client_send.get_first_module::<MintClientModule>()?;
+        let (spend_op, notes) = send_mint
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                sats(1_000),
+                Some(TIMEOUT),
+                false,
+                (),
+            )
+            .await?;
+        let mut send_sub = send_mint
+            .subscribe_spend_notes(spend_op)
+            .await?
+            .into_stream();
+        assert_eq!(send_sub.ok().await?, SpendOOBState::Created);
+
+        let receive_mint = client_receive.get_first_module::<MintClientModule>()?;
+        let reissued_value = notes.total_amount();
+
+        let quote = receive_mint.reissue_fee_quote(&notes).await?;
+        let before = client_receive.get_balance_for_btc().await?;
+
+        let op = receive_mint.reissue_external_notes(notes, ()).await?;
+        let mut sub = receive_mint
+            .subscribe_reissue_external_notes(op)
+            .await?
+            .into_stream();
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Created);
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Issuing);
+        // `Done` is reached once the reissued (and consolidation) notes have been
+        // issued, so the balance is settled by here.
+        assert_eq!(sub.ok().await?, ReissueExternalNotesState::Done);
+        assert_eq!(send_sub.ok().await?, SpendOOBState::Success);
+
+        let after = client_receive.get_balance_for_btc().await?;
+        let actual_fee = reissued_value - (after - before);
+
+        assert_eq!(
+            quote.total(),
+            Amounts::new_bitcoin(actual_fee),
+            "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, sats(11_000)).await?;
+
+    // Send several times so the wallet's note inventory — and therefore whether a
+    // self-reissue (and its fee) is needed to reach the requested denomination —
+    // differs between iterations.
+    for i in 0..5 {
+        let mint = client.get_first_module::<MintClientModule>()?;
+
+        // Settle any pending change from the previous iteration so the quote and
+        // the send observe the same inventory.
+        client.wait_for_all_active_state_machines().await?;
+
+        let quote = mint.send_fee_quote(sats(1_000)).await?;
+        let before = client.get_balance_for_btc().await?;
+
+        let notes = mint.send_oob_notes(sats(1_000), ()).await?;
+        let sent_value = notes.total_amount();
+
+        // A send may trigger an internal reissue whose change notes are credited
+        // by output state machines; wait for them before reading the balance.
+        client.wait_for_all_active_state_machines().await?;
+        let after = client.get_balance_for_btc().await?;
+
+        // Value conservation: the wallet loses exactly the sent value plus the fee.
+        let actual_fee = before - after - sent_value;
+
+        assert_eq!(
+            quote.total(),
+            Amounts::new_bitcoin(actual_fee),
+            "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Regression test: a send that requires a self-reissue must succeed without
+/// settling state machines between sends (as a wallet UI does).
+///
+/// Three 5,000,000 msat sends from a 20,000,000 msat balance. The first two are
+/// served from exact change; the third can't make exact change and triggers a
+/// self-reissue. Previously the reissue recursion ran before its freshly-minted
+/// notes were spendable (it awaited only the *change* outputs), failed to make
+/// exact change, re-reissued, and drained the wallet — surfacing as
+/// "Failed to submit reissuance transaction: Insufficient balance" even though
+/// the `send_fee_quote` had just succeeded.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, Amount::from_msats(20_000_000)).await?;
+
+    for i in 0..3 {
+        let mint = client.get_first_module::<MintClientModule>()?;
+        // The quote must succeed (it always did); the send must succeed too.
+        mint.send_fee_quote(Amount::from_msats(5_000_000)).await?;
+        mint.send_oob_notes(Amount::from_msats(5_000_000), ())
+            .await
+            .map_err(|e| anyhow::anyhow!("iteration {i}: send_oob_notes failed: {e:#}"))?;
+    }
+
     Ok(())
 }
 
@@ -287,7 +442,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                     .spend_notes_with_selector(
                         &SelectNotesWithAtleastAmount,
                         sats(30),
-                        ECASH_TIMEOUT,
+                        Some(ECASH_TIMEOUT),
                         false,
                         (),
                     )
@@ -421,7 +576,13 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let mint_module = client.get_first_module::<MintClientModule>()?;
     let (op, _) = mint_module
-        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), TIMEOUT, false, ())
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            Some(TIMEOUT),
+            false,
+            (),
+        )
         .await?;
     let sub1 = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
@@ -447,6 +608,24 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn sends_ecash_out_of_band_no_timeout_finishes_without_refund() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    issue_ecash(&client, sats(1000)).await?;
+
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let (op, _) = mint_module
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(750), None, false, ())
+        .await?;
+
+    let sub = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
+    assert_eq!(sub.ok().await?, SpendOOBState::Created);
+    assert_eq!(sub.ok().await?, SpendOOBState::Success);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
     let (client, client2) = fed.two_clients().await;
@@ -462,7 +641,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             sats(750),
-            TIMEOUT * 3,
+            Some(TIMEOUT * 3),
             false,
             (),
         )
@@ -537,7 +716,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             Amount::ZERO,
-            TIMEOUT,
+            Some(TIMEOUT),
             false,
             (),
         )
@@ -765,7 +944,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .spend_notes_with_selector(
                 &SelectNotesWithExactAmount,
                 Amount::from_msats(1),
-                TIMEOUT,
+                Some(TIMEOUT),
                 false,
                 (),
             )
@@ -820,6 +999,67 @@ async fn repair_wallet() -> anyhow::Result<()> {
         );
     }
 
+    // Check that a repair based on stale index candidates does not panic or
+    // roll back an index that was concurrently advanced while repair was doing
+    // federation API checks.
+    {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
+            NextECashNoteIndexKey(Amount::from_msats(1));
+        let old_nonce_index = dbtx
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        let stale_nonce_index = old_nonce_index
+            .checked_sub(1)
+            .expect("Amount tier index was advanced");
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &stale_nonce_index)
+            .await
+            .expect("Failed to insert test note index");
+        dbtx.commit_tx().await;
+
+        let repair_fut = client_mint.try_repair_wallet(100);
+        tokio::pin!(repair_fut);
+
+        tokio::select! {
+            biased;
+
+            repair_result = &mut repair_fut => {
+                panic!("Repair completed before concurrent index advance: {repair_result:?}");
+            }
+            () = tokio::task::yield_now() => {}
+        }
+
+        let concurrently_advanced_index = old_nonce_index + 1;
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &concurrently_advanced_index)
+            .await
+            .expect("Failed to concurrently advance test note index");
+        dbtx.commit_tx().await;
+
+        let repair_summary = repair_fut.await.expect("Repair should succeed");
+        assert!(
+            repair_summary.spent_notes.is_empty(),
+            "No spent notes should be found"
+        );
+        let repaired_index = client_mint
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        assert!(
+            concurrently_advanced_index <= repaired_index,
+            "Repair should not roll back concurrently advanced index"
+        );
+        let repaired_indices = repair_summary.used_indices.get(Amount::from_msats(1)) as u64;
+        assert!(
+            repaired_indices <= repaired_index - concurrently_advanced_index,
+            "Concurrently advanced stale index should not be counted as repaired"
+        );
+    }
+
     Ok(())
 }
 
@@ -833,12 +1073,19 @@ mod fedimint_migration_tests {
     use fedimint_client_module::module::init::recovery::{
         RecoveryFromHistory, RecoveryFromHistoryCommon,
     };
-    use fedimint_core::core::OperationId;
+    use fedimint_core::core::{IntoDynInstance, OperationId};
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
+        IDatabaseTransactionOpsCoreTyped, apply_migrations,
     };
+    use fedimint_core::epoch::ConsensusItem;
+    use fedimint_core::module::CommonModuleInit;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+    use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::{
-        Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId, secp256k1,
+        Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredMulti, TransactionId, secp256k1,
     };
     use fedimint_derive_secret::{ChildId, DerivableSecret};
     use fedimint_logging::TracingSetup;
@@ -853,15 +1100,16 @@ mod fedimint_migration_tests {
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
-    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
+    use fedimint_mint_common::{BlindNonce, MintCommonInit, MintOutput, MintOutputOutcome, Nonce};
     use fedimint_mint_server::db::{
         DbKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey,
-        MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
+        MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix, RecoveryBlindNonceOutpointKey,
     };
+    use fedimint_server::consensus::db::{ServerDbMigrationContext, SignedSessionOutcomeKey};
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        BYTE_8, BYTE_32, snapshot_db_migrations, snapshot_db_migrations_client,
-        validate_migrations_client, validate_migrations_server,
+        BYTE_8, BYTE_32, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations,
+        snapshot_db_migrations_client, validate_migrations_client, validate_migrations_server,
     };
     use ff::Field;
     use futures::StreamExt;
@@ -1098,6 +1346,96 @@ mod fedimint_migration_tests {
             Ok(())
         })
         .await
+    }
+
+    // Regression test for #8582: `migrate_db_v2` walks `ModuleHistoryItem`s
+    // assembled from `SignedSessionOutcome`s and used to call
+    // `insert_new_entry(RecoveryBlindNonceOutpointKey, _)`, which panics on a
+    // duplicate. Federations that had previously accepted a duplicate blind
+    // nonce therefore failed to migrate on the v0.11.0 -> v0.11.1 upgrade —
+    // that on-upgrade crash is what motivated cutting v0.11.1.
+    //
+    // Seed a session outcome containing one transaction with two `MintOutput`s
+    // that share a blind nonce, pin the on-disk db version to 2 so
+    // `apply_migrations` actually runs `migrate_db_v2`, and assert it
+    // completes without panic.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_migrate_db_v2_handles_duplicate_blind_nonce() -> anyhow::Result<()> {
+        use std::sync::Arc;
+
+        let _ = TracingSetup::default().init();
+
+        let decoders = ModuleDecoderRegistry::from_iter([(
+            TEST_MODULE_INSTANCE_ID,
+            MintCommonInit::KIND,
+            MintCommonInit::decoder(),
+        )]);
+        let db = Database::new(MemDatabase::new(), decoders);
+
+        let blind_nonce = BlindNonce(blind_message(
+            Message::from_bytes(&BYTE_8),
+            BlindingKey::random(),
+        ));
+        let mint_output = MintOutput::new_v0(Amount::from_sats(1), blind_nonce);
+        let tx = Transaction {
+            inputs: vec![],
+            outputs: vec![
+                mint_output.clone().into_dyn(TEST_MODULE_INSTANCE_ID),
+                mint_output.into_dyn(TEST_MODULE_INSTANCE_ID),
+            ],
+            nonce: [0u8; 8],
+            signatures: TransactionSignature::NaiveMultisig(vec![]),
+        };
+        let txid = tx.tx_hash();
+
+        let signed_outcome = SignedSessionOutcome {
+            session_outcome: SessionOutcome {
+                items: vec![AcceptedItem {
+                    item: ConsensusItem::Transaction(tx),
+                    peer: PeerId::from(0),
+                }],
+            },
+            signatures: BTreeMap::new(),
+        };
+
+        // Seed global namespace with the session-outcome record, and pin the
+        // module's DB version to 2 so `apply_migrations` runs `migrate_db_v2`.
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_new_entry(&SignedSessionOutcomeKey(0), &signed_outcome)
+            .await;
+        dbtx.insert_new_entry(
+            &DatabaseVersionKey(TEST_MODULE_INSTANCE_ID),
+            &DatabaseVersion(2),
+        )
+        .await;
+        dbtx.commit_tx().await;
+
+        // Pre-fix, this panics on the duplicate via `insert_new_entry`.
+        let module = DynServerModuleInit::from(MintInit);
+        apply_migrations(
+            &db,
+            Arc::new(ServerDbMigrationContext) as Arc<_>,
+            module.module_kind().to_string(),
+            module.get_database_migrations(),
+            Some(TEST_MODULE_INSTANCE_ID),
+            None,
+        )
+        .await?;
+
+        // Sanity-check the backfill: the recovery index must be populated, and
+        // — since `insert_entry` overwrites — it must hold the second outpoint
+        // (last-writer wins), consistent with the unit test in
+        // `fedimint-mint-server`.
+        let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).0;
+        let mut module_dbtx = module_db.begin_transaction_nc().await;
+        let entry = module_dbtx
+            .get_value(&RecoveryBlindNonceOutpointKey(blind_nonce))
+            .await;
+        ensure!(
+            entry == Some(OutPoint { txid, out_idx: 1 }),
+            "migrate_db_v2 must backfill the recovery index (last-writer wins): got {entry:?}",
+        );
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]

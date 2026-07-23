@@ -5,6 +5,9 @@
 //! its main implementation is [`ReconnectP2PConnections`], see these for
 //! details.
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 
 use async_channel::{Receiver, Sender, bounded};
@@ -16,13 +19,13 @@ use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
-use futures::FutureExt;
 use futures::future::select_all;
+use futures::{FutureExt, StreamExt};
 use tokio::sync::watch;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
-use crate::net::p2p_connection::DynP2PConnection;
+use crate::net::p2p_connection::{DynConnectionStatusUpdates, DynP2PConnection};
 use crate::net::p2p_connector::DynP2PConnector;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -268,8 +271,13 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                 self.common.transition_disconnected(backoff).await
             }
             P2PConnectionSMState::Connected(connection) => {
+                // Subscribe before taking the snapshot so an update racing with
+                // the snapshot remains queued for the connected transition.
+                let status_updates = connection.connection_status_updates();
                 let status = P2PConnectionStatus {
-                    conn_type: self.common.connector.connection_type(self.common.peer_id),
+                    conn_type: connection
+                        .connection_type()
+                        .or_else(|| self.common.connector.connection_type(self.common.peer_id)),
                     rtt: connection.rtt(),
                 };
 
@@ -278,7 +286,9 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                     last_error: None,
                 });
 
-                self.common.transition_connected(connection).await
+                self.common
+                    .transition_connected(connection, status_updates)
+                    .await
             }
         }
         .map(|state| P2PConnectionStateMachine {
@@ -292,8 +302,17 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn transition_connected(
         &mut self,
         mut connection: DynP2PConnection<M>,
+        mut status_updates: Option<DynConnectionStatusUpdates>,
     ) -> Option<P2PConnectionSMState<M>> {
         tokio::select! {
+            Some(()) = async {
+                match status_updates.as_mut() {
+                    Some(status_updates) => status_updates.next().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                Some(P2PConnectionSMState::Connected(connection))
+            },
             message = self.outgoing_receiver.recv() => {
                 Some(self.send_message(connection, message.ok()?).await)
             },

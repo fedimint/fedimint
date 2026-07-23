@@ -86,6 +86,26 @@ There are other Nix packages defined, but they are similar to the ones described
 * run some commands (arbitrary, but usually just `cargo xyz`)
 * (optionally) store the `./target` directly in the output of the Nix package
 
+### Cargo-crap baseline gate
+
+Fedimint CI includes a `cargo-crap` gate exposed as `.#ci.crap`. It compares the
+current workspace against `nix/cargo-crap-baseline.json` and fails when a
+function regresses above the CRAP-score threshold of 1000.
+
+Fedimint intentionally does not use `cargo llvm-cov`/LCOV coverage for this
+gate. The end-to-end test suite is too heavy for a coverage-backed cargo-crap
+job, so the gate uses cargo-crap's pessimistic missing-coverage behavior.
+Existing high-CRAP functions are kept in the generated baseline while
+high-CRAP regressions are rejected.
+
+When intentionally accepting a CRAP-score regression, regenerate the baseline
+from Nix in the same change rather than editing it by hand:
+
+```bash
+nix build -L .#ci.crapBaseline
+cp result/cargo-crap-baseline.json nix/cargo-crap-baseline.json
+nix build -L .#ci.crap
+```
 
 ### Source file filtering
 

@@ -24,23 +24,23 @@ extern crate fedimint_core;
 pub mod connection_limits;
 pub mod db;
 
-use std::fs;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
 use bitcoin::hashes::hex::FromHex as _;
 use config::ServerConfig;
-use config::io::{PLAINTEXT_PASSWORD, read_server_config};
+use config::io::read_server_config;
 pub use connection_limits::ConnectionLimits;
-use fedimint_aead::random_salt;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::ApiAuth;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::write_new;
+use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_CONSENSUS;
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
@@ -56,16 +56,12 @@ use tokio_rustls::rustls;
 use tracing::info;
 
 use crate::config::ConfigGenSettings;
-use crate::config::io::{
-    SALT_FILE, finalize_password_change, recover_interrupted_password_change, trim_password,
-    write_server_config,
-};
+use crate::config::io::write_server_config;
 use crate::config::setup::{ConfigGenOutcome, SetupApi};
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
-use crate::net::api::guardian_metadata::start_guardian_metadata_service;
 use crate::net::api::pkarr_publish::start_pkarr_publish_service;
 use crate::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
@@ -81,15 +77,40 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// Requested settings for the transitional Iroh 1.0 API listener.
+#[derive(Debug, Clone)]
+pub struct IrohNextApiSettings {
+    /// Optional explicit socket address on which to bind the Iroh 1.0 API
+    /// endpoint.
+    bind: Option<SocketAddr>,
+}
+
+impl IrohNextApiSettings {
+    /// Request the transitional listener, optionally overriding its bind
+    /// address.
+    pub fn new(bind: Option<SocketAddr>) -> Self {
+        Self { bind }
+    }
+
+    pub(crate) fn bind_override(&self) -> Option<SocketAddr> {
+        self.bind
+    }
+}
+
 /// A function/closure type for handling dashboard UI
 pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>;
 
 /// A function/closure type for handling setup UI
 pub type SetupUiRouter = Box<dyn Fn(DynSetupApi) -> axum::Router + Send>;
 
+/// Run a server without configuring custom Iroh 1.0 relays for guardian P2P.
+///
+/// Use [`run_with_iroh_p2p_relays`] to supply version-specific P2P relays.
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
     force_api_secrets: ApiSecrets,
     settings: ConfigGenSettings,
     db: Database,
@@ -103,6 +124,94 @@ pub async fn run(
     db_checkpoint_retention: u64,
     session_timeout: Duration,
     iroh_api_limits: ConnectionLimits,
+) -> anyhow::Result<()> {
+    run_with_iroh_p2p_relays(
+        data_dir,
+        auth_ui,
+        auth_api,
+        force_api_secrets,
+        settings,
+        db,
+        code_version_str,
+        code_version_hash,
+        module_init_registry,
+        task_group,
+        bitcoin_rpc,
+        setup_ui_router,
+        dashboard_ui_router,
+        db_checkpoint_retention,
+        session_timeout,
+        iroh_api_limits,
+        Vec::new(),
+    )
+    .await
+}
+
+/// Run a server with a separate Iroh 1.0 relay list for guardian P2P.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_iroh_p2p_relays(
+    data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    force_api_secrets: ApiSecrets,
+    settings: ConfigGenSettings,
+    db: Database,
+    code_version_str: String,
+    code_version_hash: String,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: TaskGroup,
+    bitcoin_rpc: DynServerBitcoinRpc,
+    setup_ui_router: SetupUiRouter,
+    dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
+    session_timeout: Duration,
+    iroh_api_limits: ConnectionLimits,
+    iroh_p2p_relays: Vec<SafeUrl>,
+) -> anyhow::Result<()> {
+    run_with_iroh_p2p_relays_and_next_api(
+        data_dir,
+        auth_ui,
+        auth_api,
+        force_api_secrets,
+        settings,
+        db,
+        code_version_str,
+        code_version_hash,
+        module_init_registry,
+        task_group,
+        bitcoin_rpc,
+        setup_ui_router,
+        dashboard_ui_router,
+        db_checkpoint_retention,
+        session_timeout,
+        iroh_api_limits,
+        iroh_p2p_relays,
+        None,
+    )
+    .await
+}
+
+/// Run a server with explicit guardian P2P relays and an optional Iroh 1.0 API.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_with_iroh_p2p_relays_and_next_api(
+    data_dir: PathBuf,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    force_api_secrets: ApiSecrets,
+    settings: ConfigGenSettings,
+    db: Database,
+    code_version_str: String,
+    code_version_hash: String,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: TaskGroup,
+    bitcoin_rpc: DynServerBitcoinRpc,
+    setup_ui_router: SetupUiRouter,
+    dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
+    session_timeout: Duration,
+    iroh_api_limits: ConnectionLimits,
+    iroh_p2p_relays: Vec<SafeUrl>,
+    iroh_next_api_settings: Option<IrohNextApiSettings>,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -120,7 +229,7 @@ pub async fn run(
                     cfg.private.iroh_p2p_sk.clone().unwrap(),
                     settings.p2p_bind,
                     settings.iroh_dns.clone(),
-                    settings.iroh_relays.clone(),
+                    iroh_p2p_relays.clone(),
                     cfg.consensus
                         .iroh_endpoints
                         .iter()
@@ -144,7 +253,7 @@ pub async fn run(
             (cfg, connections, p2p_status_receivers)
         }
         None => {
-            Box::pin(run_config_gen(
+            Box::pin(run_config_gen_with_iroh_p2p_relays(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
@@ -154,6 +263,9 @@ pub async fn run(
                 force_api_secrets.clone(),
                 setup_ui_router,
                 module_init_registry.clone(),
+                auth_ui.clone(),
+                auth_api.clone(),
+                iroh_p2p_relays,
             ))
             .await?
         }
@@ -171,7 +283,6 @@ pub async fn run(
     initialize_gauge_metrics(&task_group, &db).await;
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
-    start_guardian_metadata_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
     start_pkarr_publish_service(&db, &task_group, &cfg).await?;
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
@@ -182,6 +293,8 @@ pub async fn run(
 
     Box::pin(consensus::run(
         connectors,
+        auth_ui,
+        auth_api,
         connections,
         p2p_status_receivers,
         settings.api_bind,
@@ -201,6 +314,7 @@ pub async fn run(
         db_checkpoint_retention,
         session_timeout,
         iroh_api_limits,
+        iroh_next_api_settings.as_ref(),
     ))
     .await?;
 
@@ -224,18 +338,11 @@ async fn update_server_info_version_dbtx(
 }
 
 pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
-    recover_interrupted_password_change(data_dir)?;
-
-    // Attempt get the config with local password, otherwise start config gen
-    let path = data_dir.join(PLAINTEXT_PASSWORD);
-    if let Ok(password_untrimmed) = fs::read_to_string(&path) {
-        let password = trim_password(&password_untrimmed);
-        let cfg = read_server_config(password, data_dir)?;
-        finalize_password_change(data_dir)?;
-        return Ok(Some(cfg));
+    if !data_dir.join("consensus.json").exists() {
+        return Ok(None);
     }
 
-    Ok(None)
+    read_server_config(data_dir).map(Some)
 }
 
 /// Validate restored TCP transport material before building `TlsTcpConnector`.
@@ -325,6 +432,11 @@ fn restored_iroh_p2p_key(cfg: &ServerConfig) -> anyhow::Result<iroh::SecretKey> 
     Ok(iroh_p2p_sk)
 }
 
+/// Run config generation without configuring custom Iroh 1.0 relays for
+/// guardian P2P.
+///
+/// Use [`run_config_gen_with_iroh_p2p_relays`] to supply version-specific P2P
+/// relays.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_config_gen(
     data_dir: PathBuf,
@@ -336,6 +448,45 @@ pub async fn run_config_gen(
     api_secrets: ApiSecrets,
     setup_ui_handler: SetupUiRouter,
     module_init_registry: ServerModuleInitRegistry,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+) -> anyhow::Result<(
+    ServerConfig,
+    DynP2PConnections<P2PMessage>,
+    P2PStatusReceivers,
+)> {
+    run_config_gen_with_iroh_p2p_relays(
+        data_dir,
+        settings,
+        db,
+        task_group,
+        code_version_str,
+        code_version_hash,
+        api_secrets,
+        setup_ui_handler,
+        module_init_registry,
+        auth_ui,
+        auth_api,
+        Vec::new(),
+    )
+    .await
+}
+
+/// Run config generation with a separate Iroh 1.0 relay list for guardian P2P.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_config_gen_with_iroh_p2p_relays(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    task_group: &TaskGroup,
+    code_version_str: String,
+    code_version_hash: String,
+    api_secrets: ApiSecrets,
+    setup_ui_handler: SetupUiRouter,
+    module_init_registry: ServerModuleInitRegistry,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    iroh_p2p_relays: Vec<SafeUrl>,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -350,10 +501,11 @@ pub async fn run_config_gen(
     let setup_api = SetupApi::new(
         settings.clone(),
         db.clone(),
-        data_dir.clone(),
         cgp_sender,
         code_version_str.clone(),
         code_version_hash,
+        auth_ui,
+        auth_api,
     );
 
     let mut rpc_module = RpcModule::new(setup_api.clone());
@@ -429,7 +581,7 @@ pub async fn run_config_gen(
                             .expect("Iroh p2p secret key is required for iroh endpoints"),
                         settings.p2p_bind,
                         settings.iroh_dns,
-                        settings.iroh_relays,
+                        iroh_p2p_relays,
                         cg_params
                             .iroh_endpoints()
                             .iter()
@@ -465,16 +617,9 @@ pub async fn run_config_gen(
                     cfg.consensus.api_endpoints.is_empty(),
                 );
 
-                // TODO: Make writing password optional
-                write_new(
-                    data_dir.join(PLAINTEXT_PASSWORD),
-                    cfg.private.api_auth.as_str(),
-                )?;
-                write_new(data_dir.join(SALT_FILE), random_salt())?;
                 write_server_config(
                     &cfg,
                     &data_dir,
-                    cfg.private.api_auth.as_str(),
                     &module_init_registry,
                     api_secrets.get_active(),
                 )?;
@@ -484,37 +629,25 @@ pub async fn run_config_gen(
             ConfigGenOutcome::Restored(restored, restore_result_sender) => {
                 // Process restore outcomes while setup serving is still running. This lets the
                 // HTTP handler wait for a precise success/error acknowledgement and keeps setup
-                // retryable if validation or install fails after unpacking.
-                let result = async {
-                    let restored = *restored;
-                    let cfg = &restored.cfg;
+                // retryable if validation or the config write fails.
+                let result: anyhow::Result<_> = async {
+                    let cfg = *restored;
 
-                    if let Err(e) = module_init_registry.decoders_strict(
+                    module_init_registry.decoders_strict(
                         cfg.consensus
                             .modules
                             .iter()
                             .map(|(id, config)| (*id, &config.kind)),
-                    ) {
-                        restored.cleanup();
-                        return Err(e);
+                    )?;
+
+                    cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
+
+                    if cfg.consensus.iroh_endpoints.is_empty() {
+                        validate_restored_tcp_config(&cfg)?;
                     }
 
-                    if let Err(e) = cfg.validate_config(&cfg.local.identity, &module_init_registry)
-                    {
-                        restored.cleanup();
-                        return Err(e);
-                    }
-
-                    if cfg.consensus.iroh_endpoints.is_empty()
-                        && let Err(e) = validate_restored_tcp_config(cfg)
-                    {
-                        restored.cleanup();
-                        return Err(e);
-                    }
-
-                    // Build the connector from the already validated restored config before moving
-                    // the config into its final location, avoiding a redundant config
-                    // re-read after install.
+                    // Build the connector from the already validated restored config before
+                    // writing it to its final location.
                     let connector = if cfg.consensus.iroh_endpoints.is_empty() {
                         TlsTcpConnector::new(
                             cfg.tls_config(),
@@ -525,38 +658,34 @@ pub async fn run_config_gen(
                         .await
                         .into_dyn()
                     } else {
-                        let iroh_p2p_sk = match restored_iroh_p2p_key(cfg) {
-                            Ok(iroh_p2p_sk) => iroh_p2p_sk,
-                            Err(e) => {
-                                restored.cleanup();
-                                return Err(e);
-                            }
-                        };
+                        let iroh_p2p_sk = restored_iroh_p2p_key(&cfg)?;
 
-                        match IrohConnector::new(
+                        IrohConnector::new(
                             iroh_p2p_sk,
                             settings.p2p_bind,
                             settings.iroh_dns.clone(),
-                            settings.iroh_relays.clone(),
+                            iroh_p2p_relays.clone(),
                             cfg.consensus
                                 .iroh_endpoints
                                 .iter()
                                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                                 .collect(),
                         )
-                        .await
-                        {
-                            Ok(connector) => connector.into_dyn(),
-                            Err(e) => {
-                                restored.cleanup();
-                                return Err(e);
-                            }
-                        }
+                        .await?
+                        .into_dyn()
                     };
 
                     let (p2p_status_senders, p2p_status_receivers) =
                         p2p_status_channels(connector.peers());
-                    let cfg = restored.install(&data_dir)?;
+
+                    // Write the restored config directly into the data directory, exactly
+                    // like a freshly generated config.
+                    write_server_config(
+                        &cfg,
+                        &data_dir,
+                        &module_init_registry,
+                        api_secrets.get_active(),
+                    )?;
 
                     Ok((cfg, connector, p2p_status_senders, p2p_status_receivers))
                 }

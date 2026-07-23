@@ -69,7 +69,7 @@ use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
@@ -90,7 +90,7 @@ use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
-    Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
+    Amount, IdxRange, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
     async_trait_maybe_send, base32, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -103,7 +103,6 @@ use futures::{StreamExt, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use itertools::Itertools as _;
-use oob::MintOOBStatesCreatedMulti;
 use output::MintOutputStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -117,12 +116,14 @@ use crate::client_db::{
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
-use crate::oob::{MintOOBStateMachine, MintOOBStates};
+use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, NoteIssuanceRequest,
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+
+const OOB_SPEND_NO_TIMEOUT: Duration = Duration::MAX;
 
 #[derive(Clone)]
 struct PeerSelector {
@@ -564,6 +565,8 @@ pub enum MintOperationMetaVariant {
     SpendOOB {
         requested_amount: Amount,
         oob_notes: OOBNotes,
+        #[serde(default)]
+        no_timeout: bool,
     },
 }
 
@@ -579,7 +582,7 @@ impl MintClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         // Try to load existing state or create new one if we can fetch recovery count
         let mut state = if let Some(state) = args
             .db()
@@ -601,7 +604,7 @@ impl MintClientInit {
         };
 
         if state.next_index == state.total_items {
-            return Ok(());
+            return Ok(None);
         }
 
         let peer_selector = PeerSelector::new(args.api().all_peers().clone());
@@ -655,6 +658,13 @@ impl MintClientInit {
             if state.next_index == state.total_items {
                 // Finalize recovery - create state machines for pending outputs
                 let finalized = state.finalize();
+
+                // Total value of the notes reconstructed during recovery
+                let recovered_amount = finalized
+                    .pending_notes
+                    .iter()
+                    .map(|(amount, _)| *amount)
+                    .sum::<Amount>();
 
                 // Collect blind nonces to fetch outpoints from server
                 let blind_nonces: Vec<BlindNonce> = finalized
@@ -710,7 +720,7 @@ impl MintClientInit {
 
                 dbtx.commit_tx().await;
 
-                return Ok(());
+                return Ok(Some(recovered_amount));
             }
 
             dbtx.commit_tx().await;
@@ -812,7 +822,7 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         let mut dbtx = args.db().begin_transaction_nc().await;
 
         // Check if V2 (slice-based) recovery state exists
@@ -1220,7 +1230,7 @@ struct SubscribeReissueExternalNotesRequest {
 #[derive(Deserialize)]
 struct SpendNotesExpertRequest {
     min_amount: Amount,
-    try_cancel_after: Duration,
+    try_cancel_after: Option<Duration>,
     include_invite: bool,
     extra_meta: serde_json::Value,
 }
@@ -1228,7 +1238,7 @@ struct SpendNotesExpertRequest {
 #[derive(Deserialize)]
 struct SpendNotesRequest {
     amount: Amount,
-    try_cancel_after: Duration,
+    try_cancel_after: Option<Duration>,
     include_invite: bool,
     extra_meta: serde_json::Value,
 }
@@ -1343,6 +1353,8 @@ impl MintClientModule {
             return ClientOutputBundle::new(vec![], vec![]);
         }
 
+        // Change layout: carve notes out of `exact_amount`, paying each note's
+        // own fee from that same value (the leftover below a note's fee is dust).
         let denominations = represent_amount(
             exact_amount,
             &self.get_note_counts_by_denomination(dbtx).await,
@@ -1351,6 +1363,60 @@ impl MintClientModule {
             &self.cfg.fee_consensus,
         );
 
+        self.create_output_for_denominations(dbtx, operation_id, denominations)
+            .await
+    }
+
+    /// Issues note outputs worth *exactly* `amount`, with no fee carved out of
+    /// that value — the federation fee is funded separately by the primary
+    /// module's balancing (extra inputs pulled in by
+    /// `create_final_inputs_and_outputs`). This is how a *target* amount should
+    /// be minted (e.g. an ecash send reissuing itself the denominations to hand
+    /// out), as opposed to laying out change; it mirrors mintv2's `send`.
+    ///
+    /// Because the smallest denomination is 1 msat (denominations are
+    /// contiguous powers of two), every amount is exactly representable, so
+    /// a single reissue always yields notes that can be spent for the exact
+    /// amount.
+    async fn create_exact_output(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
+        if amount == Amount::ZERO {
+            return ClientOutputBundle::new(vec![], vec![]);
+        }
+
+        self.create_output_for_denominations(
+            dbtx,
+            operation_id,
+            self.represent_exact_amount(amount),
+        )
+        .await
+    }
+
+    /// Decomposes `amount` into the minimal set of note denominations summing
+    /// to *exactly* `amount` — a plain greedy power-of-two breakdown with
+    /// no fee subtracted (unlike [`represent_amount`], which lays out
+    /// change). Used when minting a target amount; see
+    /// [`Self::create_exact_output`].
+    fn represent_exact_amount(&self, amount: Amount) -> TieredCounts {
+        represent_amount(
+            amount,
+            &TieredCounts::default(),
+            &self.cfg.tbs_pks,
+            0,
+            &FeeConsensus::zero(),
+        )
+    }
+
+    async fn create_output_for_denominations(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        denominations: TieredCounts,
+    ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
         let mut outputs = Vec::new();
         let mut issuance_requests = Vec::new();
 
@@ -1602,7 +1668,7 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector,
         amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
     ) -> anyhow::Result<(
         OperationId,
         Vec<MintClientStateMachines>,
@@ -1626,18 +1692,45 @@ impl MintClientModule {
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
 
-        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
-            operation_id,
-            state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
-                spendable_notes: selected_notes.clone().into_iter_items().collect(),
-                timeout: fedimint_core::time::now() + try_cancel_after,
-            }),
-        })];
+        let try_cancel_after = try_cancel_after.unwrap_or(OOB_SPEND_NO_TIMEOUT);
+        let state_machines = if try_cancel_after == OOB_SPEND_NO_TIMEOUT {
+            vec![]
+        } else {
+            vec![MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id,
+                state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
+                    spendable_notes: selected_notes.clone().into_iter_items().collect(),
+                    timeout: fedimint_core::time::now() + try_cancel_after,
+                }),
+            })]
+        };
 
         Ok((operation_id, state_machines, selected_notes))
     }
 
+    async fn is_no_timeout_oob_spend(&self, operation_id: OperationId) -> anyhow::Result<bool> {
+        let operation = self.mint_operation(operation_id).await?;
+        let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
+            operation.meta::<MintOperationMeta>().variant
+        else {
+            bail!("Operation is not a out-of-band spend");
+        };
+
+        Ok(no_timeout)
+    }
+
     pub async fn await_spend_oob_refund(&self, operation_id: OperationId) -> SpendOOBRefund {
+        if self
+            .is_no_timeout_oob_spend(operation_id)
+            .await
+            .unwrap_or(false)
+        {
+            return SpendOOBRefund {
+                user_triggered: false,
+                transaction_ids: vec![],
+            };
+        }
+
         Box::pin(
             self.notifier
                 .subscribe(operation_id)
@@ -1762,6 +1855,101 @@ impl MintClientModule {
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, &secret)
+    }
+
+    /// Computes the exact fee `reissue_external_notes(oob_notes)` would incur
+    /// given the wallet's current note inventory, without submitting anything.
+    ///
+    /// Runs the same change generation the real reissue does
+    /// (`create_final_inputs_and_outputs`, including note consolidation)
+    /// against a non-committable transaction that is dropped rather than
+    /// committed, so the wallet's notes are read but left untouched. The
+    /// quote is point-in-time: it depends on the current inventory and can
+    /// move as notes change.
+    pub async fn reissue_fee_quote(&self, oob_notes: &OOBNotes) -> anyhow::Result<FeeQuote> {
+        // A reissue submits the external notes as explicit inputs and no explicit
+        // outputs; the shared, module-agnostic fee quote runs the primary-module
+        // balancing (note consolidation + minting change) over the real
+        // inventory.
+        let input_amount = oob_notes.total_amount();
+        let input_fee: Amount = oob_notes
+            .notes()
+            .iter_items()
+            .map(|(amount, _)| self.cfg.fee_consensus.fee(amount))
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_bitcoin(input_amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(input_fee),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
+    }
+
+    /// Computes the fee a `send_oob_notes(amount)` would incur given the
+    /// wallet's current note inventory, without sending anything.
+    ///
+    /// A send is free when the wallet's existing notes can cover the (rounded)
+    /// amount exactly — it just hands those notes out. Otherwise the send first
+    /// reissues itself the right denominations, and that self-reissue
+    /// transaction is the only thing a send ever pays a fee for. This quote
+    /// mirrors that: it returns [`FeeQuote::ZERO`] when exact change is
+    /// available, and otherwise quotes the reissue the same way the real send
+    /// submits it (explicit outputs representing `amount`, no explicit inputs)
+    /// via the shared, module-agnostic fee quote over the real inventory. The
+    /// quote is point-in-time: it depends on the current inventory and can move
+    /// as notes change.
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        let amount = self.cfg.fee_consensus.round_up(amount);
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+
+        // Exact-change path: handing out existing notes never costs a fee. This
+        // is the same selection `send_oob_notes` tries first (see
+        // `try_spend_exact_notes_dbtx`).
+        if Self::select_notes(
+            &mut dbtx,
+            &SelectNotesWithExactAmount,
+            amount,
+            FeeConsensus::zero(),
+        )
+        .await
+        .is_ok()
+        {
+            return Ok(FeeQuote::ZERO);
+        }
+
+        drop(dbtx);
+
+        // Reissue path: the send mints itself notes worth exactly `amount` as
+        // explicit outputs (no explicit inputs) and the primary module funds and
+        // balances it. Quote that exact transaction — the same exact
+        // decomposition the real send's `create_exact_output` uses, so a single
+        // reissue covers it.
+        let denominations = self.represent_exact_amount(amount);
+
+        let output_amount = denominations.total_amount();
+        let output_fee: Amount = denominations
+            .iter()
+            .map(|(denomination, count)| self.cfg.fee_consensus.fee(denomination) * count as u64)
+            .sum();
+
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(output_amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(output_fee),
+                },
+            )
+            .await
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them
@@ -1926,7 +2114,8 @@ impl MintClientModule {
     /// users forgetting about failed out-of-band transactions. The timeout
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
-    /// come online and reissue the notes themselves.
+    /// come online and reissue the notes themselves. Pass `None` to disable
+    /// automatic cancellation.
     #[deprecated(
         since = "0.5.0",
         note = "Use `spend_notes_with_selector` instead, with `SelectNotesWithAtleastAmount` to maintain the same behavior"
@@ -1934,7 +2123,7 @@ impl MintClientModule {
     pub async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
@@ -1962,12 +2151,13 @@ impl MintClientModule {
     /// users forgetting about failed out-of-band transactions. The timeout
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
-    /// come online and reissue the notes themselves.
+    /// come online and reissue the notes themselves. Pass `None` to disable
+    /// automatic cancellation.
     pub async fn spend_notes_with_selector<M: Serialize + Send>(
         &self,
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
-        try_cancel_after: Duration,
+        try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
@@ -1981,6 +2171,7 @@ impl MintClientModule {
                 |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async {
+                        let no_timeout = try_cancel_after.is_none();
                         let (operation_id, states, notes) = self
                             .spend_notes_oob(
                                 dbtx,
@@ -2014,6 +2205,7 @@ impl MintClientModule {
                                     variant: MintOperationMetaVariant::SpendOOB {
                                         requested_amount,
                                         oob_notes: oob_notes.clone(),
+                                        no_timeout,
                                     },
                                     amount: oob_notes.total_amount(),
                                     extra_meta,
@@ -2130,8 +2322,11 @@ impl MintClientModule {
 
         let operation_id = OperationId::new_random();
 
-        // Create outputs for reissuance, committing the note index counter
-        // updates so that create_final_inputs_and_outputs won't reuse the same
+        // Reissue ourselves notes worth *exactly* `amount` (fee funded by the
+        // balancing layer), so the retry below can hand out the exact amount in a
+        // single reissue — rather than minting `amount` minus fees and having to
+        // reissue repeatedly to make up the difference. Commit the note index
+        // counter updates so create_final_inputs_and_outputs won't reuse the same
         // indices for change outputs.
         let output_bundle = self
             .client_ctx
@@ -2140,7 +2335,7 @@ impl MintClientModule {
                 |dbtx, _| {
                     Box::pin(async {
                         Ok::<_, anyhow::Error>(
-                            self.create_output(dbtx, operation_id, 1, amount).await,
+                            self.create_exact_output(dbtx, operation_id, amount).await,
                         )
                     })
                 },
@@ -2148,6 +2343,13 @@ impl MintClientModule {
             )
             .await
             .expect("Failed to commit output creation after 100 retries");
+
+        // The explicit outputs we just minted (worth exactly `amount`) occupy the
+        // first `explicit_output_count` out points of the transaction; the
+        // primary module's change is appended after them. The recursion below
+        // hands out these exact notes, so we must wait for *them* to finalize —
+        // not just the change.
+        let explicit_output_count = output_bundle.outputs().len() as u64;
 
         // Combine the output bundle state machines with the send state machine
         let combined_bundle = ClientOutputBundle::new(
@@ -2182,9 +2384,17 @@ impl MintClientModule {
             .await
             .context("Failed to submit reissuance transaction")?;
 
-        // Wait for outputs to be finalized
+        // Wait for *all* of the transaction's outputs to be finalized — both the
+        // change (returned in `out_point_range`) and the explicit exact-amount
+        // notes at out points `[0, explicit_output_count)`. The recursion below
+        // can only hand out the exact notes once they are spendable; awaiting
+        // only the change (as before) raced the recursion against issuance,
+        // causing it to re-reissue and drain the wallet.
+        let txid = out_point_range.txid();
+        let total_output_count = explicit_output_count + out_point_range.count() as u64;
+        let all_outputs = OutPointRange::new(txid, IdxRange::from(0..total_output_count));
         self.client_ctx
-            .await_primary_module_outputs(operation_id, out_point_range.into_iter().collect())
+            .await_primary_module_outputs(operation_id, all_outputs.into_iter().collect())
             .await
             .context("Failed to await output finalization")?;
 
@@ -2233,6 +2443,7 @@ impl MintClientModule {
                     variant: MintOperationMetaVariant::SpendOOB {
                         requested_amount: amount,
                         oob_notes: oob_notes.clone(),
+                        no_timeout: true,
                     },
                     amount: oob_notes.total_amount(),
                     extra_meta,
@@ -2329,12 +2540,11 @@ impl MintClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
         let operation = self.mint_operation(operation_id).await?;
-        if !matches!(
-            operation.meta::<MintOperationMeta>().variant,
-            MintOperationMetaVariant::SpendOOB { .. }
-        ) {
+        let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
+            operation.meta::<MintOperationMeta>().variant
+        else {
             bail!("Operation is not a out-of-band spend");
-        }
+        };
 
         let client_ctx = self.client_ctx.clone();
 
@@ -2343,6 +2553,11 @@ impl MintClientModule {
             .outcome_or_updates(operation, operation_id, move || {
                 stream! {
                     yield SpendOOBState::Created;
+
+                    if no_timeout {
+                        yield SpendOOBState::Success;
+                        return;
+                    }
 
                     let self_ref = client_ctx.self_ref();
 
@@ -2481,6 +2696,8 @@ pub fn spendable_notes_to_operation_id(
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
+    /// Empty when the spend disabled automatic refunds and no refund was
+    /// attempted.
     pub transaction_ids: Vec<TransactionId>,
 }
 
@@ -3333,6 +3550,49 @@ mod tests {
                     "out_point_indices": [dummy_outpoint.out_idx],
                 }
             })
+        );
+    }
+
+    #[test]
+    fn spend_oob_meta_no_timeout_defaults_to_false() {
+        let notes = vec![(
+            Amount::from_sats(1),
+            SpendableNote::consensus_decode_hex("a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd", &ModuleRegistry::default()).unwrap(),
+        )]
+        .into_iter()
+        .collect::<TieredMulti<_>>();
+        let oob_notes = OOBNotes::new(FederationId::dummy().to_prefix(), notes);
+        let mut old_meta_json = serde_json::to_value(MintOperationMetaVariant::SpendOOB {
+            requested_amount: Amount::from_sats(42),
+            oob_notes: oob_notes.clone(),
+            no_timeout: false,
+        })
+        .expect("serializing always works");
+        old_meta_json
+            .get_mut("spend_o_o_b")
+            .expect("spend OOB variant should serialize as spend_o_o_b")
+            .as_object_mut()
+            .expect("spend OOB variant should serialize to an object")
+            .remove("no_timeout");
+        assert_eq!(
+            old_meta_json,
+            json!({
+                "spend_o_o_b": {
+                    "requested_amount": Amount::from_sats(42),
+                    "oob_notes": oob_notes.clone(),
+                }
+            })
+        );
+
+        let old_meta: MintOperationMetaVariant =
+            serde_json::from_value(old_meta_json).expect("parsing old spend OOB meta failed");
+        assert_eq!(
+            old_meta,
+            MintOperationMetaVariant::SpendOOB {
+                requested_amount: Amount::from_sats(42),
+                oob_notes,
+                no_timeout: false,
+            }
         );
     }
 }

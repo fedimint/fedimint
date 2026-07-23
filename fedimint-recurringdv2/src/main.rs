@@ -14,11 +14,10 @@ use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::Scalar;
-use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinHash};
 use fedimint_lnurl::{InvoiceResponse, LnurlResponse, PayResponse, pay_request_tag};
-use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage, fee_encoded_expiration};
 use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
@@ -210,9 +209,12 @@ async fn create_contract_and_fetch_invoice(
         "Amount too small"
     );
 
-    let expiration = duration_since_epoch()
-        .as_secs()
-        .saturating_add(u64::from(expiry_secs));
+    // Encode the gateway fee in the contract expiration so the receiving client
+    // can recover it and report the invoice amount in its payment events. These
+    // contracts are discovered via the contract stream rather than awaited
+    // per-invoice, so a real expiration is not needed here; the bolt11 invoice
+    // still carries the real expiry of `expiry_secs`.
+    let expiration = fee_encoded_expiration(routing_info.receive_fee.fee(amount).msats);
 
     let contract = IncomingContract::new(
         aggregate_pk,

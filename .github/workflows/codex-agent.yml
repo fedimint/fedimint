@@ -1,6 +1,8 @@
 name: "Codex Agent"
 
 on:
+  issues:
+    types: [opened, assigned]
   issue_comment:
     types: [created]
   workflow_run:
@@ -22,11 +24,18 @@ jobs:
     timeout-minutes: 120
     if: >-
       github.repository == 'fedimint/fedimint' &&
-      ((github.event_name == 'issue_comment' &&
+      ((github.event_name == 'issues' &&
+        github.actor != 'fedimint-bot' &&
+        github.actor != 'github-actions[bot]' &&
+        (github.event.action == 'opened' ||
+         (github.event.action == 'assigned' &&
+          github.event.assignee.login == 'fedimint-bot'))) ||
+       (github.event_name == 'issue_comment' &&
         github.actor != 'fedimint-bot' &&
         github.actor != 'github-actions[bot]') ||
        (github.event_name == 'workflow_run' &&
-        github.event.workflow_run.event == 'pull_request_review_comment' &&
+        (github.event.workflow_run.event == 'pull_request_review' ||
+         github.event.workflow_run.event == 'pull_request_review_comment') &&
         github.event.workflow_run.conclusion == 'success'))
 
     steps:
@@ -53,13 +62,15 @@ jobs:
           comment_endpoint=""
           comment_user=""
           comment_id=""
+          issue_number=""
+          request_kind="${event_name}"
           body=""
           artifact_dir=""
 
           if [ "${event_name}" = "workflow_run" ]; then
             # The receiver may have run without secrets on a fork PR. Treat its
             # artifact as untrusted and use it only to find the live review
-            # comment, then re-check the mention and reviewer membership here.
+            # object, then re-check the mention and reviewer membership here.
             artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
             if [ -z "${artifacts_url}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
@@ -68,16 +79,16 @@ jobs:
             fi
 
             artifact_id=$(gh api "${artifacts_url}" \
-              --jq '.artifacts[] | select(.name == "codex-agent-review-comment-event") | .id' \
+              --jq '.artifacts[] | select(.name == "codex-agent-review-event" or .name == "codex-agent-review-comment-event") | .id' \
               | head -n1)
 
             if [ -z "${artifact_id}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: receiver uploaded no review-comment event artifact"
+              echo "Skipping: receiver uploaded no review event artifact"
               exit 0
             fi
 
-            artifact_dir="${RUNNER_TEMP}/codex-agent-review-comment-artifact"
+            artifact_dir="${RUNNER_TEMP}/codex-agent-review-artifact"
             rm -rf "${artifact_dir}"
             mkdir -p "${artifact_dir}"
             gh api \
@@ -88,19 +99,49 @@ jobs:
             event_payload="${artifact_dir}/event.json"
             if [ ! -s "${event_payload}" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: review-comment event artifact is missing event.json"
+              echo "Skipping: review event artifact is missing event.json"
               exit 0
             fi
 
-            comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
-            if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+            request_kind=$(jq -r '.event_name // ""' "${event_payload}")
+            if [ -z "${request_kind}" ]; then
+              if jq -e '.comment.id?' "${event_payload}" >/dev/null; then
+                request_kind="pull_request_review_comment"
+              elif jq -e '.review.id?' "${event_payload}" >/dev/null; then
+                request_kind="pull_request_review"
+              fi
+            fi
+
+            if [ "${request_kind}" = "pull_request_review_comment" ]; then
+              comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
+              if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review-comment artifact has invalid comment id"
+                exit 0
+              fi
+
+              comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
+            elif [ "${request_kind}" = "pull_request_review" ]; then
+              comment_id=$(jq -r '.review.id // ""' "${event_payload}")
+              pull_number=$(jq -r '.pull_request.number // ""' "${event_payload}")
+              if ! [[ "${comment_id}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review artifact has invalid review id"
+                exit 0
+              fi
+              if ! [[ "${pull_number}" =~ ^[0-9]+$ ]]; then
+                echo "run=false" >> "${GITHUB_OUTPUT}"
+                echo "Skipping: review artifact has invalid pull request number"
+                exit 0
+              fi
+
+              comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/${pull_number}/reviews/${comment_id}"
+            else
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: review-comment artifact has invalid comment id"
+              echo "Skipping: review artifact has unsupported event_name=${request_kind:-<missing>}"
               exit 0
             fi
-
-            comment_endpoint="repos/${GITHUB_REPOSITORY}/pulls/comments/${comment_id}"
-          else
+          elif [ "${event_name}" = "issue_comment" ]; then
             body=$(jq -r '.comment.body // ""' "${event_payload}")
             comment_id=$(jq -r '.comment.id // ""' "${event_payload}")
             comment_user=$(jq -r '.comment.user.login // ""' "${event_payload}")
@@ -118,6 +159,42 @@ jobs:
             fi
 
             comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"
+          else
+            issue_number=$(jq -r '.issue.number // ""' "${event_payload}")
+            comment_id="${issue_number}"
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+            title=$(jq -r '.issue.title // ""' "${event_payload}")
+            body=$(jq -r '.issue.body // ""' "${event_payload}")
+            issue_text=$(printf '%s\n%s' "${title}" "${body}")
+            comment_user=$(jq -r '.sender.login // env.GITHUB_ACTOR' "${event_payload}")
+            author_association=$(jq -r '.issue.author_association // ""' "${event_payload}")
+
+            echo "event=${event_name}"
+            echo "action=${action}"
+            echo "issue_number=${issue_number}"
+            echo "request_user=${comment_user}"
+            echo "author_association=${author_association:-<missing>}"
+
+            if ! [[ "${issue_number}" =~ ^[0-9]+$ ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issues event has invalid issue number"
+              exit 0
+            fi
+
+            if [ "${action}" = "opened" ] && [[ "${issue_text}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: opened issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issue was not assigned to fedimint-bot"
+              exit 0
+            fi
+
+            comment_endpoint="repos/${GITHUB_REPOSITORY}/issues/${issue_number}"
           fi
 
           live_comment=$(curl --fail-with-body --silent --show-error \
@@ -127,15 +204,40 @@ jobs:
             "${api_url}/${comment_endpoint}")
 
           body=$(jq -r '.body // ""' <<<"${live_comment}")
-          comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
           live_author_association=$(jq -r '.author_association // ""' <<<"${live_comment}")
+          if [ "${event_name}" != "issues" ]; then
+            comment_user=$(jq -r '.user.login // ""' <<<"${live_comment}")
+          fi
 
           echo "event=${event_name}"
           echo "comment_id=${comment_id}"
           echo "comment_user=${comment_user}"
           echo "live_author_association=${live_author_association:-<missing>}"
 
-          if [[ "${body}" != *"@fedimint-bot"* ]]; then
+          if [ "${event_name}" = "issues" ]; then
+            action=$(jq -r '.action // ""' "${event_payload}")
+            assignee=$(jq -r '.assignee.login // ""' "${event_payload}")
+            title=$(jq -r '.title // ""' <<<"${live_comment}")
+            issue_text=$(printf '%s\n%s' "${title}" "${body}")
+
+            if [ "${action}" = "opened" ] && [[ "${issue_text}" != *"@fedimint-bot"* ]]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue does not mention @fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && [ "${assignee}" != "fedimint-bot" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: issue assignment event is not for fedimint-bot"
+              exit 0
+            fi
+
+            if [ "${action}" = "assigned" ] && ! jq -e '.assignees[]? | select(.login == "fedimint-bot")' <<<"${live_comment}" >/dev/null; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: live issue is no longer assigned to fedimint-bot"
+              exit 0
+            fi
+          elif [[ "${body}" != *"@fedimint-bot"* ]]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
             echo "Skipping: live comment does not mention @fedimint-bot"
             exit 0
@@ -162,7 +264,7 @@ jobs:
 
           if [ "${membership_state}" != "active" ]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping: comment author is not an active fedimint/reviewers team member"
+            echo "Skipping: requester is not an active fedimint/reviewers team member"
             exit 0
           fi
 
@@ -170,9 +272,9 @@ jobs:
 
           if [ "${event_name}" = "workflow_run" ]; then
             pull_request_url=$(jq -r '.pull_request_url // ""' <<<"${live_comment}")
-            if [ -z "${pull_request_url}" ]; then
+            if [ -z "${pull_request_url}" ] || [ "${pull_request_url}" = "null" ]; then
               echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: live review comment has no pull_request_url"
+              echo "Skipping: live review object has no pull_request_url"
               exit 0
             fi
 
@@ -182,25 +284,37 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "${pull_request_url}")
 
-            jq -n \
-              --argjson comment "${live_comment}" \
-              --argjson pull_request "${pull_request}" \
-              '{
-                action: "created",
-                comment: $comment,
-                pull_request: $pull_request
-              }' > "${agent_event_path}"
-            echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            if [ "${request_kind}" = "pull_request_review_comment" ]; then
+              jq -n \
+                --argjson comment "${live_comment}" \
+                --argjson pull_request "${pull_request}" \
+                '{
+                  action: "created",
+                  comment: $comment,
+                  pull_request: $pull_request
+                }' > "${agent_event_path}"
+              echo "agent_event_name=pull_request_review_comment" >> "${GITHUB_OUTPUT}"
+            else
+              jq -n \
+                --argjson review "${live_comment}" \
+                --argjson pull_request "${pull_request}" \
+                '{
+                  action: "submitted",
+                  review: $review,
+                  pull_request: $pull_request
+                }' > "${agent_event_path}"
+              echo "agent_event_name=pull_request_review" >> "${GITHUB_OUTPUT}"
+            fi
             echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
           else
             cp "${event_payload}" "${agent_event_path}"
             echo "agent_event_name=${event_name}" >> "${GITHUB_OUTPUT}"
-            echo "agent_actor=${GITHUB_ACTOR}" >> "${GITHUB_OUTPUT}"
+            echo "agent_actor=${comment_user}" >> "${GITHUB_OUTPUT}"
           fi
 
           echo "agent_event_path=${agent_event_path}" >> "${GITHUB_OUTPUT}"
           echo "comment_id=${comment_id}" >> "${GITHUB_OUTPUT}"
-          echo "comment_kind=${event_name}" >> "${GITHUB_OUTPUT}"
+          echo "comment_kind=${request_kind}" >> "${GITHUB_OUTPUT}"
           echo "run=true" >> "${GITHUB_OUTPUT}"
           echo "Trigger accepted"
           BASH
@@ -222,8 +336,13 @@ jobs:
           set -euo pipefail
           api_url="${GITHUB_API_URL:-https://api.github.com}"
 
-          if [ "${COMMENT_KIND}" = "workflow_run" ]; then
+          if [ "${COMMENT_KIND}" = "pull_request_review_comment" ]; then
             endpoint="repos/${REPOSITORY}/pulls/comments/${COMMENT_ID}/reactions"
+          elif [ "${COMMENT_KIND}" = "pull_request_review" ]; then
+            echo "Skipping reaction: pull request reviews do not have a supported reactions endpoint"
+            exit 0
+          elif [ "${COMMENT_KIND}" = "issues" ]; then
+            endpoint="repos/${REPOSITORY}/issues/${COMMENT_ID}/reactions"
           else
             endpoint="repos/${REPOSITORY}/issues/comments/${COMMENT_ID}/reactions"
           fi
@@ -238,11 +357,12 @@ jobs:
             >/dev/null
           BASH
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         if: steps.validate.outputs.run == 'true'
         with:
           ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
+          fetch-depth: 50
+          filter: blob:none
           persist-credentials: false
 
       - name: Run Codex in Fedimint dev shell

@@ -33,6 +33,10 @@ where
         parts: &mut Parts,
         state: &UiState<Api>,
     ) -> Result<Self, Self::Rejection> {
+        if !state.requires_auth {
+            return Ok(UserAuth::authenticated());
+        }
+
         let jar = CookieJar::from_request_parts(parts, state)
             .await
             .map_err(|_| Redirect::to(LOGIN_ROUTE))?;

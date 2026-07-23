@@ -82,6 +82,18 @@ function run_test_for_versions() {
   gateway_version=$7
   export FM_ENABLE_MODULE_LNV2=$9
 
+  # fedimintd now enables the v2 module set (lnv2/mintv2/walletv2) by default.
+  # Pin the test baseline to the v1 module set so existing tests keep
+  # generating v1 federations; individual tests that exercise v2 modules
+  # opt in by overriding these (e.g. `env FM_ENABLE_MODULE_MINTV2=true
+  # FM_ENABLE_MODULE_MINT=false ...`). LNv1 stays on regardless of the
+  # `LNv2: 0/1` matrix flag, matching the previous always-on default.
+  export FM_ENABLE_MODULE_LNV1=1
+  export FM_ENABLE_MODULE_MINT=1
+  export FM_ENABLE_MODULE_MINTV2=0
+  export FM_ENABLE_MODULE_WALLET=1
+  export FM_ENABLE_MODULE_WALLETV2=0
+
   use_fed_binaries_for_version "$fed_version"
   use_client_binaries_for_version "$client_version"
   use_gateway_binaries_for_version "$gateway_version"
@@ -133,12 +145,32 @@ export -f filter_count
 function nix_build_binary_for_version() {
   binary="$1"
   version="$2"
+  max_attempts="${FM_NIX_BUILD_BINARY_ATTEMPTS:-4}"
+  retry_delay="${FM_NIX_BUILD_BINARY_RETRY_DELAY:-60}"
+  attempt=1
 
-  >&2 echo "Compiling ${binary} for version ${version} ..."
-  output_path=$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths) || {
-    >&2 echo "Error: nix build failed for $binary $version"
-    exit 1
-  }
+  while true; do
+    if [ "$attempt" -eq 1 ]; then
+      >&2 echo "Compiling ${binary} for version ${version} ..."
+    else
+      >&2 echo "Retrying ${binary} for version ${version}, attempt ${attempt}/${max_attempts} ..."
+    fi
+
+    if output_path=$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths); then
+      break
+    fi
+
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      >&2 echo "Error: nix build failed for $binary $version after $attempt attempts"
+      >&2 echo "If the log above shows api.github.com 5xx errors, this is a known GitHub infrastructure failure. Retry the workflow later."
+      exit 1
+    fi
+
+    >&2 echo "nix build failed for $binary $version; retrying in ${retry_delay}s ..."
+    sleep "$retry_delay"
+    attempt=$((attempt + 1))
+  done
+
   echo "${output_path}/bin/${binary}"
 }
 export -f nix_build_binary_for_version
@@ -342,4 +374,3 @@ function contains() {
   done
   return 1
 }
-

@@ -10,12 +10,15 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug};
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::{Context as _, anyhow, bail};
 use async_trait::async_trait;
-use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
+};
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
@@ -30,6 +33,43 @@ use tracing::trace;
 use crate::error::ServerError;
 use crate::metrics::{CONNECTION_ATTEMPTS_TOTAL, CONNECTION_DURATION_SECONDS};
 use crate::ws::WebsocketConnector;
+
+const IROH_NEXT_PATH: &str = "/v1";
+
+/// Parse an advertised Iroh 1.0 endpoint ID into its API URL.
+///
+/// The `/v1` path is an internal transport-selection marker. It prevents the
+/// connector from attempting Iroh 0.35 against an Iroh 1.0-only identity,
+/// avoiding both an inappropriate connection attempt and its overhead.
+pub fn iroh_next_endpoint_url(endpoint: &str) -> anyhow::Result<SafeUrl> {
+    let endpoint_id =
+        iroh_next::EndpointId::from_str(endpoint).context("Invalid Iroh 1.0 endpoint ID")?;
+    SafeUrl::parse(&format!("iroh://{endpoint_id}{IROH_NEXT_PATH}"))
+        .context("Invalid Iroh 1.0 endpoint URL")
+}
+
+fn is_iroh_next_endpoint_url(url: &SafeUrl) -> anyhow::Result<bool> {
+    match url.path() {
+        "" | "/" => Ok(false),
+        IROH_NEXT_PATH => Ok(true),
+        path => bail!("Unsupported Iroh API URL path: {path}"),
+    }
+}
+
+fn preserve_iroh_next_marker(original: &SafeUrl, replacement: &SafeUrl) -> SafeUrl {
+    // An Iroh-to-Iroh override changes the destination, not the selected wire
+    // version. Cross-protocol overrides deliberately replace the whole route.
+    if original.scheme() == "iroh"
+        && original.path() == IROH_NEXT_PATH
+        && replacement.scheme() == "iroh"
+    {
+        let mut replacement = replacement.clone().to_unsafe();
+        replacement.set_path(IROH_NEXT_PATH);
+        replacement.into()
+    } else {
+        replacement.clone()
+    }
+}
 
 pub type ServerResult<T> = Result<T, ServerError>;
 
@@ -57,6 +97,8 @@ pub struct ConnectorRegistryBuilder {
     iroh_dns: Option<SafeUrl>,
     /// Enable Pkarr DHT discovery
     iroh_pkarr_dht: bool,
+    /// Enable compatible iroh-next endpoint preference from guardian metadata
+    iroh_next: bool,
 
     /// Enable Websocket API handling at all?
     ws_enable: bool,
@@ -69,6 +111,8 @@ pub struct ConnectorRegistryBuilder {
 impl ConnectorRegistryBuilder {
     #[allow(clippy::unused_async)] // Leave room for async in the future
     pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
+        let iroh_next = self.iroh_next && self.iroh_enable;
+
         // Create initialization functions for each connector type
         let mut connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)> =
             BTreeMap::new();
@@ -126,6 +170,7 @@ impl ConnectorRegistryBuilder {
                 connection_overrides: self.connection_overrides,
                 initialized: SetOnce::new(),
                 path_change,
+                iroh_next,
             }
             .into(),
         })
@@ -178,6 +223,15 @@ impl ConnectorRegistryBuilder {
         }
     }
 
+    /// Enable use of compatible iroh-next endpoints advertised in guardian
+    /// metadata.
+    pub fn iroh_next(self, enable: bool) -> Self {
+        Self {
+            iroh_next: enable,
+            ..self
+        }
+    }
+
     pub fn ws_force_tor(self, enable: bool) -> Self {
         Self {
             ws_force_tor: enable,
@@ -204,6 +258,12 @@ impl ConnectorRegistryBuilder {
         // TODO: read rest of the env
         for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
             self = self.with_connection_override(k, v);
+        }
+
+        // Disable iroh-next endpoint preference in test/devimint environments
+        // where iroh-next server endpoints are not running.
+        if is_running_in_test_env() {
+            self.iroh_next = false;
         }
 
         Ok(Self { ..self })
@@ -234,6 +294,9 @@ struct ConnectorRegistryInner {
     /// Ticks whenever a connector observes a transport-level path change
     /// (e.g. iroh relay → direct). Only Iroh bumps this today.
     path_change: Arc<watch::Sender<u64>>,
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
+    iroh_next: bool,
 }
 
 /// A set of available connectivity protocols a client can use to make
@@ -258,11 +321,18 @@ impl fmt::Debug for ConnectorRegistry {
         f.debug_struct("ConnectorRegistry")
             .field("connectors_lazy", &self.inner.connectors_lazy.len())
             .field("connection_overrides", &self.inner.connection_overrides)
+            .field("iroh_next", &self.inner.iroh_next)
             .finish()
     }
 }
 
 impl ConnectorRegistry {
+    /// Whether compatible iroh-next endpoints advertised in guardian metadata
+    /// are used.
+    pub fn iroh_next_enabled(&self) -> bool {
+        self.inner.iroh_next
+    }
+
     /// Create a builder with recommended defaults intended for client-side
     /// usage
     ///
@@ -272,6 +342,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
@@ -287,6 +358,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: true,
+            iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: false,
@@ -302,6 +374,7 @@ impl ConnectorRegistry {
             iroh_enable: true,
             iroh_dns: None,
             iroh_pkarr_dht: false,
+            iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
             http_enable: true,
@@ -352,7 +425,12 @@ impl ConnectorRegistry {
         );
         let _ = self.inner.initialized.set(());
 
-        let url = match self.inner.connection_overrides.get(url) {
+        let replacement = self
+            .inner
+            .connection_overrides
+            .get(url)
+            .map(|replacement| preserve_iroh_next_marker(url, replacement));
+        let url = match replacement.as_ref() {
             Some(replacement) => {
                 trace!(
                     target: LOG_NET,

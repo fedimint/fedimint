@@ -158,6 +158,11 @@ function lnv2_module_payments() {
 }
 export -f lnv2_module_payments
 
+function lnv2_module_duplicate_payment() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh duplicate-payment
+}
+export -f lnv2_module_duplicate_payment
+
 function lnv2_mintv2_walletv2_lightning_payments() {
   # v2 modules are not supported by older versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -226,12 +231,6 @@ function test_client_config_change_detection() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-client-config-change-detection.sh
 }
 export -f test_client_config_change_detection
-
-function test_guardian_password_change() {
-  # test modifies server configs and restarts, so we need to override FM_OFFLINE_NODES
-  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-guardian-password-change.sh
-}
-export -f test_guardian_password_change
 
 function test_admin_auth() {
   # test requires v0.11.0-alpha features, skip for backwards-compatibility tests
@@ -483,6 +482,7 @@ tests_to_run_in_parallel+=(
   "gw_liquidity_test_mintv2"
   "lnv2_module_gateway_registration"
   "lnv2_module_payments"
+  "lnv2_module_duplicate_payment"
   "lnv2_mintv2_walletv2_lightning_payments"
   "lnv2_module_lnurl_pay"
   "lnv2_module_lnurl_recovery"
@@ -501,7 +501,6 @@ tests_to_run_in_parallel+=(
   "cannot_replay_tx"
   "test_offline_client_initialization"
   "test_client_config_change_detection"
-  "test_guardian_password_change"
   "test_admin_auth"
   "circular_deposit"
   "wallet_recovery"

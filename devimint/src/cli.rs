@@ -5,6 +5,7 @@ use std::time::Duration;
 use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, ensure};
+use clap::builder::BoolishValueParser;
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
@@ -41,11 +42,11 @@ pub struct CommonArgs {
 
     /// Don't set up new Federation, start from the state in existing
     /// devimint data dir
-    #[arg(long, env = "FM_SKIP_SETUP")]
+    #[arg(long, env = "FM_SKIP_SETUP", value_parser = BoolishValueParser::new())]
     skip_setup: bool,
 
     /// Do not set up federation and stop at a pre-dkg stage
-    #[arg(long, env = FM_PRE_DKG_ENV)]
+    #[arg(long, env = FM_PRE_DKG_ENV, value_parser = BoolishValueParser::new())]
     pre_dkg: bool,
 
     /// Number of peers to allocate in every federation

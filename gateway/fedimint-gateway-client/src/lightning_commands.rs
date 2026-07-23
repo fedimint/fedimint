@@ -4,14 +4,14 @@ use clap::Subcommand;
 use fedimint_connectors::error::ServerError;
 use fedimint_core::Amount;
 use fedimint_gateway_client::{
-    close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
-    list_transactions, open_channel, open_channel_with_push, pay_invoice, pay_offer,
+    close_channels_with_peer, connect_peer, create_invoice_for_self, create_offer, get_invoice,
+    list_channels, list_transactions, open_channel, open_channel_with_push, pay_invoice, pay_offer,
     set_channel_fees,
 };
 use fedimint_gateway_common::{
-    CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    GetInvoiceRequest, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    PayOfferPayload, SetChannelFeesRequest,
+    CloseChannelsWithPeerRequest, ConnectPeerRequest, CreateInvoiceForOperatorPayload,
+    CreateOfferPayload, GetInvoiceRequest, ListTransactionsPayload, NodeAddress,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, SetChannelFeesRequest,
 };
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
@@ -34,6 +34,13 @@ pub enum LightningCommands {
     },
     /// Pay a lightning invoice as the gateway (i.e. no e-cash exchange).
     PayInvoice { invoice: Bolt11Invoice },
+    /// Connect to another lightning node without opening a channel.
+    ConnectPeer {
+        /// The peer to connect to, in `pubkey@host[:port]` format.
+        /// If omitted, the port defaults to 9735.
+        #[clap(long)]
+        node_address: NodeAddress,
+    },
     /// Open a channel with another lightning node.
     OpenChannel {
         /// The public key of the node to open a channel with
@@ -175,6 +182,10 @@ impl LightningCommands {
                 let preimage =
                     pay_invoice(client, base_url, PayInvoiceForOperatorPayload { invoice }).await?;
                 Ok(CliOutput::Preimage { preimage })
+            }
+            Self::ConnectPeer { node_address } => {
+                connect_peer(client, base_url, ConnectPeerRequest { node_address }).await?;
+                Ok(CliOutput::Empty)
             }
             Self::OpenChannel {
                 pubkey,

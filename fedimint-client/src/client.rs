@@ -26,8 +26,8 @@ use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy
 use fedimint_client_module::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
 use fedimint_client_module::sm::{ActiveStateMeta, DynState, InactiveStateMeta};
 use fedimint_client_module::transaction::{
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE, TransactionBuilder, TxSubmissionStates,
-    TxSubmissionStatesSM,
+    FeeQuote, FeeQuoteRequest, TRANSACTION_SUBMISSION_MODULE_INSTANCE, TransactionBuilder,
+    TxSubmissionStates, TxSubmissionStatesSM,
 };
 use fedimint_client_module::{
     AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
@@ -87,8 +87,8 @@ use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
-    get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
+    apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -109,6 +109,13 @@ pub(crate) mod handle;
 const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
     &[ApiVersion { major: 0, minor: 0 }];
 
+struct FinalizedTransaction {
+    transaction: Transaction,
+    states: Vec<DynState>,
+    change_range: Range<u64>,
+    fees: Amounts,
+}
+
 /// Primary module candidates at specific priority level
 #[derive(Default)]
 pub(crate) struct PrimaryModuleCandidates {
@@ -117,6 +124,11 @@ pub(crate) struct PrimaryModuleCandidates {
     /// Modules handling any unit
     wildcard: Vec<ModuleInstanceId>,
 }
+
+/// An in-progress module recovery future, resolving to the amount recovered
+/// from the module (if it tracks one) once recovery completes.
+pub(crate) type ModuleRecoveryFuture =
+    Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
 
 /// Main client type
 ///
@@ -169,6 +181,7 @@ pub struct Client {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
     /// User-provided Bitcoin RPC client for modules to use
     ///
     /// Stored here for potential future access; currently passed to modules
@@ -652,7 +665,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
+    ) -> anyhow::Result<FinalizedTransaction> {
         let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
 
         let mut added_inputs_bundles = vec![];
@@ -723,9 +736,167 @@ impl Client {
             assert!(input_amount >= output_amount, "Transaction is underfunded");
         }
 
-        let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
+        // Compute fees as the difference between total input and output amounts.
+        // This captures both explicit federation fees and any overpayment due to
+        // denomination constraints.
+        let fees = {
+            let mut input_total = Amounts::ZERO;
+            for input in partial_transaction.inputs() {
+                input_total
+                    .checked_add_mut(&input.amounts)
+                    .expect("Own transaction amounts don't overflow");
+            }
+            let mut output_total = Amounts::ZERO;
+            for output in partial_transaction.outputs() {
+                output_total
+                    .checked_add_mut(&output.amounts)
+                    .expect("Own transaction amounts don't overflow");
+            }
+            input_total
+                .checked_sub(&output_total)
+                .expect("Inputs >= outputs for own transactions")
+        };
 
-        Ok((tx, states, change_range))
+        let (transaction, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
+
+        Ok(FinalizedTransaction {
+            transaction,
+            states,
+            change_range,
+            fees,
+        })
+    }
+
+    /// Computes the fee that finalizing and submitting a transaction with the
+    /// explicit items described by `request` would incur, without submitting
+    /// anything.
+    ///
+    /// This is the read-only twin of `Self::finalize_transaction`: it runs
+    /// the exact same primary-module balancing
+    /// (`create_final_inputs_and_outputs`, including funding selection /
+    /// consolidation / rebalancing) against a non-committable transaction
+    /// that is dropped rather than committed, so the client's funds are
+    /// read but left untouched. The quote is point-in-time: it depends on
+    /// the current inventory and can move as funds change.
+    ///
+    /// The mechanism is module-agnostic — [`FeeQuoteRequest`] only summarizes
+    /// the explicit side (gross amounts + federation fees) of whichever module
+    /// is quoting (mint, lightning, wallet, …), and the change is generated by
+    /// the primary module of each affected unit. The request and the resulting
+    /// breakdown are multi-unit, so an operation spanning several units (e.g.
+    /// Bitcoin plus a custom currency) is quoted in one call, mirroring how
+    /// `finalize_transaction` balances each unit independently.
+    pub async fn fee_quote(
+        &self,
+        operation_id: OperationId,
+        request: FeeQuoteRequest,
+    ) -> anyhow::Result<FeeQuote> {
+        let FeeQuoteRequest {
+            input_amount,
+            output_amount,
+            input_fee,
+            output_fee,
+        } = request;
+
+        // Start the totals from the explicit side; the change the primary
+        // modules add below is a disjoint set of items, accumulated into these
+        // same totals.
+        let mut gross_input = input_amount.clone();
+        let mut gross_output = output_amount.clone();
+        let mut input_fees = input_fee.clone();
+        let mut output_fees = output_fee.clone();
+
+        // The primary modules balance the transaction by minting change (and
+        // possibly pulling in extra inputs). The amounts they must balance
+        // mirror `finalize_transaction`: per unit the input side is the gross
+        // input value, the output side carries the gross output value plus
+        // every explicit fee (fees consume funding on the output side).
+        let balance_input = input_amount;
+        let balance_output = output_amount
+            .checked_add(&input_fee)
+            .and_then(|amounts| amounts.checked_add(&output_fee))
+            .expect("explicit amounts and fees cannot overflow an Amounts");
+
+        // Non-committable: the balancing writes (e.g. removing consolidated
+        // notes) are discarded on drop, so this is a pure dry-run over the real
+        // inventory.
+        let mut dbtx = self.db.begin_transaction_nc().await;
+
+        // Balance each affected unit independently via its own primary module,
+        // exactly as `finalize_transaction` does over the real transaction.
+        for unit in balance_input.units().union(&balance_output.units()) {
+            let balance_input_amount = balance_input.get(unit).copied().unwrap_or_default();
+            let balance_output_amount = balance_output.get(unit).copied().unwrap_or_default();
+            if balance_input_amount == balance_output_amount {
+                continue;
+            }
+
+            let Some((module_id, module)) = self.primary_module_for_unit(*unit) else {
+                bail!("No module to balance a partial transaction (affected unit: {unit:?}");
+            };
+
+            let (change_input, change_output) = module
+                .create_final_inputs_and_outputs(
+                    module_id,
+                    &mut dbtx.to_ref_nc(),
+                    operation_id,
+                    *unit,
+                    balance_input_amount,
+                    balance_output_amount,
+                )
+                .await?;
+
+            // Fold the change into the totals. These are a disjoint set of items
+            // from the explicit ones (the primary module only sees the scalar
+            // amounts to balance, never the explicit items), so this is not
+            // double-counting. Iterate the bundles the way `finalize_transaction`
+            // would, looking each fee up via the module that owns the item.
+            for input in change_input.inputs() {
+                let module = self.get_module(input.input.module_instance_id());
+                let fee = module
+                    .input_fee(&input.amounts, &input.input)
+                    .expect("Primary module must know its own change input fees");
+                gross_input.checked_add_mut(&input.amounts);
+                input_fees.checked_add_mut(&fee);
+            }
+
+            for output in change_output.outputs() {
+                let module = self.get_module(output.output.module_instance_id());
+                let fee = module
+                    .output_fee(&output.amounts, &output.output)
+                    .expect("Primary module must know its own change output fees");
+                gross_output.checked_add_mut(&output.amounts);
+                output_fees.checked_add_mut(&fee);
+            }
+        }
+
+        // Mark the dropped dbtx as intentionally uncommitted so the commit
+        // tracker doesn't warn.
+        dbtx.ignore_uncommitted();
+
+        // Per unit: net wallet gain = produced outputs − consumed inputs. The
+        // total fee is everything the gross input value did not become a net
+        // gain; whatever is left after the input/output fees is
+        // sub-denomination dust.
+        let mut dust = Amounts::ZERO;
+        for unit in gross_input.units().union(&gross_output.units()) {
+            let total = gross_input
+                .get(unit)
+                .copied()
+                .unwrap_or_default()
+                .saturating_sub(gross_output.get(unit).copied().unwrap_or_default());
+            let fees = input_fees.get(unit).copied().unwrap_or_default()
+                + output_fees.get(unit).copied().unwrap_or_default();
+            dust = dust
+                .checked_add_unit(total.saturating_sub(fees), *unit)
+                .expect("dust cannot overflow an Amounts");
+        }
+
+        Ok(FeeQuote {
+            input: input_fees,
+            output: output_fees,
+            dust,
+        })
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -826,7 +997,12 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
-        let (transaction, mut states, change_range) = self
+        let FinalizedTransaction {
+            transaction,
+            mut states,
+            change_range,
+            fees,
+        } = self
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
 
@@ -874,6 +1050,9 @@ impl Client {
         states.push(tx_submission_sm);
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
+
+        dbtx.insert_new_entry(&TransactionFeesKey(txid), &fees)
+            .await;
 
         self.log_event_dbtx(dbtx, None, TxCreatedEvent { txid, operation_id })
             .await;
@@ -931,6 +1110,66 @@ impl Client {
             .next()
             .await
             .is_some()
+    }
+
+    /// Calculates the federation fees paid in the course of the operation.
+    ///
+    /// Federation fees are fees paid to the federation (e.g. for ecash) and do
+    /// not include fees paid to service providers like the Lightning gateway.
+    /// These still have to be separately reported by the module.
+    ///
+    /// Fees are calculated by subtracting the total output amount from the
+    /// total input amount, any difference is either due to direct fees or
+    /// overpayment to avoid generating uneconomic outputs.
+    ///
+    /// The returned amount may still increase while the operation is active;
+    /// use [`Client::has_active_states`] to check whether it is final.
+    ///
+    /// Returns `Ok(None)` if any transaction's fee data is missing (e.g. for
+    /// operations created before this feature was enabled).
+    ///
+    /// # Errors
+    /// Returns an error if the operation does not exist.
+    pub async fn get_operation_fees(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<Amounts>> {
+        if !self.operation_exists(operation_id).await {
+            bail!("Operation does not exist");
+        }
+
+        let (active_states, inactive_states) =
+            self.executor().get_operation_states(operation_id).await;
+
+        let states = active_states
+            .into_iter()
+            .map(|(state, _)| state)
+            .chain(inactive_states.into_iter().map(|(state, _)| state));
+
+        let accepted_transactions = states
+            .filter_map(|state| {
+                let tx_state = state.as_any().downcast_ref::<TxSubmissionStatesSM>()?;
+
+                match &tx_state.state {
+                    TxSubmissionStates::Accepted(transaction_id) => Some(*transaction_id),
+                    _ => None,
+                }
+            })
+            .collect::<HashSet<_>>();
+
+        // For each accepted transaction, look up its stored fees
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut total_fees = Amounts::ZERO;
+        for txid in &accepted_transactions {
+            let Some(fees) = dbtx.get_value(&TransactionFeesKey(*txid)).await else {
+                return Ok(None);
+            };
+            total_fees = total_fees
+                .checked_add(&fees)
+                .expect("Fee amounts don't overflow in practice");
+        }
+
+        Ok(Some(total_fees))
     }
 
     /// Waits for an output from the primary module to reach its final
@@ -1689,22 +1928,17 @@ impl Client {
     fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
+        // Sourced from the config rather than `self.modules`, since modules
+        // currently being recovered are not yet initialized in the registry.
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
-        let module_kinds: BTreeMap<ModuleInstanceId, String> = self
-            .modules
-            .iter_modules_id_kind()
-            .map(|(id, kind)| (id, kind.to_string()))
-            .collect();
         self.spawn("module recoveries", |_task_handle| async {
             Self::run_module_recoveries_task(
                 db,
@@ -1722,24 +1956,30 @@ impl Client {
         db: Database,
         log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
-        module_recoveries: BTreeMap<
-            ModuleInstanceId,
-            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        >,
+        module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
         >,
-        module_kinds: BTreeMap<ModuleInstanceId, String>,
+        module_kinds: BTreeMap<ModuleInstanceId, ModuleKind>,
     ) {
         debug!(target: LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
+
+        // A recovery update for a single module: either an intermediate progress
+        // report, or the final completion carrying the recovered amount (if the
+        // module tracks it).
+        enum RecoveryUpdate {
+            Progress(RecoveryProgress),
+            Completed(Option<Amount>),
+        }
+
         let mut completed_stream = Vec::new();
         let progress_stream = futures::stream::FuturesUnordered::new();
 
         for (module_instance_id, f) in module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
-                    Ok(()) => (module_instance_id, None),
+                    Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
                         warn!(
                             target: LOG_CLIENT,
@@ -1759,7 +1999,7 @@ impl Client {
             progress_stream.push(
                 tokio_stream::wrappers::WatchStream::new(rx)
                     .fuse()
-                    .map(move |progress| (module_instance_id, Some(progress))),
+                    .map(move |progress| (module_instance_id, RecoveryUpdate::Progress(progress))),
             );
         }
 
@@ -1768,7 +2008,7 @@ impl Client {
             futures::stream::select_all(completed_stream),
         );
 
-        while let Some((module_instance_id, progress)) = futures.next().await {
+        while let Some((module_instance_id, update)) = futures.next().await {
             let mut dbtx = db.begin_transaction().await;
 
             let prev_progress = *recovery_sender
@@ -1776,13 +2016,17 @@ impl Client {
                 .get(&module_instance_id)
                 .expect("existing progress must be present");
 
-            let progress = if prev_progress.is_done() {
+            // The recovered amount is only known once the module's recovery
+            // future resolves, which is also the only way progress transitions
+            // to "done" (modules can't report a completed `RecoveryProgress`).
+            let (progress, recovered_amount) = if prev_progress.is_done() {
                 // since updates might be out of order, once done, stick with it
-                prev_progress
-            } else if let Some(progress) = progress {
-                progress
+                (prev_progress, None)
             } else {
-                prev_progress.to_complete()
+                match update {
+                    RecoveryUpdate::Progress(progress) => (progress, None),
+                    RecoveryUpdate::Completed(amount) => (prev_progress.to_complete(), amount),
+                }
             };
 
             if !prev_progress.is_done() && progress.is_done() {
@@ -1790,6 +2034,7 @@ impl Client {
                     target: LOG_CLIENT,
                     module_instance_id,
                     progress = format!("{}/{}", progress.complete, progress.total),
+                    amount = ?recovered_amount,
                     "Recovery complete"
                 );
                 dbtx.log_event(
@@ -1797,6 +2042,8 @@ impl Client {
                     None,
                     ModuleRecoveryCompleted {
                         module_id: module_instance_id,
+                        kind: module_kinds.get(&module_instance_id).cloned(),
+                        amount: recovered_amount,
                     },
                 )
                 .await;
@@ -1804,7 +2051,7 @@ impl Client {
                 info!(
                     target: LOG_CLIENT,
                     module_instance_id,
-                    kind = module_kinds.get(&module_instance_id).map(String::as_str).unwrap_or("unknown"),
+                    kind = ?module_kinds.get(&module_instance_id),
                     progress = format!("{}/{}", progress.complete, progress.total),
                     "Recovery progress"
                 );
@@ -1872,7 +2119,7 @@ impl Client {
 
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
-        get_api_urls(&self.db, &self.config().await).await
+        get_api_urls(&self.db, &self.config().await, self.iroh_enable_next).await
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -2283,6 +2530,12 @@ impl Client {
         self.iroh_enable_dht
     }
 
+    /// Whether compatible iroh-next endpoints from guardian metadata are
+    /// preferred.
+    pub fn iroh_enable_next(&self) -> bool {
+        self.iroh_enable_next
+    }
+
     pub(crate) async fn run_core_migrations(
         db_no_decoders: &Database,
     ) -> Result<(), anyhow::Error> {
@@ -2390,6 +2643,18 @@ impl ClientContextIface for Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
         Client::finalize_and_submit_transaction_inner(self, dbtx, operation_id, tx_builder).await
+    }
+
+    async fn fee_quote(
+        &self,
+        operation_id: OperationId,
+        request: FeeQuoteRequest,
+    ) -> anyhow::Result<FeeQuote> {
+        Client::fee_quote(self, operation_id, request).await
+    }
+
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+        Client::get_balance_for_unit(self, unit).await
     }
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {

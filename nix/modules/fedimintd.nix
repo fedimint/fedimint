@@ -33,6 +33,20 @@ let
 
         package = mkPackageOption pkgs "fedimint" { };
 
+        passwordUi = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Password for the guardian admin UI login form. Falls back to password.private file in data dir if not set, then to passwordless mode.";
+          example = "my-secure-password";
+        };
+
+        passwordApi = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Password for authenticating admin RPCs on the public API (WS/iroh). Never falls back to disk: when unset, admin RPCs return 401 unconditionally.";
+          example = "my-secure-password";
+        };
+
         environment = mkOption {
           type = types.attrsOf types.str;
           description = "Extra Environment variables to pass to the fedimintd.";
@@ -109,6 +123,35 @@ let
             type = types.str;
             default = "0.0.0.0";
             description = "Address to bind on for Iroh endpoint for API connections";
+          };
+        };
+        api_iroh_next = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+            description = ''
+              Enable the transitional Iroh 1.0 client API for federations
+              configured with the legacy Iroh API.
+
+              WARNING: Once this endpoint is advertised, setting this option to
+              false makes fedimintd startup fail. The endpoint must remain
+              enabled and reachable.
+            '';
+          };
+          openFirewall = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Opens the UDP port for fedimintd's transitional Iroh 1.0 API endpoint";
+          };
+          port = mkOption {
+            type = types.port;
+            default = 8184;
+            description = "UDP port to bind the transitional Iroh 1.0 API endpoint";
+          };
+          bind = mkOption {
+            type = types.str;
+            default = "0.0.0.0";
+            description = "Address to bind the transitional Iroh 1.0 API endpoint";
           };
         };
         ui = {
@@ -278,6 +321,7 @@ in
           fedimintdName: cfg:
           (
             lib.optional cfg.api_iroh.openFirewall cfg.api_iroh.port
+            ++ lib.optional (cfg.api_iroh_next.enable && cfg.api_iroh_next.openFirewall) cfg.api_iroh_next.port
             ++ lib.optional cfg.p2p.openFirewall cfg.p2p.port
           )
         ) eachFedimintd
@@ -297,11 +341,14 @@ in
             wantedBy = [ "multi-user.target" ];
             environment = lib.mkMerge [
               {
+                FM_PASSWORD_UI = lib.mkIf (cfg.passwordUi != null) cfg.passwordUi;
+                FM_PASSWORD_API = lib.mkIf (cfg.passwordApi != null) cfg.passwordApi;
                 FM_BIND_P2P = "${cfg.p2p.bind}:${toString cfg.p2p.port}";
                 FM_BIND_API_WS = "${cfg.api_ws.bind}:${toString cfg.api_ws.port}";
                 FM_BIND_API_IROH = "${cfg.api_iroh.bind}:${toString cfg.api_iroh.port}";
                 FM_BIND_UI = "${cfg.ui.bind}:${toString cfg.ui.port}";
                 FM_DATA_DIR = cfg.dataDir;
+                FM_IROH_NEXT_ENABLE = lib.boolToString cfg.api_iroh_next.enable;
                 FM_BITCOIN_NETWORK = cfg.bitcoin.network;
                 FM_BITCOIND_URL = cfg.bitcoin.bitcoindUrl;
                 FM_ESPLORA_URL = cfg.bitcoin.esploraUrl;
@@ -316,6 +363,10 @@ in
 
               (lib.optionalAttrs (cfg.api_ws.url != null) {
                 FM_API_URL = cfg.api_ws.url;
+              })
+
+              (lib.optionalAttrs cfg.api_iroh_next.enable {
+                FM_BIND_API_NEXT = "${cfg.api_iroh_next.bind}:${toString cfg.api_iroh_next.port}";
               })
 
               cfg.environment
@@ -359,7 +410,8 @@ in
                 "tcp:${builtins.toString cfg.api_ws.port}"
                 "tcp:${builtins.toString cfg.ui.port}"
                 "udp:${builtins.toString cfg.api_iroh.port}"
-              ];
+              ]
+              ++ lib.optional cfg.api_iroh_next.enable "udp:${builtins.toString cfg.api_iroh_next.port}";
               SystemCallArchitectures = "native";
               SystemCallFilter = [
                 "@system-service"

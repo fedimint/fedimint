@@ -29,7 +29,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::{PeerId, TieredCounts};
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    ConnectPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
@@ -56,10 +56,10 @@ use crate::federation::{
     spend_ecash_handler, withdraw_confirm_handler, withdraw_preview_handler,
 };
 use crate::lightning::{
-    channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
-    create_receive_invoice_handler, detect_payment_type_handler, generate_receive_address_handler,
-    open_channel_handler, pay_bolt11_invoice_handler, pay_unified_handler,
-    payments_fragment_handler, send_onchain_handler, set_channel_fees_handler,
+    channels_fragment_handler, close_channel_handler, connect_peer_handler,
+    create_bolt11_invoice_handler, create_receive_invoice_handler, detect_payment_type_handler,
+    generate_receive_address_handler, open_channel_handler, pay_bolt11_invoice_handler,
+    pay_unified_handler, payments_fragment_handler, send_onchain_handler, set_channel_fees_handler,
     transactions_fragment_handler, wallet_fragment_handler,
 };
 use crate::mnemonic::{mnemonic_iframe_handler, mnemonic_reveal_handler};
@@ -70,6 +70,7 @@ pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'st
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
 pub(crate) const CLOSE_CHANNEL_ROUTE: &str = "/ui/channels/close";
 pub(crate) const SET_CHANNEL_FEES_ROUTE: &str = "/ui/channels/fees";
+pub(crate) const CONNECT_PEER_ROUTE: &str = "/ui/peers/connect";
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
@@ -162,6 +163,9 @@ pub trait IAdminGateway {
         &self,
         payload: OpenChannelRequest,
     ) -> Result<Txid, Self::Error>;
+
+    async fn handle_connect_peer_msg(&self, payload: ConnectPeerRequest)
+    -> Result<(), Self::Error>;
 
     async fn handle_close_channels_with_peer_msg(
         &self,
@@ -474,6 +478,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form_handler).post(login_submit))
         .route(OPEN_CHANNEL_ROUTE, post(open_channel_handler))
+        .route(CONNECT_PEER_ROUTE, post(connect_peer_handler))
         .route(CLOSE_CHANNEL_ROUTE, post(close_channel_handler))
         .route(SET_CHANNEL_FEES_ROUTE, post(set_channel_fees_handler))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
@@ -521,5 +526,5 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         )
         .with_static_routes();
 
-    app.with_state(UiState::new(api))
+    app.with_state(UiState::new(api, true))
 }

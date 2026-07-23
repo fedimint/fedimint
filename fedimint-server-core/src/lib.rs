@@ -13,6 +13,7 @@ pub mod migration;
 pub mod setup_ui;
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -24,8 +25,8 @@ use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-    ModuleInit, TransactionItemAmounts,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, CommonModuleInit, InputMeta,
+    ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
@@ -193,6 +194,18 @@ pub trait ServerModule: Debug + Sized {
     /// should be deterministic, only dependant on their input and the
     /// current epoch.
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>>;
+
+    /// Returns the module API versions supported by this module instance.
+    ///
+    /// By default this derives the advertised API version from the maximum API
+    /// version found in the endpoint annotations. This works as long as every
+    /// API minor bump introduces at least one endpoint. Modules that need to
+    /// advertise a version bump for semantic changes to existing endpoints can
+    /// override this method without rewriting the endpoints' introduced-at
+    /// annotations.
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        api_versions_from_endpoints(self.api_endpoints())
+    }
 }
 
 /// Backend side module interface
@@ -298,6 +311,9 @@ pub trait IServerModule: Debug {
     /// should be deterministic, only dependant on their input and the
     /// current epoch.
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>>;
+
+    /// Returns the module API versions supported by this module instance.
+    fn supported_api_versions(&self) -> MultiApiVersion;
 }
 
 dyn_newtype_define!(
@@ -487,23 +503,58 @@ where
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {
         <Self as ServerModule>::api_endpoints(self)
             .into_iter()
-            .map(|ApiEndpoint { path, handler }| ApiEndpoint {
-                path,
-                handler: Box::new(
-                    move |module: &DynServerModule,
-                          context: ApiEndpointContext,
-                          value: ApiRequestErased| {
-                        let typed_module = module
-                            .as_any()
-                            .downcast_ref::<T>()
-                            .expect("the dispatcher should always call with the right module");
-                        Box::pin(handler(typed_module, context, value))
-                    },
-                ),
-            })
+            .map(
+                |ApiEndpoint {
+                     path,
+                     version,
+                     handler,
+                 }| ApiEndpoint {
+                    path,
+                    version,
+                    handler: Box::new(
+                        move |module: &DynServerModule,
+                              context: ApiEndpointContext,
+                              value: ApiRequestErased| {
+                            let typed_module = module
+                                .as_any()
+                                .downcast_ref::<T>()
+                                .expect("the dispatcher should always call with the right module");
+                            Box::pin(handler(typed_module, context, value))
+                        },
+                    ),
+                },
+            )
             .collect()
     }
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        <Self as ServerModule>::supported_api_versions(self)
+    }
 }
+
+fn api_versions_from_endpoints<M>(
+    endpoints: impl IntoIterator<Item = ApiEndpoint<M>>,
+) -> MultiApiVersion {
+    let mut api_map: BTreeMap<u32, u32> = BTreeMap::new();
+    for endpoint in endpoints {
+        let minor = api_map.entry(endpoint.version.major).or_insert(0);
+        *minor = (*minor).max(endpoint.version.minor);
+    }
+
+    if api_map.is_empty() {
+        api_map.insert(0, 0);
+    }
+
+    MultiApiVersion::try_from_iter(
+        api_map
+            .into_iter()
+            .map(|(major, minor)| ApiVersion { major, minor }),
+    )
+    .expect("api versions are grouped by major before constructing MultiApiVersion")
+}
+
+#[cfg(test)]
+mod tests;
 
 /// Collection of server modules
 pub type ServerModuleRegistry = ModuleRegistry<DynServerModule>;

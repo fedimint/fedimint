@@ -11,10 +11,11 @@ use chrono::{DateTime, TimeZone, Utc};
 use fedimint_core::bitcoin::Network;
 use fedimint_core::time::now;
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    GatewayBalances, GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload,
-    ListTransactionsResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload,
-    PaymentStatus, SendOnchainRequest, SetChannelFeesRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, ConnectPeerRequest, CreateInvoiceForOperatorPayload,
+    CreateOfferPayload, GatewayBalances, GatewayInfo, LightningInfo, LightningMode,
+    ListTransactionsPayload, ListTransactionsResponse, NodeAddress, OpenChannelRequest,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PaymentStatus, SendOnchainRequest,
+    SetChannelFeesRequest,
 };
 use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::UiState;
@@ -28,7 +29,7 @@ use serde::Deserialize;
 use tracing::debug;
 
 use crate::{
-    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_RECEIVE_INVOICE_ROUTE,
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CONNECT_PEER_ROUTE, CREATE_RECEIVE_INVOICE_ROUTE,
     DETECT_PAYMENT_TYPE_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE,
     PAY_UNIFIED_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, SET_CHANNEL_FEES_ROUTE,
     TRANSACTIONS_FRAGMENT_ROUTE, WALLET_FRAGMENT_ROUTE,
@@ -264,6 +265,23 @@ where
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        div class="mt-3 pt-3 border-top" {
+                            h5 { "Connect Peer" }
+                            div id="connect-peer-result" {}
+                            form hx-post=(CONNECT_PEER_ROUTE)
+                                hx-target="#connect-peer-result"
+                                hx-swap="innerHTML" {
+                                div class="input-group" {
+                                    input type="text"
+                                        name="node_address"
+                                        class="form-control"
+                                        placeholder="03abcd...@1.2.3.4:9735"
+                                        required {}
+                                    button type="submit" class="btn btn-primary" { "Connect" }
                                 }
                             }
                         }
@@ -1545,6 +1563,39 @@ pub async fn open_channel_handler<E: Display + Send + Sync>(
             let markup =
                 channels_fragment_markup(channels_result, None, Some(err.to_string()), is_lnd);
             Html(markup.into_string())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ConnectPeerForm {
+    node_address: String,
+}
+
+pub async fn connect_peer_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(form): Form<ConnectPeerForm>,
+) -> Html<String> {
+    let node_address = match form.node_address.parse::<NodeAddress>() {
+        Ok(node_address) => node_address,
+        Err(err) => return Html(alert_markup("danger", &err).into_string()),
+    };
+
+    match state
+        .api
+        .handle_connect_peer_msg(ConnectPeerRequest { node_address })
+        .await
+    {
+        Ok(()) => Html(alert_markup("success", "Successfully connected to peer").into_string()),
+        Err(err) => Html(alert_markup("danger", &err.to_string()).into_string()),
+    }
+}
+
+fn alert_markup(level: &str, message: &str) -> Markup {
+    html! {
+        div class=(format!("alert alert-{level} mt-2 mb-3")) {
+            (message)
         }
     }
 }

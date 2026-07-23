@@ -47,8 +47,8 @@ use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule,
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
-    TransactionBuilder,
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote,
+    FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -1776,6 +1776,116 @@ impl LightningClientModule {
     }
 
     /// Receive over LN with a new invoice
+    /// Computes the federation fee receiving `amount` over Lightning would
+    /// incur, without submitting anything.
+    ///
+    /// When the incoming contract is claimed, the client submits a transaction
+    /// with a single Lightning input worth the contract amount; the primary
+    /// module balances it by minting the change credited to the wallet. This
+    /// quotes the fee of that transaction — the Lightning input fee, the mint
+    /// output fees, and any sub-denomination dust — via the shared,
+    /// module-agnostic fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: this is
+    /// only the fee of the on-federation transaction. For that reason the quote
+    /// is taken on `amount` directly (rather than the gateway-reduced contract
+    /// amount), and no gateway round-trip is needed.
+    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_bitcoin(amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
+    }
+
+    /// Computes the federation fee a `pay` funding an outgoing contract worth
+    /// `amount` would incur, without submitting anything.
+    ///
+    /// When a payment is sent, the client submits a transaction with a single
+    /// Lightning output (the outgoing contract) worth `amount`; the primary
+    /// module balances it by spending ecash to fund the contract and minting
+    /// any change. This quotes the fee of that transaction — the Lightning
+    /// output fee, the mint input fees on the funding notes, any mint change
+    /// output fees, and sub-denomination dust — via the shared, module-agnostic
+    /// fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: it is
+    /// part of the contract `amount` the gateway claims, not the on-federation
+    /// transaction fee. So `amount` is the full outgoing contract value.
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_output),
+                },
+            )
+            .await
+    }
+
+    /// Computes the largest invoice amount the client can pay in full out of
+    /// `balance`, i.e. the amount to request an invoice for in order to spend
+    /// (close to) the entire balance.
+    ///
+    /// Paying an invoice deducts two kinds of fee from the balance:
+    /// - the *gateway* routing fee, which is added on top of the invoice amount
+    ///   to form the outgoing contract (`invoice_amount + gateway.fees`), and
+    /// - the *federation* fee of funding that contract — the Lightning output
+    ///   fee, the mint input fees on the funding notes, the mint output fees on
+    ///   any change, and sub-denomination dust — as quoted by
+    ///   [`Self::send_fee_quote`].
+    ///
+    /// `balance` is the client's current Bitcoin balance (e.g. from
+    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway to
+    /// use; pass the same [`LightningGateway`] you intend to hand to
+    /// [`Self::pay_bolt11_invoice`] so the fee schedules match. If `None`, a
+    /// registered gateway is selected at random, the same way
+    /// [`Self::get_gateway`] does for an external payment.
+    ///
+    /// The maximum payable amount is found by binary search over the real fee
+    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
+    /// because the federation fee is stepwise in the amount. The quote is
+    /// point-in-time and moves with the balance; the eventual
+    /// [`Self::pay_bolt11_invoice`] remains the source of truth and may still
+    /// fail if balance or gateway state changes in between.
+    ///
+    /// Returns an error if no gateway is available or if the balance cannot
+    /// cover even the smallest payable amount plus fees. Any LNURL
+    /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
+    /// apply.
+    pub async fn spendable_amount(
+        &self,
+        balance: Amount,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<Amount> {
+        let gateway = match gateway {
+            Some(gateway) => gateway,
+            None => self
+                .get_gateway(None, false)
+                .await?
+                .ok_or_else(|| anyhow!("No gateway available to send the payment"))?,
+        };
+
+        max_affordable_send_amount(
+            balance,
+            Amount::from_msats(1),
+            balance,
+            |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
+            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+        )
+        .await
+        .ok_or_else(|| anyhow!("Balance is too low to send any amount after fees"))
+    }
+
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
@@ -2448,58 +2558,93 @@ fn tweak_user_secret_key<Ctx: Verification + Signing>(
     Keypair::from_secret_key(secp, &sk_tweaked)
 }
 
+/// A payment target parsed from user input: either a bolt11 invoice or the
+/// pay parameters resolved from an LNURL/lightning address.
+#[derive(Debug, Clone)]
+pub enum PaymentInfo {
+    Bolt11(Bolt11Invoice),
+    Lnurl(lnurl::pay::PayResponse),
+}
+
+impl PaymentInfo {
+    /// Parse `info` as a bolt11 invoice, or resolve it as an LNURL/lightning
+    /// address by fetching the endpoint's pay parameters.
+    pub async fn parse(info: &str) -> anyhow::Result<Self> {
+        let info = info.trim();
+        match lightning_invoice::Bolt11Invoice::from_str(info) {
+            Ok(invoice) => {
+                debug!("Parsed parameter as bolt11 invoice: {invoice}");
+                Ok(Self::Bolt11(invoice))
+            }
+            Err(e) => {
+                let lnurl = if info.to_lowercase().starts_with("lnurl") {
+                    lnurl::lnurl::LnUrl::from_str(info)?
+                } else if info.contains('@') {
+                    lnurl::lightning_address::LightningAddress::from_str(info)?.lnurl()
+                } else {
+                    bail!("Invalid invoice or lnurl: {e:?}");
+                };
+                debug!("Parsed parameter as lnurl: {lnurl:?}");
+                let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
+                let response = async_client.make_request(&lnurl.url).await?;
+                match response {
+                    lnurl::LnUrlResponse::LnUrlPayResponse(response) => Ok(Self::Lnurl(response)),
+                    other => {
+                        bail!("Unexpected response from lnurl: {other:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Produce the bolt11 invoice to pay: the parsed invoice itself, or one
+    /// requested from the LNURL endpoint for `amount`.
+    pub async fn get_invoice(
+        self,
+        amount: Option<Amount>,
+        lnurl_comment: Option<String>,
+    ) -> anyhow::Result<Bolt11Invoice> {
+        match self {
+            Self::Bolt11(invoice) => {
+                match (invoice.amount_milli_satoshis(), amount) {
+                    (Some(_), Some(_)) => {
+                        bail!("Amount specified in both invoice and command line")
+                    }
+                    (None, _) => {
+                        bail!("We don't support invoices without an amount")
+                    }
+                    _ => {}
+                }
+                Ok(invoice)
+            }
+            Self::Lnurl(response) => {
+                let amount = amount.context("When using a lnurl, an amount must be specified")?;
+                let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
+                let invoice = async_client
+                    .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
+                    .await?;
+                let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
+                let invoice_amount = invoice.amount_milli_satoshis();
+                ensure!(
+                    invoice_amount == Some(amount.msats),
+                    "the amount generated by the lnurl ({invoice_amount:?}) is different from the requested amount ({amount}), try again using a different amount"
+                );
+                Ok(invoice)
+            }
+        }
+    }
+}
+
 /// Get LN invoice with given settings
 pub async fn get_invoice(
     info: &str,
     amount: Option<Amount>,
     lnurl_comment: Option<String>,
 ) -> anyhow::Result<Bolt11Invoice> {
-    let info = info.trim();
-    match lightning_invoice::Bolt11Invoice::from_str(info) {
-        Ok(invoice) => {
-            debug!("Parsed parameter as bolt11 invoice: {invoice}");
-            match (invoice.amount_milli_satoshis(), amount) {
-                (Some(_), Some(_)) => {
-                    bail!("Amount specified in both invoice and command line")
-                }
-                (None, _) => {
-                    bail!("We don't support invoices without an amount")
-                }
-                _ => {}
-            }
-            Ok(invoice)
-        }
-        Err(e) => {
-            let lnurl = if info.to_lowercase().starts_with("lnurl") {
-                lnurl::lnurl::LnUrl::from_str(info)?
-            } else if info.contains('@') {
-                lnurl::lightning_address::LightningAddress::from_str(info)?.lnurl()
-            } else {
-                bail!("Invalid invoice or lnurl: {e:?}");
-            };
-            debug!("Parsed parameter as lnurl: {lnurl:?}");
-            let amount = amount.context("When using a lnurl, an amount must be specified")?;
-            let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
-            let response = async_client.make_request(&lnurl.url).await?;
-            match response {
-                lnurl::LnUrlResponse::LnUrlPayResponse(response) => {
-                    let invoice = async_client
-                        .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
-                        .await?;
-                    let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
-                    let invoice_amount = invoice.amount_milli_satoshis();
-                    ensure!(
-                        invoice_amount == Some(amount.msats),
-                        "the amount generated by the lnurl ({invoice_amount:?}) is different from the requested amount ({amount}), try again using a different amount"
-                    );
-                    Ok(invoice)
-                }
-                other => {
-                    bail!("Unexpected response from lnurl: {other:?}");
-                }
-            }
-        }
-    }
+    PaymentInfo::parse(info)
+        .await?
+        .get_invoice(amount, lnurl_comment)
+        .await
 }
 
 #[derive(Debug, Clone)]

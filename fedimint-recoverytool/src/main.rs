@@ -1,6 +1,5 @@
 #![deny(clippy::pedantic)]
 
-mod envs;
 mod key;
 
 use std::collections::BTreeSet;
@@ -40,7 +39,6 @@ use miniscript::{Descriptor, MiniscriptKey, TranslatePk, Translator};
 use serde::Serialize;
 use tracing::info;
 
-use crate::envs::FM_PASSWORD_ENV;
 use crate::key::Key;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
@@ -55,9 +53,6 @@ struct RecoveryTool {
     /// Directory containing server config files
     #[arg(long = "cfg")]
     config: Option<PathBuf>,
-    /// The password that encrypts the configs
-    #[arg(long, env = FM_PASSWORD_ENV, requires = "config")]
-    password: String,
     /// Wallet descriptor, can be used instead of --cfg
     #[arg(long)]
     descriptor: Option<PegInDescriptor>,
@@ -139,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
     let opts: RecoveryTool = RecoveryTool::parse();
 
     let (base_descriptor, base_key, network, wallet_module_id) = if let Some(config) = opts.config {
-        let cfg = read_server_config(&opts.password, &config).expect("Could not read config file");
+        let cfg = read_server_config(&config).expect("Could not read config file");
         let wallet_module_id =
             get_wallet_module_id(&cfg).expect("Wallet module not found in config");
         let wallet_cfg: WalletConfig = cfg

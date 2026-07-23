@@ -15,21 +15,21 @@ use fedimint_core::util::FmtCompact;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
-    CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, CreateOfferPayload, DepositAddressPayload,
-    DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest,
-    INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
-    LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
-    PaymentSummaryPayload, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
-    SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
-    SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
-    WithdrawPayload, WithdrawToOnchainPayload,
+    CONNECT_PEER_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+    CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, CloseChannelsWithPeerRequest, ConfigPayload,
+    ConnectFedPayload, ConnectPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
+    DepositAddressPayload, DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
+    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
+    PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload, PeginFromOnchainPayload,
+    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
+    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -54,11 +54,12 @@ use crate::{Gateway, GatewayState};
 
 // Routes that the liquidity manager is allowed to access. Any authenticated
 // route NOT in this list requires the admin password.
-const LIQUIDITY_MANAGER_ROUTES: [&str; 20] = [
+const LIQUIDITY_MANAGER_ROUTES: [&str; 21] = [
     ADDRESS_ENDPOINT,
     ADDRESS_RECHECK_ENDPOINT,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT,
+    CONNECT_PEER_ENDPOINT,
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     GATEWAY_INFO_ENDPOINT,
@@ -395,6 +396,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        CONNECT_PEER_ENDPOINT,
+        connect_peer,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         OPEN_CHANNEL_WITH_PUSH_ENDPOINT,
         open_channel_with_push,
         is_authenticated,
@@ -670,6 +678,15 @@ async fn open_channel(
     payload.push_amount_sats = 0;
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn connect_peer(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<ConnectPeerRequest>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    gateway.handle_connect_peer_msg(payload).await?;
+    Ok(Json(json!(())))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]

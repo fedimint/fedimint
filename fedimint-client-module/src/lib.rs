@@ -27,7 +27,8 @@ use fedimint_core::module::{ApiAuth, ApiVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync,
+    Amount, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
+    maybe_add_send_sync,
 };
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
@@ -122,6 +123,25 @@ impl Event for ModuleRecoveryStarted {
 #[derive(Serialize, Deserialize)]
 pub struct ModuleRecoveryCompleted {
     pub module_id: ModuleInstanceId,
+    /// The kind of the module that finished recovering.
+    ///
+    /// This lets consumers match on the module without cross-referencing
+    /// `module_id` against the federation config. `#[serde(default)]` keeps it
+    /// backwards-compatible with events persisted before it was added, which
+    /// deserialize as `None`.
+    #[serde(default)]
+    pub kind: Option<ModuleKind>,
+    /// The total amount recovered from this module, if the module tracks it.
+    ///
+    /// Modules like the mint know the exact value of the ecash notes they
+    /// reconstruct, while others (e.g. the wallet) only discover which
+    /// on-chain outputs belonged to the client and can't determine the
+    /// amount at recovery-completion time, in which case this is `None`.
+    ///
+    /// `#[serde(default)]` keeps this field backwards-compatible with events
+    /// persisted before it was added, which deserialize as `None`.
+    #[serde(default)]
+    pub amount: Option<Amount>,
 }
 
 impl Event for ModuleRecoveryCompleted {

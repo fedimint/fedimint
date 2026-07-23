@@ -11,9 +11,10 @@ pub use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
@@ -22,7 +23,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
-use fedimint_server_core::{ConfigGenModuleArgs, DynServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, DynServerModule, DynServerModuleInit, ServerModuleInitRegistry,
+};
 use futures::future::select_all;
 use hex::{FromHex, ToHex};
 use peer_handle::PeerHandle;
@@ -81,19 +84,21 @@ impl ServerConfig {
 
     pub(crate) fn supported_api_versions_summary(
         modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-        module_inits: &ServerModuleInitRegistry,
+        module_registry: &ModuleRegistry<DynServerModule>,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: Self::supported_api_versions(),
             modules: modules
                 .iter()
                 .map(|(&id, config)| {
+                    let module = module_registry.get_expect(id);
                     (
                         id,
-                        module_inits
-                            .get(&config.kind)
-                            .expect("missing module kind gen")
-                            .supported_api_versions(),
+                        SupportedModuleApiVersions {
+                            core_consensus: CORE_CONSENSUS_VERSION,
+                            module_consensus: config.version,
+                            api: module.supported_api_versions(),
+                        },
                     )
                 })
                 .collect(),
@@ -103,8 +108,6 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
-    /// Secret API auth string
-    pub api_auth: ApiAuth,
     /// Optional secret key for our websocket p2p endpoint
     pub tls_key: Option<String>,
     /// Optional secret key for our iroh api endpoint
@@ -238,8 +241,6 @@ pub struct ConfigGenParams {
     pub iroh_api_sk: Option<iroh::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
-    /// Secret API auth string
-    pub api_auth: ApiAuth,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
@@ -354,7 +355,6 @@ impl ServerConfig {
         };
 
         let private = ServerConfigPrivate {
-            api_auth: params.api_auth.clone(),
             tls_key: params
                 .tls_key
                 .map(|key| key.secret_der().to_vec().encode_hex()),

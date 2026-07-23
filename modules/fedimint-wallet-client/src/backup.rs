@@ -470,7 +470,10 @@ impl RecoveryFromHistory for WalletRecovery {
         Ok(())
     }
 
-    async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn finalize_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
         let now = fedimint_core::time::now();
 
         let mut tweak_idx = TweakIdx(0);
@@ -515,7 +518,10 @@ impl RecoveryFromHistory for WalletRecovery {
 
         dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
             .await;
-        Ok(())
+        // The wallet only discovers which on-chain outputs belonged to the
+        // client during recovery; their value isn't known until the deposits
+        // are later claimed, so no amount is reported here.
+        Ok(None)
     }
 }
 

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use bitcoin::address::NetworkUnchecked;
@@ -8,8 +9,8 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TIME_PREF_ENV,
-    FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_PAYMENT_TIMEOUT_SECS_ENV, FM_LND_RPC_ADDR_ENV,
+    FM_LND_TIME_PREF_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -19,8 +20,10 @@ use fedimint_core::{Amount, BitcoinAmountOrAll, secp256k1};
 use fedimint_eventlog::{EventKind, EventLogId, PersistedLogEntry, StructuredPaymentEvents};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_wallet_client::PegOutFees;
+use lightning::ln::msgs::SocketAddress;
 use lightning_invoice::Bolt11Invoice;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod envs;
 
@@ -42,6 +45,7 @@ pub const LEAVE_FED_ENDPOINT: &str = "/leave_fed";
 pub const LIST_CHANNELS_ENDPOINT: &str = "/list_channels";
 pub const LIST_TRANSACTIONS_ENDPOINT: &str = "/list_transactions";
 pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
+pub const CONNECT_PEER_ENDPOINT: &str = "/connect_peer";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const OPEN_CHANNEL_WITH_PUSH_ENDPOINT: &str = "/open_channel_with_push";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
@@ -58,6 +62,8 @@ pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
 pub const WITHDRAW_TO_ONCHAIN_ENDPOINT: &str = "/withdraw_to_onchain";
+
+pub const DEFAULT_LIGHTNING_PORT: u16 = 9735;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
@@ -369,6 +375,94 @@ pub struct OpenChannelRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConnectPeerRequest {
+    pub node_address: NodeAddress,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeAddress {
+    pub pubkey: secp256k1::PublicKey,
+    pub address: SocketAddress,
+}
+
+impl NodeAddress {
+    pub fn host_with_port(&self) -> String {
+        self.address.to_string()
+    }
+}
+
+impl FromStr for NodeAddress {
+    type Err = String;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let (pubkey, address) = input
+            .trim()
+            .split_once('@')
+            .ok_or_else(|| "Expected node address in pubkey@host[:port] format".to_string())?;
+        let pubkey = pubkey
+            .parse()
+            .map_err(|err| format!("Invalid peer public key: {err}"))?;
+        let address = address.trim();
+        if address.is_empty() {
+            return Err("Peer host must not be empty".to_string());
+        }
+        let address = if has_explicit_port(address) {
+            address.to_string()
+        } else {
+            format!("{address}:{DEFAULT_LIGHTNING_PORT}")
+        };
+        let address = SocketAddress::from_str(&address)
+            .map_err(|err| format!("Invalid peer address: {err}"))?;
+
+        Ok(NodeAddress { pubkey, address })
+    }
+}
+
+impl fmt::Display for NodeAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let address = self.address.to_string();
+        if address.ends_with(&format!(":{DEFAULT_LIGHTNING_PORT}")) {
+            write!(
+                f,
+                "{}@{}",
+                self.pubkey,
+                &address[..address.len() - format!(":{DEFAULT_LIGHTNING_PORT}").len()]
+            )
+        } else {
+            write!(f, "{}@{}", self.pubkey, address)
+        }
+    }
+}
+
+fn has_explicit_port(address: &str) -> bool {
+    if address.starts_with('[') {
+        return address.contains("]:");
+    }
+
+    address.contains(':')
+}
+
+impl Serialize for NodeAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for NodeAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(D::Error::custom)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetChannelFeesRequest {
     /// Funding outpoint identifying the channel whose advertised routing fees
     /// should be updated.
@@ -555,6 +649,23 @@ fn parse_lnd_time_pref(s: &str) -> Result<f64, String> {
     Ok(parsed)
 }
 
+/// Default value for LND's `SendPaymentRequest::timeout_seconds`, i.e. how long
+/// LND keeps trying to route an outgoing payment before giving up. This does
+/// not cancel an HTLC that is already in flight; it bounds pathfinding/retry.
+pub const LND_DEFAULT_PAYMENT_TIMEOUT_SECS: i32 = 180;
+pub const LND_PAYMENT_TIMEOUT_SECS_MIN: i32 = 1;
+pub const LND_PAYMENT_TIMEOUT_SECS_MAX: i32 = 600;
+
+fn parse_lnd_payment_timeout_secs(s: &str) -> Result<i32, String> {
+    let parsed: i32 = s.parse().map_err(|e| format!("invalid i32: {e}"))?;
+    if !(LND_PAYMENT_TIMEOUT_SECS_MIN..=LND_PAYMENT_TIMEOUT_SECS_MAX).contains(&parsed) {
+        return Err(format!(
+            "must be an integer in [{LND_PAYMENT_TIMEOUT_SECS_MIN}, {LND_PAYMENT_TIMEOUT_SECS_MAX}]"
+        ));
+    }
+    Ok(parsed)
+}
+
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize, PartialEq)]
 pub enum LightningMode {
     #[clap(name = "lnd")]
@@ -580,6 +691,17 @@ pub enum LightningMode {
             value_parser = parse_lnd_time_pref,
         )]
         lnd_time_pref: f64,
+
+        /// How long (in seconds) LND keeps trying to route an outgoing payment
+        /// before giving up. Passed as `timeout_seconds` to LND
+        /// `SendPaymentRequest`. Must be in [1, 600].
+        #[arg(
+            long = "lnd-payment-timeout",
+            env = FM_LND_PAYMENT_TIMEOUT_SECS_ENV,
+            default_value_t = LND_DEFAULT_PAYMENT_TIMEOUT_SECS,
+            value_parser = parse_lnd_payment_timeout_secs,
+        )]
+        lnd_payment_timeout_secs: i32,
     },
     #[clap(name = "ldk")]
     Ldk {
@@ -647,4 +769,85 @@ pub enum RegisteredProtocol {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetMnemonicPayload {
     pub words: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NODE_PUBKEY: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+
+    #[test]
+    fn node_address_defaults_lightning_port() {
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@example.com")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(node_address.host_with_port(), "example.com:9735");
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@example.com")
+        );
+    }
+
+    #[test]
+    fn node_address_keeps_explicit_non_default_port() {
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@example.com:9736")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(node_address.host_with_port(), "example.com:9736");
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@example.com:9736")
+        );
+    }
+
+    #[test]
+    fn node_address_handles_bracketed_ipv6_address() {
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(
+            node_address.host_with_port(),
+            "[0000:0000:0000:0000:0000:0000:0000:0001]:9735"
+        );
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]")
+        );
+
+        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]:9736")
+            .parse()
+            .expect("valid node address");
+
+        assert_eq!(
+            node_address.host_with_port(),
+            "[0000:0000:0000:0000:0000:0000:0000:0001]:9736"
+        );
+        assert_eq!(
+            node_address.to_string(),
+            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]:9736")
+        );
+    }
+
+    #[test]
+    fn node_address_serde_uses_display_format() {
+        let request = ConnectPeerRequest {
+            node_address: format!("{NODE_PUBKEY}@127.0.0.1:9735")
+                .parse()
+                .expect("valid node address"),
+        };
+
+        let json = serde_json::to_string(&request).expect("can serialize request");
+        assert_eq!(
+            json,
+            format!(r#"{{"node_address":"{NODE_PUBKEY}@127.0.0.1"}}"#)
+        );
+
+        let request: ConnectPeerRequest =
+            serde_json::from_str(&json).expect("can deserialize request");
+        assert_eq!(request.node_address.host_with_port(), "127.0.0.1:9735");
+    }
 }

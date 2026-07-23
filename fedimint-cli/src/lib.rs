@@ -1351,11 +1351,11 @@ impl FedimintCli {
             Command::Admin(AdminCmd::SignGuardianMetadata { api_urls, pkarr_id }) => {
                 let client = self.client_open(&cli).await?;
 
-                let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata {
+                let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata::new(
                     api_urls,
-                    pkarr_id_z32: pkarr_id,
-                    timestamp_secs: fedimint_core::time::duration_since_epoch().as_secs(),
-                };
+                    pkarr_id,
+                    fedimint_core::time::duration_since_epoch().as_secs(),
+                );
 
                 let signed_metadata = cli
                     .admin_client(
@@ -1398,21 +1398,6 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(backup_statistics).expect("Can be encoded"),
                 ))
-            }
-            Command::Admin(AdminCmd::ChangePassword { new_password }) => {
-                let client = self.client_open(&cli).await?;
-
-                cli.admin_client(
-                    &client.get_peer_urls().await,
-                    client.api_secret().as_deref(),
-                )
-                .await?
-                .change_password(cli.auth()?, &new_password)
-                .await?;
-
-                warn!(target: LOG_CLIENT, "Password changed, please restart fedimintd manually");
-
-                Ok(CliOutput::Raw(json!(null)))
             }
             Command::Dev(DevCmd::Api {
                 method,
@@ -1772,7 +1757,8 @@ impl FedimintCli {
                             "module_kind": module_kind,
                             "module_id": module_id,
                             "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
+                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
+                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
                         })
                     })
                     .collect();
@@ -1802,7 +1788,8 @@ impl FedimintCli {
                             "module_kind": module_kind,
                             "module_id": module_id,
                             "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
+                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
+                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
                         })
                     })
                     .collect();

@@ -6,6 +6,7 @@
   profiles,
   craneMultiBuild,
   replaceGitHash,
+  cargoCrap,
 }:
 let
   lib = pkgs.lib;
@@ -42,6 +43,8 @@ let
   # rest randomized to avoid accidentally overwriting innocent bytes in the binary
   gitHashPlaceholderValue = "01234569abcdef7afa1d2683a099c7af48a523c1";
 
+  cargoCrapViolationThreshold = 1000;
+
   filterWorkspaceDepsBuildFilesRegex = [
     "Cargo\\.lock"
     "Cargo\\.toml"
@@ -51,6 +54,18 @@ let
     ".config/.*"
     ".*/Cargo\\.toml"
     ".*/proto/.*"
+  ];
+
+  filterWorkspaceBuildFilesRegex = filterWorkspaceDepsBuildFilesRegex ++ [
+    ".*\\.rs"
+    ".*\\.html"
+    ".*/proto/.*"
+    ".*/clippy\\.toml"
+    "db/migrations/.*"
+    "devimint/src/cfg/.*"
+    "fedimint-server/src/test_fixtures/.*"
+    "docs/.*\\.md"
+    "fedimint-ui-common/assets/.*"
   ];
 
   commonSrc = builtins.path {
@@ -91,22 +106,7 @@ let
   filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes filterWorkspaceDepsBuildFilesRegex src;
 
   # Filter only files relevant to building the workspace
-  filterWorkspaceBuildFiles =
-    src:
-    filterSrcWithRegexes (
-      filterWorkspaceDepsBuildFilesRegex
-      ++ [
-        ".*\\.rs"
-        ".*\\.html"
-        ".*/proto/.*"
-        ".*/clippy\\.toml"
-        "db/migrations/.*"
-        "devimint/src/cfg/.*"
-        "fedimint-server/src/test_fixtures/.*"
-        "docs/.*\\.md"
-        "fedimint-ui-common/assets/.*"
-      ]
-    ) src;
+  filterWorkspaceBuildFiles = src: filterSrcWithRegexes filterWorkspaceBuildFilesRegex src;
 
   # Like `filterWorkspaceFiles` but with `./scripts/` included
   filterWorkspaceTestFiles =
@@ -128,6 +128,9 @@ let
 
   filterWorkspaceAuditFiles =
     src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ "deny.toml" ]) src;
+
+  filterWorkspaceCargoCrapFiles =
+    src: filterSrcWithRegexes (filterWorkspaceBuildFilesRegex ++ [ "\\.cargo-crap\\.toml" ]) src;
 
   # env vars for linking rocksdb
   commonEnvsCross =
@@ -370,6 +373,14 @@ in
       }
     );
 
+    craneLibCrap = craneLib.overrideArgs (
+      commonEnvsBuild
+      // commonArgs
+      // {
+        src = filterWorkspaceCargoCrapFiles commonSrc;
+      }
+    );
+
     devimintStaticDataDir = pkgs.stdenv.mkDerivation {
       name = "devimint-static-data-dir";
       src = pkgs.emptyDirectory;
@@ -527,6 +538,46 @@ in
 
       cargoClippyExtraArgs = "--workspace --all-targets --no-deps -- -D warnings";
       doInstallCargoArtifacts = false;
+    };
+
+    # Regenerate nix/cargo-crap-baseline.json from this derivation in the same
+    # change that intentionally accepts CRAP-score regressions.
+    #
+    # This intentionally does not use llvm-cov coverage data: Fedimint's e2e
+    # tests are too heavy for a coverage-backed cargo-crap gate, so missing
+    # coverage is handled pessimistically.
+    crapBaseline = craneLibCrap.mkCargoDerivation {
+      pname = "${commonArgs.pname}-cargo-crap-baseline";
+      cargoArtifacts = workspaceBuild;
+      buildPhaseCargoCommand = ''
+        mkdir -p $out
+        ${cargoCrap}/bin/cargo-crap \
+          --workspace \
+          --threshold ${toString cargoCrapViolationThreshold} \
+          --format json \
+          --output $out/cargo-crap-baseline.json
+      '';
+      doInstallCargoArtifacts = false;
+      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
+      doCheck = false;
+    };
+
+    crap = craneLibCrap.mkCargoDerivation {
+      pname = "${commonArgs.pname}-cargo-crap";
+      cargoArtifacts = workspaceBuild;
+      buildPhaseCargoCommand = ''
+        mkdir -p $out
+        ${cargoCrap}/bin/cargo-crap \
+          --workspace \
+          --baseline ${../nix/cargo-crap-baseline.json} \
+          --threshold ${toString cargoCrapViolationThreshold} \
+          --min ${toString cargoCrapViolationThreshold} \
+          --format github \
+          --fail-regression
+      '';
+      doInstallCargoArtifacts = false;
+      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
+      doCheck = false;
     };
 
     workspaceDoc = craneLibTests.mkCargoDerivation {
@@ -1026,7 +1077,7 @@ in
       };
 
     cargoCheckWasmNoDefaultFeatures = cargoCheckCommand {
-      args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --no-default-features";
+      args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --package fedimint-mintv2-client --package fedimint-walletv2-client --no-default-features";
     };
 
     cargoCheckUniffi = cargoCheckCommand {

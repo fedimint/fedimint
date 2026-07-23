@@ -563,6 +563,76 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+
+        let initial_gateway_balance = sats(1000);
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
+        dummy_module
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let desc = Description::new("description".to_string())?;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(desc),
+                None,
+                "test intercept same-circuit replay",
+                lightning_gateway,
+            )
+            .await?;
+
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            incoming_expiry: u32::MAX,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+
+        let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+        let (first, second) = tokio::join!(
+            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone()),
+            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone()),
+        );
+        let first_op = first?;
+        let second_op = second?;
+        assert_eq!(first_op, second_op);
+
+        let mut intercept_sub = gateway_ln_module
+            .gateway_subscribe_ln_receive(first_op)
+            .await?
+            .into_stream();
+        assert_eq!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
+        assert_matches!(
+            intercept_sub.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+        assert_eq!(
+            initial_gateway_balance.saturating_sub(invoice_amount),
+            gateway_client.get_balance_for_btc().await?
+        );
+        gateway_ln_module.await_completion(first_op).await;
+
+        let terminal_replay_op = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc)
+            .await?;
+        assert_eq!(first_op, terminal_replay_op);
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, _, _| async move {
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();

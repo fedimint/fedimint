@@ -1,3 +1,7 @@
+pub const FM_PASSWORD_UI_ENV: &str = "FM_PASSWORD_UI";
+
+pub const FM_PASSWORD_API_ENV: &str = "FM_PASSWORD_API";
+
 pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
@@ -30,6 +34,8 @@ pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
 
 pub const FM_ENABLE_IROH_ENV: &str = "FM_ENABLE_IROH";
 
+pub const FM_IROH_P2P_RELAY_ENV: &str = "FM_IROH_P2P_RELAY";
+
 pub const FM_DB_CHECKPOINT_RETENTION_ENV: &str = "FM_DB_CHECKPOINT_RETENTION";
 
 pub const FM_SESSION_TIMEOUT_SECS_ENV: &str = "FM_SESSION_TIMEOUT_SECS";
@@ -39,6 +45,10 @@ pub const FM_IROH_API_MAX_CONNECTIONS_ENV: &str = "FM_IROH_API_MAX_CONNECTIONS";
 pub const FM_BITCOIND_USERNAME_ENV: &str = "FM_BITCOIND_USERNAME";
 
 pub const FM_BITCOIND_PASSWORD_ENV: &str = "FM_BITCOIND_PASSWORD";
+
+pub const FM_IROH_NEXT_ENABLE_ENV: &str = "FM_IROH_NEXT_ENABLE";
+
+pub const FM_BIND_API_NEXT_ENV: &str = "FM_BIND_API_NEXT";
 
 // TODO: Eventually Iroh should provide something better than this.
 // <https://github.com/n0-computer/iroh/discussions/3212>

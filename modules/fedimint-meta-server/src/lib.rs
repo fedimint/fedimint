@@ -27,9 +27,8 @@ use fedimint_core::db::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmounts, api_endpoint, serde_json,
+    ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint, serde_json,
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
@@ -128,17 +127,6 @@ impl ServerModuleInit for MetaInit {
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 0)],
-        )
     }
 
     /// Initialize the module

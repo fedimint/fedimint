@@ -7,7 +7,6 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
-use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     LegacyFederationStatus, LegacyP2PConnectionStatus, LegacyPeerStatus, StatusResponse,
 };
@@ -27,14 +26,14 @@ use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT,
-    CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT,
-    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT,
+    FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::invite_code::InviteCode;
@@ -68,10 +67,7 @@ use futures::StreamExt;
 use tokio::sync::watch::{self, Receiver, Sender};
 use tracing::{debug, info, warn};
 
-use crate::config::io::{
-    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
-    reencrypt_private_config,
-};
+use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
@@ -85,8 +81,6 @@ use crate::net::p2p::P2PStatusReceivers;
 pub struct ConsensusApi {
     /// Our server configuration
     pub cfg: ServerConfig,
-    /// Directory where config files are stored
-    pub cfg_dir: PathBuf,
     /// Database for serving the API
     pub db: Database,
     /// Modules registered with the federation
@@ -103,6 +97,8 @@ pub struct ConsensusApi {
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
+    pub auth_ui: Option<ApiAuth>,
+    pub auth_api: Option<ApiAuth>,
     pub code_version_str: String,
     pub code_version_hash: String,
     pub task_group: TaskGroup,
@@ -345,14 +341,9 @@ impl ConsensusApi {
     }
 
     /// Uses the in-memory config to write a config backup tar archive that
-    /// guardians can download. Private keys are encrypted with the guardian
-    /// password, so it should be safe to store anywhere, this also means the
-    /// backup is useless without the password.
-    fn get_guardian_config_backup(
-        &self,
-        password: &str,
-        _auth: &GuardianAuthToken,
-    ) -> GuardianConfigBackup {
+    /// guardians can download. Private keys are stored as plaintext JSON.
+    /// Operators should rely on disk encryption for at-rest protection.
+    fn get_guardian_config_backup(&self, _auth: &GuardianAuthToken) -> GuardianConfigBackup {
         let mut tar_archive_builder = tar::Builder::new(Vec::new());
 
         let mut append = |name: &Path, data: &[u8]| {
@@ -376,23 +367,9 @@ impl ConsensusApi {
             &serde_json::to_vec(&self.cfg.consensus).expect("Error encoding consensus config"),
         );
 
-        // Note that the encrypted config returned here uses a different salt than the
-        // on-disk version. While this may be confusing it shouldn't be a problem since
-        // the content and encryption key are the same. It's unpractical to read the
-        // on-disk version here since the server/api aren't aware of the config dir and
-        // ideally we can keep it that way.
-        let encryption_salt = random_salt();
-        append(&PathBuf::from(SALT_FILE), encryption_salt.as_bytes());
-
-        let private_config_bytes =
-            serde_json::to_vec(&self.cfg.private).expect("Error encoding private config");
-        let encryption_key = get_encryption_key(password, &encryption_salt)
-            .expect("Generating key from password failed");
-        let private_config_encrypted =
-            hex::encode(encrypt(private_config_bytes, &encryption_key).expect("Encryption failed"));
         append(
-            &PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
-            private_config_encrypted.as_bytes(),
+            &PathBuf::from(PRIVATE_CONFIG).with_extension(JSON_EXT),
+            &serde_json::to_vec(&self.cfg.private).expect("Error encoding private config"),
         );
 
         let tar_archive_bytes = tar_archive_builder
@@ -625,47 +602,13 @@ impl ConsensusApi {
         &self,
         new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
     ) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
-        use crate::net::api::guardian_metadata::GuardianMetadataKey;
-
-        let ctx = secp256k1::Secp256k1::new();
-        let signed_metadata =
-            new_metadata.sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
-
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let signed_metadata_inner = signed_metadata.clone();
-                    Box::pin(async move {
-                        dbtx.insert_entry(
-                            &GuardianMetadataKey(self.cfg.local.identity),
-                            &signed_metadata_inner,
-                        )
-                        .await;
-
-                        Result::<_, ()>::Ok(signed_metadata_inner)
-                    })
-                },
-                None,
-            )
-            .await
-            .expect("Will not terminate on error")
-    }
-
-    /// Changes the guardian password by re-encrypting the private config and
-    /// changing the on-disk password file if present. `fedimintd` is shut down
-    /// afterward, the user's service manager (e.g. `systemd` is expected to
-    /// restart it).
-    fn change_guardian_password(
-        &self,
-        new_password: &str,
-        _auth: &GuardianAuthToken,
-    ) -> Result<(), ApiError> {
-        reencrypt_private_config(&self.cfg_dir, &self.cfg.private, new_password)
-            .map_err(|e| ApiError::server_error(format!("Failed to change password: {e}")))?;
-
-        info!(target: LOG_NET_API, "Successfully changed guardian password");
-
-        Ok(())
+        sign_guardian_metadata_preserving_iroh_endpoint(
+            &self.db,
+            self.cfg.local.identity,
+            &self.cfg.private.broadcast_secret_key,
+            new_metadata,
+        )
+        .await
     }
 
     async fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
@@ -683,6 +626,38 @@ impl ConsensusApi {
     }
 }
 
+async fn sign_guardian_metadata_preserving_iroh_endpoint(
+    db: &Database,
+    identity: PeerId,
+    broadcast_secret_key: &secp256k1::SecretKey,
+    new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
+    use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+    db.autocommit(
+        |dbtx, _| {
+            let mut new_metadata = new_metadata.clone();
+            Box::pin(async move {
+                new_metadata.iroh_next_endpoint = dbtx
+                    .get_value(&GuardianMetadataKey(identity))
+                    .await
+                    .and_then(|metadata| metadata.guardian_metadata().iroh_next_endpoint.clone());
+
+                let ctx = secp256k1::Secp256k1::new();
+                let signed_metadata = new_metadata.sign(&ctx, &broadcast_secret_key.keypair(&ctx));
+
+                dbtx.insert_entry(&GuardianMetadataKey(identity), &signed_metadata)
+                    .await;
+
+                Result::<_, ()>::Ok(signed_metadata)
+            })
+        },
+        None,
+    )
+    .await
+    .expect("Will not terminate on error")
+}
+
 #[async_trait]
 impl HasApiContext<ConsensusApi> for ConsensusApi {
     async fn context(
@@ -694,16 +669,14 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
         if let Some(id) = id {
             db = self.db.with_prefix_module_id(id).0;
         }
+        let has_auth = match (&self.auth_api, &request.auth) {
+            (Some(server_auth), Some(req_auth)) => server_auth.verify(req_auth.as_str()),
+            _ => false,
+        };
+
         (
             self,
-            ApiEndpointContext::new(
-                db,
-                request
-                    .auth
-                    .as_ref()
-                    .is_some_and(|auth| self.cfg.private.api_auth.verify(auth.as_str())),
-                request.auth.clone(),
-            ),
+            ApiEndpointContext::new(db, has_auth, request.auth.clone()),
         )
     }
 }
@@ -725,8 +698,8 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
 
 #[async_trait]
 impl IDashboardApi for ConsensusApi {
-    async fn auth(&self) -> ApiAuth {
-        self.cfg.private.api_auth.clone()
+    fn auth_ui(&self) -> Option<ApiAuth> {
+        self.auth_ui.clone()
     }
 
     async fn guardian_id(&self) -> PeerId {
@@ -792,10 +765,9 @@ impl IDashboardApi for ConsensusApi {
 
     async fn download_guardian_config_backup(
         &self,
-        password: &str,
         guardian_auth: &GuardianAuthToken,
     ) -> GuardianConfigBackup {
-        self.get_guardian_config_backup(password, guardian_auth)
+        self.get_guardian_config_backup(guardian_auth)
     }
 
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule> {
@@ -816,20 +788,6 @@ impl IDashboardApi for ConsensusApi {
 
     async fn fedimintd_version_hash(&self) -> Option<String> {
         non_zero_version_hash(&self.code_version_hash).map(str::to_owned)
-    }
-
-    async fn change_password(
-        &self,
-        new_password: &str,
-        current_password: &str,
-        guardian_auth: &GuardianAuthToken,
-    ) -> Result<(), String> {
-        let auth = self.auth().await;
-        if !auth.verify(current_password) {
-            return Err("Current password is incorrect".into());
-        }
-        self.change_guardian_password(new_password, guardian_auth)
-            .map_err(|e| e.to_string())
     }
 }
 
@@ -1014,8 +972,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 2),
             async |fedimint: &ConsensusApi, context, _v: ()| -> GuardianConfigBackup {
                 let auth = check_auth(context)?;
-                let password = context.request_auth().expect("Auth was checked before").as_str().to_string();
-                Ok(fedimint.get_guardian_config_backup(&password, &auth))
+                Ok(fedimint.get_guardian_config_backup(&auth))
             }
         },
         api_endpoint! {
@@ -1111,21 +1068,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            CHANGE_PASSWORD_ENDPOINT,
-            ApiVersion::new(0, 6),
-            async |fedimint: &ConsensusApi, context, new_password: String| -> () {
-                let auth = check_auth(context)?;
-                fedimint.change_guardian_password(&new_password, &auth)?;
-                let task_group = fedimint.task_group.clone();
-                fedimint_core::runtime::spawn("shutdown after password change",  async move {
-                    info!(target: LOG_NET_API, "Will shutdown after password change");
-                    fedimint_core:: runtime::sleep(Duration::from_secs(1)).await;
-                    task_group.shutdown();
-                });
-                Ok(())
-            }
-        },
-        api_endpoint! {
             CHAIN_ID_ENDPOINT,
             ApiVersion::new(0, 9),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ChainId {
@@ -1170,4 +1112,67 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::db::IRawDatabaseExt as _;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::net::guardian_metadata::GuardianMetadata;
+
+    use super::*;
+    use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+    #[tokio::test]
+    async fn admin_metadata_update_preserves_persisted_iroh_endpoint() {
+        let db: Database = MemDatabase::new().into_database();
+        let identity = PeerId::from(0);
+        let broadcast_secret_key =
+            secp256k1::SecretKey::from_slice(&[42; 32]).expect("valid test key");
+        let ctx = secp256k1::Secp256k1::new();
+
+        let existing = GuardianMetadata::new(
+            vec!["wss://old.example".parse().expect("valid URL")],
+            "old-pkarr".to_owned(),
+            1,
+        )
+        .with_iroh_next_endpoint("persisted-iroh-id".to_owned())
+        .sign(&ctx, &broadcast_secret_key.keypair(&ctx));
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&GuardianMetadataKey(identity), &existing)
+            .await;
+        dbtx.commit_tx().await;
+
+        let updated = GuardianMetadata::new(
+            vec!["wss://new.example".parse().expect("valid URL")],
+            "new-pkarr".to_owned(),
+            2,
+        );
+        let signed = sign_guardian_metadata_preserving_iroh_endpoint(
+            &db,
+            identity,
+            &broadcast_secret_key,
+            updated,
+        )
+        .await;
+
+        assert_eq!(
+            signed.guardian_metadata().iroh_next_endpoint.as_deref(),
+            Some("persisted-iroh-id")
+        );
+        assert_eq!(
+            signed.guardian_metadata().api_urls,
+            vec!["wss://new.example".parse().expect("valid URL")]
+        );
+        assert_eq!(signed.guardian_metadata().pkarr_id_z32, "new-pkarr");
+        assert_eq!(
+            db.begin_transaction_nc()
+                .await
+                .get_value(&GuardianMetadataKey(identity))
+                .await
+                .expect("metadata was persisted")
+                .tagged_hash(),
+            signed.tagged_hash()
+        );
+    }
 }

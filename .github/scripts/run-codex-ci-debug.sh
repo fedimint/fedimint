@@ -43,11 +43,13 @@ model_provider = "ppq"
 sandbox_mode = "danger-full-access"
 approval_policy = "never"
 
+
 [model_providers.ppq]
 name = "PPQ"
 base_url = "https://api.ppq.ai/v1"
 env_key = "PPQ_KEY"
 wire_api = "responses"
+
 
 [shell_environment_policy]
 inherit = "all"

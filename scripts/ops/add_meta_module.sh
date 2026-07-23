@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-REQUIRED_BINS=(jq fedimint-cli)
+REQUIRED_BINS=(jq)
 for REQUIRED_BIN in "${REQUIRED_BINS[@]}"; do
     if ! which "$REQUIRED_BIN" &> /dev/null; then
         echo "$REQUIRED_BIN is not installed."
@@ -36,6 +36,12 @@ if [[ "$response" != "yes" ]]; then
     exit 1
 fi
 
+if [ ! -f "$DATA_DIR/private.json" ]; then
+    echo "Error: $DATA_DIR/private.json not found. Make sure fedimintd has been upgraded"
+    echo "and started at least once to migrate from the old encrypted format."
+    exit 1
+fi
+
 exists=$(jq '.modules | to_entries | any(.value.kind == "meta")' "$DATA_DIR/consensus.json")
 if [ "$exists" == "true" ]; then
     echo "A module of kind 'meta' already exists."
@@ -46,18 +52,11 @@ NEXT_MOD_ID="$(jq '[.modules | keys[] | tonumber] | max + 1' "$DATA_DIR/consensu
 
 mv "$DATA_DIR/consensus.json" "$DATA_DIR/consensus.json.bak"
 mv "$DATA_DIR/local.json" "$DATA_DIR/local.json.bak"
-mv "$DATA_DIR/private.encrypt" "$DATA_DIR/private.encrypt.bak"
-
-PASSWORD="$(cat "$DATA_DIR/password.private")"
-fedimint-cli dev config-decrypt --in-file "$DATA_DIR/private.encrypt.bak" --out-file "$DATA_DIR/private.json.old" "$PASSWORD" > /dev/null
+mv "$DATA_DIR/private.json" "$DATA_DIR/private.json.bak"
 
 jq --arg next_mod_id "$NEXT_MOD_ID" '.modules_json += {($next_mod_id): {"kind": "meta"}} | .modules += {($next_mod_id): {"kind": "meta", "version": {"major": 0, "minor": 0}, "config": ""}}' "$DATA_DIR/consensus.json.bak" > "$DATA_DIR/consensus.json"
 jq --arg next_mod_id "$NEXT_MOD_ID" '.modules += {($next_mod_id): {"kind": "meta"}}' "$DATA_DIR/local.json.bak" > "$DATA_DIR/local.json"
-jq --arg next_mod_id "$NEXT_MOD_ID" '.modules += {($next_mod_id): {"kind": "meta"}}' "$DATA_DIR/private.json.old" > "$DATA_DIR/private.json.new"
-
-fedimint-cli dev config-encrypt --in-file "$DATA_DIR/private.json.new" --out-file "$DATA_DIR/private.encrypt" "$PASSWORD" > /dev/null
-
-rm "$DATA_DIR/private.json.old" "$DATA_DIR/private.json.new"
+jq --arg next_mod_id "$NEXT_MOD_ID" '.modules += {($next_mod_id): {"kind": "meta"}}' "$DATA_DIR/private.json.bak" > "$DATA_DIR/private.json"
 
 echo "Config files in $DATA_DIR have been patched, you can start fedimintd again."
 echo -e "\e[1mONLY VOTE ON META VALUES ONCE ALL GUARDIANS ARE UPGRADED\e[0m"

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_connectors::iroh_next_endpoint_url;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -17,11 +18,14 @@ use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::Client;
 use crate::db::DbKeyPrefix;
 use crate::guardian_metadata::GuardianMetadataPrefix;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ApiAnnouncementKey(pub PeerId);
@@ -228,7 +232,11 @@ pub(crate) async fn store_api_announcement_updates(
 /// 1. Guardian metadata (if available) - uses first URL from api_urls
 /// 2. API announcement (if available)
 /// 3. Configured URL (fallback)
-pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId, SafeUrl> {
+pub async fn get_api_urls(
+    db: &Database,
+    cfg: &ClientConfig,
+    client_iroh_next_enabled: bool,
+) -> BTreeMap<PeerId, SafeUrl> {
     let mut dbtx = db.begin_transaction_nc().await;
 
     // Load guardian metadata for all peers
@@ -247,13 +255,17 @@ pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId,
         .collect()
         .await;
 
-    // For each peer: prefer guardian metadata, then API announcement, then config
+    // For each peer: prefer guardian metadata, then API announcement, then config.
+    // When the client supports iroh-next and the guardian advertises an
+    // iroh-next endpoint, replace the original iroh:// identity with the
+    // advertised identity. The original identity is not retained as a fallback.
     cfg.global
         .api_endpoints
         .iter()
-        .map(|(peer_id, peer_url)| {
-            let url = guardian_metadata
-                .get(peer_id)
+        .filter_map(|(peer_id, peer_url)| {
+            let metadata = guardian_metadata.get(peer_id);
+
+            let mut url = metadata
                 .and_then(|m| m.guardian_metadata().api_urls.first().cloned())
                 .or_else(|| {
                     api_announcements
@@ -261,7 +273,39 @@ pub async fn get_api_urls(db: &Database, cfg: &ClientConfig) -> BTreeMap<PeerId,
                         .map(|a| a.api_announcement.api_url.clone())
                 })
                 .unwrap_or_else(|| peer_url.url.clone());
-            (*peer_id, url)
+
+            // If the resolved URL is iroh:// and iroh-next endpoint preference is
+            // enabled, swap in the advertised iroh-next endpoint.
+            if url.scheme() == "iroh"
+                && client_iroh_next_enabled
+                && let Some(m) = metadata
+            {
+                let gm = m.guardian_metadata();
+                if let Some(endpoint) = &gm.iroh_next_endpoint {
+                    match iroh_next_endpoint_url(endpoint) {
+                        Ok(next_url) => {
+                            debug!(
+                                target: LOG_CLIENT,
+                                %peer_id,
+                                %next_url,
+                                "Using iroh-next endpoint from guardian metadata",
+                            );
+                            url = next_url;
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_CLIENT,
+                                %peer_id,
+                                err = %err.fmt_compact_anyhow(),
+                                "Ignoring peer with invalid advertised iroh-next endpoint",
+                            );
+                            return None;
+                        }
+                    }
+                }
+            }
+
+            Some((*peer_id, url))
         })
         .collect()
 }

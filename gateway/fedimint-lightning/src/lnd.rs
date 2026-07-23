@@ -13,7 +13,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
 use fedimint_gateway_common::{
-    ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
+    ConnectPeerRequest, ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
 };
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
@@ -34,10 +34,11 @@ use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
 use tonic_lnd::lnrpc::{
-    ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    FeeReportRequest, GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress,
-    ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
-    OpenChannelRequest, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
+    ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
+    InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
+    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PolicyUpdateRequest,
+    SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -63,8 +64,6 @@ use crate::{
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
-const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
-
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -72,6 +71,9 @@ pub struct GatewayLndClient {
     tls_cert: String,
     macaroon: String,
     time_pref: f64,
+    /// How long (in seconds) LND keeps trying to route an outgoing payment
+    /// before giving up. Passed as `timeout_seconds` in `SendPaymentRequest`.
+    payment_timeout_secs: i32,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
     /// Predicate used to distinguish HOLD invoices the gateway created
     /// (federation-bound) from unrelated HOLD invoices on the same LND node.
@@ -87,6 +89,7 @@ impl GatewayLndClient {
         tls_cert: String,
         macaroon: String,
         time_pref: f64,
+        payment_timeout_secs: i32,
         lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
         lnv2_filter: Lnv2HoldInvoiceFilter,
     ) -> Self {
@@ -96,6 +99,7 @@ impl GatewayLndClient {
             tls_cert_path = %tls_cert,
             macaroon = %macaroon,
             time_pref,
+            payment_timeout_secs,
             "Gateway configured to connect to LND LnRpcClient",
         );
         GatewayLndClient {
@@ -103,6 +107,7 @@ impl GatewayLndClient {
             tls_cert,
             macaroon,
             time_pref,
+            payment_timeout_secs,
             lnd_sender,
             lnv2_filter,
         }
@@ -133,6 +138,46 @@ impl GatewayLndClient {
         };
 
         Ok(client)
+    }
+
+    async fn connect_peer_if_needed(
+        &self,
+        client: &mut LndClient,
+        pubkey: PublicKey,
+        host: String,
+    ) -> Result<(), LightningRpcError> {
+        let peers = client
+            .lightning()
+            .list_peers(ListPeersRequest { latest_error: true })
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Could not list peers: {e:?}"),
+            })?
+            .into_inner();
+
+        if peers.peers.into_iter().any(|peer| {
+            PublicKey::from_str(&peer.pub_key).expect("LND returned invalid peer public key")
+                == pubkey
+        }) {
+            return Ok(());
+        }
+
+        client
+            .lightning()
+            .connect_peer(LndConnectPeerRequest {
+                addr: Some(LightningAddress {
+                    pubkey: pubkey.to_string(),
+                    host,
+                }),
+                perm: false,
+                timeout: 10,
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Failed to connect to peer {e:?}"),
+            })?;
+
+        Ok(())
     }
 
     /// Spawns a new background task that subscribes to updates of a specific
@@ -268,8 +313,7 @@ impl GatewayLndClient {
     ) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
 
-        // Compute the minimum `add_index` that we need to subscribe to updates for.
-        let first_index_offset = client
+        let list_response = client
             .lightning()
             .list_invoices(ListInvoiceRequest {
                 pending_only: true,
@@ -285,16 +329,7 @@ impl GatewayLndClient {
                     failure_reason: "Failed to list all invoices".to_string(),
                 }
             })?
-            .into_inner()
-            .first_index_offset;
-
-        // `SubscribeInvoices` only replays invoices with an `add_index` strictly
-        // greater than `add_index`, so subscribing from `first_index_offset`
-        // directly would skip the add event of the oldest pending invoice and we
-        // would never spawn a monitor for it. Subtract one so that oldest pending
-        // invoice is replayed. `saturating_sub` keeps this correct in the
-        // empty-list case where `first_index_offset` is 0.
-        let add_index = first_index_offset.saturating_sub(1);
+            .into_inner();
 
         let self_copy = self.clone();
         let hold_group = task_group.make_subgroup();
@@ -302,6 +337,40 @@ impl GatewayLndClient {
         // task exits unexpectedly we shut down the payment-stream subgroup so
         // the gateway transitions to `Disconnected` and reconnects.
         let subgroup = task_group.clone();
+
+        // The `SubscribeInvoices` backlog cannot replay pre-existing pending
+        // HOLD invoices reliably: an `add_index` of 0 means "no backlog" to
+        // LND, so the oldest pending invoice is skipped whenever it is the
+        // first invoice ever created on the node (`add_index == 1`), and
+        // invoices already in the `Accepted` state are never delivered to
+        // all-invoice subscribers at all. Instead, spawn a monitor task for
+        // every pending HOLD invoice (`r_preimage` empty) from the listing
+        // directly. Invoices not created by this gateway are filtered out by
+        // the monitor task once they reach the `Accepted` state.
+        for invoice in &list_response.invoices {
+            if invoice.r_preimage.is_empty() {
+                info!(
+                    target: LOG_LIGHTNING,
+                    payment_hash = %PrettyPaymentHash(&invoice.r_hash),
+                    "Monitoring pre-existing pending LNv2 invoice",
+                );
+                self.spawn_lnv2_hold_invoice_subscription(
+                    &hold_group,
+                    subgroup.clone(),
+                    gateway_sender.clone(),
+                    invoice.r_hash.clone(),
+                )
+                .await?;
+            }
+        }
+
+        // The listing above covers all pending invoices, so the subscription
+        // only needs to replay invoices added after the listing was taken.
+        // Add indices increase monotonically, so any such invoice has an
+        // `add_index` strictly greater than the listing's `last_index_offset`
+        // (0 when no invoices were listed) and `SubscribeInvoices` replays
+        // exactly those, without duplicating the invoices handled above.
+        let add_index = list_response.last_index_offset;
         task_group.spawn("LND Invoice Subscription", move |handle| async move {
             let future_stream = client.lightning().subscribe_invoices(InvoiceSubscription {
                 add_index,
@@ -950,7 +1019,7 @@ impl ILnRpcClient for GatewayLndClient {
                         final_cltv_delta,
                         cltv_limit,
                         no_inflight_updates: false,
-                        timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
+                        timeout_seconds: self.payment_timeout_secs,
                         fee_limit_msat,
                         time_pref: self.time_pref,
                         ..Default::default()
@@ -1072,6 +1141,7 @@ impl ILnRpcClient for GatewayLndClient {
             tls_cert: self.tls_cert.clone(),
             macaroon: self.macaroon.clone(),
             time_pref: self.time_pref,
+            payment_timeout_secs: self.payment_timeout_secs,
             lnd_sender: Some(lnd_sender.clone()),
             lnv2_filter: self.lnv2_filter.clone(),
         });
@@ -1287,34 +1357,8 @@ impl ILnRpcClient for GatewayLndClient {
     ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
-        let peers = client
-            .lightning()
-            .list_peers(ListPeersRequest { latest_error: true })
-            .await
-            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
-                failure_reason: format!("Could not list peers: {e:?}"),
-            })?
-            .into_inner();
-
-        // Connect to the peer first if we are not connected already
-        if !peers.peers.into_iter().any(|peer| {
-            PublicKey::from_str(&peer.pub_key).expect("could not parse public key") == pubkey
-        }) {
-            client
-                .lightning()
-                .connect_peer(ConnectPeerRequest {
-                    addr: Some(LightningAddress {
-                        pubkey: pubkey.to_string(),
-                        host,
-                    }),
-                    perm: false,
-                    timeout: 10,
-                })
-                .await
-                .map_err(|e| LightningRpcError::FailedToConnectToPeer {
-                    failure_reason: format!("Failed to connect to peer {e:?}"),
-                })?;
-        }
+        self.connect_peer_if_needed(&mut client, pubkey, host)
+            .await?;
 
         // Build the request, leaving unspecified fee fields at their
         // protobuf defaults so LND falls back to its own configuration.
@@ -1354,6 +1398,16 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to open channel {e:?}"),
             }),
         }
+    }
+
+    async fn connect_peer(&self, payload: ConnectPeerRequest) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+        self.connect_peer_if_needed(
+            &mut client,
+            payload.node_address.pubkey,
+            payload.node_address.host_with_port(),
+        )
+        .await
     }
 
     async fn close_channels_with_peer(

@@ -29,10 +29,34 @@ pub struct IncomingContract {
 pub struct Commitment {
     pub payment_image: PaymentImage,
     pub amount: Amount,
-    pub expiration: u64,
+    /// A real unix-time expiration for ordinary incoming contracts, or a
+    /// fee-encoded value for lnurl receives (see [`fee_encoded_expiration`]).
+    /// The wire name stays `expiration` for backwards compatibility.
+    #[serde(rename = "expiration")]
+    pub expiration_or_fee: u64,
     pub claim_pk: PublicKey,
     pub refund_pk: PublicKey,
     pub ephemeral_pk: PublicKey,
+}
+
+/// Encode a gateway fee into an incoming-contract expiration.
+///
+/// Incoming contracts created for lnurl receives store the gateway fee here
+/// instead of a real timestamp: the receiving client never sees the invoice for
+/// these contracts, so this is the only way for it to recover the fee and
+/// report the invoice amount in its payment events. A real expiration is not
+/// needed as these contracts are discovered via the contract stream rather than
+/// awaited per-invoice, and the funding-time validation only requires the
+/// expiration to lie in the future, which the resulting near-`u64::MAX` value
+/// satisfies.
+pub fn fee_encoded_expiration(fee_msats: u64) -> u64 {
+    u64::MAX - fee_msats
+}
+
+/// Recover the gateway fee from an incoming-contract expiration created with
+/// [`fee_encoded_expiration`].
+pub fn fee_from_expiration(expiration: u64) -> u64 {
+    u64::MAX - expiration
 }
 
 impl IncomingContract {
@@ -51,7 +75,7 @@ impl IncomingContract {
         let commitment = Commitment {
             payment_image,
             amount,
-            expiration,
+            expiration_or_fee: expiration,
             claim_pk,
             refund_pk,
             ephemeral_pk,

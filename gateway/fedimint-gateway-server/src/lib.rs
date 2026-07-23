@@ -73,8 +73,8 @@ use fedimint_core::{
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
-    ConnectFedPayload, ConnectorType, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    ConnectFedPayload, ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload,
+    CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
@@ -1909,6 +1909,7 @@ impl Gateway {
                 lnd_tls_cert,
                 lnd_macaroon,
                 lnd_time_pref,
+                lnd_payment_timeout_secs,
             } => {
                 // The LND backend uses this to ignore HOLD invoices on the
                 // shared LND node that aren't federation-bound. Returns true
@@ -1932,6 +1933,7 @@ impl Gateway {
                     lnd_tls_cert,
                     lnd_macaroon,
                     lnd_time_pref,
+                    lnd_payment_timeout_secs,
                     None,
                     lnv2_filter,
                 ))
@@ -2355,6 +2357,21 @@ impl IAdminGateway for Gateway {
                 failure_reason: format!("Received invalid channel funding txid string {e}"),
             })
         })
+    }
+
+    /// Instructs the Gateway's Lightning node to connect to a peer specified by
+    /// `pubkey`.
+    async fn handle_connect_peer_msg(&self, payload: ConnectPeerRequest) -> AdminResult<()> {
+        info!(
+            target: LOG_GATEWAY,
+            pubkey = %payload.node_address.pubkey,
+            host = %payload.node_address.host_with_port(),
+            "Connecting to Lightning peer..."
+        );
+        let context = self.get_lightning_context().await?;
+        context.lnrpc.connect_peer(payload).await?;
+        info!(target: LOG_GATEWAY, "Connected to Lightning peer");
+        Ok(())
     }
 
     /// Instructs the Gateway's Lightning node to close all channels with a peer
@@ -3083,7 +3100,7 @@ impl Gateway {
             )));
         }
 
-        if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
+        if payload.contract.commitment.expiration_or_fee <= duration_since_epoch().as_secs() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract has already expired".to_string(),
             )));
@@ -3394,6 +3411,31 @@ impl IGatewayClientV2 for Gateway {
         }
 
         Ok(final_state)
+    }
+
+    async fn claim_payment_image(
+        &self,
+        payment_image: &PaymentImage,
+        operation_id: OperationId,
+    ) -> bool {
+        // `autocommit` retries on write-write conflicts, so concurrent claims for
+        // the same payment image are serialized: exactly one records itself as the
+        // claimer, the rest observe it and forfeit.
+        self.gateway_db
+            .autocommit(
+                |dbtx, _| {
+                    let payment_image = payment_image.clone();
+                    Box::pin(async move {
+                        let claimer = dbtx
+                            .claim_outgoing_payment_image(payment_image, operation_id)
+                            .await;
+                        Ok::<_, std::convert::Infallible>(claimer == operation_id)
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Retries until the transaction commits")
     }
 }
 

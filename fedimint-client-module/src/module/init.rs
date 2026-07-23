@@ -14,7 +14,7 @@ use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, CommonModuleInit, ModuleInit, MultiApiVersion};
 use fedimint_core::task::{MaybeSend, ShuttingDownError, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{ChainId, NumPeers, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, ChainId, NumPeers, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT;
 use tokio::sync::oneshot;
@@ -382,19 +382,24 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// Recover the state of the client module, optionally from an existing
     /// snapshot.
     ///
+    /// On success, returns the total amount recovered from this module, if the
+    /// module tracks it (`None` for modules that can't determine the amount at
+    /// recovery-completion time). This is surfaced in the
+    /// `ModuleRecoveryCompleted` event.
+    ///
     /// If `Err` is returned, the higher level client/application might try
     /// again at a different time (client restarted, code version changed, etc.)
     async fn recover(
         &self,
         _args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Amount>> {
         warn!(
             target: LOG_CLIENT,
             kind = %<Self::Module as ClientModule>::kind(),
             "Module does not support recovery, completing without doing anything"
         );
-        Ok(())
+        Ok(None)
     }
 
     /// Initialize a [`ClientModule`] instance from its config

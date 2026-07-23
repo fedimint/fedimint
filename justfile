@@ -68,6 +68,16 @@ watch *ARGS="-x run":
   env RUST_LOG=${RUST_LOG:-debug} cargo watch {{ARGS}}
 
 
+# run cargo-crap on the workspace
+crap *ARGS="--workspace":
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
+  cargo-crap {{ARGS}}
+
+
 # run `cargo clippy` on everything
 clippy *ARGS="--locked --offline --workspace --all-targets -- -D warnings":
   cargo clippy {{ARGS}}

@@ -22,9 +22,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
-    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::{
     Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
@@ -140,25 +139,14 @@ impl ServerModuleInit for MintInit {
         &[MODULE_CONSENSUS_VERSION]
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 1)],
-        )
-    }
-
     fn is_enabled_by_default(&self) -> bool {
-        is_env_var_set_opt(FM_ENABLE_MODULE_MINTV2_ENV).unwrap_or(false)
+        is_env_var_set_opt(FM_ENABLE_MODULE_MINTV2_ENV).unwrap_or(true)
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
         vec![EnvVarDoc {
             name: FM_ENABLE_MODULE_MINTV2_ENV,
-            description: "Set to 1/true to enable the MintV2 module (experimental). Disabled by default.",
+            description: "Set to 0/false to disable the MintV2 module. Enabled by default.",
         }]
     }
 

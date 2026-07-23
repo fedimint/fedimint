@@ -28,7 +28,7 @@ use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
-    ClientOutputSM, TransactionBuilder,
+    ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -44,7 +44,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
@@ -267,12 +267,42 @@ impl WalletClientModule {
             .ok_or(SendError::NoConsensusFeerateAvailable)
     }
 
+    /// Computes the federation fee an onchain send of an output worth `amount`
+    /// (the payment amount plus the on-chain miner fee) would incur, without
+    /// submitting anything.
+    ///
+    /// A send submits a single wallet output worth `amount`; the primary module
+    /// balances it by spending ecash to fund the output and minting any change.
+    /// This quotes the fee of that transaction — the wallet output fee, the
+    /// mint input fees on the funding notes, any mint change output fees,
+    /// and sub-denomination dust — via the shared, module-agnostic fee
+    /// quote.
+    ///
+    /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
+    /// the output `amount` (see [`Self::send_fee`]), not the on-federation
+    /// transaction fee.
+    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+        let amount = Amount::from_sats(amount.to_sat());
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                },
+            )
+            .await
+    }
+
     /// Fetch the current fee required to claim an onchain deposit (peg-in).
-    pub async fn receive_fee(&self) -> anyhow::Result<bitcoin::Amount> {
+    pub async fn receive_fee(&self) -> Result<bitcoin::Amount, ReceiveError> {
         self.module_api
             .receive_fee()
-            .await?
-            .ok_or_else(|| anyhow!("No consensus feerate is available"))
+            .await
+            .map_err(|e| ReceiveError::FederationError(e.to_string()))?
+            .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
     /// Send an onchain payment with the given fee.
@@ -595,21 +625,38 @@ impl WalletClientModule {
     /// Find the next valid index starting from (and including) `start_index`.
     ///
     /// Only ~1/65536 indices are valid, so the search is CPU-bound and may scan
-    /// many indices before finding one. To avoid blocking client shutdown, the
-    /// search stops and returns `None` once the task group begins shutting
-    /// down.
-    #[allow(clippy::maybe_infinite_iter)]
-    fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
+    /// many indices before finding one. The scan runs in bounded batches and
+    /// yields to the executor between them, so it does not stall the runtime —
+    /// important on wasm, which is single-threaded. It stops and returns `None`
+    /// once the task group begins shutting down.
+    async fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
+        /// Indices to scan per batch before yielding to the executor.
+        const SCAN_BATCH: u64 = 256;
+
         let pks_hash = self.cfg.bitcoin_pks.consensus_hash();
 
-        block_in_place(|| {
-            (start_index..)
-                .take_while(|_| !handle.is_shutting_down())
-                .find(|i| is_potential_receive(&self.derive_address(*i).script_pubkey(), &pks_hash))
-        })
+        let mut index = start_index;
+
+        while !handle.is_shutting_down() {
+            for _ in 0..SCAN_BATCH {
+                if is_potential_receive(&self.derive_address(index).script_pubkey(), &pks_hash) {
+                    return Some(index);
+                }
+
+                index += 1;
+            }
+
+            // Hand control back to the executor between batches.
+            sleep(Duration::ZERO).await;
+        }
+
+        None
     }
 
     /// Issue ecash for an unspent output with a given fee.
+    ///
+    /// Returns `None` if the output value cannot cover the fee, or if the
+    /// remainder is too small to fund the claim transaction's fees.
     async fn receive_output(
         &self,
         output_index: u64,
@@ -617,7 +664,7 @@ impl WalletClientModule {
         address_index: u64,
         fee: bitcoin::Amount,
         outpoint: Option<bitcoin::OutPoint>,
-    ) -> (OperationId, TransactionId) {
+    ) -> Option<(OperationId, TransactionId)> {
         let operation_id = OperationId::new_random();
 
         let client_input = ClientInput::<WalletInput> {
@@ -627,7 +674,7 @@ impl WalletClientModule {
                 tweak: self.derive_tweak(address_index).public_key(),
             }),
             keys: vec![self.derive_tweak(address_index)],
-            amounts: Amounts::new_bitcoin(Amount::from_sats((value - fee).to_sat())),
+            amounts: Amounts::new_bitcoin(Amount::from_sats(value.checked_sub(fee)?.to_sat())),
         };
 
         let client_input_sm = ClientInputSM::<WalletClientStateMachines> {
@@ -669,7 +716,7 @@ impl WalletClientModule {
                 TransactionBuilder::new().with_inputs(client_input_bundle),
             )
             .await
-            .expect("Input amount is sufficient to finalize transaction");
+            .ok()?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -688,7 +735,7 @@ impl WalletClientModule {
 
         dbtx.commit_tx().await;
 
-        (operation_id, range.txid())
+        Some((operation_id, range.txid()))
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -705,7 +752,7 @@ impl WalletClientModule {
                 .await
                 .is_none()
             {
-                let Some(index) = module.next_valid_index(0, &handle) else {
+                let Some(index) = module.next_valid_index(0, &handle).await else {
                     return;
                 };
 
@@ -767,7 +814,8 @@ impl WalletClientModule {
 
                 // If we used the highest valid index, add the next valid one
                 if address_index == next_address_index {
-                    let Some(index) = self.next_valid_index(next_address_index + 1, handle) else {
+                    let Some(index) = self.next_valid_index(next_address_index + 1, handle).await
+                    else {
                         return Ok(false);
                     };
 
@@ -840,24 +888,16 @@ impl WalletClientModule {
             .await?
             .ok_or(anyhow!("No consensus feerate is available"))?;
 
-        if receive_fee < output.value {
-            debug!(
-                target: LOG_CLIENT_MODULE_WALLETV2,
-                output_index = output.index,
-                value_sat = output.value.to_sat(),
-                fee_sat = receive_fee.to_sat(),
-                "Submitting walletv2 receive claim"
-            );
-            let (operation_id, txid) = self
-                .receive_output(
-                    output.index,
-                    output.value,
-                    address_index,
-                    receive_fee,
-                    output.outpoint,
-                )
-                .await;
-
+        if let Some((operation_id, txid)) = self
+            .receive_output(
+                output.index,
+                output.value,
+                address_index,
+                receive_fee,
+                output.outpoint,
+            )
+            .await
+        {
             debug!(
                 target: LOG_CLIENT_MODULE_WALLETV2,
                 output_index = output.index,
@@ -884,7 +924,7 @@ impl WalletClientModule {
                 output_index = output.index,
                 value_sat = output.value.to_sat(),
                 fee_sat = receive_fee.to_sat(),
-                "Skipping walletv2 receive output because fee meets or exceeds value"
+                "Skipping walletv2 receive claim; value cannot cover the claim fees"
             );
         }
 
@@ -906,6 +946,14 @@ pub enum SendError {
     InsufficientFunds,
     #[error("Unsupported address type")]
     UnsupportedAddress,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum ReceiveError {
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("No consensus feerate is available at this time")]
+    NoConsensusFeerateAvailable,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

@@ -12,8 +12,8 @@ use anyhow::{Context, Result, anyhow, bail, format_err};
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::envs::{
-    FM_ENABLE_MODULE_LNV2_ENV, FM_ENABLE_MODULE_MINTV2_ENV, FM_ENABLE_MODULE_WALLETV2_ENV,
-    is_env_var_set,
+    FM_ENABLE_MODULE_LNV1_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_ENABLE_MODULE_MINTV2_ENV,
+    FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set,
 };
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self};
@@ -696,21 +696,6 @@ impl FedimintCli {
         }
     }
 
-    pub async fn set_password(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            auth.as_str(),
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "set-password",
-        )
-        .run()
-        .await
-    }
-
     pub async fn set_local_params_leader(
         self,
         peer: &PeerId,
@@ -994,17 +979,24 @@ fn to_command(cli: Vec<String>) -> Command {
     }
 }
 
+pub fn supports_lnv1() -> bool {
+    // Mirrors the server default: LNv1 is disabled unless explicitly enabled.
+    is_env_var_set(FM_ENABLE_MODULE_LNV1_ENV)
+}
+
 pub fn supports_lnv2() -> bool {
     std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
         || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV)
 }
 
 pub fn supports_wallet_v2() -> bool {
-    is_env_var_set(FM_ENABLE_MODULE_WALLETV2_ENV)
+    std::env::var_os(FM_ENABLE_MODULE_WALLETV2_ENV).is_none()
+        || is_env_var_set(FM_ENABLE_MODULE_WALLETV2_ENV)
 }
 
 pub fn supports_mint_v2() -> bool {
-    is_env_var_set(FM_ENABLE_MODULE_MINTV2_ENV)
+    std::env::var_os(FM_ENABLE_MODULE_MINTV2_ENV).is_none()
+        || is_env_var_set(FM_ENABLE_MODULE_MINTV2_ENV)
 }
 
 /// Returns true if running backwards-compatibility tests

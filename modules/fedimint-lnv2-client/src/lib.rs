@@ -28,7 +28,8 @@ use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange}
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
+    TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -556,7 +557,14 @@ impl LightningClientModule {
             });
         }
 
-        let operation_id = self.get_next_operation_id(&invoice).await?;
+        // The attempt index is fixed at `0` so the operation id matches the one
+        // older clients derived for the first payment attempt, ensuring an
+        // already-paid or in-flight invoice is still detected after an upgrade.
+        let operation_id = OperationId::from_encodable(&(invoice.clone(), 0u64));
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Err(SendPaymentError::DuplicatePaymentAttempt(operation_id));
+        }
 
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
 
@@ -660,7 +668,7 @@ impl LightningClientModule {
                 &mut dbtx,
                 SendPaymentEvent {
                     operation_id,
-                    amount: send_fee.add_to(amount),
+                    amount: Amount::from_msats(amount),
                     fee: send_fee.fee(amount),
                 },
             )
@@ -669,39 +677,6 @@ impl LightningClientModule {
         dbtx.commit_tx().await;
 
         Ok(operation_id)
-    }
-
-    async fn get_next_operation_id(
-        &self,
-        invoice: &Bolt11Invoice,
-    ) -> Result<OperationId, SendPaymentError> {
-        for payment_attempt in 0..u64::MAX {
-            let operation_id = OperationId::from_encodable(&(invoice.clone(), payment_attempt));
-
-            if !self.client_ctx.operation_exists(operation_id).await {
-                return Ok(operation_id);
-            }
-
-            if self.client_ctx.has_active_states(operation_id).await {
-                return Err(SendPaymentError::PaymentInProgress(operation_id));
-            }
-
-            let mut stream = self
-                .subscribe_send_operation_state_updates(operation_id)
-                .await
-                .expect("operation_id exists")
-                .into_stream();
-
-            // This will not block since we checked for active states and there were none,
-            // so by definition a final state has to have been assumed already.
-            while let Some(state) = stream.next().await {
-                if let SendOperationState::Success(_) = state {
-                    return Err(SendPaymentError::InvoiceAlreadyPaid(operation_id));
-                }
-            }
-        }
-
-        panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
     /// Subscribe to all state updates of the send operation.
@@ -834,6 +809,130 @@ impl LightningClientModule {
             .expect("The contract has been generated with our public key");
 
         Ok((invoice, operation_id))
+    }
+
+    /// Computes the federation fee a `receive` of `amount` would incur, without
+    /// submitting anything.
+    ///
+    /// When the incoming contract is claimed, the client submits a transaction
+    /// with a single Lightning input worth the contract amount; the primary
+    /// module balances it by minting the change credited to the wallet. This
+    /// quotes the fee of that transaction — the Lightning input fee, the mint
+    /// output fees, and any sub-denomination dust — via the shared,
+    /// module-agnostic fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: this is
+    /// only the fee of the on-federation transaction. For that reason the quote
+    /// is taken on `amount` directly (rather than the gateway-reduced contract
+    /// amount), and no gateway round-trip is needed.
+    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_bitcoin(amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
+    }
+
+    /// Computes the federation fee a `send` funding an outgoing contract worth
+    /// `amount` would incur, without submitting anything.
+    ///
+    /// When a payment is sent, the client submits a transaction with a single
+    /// Lightning output (the outgoing contract) worth `amount`; the primary
+    /// module balances it by spending ecash to fund the contract and minting
+    /// any change. This quotes the fee of that transaction — the Lightning
+    /// output fee, the mint input fees on the funding notes, any mint change
+    /// output fees, and sub-denomination dust — via the shared, module-agnostic
+    /// fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: it is
+    /// part of the contract `amount` the gateway claims, not the on-federation
+    /// transaction fee. So `amount` is the full outgoing contract value
+    /// (`send_fee.add_to(invoice_amount)`).
+    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                },
+            )
+            .await
+    }
+
+    /// Computes the largest invoice amount the client can pay in full out of
+    /// `balance`, i.e. the amount to request an invoice for in order to spend
+    /// (close to) the entire balance.
+    ///
+    /// Paying an invoice deducts two kinds of fee from the balance:
+    /// - the *gateway* fee, which is added on top of the invoice amount to form
+    ///   the outgoing contract (`send_fee.add_to(invoice_amount)`), and
+    /// - the *federation* fee of funding that contract — the Lightning output
+    ///   fee, the mint input fees on the funding notes, the mint output fees on
+    ///   any change, and sub-denomination dust — as quoted by
+    ///   [`Self::send_fee_quote`].
+    ///
+    /// `balance` is the client's current Bitcoin balance (e.g. from
+    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway
+    /// whose fee schedule to use; if `None` one is selected automatically, the
+    /// same way [`Self::send`] does when no gateway is given. The gateway's
+    /// *default* send fee is used — the higher of its two send fees, applied to
+    /// a Lightning swap rather than a direct fedimint-to-fedimint swap — so the
+    /// returned amount stays payable even when the eventual invoice is routed
+    /// over Lightning.
+    ///
+    /// The maximum payable amount is found by binary search over the real fee
+    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
+    /// because the federation fee is stepwise in the amount. The quote is
+    /// point-in-time and moves with the balance, exactly like
+    /// [`Self::send_fee_quote`]; the eventual [`Self::send`] remains the source
+    /// of truth and may still fail if balance or gateway state changes in
+    /// between.
+    ///
+    /// Returns an error if the balance cannot cover even the smallest payable
+    /// amount plus fees. Any LNURL `minSendable`/`maxSendable` bounds are the
+    /// caller's responsibility to apply.
+    pub async fn spendable_amount(
+        &self,
+        balance: Amount,
+        gateway: Option<SafeUrl>,
+    ) -> anyhow::Result<Amount> {
+        let routing_info = match gateway {
+            Some(gateway) => self
+                .routing_info(&gateway)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Federation not supported by gateway"))?,
+            None => self.select_gateway(None).await?.1,
+        };
+
+        // The default (Lightning-swap) send fee is the higher of the gateway's
+        // two send fees, so using it keeps the result payable even if the
+        // eventual invoice is routed over Lightning instead of settled by a
+        // direct swap.
+        let send_fee = routing_info.send_fee_default;
+
+        anyhow::ensure!(
+            send_fee.le(&PaymentFee::SEND_FEE_LIMIT),
+            "Gateway's default send fee exceeds the limit"
+        );
+
+        max_affordable_send_amount(
+            balance,
+            Amount::from_msats(1),
+            balance,
+            |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
+            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+        )
+        .await
+        .ok_or_else(|| anyhow::anyhow!("Balance is too low to send any amount after fees"))
     }
 
     /// Create an incoming contract locked to a public key derived from the
@@ -1123,9 +1222,19 @@ impl LightningClientModule {
     }
 
     async fn receive_lnurl(&self, custom_meta: Value) {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        let stream_index = dbtx
+        // Read the stream cursor with a short-lived transaction. It must NOT stay open
+        // across the long-poll below: RocksDB's optimistic transactions validate a
+        // commit against bounded memtable history, so a transaction held open
+        // for minutes fails with a spurious `WriteConflict` once enough
+        // concurrent writes flush that history — and the panicking
+        // `commit_tx()` then killed this task permanently, silently
+        // stalling every future receive for the lifetime of the process. Long-lived
+        // clients (daemons) hit this reproducibly under concurrent lnv2 activity.
+        let stream_index = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
             .get_value(&IncomingContractStreamIndexKey)
             .await
             .unwrap_or(0);
@@ -1153,6 +1262,16 @@ impl LightningClientModule {
             }
         }
 
+        // Advance the cursor in its own short transaction. This is the only writer of
+        // this key and it runs in a single sequential loop, so there is no concurrent
+        // writer to guard against; and because this transaction is short-lived — opened
+        // after the long-poll and committed immediately — it cannot hit the spurious
+        // `WriteConflict` that a transaction held open across the long-poll would, so a
+        // plain `commit_tx()` is safe. Ordering is unchanged: the cursor only moves
+        // after the batch above was processed, and a crash in between re-fetches the
+        // same batch on the next iteration.
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
         dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
             .await;
 
@@ -1176,10 +1295,8 @@ pub enum SendPaymentError {
     InvoiceMissingAmount,
     #[error("Invoice has expired")]
     InvoiceExpired,
-    #[error("A payment for this invoice is already in progress")]
-    PaymentInProgress(OperationId),
-    #[error("This invoice has already been paid")]
-    InvoiceAlreadyPaid(OperationId),
+    #[error("Payment attempt is duplicate")]
+    DuplicatePaymentAttempt(OperationId),
     #[error(transparent)]
     SelectGateway(SelectGatewayError),
     #[error("Failed to connect to gateway")]

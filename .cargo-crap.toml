@@ -1,0 +1,7 @@
+# Shared cargo-crap defaults for local runs and CI gates.
+# CLI arguments take precedence over this file.
+default-excludes = ["benches/**", "examples/**", "tests/**"]
+epsilon = 0.01
+missing = "pessimistic"
+sort = "crap"
+threshold = 500
