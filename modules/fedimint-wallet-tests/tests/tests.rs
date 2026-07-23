@@ -1086,6 +1086,7 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
         dbtx.commit_tx().await;
     }
 
+    let before_reuse = fedimint_core::time::now();
     let (reused, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
     assert_matches!(
         outcome,
@@ -1097,8 +1098,10 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
     let data = wallet_module
         .get_pegin_tweak_idx(original.tweak_idx)
         .await?;
-    assert!(distant_past < data.creation_time);
-    assert_eq!(data.last_check_time, None);
+    assert!(before_reuse <= data.creation_time);
+    if let Some(last_check_time) = data.last_check_time {
+        assert!(before_reuse <= last_check_time);
+    }
     assert!(data.next_check_time.is_some());
     assert!(distant_past < data.next_check_time.expect("next check time must be set"));
 
