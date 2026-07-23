@@ -30,6 +30,8 @@ pub mod envs;
 pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
+pub const ADDRESS_WITH_EVENT_LOG_POSITION_ENDPOINT: &str = "/address_with_event_log_position";
+pub const AWAIT_DEPOSIT_ENDPOINT: &str = "/await_deposit";
 pub const ADDRESS_RECHECK_ENDPOINT: &str = "/address_recheck";
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
@@ -93,6 +95,28 @@ pub struct ConfigPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DepositAddressPayload {
     pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DepositAddressWithEventLogPositionPayload {
+    pub federation_id: FederationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DepositAddressWithEventLogPositionResponse {
+    pub address: Address<NetworkUnchecked>,
+    pub position: EventLogId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AwaitDepositPayload {
+    pub federation_id: FederationId,
+    pub position: EventLogId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AwaitDepositResponse {
+    pub next_position: EventLogId,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
