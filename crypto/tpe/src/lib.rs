@@ -207,8 +207,7 @@ fn lagrange_multipliers(scalars: Vec<Scalar>) -> Vec<Scalar> {
                 .iter()
                 .filter(|j| *j != i)
                 .map(|j| j * (j - i).invert().expect("We filtered the case j == i"))
-                .reduce(|a, b| a * b)
-                .expect("We have at least one share")
+                .fold(Scalar::ONE, |a, b| a * b)
         })
         .collect()
 }
