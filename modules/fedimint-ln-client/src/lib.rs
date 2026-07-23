@@ -1318,13 +1318,6 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
-        if let Some(expires_at) = invoice.expires_at() {
-            ensure!(
-                expires_at.as_secs() > fedimint_core::time::duration_since_epoch().as_secs(),
-                "Invoice has expired"
-            );
-        }
-
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
@@ -1346,6 +1339,21 @@ impl LightningClientModule {
                     operation_id: prev_operation_id
                 }
             )
+        }
+
+        // Only a genuinely NEW payment attempt is refused for an expired invoice. This
+        // check deliberately runs AFTER the two idempotency checks above so
+        // that re-submitting an invoice that was already attempted keeps its
+        // idempotent answer even once the invoice lapses: a completed payment
+        // is returned as such, and a still-running attempt surfaces
+        // `PreviousPaymentAttemptStillInProgress` with its operation id.
+        // Checking expiry first would mask both answers behind "Invoice has
+        // expired".
+        if let Some(expires_at) = invoice.expires_at() {
+            ensure!(
+                expires_at.as_secs() > fedimint_core::time::duration_since_epoch().as_secs(),
+                "Invoice has expired"
+            );
         }
 
         let next_index = prev_payment_result.index + 1;

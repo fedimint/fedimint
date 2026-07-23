@@ -766,6 +766,92 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
+
+    // Give client2 initial balance
+    client2_dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    // An invoice with a short expiry, paid (internally) well before it lapses.
+    let desc = Description::new("paid-then-expired".to_string())?;
+    let (op, invoice, _) = client1
+        .get_first_module::<LightningClientModule>()?
+        .create_bolt11_invoice(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(desc),
+            Some(5),
+            (),
+            None,
+        )
+        .await?;
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()?
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
+
+    // Pay FIRST, before consuming any receive-stream states: the pre-payment
+    // window against the short real-time expiry must stay minimal so a slow CI
+    // cannot expire the invoice before the first attempt. The receive stream
+    // replays all states in order, so the assertions below are unaffected.
+    let OutgoingLightningPayment {
+        payment_type: first_payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice.clone(), None).await?;
+    match first_payment_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()?
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+            assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
+            assert_eq!(sub1.ok().await?, LnReceiveState::AwaitingFunds);
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Let the invoice lapse AFTER it was successfully paid.
+    fedimint_core::task::sleep_in_test(
+        "waiting for the paid invoice to expire",
+        std::time::Duration::from_secs(6),
+    )
+    .await;
+
+    // A caller recovering from a crash re-pays the same (now expired) invoice to
+    // learn what happened to its earlier attempt. The completed payment must be
+    // returned — not an "Invoice has expired" error, which would mask the
+    // successful payment and push the caller toward paying again through a
+    // fresh invoice.
+    let prev_balance = client2.get_balance_for_btc().await?;
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice, None).await?;
+    assert_eq!(
+        payment_type.operation_id(),
+        first_payment_type.operation_id(),
+        "the completed payment is returned; no new attempt is started"
+    );
+    let same_balance = client2.get_balance_for_btc().await?;
+    assert_eq!(prev_balance, same_balance);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
