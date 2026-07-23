@@ -1,23 +1,38 @@
 //! State machine for submitting transactions
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use fedimint_core::TransactionId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::retry;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::watch;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::sm::{Context, DynContext, State, StateTransition};
-use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
+use crate::{
+    DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent, TxSubmissionStalledEvent,
+};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
 pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
+
+/// How long a submission may keep being re-attempted within a single client
+/// run, without the transaction being accepted or rejected, before it is
+/// reported as stalled.
+///
+/// Comfortably above the submission backoff's own maximum delay, so a healthy
+/// but slow submission does not warn.
+const SUBMISSION_STALL_WARN_AFTER: Duration = Duration::from_mins(30);
+
+/// How often to repeat the stall report while the condition persists.
+const SUBMISSION_STALL_WARN_INTERVAL: Duration = Duration::from_mins(30);
 
 #[derive(Debug, Clone)]
 pub struct TxSubmissionContext;
@@ -97,6 +112,7 @@ impl State for TxSubmissionStatesSM {
                             transaction.clone(),
                             global_context.clone(),
                             tx_submitted_sender,
+                            operation_id,
                         ),
                         {
                             let global_context = global_context.clone();
@@ -198,13 +214,21 @@ impl TxSubmissionStates {
         transaction: Transaction,
         context: DynGlobalClientContext,
         tx_submitted: watch::Sender<bool>,
+        operation_id: OperationId,
     ) -> String {
         let txid = transaction.tx_hash();
         debug!(target: LOG_CLIENT_NET_API, %txid, "Submitting transaction");
+
+        let started_s = duration_since_epoch().as_secs();
+        let attempts = AtomicU64::new(0);
+        // Unix seconds of the last stall report; 0 means "not yet reported".
+        let reported_at_s = AtomicU64::new(0);
+
         retry(
             "tx-submit-sm",
             custom_backoff(Duration::from_secs(2), Duration::from_mins(10), None),
             || async {
+                let attempt = attempts.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                 if let TransactionSubmissionOutcome(Err(transaction_error)) = context
                     .api()
                     .submit_transaction(transaction.clone())
@@ -219,6 +243,48 @@ impl TxSubmissionStates {
                         "Transaction submission accepted by peer, awaiting consensus",
                     );
                     tx_submitted.send_replace(true);
+
+                    // Re-submitting until the transaction is accepted or rejected is
+                    // intentional: submission does not guarantee the transaction reaches
+                    // consensus. But a submission stuck in this branch keeps its state
+                    // machine alive indefinitely, and at default log levels nothing
+                    // reports that it is happening, so surface it.
+                    //
+                    // Elapsed is measured per client run off a wall clock: a restart
+                    // resets it, and a large clock step can skew it. That is acceptable
+                    // for a diagnostic, which this is - it changes no behaviour.
+                    let now_s = duration_since_epoch().as_secs();
+                    let elapsed_s = now_s.saturating_sub(started_s);
+                    if SUBMISSION_STALL_WARN_AFTER.as_secs() <= elapsed_s {
+                        let last_s = reported_at_s.load(Ordering::Relaxed);
+                        if last_s == 0
+                            || SUBMISSION_STALL_WARN_INTERVAL.as_secs()
+                                <= now_s.saturating_sub(last_s)
+                        {
+                            reported_at_s.store(now_s, Ordering::Relaxed);
+                            warn!(
+                                target: LOG_CLIENT_NET_API,
+                                %txid,
+                                operation_id = %operation_id.fmt_short(),
+                                %attempt,
+                                %elapsed_s,
+                                "Transaction neither accepted nor rejected; still re-submitting",
+                            );
+                            // Surface the same condition to integrators as a
+                            // transient (non-persisted) event, at the same cadence
+                            // as the warn. No dbtx is in scope here, so this opens
+                            // its own.
+                            context
+                                .log_event_no_dbtx(TxSubmissionStalledEvent {
+                                    txid,
+                                    operation_id,
+                                    attempt,
+                                    elapsed_s,
+                                })
+                                .await;
+                        }
+                    }
+
                     Err(anyhow::anyhow!("Transaction is still valid"))
                 }
             },
