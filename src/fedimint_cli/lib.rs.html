@@ -1749,8 +1749,8 @@
 <a href=#1749 id=1749 data-nosnippet>1749</a>                    .map(|v| {
 <a href=#1750 id=1750 data-nosnippet>1750</a>                        <span class="kw">let </span>id = v.id();
 <a href=#1751 id=1751 data-nosnippet>1751</a>                        <span class="kw">let </span>v = v.as_raw();
-<a href=#1752 id=1752 data-nosnippet>1752</a>                        <span class="kw">let </span>module_id = v.module.as_ref().map(|m| m.<span class="number">1</span>);
-<a href=#1753 id=1753 data-nosnippet>1753</a>                        <span class="kw">let </span>module_kind = v.module.as_ref().map(|m| m.<span class="number">0</span>.clone());
+<a href=#1752 id=1752 data-nosnippet>1752</a>                        <span class="kw">let </span>module_id = v.module.as_ref().map(|m| m.id);
+<a href=#1753 id=1753 data-nosnippet>1753</a>                        <span class="kw">let </span>module_kind = v.module.as_ref().map(|m| m.kind.clone());
 <a href=#1754 id=1754 data-nosnippet>1754</a>                        <span class="macro">serde_json::json!</span>({
 <a href=#1755 id=1755 data-nosnippet>1755</a>                            <span class="string">"id"</span>: id,
 <a href=#1756 id=1756 data-nosnippet>1756</a>                            <span class="string">"kind"</span>: v.kind,
@@ -1780,8 +1780,8 @@
 <a href=#1780 id=1780 data-nosnippet>1780</a>                    .map(|v| {
 <a href=#1781 id=1781 data-nosnippet>1781</a>                        <span class="kw">let </span>id = v.id();
 <a href=#1782 id=1782 data-nosnippet>1782</a>                        <span class="kw">let </span>v = v.as_raw();
-<a href=#1783 id=1783 data-nosnippet>1783</a>                        <span class="kw">let </span>module_id = v.module.as_ref().map(|m| m.<span class="number">1</span>);
-<a href=#1784 id=1784 data-nosnippet>1784</a>                        <span class="kw">let </span>module_kind = v.module.as_ref().map(|m| m.<span class="number">0</span>.clone());
+<a href=#1783 id=1783 data-nosnippet>1783</a>                        <span class="kw">let </span>module_id = v.module.as_ref().map(|m| m.id);
+<a href=#1784 id=1784 data-nosnippet>1784</a>                        <span class="kw">let </span>module_kind = v.module.as_ref().map(|m| m.kind.clone());
 <a href=#1785 id=1785 data-nosnippet>1785</a>                        <span class="macro">serde_json::json!</span>({
 <a href=#1786 id=1786 data-nosnippet>1786</a>                            <span class="string">"id"</span>: id,
 <a href=#1787 id=1787 data-nosnippet>1787</a>                            <span class="string">"kind"</span>: v.kind,
