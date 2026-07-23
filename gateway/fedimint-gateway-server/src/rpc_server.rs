@@ -87,7 +87,14 @@ pub async fn run_webserver(
     let mut handlers = Handlers::new();
 
     let routes = routes(gateway.clone(), task_group.clone(), &mut handlers);
-    let ui_routes = fedimint_gateway_ui::router(gateway.clone());
+    // The UI router is merged separately from `routes` below and merged
+    // routers keep their own layers, so it needs its own
+    // `not_configured_middleware` layer. Without it, only the API routes are
+    // restricted to `is_allowed_setup_route` while the gateway is
+    // `NotConfigured`
+    let ui_routes = fedimint_gateway_ui::router(gateway.clone())
+        .layer(middleware::from_fn(not_configured_middleware))
+        .layer(Extension(gateway.clone()));
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
