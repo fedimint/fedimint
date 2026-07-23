@@ -4,17 +4,12 @@ use anyhow::{Context, bail, ensure};
 use bitcoin::TapLeafHash;
 use bitcoin::sighash::{Prevouts, SighashCache};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_walletv2_common::taproot::{descriptor_tr, nums_point, tweak_xonly_public_key};
 use futures::StreamExt;
 use secp256k1::{Keypair, PublicKey, Scalar, XOnlyPublicKey, schnorr};
-use tracing::debug;
 
-use crate::db::{
-    SchnorrSignaturesKey, SchnorrSignaturesTxidPrefix, UnconfirmedTxKey, UnsignedTxKey,
-};
+use crate::db::{SchnorrSignaturesKey, SchnorrSignaturesTxidPrefix, UnsignedTxKey};
 use crate::{FederationTx, Wallet};
 
 impl Wallet {
@@ -62,18 +57,12 @@ impl Wallet {
             .await;
 
         if signatures.len() == self.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
-            dbtx.remove_entry(&UnsignedTxKey(txid)).await;
-
             dbtx.remove_by_prefix(&SchnorrSignaturesTxidPrefix(txid))
                 .await;
 
             self.finalize_tx_schnorr(&mut unsigned, &signatures);
 
-            dbtx.insert_new_entry(&UnconfirmedTxKey(txid), &unsigned)
-                .await;
-            if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
-                debug!(target: LOG_MODULE_WALLETV2, err = %err.fmt_compact_anyhow(), "Error broadcasting finalized transaction");
-            }
+            self.finalize_and_broadcast(dbtx, txid, unsigned).await;
         }
         Ok(())
     }

@@ -5,32 +5,21 @@ mod single_peer;
 use bitcoin::hashes::sha256;
 use bitcoin::taproot::LeafVersion;
 use bitcoin::{ScriptBuf, TapLeafHash, TxOut};
-use fedimint_walletv2_common::config::WalletDescriptor;
-use fedimint_walletv2_common::taproot::{descriptor_tr, descriptor_tr_single_peer, nums_point};
+use fedimint_walletv2_common::taproot::{descriptor_tr, nums_point, script_pubkey_for_descriptor};
 
 use crate::{FederationTx, Wallet};
 
 impl Wallet {
     /// The federation `script_pubkey` for the UTXO identified by
-    /// `tweak`. Branches on the configured descriptor: P2WSH for `Wsh`,
-    /// P2TR with NUMS internal key + script-path multisig for `Tr`,
-    /// P2TR key-path with the lone peer's xonly for `SinglePeer`, or
-    /// P2TR key-path with the FROST aggregated key for `Frost`. Used
-    /// both to derive deposit addresses and to reconstruct prevouts
-    /// when computing sighashes.
+    /// `tweak`, per the configured descriptor. Used both to derive
+    /// deposit addresses and to reconstruct prevouts when computing
+    /// sighashes.
     pub(crate) fn script_pubkey_for(&self, tweak: &sha256::Hash) -> ScriptBuf {
-        match self.cfg.consensus.descriptor {
-            WalletDescriptor::Wsh => self.descriptor(tweak).script_pubkey(),
-            WalletDescriptor::Tr => {
-                descriptor_tr(&self.cfg.consensus.bitcoin_pks, tweak, nums_point()).script_pubkey()
-            }
-            WalletDescriptor::SinglePeer(peer_xonly) => {
-                descriptor_tr_single_peer(peer_xonly, tweak).script_pubkey()
-            }
-            WalletDescriptor::Frost(internal_key) => {
-                descriptor_tr(&self.cfg.consensus.bitcoin_pks, tweak, internal_key).script_pubkey()
-            }
-        }
+        script_pubkey_for_descriptor(
+            &self.cfg.consensus.descriptor,
+            &self.cfg.consensus.bitcoin_pks,
+            tweak,
+        )
     }
 
     /// The `TapLeafHash` of the single `multi_a` script leaf for the
@@ -74,5 +63,27 @@ impl Wallet {
                 script_pubkey: self.script_pubkey_for(&utxo.tweak),
             })
             .collect()
+    }
+}
+
+/// Attach a BIP-341 key-path witness to every input of `federation_tx`:
+/// each witness is exactly the serialized Schnorr signature — with
+/// `SIGHASH_DEFAULT` that is 64 bytes and no sighash-type byte is
+/// appended. No script, no control block. Shared by the `SinglePeer` and
+/// `Frost` descriptors, which both spend via the key path only.
+pub(crate) fn attach_key_path_witnesses(
+    federation_tx: &mut crate::FederationTx,
+    signatures: impl ExactSizeIterator<Item = Vec<u8>>,
+) {
+    assert_eq!(
+        federation_tx.spent_tx_outs.len(),
+        federation_tx.tx.input.len()
+    );
+    assert_eq!(signatures.len(), federation_tx.tx.input.len());
+
+    for (input, signature) in federation_tx.tx.input.iter_mut().zip(signatures) {
+        let mut witness = bitcoin::Witness::new();
+        witness.push(&signature);
+        input.witness = witness;
     }
 }
