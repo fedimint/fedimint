@@ -100,6 +100,40 @@ impl Event for TxRejectedEvent {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
+/// Diagnostic signal that a transaction submission is being re-attempted
+/// indefinitely without reaching consensus.
+///
+/// Emitted only on the retry iterations where `submit_transaction` returns a
+/// decodable, non-rejection outcome — i.e. a peer accepted the submission but
+/// the transaction has still not been accepted into (or rejected from)
+/// consensus. Repeated transport, API, or decoding errors instead take the
+/// retry error path and do not emit this event, so its absence does not imply
+/// the submission has stopped.
+///
+/// Cadence: first emitted after roughly 30 minutes of continuous re-submission
+/// within a single client run, then repeated about every 30 minutes while the
+/// condition persists. Elapsed time is measured per client run, so a restart
+/// resets it.
+///
+/// It is [`EventPersistence::Transient`], so it is broadcast to live
+/// subscribers (and transits the unordered event staging table) but is never
+/// written to the ordered event log.
+#[derive(Serialize, Deserialize)]
+pub struct TxSubmissionStalledEvent {
+    pub txid: TransactionId,
+    pub operation_id: OperationId,
+    /// Submission attempts so far in this client run.
+    pub attempt: u64,
+    /// Seconds elapsed in this client run since submission started.
+    pub elapsed_s: u64,
+}
+
+impl Event for TxSubmissionStalledEvent {
+    const MODULE: Option<ModuleKind> = None;
+    const KIND: EventKind = EventKind::from_static("tx-submission-stalled");
+    const PERSISTENCE: EventPersistence = EventPersistence::Transient;
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ModuleRecoveryStarted {
     module_id: ModuleInstanceId,
@@ -231,6 +265,20 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         persist: EventPersistence,
     );
 
+    /// Like [`Self::log_event_json`], but opens its own database transaction
+    /// instead of borrowing a [`ClientSMDatabaseTransaction`]. Meant for call
+    /// sites that run outside a state transition (e.g. the submission retry
+    /// loop) and therefore have no dbtx in scope. The implementation pairs the
+    /// event's `module` kind with its own module instance id, mirroring what
+    /// `log_event_json` derives from the transaction's `module_id()`.
+    async fn log_event_json_no_dbtx(
+        &self,
+        kind: EventKind,
+        module_kind: Option<ModuleKind>,
+        payload: serde_json::Value,
+        persist: EventPersistence,
+    );
+
     async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
 
     /// Returns the core API version that the federation supports
@@ -284,6 +332,16 @@ impl IGlobalClientContext for () {
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _kind: EventKind,
         _module: Option<(ModuleKind, ModuleInstanceId)>,
+        _payload: serde_json::Value,
+        _persist: EventPersistence,
+    ) {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn log_event_json_no_dbtx(
+        &self,
+        _kind: EventKind,
+        _module_kind: Option<ModuleKind>,
         _payload: serde_json::Value,
         _persist: EventPersistence,
     ) {
@@ -383,6 +441,23 @@ impl DynGlobalClientContext {
             dbtx,
             E::KIND,
             E::MODULE.map(|m| (m, dbtx.module_id())),
+            serde_json::to_value(&event).expect("Payload serialization can't fail"),
+            <E as Event>::PERSISTENCE,
+        )
+        .await;
+    }
+
+    /// Log an event from outside a state transition, where no
+    /// [`ClientSMDatabaseTransaction`] is in scope. Opens its own database
+    /// transaction. Prefer [`Self::log_event`] whenever a dbtx is available so
+    /// the event commits atomically with the surrounding transition.
+    async fn log_event_no_dbtx<E>(&self, event: E)
+    where
+        E: Event + Send,
+    {
+        self.log_event_json_no_dbtx(
+            E::KIND,
+            E::MODULE,
             serde_json::to_value(&event).expect("Payload serialization can't fail"),
             <E as Event>::PERSISTENCE,
         )

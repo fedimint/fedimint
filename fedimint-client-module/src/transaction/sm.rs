@@ -15,7 +15,9 @@ use tokio::sync::watch;
 use tracing::{debug, warn};
 
 use crate::sm::{Context, DynContext, State, StateTransition};
-use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
+use crate::{
+    DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent, TxSubmissionStalledEvent,
+};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
@@ -219,8 +221,11 @@ impl TxSubmissionStates {
 
         let started_s = duration_since_epoch().as_secs();
         let attempts = AtomicU64::new(0);
-        // Unix seconds of the last stall report; 0 means "not yet reported".
-        let reported_at_s = AtomicU64::new(0);
+        // Unix second at which the next stall report is due. Starts one
+        // `SUBMISSION_STALL_WARN_AFTER` out and advances by
+        // `SUBMISSION_STALL_WARN_INTERVAL` after each report.
+        let next_alert_deadline_s =
+            AtomicU64::new(started_s + SUBMISSION_STALL_WARN_AFTER.as_secs());
 
         retry(
             "tx-submit-sm",
@@ -252,23 +257,31 @@ impl TxSubmissionStates {
                     // resets it, and a large clock step can skew it. That is acceptable
                     // for a diagnostic, which this is - it changes no behaviour.
                     let now_s = duration_since_epoch().as_secs();
-                    let elapsed_s = now_s.saturating_sub(started_s);
-                    if SUBMISSION_STALL_WARN_AFTER.as_secs() <= elapsed_s {
-                        let last_s = reported_at_s.load(Ordering::Relaxed);
-                        if last_s == 0
-                            || SUBMISSION_STALL_WARN_INTERVAL.as_secs()
-                                <= now_s.saturating_sub(last_s)
-                        {
-                            reported_at_s.store(now_s, Ordering::Relaxed);
-                            warn!(
-                                target: LOG_CLIENT_NET_API,
-                                %txid,
-                                operation_id = %operation_id.fmt_short(),
-                                %attempt,
-                                %elapsed_s,
-                                "Transaction neither accepted nor rejected; still re-submitting",
-                            );
-                        }
+                    if next_alert_deadline_s.load(Ordering::Relaxed) <= now_s {
+                        next_alert_deadline_s.store(
+                            now_s + SUBMISSION_STALL_WARN_INTERVAL.as_secs(),
+                            Ordering::Relaxed,
+                        );
+                        let elapsed_s = now_s.saturating_sub(started_s);
+                        warn!(
+                            target: LOG_CLIENT_NET_API,
+                            %txid,
+                            operation_id = %operation_id.fmt_short(),
+                            %attempt,
+                            %elapsed_s,
+                            "Transaction neither accepted nor rejected; still re-submitting",
+                        );
+                        // Surface the same condition to integrators as a transient
+                        // (non-persisted) event. No dbtx is in scope here, so this
+                        // opens its own.
+                        context
+                            .log_event_no_dbtx(TxSubmissionStalledEvent {
+                                txid,
+                                operation_id,
+                                attempt,
+                                elapsed_s,
+                            })
+                            .await;
                     }
 
                     Err(anyhow::anyhow!("Transaction is still valid"))
