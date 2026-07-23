@@ -35,10 +35,10 @@ use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
-    ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
-    InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
-    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PolicyUpdateRequest,
-    SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Hop,
+    HtlcAttempt, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
+    ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, Payment,
+    PolicyUpdateRequest, Route, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -50,8 +50,10 @@ use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
-    MAX_LIGHTNING_RETRIES, RouteHtlcStream,
+    ChannelInfo, ILnRpcClient, LightningPaymentBackend, LightningPaymentFailure,
+    LightningPaymentFailureAttempt, LightningPaymentRoute, LightningPaymentRouteHop,
+    LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter, MAX_LIGHTNING_RETRIES,
+    RouteHtlcStream,
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -63,6 +65,106 @@ use crate::{
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
+
+fn lnd_payment_failure(payment: &Payment) -> LightningPaymentFailure {
+    LightningPaymentFailure {
+        backend: LightningPaymentBackend::Lnd,
+        failure_reason: Some(format!("{:?}", payment.failure_reason())),
+        attempts: payment
+            .htlcs
+            .iter()
+            .filter_map(lnd_payment_failure_attempt)
+            .collect(),
+    }
+}
+
+fn lnd_payment_failure_attempt(htlc: &HtlcAttempt) -> Option<LightningPaymentFailureAttempt> {
+    if htlc.status() != tonic_lnd::lnrpc::htlc_attempt::HtlcStatus::Failed {
+        return None;
+    }
+
+    let route = htlc.route.as_ref().map(lnd_payment_route);
+    let failure = htlc.failure.as_ref();
+    let failure_source_index = failure.map(|failure| failure.failure_source_index);
+    let failure_channel_id = failure
+        .and_then(|failure| {
+            failure
+                .channel_update
+                .as_ref()
+                .map(|channel_update| channel_update.chan_id)
+        })
+        .or_else(|| {
+            route
+                .as_ref()
+                .and_then(|route| lnd_route_failure_channel_id(route, failure_source_index))
+        });
+    let failure_node_pub_key = route
+        .as_ref()
+        .and_then(|route| lnd_route_failure_node_pub_key(route, failure_source_index));
+
+    Some(LightningPaymentFailureAttempt {
+        attempt_id: Some(htlc.attempt_id),
+        failure_source_index,
+        failure_code: failure.map(|failure| format!("{:?}", failure.code())),
+        failure_node_pub_key,
+        failure_channel_id,
+        route,
+    })
+}
+
+fn lnd_route_failure_channel_id(
+    route: &LightningPaymentRoute,
+    failure_source_index: Option<u32>,
+) -> Option<u64> {
+    let failure_source_index = failure_source_index?;
+    if failure_source_index == 0 {
+        return None;
+    }
+
+    let hop_index = usize::try_from(failure_source_index - 1).ok()?;
+    route.hops.get(hop_index).and_then(|hop| hop.channel_id)
+}
+
+fn lnd_route_failure_node_pub_key(
+    route: &LightningPaymentRoute,
+    failure_source_index: Option<u32>,
+) -> Option<String> {
+    let failure_source_index = failure_source_index?;
+    if failure_source_index == 0 {
+        return None;
+    }
+
+    let hop_index = usize::try_from(failure_source_index - 1).ok()?;
+    route.hops.get(hop_index)?.pub_key.clone()
+}
+
+fn lnd_payment_route(route: &Route) -> LightningPaymentRoute {
+    LightningPaymentRoute {
+        total_amount_msat: non_negative_i64_to_u64(route.total_amt_msat),
+        total_fees_msat: non_negative_i64_to_u64(route.total_fees_msat),
+        total_time_lock: route.total_time_lock,
+        hops: route.hops.iter().map(lnd_payment_route_hop).collect(),
+    }
+}
+
+fn lnd_payment_route_hop(hop: &Hop) -> LightningPaymentRouteHop {
+    LightningPaymentRouteHop {
+        pub_key: (!hop.pub_key.is_empty()).then(|| hop.pub_key.clone()),
+        channel_id: (hop.chan_id != 0).then_some(hop.chan_id),
+        amount_to_forward_msat: non_negative_i64_to_u64(hop.amt_to_forward_msat),
+        fee_msat: non_negative_i64_to_u64(hop.fee_msat),
+        expiry: hop.expiry,
+    }
+}
+
+fn non_negative_i64_to_u64(value: i64) -> Option<u64> {
+    if value < 0 {
+        debug!(value, "LND returned negative millisatoshi value");
+        return None;
+    }
+
+    Some(u64::try_from(value).expect("value was checked to be non-negative"))
+}
 
 #[derive(Clone)]
 pub struct GatewayLndClient {
@@ -680,8 +782,9 @@ impl GatewayLndClient {
                         }
 
                         let failure_reason = payment.failure_reason();
-                        return Err(LightningRpcError::FailedPayment {
+                        return Err(LightningRpcError::FailedPaymentWithDetails {
                             failure_reason: format!("{failure_reason:?}"),
+                            payment_failure: lnd_payment_failure(&payment),
                         });
                     }
                 }
@@ -1076,8 +1179,9 @@ impl ILnRpcClient for GatewayLndClient {
                                 "LND payment failed",
                             );
                             let failure_reason = payment.failure_reason();
-                            return Err(LightningRpcError::FailedPayment {
+                            return Err(LightningRpcError::FailedPaymentWithDetails {
                                 failure_reason: format!("{failure_reason:?}"),
+                                payment_failure: lnd_payment_failure(&payment),
                             });
                         }
                         Ok(None) => {
