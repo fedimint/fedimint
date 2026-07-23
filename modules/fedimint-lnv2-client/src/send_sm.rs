@@ -83,12 +83,22 @@ async fn send_update_event(
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Funding -- funding tx is rejected --> Rejected
-///     Funding -- funding tx is accepted --> Funded
-///     Funded -- post invoice returns preimage  --> Success
-///     Funded -- post invoice returns forfeit tx --> Refunding
-///     Funded -- await_preimage returns preimage --> Success
-///     Funded -- await_preimage expires --> Refunding
+///     Funding -- post invoice returns preimage  --> Success
+///     Funding -- post invoice returns forfeit tx --> Refunding
+///     Funding -- await_preimage returns preimage --> Success
+///     Funding -- await_preimage expires --> Refunding
 /// ```
+///
+/// We ask the gateway to pay the invoice optimistically, before the funding
+/// transaction is even confirmed. The gateway's outgoing-contract-expiration
+/// endpoint long-polls until the contract is accepted, so the request parks
+/// server-side and the gateway proceeds the instant the funding lands, saving a
+/// serialized round trip. `await_funding_rejection` runs alongside it purely to
+/// tear the request down should the funding transaction be rejected.
+///
+/// The `Funded` state is retained for state machines persisted before
+/// optimistic send was introduced; such operations are already confirmed and so
+/// do not need to watch for a rejected funding transaction.
 impl State for SendStateMachine {
     type ModuleContext = LightningClientContext;
 
@@ -99,20 +109,14 @@ impl State for SendStateMachine {
     ) -> Vec<StateTransition<Self>> {
         let c_pay = context.clone();
         let gc_pay = global_context.clone();
+        let gc_gateway = global_context.clone();
         let c_preimage = context.clone();
         let gc_preimage = global_context.clone();
+        let gc_rejection = global_context.clone();
 
         match &self.state {
-            SendSMState::Funding => {
-                vec![StateTransition::new(
-                    Self::await_funding(global_context.clone(), self.common.outpoint.txid),
-                    move |_, error, old_state| {
-                        Box::pin(async move { Self::transition_funding(error, &old_state) })
-                    },
-                )]
-            }
-            SendSMState::Funded => {
-                vec![
+            SendSMState::Funding | SendSMState::Funded => {
+                let mut transitions = vec![
                     StateTransition::new(
                         Self::gateway_send_payment(
                             self.common.gateway_api.clone().unwrap(),
@@ -122,6 +126,7 @@ impl State for SendStateMachine {
                             self.common.invoice.clone().unwrap(),
                             self.common.refund_keypair,
                             context.clone(),
+                            gc_gateway.clone(),
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
@@ -149,7 +154,24 @@ impl State for SendStateMachine {
                             ))
                         },
                     ),
-                ]
+                ];
+
+                // An unconfirmed (optimistically funded) operation watches for a
+                // rejected funding transaction so it can transition to Rejected and
+                // tear down the optimistic gateway request. A persisted `Funded`
+                // operation is already confirmed, so this never applies to it.
+                if matches!(self.state, SendSMState::Funding) {
+                    transitions.push(StateTransition::new(
+                        Self::await_funding_rejection(gc_rejection, self.common.outpoint.txid),
+                        move |_, rejected: String, old_state: SendStateMachine| {
+                            Box::pin(
+                                async move { old_state.update(SendSMState::Rejected(rejected)) },
+                            )
+                        },
+                    ));
+                }
+
+                transitions
             }
             SendSMState::Refunding(..) | SendSMState::Success(..) | SendSMState::Rejected(..) => {
                 vec![]
@@ -163,24 +185,22 @@ impl State for SendStateMachine {
 }
 
 impl SendStateMachine {
-    async fn await_funding(
+    /// Resolves only if the funding transaction is rejected, yielding the
+    /// error. On acceptance it stays pending forever so that it never
+    /// fires: an accepted funding transaction is driven to completion by
+    /// the gateway-send-payment and await-preimage transitions, and this
+    /// one is dropped when one of them wins.
+    async fn await_funding_rejection(
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -> Result<(), String> {
-        global_context.await_tx_accepted(txid).await
-    }
-
-    fn transition_funding(
-        result: Result<(), String>,
-        old_state: &SendStateMachine,
-    ) -> SendStateMachine {
-        match result {
-            Ok(()) => old_state.update(SendSMState::Funded),
-            Err(error) => old_state.update(SendSMState::Rejected(error)),
+    ) -> String {
+        match global_context.await_tx_accepted(txid).await {
+            Ok(()) => pending().await,
+            Err(rejected) => rejected,
         }
     }
 
-    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
+    #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context, global_context))]
     async fn gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
@@ -189,31 +209,50 @@ impl SendStateMachine {
         invoice: LightningInvoice,
         refund_keypair: Keypair,
         context: LightningClientContext,
+        global_context: DynGlobalClientContext,
     ) -> Result<[u8; 32], Signature> {
-        util::retry("gateway-send-payment", api_networking_backoff(), || async {
-            let payment_result = context
-                .gateway_conn
-                .send_payment(
-                    gateway_api.clone(),
-                    federation_id,
-                    outpoint,
-                    contract.clone(),
-                    invoice.clone(),
-                    refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
-                        *invoice.consensus_hash::<sha256::Hash>().as_ref(),
-                    )),
-                )
-                .await?;
+        let payment_result =
+            util::retry("gateway-send-payment", api_networking_backoff(), || async {
+                let payment_result = context
+                    .gateway_conn
+                    .send_payment(
+                        gateway_api.clone(),
+                        federation_id,
+                        outpoint,
+                        contract.clone(),
+                        invoice.clone(),
+                        refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
+                            *invoice.consensus_hash::<sha256::Hash>().as_ref(),
+                        )),
+                    )
+                    .await?;
 
-            ensure!(
-                contract.verify_gateway_response(&payment_result),
-                "Invalid gateway response: {payment_result:?}"
-            );
+                ensure!(
+                    contract.verify_gateway_response(&payment_result),
+                    "Invalid gateway response: {payment_result:?}"
+                );
 
-            Ok(payment_result)
-        })
-        .await
-        .expect("Number of retries has no limit")
+                Ok(payment_result)
+            })
+            .await
+            .expect("Number of retries has no limit");
+
+        // The gateway is asked to pay optimistically, before the funding transaction
+        // is confirmed (its outgoing-contract-expiration endpoint long-polls until the
+        // contract is accepted). Do not act on the response until the funding
+        // transaction is accepted: success must not be reported before the sender's
+        // ecash is committed to the contract, and the refund path spends the
+        // now-existing contract. If the funding is instead rejected,
+        // `await_funding_rejection` drives the operation to `Rejected`, so park here.
+        if global_context
+            .await_tx_accepted(outpoint.txid)
+            .await
+            .is_err()
+        {
+            return pending().await;
+        }
+
+        payment_result
     }
 
     async fn transition_gateway_send_payment(
