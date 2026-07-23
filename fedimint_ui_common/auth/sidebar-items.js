@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["UserAuth"]};
+window.SIDEBAR_ITEMS = {"fn":["csrf_protection_middleware","is_request_origin_allowed"],"struct":["UserAuth"]};

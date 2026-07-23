@@ -18,7 +18,7 @@
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>axum::http::header;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>axum::response::{Html, IntoResponse, Redirect, Response};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>axum::routing::{get, post};
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>axum::{Form, Router};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>axum::{Form, Router, middleware};
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>axum_extra::extract::CookieJar;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>axum_extra::extract::cookie::{Cookie, SameSite};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::bitcoin::Network;
@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>fedimint_logging::LOG_GATEWAY_UI;
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>fedimint_ui_common::assets::WithStaticRoutesExt;
-<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_ui_common::auth::UserAuth;
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_ui_common::auth::{UserAuth, csrf_protection_middleware};
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>fedimint_ui_common::{
 <a href=#46 id=46 data-nosnippet>46</a>    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, dashboard_layout,
 <a href=#47 id=47 data-nosnippet>47</a>    login_form <span class="kw">as </span>render_login_form, single_card_layout,
@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>
 <a href=#299 id=299 data-nosnippet>299</a><span class="kw">async fn </span>dashboard_view&lt;E&gt;(
 <a href=#300 id=300 data-nosnippet>300</a>    State(state): State&lt;UiState&lt;DynGatewayApi&lt;E&gt;&gt;&gt;,
-<a href=#301 id=301 data-nosnippet>301</a>    _auth: UserAuth,
+<a href=#301 id=301 data-nosnippet>301</a>    auth: UserAuth,
 <a href=#302 id=302 data-nosnippet>302</a>    Query(msg): Query&lt;DashboardQuery&gt;,
 <a href=#303 id=303 data-nosnippet>303</a>) -&gt; <span class="kw">impl </span>IntoResponse
 <a href=#304 id=304 data-nosnippet>304</a><span class="kw">where
@@ -306,7 +306,7 @@
 <a href=#306 id=306 data-nosnippet>306</a>{
 <a href=#307 id=307 data-nosnippet>307</a>    <span class="comment">// If gateway is not configured, show setup view instead of dashboard
 <a href=#308 id=308 data-nosnippet>308</a>    </span><span class="kw">if </span>!state.api.is_configured().<span class="kw">await </span>{
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">return </span>setup::setup_view(State(state), Query(msg))
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">return </span>setup::setup_view(State(state), auth, Query(msg))
 <a href=#310 id=310 data-nosnippet>310</a>            .<span class="kw">await
 <a href=#311 id=311 data-nosnippet>311</a>            </span>.into_response();
 <a href=#312 id=312 data-nosnippet>312</a>    }
@@ -524,8 +524,9 @@
 <a href=#524 id=524 data-nosnippet>524</a>            MNEMONIC_IFRAME_ROUTE,
 <a href=#525 id=525 data-nosnippet>525</a>            get(mnemonic_iframe_handler).post(mnemonic_reveal_handler),
 <a href=#526 id=526 data-nosnippet>526</a>        )
-<a href=#527 id=527 data-nosnippet>527</a>        .with_static_routes();
-<a href=#528 id=528 data-nosnippet>528</a>
-<a href=#529 id=529 data-nosnippet>529</a>    app.with_state(UiState::new(api, <span class="bool-val">true</span>))
-<a href=#530 id=530 data-nosnippet>530</a>}
+<a href=#527 id=527 data-nosnippet>527</a>        .with_static_routes()
+<a href=#528 id=528 data-nosnippet>528</a>        .layer(middleware::from_fn(csrf_protection_middleware));
+<a href=#529 id=529 data-nosnippet>529</a>
+<a href=#530 id=530 data-nosnippet>530</a>    app.with_state(UiState::new(api, <span class="bool-val">true</span>))
+<a href=#531 id=531 data-nosnippet>531</a>}
 </code></pre></div></section></main></body></html>
