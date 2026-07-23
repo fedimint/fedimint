@@ -3,6 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use bip39::Language;
 use fedimint_gateway_common::SetMnemonicPayload;
+use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{ROOT_ROUTE, UiState, single_card_layout};
 use maud::{PreEscaped, html};
 use serde::Deserialize;
@@ -32,6 +33,7 @@ pub struct RecoverWalletForm {
 /// - Recover Wallet
 pub async fn setup_view<E>(
     State(_state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
     Query(msg): Query<DashboardQuery>,
 ) -> impl IntoResponse
 where
@@ -77,6 +79,7 @@ where
 /// Handler for creating a new wallet (generates new mnemonic)
 pub async fn create_wallet_handler<E>(
     State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
 ) -> impl IntoResponse
 where
     E: std::fmt::Display,
@@ -94,6 +97,7 @@ where
 /// Renders the recovery form where user can enter their 12 words
 pub async fn recover_wallet_form<E>(
     State(_state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
     Query(msg): Query<DashboardQuery>,
 ) -> impl IntoResponse
 where
@@ -176,6 +180,7 @@ where
 /// Handler for recovering a wallet with provided mnemonic words
 pub async fn recover_wallet_handler<E>(
     State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
     Form(form): Form<RecoverWalletForm>,
 ) -> impl IntoResponse
 where

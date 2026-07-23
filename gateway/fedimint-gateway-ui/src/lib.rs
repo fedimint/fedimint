@@ -298,7 +298,7 @@ async fn login_submit<E>(
 
 async fn dashboard_view<E>(
     State(state): State<UiState<DynGatewayApi<E>>>,
-    _auth: UserAuth,
+    auth: UserAuth,
     Query(msg): Query<DashboardQuery>,
 ) -> impl IntoResponse
 where
@@ -306,7 +306,7 @@ where
 {
     // If gateway is not configured, show setup view instead of dashboard
     if !state.api.is_configured().await {
-        return setup::setup_view(State(state), Query(msg))
+        return setup::setup_view(State(state), auth, Query(msg))
             .await
             .into_response();
     }
