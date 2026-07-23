@@ -309,12 +309,12 @@ mod db {
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FederationWalletKey, FeeRateVoteKey,
-        FeeRateVotePrefix, FrostAdvanceVotePrefix, FrostSignatureSharePrefix,
-        FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix, FrostSigningNoncesPrefix,
-        FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix, Output, OutputKey,
-        OutputPrefix, SchnorrSignaturesPrefix, SignaturesKey, SignaturesPrefix, SpentOutputKey,
-        SpentOutputPrefix, TxInfoIndexKey, TxInfoIndexPrefix, TxInfoKey, TxInfoPrefix,
-        UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+        FeeRateVotePrefix, FrostAdvanceVotePrefix, FrostFinalizationStatPrefix,
+        FrostSignatureSharePrefix, FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix,
+        FrostSigningNoncesPrefix, FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix,
+        Output, OutputKey, OutputPrefix, SchnorrSignaturesPrefix, SignaturesKey, SignaturesPrefix,
+        SpentOutputKey, SpentOutputPrefix, TxInfoIndexKey, TxInfoIndexPrefix, TxInfoKey,
+        TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
     };
     use fedimint_walletv2_server::{FederationTx, SpentTxOut};
     use futures::StreamExt;
@@ -784,6 +784,19 @@ mod db {
                             shares.is_empty(),
                             "the v0 snapshot predates FROST, and no migration writes local \
                              signature shares, got {shares:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostFinalizationStat => {
+                        let stats = dbtx
+                            .find_by_prefix(&FrostFinalizationStatPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            stats.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes \
+                             finalization stats, got {stats:?}"
                         );
                     }
                 }
