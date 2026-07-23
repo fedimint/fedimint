@@ -5,7 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
-use fedimint_walletv2_common::taproot::{descriptor_tr, descriptor_tr_single_peer, nums_point};
+use fedimint_walletv2_common::taproot::script_pubkey_for_descriptor;
 
 mod api;
 #[cfg(feature = "cli")]
@@ -51,11 +51,11 @@ use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_se
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
-use fedimint_walletv2_common::config::{WalletClientConfig, WalletDescriptor};
+use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::taproot::frost::FrostFinalizationStat;
 use fedimint_walletv2_common::{
     KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
-    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    WalletModuleTypes, WalletOutput, WalletOutputV0, is_potential_receive,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -630,20 +630,10 @@ impl WalletClientModule {
 
     fn derive_address(&self, index: u64) -> Address {
         let tweak = self.derive_tweak(index).public_key().consensus_hash();
-        match self.cfg.descriptor {
-            WalletDescriptor::Wsh => {
-                descriptor(&self.cfg.bitcoin_pks, &tweak).address(self.cfg.network)
-            }
-            WalletDescriptor::Tr => {
-                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, nums_point()).address(self.cfg.network)
-            }
-            WalletDescriptor::SinglePeer(peer_xonly) => {
-                descriptor_tr_single_peer(peer_xonly, &tweak).address(self.cfg.network)
-            }
-            WalletDescriptor::Frost(internal_key) => {
-                descriptor_tr(&self.cfg.bitcoin_pks, &tweak, internal_key).address(self.cfg.network)
-            }
-        }
+        let script_pubkey =
+            script_pubkey_for_descriptor(&self.cfg.descriptor, &self.cfg.bitcoin_pks, &tweak);
+        Address::from_script(&script_pubkey, self.cfg.network)
+            .expect("Federation script pubkeys are standard and addressable")
     }
 
     fn derive_tweak(&self, index: u64) -> Keypair {

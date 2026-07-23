@@ -3,11 +3,39 @@ pub mod frost;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use bitcoin::ScriptBuf;
 use bitcoin::hashes::sha256;
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 use miniscript::descriptor::{TapTree, Tr};
 use miniscript::{Miniscript, Tap, Terminal, Threshold};
 use secp256k1::{PublicKey, Scalar, XOnlyPublicKey};
+
+use crate::config::WalletDescriptor;
+
+/// The federation `script_pubkey` for the UTXO identified by `tweak`,
+/// for any descriptor kind: P2WSH for [`WalletDescriptor::Wsh`], P2TR
+/// with NUMS internal key + script-path multisig for
+/// [`WalletDescriptor::Tr`], P2TR key-path with the lone peer's xonly
+/// key for [`WalletDescriptor::SinglePeer`], and P2TR key-path with the
+/// FROST aggregate key for [`WalletDescriptor::Frost`]. Shared by the
+/// server (deposit addresses, prevout reconstruction) and the client
+/// (address derivation).
+pub fn script_pubkey_for_descriptor(
+    descriptor: &WalletDescriptor,
+    bitcoin_pks: &BTreeMap<PeerId, PublicKey>,
+    tweak: &sha256::Hash,
+) -> ScriptBuf {
+    match descriptor {
+        WalletDescriptor::Wsh => crate::descriptor(bitcoin_pks, tweak).script_pubkey(),
+        WalletDescriptor::Tr => descriptor_tr(bitcoin_pks, tweak, nums_point()).script_pubkey(),
+        WalletDescriptor::SinglePeer(peer_xonly) => {
+            descriptor_tr_single_peer(*peer_xonly, tweak).script_pubkey()
+        }
+        WalletDescriptor::Frost(internal_key) => {
+            descriptor_tr(bitcoin_pks, tweak, *internal_key).script_pubkey()
+        }
+    }
+}
 
 /// Provably unspendable x-only public key (BIP-341 NUMS point from the
 /// BIP-341 spec). Used as the internal key in our Taproot descriptor so
