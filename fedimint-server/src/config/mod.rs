@@ -17,7 +17,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
-use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
+use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode, WalletDescriptorKind};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
@@ -251,6 +251,9 @@ pub struct ConfigGenParams {
     pub enabled_modules: BTreeSet<ModuleKind>,
     /// Bitcoin network for this federation
     pub network: bitcoin::Network,
+    /// On-chain wallet descriptor for the walletv2 module (set by the
+    /// federation leader via the `FM_WALLETV2_DESCRIPTOR` env var).
+    pub descriptor_kind: WalletDescriptorKind,
 }
 
 impl ServerConfigConsensus {
@@ -486,6 +489,7 @@ impl ServerConfig {
         let args = ConfigGenModuleArgs {
             network: peer0.network,
             disable_base_fees: peer0.disable_base_fees,
+            descriptor_kind: peer0.descriptor_kind,
         };
 
         // Use legacy module ordering for backwards compatibility tests
@@ -646,6 +650,7 @@ impl ServerConfig {
         let args = ConfigGenModuleArgs {
             network: params.network,
             disable_base_fees: params.disable_base_fees,
+            descriptor_kind: params.descriptor_kind,
         };
 
         // Use legacy module ordering for backwards compatibility tests

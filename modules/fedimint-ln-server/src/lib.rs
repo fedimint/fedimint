@@ -1255,6 +1255,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
+    use fedimint_core::setup_code::WalletDescriptorKind;
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, ChainId, Feerate, InPoint, OutPoint, PeerId, TransactionId};
@@ -1332,6 +1333,7 @@ mod tests {
         let args = fedimint_server_core::ConfigGenModuleArgs {
             network: Network::Regtest,
             disable_base_fees: false,
+            descriptor_kind: WalletDescriptorKind::default(),
         };
         let server_cfg = ServerModuleInit::trusted_dealer_gen(&LightningInit, &peers, &args);
 
