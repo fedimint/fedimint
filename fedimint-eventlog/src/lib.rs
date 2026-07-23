@@ -11,6 +11,10 @@
 //! all events and react to ones it is interested in (and understands),
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
+
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -134,6 +138,9 @@ impl UnordedEventLogId {
 )]
 pub struct EventLogId(u64);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(EventLogId, u64);
+
 impl EventLogId {
     pub const LOG_START: EventLogId = EventLogId(0);
 
@@ -177,6 +184,9 @@ impl fmt::Display for EventLogId {
 #[derive(Debug, Clone, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventKind(Cow<'static, str>);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(EventKind, String);
+
 impl EventKind {
     pub const fn from_static(value: &'static str) -> Self {
         Self(Cow::Borrowed(value))
@@ -195,10 +205,23 @@ impl From<String> for EventKind {
     }
 }
 
+impl From<EventKind> for String {
+    fn from(event_kind: EventKind) -> Self {
+        event_kind.0.into_owned()
+    }
+}
+
 impl fmt::Display for EventKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+#[derive(Debug, Encodable, Decodable, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct EventLogModule {
+    pub kind: ModuleKind,
+    pub id: ModuleInstanceId,
 }
 
 #[derive(Debug, Encodable, Decodable, Clone)]
@@ -221,6 +244,7 @@ impl UnorderedEventLogEntry {
 }
 
 #[derive(Debug, Encodable, Decodable, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EventLogEntry {
     /// Type/kind of the event
     ///
@@ -237,7 +261,7 @@ pub struct EventLogEntry {
     /// defines this event kind. Oftentime a core (non-module)-defined event
     /// will refer in some way to a module. It should use a separate `module_id`
     /// field in the `payload`, instead of this field.
-    pub module: Option<(ModuleKind, ModuleInstanceId)>,
+    pub module: Option<EventLogModule>,
 
     /// Timestamp in microseconds after unix epoch
     pub ts_usecs: u64,
@@ -249,11 +273,11 @@ pub struct EventLogEntry {
 
 impl EventLogEntry {
     pub fn module_kind(&self) -> Option<&ModuleKind> {
-        self.module.as_ref().map(|m| &m.0)
+        self.module.as_ref().map(|m| &m.kind)
     }
 
     pub fn module_id(&self) -> Option<ModuleInstanceId> {
-        self.module.as_ref().map(|m| m.1)
+        self.module.as_ref().map(|m| m.id)
     }
 
     /// Get the event payload as typed value
@@ -267,6 +291,7 @@ impl EventLogEntry {
 
 /// An `EventLogEntry` that was already persisted (so has an id)
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PersistedLogEntry {
     id: EventLogId,
     inner: EventLogEntry,
@@ -584,7 +609,10 @@ where
                     },
                     inner: EventLogEntry {
                         kind,
-                        module: module_kind.map(|kind| (kind, module_id.unwrap())),
+                        module: module_kind.map(|kind| EventLogModule {
+                            kind,
+                            id: module_id.expect("module_id exists for module events"),
+                        }),
                         ts_usecs: unordered_id.ts_usecs,
                         payload,
                     },
@@ -909,8 +937,8 @@ where
     I: IntoIterator<Item = &'a PersistedLogEntry> + 'a,
 {
     all_events.into_iter().filter(move |e| {
-        if let Some((m, _)) = &e.inner.module {
-            e.inner.kind == event_kind && *m == module_kind
+        if let Some(module) = &e.inner.module {
+            e.inner.kind == event_kind && module.kind == module_kind
         } else {
             false
         }

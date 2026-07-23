@@ -125,6 +125,8 @@ impl State for IncomingStateMachine {
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Hash, Clone, Eq, PartialEq,
 )]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
+#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 pub enum IncomingSmError {
     #[error("Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}")]
     ViolatedFeePolicy {

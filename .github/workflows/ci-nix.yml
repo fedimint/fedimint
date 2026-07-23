@@ -173,6 +173,10 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceClippy
 
+      - name: Check UniFFI feature builds
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
+        run: nix build -L .#ci.cargoCheckUniffi
+
       - name: Run cargo doc
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
         run: nix build -L .#ci.workspaceDoc

@@ -56,6 +56,13 @@ pub mod backup;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
 pub struct OperationId(pub [u8; 32]);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(OperationId, String, {
+    lower: |obj| obj.fmt_full().to_string(),
+    try_lift: |s| OperationId::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
+    }
+);
+
 pub struct OperationIdFullFmt<'a>(&'a OperationId);
 pub struct OperationIdShortFmt<'a>(&'a OperationId);
 
@@ -163,6 +170,9 @@ pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ModuleKind(Cow<'static, str>);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ModuleKind, String);
+
 impl ModuleKind {
     pub fn clone_from_str(s: &str) -> Self {
         Self(Cow::from(s.to_owned()))
@@ -174,6 +184,18 @@ impl ModuleKind {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl From<ModuleKind> for String {
+    fn from(module_kind: ModuleKind) -> Self {
+        module_kind.0.into_owned()
+    }
+}
+
+impl From<String> for ModuleKind {
+    fn from(value: String) -> Self {
+        Self(Cow::Owned(value))
     }
 }
 

@@ -1,6 +1,8 @@
 pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 pub mod update_merge;
 
 use std::convert::Infallible;
@@ -84,6 +86,12 @@ where
 #[derive(Hash, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 // nosemgrep: ban-raw-url
 pub struct SafeUrl(Url);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(SafeUrl, String, {
+    lower: |u| u.0.to_string(),
+    try_lift: |s| SafeUrl::parse(&s).map_err(|e| anyhow::anyhow!("Invalid URL: {e}")),
+});
 
 impl SafeUrl {
     pub fn parse(url_str: &str) -> Result<Self, ParseError> {

@@ -76,6 +76,9 @@ pub struct InputMeta {
 )]
 pub struct AmountUnit(u64);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(AmountUnit, u64);
+
 impl AmountUnit {
     /// [`AmountUnit`] with id `0` is reserved for the native Bitcoin currency.
     /// So e.g. for a mainnet Federation it's a real Bitcoin (msats), for a

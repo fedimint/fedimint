@@ -5,6 +5,9 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
+#[cfg(feature = "uniffi")]
+::uniffi::setup_scaffolding!();
+
 pub mod api;
 #[cfg(feature = "cli")]
 mod cli;
@@ -17,6 +20,8 @@ pub mod client_db;
 mod deposit;
 pub mod events;
 use events::SendPaymentEvent;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -108,6 +113,7 @@ pub enum DepositStateV1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum DepositStateV2 {
     WaitingForTransaction,
     WaitingForConfirmation {
@@ -168,6 +174,7 @@ pub enum AllocateDepositOutcome {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum WithdrawState {
     Created,
     Succeeded(bitcoin::Txid),
@@ -541,6 +548,7 @@ impl WalletClientModuleData {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct WalletClientModule {
     data: WalletClientModuleData,
     db: Database,
@@ -740,6 +748,12 @@ pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(PegInRequest, String, {
+    lower: |v| serde_json::to_string(&v).expect("PegInRequest serialization cannot fail"),
+    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!("Failed to parse PegInRequest: {e}")),
+});
+
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
     operation_id: OperationId,
@@ -751,12 +765,14 @@ struct SubscribeWithdrawRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegInResponse {
     pub deposit_address: Address<NetworkUnchecked>,
     pub operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutRequest {
     pub amount_sat: u64,
     pub destination_address: Address<NetworkUnchecked>,
@@ -764,6 +780,7 @@ pub struct PegOutRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutResponse {
     pub operation_id: OperationId,
 }

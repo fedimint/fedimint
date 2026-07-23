@@ -71,6 +71,7 @@ use crate::encoding::{Decodable, Encodable};
 #[derive(
     Debug, Copy, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CoreConsensusVersion {
     pub major: u32,
     pub minor: u32,
@@ -130,6 +131,7 @@ pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::n
     Encodable,
     Decodable,
 )]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ModuleConsensusVersion {
     pub major: u32,
     pub minor: u32,
@@ -165,6 +167,7 @@ impl fmt::Display for ModuleConsensusVersion {
 /// user client devices receiving updates at a pace hard to control, and
 /// technical and coordination challenges of upgrading servers.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Decodable, Encodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ApiVersion {
     /// Major API version
     ///

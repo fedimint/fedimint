@@ -4,6 +4,9 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::needless_lifetimes)]
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub mod endpoint;
 
 use std::fmt;
@@ -56,6 +59,9 @@ pub const DEFAULT_META_KEY: MetaKey = MetaKey(0);
 )]
 pub struct MetaKey(pub u8);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(MetaKey, u8);
+
 impl fmt::Display for MetaKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -76,6 +82,9 @@ impl FromStr for MetaKey {
 /// implementations enforcing size limit of [`Self::MAX_LEN_BYTES`].
 #[derive(Debug, Clone, Encodable, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MetaValue(Vec<u8>);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(MetaValue, Vec<u8>);
 
 impl FromStr for MetaValue {
     type Err = anyhow::Error;
@@ -190,6 +199,7 @@ pub struct MetaConsensusItem {
 
 /// A [`MetaValue`] in a consensus (which means it has a revision number)
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct MetaConsensusValue {
     pub revision: u64,
     pub value: MetaValue,

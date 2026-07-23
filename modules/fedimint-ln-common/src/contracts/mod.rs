@@ -3,6 +3,8 @@ pub mod outgoing;
 
 use std::fmt::Display;
 use std::io::Error;
+#[cfg(feature = "uniffi")]
+use std::str::FromStr;
 
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash as BitcoinHash, hash_newtype};
@@ -21,6 +23,12 @@ hash_newtype!(
     /// The hash of a LN incoming contract
     pub struct ContractId(Sha256);
 );
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ContractId, String, {
+    lower: |contract_id| contract_id.to_string(),
+    try_lift: |s| ContractId::from_str(&s).map_err(Into::into),
+});
 
 /// A contract before execution as found in transaction outputs
 // TODO: investigate if this is actually a problem
@@ -126,6 +134,22 @@ impl Display for Preimage {
         write!(f, "{}", self.0.encode_hex::<String>())
     }
 }
+
+#[cfg(feature = "uniffi")]
+impl FromStr for Preimage {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes: [u8; 32] = fedimint_core::hex::FromHex::from_hex(s)?;
+        Ok(Self(bytes))
+    }
+}
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(Preimage, String, {
+    lower: |p| p.to_string(),
+    try_lift: |s| Preimage::from_str(&s).map_err(Into::into),
+});
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PreimageKey(#[serde(with = "serde_big_array::BigArray")] pub [u8; 33]);

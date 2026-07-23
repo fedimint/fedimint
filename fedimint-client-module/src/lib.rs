@@ -11,6 +11,9 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::type_complexity)]
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 use std::fmt::Debug;
 use std::ops::{self};
 use std::sync::Arc;

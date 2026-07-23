@@ -78,6 +78,9 @@
 /// Federation Api announcement handling
 mod api_announcements;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 /// Guardian metadata handling
 mod guardian_metadata;
 
@@ -86,9 +89,10 @@ mod client;
 
 /// Client backup
 pub mod backup;
-
 /// Database keys used by the client
 pub mod db;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 
 /// Management of meta fields
 pub mod meta;

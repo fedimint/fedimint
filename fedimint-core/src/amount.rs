@@ -42,6 +42,12 @@ pub struct Amount {
     pub msats: u64,
 }
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(Amount, u64, {
+    lower: |a| a.msats,
+    try_lift: |msats| Ok(Amount { msats }),
+});
+
 impl Amount {
     pub const ZERO: Self = Self { msats: 0 };
 

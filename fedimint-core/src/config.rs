@@ -1,3 +1,5 @@
+#[cfg(feature = "uniffi")]
+use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -99,6 +101,7 @@ impl JsonWithKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PeerUrl {
     /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: SafeUrl,
@@ -117,16 +120,38 @@ pub struct ClientConfigV0 {
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
+/// `uniffi::custom_type!` only accepts a bare identifier for the custom
+/// type, and `BTreeMap` isn't natively uniffi-representable (unlike
+/// `HashMap`, which is), so this map shape needs a type alias bridged to
+/// its `HashMap` equivalent.
+#[cfg(feature = "uniffi")]
+type ClientModulesMap = BTreeMap<ModuleInstanceId, ClientModuleConfig>;
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ClientModulesMap, HashMap<ModuleInstanceId, ClientModuleConfig>, {
+    remote,
+    lower: |m| m.into_iter().collect(),
+    try_lift: |h| Ok(h.into_iter().collect()),
+});
+
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ClientConfig {
     #[serde(flatten)]
     pub global: GlobalClientConfig,
     #[serde(deserialize_with = "de_int_key")]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(PublicKey, String, {
+    remote,
+    lower: |pk| pk.to_string(),
+    try_lift: |s| PublicKey::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
+});
 
 // FIXME: workaround for https://github.com/serde-rs/json/issues/989
 fn de_int_key<'de, D, K, V>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
@@ -192,6 +217,7 @@ pub struct GlobalClientConfigV0 {
 
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GlobalClientConfig {
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
@@ -206,6 +232,38 @@ pub struct GlobalClientConfig {
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
 }
+
+/// `uniffi::custom_type!` only accepts a bare identifier for the custom
+/// type, and `BTreeMap` isn't natively uniffi-representable (unlike
+/// `HashMap`, which is), so each map shape needs a type alias bridged to its
+/// `HashMap` equivalent.
+#[cfg(feature = "uniffi")]
+type ApiEndpointsMap = BTreeMap<PeerId, PeerUrl>;
+#[cfg(feature = "uniffi")]
+type BroadcastPublicKeysMap = BTreeMap<PeerId, PublicKey>;
+#[cfg(feature = "uniffi")]
+type MetaMap = BTreeMap<String, String>;
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ApiEndpointsMap, HashMap<PeerId, PeerUrl>, {
+    remote,
+    lower: |m| m.into_iter().collect(),
+    try_lift: |h| Ok(h.into_iter().collect()),
+});
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(BroadcastPublicKeysMap, HashMap<PeerId, PublicKey>, {
+    remote,
+    lower: |m| m.into_iter().collect(),
+    try_lift: |h| Ok(h.into_iter().collect()),
+});
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(MetaMap, HashMap<String, String>, {
+    remote,
+    lower: |m| m.into_iter().collect(),
+    try_lift: |h| Ok(h.into_iter().collect()),
+});
 
 impl GlobalClientConfig {
     /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
@@ -324,6 +382,15 @@ impl ClientConfig {
     PartialOrd,
 )]
 pub struct FederationId(pub sha256::Hash);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(FederationId, String, {
+    lower: |obj| obj.to_string(),
+    try_lift: |bytes| {
+        let obj: FederationId = bytes.parse().map_err(|e| anyhow::anyhow!("Failed to parse FederationId from string: {e}"))?;
+        Ok(obj)
+    },
+});
 
 #[derive(
     Debug,
@@ -626,12 +693,31 @@ pub struct ServerModuleConsensusConfig {
     pub config: Vec<u8>,
 }
 
+/// `uniffi::custom_type!` only accepts a bare identifier for the custom
+/// type, so this bridges the type-erased `DynRawFallback<DynClientConfig>`
+/// to its consensus-encoded hex representation. Since no
+/// `ModuleDecoderRegistry` is available across the FFI boundary, lifting
+/// always produces the `Raw` variant; callers can call `redecode_raw`
+/// afterwards once a decoder registry is available.
+#[cfg(feature = "uniffi")]
+type ClientModuleConfigRaw = DynRawFallback<DynClientConfig>;
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(ClientModuleConfigRaw, String, {
+    lower: |v| v.consensus_encode_to_hex(),
+    try_lift: |s| {
+        ClientModuleConfigRaw::consensus_decode_hex(&s, &ModuleDecoderRegistry::default())
+            .map_err(|e| anyhow::anyhow!("Failed to decode client module config: {e}"))
+    },
+});
+
 /// Config for the client-side of a particular Federation module
 ///
 /// Since modules are (tbd.) pluggable into Federations,
 /// it needs to be some form of an abstract type-erased-like
 /// value.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ClientModuleConfig {
     pub kind: ModuleKind,
     pub version: ModuleConsensusVersion,

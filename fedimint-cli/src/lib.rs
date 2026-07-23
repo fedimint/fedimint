@@ -1749,8 +1749,8 @@ impl FedimintCli {
                     .map(|v| {
                         let id = v.id();
                         let v = v.as_raw();
-                        let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
+                        let module_id = v.module.as_ref().map(|m| m.id);
+                        let module_kind = v.module.as_ref().map(|m| m.kind.clone());
                         serde_json::json!({
                             "id": id,
                             "kind": v.kind,
@@ -1780,8 +1780,8 @@ impl FedimintCli {
                     .map(|v| {
                         let id = v.id();
                         let v = v.as_raw();
-                        let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
+                        let module_id = v.module.as_ref().map(|m| m.id);
+                        let module_kind = v.module.as_ref().map(|m| m.kind.clone());
                         serde_json::json!({
                             "id": id,
                             "kind": v.kind,
