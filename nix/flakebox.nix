@@ -517,6 +517,7 @@ in
 
     workspaceTest = craneLib.cargoNextest {
       cargoArtifacts = workspaceBuild;
+      doInstallCargoArtifacts = false;
       cargoExtraArgs = "--workspace --all-targets --locked";
 
       FM_DISCOVER_API_VERSION_TIMEOUT = "10";
@@ -527,6 +528,7 @@ in
       # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
       cargoTestExtraArgs = "--doc";
       cargoArtifacts = workspaceBuild;
+      doInstallCargoArtifacts = false;
 
       # workaround: `cargo test --doc` started to ignore CARGO_TARGET_<native-target>_RUSTFLAGS
       # out of the blue
@@ -548,7 +550,7 @@ in
     # coverage is handled pessimistically.
     crapBaseline = craneLibCrap.mkCargoDerivation {
       pname = "${commonArgs.pname}-cargo-crap-baseline";
-      cargoArtifacts = workspaceBuild;
+      cargoArtifacts = null;
       buildPhaseCargoCommand = ''
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
@@ -564,7 +566,7 @@ in
 
     crap = craneLibCrap.mkCargoDerivation {
       pname = "${commonArgs.pname}-cargo-crap";
-      cargoArtifacts = workspaceBuild;
+      cargoArtifacts = null;
       buildPhaseCargoCommand = ''
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
