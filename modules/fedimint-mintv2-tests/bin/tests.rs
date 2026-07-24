@@ -3,7 +3,7 @@ use clap::Parser;
 use devimint::cmd;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use fedimint_core::envs::{FM_ENABLE_MODULE_MINT_ENV, FM_ENABLE_MODULE_MINTV2_ENV};
+use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, FM_ENABLE_MODULE_MINT_ENV};
 use fedimint_mintv2_client::FinalReceiveOperationState;
 use tracing::info;
 

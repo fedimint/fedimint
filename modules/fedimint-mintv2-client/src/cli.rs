@@ -1,8 +1,8 @@
 use std::{ffi, iter};
 
 use clap::Parser;
-use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
+use fedimint_core::Amount;
 use serde::Serialize;
 use serde_json::Value;
 
