@@ -103,9 +103,9 @@ pub mod module_init;
 
 pub mod sm;
 pub mod visualize;
-pub use client::Client;
 pub use client::builder::{ClientBuilder, ClientPreview, RootSecret};
 pub use client::handle::{ClientHandle, ClientHandleArc};
+pub use client::Client;
 pub use fedimint_client_module as module;
 /// Re-exporting of everything from `fedimint_client_module`
 ///

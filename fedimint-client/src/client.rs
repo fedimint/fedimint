@@ -75,6 +75,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
 use serde::{Deserialize, Serialize};
+use tokio::select;
 use tokio::sync::{broadcast, oneshot, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{Span, debug, info, warn};
@@ -103,6 +104,9 @@ pub(crate) mod event_log;
 pub(crate) mod global_ctx;
 pub(crate) mod handle;
 
+#[cfg(test)]
+mod tests;
+
 /// List of core api versions supported by the implementation.
 /// Notably `major` version is the one being supported, and corresponding
 /// `minor` version is the one required (for given `major` version).
@@ -129,6 +133,26 @@ pub(crate) struct PrimaryModuleCandidates {
 /// from the module (if it tracks one) once recovery completes.
 pub(crate) type ModuleRecoveryFuture =
     Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+
+/// A module recovery that ended in an error rather than completing.
+///
+/// [`RecoveryProgress`] can only ever express how far a recovery got, never
+/// that it gave up, which makes a failed recovery indistinguishable from a
+/// merely slow one. To avoid waiters blocking forever on a failure that already
+/// happened, the recovery task reports it out-of-band using this type.
+///
+/// Only the APIs returning a result observe this signal. The ones exposing the
+/// progress itself, like [`Client::has_pending_recoveries`], keep reporting a
+/// failed recovery as not done, which it is.
+///
+/// Internal: the failure reaches callers as the error of the waiting API, not
+/// as this type, so it stays crate-private rather than committing an
+/// accessorless public type to the API surface.
+#[derive(Clone, Debug)]
+pub(crate) struct RecoveryFailure {
+    pub(crate) module_instance_id: ModuleInstanceId,
+    pub(crate) error: String,
+}
 
 /// Main client type
 ///
@@ -172,6 +196,18 @@ pub struct Client {
     /// Updates about client recovery progress
     client_recovery_progress_receiver:
         watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+
+    /// The module recoveries that terminally failed, keyed by module instance
+    ///
+    /// Keyed rather than a single slot because a `watch` channel only keeps its
+    /// latest value: if one module's failure overwrote another's before a
+    /// waiter observed it, [`Self::wait_for_module_kind_recovery`] could miss a
+    /// failure of its own kind and block forever. Keeping every failure keeps
+    /// the outcome determinate no matter how many modules fail.
+    ///
+    /// Intentionally not persisted: on a restart the recovery is simply
+    /// attempted again, which is the right thing to do for a transient cause.
+    client_recovery_failure_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryFailure>>,
 
     /// Internal client sender to wake up log ordering task every time a
     /// (unuordered) log event is added.
@@ -1865,17 +1901,76 @@ impl Client {
     ///
     /// A bit of a heavy approach.
     pub async fn wait_for_all_recoveries(&self) -> anyhow::Result<()> {
-        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
-        recovery_receiver
-            .wait_for(|in_progress| {
-                in_progress
-                    .iter()
-                    .all(|(_id, progress)| progress.is_done())
-            })
-            .await
-            .context("Recovery task completed and update receiver disconnected, but some modules failed to recover")?;
+        Self::wait_for_recoveries(
+            self.client_recovery_progress_receiver.clone(),
+            self.client_recovery_failure_receiver.clone(),
+            |_module_instance_id| true,
+            "Recovery task completed and update receiver disconnected, but some modules failed to recover",
+        )
+        .await
+    }
 
-        Ok(())
+    /// Wait for the recovery of every module accepted by `module_filter` to
+    /// either complete or fail.
+    ///
+    /// Since [`RecoveryProgress`] can never express a failure, waiting on
+    /// progress alone would block forever on a module that gave up. So the
+    /// failure reported out-of-band by [`Self::run_module_recoveries_task`] is
+    /// raced against the progress updates here.
+    async fn wait_for_recoveries(
+        mut progress_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        mut failure_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryFailure>>,
+        module_filter: impl Fn(ModuleInstanceId) -> bool,
+        disconnected_context: &'static str,
+    ) -> anyhow::Result<()> {
+        let all_done = progress_receiver.wait_for(|in_progress| {
+            in_progress
+                .iter()
+                .filter(|(module_instance_id, _progress)| module_filter(**module_instance_id))
+                .all(|(_id, progress)| progress.is_done())
+        });
+
+        let failed = async {
+            let failure = failure_receiver
+                .wait_for(|failures| {
+                    failures
+                        .keys()
+                        .any(|module_instance_id| module_filter(*module_instance_id))
+                })
+                .await
+                .ok()
+                .and_then(|failures| {
+                    failures
+                        .values()
+                        .find(|failure| module_filter(failure.module_instance_id))
+                        .cloned()
+                });
+
+            match failure {
+                Some(failure) => failure,
+                // Without a sender left no failure can ever be reported
+                // anymore, so leave detecting the outcome to the progress
+                // updates
+                None => pending().await,
+            }
+        };
+
+        select! {
+            biased;
+
+            failed = failed => {
+                Err(anyhow!(
+                    "Module recovery failed: module_instance_id={}, error={}",
+                    failed.module_instance_id,
+                    failed.error
+                ))
+            }
+            all_done = all_done => {
+                all_done.context(disconnected_context)?;
+
+                Ok(())
+            }
+        }
     }
 
     /// Subscribe to recover progress for all the modules.
@@ -1893,21 +1988,14 @@ impl Client {
         &self,
         module_kind: ModuleKind,
     ) -> anyhow::Result<()> {
-        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
         let config = self.config().await;
-        recovery_receiver
-            .wait_for(|in_progress| {
-                !in_progress
-                    .iter()
-                    .filter(|(module_instance_id, _progress)| {
-                        config.modules[module_instance_id].kind == module_kind
-                    })
-                    .any(|(_id, progress)| !progress.is_done())
-            })
-            .await
-            .context("Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover")?;
-
-        Ok(())
+        Self::wait_for_recoveries(
+            self.client_recovery_progress_receiver.clone(),
+            self.client_recovery_failure_receiver.clone(),
+            move |module_instance_id| config.modules[&module_instance_id].kind == module_kind,
+            "Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover",
+        )
+        .await
     }
 
     pub async fn wait_for_all_active_state_machines(&self) -> anyhow::Result<()> {
@@ -1928,6 +2016,7 @@ impl Client {
     fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        recovery_failure_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryFailure>>,
         module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
@@ -1944,6 +2033,7 @@ impl Client {
                 db,
                 log_ordering_wakeup_tx,
                 recovery_sender,
+                recovery_failure_sender,
                 module_recoveries,
                 module_recovery_progress_receivers,
                 module_kinds,
@@ -1956,6 +2046,7 @@ impl Client {
         db: Database,
         log_ordering_wakeup_tx: watch::Sender<()>,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        recovery_failure_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryFailure>>,
         module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
@@ -1977,14 +2068,30 @@ impl Client {
         let progress_stream = futures::stream::FuturesUnordered::new();
 
         for (module_instance_id, f) in module_recoveries {
+            let recovery_failure_sender = recovery_failure_sender.clone();
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
                     Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
+                        let error = err.fmt_compact_anyhow().to_string();
                         warn!(
                             target: LOG_CLIENT,
-                            err = %err.fmt_compact_anyhow(), module_instance_id, "Module recovery failed"
+                            err = %error, module_instance_id, "Module recovery failed"
                         );
+                        // since the progress a module reports can't express a
+                        // failure, report it out-of-band for anyone waiting on
+                        // the outcome. Keyed by module instance so a later
+                        // failure of another module can't overwrite this one
+                        // before a waiter observes it.
+                        recovery_failure_sender.send_modify(|failures| {
+                            failures.insert(
+                                module_instance_id,
+                                RecoveryFailure {
+                                    module_instance_id,
+                                    error,
+                                },
+                            );
+                        });
                         // a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
