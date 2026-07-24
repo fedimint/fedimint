@@ -61,9 +61,7 @@ fn parse_transitions(data: &[u8]) -> Vec<MockTransition> {
                 // Non-zero amounts only; modulus keeps them in test range
                 amount_msats: (secondary % 100_000) + 1,
             }),
-            1 => out.push(MockTransition::SpendNote {
-                id: primary % 1024,
-            }),
+            1 => out.push(MockTransition::SpendNote { id: primary % 1024 }),
             _ => out.push(MockTransition::EpochConsensus {
                 epoch: primary % 128,
             }),
@@ -135,18 +133,17 @@ pub fn execute_interleaved(transitions: &[MockTransition]) -> LedgerState {
     let mut pending_issues: Vec<(u64, u64)> = Vec::new();
     let mut pending_spends: Vec<u64> = Vec::new();
 
-    let mut flush = |state: &mut LedgerState,
-                     issues: &mut Vec<(u64, u64)>,
-                     spends: &mut Vec<u64>| {
-        // Apply issues first (matches Fedimint consensus ordering)
-        for (id, amount) in issues.drain(..) {
-            state.insert(id, amount);
-        }
-        // Then apply spends
-        for id in spends.drain(..) {
-            state.remove(&id);
-        }
-    };
+    let mut flush =
+        |state: &mut LedgerState, issues: &mut Vec<(u64, u64)>, spends: &mut Vec<u64>| {
+            // Apply issues first (matches Fedimint consensus ordering)
+            for (id, amount) in issues.drain(..) {
+                state.insert(id, amount);
+            }
+            // Then apply spends
+            for id in spends.drain(..) {
+                state.remove(&id);
+            }
+        };
 
     for t in transitions {
         match t {
@@ -189,8 +186,7 @@ fn main() {
             // Epoch-batched interleaved execution must converge to the
             // sequential reference state for the same sequence of transitions.
             assert_eq!(
-                ref_state,
-                test_state,
+                ref_state, test_state,
                 "CRITICAL: State divergence detected!\n  transitions={transitions:?}\n  reference={ref_state:?}\n  interleaved={test_state:?}"
             );
         });
@@ -225,8 +221,7 @@ mod tests {
         let ref_state = execute_reference(&transitions);
         let test_state = execute_interleaved(&transitions);
         assert_eq!(
-            ref_state,
-            test_state,
+            ref_state, test_state,
             "State divergence on: {transitions:?}"
         );
     }
@@ -343,10 +338,16 @@ mod tests {
         // reference model and the epoch-batched interleaved model.
         // The #[should_panic] proves our assert_eq! FIRES on real bugs.
         let transitions = vec![
-            MockTransition::IssueNote { id: 5, amount_msats: 100 },
+            MockTransition::IssueNote {
+                id: 5,
+                amount_msats: 100,
+            },
             MockTransition::EpochConsensus { epoch: 1 },
             MockTransition::SpendNote { id: 5 },
-            MockTransition::IssueNote { id: 5, amount_msats: 200 },
+            MockTransition::IssueNote {
+                id: 5,
+                amount_msats: 200,
+            },
             // No trailing EpochConsensus: final flush applies issues THEN
             // spends, reordering relative to the reference model.
         ];
@@ -358,8 +359,7 @@ mod tests {
         // test_state = {}         (batched: flush epoch1, then final flush
         //                          inserts 5:200 first, then removes it)
         assert_eq!(
-            ref_state,
-            test_state,
+            ref_state, test_state,
             "State divergence on: {transitions:?}"
         );
     }

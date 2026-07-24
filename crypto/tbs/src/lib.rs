@@ -274,7 +274,7 @@ pub fn unblind_signature(
     blinded_sig: BlindedSignature,
 ) -> Result<Signature, Error> {
     let inv = Option::from(blinding_key.0.invert()).ok_or(Error::InvalidBlindingKey)?;
-    let sig = blinded_sig.0 * inv;
+    let sig: G1Projective = blinded_sig.0 * inv;
     Ok(Signature(sig.to_affine()))
 }
 
