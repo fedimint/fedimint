@@ -960,7 +960,10 @@ impl NoteIssuanceRequest {
     }
 
     /// Use the blind signature to create spendable e-cash notes
-    pub fn finalize(&self, blinded_signature: BlindedSignature) -> Result<SpendableNote, tbs::Error> {
+    pub fn finalize(
+        &self,
+        blinded_signature: BlindedSignature,
+    ) -> Result<SpendableNote, tbs::Error> {
         Ok(SpendableNote {
             signature: unblind_signature(self.blinding_key, blinded_signature)?,
             spend_key: self.spend_key,

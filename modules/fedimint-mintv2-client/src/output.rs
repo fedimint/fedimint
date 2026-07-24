@@ -4,12 +4,12 @@ use anyhow::ensure;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_core::PeerId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_mintv2_common::{Denomination, verify_note};
-use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, aggregate_signature_shares};
+use fedimint_core::PeerId;
+use fedimint_mintv2_common::{verify_note, Denomination};
+use tbs::{aggregate_signature_shares, AggregatePublicKey, BlindedSignatureShare, PublicKeyShare};
 
 use crate::api::MintV2ModuleApi;
 use crate::client_db::SpendableNoteKey;
