@@ -103,6 +103,9 @@ pub(crate) mod event_log;
 pub(crate) mod global_ctx;
 pub(crate) mod handle;
 
+#[cfg(test)]
+mod tests;
+
 /// List of core api versions supported by the implementation.
 /// Notably `major` version is the one being supported, and corresponding
 /// `minor` version is the one required (for given `major` version).
@@ -129,6 +132,69 @@ pub(crate) struct PrimaryModuleCandidates {
 /// from the module (if it tracks one) once recovery completes.
 pub(crate) type ModuleRecoveryFuture =
     Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+
+/// The state of a single module's recovery, as tracked by the client.
+///
+/// [`RecoveryProgress`] can only ever express how far a recovery got, never
+/// that it gave up, which makes a failed recovery indistinguishable from a
+/// merely slow one and blocks every waiter on the outcome forever. Carrying the
+/// failure as a state of the very thing the progress describes makes the
+/// contradictory "done and failed" unrepresentable for a module, so a recovery
+/// that terminally fails resolves the waiters it used to strand. Only a
+/// terminal failure does: a recovery that keeps retrying instead of giving up,
+/// as fetching the federation's history does, resolves nothing, and its waiters
+/// keep waiting.
+///
+/// Only the APIs returning a result observe the failure. The ones exposing the
+/// progress itself, like [`Client::has_pending_recoveries`] and
+/// [`Client::subscribe_to_recovery_progress`], keep reporting a failed recovery
+/// as not done, which it is.
+///
+/// Internal: the failure reaches callers as the error of the waiting API, not
+/// as this type, so it stays crate-private rather than committing an
+/// accessorless public type to the API surface.
+///
+/// The module this describes is the key of the map this is stored in, so it is
+/// deliberately not repeated here: a copy could contradict the key it is
+/// filed under.
+#[derive(Clone, Debug)]
+pub(crate) enum RecoveryStatus {
+    /// The latest progress of a recovery that has not failed.
+    ///
+    /// A successfully completed recovery is represented by a done progress.
+    InProgress(RecoveryProgress),
+    /// The recovery terminally failed at `last_progress`, which is kept so the
+    /// progress-reporting APIs can keep describing the module.
+    Failed {
+        last_progress: RecoveryProgress,
+        error: String,
+    },
+}
+
+impl RecoveryStatus {
+    /// Whether the module's recovery completed successfully.
+    ///
+    /// A failure is terminal but never done: the module recovered nothing
+    /// beyond the progress it got to.
+    pub(crate) fn is_successfully_done(&self) -> bool {
+        match self {
+            Self::InProgress(progress) => progress.is_done(),
+            Self::Failed { .. } => false,
+        }
+    }
+
+    /// The progress view of the status, which is all a progress-reporting API
+    /// can express.
+    pub(crate) fn progress(&self) -> RecoveryProgress {
+        match self {
+            Self::InProgress(progress)
+            | Self::Failed {
+                last_progress: progress,
+                ..
+            } => *progress,
+        }
+    }
+}
 
 /// Main client type
 ///
@@ -169,9 +235,19 @@ pub struct Client {
     /// federation prefix.
     client_span: Span,
 
-    /// Updates about client recovery progress
-    client_recovery_progress_receiver:
-        watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+    /// Updates about the recovery status of every recovering module, keyed by
+    /// module instance
+    ///
+    /// Keyed rather than a single slot because a `watch` channel only keeps its
+    /// latest value: if one module's terminal state overwrote another's before
+    /// a waiter observed it, [`Self::wait_for_module_kind_recovery`] could miss
+    /// a failure of its own kind and block forever. Keeping a status per module
+    /// keeps the outcome determinate no matter how many modules fail.
+    ///
+    /// A [`RecoveryStatus::Failed`] is intentionally not persisted: on a
+    /// restart the recovery is simply attempted again, which is the right thing
+    /// to do for a transient cause.
+    client_recovery_status_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
 
     /// Internal client sender to wake up log ordering task every time a
     /// (unuordered) log event is added.
@@ -1851,63 +1927,127 @@ impl Client {
 
     pub fn has_pending_recoveries(&self) -> bool {
         !self
-            .client_recovery_progress_receiver
+            .client_recovery_status_receiver
             .borrow()
-            .iter()
-            .all(|(_id, progress)| progress.is_done())
+            .values()
+            .all(RecoveryStatus::is_successfully_done)
     }
 
     /// Wait for all module recoveries to finish
     ///
-    /// This will block until the recovery task is done with recoveries.
-    /// Returns success if all recovery tasks are complete (success case),
-    /// or an error if some modules could not complete the recovery at the time.
+    /// Returns `Ok(())` once every module recovery completed, or an error as
+    /// soon as any one of them fails terminally.
+    ///
+    /// An error does not mean the recovery task is done: the failed module's
+    /// progress stays pending forever (so [`Self::has_pending_recoveries`]
+    /// keeps returning `true`) and the recovery task stays parked. The
+    /// failure is in-memory only and is not persisted, so reopening the
+    /// client retries the recovery from its last persisted, non-terminal
+    /// progress.
     ///
     /// A bit of a heavy approach.
     pub async fn wait_for_all_recoveries(&self) -> anyhow::Result<()> {
-        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
-        recovery_receiver
-            .wait_for(|in_progress| {
-                in_progress
-                    .iter()
-                    .all(|(_id, progress)| progress.is_done())
+        Self::wait_for_recoveries(
+            self.client_recovery_status_receiver.clone(),
+            |_module_instance_id| true,
+            "Recovery task completed and update receiver disconnected, but some modules failed to recover",
+        )
+        .await
+    }
+
+    /// Wait for the recovery of every module accepted by `module_filter` to
+    /// either complete or fail.
+    ///
+    /// Since [`RecoveryProgress`] can never express a failure, waiting on
+    /// progress alone would block forever on a module that gave up. A module
+    /// that gave up is recorded as [`RecoveryStatus::Failed`] by
+    /// [`Self::run_module_recoveries_task`] instead, so both outcomes are
+    /// observable on the same per-module status.
+    async fn wait_for_recoveries(
+        mut status_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
+        module_filter: impl Fn(ModuleInstanceId) -> bool,
+        disconnected_context: &'static str,
+    ) -> anyhow::Result<()> {
+        let failure = status_receiver
+            .wait_for(|statuses| {
+                let matching = || {
+                    statuses
+                        .iter()
+                        .filter(|(module_instance_id, _status)| module_filter(**module_instance_id))
+                        .map(|(_module_instance_id, status)| status)
+                };
+
+                // A failure is terminal, so waiting for the modules that are
+                // still recovering would only delay an outcome that can no
+                // longer change.
+                matching().any(|status| matches!(status, RecoveryStatus::Failed { .. }))
+                    || matching().all(RecoveryStatus::is_successfully_done)
             })
             .await
-            .context("Recovery task completed and update receiver disconnected, but some modules failed to recover")?;
+            .context(disconnected_context)?
+            // Classified from the woken-up snapshot before anything else, so a
+            // failure of one module still wins over another one completing.
+            .iter()
+            .find_map(|(module_instance_id, status)| match status {
+                RecoveryStatus::Failed { error, .. } if module_filter(*module_instance_id) => {
+                    Some((*module_instance_id, error.clone()))
+                }
+                _ => None,
+            });
 
-        Ok(())
+        match failure {
+            Some((module_instance_id, error)) => Err(anyhow!(
+                "Module recovery failed: module_instance_id={module_instance_id}, error={error}"
+            )),
+            None => Ok(()),
+        }
     }
 
     /// Subscribe to recover progress for all the modules.
     ///
     /// This stream can contain duplicate progress for a module.
     /// Don't use this stream for detecting completion of recovery.
+    ///
+    /// It can't express a failure either: a module that failed to recover keeps
+    /// being reported with the last progress it made, which is never done. Use
+    /// [`Self::wait_for_all_recoveries`] or
+    /// [`Self::wait_for_module_kind_recovery`] to learn the outcome.
     pub fn subscribe_to_recovery_progress(
         &self,
     ) -> impl Stream<Item = (ModuleInstanceId, RecoveryProgress)> + use<> {
-        WatchStream::new(self.client_recovery_progress_receiver.clone())
-            .flat_map(futures::stream::iter)
+        WatchStream::new(self.client_recovery_status_receiver.clone()).flat_map(|statuses| {
+            futures::stream::iter(
+                statuses
+                    .into_iter()
+                    .map(|(module_instance_id, status)| (module_instance_id, status.progress())),
+            )
+        })
     }
 
+    /// Wait for the recoveries of all modules of `module_kind` to finish
+    ///
+    /// Returns `Ok(())` once every recovery of that kind completed, or an error
+    /// as soon as one of them fails terminally. Failures of other module kinds
+    /// are ignored.
+    ///
+    /// See [`Self::wait_for_all_recoveries`] for what an error does and does
+    /// not say about the state of the recovery.
     pub async fn wait_for_module_kind_recovery(
         &self,
         module_kind: ModuleKind,
     ) -> anyhow::Result<()> {
-        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
         let config = self.config().await;
-        recovery_receiver
-            .wait_for(|in_progress| {
-                !in_progress
-                    .iter()
-                    .filter(|(module_instance_id, _progress)| {
-                        config.modules[module_instance_id].kind == module_kind
-                    })
-                    .any(|(_id, progress)| !progress.is_done())
-            })
-            .await
-            .context("Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover")?;
-
-        Ok(())
+        Self::wait_for_recoveries(
+            self.client_recovery_status_receiver.clone(),
+            move |module_instance_id| {
+                config
+                    .modules
+                    .get(&module_instance_id)
+                    .is_some_and(|module| module.kind == module_kind)
+            },
+            "Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover",
+        )
+        .await
     }
 
     pub async fn wait_for_all_active_state_machines(&self) -> anyhow::Result<()> {
@@ -1927,7 +2067,7 @@ impl Client {
 
     fn spawn_module_recoveries_task(
         &self,
-        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
         module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
@@ -1939,6 +2079,10 @@ impl Client {
     ) {
         let db = self.db.clone();
         let log_ordering_wakeup_tx = self.log_ordering_wakeup_tx.clone();
+        // A module can finish its own final database commit before the client
+        // persists the corresponding completed progress below. Keep the
+        // coordinator alive across graceful shutdown so that gap cannot cause
+        // a non-idempotent module finalization to be replayed on reopen.
         self.spawn("module recoveries", |_task_handle| async {
             Self::run_module_recoveries_task(
                 db,
@@ -1955,7 +2099,7 @@ impl Client {
     async fn run_module_recoveries_task(
         db: Database,
         log_ordering_wakeup_tx: watch::Sender<()>,
-        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
         module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture>,
         module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
@@ -1977,17 +2121,44 @@ impl Client {
         let progress_stream = futures::stream::FuturesUnordered::new();
 
         for (module_instance_id, f) in module_recoveries {
+            let recovery_sender = recovery_sender.clone();
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
                     Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
+                        let error = err.fmt_compact_anyhow().to_string();
                         warn!(
                             target: LOG_CLIENT,
-                            err = %err.fmt_compact_anyhow(), module_instance_id, "Module recovery failed"
+                            err = %error.as_str(), module_instance_id, "Module recovery failed"
                         );
-                        // a module recovery that failed reports and error and
-                        // just never finishes, so we don't need a separate state
-                        // for it
+                        // since the progress a module reports can't express a
+                        // failure, record it as the terminal state of this
+                        // module's recovery for anyone waiting on the outcome.
+                        // Keyed by module instance so a later failure of
+                        // another module can't overwrite this one before a
+                        // waiter observes it.
+                        recovery_sender.send_modify(|statuses| {
+                            let last_progress = statuses
+                                .get(&module_instance_id)
+                                .expect("existing status must be present")
+                                .progress();
+                            statuses.insert(
+                                module_instance_id,
+                                RecoveryStatus::Failed {
+                                    last_progress,
+                                    error,
+                                },
+                            );
+                        });
+                        // The terminal failure is now published to the waiters,
+                        // and this branch stays pending on purpose so the
+                        // recovery coordinator and its single status sender
+                        // remain alive. The failed module's progress never
+                        // becomes done either, so observers that only see the
+                        // progress keep treating the recovery as pending, which
+                        // it effectively is. The failure is deliberately not
+                        // persisted, so reopening the client retries the
+                        // recovery.
                         futures::future::pending::<()>().await;
                         unreachable!()
                     }
@@ -2009,16 +2180,73 @@ impl Client {
         );
 
         while let Some((module_instance_id, update)) = futures.next().await {
-            let mut dbtx = db.begin_transaction().await;
-
-            let prev_progress = *recovery_sender
+            // Cloned so the `watch::Ref` is released right here: holding it
+            // across the awaits or the `send_modify` below would deadlock the
+            // channel it borrows from.
+            let prev_status = recovery_sender
                 .borrow()
                 .get(&module_instance_id)
-                .expect("existing progress must be present");
+                .expect("existing status must be present")
+                .clone();
+
+            // A failure is the terminal state of a module's recovery, but
+            // progress and completion are merged without any ordering between
+            // them, so a stale progress update of that module can still arrive
+            // after it. Applying it would overwrite the failure with an
+            // in-progress status, and a waiter subscribing afterwards would
+            // block forever again. Ignoring it entirely, without touching the
+            // channel, also keeps subscribers from seeing a snapshot that says
+            // nothing new. Mirrors the sticky "once done, stick with it"
+            // handling below.
+            if matches!(prev_status, RecoveryStatus::Failed { .. }) {
+                debug!(
+                    target: LOG_CLIENT_RECOVERY,
+                    module_instance_id,
+                    "Ignoring a recovery update of a module whose recovery already failed"
+                );
+                continue;
+            }
+
+            let prev_progress = prev_status.progress();
+
+            // A module reports its progress on a channel it owns, so the values
+            // arriving here are untrusted: `update_recovery_progress` filters
+            // them, but a module can send on `progress_tx` directly. Reject the
+            // values that would break the invariants downstream depends on
+            // before anything is persisted or broadcast.
+            if let RecoveryUpdate::Progress(progress) = &update {
+                if progress.is_done() {
+                    warn!(
+                        target: LOG_CLIENT_RECOVERY,
+                        module_instance_id,
+                        "Module bypassed the sanctioned recovery progress reporting API and reported a completed recovery progress. Ignoring"
+                    );
+                    continue;
+                }
+
+                // The module's channel starts at the progress the client seeded
+                // it with, so a "none" that doesn't regress anything is the
+                // normal start of a recovery, not a module misbehaving. Neither
+                // is one seen after the module already completed: progress and
+                // completion are merged without ordering between them, so a
+                // seeded value can arrive after the completion it preceded.
+                if progress.is_none() && !prev_progress.is_none() && !prev_progress.is_done() {
+                    warn!(
+                        target: LOG_CLIENT_RECOVERY,
+                        module_instance_id,
+                        "Module bypassed the sanctioned recovery progress reporting API and reported a none recovery progress, regressing its previous one. Ignoring"
+                    );
+                    continue;
+                }
+            }
+
+            let mut dbtx = db.begin_transaction().await;
 
             // The recovered amount is only known once the module's recovery
             // future resolves, which is also the only way progress transitions
-            // to "done" (modules can't report a completed `RecoveryProgress`).
+            // to "done": the guard above rejects a completed progress reported
+            // by a module, so `RecoveryUpdate::Completed` stays the only
+            // producer of a done progress, and done therefore implies success.
             let (progress, recovered_amount) = if prev_progress.is_done() {
                 // since updates might be out of order, once done, stick with it
                 (prev_progress, None)
@@ -2064,8 +2292,8 @@ impl Client {
             .await;
             dbtx.commit_tx().await;
 
-            recovery_sender.send_modify(|v| {
-                v.insert(module_instance_id, progress);
+            recovery_sender.send_modify(|statuses| {
+                statuses.insert(module_instance_id, RecoveryStatus::InProgress(progress));
             });
         }
         debug!(target: LOG_CLIENT_RECOVERY, "Recovery executor stopped");
