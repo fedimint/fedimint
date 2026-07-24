@@ -1,5 +1,5 @@
-use fedimint_core::Amount;
 use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::Amount;
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_mintv2_common::KIND;
 use serde::{Deserialize, Serialize};

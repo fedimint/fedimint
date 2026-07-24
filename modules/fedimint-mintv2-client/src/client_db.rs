@@ -7,8 +7,8 @@ use fedimint_mintv2_common::Denomination;
 use strum::Display;
 use strum_macros::EnumIter;
 
-use crate::SpendableNote;
 use crate::issuance::NoteIssuanceRequest;
+use crate::SpendableNote;
 
 #[repr(u8)]
 #[derive(Clone, Display, EnumIter, Debug)]

@@ -134,12 +134,12 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        let prefix = key_prefix.to_vec();
         let data = self
             .tx_data
-            .range((key_prefix.to_vec())..)
-            .take_while(|(key, _)| key.starts_with(key_prefix))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<Vec<_>>();
+            .range((prefix.clone())..)
+            .take_while(move |(key, _)| key.starts_with(&prefix))
+            .map(|(key, value)| (key.clone(), value.clone()));
         Ok(Box::pin(stream::iter(data)))
     }
 
@@ -147,13 +147,28 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
         &mut self,
         key_prefix: &[u8],
     ) -> DatabaseResult<PrefixStream<'_>> {
-        let mut data = self
+        let prefix = key_prefix.to_vec();
+        let mut upper_bound = prefix.clone();
+        let mut has_upper_bound = false;
+        while let Some(last) = upper_bound.pop() {
+            if last != 255 {
+                upper_bound.push(last + 1);
+                has_upper_bound = true;
+                break;
+            }
+        }
+
+        let end_bound = if has_upper_bound {
+            std::ops::Bound::Excluded(upper_bound)
+        } else {
+            std::ops::Bound::Unbounded
+        };
+
+        let data = self
             .tx_data
-            .range((key_prefix.to_vec())..)
-            .take_while(|(key, _)| key.starts_with(key_prefix))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<Vec<_>>();
-        data.sort_by(|a, b| a.cmp(b).reverse());
+            .range((std::ops::Bound::Included(prefix), end_bound))
+            .rev()
+            .map(|(key, value)| (key.clone(), value.clone()));
 
         Ok(Box::pin(stream::iter(data)))
     }
@@ -165,8 +180,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
                 start: range.start.to_vec(),
                 end: range.end.to_vec(),
             })
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<Vec<_>>();
+            .map(|(key, value)| (key.clone(), value.clone()));
         Ok(Box::pin(stream::iter(data)))
     }
 }
