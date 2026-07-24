@@ -1,0 +1,63 @@
+name: "Maintainer digest"
+
+on:
+  schedule:
+    # Weekdays at 08:00 UTC. The first rollout is artifact-only and read-only.
+    - cron: "0 8 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  digest:
+    if: github.repository == 'fedimint/fedimint'
+    name: Build read-only maintainer digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DIGEST_DIR: maintainer-digest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Collect deterministic repository state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/maintainer-digest.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --output-dir "${DIGEST_DIR}"
+
+      - name: Add optional AI prioritization
+        env:
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PPQ_KEY}" ]; then
+            npm install -g @openai/codex
+          fi
+          bash .github/scripts/run-maintainer-digest-ai.sh
+
+      - name: Publish job summary
+        run: cat "${DIGEST_DIR}/digest.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload digest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintainer-digest-${{ github.run_id }}
+          path: ${{ env.DIGEST_DIR }}
+          if-no-files-found: error
+          retention-days: 14
