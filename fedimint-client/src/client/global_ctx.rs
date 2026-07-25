@@ -115,6 +115,26 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             .await;
     }
 
+    async fn log_event_json_no_dbtx(
+        &self,
+        kind: EventKind,
+        module_kind: Option<ModuleKind>,
+        payload: serde_json::Value,
+        persist: EventPersistence,
+    ) {
+        let mut dbtx = self.client.db().begin_transaction().await;
+        self.client
+            .log_event_raw_dbtx(
+                &mut dbtx,
+                kind,
+                module_kind.map(|m| (m, self.module_instance_id)),
+                serde_json::to_vec(&payload).expect("Serialization can't fail"),
+                persist,
+            )
+            .await;
+        dbtx.commit_tx().await;
+    }
+
     async fn core_api_version(&self) -> fedimint_core::module::ApiVersion {
         self.client.core_api_version().await
     }
