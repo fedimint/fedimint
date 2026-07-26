@@ -335,7 +335,7 @@ fn setup_form_content(
                                                 label class="form-check-label" for=(format!("module_{}", kind.as_str())) {
                                                     (kind.as_str())
                                                     @if !default_modules.contains(kind) {
-                                                        span class="badge bg-warning text-dark ms-2" { "experimental" }
+                                                        span class="badge bg-warning text-dark ms-2" { "deprecated" }
                                                     }
                                                 }
                                             }
