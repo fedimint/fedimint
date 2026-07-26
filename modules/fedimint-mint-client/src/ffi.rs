@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use fedimint_client::OperationId;
+use fedimint_core::Amount;
+use fedimint_core::runtime::ffi_spawn_subscription;
 use fedimint_core::util::ffi::UniffiError;
-use fedimint_core::{Amount, runtime};
 use futures::StreamExt;
 
 use crate::{
@@ -51,7 +52,7 @@ impl MintClientModule {
         let client_ctx = self.client_ctx.clone();
         let mint = client_ctx.self_ref();
         let updates = mint.subscribe_reissue_external_notes(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-reissue-external-notes", async move {
+        ffi_spawn_subscription("uniffi-subscribe-reissue-external-notes", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
@@ -120,7 +121,7 @@ impl MintClientModule {
         let client_ctx = self.client_ctx.clone();
         let mint = client_ctx.self_ref();
         let updates = mint.subscribe_spend_notes(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-spend-notes", async move {
+        ffi_spawn_subscription("uniffi-subscribe-spend-notes", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
