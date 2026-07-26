@@ -62,7 +62,7 @@ plugin_types_trait_impl_config!(
     MintClientConfig
 );
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     base: Amount,
     parts_per_million: u64,
