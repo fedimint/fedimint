@@ -133,6 +133,16 @@ pub async fn run_webserver(
     Ok(())
 }
 
+/// Strips at most one leading `/v1` path segment so paths from both the
+/// versioned and unversioned API mounts can be compared against the unprefixed
+/// endpoint constants.
+fn strip_v1_prefix(path: &str) -> &str {
+    match path.strip_prefix(&format!("/{V1_API_ENDPOINT}")) {
+        Some(stripped) if stripped.starts_with('/') => stripped,
+        _ => path,
+    }
+}
+
 /// Extracts the Bearer token from the Authorization header of the request.
 fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
     let headers = request.headers();
@@ -161,9 +171,8 @@ async fn not_configured_middleware(
         let path = request.uri().path();
 
         // Allow the API mnemonic endpoint (for CLI usage)
-        let is_mnemonic_api = method == axum::http::Method::POST
-            && (path == MNEMONIC_ENDPOINT
-                || path == format!("/{V1_API_ENDPOINT}/{MNEMONIC_ENDPOINT}"));
+        let is_mnemonic_api =
+            method == axum::http::Method::POST && strip_v1_prefix(path) == MNEMONIC_ENDPOINT;
 
         let is_setup_route = fedimint_gateway_ui::is_allowed_setup_route(path);
 
@@ -195,9 +204,9 @@ async fn auth_middleware(
         && bcrypt::verify(token, liquidity_manager_password_hash)
             .expect("Bcrypt hash is valid since we just stringified it")
     {
-        let path = request.uri().path().to_string();
+        let path = strip_v1_prefix(request.uri().path());
 
-        if !LIQUIDITY_MANAGER_ROUTES.contains(&path.as_str()) {
+        if !LIQUIDITY_MANAGER_ROUTES.contains(&path) {
             return Err(StatusCode::UNAUTHORIZED);
         }
 
@@ -916,4 +925,27 @@ async fn invite_codes(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let invite_codes = gateway.handle_export_invite_codes().await;
     Ok(Json(json!(invite_codes)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_v1_prefix_covers_both_api_mounts() {
+        for route in LIQUIDITY_MANAGER_ROUTES {
+            assert_eq!(strip_v1_prefix(route), route);
+            assert_eq!(
+                strip_v1_prefix(&format!("/{V1_API_ENDPOINT}{route}")),
+                route
+            );
+        }
+    }
+
+    #[test]
+    fn strip_v1_prefix_only_strips_a_full_leading_segment() {
+        assert_eq!(strip_v1_prefix("/v1"), "/v1");
+        assert_eq!(strip_v1_prefix("/v1x/address"), "/v1x/address");
+        assert_eq!(strip_v1_prefix("/v1/v1/address"), "/v1/address");
+    }
 }
