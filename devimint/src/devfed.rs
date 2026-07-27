@@ -92,6 +92,7 @@ pub struct DevJitFed {
     gw_ldk_second_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
+    lnv2_gateways_added: JitArc<()>,
     recurringd_connected: JitArc<()>,
 
     skip_setup: bool,
@@ -339,6 +340,41 @@ impl DevJitFed {
             }
         });
 
+        let lnv2_gateways_added = JitTryAnyhow::new_try({
+            let fed = fed.clone();
+            let gw_lnd = gw_lnd.clone();
+            let gw_ldk = gw_ldk.clone();
+            let gw_ldk_second = gw_ldk_second.clone();
+            let gw_lnd_registered = gw_lnd_registered.clone();
+            let gw_ldk_connected = gw_ldk_connected.clone();
+            let gw_ldk_second_connected = gw_ldk_second_connected.clone();
+            let channel_opened = channel_opened.clone();
+            move || async move {
+                if supports_lnv2() && !skip_setup && !pre_dkg {
+                    gw_lnd_registered.get_try().await?;
+                    gw_ldk_connected.get_try().await?;
+                    gw_ldk_second_connected.get_try().await?;
+                    // The per-guardian admin calls each spin up a full
+                    // client, so run them serially and only after the
+                    // channels are open rather than competing with the
+                    // channel opens for resources.
+                    channel_opened.get_try().await?;
+                    let fed = fed.get_try().await?;
+                    debug!(target: LOG_DEVIMINT, "Adding gateways to the guardians' lnv2 gateway lists...");
+                    let start_time = fedimint_core::time::now();
+                    for gw in [
+                        gw_lnd.get_try().await?.deref(),
+                        gw_ldk.get_try().await?.deref(),
+                        gw_ldk_second.get_try().await?.deref(),
+                    ] {
+                        fed.add_lnv2_gateway(&gw.client().address()).await?;
+                    }
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Added gateways to the guardians' lnv2 gateway lists");
+                }
+                Ok(Arc::new(()))
+            }
+        });
+
         let recurringd = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
@@ -394,6 +430,7 @@ impl DevJitFed {
             gw_ldk_second_connected,
             fed_epoch_generated,
             channel_opened,
+            lnv2_gateways_added,
             recurringd_connected,
             skip_setup,
             pre_dkg,
@@ -471,6 +508,7 @@ impl DevJitFed {
             let _ = self.internal_client_gw_registered().await?;
         }
         let _ = self.channel_opened.get_try().await?;
+        let _ = self.lnv2_gateways_added.get_try().await?;
         let _ = self.gw_lnd_registered().await?;
         let _ = self.gw_ldk_connected().await?;
         let _ = self.gw_ldk_second_connected().await?;

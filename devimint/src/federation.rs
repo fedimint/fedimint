@@ -663,6 +663,40 @@ impl Federation {
         Ok(client)
     }
 
+    /// Add a gateway to every guardian's list of lnv2 gateways.
+    ///
+    /// Clients only see lnv2 gateways that guardians have added via the
+    /// authenticated lnv2 admin endpoint. Devimint has no human
+    /// guardians, so this calls that endpoint with the well-known test
+    /// credentials for each running guardian.
+    pub async fn add_lnv2_gateway(&self, gateway: &str) -> Result<()> {
+        let client = self.internal_client().await?;
+        for peer_id in self.members.keys() {
+            // The add runs concurrently with the rest of the dev-fed setup,
+            // so a single attempt can fail transiently, e.g. on an iroh
+            // connection under CI load.
+            poll("adding lnv2 gateway", || async {
+                cmd!(
+                    client,
+                    "--our-id",
+                    peer_id.to_string(),
+                    "--password",
+                    API_AUTH.as_str(),
+                    "module",
+                    "lnv2",
+                    "gateways",
+                    "add",
+                    gateway
+                )
+                .run()
+                .await
+                .map_err(ControlFlow::Continue)
+            })
+            .await?;
+        }
+        Ok(())
+    }
+
     pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {
         if self.members.contains_key(&peer) {
             bail!("fedimintd-{peer} already running");

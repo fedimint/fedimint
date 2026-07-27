@@ -151,6 +151,11 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gateways = [gw_lnd.addr.clone(), gw_ldk.addr.clone()];
 
+    info!("Removing the gateways devimint added on startup...");
+
+    let peers = (0..dev_fed.fed().await?.members.len()).collect::<Vec<usize>>();
+    remove_all_gateways(&client, &peers).await?;
+
     info!("Testing registration of gateways...");
 
     for gateway in &gateways {
@@ -627,6 +632,32 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyho
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
+/// Remove all currently registered gateways, including the ones devimint
+/// adds on startup, from the given peers.
+async fn remove_all_gateways(client: &Client, peers: &[usize]) -> anyhow::Result<()> {
+    let gateways = cmd!(client, "module", "lnv2", "gateways", "list")
+        .out_json()
+        .await?
+        .as_array()
+        .expect("JSON Value is not an array")
+        .iter()
+        .map(|gateway| {
+            gateway
+                .as_str()
+                .expect("JSON Value is not a string")
+                .to_string()
+        })
+        .collect::<Vec<String>>();
+
+    for gateway in &gateways {
+        for &peer in peers {
+            assert!(remove_gateway(client, peer, gateway).await?);
+        }
+    }
+
+    Ok(())
+}
+
 // Keep this below the 310s `fm-run-test` timeout so LNURL flakes fail with
 // useful balance diagnostics instead of a generic test timeout.
 const LNURL_BALANCE_WAIT_ATTEMPTS: u64 = 120;
@@ -975,6 +1006,9 @@ async fn test_iroh_payment(
     online_peers: &[usize],
 ) -> anyhow::Result<()> {
     info!("Testing iroh payment...");
+    // The send below relies on automatic gateway selection picking the iroh
+    // gateway, so the gateways devimint added on startup have to go first.
+    remove_all_gateways(client, online_peers).await?;
     for &peer in online_peers {
         add_gateway(client, peer, &format!("iroh://{}", gw_lnd.node_id)).await?;
     }
