@@ -11,7 +11,9 @@ use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, DatabaseError, DatabaseResult, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
@@ -57,6 +59,12 @@ use crate::metrics::{
 
 // The name of the directory where the database checkpoints are stored.
 const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
+
+/// How many times a single ordered consensus item is processed before we give
+/// up. Only a database transaction that could not be validated at commit time
+/// costs an attempt, and reprocessing takes a fresh snapshot, so needing more
+/// than a couple of these means something is wrong beyond a stale snapshot.
+const MAX_ITEM_PROCESSING_ATTEMPTS: usize = 10;
 
 /// Runs the main server consensus loop
 pub struct ConsensusEngine {
@@ -902,6 +910,62 @@ impl ConsensusEngine {
             ])
             .set(session_index as i64);
 
+        let mut attempt: usize = 1;
+
+        let outcome = loop {
+            match self
+                .process_consensus_item_attempt(item_index, &item, peer)
+                .await
+            {
+                Ok(outcome) => break outcome,
+                Err(err) => {
+                    // A snapshot that aged out of the backend's write history is the only
+                    // commit failure we can do anything about, and the only way to recover
+                    // is to rerun the whole operation against a fresh transaction. Nothing
+                    // was written, and reprocessing an ordered item is deterministic, so
+                    // the replay is equivalent to having processed it a moment later.
+                    assert!(
+                        matches!(err, DatabaseError::SnapshotTooOld(_)),
+                        "Committing consensus item failed: {err}"
+                    );
+
+                    assert!(
+                        attempt < MAX_ITEM_PROCESSING_ATTEMPTS,
+                        "Committing consensus item failed after {attempt} attempts: {err}"
+                    );
+
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        %peer,
+                        item_index,
+                        attempt,
+                        err = %err.fmt_compact(),
+                        "Consensus item transaction could not be validated - reprocessing item"
+                    );
+
+                    attempt += 1;
+                }
+            }
+        };
+
+        outcome?;
+
+        timing_prom.observe_duration();
+
+        Ok(())
+    }
+
+    /// Process a single ordered consensus item in one database transaction.
+    ///
+    /// The outer `Err` means the transaction could not be committed and the
+    /// caller has to rerun the whole operation in a fresh one. The inner `Err`
+    /// means the item itself was rejected, which is a normal, final outcome.
+    async fn process_consensus_item_attempt(
+        &self,
+        item_index: u64,
+        item: &ConsensusItem,
+        peer: PeerId,
+    ) -> DatabaseResult<anyhow::Result<()>> {
         let mut dbtx = self.db.begin_transaction().await;
 
         dbtx.ignore_uncommitted();
@@ -909,32 +973,32 @@ impl ConsensusEngine {
         // When we recover from a mid-session crash aleph bft will replay the units that
         // were already processed before the crash. We therefore skip all consensus
         // items until we have seen every previously accepted items again.
-        if let Some(existing_item) = dbtx
-            .get_value(&AcceptedItemKey(item_index.to_owned()))
-            .await
-        {
-            if existing_item.item == item && existing_item.peer == peer {
-                return Ok(());
+        if let Some(existing_item) = dbtx.get_value(&AcceptedItemKey(item_index)).await {
+            if existing_item.item == *item && existing_item.peer == peer {
+                return Ok(Ok(()));
             }
 
-            bail!(
+            return Ok(Err(anyhow!(
                 "Item was discarded previously: existing: {existing_item:?} {}, current: {item:?}, {peer}",
                 existing_item.peer
-            );
+            )));
         }
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
+        if let Err(err) = self
+            .process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
             .await
-            .inspect_err(|err| {
-                // Rejected items are very common, so only trace level
-                trace!(
-                    target: LOG_CONSENSUS,
-                    %peer,
-                    item = ?DebugConsensusItem(&item),
-                    err = %err.fmt_compact_anyhow(),
-                    "Rejected consensus item"
-                );
-            })?;
+        {
+            // Rejected items are very common, so only trace level
+            trace!(
+                target: LOG_CONSENSUS,
+                %peer,
+                item = ?DebugConsensusItem(item),
+                err = %err.fmt_compact_anyhow(),
+                "Rejected consensus item"
+            );
+
+            return Ok(Err(err));
+        }
 
         // After this point we have to commit the database transaction since the
         // item has been fully processed without errors
@@ -952,7 +1016,7 @@ impl ConsensusEngine {
         debug!(
             target: LOG_CONSENSUS,
             %peer,
-            item = ?DebugConsensusItem(&item),
+            item = ?DebugConsensusItem(item),
             "Processed consensus item"
         );
         let mut audit = Audit::default();
@@ -991,17 +1055,16 @@ impl ConsensusEngine {
             "Balance sheet of the fed has gone negative, this should never happen! {audit}"
         );
 
-        dbtx.commit_tx_result()
-            .await
-            .expect("Committing consensus epoch failed");
+        dbtx.commit_tx_result().await?;
 
+        // Counted here rather than in the caller so that only an attempt that actually
+        // committed is counted: the replay and rejection paths above return early, and
+        // a failed attempt loops back around to a fresh transaction.
         CONSENSUS_ITEMS_PROCESSED_TOTAL
             .with_label_values(&[&peer.to_usize().to_string()])
             .inc();
 
-        timing_prom.observe_duration();
-
-        Ok(())
+        Ok(Ok(()))
     }
 
     async fn process_consensus_item_with_db_transaction(
