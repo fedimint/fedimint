@@ -859,4 +859,60 @@ mod fedimint_rocksdb_tests {
             ]
         );
     }
+
+    /// `RocksDB` validates an optimistic transaction at commit time against the
+    /// write history it still keeps in memory. That history is bounded by
+    /// `max_write_buffer_size_to_maintain`, which `OptimisticTransactionDB`
+    /// defaults to `max_write_buffer_number * write_buffer_size` — 4 MiB with
+    /// our options. Once a transaction's snapshot falls out of that window
+    /// `RocksDB` can no longer tell whether anything conflicted, and fails the
+    /// commit with `TryAgain` even though no other transaction ever touched any
+    /// of its keys.
+    ///
+    /// This is not a write conflict, but we currently report it as one, so a
+    /// caller cannot tell a genuine race from a transaction that was simply
+    /// held open too long.
+    ///
+    /// See: <https://github.com/fedimint/fedimint/issues/8872>
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_long_lived_transaction_fails_without_key_overlap() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-long-lived-transaction")
+            .tempdir()
+            .unwrap();
+
+        let db = Database::new(
+            RocksDb::build(path.as_ref()).open_blocking().unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        // A transaction that writes a single key and then stays open, standing in
+        // for one that waits on something slow before committing.
+        let mut long_lived_dbtx = db.begin_transaction().await;
+        long_lived_dbtx
+            .insert_entry(&TestKey(vec![0]), &TestVal(vec![0]))
+            .await;
+
+        // Unrelated writers commit 8 MiB over keys that are disjoint from the
+        // above, which is enough to push the retained history past the snapshot.
+        // 6 MiB was the observed threshold, so this leaves some headroom.
+        let value = vec![0xab; 64 * 1024];
+
+        for index in 0u32..128 {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.insert_entry(
+                &TestKey2(index.to_be_bytes().to_vec()),
+                &TestVal2(value.clone()),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
+
+        let result = long_lived_dbtx.commit_tx_result().await;
+
+        assert!(
+            matches!(result, Err(DatabaseError::WriteConflict)),
+            "expected the stale snapshot to be reported as a write conflict, got {result:?}"
+        );
+    }
 }
