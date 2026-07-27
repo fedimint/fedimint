@@ -83,6 +83,16 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
         default: DEFAULT_RUST_LOG,
         pattern: ".*",
         "pattern-description": "Any valid Rust log directive string"
+      },
+      "session-timeout-secs": {
+        type: "number",
+        name: "Session Timeout (seconds)",
+        description: "Exit the process if a consensus session is not completed within this many seconds, relying on StartOS to restart the service. Restarting guardians has been observed to resolve stuck sessions.",
+        nullable: false,
+        range: "[600,*)",
+        integral: true,
+        default: 3600,
+        units: "seconds"
       }
     }
   }

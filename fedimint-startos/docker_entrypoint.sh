@@ -74,6 +74,15 @@ RUST_LOG_LEVEL=$(yq '.advanced.rust-log-level' /start-os/start9/config.yaml)
 export RUST_LOG="${RUST_LOG_LEVEL}"
 echo "Setting RUST_LOG=${RUST_LOG}"
 
+# Read and set the consensus session timeout from config. Configs saved
+# before the option existed lack the key; fedimintd then falls back to its
+# built-in default of 3600 seconds.
+SESSION_TIMEOUT_SECS=$(yq '.advanced.session-timeout-secs' /start-os/start9/config.yaml)
+if [ "$SESSION_TIMEOUT_SECS" != "null" ] && [ -n "$SESSION_TIMEOUT_SECS" ]; then
+    export FM_SESSION_TIMEOUT_SECS="${SESSION_TIMEOUT_SECS}"
+    echo "Setting FM_SESSION_TIMEOUT_SECS=${FM_SESSION_TIMEOUT_SECS}"
+fi
+
 # Create .backupignore to exclude files that shouldn't be backed up:
 #
 # We exclude the active database because:
