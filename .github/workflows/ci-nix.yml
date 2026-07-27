@@ -839,6 +839,11 @@ jobs:
           if [ -z "$(command -v start-sdk)" ]; then
             export RUSTFLAGS=""
             export OS_ARCH=$(uname -m)
+            # Start9Labs/avahi-sys (a git dep pinned by start-os v0.3.5.1) was deleted
+            # upstream, breaking the s9pk build. Redirect it to a fedimint-controlled
+            # mirror of the same commit. See fedimint/fedimint#8810.
+            git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
+            export CARGO_NET_GIT_FETCH_WITH_CLI=true
             mkdir -p web/dist/static
             ./check-git-hash.sh
             cargo update -p time --manifest-path=core/Cargo.toml
@@ -941,6 +946,11 @@ jobs:
           if [ -z "$(command -v start-sdk)" ]; then
             export RUSTFLAGS=""
             export OS_ARCH=$(uname -m)
+            # Start9Labs/avahi-sys (a git dep pinned by start-os v0.3.5.1) was deleted
+            # upstream, breaking the s9pk build. Redirect it to a fedimint-controlled
+            # mirror of the same commit. See fedimint/fedimint#8810.
+            git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
+            export CARGO_NET_GIT_FETCH_WITH_CLI=true
             mkdir -p web/dist/static
             ./check-git-hash.sh
             cargo update -p time --manifest-path=core/Cargo.toml
