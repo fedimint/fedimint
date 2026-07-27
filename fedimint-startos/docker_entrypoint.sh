@@ -83,6 +83,14 @@ if [ "$SESSION_TIMEOUT_SECS" != "null" ] && [ -n "$SESSION_TIMEOUT_SECS" ]; then
     echo "Setting FM_SESSION_TIMEOUT_SECS=${FM_SESSION_TIMEOUT_SECS}"
 fi
 
+# Read and set the p2p max connection age from config; unset by default, in
+# which case fedimintd never drops p2p connections due to their age.
+P2P_MAX_CONNECTION_AGE_SECS=$(yq '.advanced.p2p-max-connection-age-secs' /start-os/start9/config.yaml)
+if [ "$P2P_MAX_CONNECTION_AGE_SECS" != "null" ] && [ -n "$P2P_MAX_CONNECTION_AGE_SECS" ]; then
+    export FM_P2P_MAX_CONNECTION_AGE_SECS="${P2P_MAX_CONNECTION_AGE_SECS}"
+    echo "Setting FM_P2P_MAX_CONNECTION_AGE_SECS=${FM_P2P_MAX_CONNECTION_AGE_SECS}"
+fi
+
 # Create .backupignore to exclude files that shouldn't be backed up:
 #
 # We exclude the active database because:

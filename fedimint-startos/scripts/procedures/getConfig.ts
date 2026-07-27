@@ -93,6 +93,15 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
         integral: true,
         default: 3600,
         units: "seconds"
+      },
+      "p2p-max-connection-age-secs": {
+        type: "number",
+        name: "P2P Max Connection Age (seconds)",
+        description: "Drop a p2p connection to a peer once it exceeds this age in seconds, relying on the reconnection logic to re-establish it. Leave empty to never drop connections due to their age.",
+        nullable: true,
+        range: "[600,*)",
+        integral: true,
+        units: "seconds"
       }
     }
   }

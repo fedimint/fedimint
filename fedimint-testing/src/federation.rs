@@ -368,6 +368,7 @@ impl FederationTestBuilder {
                 connector,
                 &task_group,
                 p2p_status_senders,
+                None,
             )
             .into_dyn();
 

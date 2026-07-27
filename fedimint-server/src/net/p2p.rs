@@ -9,7 +9,9 @@
 mod tests;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
+use anyhow::anyhow;
 use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
@@ -22,6 +24,7 @@ use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
 use futures::future::select_all;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::watch;
+use tokio::time::{Instant, sleep_until};
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
@@ -67,6 +70,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
         connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
         status_senders: P2PStatusSenders,
+        max_connection_age: Option<Duration>,
     ) -> Self {
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
@@ -85,6 +89,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                     .get(&peer_id)
                     .expect("No p2p status sender for peer")
                     .clone(),
+                max_connection_age,
                 task_group,
             );
 
@@ -171,6 +176,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
         status_sender: watch::Sender<P2PConnectionState>,
+        max_connection_age: Option<Duration>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
         // We use small message queues here to avoid outdated messages such as requests
@@ -198,6 +204,8 @@ impl<M: Send + 'static> P2PConnection<M> {
                         connector,
                         incoming_connections,
                         status_sender,
+                        max_connection_age,
+                        connection_deadline: None,
                     },
                     state: P2PConnectionSMState::Disconnected {
                         backoff: api_networking_backoff(),
@@ -246,6 +254,12 @@ struct P2PConnectionSMCommon<M> {
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
     status_sender: watch::Sender<P2PConnectionState>,
+    /// Drop a connection once it exceeds this age so it is re-established;
+    /// disabled if `None`.
+    max_connection_age: Option<Duration>,
+    /// Point in time at which the current connection exceeds the maximum
+    /// age; set whenever a new connection is established.
+    connection_deadline: Option<Instant>,
 }
 
 enum P2PConnectionSMState<M> {
@@ -313,11 +327,21 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             } => {
                 Some(P2PConnectionSMState::Connected(connection))
             },
+            () = async {
+                match self.connection_deadline {
+                    Some(deadline) => sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                Some(self.disconnect(anyhow!("Connection exceeded the maximum age")))
+            },
             message = self.outgoing_receiver.recv() => {
                 Some(self.send_message(connection, message.ok()?).await)
             },
             connection = self.incoming_connections.recv() => {
                 info!(target: LOG_NET_PEER, "Connected to peer");
+
+                self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
 
                 Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
@@ -396,6 +420,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                 info!(target: LOG_NET_PEER, "Connected to peer");
 
+                self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
+
                 Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
             // to prevent "reconnection ping-pongs", only the side with lower PeerId reconnects
@@ -409,6 +435,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                             .inc();
 
                         info!(target: LOG_NET_PEER, "Connected to peer");
+
+                        self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
 
                         Some(P2PConnectionSMState::Connected(connection))
                     }

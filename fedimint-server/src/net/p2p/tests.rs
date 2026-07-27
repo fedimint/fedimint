@@ -220,6 +220,8 @@ impl StatusMachineHarness {
                 connector,
                 incoming_connections,
                 status_sender,
+                max_connection_age: None,
+                connection_deadline: None,
             },
         };
         let task = runtime::spawn("p2p-status-machine-test", async move {
