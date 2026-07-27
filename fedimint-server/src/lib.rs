@@ -123,6 +123,7 @@ pub async fn run(
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
     session_timeout: Duration,
+    p2p_max_connection_age: Option<Duration>,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     run_with_iroh_p2p_relays(
@@ -141,6 +142,7 @@ pub async fn run(
         dashboard_ui_router,
         db_checkpoint_retention,
         session_timeout,
+        p2p_max_connection_age,
         iroh_api_limits,
         Vec::new(),
     )
@@ -165,6 +167,7 @@ pub async fn run_with_iroh_p2p_relays(
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
     session_timeout: Duration,
+    p2p_max_connection_age: Option<Duration>,
     iroh_api_limits: ConnectionLimits,
     iroh_p2p_relays: Vec<SafeUrl>,
 ) -> anyhow::Result<()> {
@@ -184,6 +187,7 @@ pub async fn run_with_iroh_p2p_relays(
         dashboard_ui_router,
         db_checkpoint_retention,
         session_timeout,
+        p2p_max_connection_age,
         iroh_api_limits,
         iroh_p2p_relays,
         None,
@@ -209,6 +213,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
     session_timeout: Duration,
+    p2p_max_connection_age: Option<Duration>,
     iroh_api_limits: ConnectionLimits,
     iroh_p2p_relays: Vec<SafeUrl>,
     iroh_next_api_settings: Option<IrohNextApiSettings>,
@@ -247,6 +252,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
                 connector,
                 &task_group,
                 p2p_status_senders,
+                p2p_max_connection_age,
             )
             .into_dyn();
 
@@ -600,6 +606,7 @@ pub async fn run_config_gen_with_iroh_p2p_relays(
                     connector,
                     task_group,
                     p2p_status_senders,
+                    None,
                 )
                 .into_dyn();
 
@@ -723,6 +730,7 @@ pub async fn run_config_gen_with_iroh_p2p_relays(
                     connector,
                     task_group,
                     p2p_status_senders,
+                    None,
                 )
                 .into_dyn();
 
