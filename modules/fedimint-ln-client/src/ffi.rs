@@ -2,9 +2,10 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use bitcoin::secp256k1::SecretKey;
+use fedimint_core::Amount;
+use fedimint_core::runtime::ffi_spawn_subscription;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::ffi::UniffiError;
-use fedimint_core::{Amount, runtime};
 use fedimint_ln_common::{LightningGateway, LightningGatewayAnnouncement};
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
@@ -92,7 +93,7 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let ln = client_ctx.self_ref();
         let updates = ln.subscribe_ln_pay(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-ln-pay", async move {
+        ffi_spawn_subscription("uniffi-subscribe-ln-pay", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
@@ -110,7 +111,7 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let ln = client_ctx.self_ref();
         let updates = ln.subscribe_internal_pay(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-internal-pay", async move {
+        ffi_spawn_subscription("uniffi-subscribe-internal-pay", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
@@ -128,7 +129,7 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let ln = client_ctx.self_ref();
         let updates = ln.subscribe_ln_receive(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-ln-receive", async move {
+        ffi_spawn_subscription("uniffi-subscribe-ln-receive", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);

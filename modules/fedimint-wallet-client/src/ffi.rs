@@ -3,7 +3,7 @@ use std::str::FromStr;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Amount, OutPoint, Txid};
 use fedimint_core::core::OperationId;
-use fedimint_core::runtime;
+use fedimint_core::runtime::ffi_spawn_subscription;
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_wallet_common::WalletSummary;
 use futures::StreamExt as _;
@@ -77,7 +77,7 @@ impl WalletClientModule {
         let client_ctx = self.client_ctx.clone();
         let wallet = client_ctx.self_ref();
         let updates = wallet.subscribe_deposit(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-deposit", async move {
+        ffi_spawn_subscription("uniffi-subscribe-deposit", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
@@ -96,7 +96,7 @@ impl WalletClientModule {
         let client_ctx = self.client_ctx.clone();
         let wallet = client_ctx.self_ref();
         let updates = wallet.subscribe_withdraw_updates(operation_id).await?;
-        runtime::spawn("uniffi-subscribe-withdraw", async move {
+        ffi_spawn_subscription("uniffi-subscribe-withdraw", async move {
             let mut stream = updates.into_stream();
             while let Some(state) = stream.next().await {
                 callback.on_state(operation_id, state);
