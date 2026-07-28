@@ -12,7 +12,7 @@ use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_CONSENSUS;
 use parity_scale_codec::{Decode, Encode, IoReader};
-use tracing::error;
+use tracing::{error, trace};
 
 use super::super::db::SignedSessionOutcomeKey;
 use super::data_provider::UnitData;
@@ -65,7 +65,19 @@ impl aleph_bft::Network<NetworkData> for Network {
         // convert from aleph_bft::Recipient to session::Recipient
         let recipient = match recipient {
             aleph_bft::Recipient::Node(node_index) => {
-                Recipient::Peer(super::to_peer_id(node_index))
+                // Aleph echoes back node indices taken from messages we received, so this
+                // index may have been chosen by a peer and may not name a peer at all.
+                let Some(peer_id) = super::to_peer_id(node_index) else {
+                    trace!(
+                        target: LOG_CONSENSUS,
+                        ?node_index,
+                        "Dropping Aleph BFT message addressed to an invalid node index"
+                    );
+
+                    return;
+                };
+
+                Recipient::Peer(peer_id)
             }
             aleph_bft::Recipient::Everyone => Recipient::Everyone,
         };
