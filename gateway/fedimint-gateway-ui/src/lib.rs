@@ -32,11 +32,11 @@ use fedimint_gateway_common::{
     ConnectPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
-    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
+    OpenChannelRequest, OperationLogPayload, OperationLogResponse, PayInvoiceForOperatorPayload,
+    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SendOnchainRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse,
+    WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_GATEWAY_UI;
@@ -63,7 +63,7 @@ use crate::lightning::{
     transactions_fragment_handler, wallet_fragment_handler,
 };
 use crate::mnemonic::{mnemonic_iframe_handler, mnemonic_reveal_handler};
-use crate::payment_summary::payment_log_fragment_handler;
+use crate::payment_summary::{operation_log_fragment_handler, payment_log_fragment_handler};
 use crate::setup::{create_wallet_handler, recover_wallet_form, recover_wallet_handler};
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
@@ -92,6 +92,7 @@ pub(crate) const WITHDRAW_PREVIEW_ROUTE: &str = "/ui/federations/withdraw-previe
 pub(crate) const WITHDRAW_CONFIRM_ROUTE: &str = "/ui/federations/withdraw-confirm";
 pub(crate) const SPEND_ECASH_ROUTE: &str = "/ui/federations/spend";
 pub(crate) const PAYMENT_LOG_ROUTE: &str = "/ui/payment-log";
+pub(crate) const OPERATION_LOG_ROUTE: &str = "/ui/operation-log";
 pub(crate) const CREATE_WALLET_ROUTE: &str = "/ui/wallet/create";
 pub(crate) const RECOVER_WALLET_ROUTE: &str = "/ui/wallet/recover";
 pub(crate) const MNEMONIC_IFRAME_ROUTE: &str = "/ui/mnemonic/iframe";
@@ -234,6 +235,11 @@ pub trait IAdminGateway {
         &self,
         payload: PaymentLogPayload,
     ) -> Result<PaymentLogResponse, Self::Error>;
+
+    async fn handle_operation_log_msg(
+        &self,
+        payload: OperationLogPayload,
+    ) -> Result<OperationLogResponse, Self::Error>;
 
     async fn handle_export_invite_codes(
         &self,
@@ -515,6 +521,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(WITHDRAW_PREVIEW_ROUTE, post(withdraw_preview_handler))
         .route(WITHDRAW_CONFIRM_ROUTE, post(withdraw_confirm_handler))
         .route(PAYMENT_LOG_ROUTE, get(payment_log_fragment_handler))
+        .route(OPERATION_LOG_ROUTE, get(operation_log_fragment_handler))
         .route(CREATE_WALLET_ROUTE, post(create_wallet_handler))
         .route(
             RECOVER_WALLET_ROUTE,

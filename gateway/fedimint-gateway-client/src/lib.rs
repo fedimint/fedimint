@@ -19,7 +19,8 @@ use fedimint_gateway_common::{
     GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
     ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
-    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
+    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OPERATION_LOG_ENDPOINT,
+    OpenChannelRequest, OperationLogPayload, OperationLogResponse,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
@@ -344,6 +345,21 @@ pub async fn payment_log(
 ) -> ServerResult<PaymentLogResponse> {
     client
         .request(base_url, Method::POST, PAYMENT_LOG_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn operation_log(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: OperationLogPayload,
+) -> ServerResult<OperationLogResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            OPERATION_LOG_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
