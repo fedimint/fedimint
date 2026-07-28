@@ -45,7 +45,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
                     "--our-id",
                     &peer_id.to_string(),
                     "--password",
-                    "notset",
+                    "pass",
                     "module",
                     "meta",
                     "get-submissions"
@@ -66,7 +66,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
                     "--our-id",
                     &peer_id.to_string(),
                     "--password",
-                    "notset",
+                    "pass",
                     "module",
                     "meta",
                     "submit",
