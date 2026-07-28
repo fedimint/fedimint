@@ -16,6 +16,28 @@ pub trait MintFederationApi {
 
     async fn check_note_spent(&self, nonce: Nonce) -> FederationResult<bool>;
 
+    /// Asks a single peer if e-cash has already been issued for `blind_nonce`.
+    ///
+    /// Unlike [`MintFederationApi::check_blind_nonce_used`] this does not wait
+    /// for a threshold of peers to agree, which makes it possible to observe
+    /// disagreement between peers.
+    async fn check_blind_nonce_used_single_peer(
+        &self,
+        peer: PeerId,
+        blind_nonce: BlindNonce,
+    ) -> anyhow::Result<bool>;
+
+    /// Asks a single peer if the note identified by `nonce` was already spent.
+    ///
+    /// Unlike [`MintFederationApi::check_note_spent`] this does not wait for a
+    /// threshold of peers to agree, which makes it possible to observe
+    /// disagreement between peers.
+    async fn check_note_spent_single_peer(
+        &self,
+        peer: PeerId,
+        nonce: Nonce,
+    ) -> anyhow::Result<bool>;
+
     /// Returns the total number of recovery items stored on the federation.
     async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
 
@@ -57,6 +79,34 @@ where
             ApiRequestErased::new(nonce),
         )
         .await
+    }
+
+    async fn check_blind_nonce_used_single_peer(
+        &self,
+        peer: PeerId,
+        blind_nonce: BlindNonce,
+    ) -> anyhow::Result<bool> {
+        Ok(self
+            .request_single_peer::<bool>(
+                BLIND_NONCE_USED_ENDPOINT.to_string(),
+                ApiRequestErased::new(blind_nonce),
+                peer,
+            )
+            .await?)
+    }
+
+    async fn check_note_spent_single_peer(
+        &self,
+        peer: PeerId,
+        nonce: Nonce,
+    ) -> anyhow::Result<bool> {
+        Ok(self
+            .request_single_peer::<bool>(
+                NOTE_SPENT_ENDPOINT.to_string(),
+                ApiRequestErased::new(nonce),
+                peer,
+            )
+            .await?)
     }
 
     async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {

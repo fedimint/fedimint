@@ -1,18 +1,23 @@
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{ffi, iter};
 
-use anyhow::bail;
-use clap::Parser;
-use fedimint_core::{Amount, TieredMulti};
+use anyhow::{Context, bail};
+use clap::{Parser, Subcommand};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::{Amount, PeerId, TieredMulti};
 use futures::StreamExt;
+use futures::future::join_all;
 use serde::Serialize;
 use serde_json::json;
 use tracing::{info, warn};
 
+use crate::api::MintFederationApi;
 use crate::{
-    MintClientModule, OOBNotes, ReissueExternalNotesState, SelectNotesWithAtleastAmount,
-    SelectNotesWithExactAmount,
+    BlindNonce, MintClientModule, Nonce, OOBNotes, ReissueExternalNotesState,
+    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
 };
 
 #[derive(Parser, Serialize)]
@@ -54,6 +59,129 @@ enum Opts {
         /// E-Cash note to validate
         oob_notes: OOBNotes,
     },
+    /// Debugging commands querying the federation directly
+    Dev {
+        #[clap(subcommand)]
+        command: DevOpts,
+    },
+}
+
+#[derive(Subcommand, Serialize)]
+enum DevOpts {
+    /// Ask every guardian if a note's nonce has already been spent
+    ///
+    /// Accepts either a hex-encoded nonce (33 byte compressed secp256k1 public
+    /// key) or an out-of-band e-cash notes string, in which case every nonce it
+    /// contains is checked.
+    CheckNonce {
+        /// Hex-encoded nonce or e-cash notes string
+        nonce: String,
+    },
+    /// Ask every guardian if e-cash has already been issued for a blind nonce
+    ///
+    /// Accepts a hex-encoded blind nonce (48 byte compressed BLS12-381 G1
+    /// point). Note that the human-readable form logged for a blind nonce is a
+    /// SHA256 digest of it and can not be used here.
+    CheckBlindNonce {
+        /// Hex-encoded blind nonce
+        blind_nonce: String,
+    },
+}
+
+/// A single guardian's answer to a nonce or blind nonce query
+#[derive(Serialize)]
+#[serde(untagged)]
+enum PeerCheckResult {
+    Answer(bool),
+    Error(String),
+}
+
+/// Asks every guardian if `nonce` was already spent.
+///
+/// Peers that fail to answer are reported as errors instead of failing the
+/// whole query, since seeing the remaining guardians' answers is the point.
+async fn check_nonce_spent(
+    mint: &MintClientModule,
+    nonce: Nonce,
+) -> BTreeMap<PeerId, PeerCheckResult> {
+    let api = mint.client_ctx.module_api();
+
+    join_all(api.all_peers().iter().map(|&peer| {
+        let api = &api;
+        async move {
+            let result = match api.check_note_spent_single_peer(peer, nonce).await {
+                Ok(spent) => PeerCheckResult::Answer(spent),
+                Err(e) => PeerCheckResult::Error(format!("error: {e}")),
+            };
+            (peer, result)
+        }
+    }))
+    .await
+    .into_iter()
+    .collect()
+}
+
+/// Asks every guardian if e-cash was already issued for `blind_nonce`.
+async fn check_blind_nonce_used(
+    mint: &MintClientModule,
+    blind_nonce: BlindNonce,
+) -> BTreeMap<PeerId, PeerCheckResult> {
+    let api = mint.client_ctx.module_api();
+
+    join_all(api.all_peers().iter().map(|&peer| {
+        let api = &api;
+        async move {
+            let result = match api
+                .check_blind_nonce_used_single_peer(peer, blind_nonce)
+                .await
+            {
+                Ok(used) => PeerCheckResult::Answer(used),
+                Err(e) => PeerCheckResult::Error(format!("error: {e}")),
+            };
+            (peer, result)
+        }
+    }))
+    .await
+    .into_iter()
+    .collect()
+}
+
+async fn check_nonce(mint: &MintClientModule, nonce: &str) -> anyhow::Result<serde_json::Value> {
+    if let Ok(nonce) = Nonce::consensus_decode_hex(nonce, &ModuleDecoderRegistry::default()) {
+        return Ok(json!({
+            "nonce": nonce.consensus_encode_to_hex(),
+            "spent": check_nonce_spent(mint, nonce).await,
+        }));
+    }
+
+    let oob_notes = OOBNotes::from_str(nonce)
+        .context("Argument is neither a hex-encoded nonce nor an e-cash notes string")?;
+
+    let mut nonces = Vec::new();
+    for (amount, note) in oob_notes.notes().iter_items() {
+        let nonce = note.nonce();
+        nonces.push(json!({
+            "nonce": nonce.consensus_encode_to_hex(),
+            "amount_msat": amount.msats,
+            "spent": check_nonce_spent(mint, nonce).await,
+        }));
+    }
+
+    Ok(json!({ "nonces": nonces }))
+}
+
+async fn check_blind_nonce(
+    mint: &MintClientModule,
+    blind_nonce: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let blind_nonce =
+        BlindNonce::consensus_decode_hex(blind_nonce, &ModuleDecoderRegistry::default())
+            .context("Argument is not a hex-encoded blind nonce")?;
+
+    Ok(json!({
+        "blind_nonce": blind_nonce.consensus_encode_to_hex(),
+        "issued": check_blind_nonce_used(mint, blind_nonce).await,
+    }))
 }
 
 async fn spend(
@@ -194,5 +322,42 @@ pub(crate) async fn handle_cli_command(
                 Ok(json!({ "amount_msat": amount }))
             }
         }
+        Opts::Dev { command } => match command {
+            DevOpts::CheckNonce { nonce } => check_nonce(mint, &nonce).await,
+            DevOpts::CheckBlindNonce { blind_nonce } => check_blind_nonce(mint, &blind_nonce).await,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bls12_381::G1Affine;
+    use tbs::BlindedMessage;
+
+    use super::*;
+
+    /// The hex `dev check-nonce` accepts is the plain compressed public key, so
+    /// it matches what the JSON representation of a nonce shows.
+    #[test]
+    fn nonce_hex_round_trip() {
+        let nonce_hex = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let nonce = Nonce::consensus_decode_hex(nonce_hex, &ModuleDecoderRegistry::default())
+            .expect("Valid compressed public key");
+
+        assert_eq!(nonce.consensus_encode_to_hex(), nonce_hex);
+    }
+
+    /// Same for `dev check-blind-nonce` and the compressed G1 point.
+    #[test]
+    fn blind_nonce_hex_round_trip() {
+        let blind_nonce = BlindNonce(BlindedMessage(G1Affine::generator()));
+        let blind_nonce_hex = blind_nonce.consensus_encode_to_hex();
+
+        assert_eq!(blind_nonce_hex.len(), 96);
+        assert_eq!(
+            BlindNonce::consensus_decode_hex(&blind_nonce_hex, &ModuleDecoderRegistry::default())
+                .expect("Valid compressed G1 point"),
+            blind_nonce
+        );
     }
 }
