@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::ensure;
 use assert_matches::assert_matches;
 use bls12_381::G1Affine;
 use fedimint_client::ClientHandleArc;
@@ -10,7 +11,8 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::{NextOrPending, retry};
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -353,6 +355,134 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
         client_mint.api.check_blind_nonce_used(blind_nonce).await?,
         "Blind nonce should be used now"
     );
+
+    Ok(())
+}
+
+/// The single-peer nonce checks backing `mint dev check-nonce` and `mint dev
+/// check-blind-nonce` have to agree with the threshold API, both before and
+/// after the nonces are used.
+#[tokio::test(flavor = "multi_thread")]
+async fn single_peer_nonce_checks() -> anyhow::Result<()> {
+    // Every peer has to be online, otherwise there is no answer to compare
+    // against for the offline one.
+    let fed = fixtures().new_fed_not_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    issue_ecash(&client1, sats(1000)).await?;
+
+    let client1_mint = client1.get_first_module::<MintClientModule>()?;
+    let client2_mint = client2.get_first_module::<MintClientModule>()?;
+    let peers = client1_mint.api.all_peers().clone();
+
+    let (_op, notes) = client1_mint
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            sats(750),
+            Some(TIMEOUT),
+            false,
+            (),
+        )
+        .await?;
+    let nonces = notes
+        .notes()
+        .iter_items()
+        .map(|(_, note)| note.nonce())
+        .collect::<Vec<_>>();
+
+    for &peer in &peers {
+        for &nonce in &nonces {
+            assert!(
+                !client1_mint
+                    .api
+                    .check_note_spent_single_peer(peer, nonce)
+                    .await?,
+                "Peer {peer} should not consider the nonce spent yet"
+            );
+        }
+    }
+
+    let op = client2_mint.reissue_external_notes(notes, ()).await?;
+    let mut sub = client2_mint
+        .subscribe_reissue_external_notes(op)
+        .await?
+        .into_stream();
+    assert_eq!(sub.ok().await?, ReissueExternalNotesState::Created);
+    assert_eq!(sub.ok().await?, ReissueExternalNotesState::Issuing);
+    assert_eq!(sub.ok().await?, ReissueExternalNotesState::Done);
+
+    // A single peer can lag behind the threshold of peers that accepted the
+    // transaction, so give each one a chance to catch up.
+    for &peer in &peers {
+        for &nonce in &nonces {
+            retry(
+                format!("waiting for peer {peer} to see the nonce as spent"),
+                aggressive_backoff(),
+                || async {
+                    ensure!(
+                        client1_mint
+                            .api
+                            .check_note_spent_single_peer(peer, nonce)
+                            .await?,
+                        "Peer {peer} does not consider the nonce spent yet"
+                    );
+                    Ok(())
+                },
+            )
+            .await?;
+        }
+    }
+
+    // Same for a blind nonce, which goes from unused to used once the output
+    // creating it is accepted.
+    let mut dbtx = client1_mint.db.begin_transaction().await;
+    let operation_id = OperationId::new_random();
+    let issuance_req = client1_mint
+        .create_output(&mut dbtx.to_ref_nc(), operation_id, 1, Amount::from_sats(1))
+        .await;
+    dbtx.commit_tx().await;
+
+    let blind_nonce = issuance_req
+        .outputs()
+        .first()
+        .expect("There should be at least one note in here")
+        .output
+        .ensure_v0_ref()?
+        .blind_nonce;
+
+    for &peer in &peers {
+        assert!(
+            !client1_mint
+                .api
+                .check_blind_nonce_used_single_peer(peer, blind_nonce)
+                .await?,
+            "Peer {peer} should not consider the blind nonce used yet"
+        );
+    }
+
+    let tx = TransactionBuilder::new().with_outputs(client1_mint.client_ctx.make_dyn(issuance_req));
+    let change_range = client1_mint
+        .client_ctx
+        .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
+        .await?;
+    client1.api().await_transaction(change_range.txid()).await;
+
+    for &peer in &peers {
+        retry(
+            format!("waiting for peer {peer} to see the blind nonce as used"),
+            aggressive_backoff(),
+            || async {
+                ensure!(
+                    client1_mint
+                        .api
+                        .check_blind_nonce_used_single_peer(peer, blind_nonce)
+                        .await?,
+                    "Peer {peer} does not consider the blind nonce used yet"
+                );
+                Ok(())
+            },
+        )
+        .await?;
+    }
 
     Ok(())
 }
