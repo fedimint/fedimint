@@ -100,12 +100,14 @@ impl aleph_bft::Keychain for Keychain {
         // Aleph verifies signatures before it validates the index they are attributed
         // to, so this index is chosen by the peer that sent the message. An index that
         // cannot name a peer cannot have signed anything we accept.
-        let Some(peer_id) = super::to_peer_id(node_index) else {
+        let Some(node_index) =
+            super::NodeIndex::<super::Unchecked>::from_aleph(node_index).validate_peer_id_range()
+        else {
             return false;
         };
 
         match schnorr::Signature::from_slice(signature) {
-            Ok(sig) => self.verify_schnorr(message, &sig, peer_id),
+            Ok(sig) => self.verify_schnorr(message, &sig, super::to_peer_id(node_index)),
             Err(_) => false,
         }
     }

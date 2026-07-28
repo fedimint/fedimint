@@ -33,8 +33,13 @@ impl aleph_bft::FinalizationHandler<UnitData> for FinalizationHandler {
                 // It is unreachable regardless: a unit is only finalized after its
                 // signature was verified against our broadcast public key set, which
                 // requires its creator to be one of our peers.
-                creator: super::to_peer_id(creator)
-                    .expect("Finalized units were verified against the broadcast public key set"),
+                creator: super::to_peer_id(
+                    super::NodeIndex::<super::Unchecked>::from_aleph(creator)
+                        .validate_peer_id_range()
+                        .expect(
+                            "Finalized units were verified against the broadcast public key set",
+                        ),
+                ),
                 round,
                 data,
             })

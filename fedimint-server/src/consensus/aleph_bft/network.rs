@@ -67,7 +67,9 @@ impl aleph_bft::Network<NetworkData> for Network {
             aleph_bft::Recipient::Node(node_index) => {
                 // Aleph echoes back node indices taken from messages we received, so this
                 // index may have been chosen by a peer and may not name a peer at all.
-                let Some(peer_id) = super::to_peer_id(node_index) else {
+                let Some(node_index) = super::NodeIndex::<super::Unchecked>::from_aleph(node_index)
+                    .validate_peer_id_range()
+                else {
                     trace!(
                         target: LOG_CONSENSUS,
                         ?node_index,
@@ -77,7 +79,7 @@ impl aleph_bft::Network<NetworkData> for Network {
                     return;
                 };
 
-                Recipient::Peer(peer_id)
+                Recipient::Peer(super::to_peer_id(node_index))
             }
             aleph_bft::Recipient::Everyone => Recipient::Everyone,
         };
