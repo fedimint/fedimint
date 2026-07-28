@@ -839,10 +839,12 @@ jobs:
           if [ -z "$(command -v start-sdk)" ]; then
             export RUSTFLAGS=""
             export OS_ARCH=$(uname -m)
-            # Start9Labs/avahi-sys (a git dep pinned by start-os v0.3.5.1) was deleted
-            # upstream, breaking the s9pk build. Redirect it to a fedimint-controlled
-            # mirror of the same commit. See fedimint/fedimint#8810.
+            # Several git deps pinned by start-os v0.3.5.1 (Start9Labs/avahi-sys and
+            # Start9Labs/jsonpath) were deleted upstream, breaking the s9pk build.
+            # Redirect them to fedimint-controlled mirrors of the same commits.
+            # See fedimint/fedimint#8810.
             git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
+            git config --global url."https://github.com/fedimint/jsonpath".insteadOf "https://github.com/Start9Labs/jsonpath"
             export CARGO_NET_GIT_FETCH_WITH_CLI=true
             mkdir -p web/dist/static
             ./check-git-hash.sh
@@ -946,10 +948,12 @@ jobs:
           if [ -z "$(command -v start-sdk)" ]; then
             export RUSTFLAGS=""
             export OS_ARCH=$(uname -m)
-            # Start9Labs/avahi-sys (a git dep pinned by start-os v0.3.5.1) was deleted
-            # upstream, breaking the s9pk build. Redirect it to a fedimint-controlled
-            # mirror of the same commit. See fedimint/fedimint#8810.
+            # Several git deps pinned by start-os v0.3.5.1 (Start9Labs/avahi-sys and
+            # Start9Labs/jsonpath) were deleted upstream, breaking the s9pk build.
+            # Redirect them to fedimint-controlled mirrors of the same commits.
+            # See fedimint/fedimint#8810.
             git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
+            git config --global url."https://github.com/fedimint/jsonpath".insteadOf "https://github.com/Start9Labs/jsonpath"
             export CARGO_NET_GIT_FETCH_WITH_CLI=true
             mkdir -p web/dist/static
             ./check-git-hash.sh
