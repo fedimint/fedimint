@@ -18,8 +18,8 @@ use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
-    SendOperationState, SendPaymentError,
+    InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
+    ReceiveOperationState, SendOperationState, SendPaymentError,
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
@@ -115,6 +115,14 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let mut events = pin!(ln_event_stream(&client));
 
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::NotAttempted,
+    );
+
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
         .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
@@ -158,9 +166,17 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(invoice, Some(gateway_api), Value::Null)
+            .send(invoice.clone(), Some(gateway_api), Value::Null)
             .await,
         Err(SendPaymentError::DuplicatePaymentAttempt(operation_id)),
+    );
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::Succeeded(operation_id),
     );
 
     Ok(())
@@ -180,13 +196,11 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let mut events = pin!(ln_event_stream(&client));
 
+    let invoice = mock::unpayable_invoice();
+
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(
-            mock::unpayable_invoice(),
-            Some(mock::gateway()),
-            Value::Null,
-        )
+        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -210,6 +224,14 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     };
     assert_eq!(update.operation_id, operation_id);
     assert_eq!(update.status, SendPaymentStatus::Refunded);
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::Failed(operation_id),
+    );
 
     Ok(())
 }
@@ -236,9 +258,11 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let mut events = pin!(ln_event_stream(&client));
 
+    let invoice = mock::crash_invoice();
+
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
+        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -273,6 +297,13 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
         .expect("Operation exists")
         .expect("Fee data is present for new operations");
     assert_eq!(operation_fees.get_bitcoin().msats, 2000);
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::Failed(operation_id),
+    );
 
     Ok(())
 }
