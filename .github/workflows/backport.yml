@@ -29,6 +29,9 @@ jobs:
       was_successful: ${{ steps.create-pr.outputs.was_successful }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # check out the base branch (no fork code) so the fork-PR guard under pull_request_target passes
+          ref: ${{ github.base_ref }}
       - id: create-pr
         name: Create backport pull requests
         uses: korthout/backport-action@66065406958f46e82238fd59546f5a99e69e22aa # v4.5.2
@@ -45,6 +48,9 @@ jobs:
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # check out the base branch (no fork code) so the fork-PR guard under pull_request_target passes
+          ref: ${{ github.base_ref }}
       - name: Set SHORT_PR_TITLE env
         run: |
           # logic to truncate titles needs to be run in a previous step
