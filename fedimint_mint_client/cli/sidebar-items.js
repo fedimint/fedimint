@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Opts"],"fn":["combine","handle_cli_command","spend","split"]};
+window.SIDEBAR_ITEMS = {"enum":["DevOpts","Opts","PeerCheckResult"],"fn":["check_blind_nonce","check_blind_nonce_used","check_nonce","check_nonce_spent","combine","handle_cli_command","spend","split"]};
