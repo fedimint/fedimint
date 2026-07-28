@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/runtime.rs`."><title>runtime.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (18d13b533 2026-02-09)" data-channel="nightly" data-search-js="search-fb33671b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-f9617a14.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_core/</div>runtime.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Abstraction over an executor so we can spawn tasks under WASM the same way
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/runtime.rs`."><title>runtime.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (18d13b533 2026-02-09)" data-channel="nightly" data-search-js="search-fb33671b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-f9617a14.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_core/</div>runtime.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Abstraction over an executor so we can spawn tasks under WASM the same way
 <a href=#2 id=2 data-nosnippet>2</a>//! we do usually.
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>std::future::Future;
@@ -49,4 +49,85 @@
 <a href=#49 id=49 data-nosnippet>49</a>    <span class="comment">// nosemgrep: ban-raw-block-on
 <a href=#50 id=50 data-nosnippet>50</a>    </span>tokio::runtime::Handle::current().block_on(future)
 <a href=#51 id=51 data-nosnippet>51</a>}
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// The single, process-wide multi-threaded Tokio runtime that backs every
+<a href=#54 id=54 data-nosnippet>54</a>/// Fedimint UniFFI entry point.
+<a href=#55 id=55 data-nosnippet>55</a>///
+<a href=#56 id=56 data-nosnippet>56</a>/// UniFFI's `#[uniffi::export(async_runtime = "tokio")]` async methods are
+<a href=#57 id=57 data-nosnippet>57</a>/// polled by `async_compat::Compat` on whatever host thread (a Kotlin
+<a href=#58 id=58 data-nosnippet>58</a>/// coroutine dispatcher, a Swift `Task`, ...) drives the call. That thread
+<a href=#59 id=59 data-nosnippet>59</a>/// usually has no ambient Tokio runtime, so `async_compat` enters its own
+<a href=#60 id=60 data-nosnippet>60</a>/// global *current-thread* runtime. Any work *spawned* from that context
+<a href=#61 id=61 data-nosnippet>61</a>/// therefore runs on a current-thread runtime, and Fedimint's rocksdb access
+<a href=#62 id=62 data-nosnippet>62</a>/// uses [`block_in_place`], which aborts the process with "can call blocking
+<a href=#63 id=63 data-nosnippet>63</a>/// only when running on the multi-threaded runtime" when run inside such a
+<a href=#64 id=64 data-nosnippet>64</a>/// task.
+<a href=#65 id=65 data-nosnippet>65</a>///
+<a href=#66 id=66 data-nosnippet>66</a>/// Routing all spawned FFI work onto this dedicated multi-threaded runtime
+<a href=#67 id=67 data-nosnippet>67</a>/// keeps [`block_in_place`] valid regardless of which host thread drove the
+<a href=#68 id=68 data-nosnippet>68</a>/// poll. It is created once, lazily, and reused for the life of the process,
+<a href=#69 id=69 data-nosnippet>69</a>/// so this is a fixed worker pool — not a thread per call.
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="attr">#[cfg(all(feature = <span class="string">"uniffi"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+<a href=#71 id=71 data-nosnippet>71</a></span><span class="kw">pub fn </span>ffi_runtime() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>tokio::runtime::Runtime {
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">use </span>std::sync::OnceLock;
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">static </span>RUNTIME: OnceLock&lt;tokio::runtime::Runtime&gt; = OnceLock::new();
+<a href=#74 id=74 data-nosnippet>74</a>    RUNTIME.get_or_init(|| {
+<a href=#75 id=75 data-nosnippet>75</a>        tokio::runtime::Builder::new_multi_thread()
+<a href=#76 id=76 data-nosnippet>76</a>            .enable_all()
+<a href=#77 id=77 data-nosnippet>77</a>            .thread_name(<span class="string">"fedimint-ffi"</span>)
+<a href=#78 id=78 data-nosnippet>78</a>            .build()
+<a href=#79 id=79 data-nosnippet>79</a>            .expect(<span class="string">"failed to build fedimint FFI runtime"</span>)
+<a href=#80 id=80 data-nosnippet>80</a>    })
+<a href=#81 id=81 data-nosnippet>81</a>}
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a><span class="doccomment">/// Run `fut` to completion on the shared multi-threaded [`ffi_runtime`],
+<a href=#84 id=84 data-nosnippet>84</a>/// regardless of which (possibly current-thread) runtime is ambient on the
+<a href=#85 id=85 data-nosnippet>85</a>/// thread driving the FFI poll.
+<a href=#86 id=86 data-nosnippet>86</a>///
+<a href=#87 id=87 data-nosnippet>87</a>/// Wrap the body of a `#[uniffi::export(async_runtime = "tokio")]` async
+<a href=#88 id=88 data-nosnippet>88</a>/// method in this whenever its work — or anything it transitively spawns,
+<a href=#89 id=89 data-nosnippet>89</a>/// such as a client's state-machine executor — must run on genuine
+<a href=#90 id=90 data-nosnippet>90</a>/// multi-threaded workers.
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="attr">#[cfg(all(feature = <span class="string">"uniffi"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+<a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">pub async fn </span>ffi_spawn&lt;F, T&gt;(fut: F) -&gt; T
+<a href=#93 id=93 data-nosnippet>93</a><span class="kw">where
+<a href=#94 id=94 data-nosnippet>94</a>    </span>F: Future&lt;Output = T&gt; + Send + <span class="lifetime">'static</span>,
+<a href=#95 id=95 data-nosnippet>95</a>    T: Send + <span class="lifetime">'static</span>,
+<a href=#96 id=96 data-nosnippet>96</a>{
+<a href=#97 id=97 data-nosnippet>97</a>    ffi_runtime()
+<a href=#98 id=98 data-nosnippet>98</a>        .spawn(fut)
+<a href=#99 id=99 data-nosnippet>99</a>        .<span class="kw">await
+<a href=#100 id=100 data-nosnippet>100</a>        </span>.expect(<span class="string">"fedimint FFI task panicked"</span>)
+<a href=#101 id=101 data-nosnippet>101</a>}
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a><span class="doccomment">/// Spawn a detached background task that drives a UniFFI `subscribe_*`
+<a href=#104 id=104 data-nosnippet>104</a>/// callback loop on the shared multi-threaded [`ffi_runtime`].
+<a href=#105 id=105 data-nosnippet>105</a>///
+<a href=#106 id=106 data-nosnippet>106</a>/// This is only meant for the fire-and-forget background loops behind
+<a href=#107 id=107 data-nosnippet>107</a>/// `subscribe_*` FFI methods; the spawned task is detached. See
+<a href=#108 id=108 data-nosnippet>108</a>/// [`ffi_runtime`] for why a multi-threaded runtime is required here.
+<a href=#109 id=109 data-nosnippet>109</a></span><span class="attr">#[cfg(all(feature = <span class="string">"uniffi"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+<a href=#110 id=110 data-nosnippet>110</a></span><span class="kw">pub fn </span>ffi_spawn_subscription&lt;F&gt;(name: <span class="kw-2">&amp;</span>str, future: F)
+<a href=#111 id=111 data-nosnippet>111</a><span class="kw">where
+<a href=#112 id=112 data-nosnippet>112</a>    </span>F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>,
+<a href=#113 id=113 data-nosnippet>113</a>{
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">let </span>span = <span class="macro">tracing::debug_span!</span>(target: LOG_RUNTIME, parent: <span class="prelude-val">None</span>, <span class="string">"spawn"</span>, task = name);
+<a href=#115 id=115 data-nosnippet>115</a>    ffi_runtime().spawn(future.instrument(span));
+<a href=#116 id=116 data-nosnippet>116</a>}
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a><span class="doccomment">/// wasm has no multi-threaded runtime and no [`block_in_place`] (rocksdb is
+<a href=#119 id=119 data-nosnippet>119</a>/// not used there), so the ambient-runtime hazard does not exist: just run
+<a href=#120 id=120 data-nosnippet>120</a>/// the future on the ambient executor like [`spawn`] does.
+<a href=#121 id=121 data-nosnippet>121</a></span><span class="attr">#[cfg(all(feature = <span class="string">"uniffi"</span>, target_family = <span class="string">"wasm"</span>))]
+<a href=#122 id=122 data-nosnippet>122</a></span><span class="kw">pub async fn </span>ffi_spawn&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+<a href=#123 id=123 data-nosnippet>123</a>    fut.<span class="kw">await
+<a href=#124 id=124 data-nosnippet>124</a></span>}
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a><span class="attr">#[cfg(all(feature = <span class="string">"uniffi"</span>, target_family = <span class="string">"wasm"</span>))]
+<a href=#127 id=127 data-nosnippet>127</a></span><span class="kw">pub fn </span>ffi_spawn_subscription&lt;F&gt;(name: <span class="kw-2">&amp;</span>str, future: F)
+<a href=#128 id=128 data-nosnippet>128</a><span class="kw">where
+<a href=#129 id=129 data-nosnippet>129</a>    </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">'static</span>,
+<a href=#130 id=130 data-nosnippet>130</a>{
+<a href=#131 id=131 data-nosnippet>131</a>    spawn(name, future);
+<a href=#132 id=132 data-nosnippet>132</a>}
 </code></pre></div></section></main></body></html>
