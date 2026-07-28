@@ -107,39 +107,14 @@ impl EcashCommands {
                 backup(client, base_url, BackupPayload { federation_id }).await?;
                 Ok(CliOutput::Empty)
             }
-            Self::Pegin { federation_id } => {
-                let address =
-                    get_deposit_address(client, base_url, DepositAddressPayload { federation_id })
-                        .await?;
-
-                Ok(CliOutput::DepositAddress { address })
-            }
+            Self::Pegin { federation_id } => handle_pegin(client, base_url, federation_id).await,
             Self::PeginWithEventLogPosition { federation_id } => {
-                let response = get_deposit_address_with_event_log_position(
-                    client,
-                    base_url,
-                    DepositAddressWithEventLogPositionPayload { federation_id },
-                )
-                .await?;
-
-                Ok(CliOutput::DepositAddressWithEventLogPosition(response))
+                handle_pegin_with_event_log_position(client, base_url, federation_id).await
             }
             Self::AwaitPegin {
                 federation_id,
                 position,
-            } => {
-                let response = await_deposit(
-                    client,
-                    base_url,
-                    AwaitDepositPayload {
-                        federation_id,
-                        position,
-                    },
-                )
-                .await?;
-
-                Ok(CliOutput::AwaitDeposit(response))
-            }
+            } => handle_await_pegin(client, base_url, federation_id, position).await,
             Self::PeginRecheck {
                 address,
                 federation_id,
@@ -160,75 +135,165 @@ impl EcashCommands {
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
-                let txid = pegin_from_onchain(
+                handle_pegin_from_onchain(
                     client,
                     base_url,
-                    PeginFromOnchainPayload {
-                        federation_id,
-                        amount,
-                        fee_rate_sats_per_vbyte,
-                    },
+                    federation_id,
+                    amount,
+                    fee_rate_sats_per_vbyte,
                 )
-                .await?;
-
-                Ok(CliOutput::PeginTxid { txid })
+                .await
             }
             Self::Pegout {
                 federation_id,
                 amount,
                 address,
-            } => {
-                let response = withdraw(
-                    client,
-                    base_url,
-                    WithdrawPayload {
-                        federation_id,
-                        amount,
-                        address,
-                        quoted_fees: None,
-                    },
-                )
-                .await?;
-
-                Ok(CliOutput::Withdraw(response))
-            }
+            } => handle_pegout(client, base_url, federation_id, amount, address).await,
             Self::PegoutToOnchain {
                 federation_id,
                 amount,
-            } => {
-                let response = withdraw_to_onchain(
-                    client,
-                    base_url,
-                    WithdrawToOnchainPayload {
-                        federation_id,
-                        amount,
-                    },
-                )
-                .await?;
-
-                Ok(CliOutput::Withdraw(response))
-            }
+            } => handle_pegout_to_onchain(client, base_url, federation_id, amount).await,
             Self::Send {
                 federation_id,
                 amount,
-            } => {
-                let response = spend_ecash(
-                    client,
-                    base_url,
-                    SpendEcashPayload {
-                        federation_id,
-                        amount,
-                    },
-                )
-                .await?;
-
-                Ok(CliOutput::SpendEcash(response))
-            }
-            Self::Receive { notes, wait } => {
-                let response =
-                    receive_ecash(client, base_url, ReceiveEcashPayload { notes, wait }).await?;
-                Ok(CliOutput::ReceiveEcash(response))
-            }
+            } => handle_send(client, base_url, federation_id, amount).await,
+            Self::Receive { notes, wait } => handle_receive(client, base_url, notes, wait).await,
         }
     }
+}
+
+async fn handle_pegin(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+) -> CliOutputResult {
+    let address =
+        get_deposit_address(client, base_url, DepositAddressPayload { federation_id }).await?;
+
+    Ok(CliOutput::DepositAddress { address })
+}
+
+async fn handle_pegin_with_event_log_position(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+) -> CliOutputResult {
+    let response = get_deposit_address_with_event_log_position(
+        client,
+        base_url,
+        DepositAddressWithEventLogPositionPayload { federation_id },
+    )
+    .await?;
+
+    Ok(CliOutput::DepositAddressWithEventLogPosition(response))
+}
+
+async fn handle_await_pegin(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+    position: EventLogId,
+) -> CliOutputResult {
+    let response = await_deposit(
+        client,
+        base_url,
+        AwaitDepositPayload {
+            federation_id,
+            position,
+        },
+    )
+    .await?;
+
+    Ok(CliOutput::AwaitDeposit(response))
+}
+
+async fn handle_pegin_from_onchain(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+    amount: BitcoinAmountOrAll,
+    fee_rate_sats_per_vbyte: u64,
+) -> CliOutputResult {
+    let txid = pegin_from_onchain(
+        client,
+        base_url,
+        PeginFromOnchainPayload {
+            federation_id,
+            amount,
+            fee_rate_sats_per_vbyte,
+        },
+    )
+    .await?;
+
+    Ok(CliOutput::PeginTxid { txid })
+}
+
+async fn handle_pegout(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+    amount: BitcoinAmountOrAll,
+    address: Address<NetworkUnchecked>,
+) -> CliOutputResult {
+    let response = withdraw(
+        client,
+        base_url,
+        WithdrawPayload {
+            federation_id,
+            amount,
+            address,
+            quoted_fees: None,
+        },
+    )
+    .await?;
+
+    Ok(CliOutput::Withdraw(response))
+}
+
+async fn handle_pegout_to_onchain(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+    amount: BitcoinAmountOrAll,
+) -> CliOutputResult {
+    let response = withdraw_to_onchain(
+        client,
+        base_url,
+        WithdrawToOnchainPayload {
+            federation_id,
+            amount,
+        },
+    )
+    .await?;
+
+    Ok(CliOutput::Withdraw(response))
+}
+
+async fn handle_send(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+    amount: Amount,
+) -> CliOutputResult {
+    let response = spend_ecash(
+        client,
+        base_url,
+        SpendEcashPayload {
+            federation_id,
+            amount,
+        },
+    )
+    .await?;
+
+    Ok(CliOutput::SpendEcash(response))
+}
+
+async fn handle_receive(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    notes: String,
+    wait: bool,
+) -> CliOutputResult {
+    let response = receive_ecash(client, base_url, ReceiveEcashPayload { notes, wait }).await?;
+    Ok(CliOutput::ReceiveEcash(response))
 }
