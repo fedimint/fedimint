@@ -97,34 +97,83 @@
 <a href=#97 id=97 data-nosnippet>97</a>        signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
 <a href=#98 id=98 data-nosnippet>98</a>        node_index: aleph_bft::NodeIndex,
 <a href=#99 id=99 data-nosnippet>99</a>    ) -&gt; bool {
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">match </span>schnorr::Signature::from_slice(signature) {
-<a href=#101 id=101 data-nosnippet>101</a>            <span class="prelude-val">Ok</span>(sig) =&gt; <span class="self">self</span>.verify_schnorr(message, <span class="kw-2">&amp;</span>sig, <span class="kw">super</span>::to_peer_id(node_index)),
-<a href=#102 id=102 data-nosnippet>102</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-<a href=#103 id=103 data-nosnippet>103</a>        }
-<a href=#104 id=104 data-nosnippet>104</a>    }
-<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="comment">// Aleph verifies signatures before it validates the index they are attributed
+<a href=#101 id=101 data-nosnippet>101</a>        // to, so this index is chosen by the peer that sent the message. An index that
+<a href=#102 id=102 data-nosnippet>102</a>        // cannot name a peer cannot have signed anything we accept.
+<a href=#103 id=103 data-nosnippet>103</a>        </span><span class="kw">let </span><span class="prelude-val">Some</span>(peer_id) = <span class="kw">super</span>::to_peer_id(node_index) <span class="kw">else </span>{
+<a href=#104 id=104 data-nosnippet>104</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#105 id=105 data-nosnippet>105</a>        };
 <a href=#106 id=106 data-nosnippet>106</a>
-<a href=#107 id=107 data-nosnippet>107</a><span class="kw">impl </span>aleph_bft::MultiKeychain <span class="kw">for </span>Keychain {
-<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">type </span>PartialMultisignature = aleph_bft::NodeMap&lt;[u8; <span class="number">64</span>]&gt;;
-<a href=#109 id=109 data-nosnippet>109</a>
-<a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">fn </span>bootstrap_multi(
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#112 id=112 data-nosnippet>112</a>        signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
-<a href=#113 id=113 data-nosnippet>113</a>        index: aleph_bft::NodeIndex,
-<a href=#114 id=114 data-nosnippet>114</a>    ) -&gt; <span class="self">Self</span>::PartialMultisignature {
-<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.pks.len().into());
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">match </span>schnorr::Signature::from_slice(signature) {
+<a href=#108 id=108 data-nosnippet>108</a>            <span class="prelude-val">Ok</span>(sig) =&gt; <span class="self">self</span>.verify_schnorr(message, <span class="kw-2">&amp;</span>sig, peer_id),
+<a href=#109 id=109 data-nosnippet>109</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+<a href=#110 id=110 data-nosnippet>110</a>        }
+<a href=#111 id=111 data-nosnippet>111</a>    }
+<a href=#112 id=112 data-nosnippet>112</a>}
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a><span class="kw">impl </span>aleph_bft::MultiKeychain <span class="kw">for </span>Keychain {
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">type </span>PartialMultisignature = aleph_bft::NodeMap&lt;[u8; <span class="number">64</span>]&gt;;
 <a href=#116 id=116 data-nosnippet>116</a>
-<a href=#117 id=117 data-nosnippet>117</a>        partial.insert(index, <span class="kw-2">*</span>signature);
-<a href=#118 id=118 data-nosnippet>118</a>
-<a href=#119 id=119 data-nosnippet>119</a>        partial
-<a href=#120 id=120 data-nosnippet>120</a>    }
-<a href=#121 id=121 data-nosnippet>121</a>
-<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">fn </span>is_complete(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>[u8], partial: <span class="kw-2">&amp;</span><span class="self">Self</span>::PartialMultisignature) -&gt; bool {
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.pks.to_num_peers().threshold() {
-<a href=#124 id=124 data-nosnippet>124</a>            <span class="kw">return </span><span class="bool-val">false</span>;
-<a href=#125 id=125 data-nosnippet>125</a>        }
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a>        partial.iter().all(|(i, sgn)| <span class="self">self</span>.verify(msg, sgn, i))
-<a href=#128 id=128 data-nosnippet>128</a>    }
-<a href=#129 id=129 data-nosnippet>129</a>}
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">fn </span>bootstrap_multi(
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#119 id=119 data-nosnippet>119</a>        signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
+<a href=#120 id=120 data-nosnippet>120</a>        index: aleph_bft::NodeIndex,
+<a href=#121 id=121 data-nosnippet>121</a>    ) -&gt; <span class="self">Self</span>::PartialMultisignature {
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.pks.len().into());
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a>        partial.insert(index, <span class="kw-2">*</span>signature);
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>        partial
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">fn </span>is_complete(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>[u8], partial: <span class="kw-2">&amp;</span><span class="self">Self</span>::PartialMultisignature) -&gt; bool {
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.pks.to_num_peers().threshold() {
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#132 id=132 data-nosnippet>132</a>        }
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>        partial.iter().all(|(i, sgn)| <span class="self">self</span>.verify(msg, sgn, i))
+<a href=#135 id=135 data-nosnippet>135</a>    }
+<a href=#136 id=136 data-nosnippet>136</a>}
+<a href=#137 id=137 data-nosnippet>137</a>
+<a href=#138 id=138 data-nosnippet>138</a><span class="attr">#[cfg(test)]
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">mod </span>tests {
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">use </span>std::collections::BTreeMap;
+<a href=#141 id=141 data-nosnippet>141</a>
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">use </span>aleph_bft::{Keychain <span class="kw">as _</span>, NodeIndex};
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">use </span>fedimint_core::{PeerId, secp256k1};
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">use </span>secp256k1::{Keypair, SecretKey};
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">use </span><span class="kw">super</span>::Keychain;
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">fn </span>keychain() -&gt; Keychain {
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="kw">let </span>keypair = Keypair::from_secret_key(
+<a href=#151 id=151 data-nosnippet>151</a>            secp256k1::SECP256K1,
+<a href=#152 id=152 data-nosnippet>152</a>            <span class="kw-2">&amp;</span>SecretKey::from_slice(<span class="kw-2">&amp;</span>[<span class="number">1</span>; <span class="number">32</span>]).expect(<span class="string">"Valid secret key"</span>),
+<a href=#153 id=153 data-nosnippet>153</a>        );
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>pks = BTreeMap::from([(PeerId::from(<span class="number">0</span>), keypair.public_key())]);
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>        Keychain {
+<a href=#158 id=158 data-nosnippet>158</a>            identity: PeerId::from(<span class="number">0</span>),
+<a href=#159 id=159 data-nosnippet>159</a>            message_tag: pks.consensus_hash(),
+<a href=#160 id=160 data-nosnippet>160</a>            pks,
+<a href=#161 id=161 data-nosnippet>161</a>            keypair,
+<a href=#162 id=162 data-nosnippet>162</a>        }
+<a href=#163 id=163 data-nosnippet>163</a>    }
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="attr">#[test]
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">fn </span>verify_rejects_out_of_range_node_index() {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>keychain = keychain();
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">let </span>signature = keychain.sign(<span class="string">b"message"</span>);
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>        <span class="macro">assert!</span>(keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(<span class="number">0</span>)));
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="comment">// A malicious peer can embed an arbitrary u64 index in a unit it sends us and
+<a href=#173 id=173 data-nosnippet>173</a>        // aleph-bft verifies the signature before it validates that index, so this must
+<a href=#174 id=174 data-nosnippet>174</a>        // return false rather than panic and take the consensus session down.
+<a href=#175 id=175 data-nosnippet>175</a>        </span><span class="macro">assert!</span>(!keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(usize::from(u16::MAX) + <span class="number">1</span>)));
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="macro">assert!</span>(!keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(usize::MAX)));
+<a href=#177 id=177 data-nosnippet>177</a>    }
+<a href=#178 id=178 data-nosnippet>178</a>}
 </code></pre></div></section></main></body></html>
