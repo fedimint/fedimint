@@ -4054,6 +4054,7 @@ version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "axum 0.8.9",
  "bitcoin_hashes",
  "fedimint-client",
  "fedimint-client-module",
