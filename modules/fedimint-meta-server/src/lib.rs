@@ -27,9 +27,10 @@ use fedimint_core::db::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint, serde_json,
+    ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, TransactionItemAmounts, api_endpoint, serde_json,
 };
+use fedimint_core::net::auth::check_auth;
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
 use fedimint_meta_common::config::{
@@ -417,16 +418,12 @@ impl ServerModule for Meta {
                 SUBMIT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: SubmitRequest| -> () {
+                    check_auth(context)?;
 
-                    match context.request_auth() {
-                        None => return Err(ApiError::bad_request("Missing password".to_string())),
-                        Some(auth) => {
-                            let db = context.db();
-                            let mut dbtx = db.begin_transaction().await;
-                            module.handle_submit_request(&mut dbtx.to_ref_nc(), &auth, &request).await?;
-                            dbtx.commit_tx_result().await?;
-                        }
-                    }
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction().await;
+                    module.handle_submit_request(&mut dbtx.to_ref_nc(), &request).await?;
+                    dbtx.commit_tx_result().await?;
 
                     Ok(())
                 }
@@ -453,14 +450,11 @@ impl ServerModule for Meta {
                 GET_SUBMISSIONS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetSubmissionsRequest| -> GetSubmissionResponse {
-                    match context.request_auth() {
-                        None => return Err(ApiError::bad_request("Missing password".to_string())),
-                        Some(auth) => {
-                            let db = context.db();
-                            let mut dbtx = db.begin_transaction_nc().await;
-                            module.handle_get_submissions_request(&mut dbtx, &auth, &request).await
-                        }
-                    }
+                    check_auth(context)?;
+
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    module.handle_get_submissions_request(&mut dbtx, &request).await
                 }
             },
         ]
@@ -471,7 +465,6 @@ impl Meta {
     async fn handle_submit_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
-        _auth: &ApiAuth,
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {
         let salt = thread_rng().r#gen();
@@ -516,7 +509,6 @@ impl Meta {
     async fn handle_get_submissions_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
-        _auth: &ApiAuth,
         req: &GetSubmissionsRequest,
     ) -> Result<BTreeMap<PeerId, MetaValue>, ApiError> {
         Ok(dbtx
@@ -539,7 +531,6 @@ impl Meta {
 
         self.handle_submit_request(
             &mut dbtx.to_ref_nc(),
-            &ApiAuth::new(String::new()),
             &SubmitRequest {
                 key: DEFAULT_META_KEY,
                 value: MetaValue::from(serde_json::to_vec(&value).unwrap().as_slice()),
@@ -587,7 +578,6 @@ impl Meta {
         for (peer_id, value) in self
             .handle_get_submissions_request(
                 &mut dbtx.to_ref_nc(),
-                &ApiAuth::new(String::new()),
                 &GetSubmissionsRequest(DEFAULT_META_KEY),
             )
             .await?
