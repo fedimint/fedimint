@@ -249,8 +249,8 @@ impl Add for PaymentFee {
     type Output = PaymentFee;
     fn add(self, rhs: Self) -> Self::Output {
         PaymentFee {
-            base: self.base + rhs.base,
-            parts_per_million: self.parts_per_million + rhs.parts_per_million,
+            base: Amount::from_msats(self.base.msats.saturating_add(rhs.base.msats)),
+            parts_per_million: self.parts_per_million.saturating_add(rhs.parts_per_million),
         }
     }
 }
@@ -353,5 +353,22 @@ mod tests {
             parts_per_million: 10_000,
         };
         assert!(ok.is_within(&PaymentFee::SEND_FEE_LIMIT));
+    }
+
+    #[test]
+    fn payment_fee_add_saturates_instead_of_wrapping() {
+        let huge = PaymentFee {
+            base: Amount::from_msats(u64::MAX),
+            parts_per_million: u64::MAX,
+        };
+        let one = PaymentFee {
+            base: Amount::from_msats(1),
+            parts_per_million: 1,
+        };
+        let sum = huge + one;
+        // must saturate, not wrap to 0 (a wrap would silently bypass SEND_FEE_LIMIT)
+        assert_eq!(sum.base.msats, u64::MAX);
+        assert_eq!(sum.parts_per_million, u64::MAX);
+        assert!(!sum.is_within(&PaymentFee::SEND_FEE_LIMIT));
     }
 }
