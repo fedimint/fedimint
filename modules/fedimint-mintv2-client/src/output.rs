@@ -129,6 +129,12 @@ impl MintOutputStateMachine {
             };
         };
 
+        // Finalize and verify ALL notes before writing any to the database.
+        // If we wrote to the database inside the loop and a later note failed,
+        // earlier notes would already be persisted while the state machine
+        // transitions to Failure, leaving the wallet balance partially updated.
+        let mut spendable_notes = Vec::with_capacity(old_state.common.issuance_requests.len());
+
         for (i, request) in old_state.common.issuance_requests.iter().enumerate() {
             let agg_blind_signature = aggregate_signature_shares(
                 &signature_shares
@@ -163,6 +169,11 @@ impl MintOutputStateMachine {
                 };
             }
 
+            spendable_notes.push(spendable_note);
+        }
+
+        // All notes finalized and verified — now write them all to the database.
+        for spendable_note in spendable_notes {
             dbtx.module_tx()
                 .insert_new_entry(&SpendableNoteKey(spendable_note), &())
                 .await;
