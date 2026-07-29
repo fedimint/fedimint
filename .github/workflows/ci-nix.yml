@@ -774,6 +774,8 @@ jobs:
   start9:
     if: github.repository == 'fedimint/fedimint' && github.ref_type == 'tag'
     name: "Build fedimintd.s9pk"
+    permissions:
+      contents: write # softprops/action-gh-release attaches the .s9pk to the release
     needs: manifest
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -885,6 +887,8 @@ jobs:
   start9-gatewayd:
     if: github.repository == 'fedimint/fedimint' && github.ref_type == 'tag'
     name: "Build fedimint-gatewayd.s9pk"
+    permissions:
+      contents: write # softprops/action-gh-release attaches the .s9pk to the release
     needs: manifest
     runs-on: ubuntu-24.04
     timeout-minutes: 180
