@@ -357,7 +357,7 @@ ai-generate-api-docs:
   aider \
     --no-auto-commits --no-git \
     --message \
-      "Go through API endpoint functions (defined with Rust api_endpoint! macro) and create/update the api.md file documenting the name of the endpoint (resolve the name to value of the constant used), its arguments and return value and the purpose of the API call. When using non-primitive types defined by our project, make the name in the output link to our documentation page for it: 'https://docs.fedimint.org/?search=TypeNameHere'" \
+      "Go through API endpoint functions (defined with Rust public_api_endpoint! and admin_api_endpoint! macros) and create/update the api.md file documenting the public/admin macro convention, each endpoint's name (resolve the name to the value of the constant used), arguments, return value, and purpose. When using non-primitive types defined by our project, make the name in the output link to our documentation page for it: 'https://docs.fedimint.org/?search=TypeNameHere'" \
     ./fedimint-core/src/endpoint_constants.rs \
     ./fedimint-server/src/consensus/api.rs \
     ./modules/fedimint-meta-server/src/lib.rs \

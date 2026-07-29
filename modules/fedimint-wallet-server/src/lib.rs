@@ -61,9 +61,9 @@ use fedimint_core::envs::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, admin_api_endpoint,
+    public_api_endpoint,
 };
-use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
@@ -960,7 +960,7 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
@@ -969,14 +969,14 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 BLOCK_COUNT_LOCAL_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, _context, _params: ()| -> Option<u32> {
                     Ok(module.get_block_count().ok())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 PEG_OUT_FEES_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (Address<NetworkUnchecked>, u64)| -> Option<PegOutFees> {
@@ -1011,19 +1011,18 @@ impl ServerModule for Wallet {
                     }
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 BITCOIN_KIND_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, _context, _params: ()| -> String {
                     Ok(module.btc_rpc.get_bitcoin_rpc_config().kind)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 BITCOIN_RPC_CONFIG_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> BitcoinRpcConfig {
-                    check_auth(context)?;
-                    let config = module.btc_rpc.get_bitcoin_rpc_config();
+                        let config = module.btc_rpc.get_bitcoin_rpc_config();
 
                     // we need to remove auth, otherwise we'll send over the wire
                     let without_auth = config.url.clone().without_auth().map_err(|()| {
@@ -1036,7 +1035,7 @@ impl ServerModule for Wallet {
                     })
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 WALLET_SUMMARY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
@@ -1045,7 +1044,7 @@ impl ServerModule for Wallet {
                     Ok(module.get_wallet_summary(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
@@ -1054,18 +1053,17 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_module_consensus_version(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |_module: &Wallet, _context, _params: ()| -> ModuleConsensusVersion {
                     Ok(MODULE_CONSENSUS_VERSION)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |_module: &Wallet, context, _params: ()| -> () {
-                    check_auth(context)?;
 
                     let db = context.db();
                     let mut dbtx = db.begin_transaction().await;
@@ -1074,7 +1072,7 @@ impl ServerModule for Wallet {
                     Ok(())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 UTXO_CONFIRMED_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, outpoint: bitcoin::OutPoint| -> bool {
@@ -1083,7 +1081,7 @@ impl ServerModule for Wallet {
                     Ok(module.is_utxo_confirmed(&mut dbtx, outpoint).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_COUNT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, _params: ()| -> u64 {
@@ -1092,7 +1090,7 @@ impl ServerModule for Wallet {
                     Ok(get_recovery_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, range: (u64, u64)| -> Vec<RecoveryItem> {

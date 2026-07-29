@@ -46,7 +46,7 @@ use fedimint_core::envs::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, MultiApiVersion, TransactionItemAmounts, api_endpoint,
+    ModuleInit, MultiApiVersion, TransactionItemAmounts, public_api_endpoint,
 };
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
@@ -795,7 +795,7 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 CONSENSUS_BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u64 {
@@ -804,7 +804,7 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 CONSENSUS_FEERATE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Option<u64> {
@@ -813,7 +813,7 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_feerate(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 FEDERATION_WALLET_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Wallet, context, _params: ()| -> Option<FederationWallet> {
@@ -822,7 +822,7 @@ impl ServerModule for Wallet {
                     Ok(dbtx.get_value(&FederationWalletKey).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 SEND_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
@@ -831,7 +831,7 @@ impl ServerModule for Wallet {
                     Ok(module.send_fee(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECEIVE_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
@@ -840,7 +840,7 @@ impl ServerModule for Wallet {
                     Ok(module.receive_fee(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 TRANSACTION_ID_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: OutPoint| -> Option<Txid> {
@@ -849,7 +849,7 @@ impl ServerModule for Wallet {
                     Ok(module.tx_id(&mut dbtx, params).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 OUTPUT_INFO_SLICE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (u64, u64)| -> Vec<OutputInfo> {
@@ -858,7 +858,7 @@ impl ServerModule for Wallet {
                     Ok(module.get_outputs(&mut dbtx, params.0, params.1).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 PENDING_TRANSACTION_CHAIN_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Vec<TxInfo> {
@@ -867,7 +867,7 @@ impl ServerModule for Wallet {
                     Ok(module.pending_tx_chain(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 TRANSACTION_CHAIN_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Vec<TxInfo> {

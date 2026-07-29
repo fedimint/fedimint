@@ -26,7 +26,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, SerdeModuleEncodingBase64, TransactionItemAmounts,
-    api_endpoint,
+    public_api_endpoint,
 };
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
@@ -771,7 +771,7 @@ impl ServerModule for Mint {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 NOTE_SPENT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, nonce: Nonce| -> bool {
@@ -780,7 +780,7 @@ impl ServerModule for Mint {
                     Ok(dbtx.get_value(&NonceKey(nonce)).await.is_some())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 BLIND_NONCE_USED_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, blind_nonce: BlindNonce| -> bool {
@@ -789,7 +789,7 @@ impl ServerModule for Mint {
                     Ok(dbtx.get_value(&BlindNonceKey(blind_nonce)).await.is_some())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_COUNT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, _params: ()| -> u64 {
@@ -798,7 +798,7 @@ impl ServerModule for Mint {
                     Ok(get_recovery_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> SerdeModuleEncodingBase64<Vec<RecoveryItem>> {
@@ -807,7 +807,7 @@ impl ServerModule for Mint {
                     Ok((&get_recovery_slice(&mut dbtx, range).await).into())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_HASH_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> sha256::Hash {
@@ -816,7 +816,7 @@ impl ServerModule for Mint {
                     Ok(get_recovery_slice(&mut dbtx, range).await.consensus_hash())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, blind_nonces: Vec<BlindNonce>| -> Vec<OutPoint> {
