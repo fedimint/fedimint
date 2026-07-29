@@ -1097,7 +1097,7 @@
 <a href=#1097 id=1097 data-nosnippet>1097</a>
 <a href=#1098 id=1098 data-nosnippet>1098</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
 <a href=#1099 id=1099 data-nosnippet>1099</a>            </span>.client_ctx
-<a href=#1100 id=1100 data-nosnippet>1100</a>            .outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
+<a href=#1100 id=1100 data-nosnippet>1100</a>            .outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, |<span class="kw">_</span>| <span class="bool-val">true</span>, <span class="kw">move </span>|| {
 <a href=#1101 id=1101 data-nosnippet>1101</a>                <span class="macro">async_stream::stream!</span> {
 <a href=#1102 id=1102 data-nosnippet>1102</a>                    <span class="kw">loop </span>{
 <a href=#1103 id=1103 data-nosnippet>1103</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>(MintClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{

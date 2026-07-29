@@ -11,8 +11,8 @@
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::time::now;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::util::BoxStream;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::util::{BoxStream, FmtCompact <span class="kw">as _</span>};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>serde::Serialize;
@@ -235,184 +235,227 @@
 <a href=#235 id=235 data-nosnippet>235</a>    /// an update stream for easier handling using
 <a href=#236 id=236 data-nosnippet>236</a>    /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
 <a href=#237 id=237 data-nosnippet>237</a>    /// shortcut the handling of final outcomes.
-<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="kw">pub fn </span>outcome_or_updates&lt;U, S&gt;(
-<a href=#239 id=239 data-nosnippet>239</a>        db: <span class="kw-2">&amp;</span>Database,
-<a href=#240 id=240 data-nosnippet>240</a>        operation_id: OperationId,
-<a href=#241 id=241 data-nosnippet>241</a>        operation_log_entry: OperationLogEntry,
-<a href=#242 id=242 data-nosnippet>242</a>        stream_gen: <span class="kw">impl </span>FnOnce() -&gt; S,
-<a href=#243 id=243 data-nosnippet>243</a>    ) -&gt; UpdateStreamOrOutcome&lt;U&gt;
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">where
-<a href=#245 id=245 data-nosnippet>245</a>        </span>U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#246 id=246 data-nosnippet>246</a>        S: futures::Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">'static</span>,
-<a href=#247 id=247 data-nosnippet>247</a>    {
-<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw">match </span>operation_log_entry.outcome::&lt;U&gt;() {
-<a href=#249 id=249 data-nosnippet>249</a>            <span class="prelude-val">Some</span>(outcome) =&gt; UpdateStreamOrOutcome::Outcome(outcome),
-<a href=#250 id=250 data-nosnippet>250</a>            <span class="prelude-val">None </span>=&gt; UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
-<a href=#251 id=251 data-nosnippet>251</a>                db.clone(),
-<a href=#252 id=252 data-nosnippet>252</a>                operation_id,
-<a href=#253 id=253 data-nosnippet>253</a>                stream_gen(),
-<a href=#254 id=254 data-nosnippet>254</a>            )),
-<a href=#255 id=255 data-nosnippet>255</a>        }
-<a href=#256 id=256 data-nosnippet>256</a>    }
-<a href=#257 id=257 data-nosnippet>257</a>
-<a href=#258 id=258 data-nosnippet>258</a>    <span class="doccomment">/// Tries to set the outcome of an operation, but only logs an error if it
-<a href=#259 id=259 data-nosnippet>259</a>    /// fails and does not return it. Since the outcome can always be recomputed
-<a href=#260 id=260 data-nosnippet>260</a>    /// from an update stream, failing to save it isn't a problem in cases where
-<a href=#261 id=261 data-nosnippet>261</a>    /// we do this merely for caching.
-<a href=#262 id=262 data-nosnippet>262</a>    </span><span class="kw">pub async fn </span>optimistically_set_operation_outcome(
-<a href=#263 id=263 data-nosnippet>263</a>        db: <span class="kw-2">&amp;</span>Database,
-<a href=#264 id=264 data-nosnippet>264</a>        operation_id: OperationId,
-<a href=#265 id=265 data-nosnippet>265</a>        outcome: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Serialize + Debug),
-<a href=#266 id=266 data-nosnippet>266</a>    ) {
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">Self</span>::set_operation_outcome(db, operation_id, outcome).<span class="kw">await </span>{
-<a href=#268 id=268 data-nosnippet>268</a>            <span class="macro">warn!</span>(
-<a href=#269 id=269 data-nosnippet>269</a>                target: LOG_CLIENT,
-<a href=#270 id=270 data-nosnippet>270</a>                <span class="string">"Error setting operation outcome: {e}"
-<a href=#271 id=271 data-nosnippet>271</a>            </span>);
-<a href=#272 id=272 data-nosnippet>272</a>        }
-<a href=#273 id=273 data-nosnippet>273</a>    }
-<a href=#274 id=274 data-nosnippet>274</a>}
-<a href=#275 id=275 data-nosnippet>275</a>
-<a href=#276 id=276 data-nosnippet>276</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#277 id=277 data-nosnippet>277</a></span><span class="kw">impl </span>IOperationLog <span class="kw">for </span>OperationLog {
-<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">async fn </span>get_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
-<a href=#279 id=279 data-nosnippet>279</a>        OperationLog::get_operation(<span class="self">self</span>, operation_id).<span class="kw">await
-<a href=#280 id=280 data-nosnippet>280</a>    </span>}
-<a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a>    <span class="kw">async fn </span>get_operation_dbtx(
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#284 id=284 data-nosnippet>284</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#285 id=285 data-nosnippet>285</a>        operation_id: OperationId,
-<a href=#286 id=286 data-nosnippet>286</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
-<a href=#287 id=287 data-nosnippet>287</a>        OperationLog::get_operation_dbtx(dbtx, operation_id).<span class="kw">await
-<a href=#288 id=288 data-nosnippet>288</a>    </span>}
-<a href=#289 id=289 data-nosnippet>289</a>
-<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">async fn </span>add_operation_log_entry_dbtx(
-<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#292 id=292 data-nosnippet>292</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#293 id=293 data-nosnippet>293</a>        operation_id: OperationId,
-<a href=#294 id=294 data-nosnippet>294</a>        operation_type: <span class="kw-2">&amp;</span>str,
-<a href=#295 id=295 data-nosnippet>295</a>        operation_meta: serde_json::Value,
-<a href=#296 id=296 data-nosnippet>296</a>    ) {
-<a href=#297 id=297 data-nosnippet>297</a>        OperationLog::add_operation_log_entry_dbtx(
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="self">self</span>,
-<a href=#299 id=299 data-nosnippet>299</a>            dbtx,
-<a href=#300 id=300 data-nosnippet>300</a>            operation_id,
-<a href=#301 id=301 data-nosnippet>301</a>            operation_type,
-<a href=#302 id=302 data-nosnippet>302</a>            operation_meta,
-<a href=#303 id=303 data-nosnippet>303</a>        )
-<a href=#304 id=304 data-nosnippet>304</a>        .<span class="kw">await
-<a href=#305 id=305 data-nosnippet>305</a>    </span>}
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">fn </span>outcome_or_updates(
-<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#309 id=309 data-nosnippet>309</a>        db: <span class="kw-2">&amp;</span>Database,
-<a href=#310 id=310 data-nosnippet>310</a>        operation_id: OperationId,
-<a href=#311 id=311 data-nosnippet>311</a>        operation: OperationLogEntry,
-<a href=#312 id=312 data-nosnippet>312</a>        stream_gen: Box&lt;<span class="kw">dyn </span>FnOnce() -&gt; BoxStream&lt;<span class="lifetime">'static</span>, serde_json::Value&gt;&gt;,
-<a href=#313 id=313 data-nosnippet>313</a>    ) -&gt; UpdateStreamOrOutcome&lt;serde_json::Value&gt; {
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">match </span>OperationLog::outcome_or_updates(db, operation_id, operation, stream_gen) {
-<a href=#315 id=315 data-nosnippet>315</a>            UpdateStreamOrOutcome::UpdateStream(pin) =&gt; UpdateStreamOrOutcome::UpdateStream(pin),
-<a href=#316 id=316 data-nosnippet>316</a>            UpdateStreamOrOutcome::Outcome(o) =&gt; {
-<a href=#317 id=317 data-nosnippet>317</a>                UpdateStreamOrOutcome::Outcome(serde_json::from_value(o).expect(<span class="string">"Can't fail"</span>))
-<a href=#318 id=318 data-nosnippet>318</a>            }
-<a href=#319 id=319 data-nosnippet>319</a>        }
-<a href=#320 id=320 data-nosnippet>320</a>    }
-<a href=#321 id=321 data-nosnippet>321</a>}
+<a href=#238 id=238 data-nosnippet>238</a>    ///
+<a href=#239 id=239 data-nosnippet>239</a>    /// `is_terminal` reports whether a given update is a final state of the
+<a href=#240 id=240 data-nosnippet>240</a>    /// operation (no further update will ever follow it). Only terminal
+<a href=#241 id=241 data-nosnippet>241</a>    /// updates are cached as the operation's outcome — an update stream that
+<a href=#242 id=242 data-nosnippet>242</a>    /// ends early (a consumer-side error path) must not persist a
+<a href=#243 id=243 data-nosnippet>243</a>    /// non-terminal update as the durable outcome, since later subscribers
+<a href=#244 id=244 data-nosnippet>244</a>    /// would then be short-circuited to it forever. The same predicate also
+<a href=#245 id=245 data-nosnippet>245</a>    /// validates outcomes READ from the cache: a cached outcome that no
+<a href=#246 id=246 data-nosnippet>246</a>    /// longer deserializes (e.g. written by an older version with a different
+<a href=#247 id=247 data-nosnippet>247</a>    /// update type) or that is non-terminal (frozen by a previous version
+<a href=#248 id=248 data-nosnippet>248</a>    /// that cached whatever update a stream ended on) is discarded with a
+<a href=#249 id=249 data-nosnippet>249</a>    /// warning and the outcome is rebuilt from the update stream — whose
+<a href=#250 id=250 data-nosnippet>250</a>    /// terminal end then overwrites the stale cache — instead of
+<a href=#251 id=251 data-nosnippet>251</a>    /// short-circuiting subscribers to it or panicking.
+<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">pub fn </span>outcome_or_updates&lt;U, S&gt;(
+<a href=#253 id=253 data-nosnippet>253</a>        db: <span class="kw-2">&amp;</span>Database,
+<a href=#254 id=254 data-nosnippet>254</a>        operation_id: OperationId,
+<a href=#255 id=255 data-nosnippet>255</a>        operation_log_entry: <span class="kw-2">&amp;</span>OperationLogEntry,
+<a href=#256 id=256 data-nosnippet>256</a>        is_terminal: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>U) -&gt; bool + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#257 id=257 data-nosnippet>257</a>        stream_gen: <span class="kw">impl </span>FnOnce() -&gt; S,
+<a href=#258 id=258 data-nosnippet>258</a>    ) -&gt; UpdateStreamOrOutcome&lt;U&gt;
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">where
+<a href=#260 id=260 data-nosnippet>260</a>        </span>U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#261 id=261 data-nosnippet>261</a>        S: futures::Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">'static</span>,
+<a href=#262 id=262 data-nosnippet>262</a>    {
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">match </span>operation_log_entry.try_outcome::&lt;U&gt;() {
+<a href=#264 id=264 data-nosnippet>264</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(outcome)) <span class="kw">if </span>is_terminal(<span class="kw-2">&amp;</span>outcome) =&gt; {
+<a href=#265 id=265 data-nosnippet>265</a>                <span class="kw">return </span>UpdateStreamOrOutcome::Outcome(outcome);
+<a href=#266 id=266 data-nosnippet>266</a>            }
+<a href=#267 id=267 data-nosnippet>267</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(_non_terminal)) =&gt; {
+<a href=#268 id=268 data-nosnippet>268</a>                <span class="macro">warn!</span>(
+<a href=#269 id=269 data-nosnippet>269</a>                    target: LOG_CLIENT,
+<a href=#270 id=270 data-nosnippet>270</a>                    <span class="string">"Cached operation outcome is not a terminal update (cached by a previous \
+<a href=#271 id=271 data-nosnippet>271</a>                     version); rebuilding it from the update stream"
+<a href=#272 id=272 data-nosnippet>272</a>                </span>);
+<a href=#273 id=273 data-nosnippet>273</a>            }
+<a href=#274 id=274 data-nosnippet>274</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {}
+<a href=#275 id=275 data-nosnippet>275</a>            <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#276 id=276 data-nosnippet>276</a>                <span class="macro">warn!</span>(
+<a href=#277 id=277 data-nosnippet>277</a>                    target: LOG_CLIENT,
+<a href=#278 id=278 data-nosnippet>278</a>                    err = %err.fmt_compact(),
+<a href=#279 id=279 data-nosnippet>279</a>                    <span class="string">"Cached operation outcome failed to deserialize; rebuilding it from the update stream"
+<a href=#280 id=280 data-nosnippet>280</a>                </span>);
+<a href=#281 id=281 data-nosnippet>281</a>            }
+<a href=#282 id=282 data-nosnippet>282</a>        }
+<a href=#283 id=283 data-nosnippet>283</a>        UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
+<a href=#284 id=284 data-nosnippet>284</a>            db.clone(),
+<a href=#285 id=285 data-nosnippet>285</a>            operation_id,
+<a href=#286 id=286 data-nosnippet>286</a>            stream_gen(),
+<a href=#287 id=287 data-nosnippet>287</a>            is_terminal,
+<a href=#288 id=288 data-nosnippet>288</a>        ))
+<a href=#289 id=289 data-nosnippet>289</a>    }
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>    <span class="doccomment">/// Tries to set the outcome of an operation, but only logs an error if it
+<a href=#292 id=292 data-nosnippet>292</a>    /// fails and does not return it. Since the outcome can always be recomputed
+<a href=#293 id=293 data-nosnippet>293</a>    /// from an update stream, failing to save it isn't a problem in cases where
+<a href=#294 id=294 data-nosnippet>294</a>    /// we do this merely for caching.
+<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">pub async fn </span>optimistically_set_operation_outcome(
+<a href=#296 id=296 data-nosnippet>296</a>        db: <span class="kw-2">&amp;</span>Database,
+<a href=#297 id=297 data-nosnippet>297</a>        operation_id: OperationId,
+<a href=#298 id=298 data-nosnippet>298</a>        outcome: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Serialize + Debug),
+<a href=#299 id=299 data-nosnippet>299</a>    ) {
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">Self</span>::set_operation_outcome(db, operation_id, outcome).<span class="kw">await </span>{
+<a href=#301 id=301 data-nosnippet>301</a>            <span class="macro">warn!</span>(
+<a href=#302 id=302 data-nosnippet>302</a>                target: LOG_CLIENT,
+<a href=#303 id=303 data-nosnippet>303</a>                <span class="string">"Error setting operation outcome: {e}"
+<a href=#304 id=304 data-nosnippet>304</a>            </span>);
+<a href=#305 id=305 data-nosnippet>305</a>        }
+<a href=#306 id=306 data-nosnippet>306</a>    }
+<a href=#307 id=307 data-nosnippet>307</a>}
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#310 id=310 data-nosnippet>310</a></span><span class="kw">impl </span>IOperationLog <span class="kw">for </span>OperationLog {
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">async fn </span>get_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
+<a href=#312 id=312 data-nosnippet>312</a>        OperationLog::get_operation(<span class="self">self</span>, operation_id).<span class="kw">await
+<a href=#313 id=313 data-nosnippet>313</a>    </span>}
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">async fn </span>get_operation_dbtx(
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#317 id=317 data-nosnippet>317</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#318 id=318 data-nosnippet>318</a>        operation_id: OperationId,
+<a href=#319 id=319 data-nosnippet>319</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
+<a href=#320 id=320 data-nosnippet>320</a>        OperationLog::get_operation_dbtx(dbtx, operation_id).<span class="kw">await
+<a href=#321 id=321 data-nosnippet>321</a>    </span>}
 <a href=#322 id=322 data-nosnippet>322</a>
-<a href=#323 id=323 data-nosnippet>323</a><span class="kw">fn </span>chronological_operation_log_key_is_older(
-<a href=#324 id=324 data-nosnippet>324</a>    lhs: <span class="kw-2">&amp;</span>ChronologicalOperationLogKey,
-<a href=#325 id=325 data-nosnippet>325</a>    rhs: <span class="kw-2">&amp;</span>ChronologicalOperationLogKey,
-<a href=#326 id=326 data-nosnippet>326</a>) -&gt; bool {
-<a href=#327 id=327 data-nosnippet>327</a>    (lhs.creation_time, lhs.operation_id) &lt; (rhs.creation_time, rhs.operation_id)
-<a href=#328 id=328 data-nosnippet>328</a>}
-<a href=#329 id=329 data-nosnippet>329</a>
-<a href=#330 id=330 data-nosnippet>330</a><span class="doccomment">/// Returns an iterator over the ranges of operation log keys, starting from the
-<a href=#331 id=331 data-nosnippet>331</a>/// most recent range and going backwards in time till slightly later than
-<a href=#332 id=332 data-nosnippet>332</a>/// `last_entry`.
-<a href=#333 id=333 data-nosnippet>333</a>///
-<a href=#334 id=334 data-nosnippet>334</a>/// Simplifying keys to integers and assuming a `start_after` of 100, a
-<a href=#335 id=335 data-nosnippet>335</a>/// `last_entry` of 55 and an `epoch_duration` of 10 the ranges would be:
-<a href=#336 id=336 data-nosnippet>336</a>/// ```text
-<a href=#337 id=337 data-nosnippet>337</a>/// [90..100, 80..90, 70..80, 60..70, 50..60]
-<a href=#338 id=338 data-nosnippet>338</a>/// ```
-<a href=#339 id=339 data-nosnippet>339</a></span><span class="kw">fn </span>rev_epoch_ranges(
-<a href=#340 id=340 data-nosnippet>340</a>    start_after: ChronologicalOperationLogKey,
-<a href=#341 id=341 data-nosnippet>341</a>    last_entry: ChronologicalOperationLogKey,
-<a href=#342 id=342 data-nosnippet>342</a>    epoch_duration: Duration,
-<a href=#343 id=343 data-nosnippet>343</a>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = Range&lt;ChronologicalOperationLogKey&gt;&gt; {
-<a href=#344 id=344 data-nosnippet>344</a>    <span class="comment">// We want to fetch all operations that were created before `start_after`, going
-<a href=#345 id=345 data-nosnippet>345</a>    // backwards in time. This means "start" generally means a later time than
-<a href=#346 id=346 data-nosnippet>346</a>    // "end". Only when creating a rust Range we have to swap the terminology (see
-<a href=#347 id=347 data-nosnippet>347</a>    // comment there).
-<a href=#348 id=348 data-nosnippet>348</a>    </span>(<span class="number">0</span>..)
-<a href=#349 id=349 data-nosnippet>349</a>        .map(<span class="kw">move </span>|epoch| start_after.creation_time - epoch * epoch_duration)
-<a href=#350 id=350 data-nosnippet>350</a>        <span class="comment">// We want to get all operation log keys in the range [last_key, start_after). So as
-<a href=#351 id=351 data-nosnippet>351</a>        // long as the start time is greater than the last key's creation time, we have to
-<a href=#352 id=352 data-nosnippet>352</a>        // keep going.
-<a href=#353 id=353 data-nosnippet>353</a>        </span>.take_while(<span class="kw">move </span>|<span class="kw-2">&amp;</span>start_time| start_time &gt;= last_entry.creation_time)
-<a href=#354 id=354 data-nosnippet>354</a>        .map(<span class="kw">move </span>|start_time| {
-<a href=#355 id=355 data-nosnippet>355</a>            <span class="kw">let </span>end_time = start_time - epoch_duration;
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">async fn </span>add_operation_log_entry_dbtx(
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#325 id=325 data-nosnippet>325</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#326 id=326 data-nosnippet>326</a>        operation_id: OperationId,
+<a href=#327 id=327 data-nosnippet>327</a>        operation_type: <span class="kw-2">&amp;</span>str,
+<a href=#328 id=328 data-nosnippet>328</a>        operation_meta: serde_json::Value,
+<a href=#329 id=329 data-nosnippet>329</a>    ) {
+<a href=#330 id=330 data-nosnippet>330</a>        OperationLog::add_operation_log_entry_dbtx(
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="self">self</span>,
+<a href=#332 id=332 data-nosnippet>332</a>            dbtx,
+<a href=#333 id=333 data-nosnippet>333</a>            operation_id,
+<a href=#334 id=334 data-nosnippet>334</a>            operation_type,
+<a href=#335 id=335 data-nosnippet>335</a>            operation_meta,
+<a href=#336 id=336 data-nosnippet>336</a>        )
+<a href=#337 id=337 data-nosnippet>337</a>        .<span class="kw">await
+<a href=#338 id=338 data-nosnippet>338</a>    </span>}
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">fn </span>caching_operation_update_stream(
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#342 id=342 data-nosnippet>342</a>        operation_id: OperationId,
+<a href=#343 id=343 data-nosnippet>343</a>        stream_gen: Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>FnOnce() -&gt; BoxStream&lt;<span class="lifetime">'static</span>, serde_json::Value&gt;)&gt;,
+<a href=#344 id=344 data-nosnippet>344</a>        is_terminal: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>serde_json::Value) -&gt; bool)&gt;,
+<a href=#345 id=345 data-nosnippet>345</a>    ) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, serde_json::Value&gt; {
+<a href=#346 id=346 data-nosnippet>346</a>        caching_operation_update_stream(<span class="self">self</span>.db.clone(), operation_id, stream_gen(), is_terminal)
+<a href=#347 id=347 data-nosnippet>347</a>    }
+<a href=#348 id=348 data-nosnippet>348</a>}
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a><span class="kw">fn </span>chronological_operation_log_key_is_older(
+<a href=#351 id=351 data-nosnippet>351</a>    lhs: <span class="kw-2">&amp;</span>ChronologicalOperationLogKey,
+<a href=#352 id=352 data-nosnippet>352</a>    rhs: <span class="kw-2">&amp;</span>ChronologicalOperationLogKey,
+<a href=#353 id=353 data-nosnippet>353</a>) -&gt; bool {
+<a href=#354 id=354 data-nosnippet>354</a>    (lhs.creation_time, lhs.operation_id) &lt; (rhs.creation_time, rhs.operation_id)
+<a href=#355 id=355 data-nosnippet>355</a>}
 <a href=#356 id=356 data-nosnippet>356</a>
-<a href=#357 id=357 data-nosnippet>357</a>            <span class="comment">// In the edge case that there were two events logged at exactly the same time
-<a href=#358 id=358 data-nosnippet>358</a>            // we need to specify the correct operation_id for the first key. Otherwise, we
-<a href=#359 id=359 data-nosnippet>359</a>            // could miss entries.
-<a href=#360 id=360 data-nosnippet>360</a>            </span><span class="kw">let </span>start_key = <span class="kw">if </span>start_time == start_after.creation_time {
-<a href=#361 id=361 data-nosnippet>361</a>                start_after
-<a href=#362 id=362 data-nosnippet>362</a>            } <span class="kw">else </span>{
-<a href=#363 id=363 data-nosnippet>363</a>                ChronologicalOperationLogKey {
-<a href=#364 id=364 data-nosnippet>364</a>                    creation_time: start_time,
-<a href=#365 id=365 data-nosnippet>365</a>                    operation_id: OperationId([<span class="number">0</span>; <span class="number">32</span>]),
-<a href=#366 id=366 data-nosnippet>366</a>                }
-<a href=#367 id=367 data-nosnippet>367</a>            };
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a>            <span class="comment">// We could also special-case the last key here, but it's not necessary, making
-<a href=#370 id=370 data-nosnippet>370</a>            // it last_key if end_time &lt; last_key.creation_time. We know there are no
-<a href=#371 id=371 data-nosnippet>371</a>            // entries beyond last_key though, so the range query will be equivalent either
-<a href=#372 id=372 data-nosnippet>372</a>            // way.
-<a href=#373 id=373 data-nosnippet>373</a>            </span><span class="kw">let </span>end_key = ChronologicalOperationLogKey {
-<a href=#374 id=374 data-nosnippet>374</a>                creation_time: end_time,
-<a href=#375 id=375 data-nosnippet>375</a>                operation_id: OperationId([<span class="number">0</span>; <span class="number">32</span>]),
-<a href=#376 id=376 data-nosnippet>376</a>            };
-<a href=#377 id=377 data-nosnippet>377</a>
-<a href=#378 id=378 data-nosnippet>378</a>            <span class="comment">// We want to go backwards using a forward range query. This means we have to
-<a href=#379 id=379 data-nosnippet>379</a>            // swap the start and end keys and then reverse the vector returned by the
-<a href=#380 id=380 data-nosnippet>380</a>            // query.
-<a href=#381 id=381 data-nosnippet>381</a>            </span>Range {
-<a href=#382 id=382 data-nosnippet>382</a>                start: end_key,
-<a href=#383 id=383 data-nosnippet>383</a>                end: start_key,
-<a href=#384 id=384 data-nosnippet>384</a>            }
-<a href=#385 id=385 data-nosnippet>385</a>        })
-<a href=#386 id=386 data-nosnippet>386</a>}
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a><span class="doccomment">/// Wraps an operation update stream such that the last update before it closes
-<a href=#389 id=389 data-nosnippet>389</a>/// is tried to be written to the operation log entry as its outcome.
-<a href=#390 id=390 data-nosnippet>390</a></span><span class="kw">pub fn </span>caching_operation_update_stream&lt;<span class="lifetime">'a</span>, U, S&gt;(
-<a href=#391 id=391 data-nosnippet>391</a>    db: Database,
-<a href=#392 id=392 data-nosnippet>392</a>    operation_id: OperationId,
-<a href=#393 id=393 data-nosnippet>393</a>    stream: S,
-<a href=#394 id=394 data-nosnippet>394</a>) -&gt; BoxStream&lt;<span class="lifetime">'a</span>, U&gt;
-<a href=#395 id=395 data-nosnippet>395</a><span class="kw">where
-<a href=#396 id=396 data-nosnippet>396</a>    </span>U: Clone + Serialize + Debug + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#397 id=397 data-nosnippet>397</a>    S: futures::Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">'a</span>,
-<a href=#398 id=398 data-nosnippet>398</a>{
-<a href=#399 id=399 data-nosnippet>399</a>    <span class="kw">let </span><span class="kw-2">mut </span>stream = Box::pin(stream);
-<a href=#400 id=400 data-nosnippet>400</a>    Box::pin(<span class="macro">async_stream::stream!</span> {
-<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_update = <span class="prelude-val">None</span>;
-<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = stream.next().<span class="kw">await </span>{
-<a href=#403 id=403 data-nosnippet>403</a>            <span class="kw">yield </span>update.clone();
-<a href=#404 id=404 data-nosnippet>404</a>            last_update = <span class="prelude-val">Some</span>(update);
-<a href=#405 id=405 data-nosnippet>405</a>        }
-<a href=#406 id=406 data-nosnippet>406</a>
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(last_update) = last_update <span class="kw">else </span>{
-<a href=#408 id=408 data-nosnippet>408</a>            <span class="macro">error!</span>(
-<a href=#409 id=409 data-nosnippet>409</a>                target: LOG_CLIENT,
-<a href=#410 id=410 data-nosnippet>410</a>                <span class="string">"Stream ended without any updates, this should not happen!"
-<a href=#411 id=411 data-nosnippet>411</a>            </span>);
-<a href=#412 id=412 data-nosnippet>412</a>            <span class="kw">return</span>;
-<a href=#413 id=413 data-nosnippet>413</a>        };
+<a href=#357 id=357 data-nosnippet>357</a><span class="doccomment">/// Returns an iterator over the ranges of operation log keys, starting from the
+<a href=#358 id=358 data-nosnippet>358</a>/// most recent range and going backwards in time till slightly later than
+<a href=#359 id=359 data-nosnippet>359</a>/// `last_entry`.
+<a href=#360 id=360 data-nosnippet>360</a>///
+<a href=#361 id=361 data-nosnippet>361</a>/// Simplifying keys to integers and assuming a `start_after` of 100, a
+<a href=#362 id=362 data-nosnippet>362</a>/// `last_entry` of 55 and an `epoch_duration` of 10 the ranges would be:
+<a href=#363 id=363 data-nosnippet>363</a>/// ```text
+<a href=#364 id=364 data-nosnippet>364</a>/// [90..100, 80..90, 70..80, 60..70, 50..60]
+<a href=#365 id=365 data-nosnippet>365</a>/// ```
+<a href=#366 id=366 data-nosnippet>366</a></span><span class="kw">fn </span>rev_epoch_ranges(
+<a href=#367 id=367 data-nosnippet>367</a>    start_after: ChronologicalOperationLogKey,
+<a href=#368 id=368 data-nosnippet>368</a>    last_entry: ChronologicalOperationLogKey,
+<a href=#369 id=369 data-nosnippet>369</a>    epoch_duration: Duration,
+<a href=#370 id=370 data-nosnippet>370</a>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = Range&lt;ChronologicalOperationLogKey&gt;&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>    <span class="comment">// We want to fetch all operations that were created before `start_after`, going
+<a href=#372 id=372 data-nosnippet>372</a>    // backwards in time. This means "start" generally means a later time than
+<a href=#373 id=373 data-nosnippet>373</a>    // "end". Only when creating a rust Range we have to swap the terminology (see
+<a href=#374 id=374 data-nosnippet>374</a>    // comment there).
+<a href=#375 id=375 data-nosnippet>375</a>    </span>(<span class="number">0</span>..)
+<a href=#376 id=376 data-nosnippet>376</a>        .map(<span class="kw">move </span>|epoch| start_after.creation_time - epoch * epoch_duration)
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="comment">// We want to get all operation log keys in the range [last_key, start_after). So as
+<a href=#378 id=378 data-nosnippet>378</a>        // long as the start time is greater than the last key's creation time, we have to
+<a href=#379 id=379 data-nosnippet>379</a>        // keep going.
+<a href=#380 id=380 data-nosnippet>380</a>        </span>.take_while(<span class="kw">move </span>|<span class="kw-2">&amp;</span>start_time| start_time &gt;= last_entry.creation_time)
+<a href=#381 id=381 data-nosnippet>381</a>        .map(<span class="kw">move </span>|start_time| {
+<a href=#382 id=382 data-nosnippet>382</a>            <span class="kw">let </span>end_time = start_time - epoch_duration;
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a>            <span class="comment">// In the edge case that there were two events logged at exactly the same time
+<a href=#385 id=385 data-nosnippet>385</a>            // we need to specify the correct operation_id for the first key. Otherwise, we
+<a href=#386 id=386 data-nosnippet>386</a>            // could miss entries.
+<a href=#387 id=387 data-nosnippet>387</a>            </span><span class="kw">let </span>start_key = <span class="kw">if </span>start_time == start_after.creation_time {
+<a href=#388 id=388 data-nosnippet>388</a>                start_after
+<a href=#389 id=389 data-nosnippet>389</a>            } <span class="kw">else </span>{
+<a href=#390 id=390 data-nosnippet>390</a>                ChronologicalOperationLogKey {
+<a href=#391 id=391 data-nosnippet>391</a>                    creation_time: start_time,
+<a href=#392 id=392 data-nosnippet>392</a>                    operation_id: OperationId([<span class="number">0</span>; <span class="number">32</span>]),
+<a href=#393 id=393 data-nosnippet>393</a>                }
+<a href=#394 id=394 data-nosnippet>394</a>            };
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="comment">// We could also special-case the last key here, but it's not necessary, making
+<a href=#397 id=397 data-nosnippet>397</a>            // it last_key if end_time &lt; last_key.creation_time. We know there are no
+<a href=#398 id=398 data-nosnippet>398</a>            // entries beyond last_key though, so the range query will be equivalent either
+<a href=#399 id=399 data-nosnippet>399</a>            // way.
+<a href=#400 id=400 data-nosnippet>400</a>            </span><span class="kw">let </span>end_key = ChronologicalOperationLogKey {
+<a href=#401 id=401 data-nosnippet>401</a>                creation_time: end_time,
+<a href=#402 id=402 data-nosnippet>402</a>                operation_id: OperationId([<span class="number">0</span>; <span class="number">32</span>]),
+<a href=#403 id=403 data-nosnippet>403</a>            };
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>            <span class="comment">// We want to go backwards using a forward range query. This means we have to
+<a href=#406 id=406 data-nosnippet>406</a>            // swap the start and end keys and then reverse the vector returned by the
+<a href=#407 id=407 data-nosnippet>407</a>            // query.
+<a href=#408 id=408 data-nosnippet>408</a>            </span>Range {
+<a href=#409 id=409 data-nosnippet>409</a>                start: end_key,
+<a href=#410 id=410 data-nosnippet>410</a>                end: start_key,
+<a href=#411 id=411 data-nosnippet>411</a>            }
+<a href=#412 id=412 data-nosnippet>412</a>        })
+<a href=#413 id=413 data-nosnippet>413</a>}
 <a href=#414 id=414 data-nosnippet>414</a>
-<a href=#415 id=415 data-nosnippet>415</a>        OperationLog::optimistically_set_operation_outcome(<span class="kw-2">&amp;</span>db, operation_id, <span class="kw-2">&amp;</span>last_update).<span class="kw">await</span>;
-<a href=#416 id=416 data-nosnippet>416</a>    })
-<a href=#417 id=417 data-nosnippet>417</a>}
+<a href=#415 id=415 data-nosnippet>415</a><span class="doccomment">/// Wraps an operation update stream such that the last update before it closes
+<a href=#416 id=416 data-nosnippet>416</a>/// is tried to be written to the operation log entry as its outcome — but only
+<a href=#417 id=417 data-nosnippet>417</a>/// if `is_terminal` reports it as a final state of the operation. A stream
+<a href=#418 id=418 data-nosnippet>418</a>/// that ends on a non-terminal update (e.g. an error-path early return in the
+<a href=#419 id=419 data-nosnippet>419</a>/// stream generator) must not have that update cached as the outcome:
+<a href=#420 id=420 data-nosnippet>420</a>/// [`OperationLog::outcome_or_updates`] short-circuits every later subscriber
+<a href=#421 id=421 data-nosnippet>421</a>/// to the cached value, so caching a non-terminal update would freeze the
+<a href=#422 id=422 data-nosnippet>422</a>/// operation's observable state before its actual end.
+<a href=#423 id=423 data-nosnippet>423</a></span><span class="kw">pub fn </span>caching_operation_update_stream&lt;<span class="lifetime">'a</span>, U, S&gt;(
+<a href=#424 id=424 data-nosnippet>424</a>    db: Database,
+<a href=#425 id=425 data-nosnippet>425</a>    operation_id: OperationId,
+<a href=#426 id=426 data-nosnippet>426</a>    stream: S,
+<a href=#427 id=427 data-nosnippet>427</a>    is_terminal: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>U) -&gt; bool + MaybeSend + <span class="lifetime">'a</span>,
+<a href=#428 id=428 data-nosnippet>428</a>) -&gt; BoxStream&lt;<span class="lifetime">'a</span>, U&gt;
+<a href=#429 id=429 data-nosnippet>429</a><span class="kw">where
+<a href=#430 id=430 data-nosnippet>430</a>    </span>U: Clone + Serialize + Debug + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#431 id=431 data-nosnippet>431</a>    S: futures::Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">'a</span>,
+<a href=#432 id=432 data-nosnippet>432</a>{
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="kw">let </span><span class="kw-2">mut </span>stream = Box::pin(stream);
+<a href=#434 id=434 data-nosnippet>434</a>    Box::pin(<span class="macro">async_stream::stream!</span> {
+<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_update = <span class="prelude-val">None</span>;
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = stream.next().<span class="kw">await </span>{
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="kw">yield </span>update.clone();
+<a href=#438 id=438 data-nosnippet>438</a>            last_update = <span class="prelude-val">Some</span>(update);
+<a href=#439 id=439 data-nosnippet>439</a>        }
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(last_update) = last_update <span class="kw">else </span>{
+<a href=#442 id=442 data-nosnippet>442</a>            <span class="macro">error!</span>(
+<a href=#443 id=443 data-nosnippet>443</a>                target: LOG_CLIENT,
+<a href=#444 id=444 data-nosnippet>444</a>                <span class="string">"Stream ended without any updates, this should not happen!"
+<a href=#445 id=445 data-nosnippet>445</a>            </span>);
+<a href=#446 id=446 data-nosnippet>446</a>            <span class="kw">return</span>;
+<a href=#447 id=447 data-nosnippet>447</a>        };
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">if </span>!is_terminal(<span class="kw-2">&amp;</span>last_update) {
+<a href=#450 id=450 data-nosnippet>450</a>            <span class="macro">warn!</span>(
+<a href=#451 id=451 data-nosnippet>451</a>                target: LOG_CLIENT,
+<a href=#452 id=452 data-nosnippet>452</a>                <span class="question-mark">?</span>last_update,
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="string">"Operation update stream ended on a non-terminal update; not caching an outcome"
+<a href=#454 id=454 data-nosnippet>454</a>            </span>);
+<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">return</span>;
+<a href=#456 id=456 data-nosnippet>456</a>        }
+<a href=#457 id=457 data-nosnippet>457</a>
+<a href=#458 id=458 data-nosnippet>458</a>        OperationLog::optimistically_set_operation_outcome(<span class="kw-2">&amp;</span>db, operation_id, <span class="kw-2">&amp;</span>last_update).<span class="kw">await</span>;
+<a href=#459 id=459 data-nosnippet>459</a>    })
+<a href=#460 id=460 data-nosnippet>460</a>}
 </code></pre></div></section></main></body></html>
