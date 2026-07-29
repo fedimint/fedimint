@@ -39,7 +39,7 @@ use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{TerminalState, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote,
@@ -175,50 +175,76 @@ pub enum LightningPaymentOutcome {
 
 /// The high-level state of an pay operation internal to the federation,
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 #[serde(rename_all = "snake_case")]
 pub enum InternalPayState {
     Funding,
+    #[terminal]
     Preimage(Preimage),
+    #[terminal]
     RefundSuccess {
         out_points: Vec<OutPoint>,
         error: IncomingSmError,
     },
+    #[terminal]
     RefundError {
         error_message: String,
         error: IncomingSmError,
     },
+    #[terminal]
     FundingFailed {
         error: IncomingSmError,
     },
+    #[terminal]
     UnexpectedError(String),
 }
 
 /// The high-level state of a pay operation over lightning,
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 #[serde(rename_all = "snake_case")]
 pub enum LnPayState {
     Created,
+    #[terminal]
     Canceled,
-    Funded { block_height: u32 },
-    WaitingForRefund { error_reason: String },
+    Funded {
+        block_height: u32,
+    },
+    WaitingForRefund {
+        error_reason: String,
+    },
     AwaitingChange,
-    Success { preimage: String },
-    Refunded { gateway_error: GatewayPayError },
-    UnexpectedError { error_message: String },
+    #[terminal]
+    Success {
+        preimage: String,
+    },
+    #[terminal]
+    Refunded {
+        gateway_error: GatewayPayError,
+    },
+    #[terminal]
+    UnexpectedError {
+        error_message: String,
+    },
 }
 
 /// The high-level state of a reissue operation started with
 /// [`LightningClientModule::create_bolt11_invoice`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 #[serde(rename_all = "snake_case")]
 pub enum LnReceiveState {
     Created,
-    WaitingForPayment { invoice: String, timeout: Duration },
-    Canceled { reason: LightningReceiveError },
+    WaitingForPayment {
+        invoice: String,
+        timeout: Duration,
+    },
+    #[terminal]
+    Canceled {
+        reason: LightningReceiveError,
+    },
     Funded,
     AwaitingFunds,
+    #[terminal]
     Claimed,
 }
 
@@ -1525,14 +1551,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                InternalPayState::Funding => false,
-                InternalPayState::Preimage(_)
-                | InternalPayState::RefundSuccess { .. }
-                | InternalPayState::RefundError { .. }
-                | InternalPayState::FundingFailed { .. }
-                | InternalPayState::UnexpectedError(_) => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, InternalPayState::is_terminal, move || {
             stream! {
                 yield InternalPayState::Funding;
 
@@ -1598,16 +1617,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                LnPayState::Created
-                | LnPayState::Funded { .. }
-                | LnPayState::WaitingForRefund { .. }
-                | LnPayState::AwaitingChange => false,
-                LnPayState::Success { .. }
-                | LnPayState::Canceled
-                | LnPayState::Refunded { .. }
-                | LnPayState::UnexpectedError { .. } => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, LnPayState::is_terminal, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
@@ -2113,13 +2123,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                LnReceiveState::Created
-                | LnReceiveState::WaitingForPayment { .. }
-                | LnReceiveState::Funded
-                | LnReceiveState::AwaitingFunds => false,
-                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, LnReceiveState::is_terminal, move || {
             stream! {
                 yield LnReceiveState::AwaitingFunds;
 
@@ -2155,13 +2159,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                LnReceiveState::Created
-                | LnReceiveState::WaitingForPayment { .. }
-                | LnReceiveState::Funded
-                | LnReceiveState::AwaitingFunds => false,
-                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, LnReceiveState::is_terminal, move || {
             stream! {
 
                 let self_ref = client_ctx.self_ref();

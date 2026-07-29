@@ -40,7 +40,7 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{TerminalState, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
@@ -107,7 +107,7 @@ pub enum DepositStateV1 {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TerminalState)]
 pub enum DepositStateV2 {
     WaitingForTransaction,
     WaitingForConfirmation {
@@ -120,11 +120,13 @@ pub enum DepositStateV2 {
         btc_deposited: bitcoin::Amount,
         btc_out_point: bitcoin::OutPoint,
     },
+    #[terminal]
     Claimed {
         #[serde(with = "bitcoin::amount::serde::as_sat")]
         btc_deposited: bitcoin::Amount,
         btc_out_point: bitcoin::OutPoint,
     },
+    #[terminal]
     Failed(String),
 }
 
@@ -167,10 +169,12 @@ pub enum AllocateDepositOutcome {
     Reused { original_tweak_idx: TweakIdx },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TerminalState)]
 pub enum WithdrawState {
     Created,
+    #[terminal]
     Succeeded(bitcoin::Txid),
+    #[terminal]
     Failed(String),
     // TODO: track refund
     // Refunded,
@@ -1458,12 +1462,7 @@ impl WalletClientModule {
         Ok(self.client_ctx.outcome_or_updates(
             &operation,
             operation_id,
-            |state| match state {
-                DepositStateV2::WaitingForTransaction
-                | DepositStateV2::WaitingForConfirmation { .. }
-                | DepositStateV2::Confirmed { .. } => false,
-                DepositStateV2::Claimed { .. } | DepositStateV2::Failed(_) => true,
-            },
+            DepositStateV2::is_terminal,
             {
             let stream_rpc = self.rpc.clone();
             let stream_client_ctx = self.client_ctx.clone();
@@ -1885,10 +1884,7 @@ impl WalletClientModule {
         Ok(self.client_ctx.outcome_or_updates(
             &operation,
             operation_id,
-            |state| match state {
-                WithdrawState::Created => false,
-                WithdrawState::Succeeded(_) | WithdrawState::Failed(_) => true,
-            },
+            WithdrawState::is_terminal,
             move || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {

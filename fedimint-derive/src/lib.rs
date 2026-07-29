@@ -12,6 +12,55 @@ use syn::{
     parse_macro_input,
 };
 
+#[proc_macro_derive(TerminalState, attributes(terminal))]
+pub fn derive_terminal_state(input: TokenStream) -> TokenStream {
+    let DeriveInput {
+        ident,
+        data,
+        generics,
+        ..
+    } = parse_macro_input!(input);
+
+    let Data::Enum(DataEnum { variants, .. }) = data else {
+        return error(&ident, "TerminalState can only be derived for enums").into();
+    };
+
+    let terminal_variants = variants
+        .iter()
+        .filter(|variant| {
+            variant
+                .attrs
+                .iter()
+                .any(|attr| attr.path().is_ident("terminal"))
+        })
+        .map(|variant| {
+            let variant_ident = &variant.ident;
+            match &variant.fields {
+                Fields::Unit => quote! { Self::#variant_ident },
+                Fields::Unnamed(_) => quote! { Self::#variant_ident(..) },
+                Fields::Named(_) => quote! { Self::#variant_ident { .. } },
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let is_terminal_body = if terminal_variants.is_empty() {
+        quote! { false }
+    } else {
+        quote! { matches!(self, #(#terminal_variants)|*) }
+    };
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    quote! {
+        impl #impl_generics ::fedimint_client_module::oplog::TerminalState for #ident #ty_generics #where_clause {
+            fn is_terminal(&self) -> bool {
+                #is_terminal_body
+            }
+        }
+    }
+    .into()
+}
+
 fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
     let is_default = variant
         .attrs

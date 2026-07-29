@@ -3184,6 +3184,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-connectors",
  "fedimint-core",
+ "fedimint-derive",
  "fedimint-derive-secret",
  "fedimint-eventlog",
  "fedimint-logging",

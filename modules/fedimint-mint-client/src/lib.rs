@@ -59,7 +59,7 @@ use fedimint_client_module::module::{
     ClientContext, ClientModule, IClientModule, OutPointRange, PrimaryModulePriority,
     PrimaryModuleSupport,
 };
-use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
+use fedimint_client_module::oplog::{OperationLogEntry, TerminalState, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -485,7 +485,7 @@ impl OOBNotes {
 
 /// The high-level state of a reissue operation started with
 /// [`MintClientModule::reissue_external_notes`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum ReissueExternalNotesState {
     /// The operation has been created and is waiting to be accepted by the
     /// federation.
@@ -494,14 +494,16 @@ pub enum ReissueExternalNotesState {
     /// transaction to be successful.
     Issuing,
     /// The operation has been completed successfully.
+    #[terminal]
     Done,
     /// Some error happened and the operation failed.
+    #[terminal]
     Failed(String),
 }
 
 /// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientModule::spend_notes_with_selector`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
     Created,
@@ -510,17 +512,21 @@ pub enum SpendOOBState {
     UserCanceledProcessing,
     /// The user-requested cancellation was successful, we got all our money
     /// back.
+    #[terminal]
     UserCanceledSuccess,
     /// The user-requested cancellation failed, the e-cash notes have been spent
     /// by someone else already.
+    #[terminal]
     UserCanceledFailure,
     /// We tried to cancel the operation automatically after the timeout but
     /// failed, indicating the recipient reissued the e-cash to themselves,
     /// making the out-of-band spend **successful**.
+    #[terminal]
     Success,
     /// We tried to cancel the operation automatically after the timeout and
     /// succeeded, indicating the recipient did not reissue the e-cash to
     /// themselves, meaning the out-of-band spend **failed**.
+    #[terminal]
     Refunded,
 }
 
@@ -2062,10 +2068,7 @@ impl MintClientModule {
         Ok(self.client_ctx.outcome_or_updates(
             &operation,
             operation_id,
-            |state| match state {
-                ReissueExternalNotesState::Created | ReissueExternalNotesState::Issuing => false,
-                ReissueExternalNotesState::Done | ReissueExternalNotesState::Failed(_) => true,
-            },
+            ReissueExternalNotesState::is_terminal,
             move || {
             stream! {
                 yield ReissueExternalNotesState::Created;
@@ -2543,13 +2546,7 @@ impl MintClientModule {
         Ok(self.client_ctx.outcome_or_updates(
             &operation,
             operation_id,
-            |state| match state {
-                SpendOOBState::Created | SpendOOBState::UserCanceledProcessing => false,
-                SpendOOBState::UserCanceledSuccess
-                | SpendOOBState::UserCanceledFailure
-                | SpendOOBState::Success
-                | SpendOOBState::Refunded => true,
-            },
+            SpendOOBState::is_terminal,
             move || {
                 stream! {
                     yield SpendOOBState::Created;

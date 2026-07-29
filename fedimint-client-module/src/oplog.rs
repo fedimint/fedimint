@@ -9,6 +9,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
+pub use fedimint_derive::TerminalState;
 use futures::{StreamExt, stream};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -186,6 +187,14 @@ impl OperationLogEntry {
 pub enum UpdateStreamOrOutcome<U> {
     UpdateStream(BoxStream<'static, U>),
     Outcome(U),
+}
+
+/// Marks operation update states that end their update stream.
+///
+/// Derive this trait on operation state enums and annotate terminal variants
+/// with `#[terminal]`.
+pub trait TerminalState {
+    fn is_terminal(&self) -> bool;
 }
 
 impl<U: Debug> Debug for UpdateStreamOrOutcome<U> {

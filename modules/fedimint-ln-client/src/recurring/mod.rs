@@ -14,7 +14,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::SECP256K1;
 use fedimint_client_module::OperationId;
 use fedimint_client_module::module::ClientContext;
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{TerminalState, UpdateStreamOrOutcome};
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
@@ -368,13 +368,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                LnReceiveState::Created
-                | LnReceiveState::WaitingForPayment { .. }
-                | LnReceiveState::Funded
-                | LnReceiveState::AwaitingFunds => false,
-                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, LnReceiveState::is_terminal, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 

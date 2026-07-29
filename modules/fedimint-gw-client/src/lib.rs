@@ -20,7 +20,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{TerminalState, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
@@ -74,23 +74,27 @@ use self::pay::{
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum GatewayExtPayStates {
     Created,
     Preimage {
         preimage: Preimage,
     },
+    #[terminal]
     Success {
         preimage: Preimage,
         out_points: Vec<OutPoint>,
     },
+    #[terminal]
     Canceled {
         error: OutgoingPaymentError,
     },
+    #[terminal]
     Fail {
         error: OutgoingPaymentError,
         error_message: String,
     },
+    #[terminal]
     OfferDoesNotExist {
         contract_id: ContractId,
     },
@@ -98,18 +102,22 @@ pub enum GatewayExtPayStates {
 
 /// The high-level state of an intercepted HTLC operation started with
 /// [`GatewayClientModule::gateway_handle_intercepted_htlc`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum GatewayExtReceiveStates {
     Funding,
+    #[terminal]
     Preimage(Preimage),
+    #[terminal]
     RefundSuccess {
         out_points: Vec<OutPoint>,
         error: IncomingSmError,
     },
+    #[terminal]
     RefundError {
         error_message: String,
         error: IncomingSmError,
     },
+    #[terminal]
     FundingFailed {
         error: IncomingSmError,
     },
@@ -624,13 +632,7 @@ impl GatewayClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                GatewayExtReceiveStates::Funding => false,
-                GatewayExtReceiveStates::Preimage(_)
-                | GatewayExtReceiveStates::RefundSuccess { .. }
-                | GatewayExtReceiveStates::RefundError { .. }
-                | GatewayExtReceiveStates::FundingFailed { .. } => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, GatewayExtReceiveStates::is_terminal, move || {
             stream! {
 
                 yield GatewayExtReceiveStates::Funding;
@@ -779,13 +781,7 @@ impl GatewayClientModule {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                GatewayExtPayStates::Created | GatewayExtPayStates::Preimage { .. } => false,
-                GatewayExtPayStates::Success { .. }
-                | GatewayExtPayStates::Canceled { .. }
-                | GatewayExtPayStates::Fail { .. }
-                | GatewayExtPayStates::OfferDoesNotExist { .. } => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, GatewayExtPayStates::is_terminal, move || {
             stream! {
                 yield GatewayExtPayStates::Created;
 

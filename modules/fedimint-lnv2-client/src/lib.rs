@@ -25,7 +25,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{TerminalState, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
@@ -148,19 +148,22 @@ pub struct LnurlReceiveOperationMeta {
 /// ```
 /// The transition from Refunding to Success is only possible if the gateway
 /// misbehaves.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum SendOperationState {
     /// We are funding the contract to incentivize the gateway.
     Funding,
     /// We are waiting for the gateway to complete the payment.
     Funded,
     /// The payment was successful.
+    #[terminal]
     Success([u8; 32]),
     /// The payment has failed and we are refunding the contract.
     Refunding,
     /// The payment has been refunded.
+    #[terminal]
     Refunded,
     /// Either a programming error has occurred or the federation is malicious.
+    #[terminal]
     Failure,
 }
 
@@ -190,17 +193,20 @@ pub type SendResult = Result<OperationId, SendPaymentError>;
 ///     Claiming -- ecash is minted --> Claimed
 ///     Claiming -- minting ecash fails --> Failure
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, TerminalState)]
 pub enum ReceiveOperationState {
     /// We are waiting for the payment.
     Pending,
     /// The payment request has expired.
+    #[terminal]
     Expired,
     /// The payment has been confirmed and we are issuing the ecash.
     Claiming,
     /// The payment has been successful.
+    #[terminal]
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
+    #[terminal]
     Failure,
 }
 
@@ -688,14 +694,7 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let module_api = self.module_api.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                SendOperationState::Funding
-                | SendOperationState::Funded
-                | SendOperationState::Refunding => false,
-                SendOperationState::Success(_)
-                | SendOperationState::Refunded
-                | SendOperationState::Failure => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, SendOperationState::is_terminal, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
@@ -1044,12 +1043,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
-                ReceiveOperationState::Pending | ReceiveOperationState::Claiming => false,
-                ReceiveOperationState::Expired
-                | ReceiveOperationState::Claimed
-                | ReceiveOperationState::Failure => true,
-            }, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, ReceiveOperationState::is_terminal, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
