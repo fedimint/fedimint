@@ -368,7 +368,13 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                LnReceiveState::Created
+                | LnReceiveState::WaitingForPayment { .. }
+                | LnReceiveState::Funded
+                | LnReceiveState::AwaitingFunds => false,
+                LnReceiveState::Canceled { .. } | LnReceiveState::Claimed => true,
+            }, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
