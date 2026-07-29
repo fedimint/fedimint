@@ -10,6 +10,7 @@ use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_mintv2_common::{Denomination, verify_note};
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, aggregate_signature_shares};
+use tracing::warn;
 
 use crate::api::MintV2ModuleApi;
 use crate::client_db::SpendableNoteKey;
@@ -136,7 +137,20 @@ impl MintOutputStateMachine {
                     .collect(),
             );
 
-            let spendable_note = request.finalize(agg_blind_signature);
+            let spendable_note = match request.finalize(agg_blind_signature) {
+                Ok(note) => note,
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        denomination = ?request.denomination,
+                        "Failed to unblind signature: invalid blinding key scalar"
+                    );
+                    return MintOutputStateMachine {
+                        common: old_state.common,
+                        state: OutputSMState::Failure,
+                    };
+                }
+            };
 
             let pk = *tbs_pks
                 .get(&request.denomination)

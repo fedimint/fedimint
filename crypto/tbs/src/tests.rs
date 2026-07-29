@@ -67,7 +67,7 @@ fn test_roundtrip() {
 
     let signature = aggregate_signature_shares(&signature_shares);
 
-    let signature = unblind_signature(blinding_key, signature);
+    let signature = unblind_signature(blinding_key, signature).unwrap();
 
     assert!(verify(message, signature, dealer_agg_pk()));
 }
