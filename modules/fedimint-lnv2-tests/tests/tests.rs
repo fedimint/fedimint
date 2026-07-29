@@ -401,6 +401,40 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Wait until the federation has committed its first block count votes.
+///
+/// A freshly started federation reports a consensus block count of zero until
+/// the votes of its first consensus sessions are committed, while the backing
+/// chain may already be at a positive height - over one hundred blocks for
+/// the pre-mined regtest chain in CI. A contract created against the stale
+/// zero count would be expired the moment the votes land. Mining one block
+/// ensures even a pristine mock chain reaches a nonzero height for the votes
+/// to reflect.
+async fn await_block_count_consensus(
+    fixtures: &Fixtures,
+    client: &ClientHandleArc,
+) -> anyhow::Result<()> {
+    fixtures.bitcoin().mine_blocks(1).await;
+
+    loop {
+        match client
+            .get_first_module::<LightningClientModule>()?
+            .consensus_block_count()
+            .await
+        {
+            Ok(..) => return Ok(()),
+            Err(HtlcError::NoBlockCountConsensus) => {
+                sleep_in_test(
+                    "block count votes to be committed",
+                    Duration::from_millis(200),
+                )
+                .await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn direct_htlc_claim() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -412,6 +446,8 @@ async fn direct_htlc_claim() -> anyhow::Result<()> {
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
         .await?;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
 
     let preimage = [42_u8; 32];
     let payment_image = PaymentImage::Hash(preimage.consensus_hash());
@@ -490,6 +526,8 @@ async fn direct_htlc_refund() -> anyhow::Result<()> {
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
         .await?;
 
+    await_block_count_consensus(&fixtures, &funder).await?;
+
     let preimage = [42_u8; 32];
     let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
 
@@ -563,6 +601,8 @@ async fn direct_htlc_cancel() -> anyhow::Result<()> {
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
         .await?;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
 
     let preimage = [42_u8; 32];
     let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);

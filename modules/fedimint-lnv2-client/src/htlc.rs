@@ -83,6 +83,8 @@ pub enum HtlcError {
     InvalidExpirationDelta,
     #[error("Failed to request the consensus block count")]
     FailedToRequestBlockCount(String),
+    #[error("The federation has not yet reached consensus on a block count")]
+    NoBlockCountConsensus,
     #[error("Failed to submit the transaction")]
     FailedToSubmitTransaction(String),
     #[error("An operation for this contract action already exists")]
@@ -165,11 +167,7 @@ impl LightningClientModule {
             return Err(HtlcError::InvalidExpirationDelta);
         }
 
-        let consensus_block_count = self
-            .module_api
-            .consensus_block_count()
-            .await
-            .map_err(|e| HtlcError::FailedToRequestBlockCount(e.to_string()))?;
+        let consensus_block_count = self.consensus_block_count().await?;
 
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
 
@@ -258,6 +256,8 @@ impl LightningClientModule {
             return Err(HtlcError::InvalidPreimage);
         }
 
+        self.consensus_block_count().await?;
+
         let (contract_id, remaining_blocks) = self
             .module_api
             .outgoing_contract_expiration(outpoint)
@@ -298,11 +298,7 @@ impl LightningClientModule {
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
-        let consensus_block_count = self
-            .module_api
-            .consensus_block_count()
-            .await
-            .map_err(|e| HtlcError::FailedToRequestBlockCount(e.to_string()))?;
+        let consensus_block_count = self.consensus_block_count().await?;
 
         if consensus_block_count < contract.expiration {
             return Err(HtlcError::NotExpired(
@@ -352,6 +348,30 @@ impl LightningClientModule {
             custom_meta,
         })
         .await
+    }
+
+    /// The federation's current consensus block count, against which direct
+    /// HTLC expirations are measured.
+    ///
+    /// Returns [`HtlcError::NoBlockCountConsensus`] while the federation has
+    /// not yet committed its first block count votes, during which the
+    /// reported count would be zero while the actual chain tip may already
+    /// be at a positive height; an expiration computed against the zero
+    /// count would be overtaken the moment the first votes are committed.
+    /// For the same reason [`Self::create_htlc`] and [`Self::claim_htlc`]
+    /// refuse to operate until this method succeeds.
+    pub async fn consensus_block_count(&self) -> Result<u64, HtlcError> {
+        let consensus_block_count = self
+            .module_api
+            .consensus_block_count()
+            .await
+            .map_err(|e| HtlcError::FailedToRequestBlockCount(e.to_string()))?;
+
+        if consensus_block_count == 0 {
+            return Err(HtlcError::NoBlockCountConsensus);
+        }
+
+        Ok(consensus_block_count)
     }
 
     /// Create a forfeit signature for a direct HTLC locked to our
