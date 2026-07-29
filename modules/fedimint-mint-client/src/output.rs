@@ -777,8 +777,6 @@ impl MintOutputStatesCreatedMulti {
             panic!("Unexpected prior state")
         };
 
-        let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
-
         // Note verification is relatively slow and CPU-bound, so parallelize them
         let spendable_notes_result: Result<Vec<_>, String> = blinded_signature_shares
             .into_par_iter()
