@@ -439,7 +439,8 @@ in
         // (lib.optionalAttrs (pname != null) { inherit pname; })
         // {
           cargoArtifacts = deps;
-          meta = { inherit mainProgram; };
+          # `mkDerivation` rejects a null `meta.mainProgram`, so only set it when we have one
+          meta = lib.optionalAttrs (mainProgram != null) { inherit mainProgram; };
           cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${extraArgs}";
 
