@@ -184,19 +184,7 @@ impl RoutingInfo {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Eq,
-    PartialEq,
-    PartialOrd,
-    Hash,
-    Serialize,
-    Deserialize,
-    Encodable,
-    Decodable,
-    Copy,
-)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable, Copy)]
 pub struct PaymentFee {
     pub base: Amount,
     pub parts_per_million: u64,
@@ -224,6 +212,17 @@ impl PaymentFee {
         base: Amount::from_sats(50),
         parts_per_million: 5_000,
     };
+
+    /// Returns `true` if this fee is within `limit` in both components.
+    ///
+    /// `absolute_fee` is monotonically increasing in `base` and in
+    /// `parts_per_million`, so a fee is bounded by the limit only when neither
+    /// component exceeds it. This is intentionally a named method rather than a
+    /// derived `PartialOrd`, which orders the fields lexicographically and
+    /// therefore stops at `base` whenever the two bases differ.
+    pub fn is_within(&self, limit: &PaymentFee) -> bool {
+        self.base <= limit.base && self.parts_per_million <= limit.parts_per_million
+    }
 
     pub fn add_to(&self, msats: u64) -> Amount {
         Amount::from_msats(msats.saturating_add(self.absolute_fee(msats)))
@@ -305,5 +304,54 @@ impl FromStr for PaymentFee {
             base,
             parts_per_million,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::Amount;
+
+    use super::PaymentFee;
+
+    /// A lower `base` must not let an over-limit `parts_per_million` through,
+    /// which is what the lexicographic ordering used to allow.
+    #[test]
+    fn is_within_enforces_both_components() {
+        // base under the limit, ppm over it, on the send side.
+        let over_ppm = PaymentFee {
+            base: Amount::from_sats(0),
+            parts_per_million: 1_000_000,
+        };
+        assert!(!over_ppm.is_within(&PaymentFee::SEND_FEE_LIMIT));
+
+        let over_ppm = PaymentFee {
+            base: Amount::from_sats(0),
+            parts_per_million: 5_000_000,
+        };
+        assert!(!over_ppm.is_within(&PaymentFee::SEND_FEE_LIMIT));
+
+        // Same on the receive side, which has the lower cap of the two.
+        let over_ppm = PaymentFee {
+            base: Amount::from_sats(0),
+            parts_per_million: 500_000,
+        };
+        assert!(!over_ppm.is_within(&PaymentFee::RECEIVE_FEE_LIMIT));
+
+        // The reverse case, which the ordering already rejected.
+        let over_base = PaymentFee {
+            base: Amount::from_sats(101),
+            parts_per_million: 0,
+        };
+        assert!(!over_base.is_within(&PaymentFee::SEND_FEE_LIMIT));
+
+        // Exactly at the limit is accepted.
+        assert!(PaymentFee::SEND_FEE_LIMIT.is_within(&PaymentFee::SEND_FEE_LIMIT));
+
+        // Strictly within on both components is accepted.
+        let ok = PaymentFee {
+            base: Amount::from_sats(50),
+            parts_per_million: 10_000,
+        };
+        assert!(ok.is_within(&PaymentFee::SEND_FEE_LIMIT));
     }
 }
