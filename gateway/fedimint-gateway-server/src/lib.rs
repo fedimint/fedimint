@@ -786,6 +786,7 @@ impl Gateway {
         self.load_clients().await?;
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
+        self.spawn_prune_registered_contracts_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -813,6 +814,53 @@ impl Gateway {
                     }
                 }
             });
+    }
+
+    /// Spawns a background task that periodically deletes registered incoming
+    /// contract records whose invoice has long expired, so unpaid invoice
+    /// registrations cannot grow the database without bound.
+    fn spawn_prune_registered_contracts_task(&self) {
+        let self_copy = self.clone();
+        self.task_group.spawn_cancellable_silent(
+            "prune registered incoming contracts",
+            async move {
+                const PRUNE_INTERVAL: Duration = Duration::from_hours(1);
+                // Records are kept for a day past invoice expiry so payments
+                // settled shortly before expiry can still complete and be
+                // verified via the preimage verification endpoint.
+                const RETENTION_AFTER_EXPIRY: Duration = Duration::from_hours(24);
+
+                let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+                loop {
+                    interval.tick().await;
+
+                    let cutoff_secs = duration_since_epoch()
+                        .saturating_sub(RETENTION_AFTER_EXPIRY)
+                        .as_secs();
+
+                    let mut dbtx = self_copy.gateway_db.begin_transaction().await;
+                    let num_pruned = dbtx.prune_registered_incoming_contracts(cutoff_secs).await;
+                    match dbtx.commit_tx_result().await {
+                        Ok(()) => {
+                            if num_pruned > 0 {
+                                info!(
+                                    target: LOG_GATEWAY,
+                                    num_pruned,
+                                    "Pruned expired incoming contract records"
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_GATEWAY,
+                                err = %err.fmt_compact(),
+                                "Failed to prune expired incoming contract records"
+                            );
+                        }
+                    }
+                }
+            },
+        );
     }
 
     /// Loops through all federations and checks their last save backup time. If
@@ -3135,10 +3183,15 @@ impl Gateway {
         // registered by the time the invoice is payable.
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
+        let invoice_expires_at_secs = duration_since_epoch()
+            .as_secs()
+            .saturating_add(u64::from(payload.expiry_secs));
+
         if dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
                 payload.amount,
+                invoice_expires_at_secs,
                 payload.contract,
             )
             .await

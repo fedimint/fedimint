@@ -3787,6 +3787,7 @@ dependencies = [
  "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-testing",
+ "fedimint-tpe",
  "futures",
  "iroh 0.35.0",
  "lightning-invoice",
