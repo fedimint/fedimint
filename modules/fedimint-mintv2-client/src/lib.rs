@@ -12,7 +12,7 @@ pub use fedimint_mintv2_common as common;
 mod api;
 #[cfg(feature = "cli")]
 mod cli;
-mod client_db;
+pub mod client_db;
 mod ecash;
 mod events;
 mod input;
