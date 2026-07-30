@@ -84,6 +84,13 @@ pub trait GatewayDbtxNcExt {
         payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract>;
 
+    /// Deletes a registered incoming contract, returning the contract if it
+    /// existed.
+    async fn delete_registered_incoming_contract(
+        &mut self,
+        payment_image: PaymentImage,
+    ) -> Option<RegisteredIncomingContract>;
+
     /// Records `operation_id` as the claimer of `payment_image`, unless another
     /// operation already claimed it, and returns the operation id that holds
     /// the claim. Lets the gateway claim at most one outgoing contract per
@@ -216,6 +223,14 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract> {
         self.get_value(&RegisteredIncomingContractKey(payment_image))
+            .await
+    }
+
+    async fn delete_registered_incoming_contract(
+        &mut self,
+        payment_image: PaymentImage,
+    ) -> Option<RegisteredIncomingContract> {
+        self.remove_entry(&RegisteredIncomingContractKey(payment_image))
             .await
     }
 

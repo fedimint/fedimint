@@ -48,7 +48,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
+    GatewayConnection, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
@@ -1002,6 +1002,10 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong);
+        }
+
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -1415,6 +1419,8 @@ pub enum ReceiveError {
     InvalidInvoice,
     #[error("Gateway returned an invoice with incorrect amount")]
     IncorrectInvoiceAmount,
+    #[error("Requested invoice expiry exceeds the maximum of one week")]
+    InvoiceExpiryTooLong,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
