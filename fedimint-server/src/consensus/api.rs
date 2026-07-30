@@ -50,9 +50,9 @@ use fedimint_core::epoch::{
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
-    CORE_CONSENSUS_VERSION, CoreConsensusVersion, ModuleConsensusVersion, SerdeModuleEncoding,
-    SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
+    AmountUnit, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult,
+    ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, ModuleConsensusVersion,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -69,7 +69,7 @@ use fedimint_core::transaction::{
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::version::non_zero_version_hash;
 use fedimint_core::{
-    ChainId, NumPeersExt as _, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1,
+    Amount, ChainId, NumPeersExt as _, OutPoint, OutPointRange, PeerId, TransactionId, secp256k1,
 };
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -86,8 +86,8 @@ use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, CoreConsensusVersionVotingActivationKey,
     ModuleConsensusVersionVotingActivationKey, ModuleFeeConsensusDesiredKey,
-    SignedSessionOutcomeKey, active_core_consensus_version, active_module_consensus_version,
-    consensus_unix_time, current_module_fee_consensus,
+    SignedSessionOutcomeKey, accrued_fees, active_core_consensus_version,
+    active_module_consensus_version, consensus_unix_time, current_module_fee_consensus,
 };
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -567,6 +567,21 @@ impl ConsensusApi {
                 )
                 .await;
         }
+
+        // Accrued fees are owed to the guardians, so they are a liability of
+        // the federation rather than headroom on top of user balances. Only the
+        // bitcoin unit is reported, as the audit has no notion of units.
+        let accrued_bitcoin_msats = accrued_fees(&mut dbtx)
+            .await
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or(Amount::ZERO)
+            .msats;
+
+        if let Ok(accrued_bitcoin_msats) = i64::try_from(accrued_bitcoin_msats) {
+            audit.add_core_item("Fees owed to guardians", -accrued_bitcoin_msats);
+        }
+
         Ok(AuditSummary::from_audit(
             &audit,
             &module_instance_id_to_kind,

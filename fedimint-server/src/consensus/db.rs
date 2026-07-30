@@ -8,18 +8,20 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime, CurrentFeeConsensus};
-use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::module::{Amounts, CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
     NumPeers, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, impl_db_lookup,
     impl_db_record,
 };
+use fedimint_logging::LOG_CONSENSUS;
 use fedimint_server_core::migration::{
     DynModuleHistoryItem, DynServerDbMigrationFn, IServerDbMigrationContext,
 };
 use futures::StreamExt;
 use serde::Serialize;
+use tracing::warn;
 
 use crate::db::DbKeyPrefix;
 
@@ -291,16 +293,176 @@ fn active_core_consensus_version_from_votes(
     threshold_version.max(initial_version)
 }
 
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct AccruedFeesKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct AccruedFeesPrefix;
+
+impl_db_record!(
+    key = AccruedFeesKey,
+    value = Amounts,
+    db_prefix = DbKeyPrefix::AccruedFees,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(key = AccruedFeesKey, query_prefix = AccruedFeesPrefix);
+
+/// Fees the federation has charged and not yet paid out to guardians.
+///
+/// Multi-unit, so the ledger is independent of the asset a fee was charged in.
+pub async fn accrued_fees<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> Amounts
+where
+    for<'tx> DatabaseTransaction<'tx, Cap>: IDatabaseTransactionOpsCore,
+{
+    dbtx.get_value(&AccruedFeesKey)
+        .await
+        .unwrap_or(Amounts::ZERO)
+}
+
+/// Credits `fees` to the accrued fee ledger.
+///
+/// On overflow the ledger is left unchanged rather than saturating, so it can
+/// never credit more than was actually charged. Every peer processes the same
+/// ordered transactions, so this decision is deterministic.
+pub async fn accrue_fees(dbtx: &mut DatabaseTransaction<'_>, fees: &Amounts) {
+    if *fees == Amounts::ZERO {
+        return;
+    }
+
+    let accrued = accrued_fees(dbtx).await;
+
+    let Some(accrued) = accrued.checked_add(fees) else {
+        warn!(
+            target: LOG_CONSENSUS,
+            ?fees,
+            "Accrued fee ledger overflow, leaving the ledger unchanged"
+        );
+
+        return;
+    };
+
+    dbtx.insert_entry(&AccruedFeesKey, &accrued).await;
+}
+
+/// Debits `amounts` from the accrued fee ledger, returning `false` and leaving
+/// the ledger unchanged if it does not hold that much in every unit.
+pub async fn debit_accrued_fees(dbtx: &mut DatabaseTransaction<'_>, amounts: &Amounts) -> bool {
+    let Some(remaining) = accrued_fees(dbtx).await.checked_sub(amounts) else {
+        return false;
+    };
+
+    dbtx.insert_entry(&AccruedFeesKey, &remaining).await;
+
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
-    use fedimint_core::{NumPeers, PeerId};
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::{Database, IRawDatabaseExt as _};
+    use fedimint_core::module::{
+        AmountUnit, Amounts, CoreConsensusVersion, ModuleConsensusVersion,
+    };
+    use fedimint_core::{Amount, NumPeers, PeerId};
 
     use super::{
-        active_core_consensus_version_from_votes, active_module_consensus_version_from_votes,
+        accrue_fees, accrued_fees, active_core_consensus_version_from_votes,
+        active_module_consensus_version_from_votes, debit_accrued_fees,
     };
+
+    fn test_db() -> Database {
+        MemDatabase::new().into_database()
+    }
+
+    fn custom(unit: u64, msats: u64) -> Amounts {
+        Amounts::new_custom(AmountUnit::new_custom(unit), Amount::from_msats(msats))
+    }
+
+    #[tokio::test]
+    async fn accrued_fees_accumulate_per_unit() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1000)).await;
+        accrue_fees(&mut dbtx.to_ref_nc(), &custom(7, 42)).await;
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(500)).await;
+
+        let expected = Amounts::new_bitcoin_msats(1500)
+            .checked_add(&custom(7, 42))
+            .expect("no overflow");
+
+        assert_eq!(accrued_fees(&mut dbtx.to_ref_nc()).await, expected);
+    }
+
+    #[tokio::test]
+    async fn accruing_zero_fees_is_a_no_op() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::ZERO).await;
+
+        assert_eq!(accrued_fees(&mut dbtx.to_ref_nc()).await, Amounts::ZERO);
+    }
+
+    #[tokio::test]
+    async fn debit_rejects_more_than_accrued() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1000)).await;
+
+        assert!(
+            !debit_accrued_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1001)).await,
+            "debit beyond the accrued balance must be rejected"
+        );
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(1000),
+            "a rejected debit must leave the ledger unchanged"
+        );
+
+        assert!(debit_accrued_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(400)).await);
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(600)
+        );
+    }
+
+    #[tokio::test]
+    async fn debit_rejects_units_the_ledger_does_not_hold() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1000)).await;
+
+        assert!(
+            !debit_accrued_fees(&mut dbtx.to_ref_nc(), &custom(7, 1)).await,
+            "a unit the ledger holds nothing of must not be debitable"
+        );
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(1000)
+        );
+    }
+
+    #[tokio::test]
+    async fn accrue_leaves_ledger_unchanged_on_overflow() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+
+        let huge = Amounts::new_bitcoin_msats(u64::MAX);
+        accrue_fees(&mut dbtx.to_ref_nc(), &huge).await;
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1)).await;
+
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            huge,
+            "an overflowing accrual must not credit anything"
+        );
+    }
 
     #[test]
     fn active_module_consensus_version_merges_legacy_and_core_votes() {

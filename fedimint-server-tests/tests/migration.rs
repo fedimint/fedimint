@@ -24,12 +24,13 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AlephUnitsKey, AlephUnitsPrefix, ConsensusUnixTimePrefix, CoreConsensusVersionVotePrefix,
-    CoreConsensusVersionVotingActivationPrefix, CoreUnixTimeVotePrefix,
-    ModuleConsensusVersionVoteFullPrefix, ModuleConsensusVersionVotingActivationPrefix,
-    ModuleFeeConsensusDesiredPrefix, ModuleFeeConsensusScheduleFullPrefix,
-    ModuleFeeConsensusVoteFullPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
-    SignedSessionOutcomePrefix, get_global_database_migrations,
+    AccruedFeesPrefix, AlephUnitsKey, AlephUnitsPrefix, ConsensusUnixTimePrefix,
+    CoreConsensusVersionVotePrefix, CoreConsensusVersionVotingActivationPrefix,
+    CoreUnixTimeVotePrefix, ModuleConsensusVersionVoteFullPrefix,
+    ModuleConsensusVersionVotingActivationPrefix, ModuleFeeConsensusDesiredPrefix,
+    ModuleFeeConsensusScheduleFullPrefix, ModuleFeeConsensusVoteFullPrefix,
+    ServerDbMigrationContext, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
 use fedimint_server::db::DbKeyPrefix;
@@ -303,6 +304,15 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // can query them.
                         let _activations = dbtx
                             .find_by_prefix(&CoreConsensusVersionVotingActivationPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::AccruedFees => {
+                        // A federation that has not charged any fees yet has no ledger entry,
+                        // just verify we can query it.
+                        let _accrued = dbtx
+                            .find_by_prefix(&AccruedFeesPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

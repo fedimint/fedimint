@@ -330,6 +330,16 @@ impl DatabaseDump {
             | server_db::DbKeyPrefix::ServerInfo
             | server_db::DbKeyPrefix::DatabaseVersion
             | server_db::DbKeyPrefix::ClientBackup => {}
+            server_db::DbKeyPrefix::AccruedFees => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::AccruedFeesPrefix,
+                    consensus_db::AccruedFeesKey,
+                    fedimint_core::module::Amounts,
+                    consensus,
+                    "Accrued Fees"
+                );
+            }
             server_db::DbKeyPrefix::ApiAnnouncements => {
                 push_db_pair_items_no_serde!(
                     dbtx,

@@ -26,6 +26,20 @@ impl Audit {
         })
     }
 
+    /// Adds an item that belongs to the federation as a whole rather than to a
+    /// single module, e.g. fees the federation has charged and owes its
+    /// guardians.
+    ///
+    /// Core items count towards [`Self::net_assets`] but, having no module
+    /// instance, do not appear in any [`ModuleSummary`].
+    pub fn add_core_item(&mut self, name: &str, milli_sat: i64) {
+        self.items.push(AuditItem {
+            name: name.to_string(),
+            milli_sat,
+            module_instance_id: None,
+        });
+    }
+
     pub async fn add_items<KP, F>(
         &mut self,
         dbtx: &mut DatabaseTransaction<'_>,

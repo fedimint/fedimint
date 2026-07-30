@@ -4,15 +4,15 @@ use std::collections::btree_map::Entry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{
-    Amounts, CoreConsensusVersion, ModuleConsensusVersion, TransactionItemAmounts,
-    TransactionItemAmountsWithFees, TransactionItemFees,
+    Amounts, CoreConsensusVersion, DYNAMIC_FEES_CORE_CONSENSUS_VERSION, ModuleConsensusVersion,
+    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees,
 };
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::consensus::db::{consensus_unix_time, module_fee_consensus_schedules};
+use crate::consensus::db::{accrue_fees, consensus_unix_time, module_fee_consensus_schedules};
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -164,7 +164,15 @@ pub async fn process_transaction_with_dbtx(
         funding_verifier.add_output_with_fees(amount)?;
     }
 
-    funding_verifier.verify_funding(version)?;
+    let fees = funding_verifier.verify_funding(version)?;
+
+    // The fees a transaction pays are owed to the guardians, who can withdraw
+    // them with a threshold-approved payout voucher. Until the ledger exists
+    // they are simply surplus, so only start accruing once the federation has
+    // activated the core consensus version that introduced it.
+    if version >= DYNAMIC_FEES_CORE_CONSENSUS_VERSION {
+        accrue_fees(dbtx, &fees).await;
+    }
 
     Ok(())
 }
@@ -215,7 +223,15 @@ impl FundingVerifier {
         Ok(self)
     }
 
-    pub fn verify_funding(mut self, version: CoreConsensusVersion) -> Result<(), TransactionError> {
+    /// Verifies the transaction is funded, returning the fees it pays the
+    /// federation.
+    ///
+    /// Any amount overpaid beyond those fees is not included: it is surplus
+    /// that cannot be attributed to a fee the federation charged.
+    pub fn verify_funding(
+        mut self,
+        version: CoreConsensusVersion,
+    ) -> Result<Amounts, TransactionError> {
         // In early versions we did not allow any overpaying
         const OVERPAY_MIN_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 1);
 
@@ -256,7 +272,7 @@ impl FundingVerifier {
             });
         }
 
-        Ok(())
+        Ok(fees)
     }
 
     fn fee_totals(&self) -> Result<(Amounts, Amounts), TransactionError> {
