@@ -15,7 +15,9 @@ use fedimint_walletv2_client::events::{
     ReceivePaymentEvent, ReceivePaymentUpdateEvent, SendPaymentEvent, SendPaymentStatus,
     SendPaymentUpdateEvent,
 };
-use fedimint_walletv2_client::{FinalSendOperationState, WalletClientInit, WalletClientModule};
+use fedimint_walletv2_client::{
+    FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
+};
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{CONFIRMATION_FINALITY_DELAY, WalletInit};
 use futures::StreamExt;
@@ -234,4 +236,52 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     }
 
     panic!("Transaction fee did not exceed one bitcoin")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    // A well-known mainnet P2PKH address. The federation runs on regtest.
+    let mainnet_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
+
+    assert_eq!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .send(
+                mainnet_address,
+                Amount::from_sat(100_000),
+                None,
+                serde_json::Value::Null,
+            )
+            .await
+            .err(),
+        Some(SendError::WrongNetwork),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_below_the_dust_limit_is_rejected() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    let address = bitcoin.get_new_address().await.as_unchecked().clone();
+
+    assert_eq!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .send(address, Amount::from_sat(1), None, serde_json::Value::Null)
+            .await
+            .err(),
+        Some(SendError::DustValue),
+    );
+
+    Ok(())
 }
