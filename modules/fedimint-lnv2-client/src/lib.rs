@@ -588,7 +588,7 @@ impl LightningClientModule {
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
-        if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT) {
+        if !send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT) {
             return Err(SendPaymentError::GatewayFeeExceedsLimit);
         }
 
@@ -976,7 +976,7 @@ impl LightningClientModule {
         let send_fee = routing_info.send_fee_default;
 
         anyhow::ensure!(
-            send_fee.le(&PaymentFee::SEND_FEE_LIMIT),
+            send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT),
             "Gateway's default send fee exceeds the limit"
         );
 
@@ -1026,7 +1026,10 @@ impl LightningClientModule {
                 .map_err(ReceiveError::SelectGateway)?,
         };
 
-        if !routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT) {
+        if !routing_info
+            .receive_fee
+            .is_within(&PaymentFee::RECEIVE_FEE_LIMIT)
+        {
             return Err(ReceiveError::GatewayFeeExceedsLimit);
         }
 
