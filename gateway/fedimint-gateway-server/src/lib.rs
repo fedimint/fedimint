@@ -23,6 +23,7 @@ mod federation_manager;
 mod federation_status;
 mod iroh_server;
 mod metrics;
+mod rate_limit;
 mod registration_health;
 pub mod rpc_server;
 mod types;
@@ -132,6 +133,7 @@ use tracing::{debug, info, info_span, warn};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
+use crate::rate_limit::TokenBucketRateLimiter;
 use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
@@ -142,6 +144,13 @@ const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_mins(10);
 /// The default number of route hints that the legacy gateway provides for
 /// invoice creation.
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
+
+/// Default maximum burst of requests to the public invoice creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_BURST: u32 = 50;
+
+/// Default sustained number of requests per second to the public invoice
+/// creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND: u32 = 5;
 
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
@@ -300,6 +309,8 @@ impl Gateway {
                 iroh_relays,
                 skip_setup: true,
                 metrics_listen,
+                invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
+                invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
             },
             gateway_db,
             client_builder,
@@ -384,6 +395,9 @@ pub struct Gateway {
 
     /// Detail-free retained results of LNv1 federation registration attempts.
     registration_health: RegistrationHealthTracker,
+
+    /// Rate limiter for the public invoice creation endpoint.
+    invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -768,6 +782,10 @@ impl Gateway {
             iroh_listen: gateway_parameters.iroh_listen,
             registrations,
             registration_health: RegistrationHealthTracker::default(),
+            invoice_rate_limiter: Arc::new(TokenBucketRateLimiter::new(
+                gateway_parameters.invoice_rate_limit_burst,
+                gateway_parameters.invoice_rate_limit_per_second,
+            )),
         })
     }
 
@@ -3376,6 +3394,13 @@ impl Gateway {
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
+        // Unauthenticated invoice creation consumes resources on the Lightning
+        // node and burns CPU on contract verification, so the request rate is
+        // limited before any other work is done.
+        if !self.invoice_rate_limiter.try_acquire() {
+            return Err(PublicGatewayError::RateLimited);
+        }
+
         if !payload.contract.verify() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
@@ -3417,7 +3442,7 @@ impl Gateway {
 
         if payload.expiry_secs > MAX_INVOICE_EXPIRY_SECS {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
-                "The invoice expiry exceeds the maximum of one week".to_string(),
+                "The invoice expiry exceeds the maximum of one day".to_string(),
             )));
         }
 

@@ -1419,7 +1419,7 @@ pub enum ReceiveError {
     InvalidInvoice,
     #[error("Gateway returned an invoice with incorrect amount")]
     IncorrectInvoiceAmount,
-    #[error("Requested invoice expiry exceeds the maximum of one week")]
+    #[error("Requested invoice expiry exceeds the maximum of one day")]
     InvoiceExpiryTooLong,
 }
 
