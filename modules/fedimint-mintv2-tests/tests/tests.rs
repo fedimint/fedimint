@@ -18,7 +18,7 @@ use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_mintv2_client::{
     ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, MintOperationMeta,
     ReceiveECashError, ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent,
-    SendPaymentEvent, SpendableNote,
+    SendECashError, SendPaymentEvent, SpendableNote,
 };
 use fedimint_mintv2_common::{Denomination, KIND};
 use fedimint_mintv2_server::MintInit;
@@ -636,6 +636,26 @@ async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
             .receive(dust_ecash, Value::Null)
             .await,
         Err(ReceiveECashError::UneconomicalDenomination),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    // Deliberately no `issue_ecash` call: the wallet is empty.
+    let client = fed.new_client().await;
+
+    assert_eq!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .send(Amount::from_sats(1_000), Value::Null, false)
+            .await
+            .map(|(_operation_id, ecash)| ecash.amount()),
+        Err(SendECashError::InsufficientBalance),
     );
 
     Ok(())
