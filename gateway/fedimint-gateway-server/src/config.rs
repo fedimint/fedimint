@@ -140,6 +140,26 @@ pub struct GatewayOpts {
         value_parser = BoolishValueParser::new()
     )]
     skip_setup: bool,
+
+    /// Maximum burst of requests to the public invoice creation endpoint
+    /// accepted before rate limiting kicks in
+    #[arg(
+        long = "invoice-rate-limit-burst",
+        env = envs::FM_GATEWAY_INVOICE_RATE_LIMIT_BURST_ENV,
+        default_value_t = super::DEFAULT_INVOICE_RATE_LIMIT_BURST,
+        value_parser = clap::value_parser!(u32).range(1..)
+    )]
+    invoice_rate_limit_burst: u32,
+
+    /// Sustained number of requests per second to the public invoice creation
+    /// endpoint accepted before rate limiting kicks in
+    #[arg(
+        long = "invoice-rate-limit-per-second",
+        env = envs::FM_GATEWAY_INVOICE_RATE_LIMIT_PER_SECOND_ENV,
+        default_value_t = super::DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
+        value_parser = clap::value_parser!(u32).range(1..)
+    )]
+    invoice_rate_limit_per_second: u32,
 }
 
 impl GatewayOpts {
@@ -181,6 +201,8 @@ impl GatewayOpts {
             iroh_relays: self.iroh_relays.clone(),
             skip_setup: self.skip_setup,
             metrics_listen,
+            invoice_rate_limit_burst: self.invoice_rate_limit_burst,
+            invoice_rate_limit_per_second: self.invoice_rate_limit_per_second,
         })
     }
 }
@@ -206,4 +228,6 @@ pub struct GatewayParameters {
     pub iroh_relays: Vec<SafeUrl>,
     pub skip_setup: bool,
     pub metrics_listen: SocketAddr,
+    pub invoice_rate_limit_burst: u32,
+    pub invoice_rate_limit_per_second: u32,
 }

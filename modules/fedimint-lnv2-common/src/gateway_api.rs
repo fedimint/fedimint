@@ -125,7 +125,7 @@ impl GatewayConnection for RealGatewayConnection {
 /// `create_bolt11_invoice`. Bounding the expiry bounds the lifetime of both
 /// the hold invoice created on the gateway's Lightning node and the incoming
 /// contract record in the gateway's database.
-pub const MAX_INVOICE_EXPIRY_SECS: u32 = 60 * 60 * 24 * 7;
+pub const MAX_INVOICE_EXPIRY_SECS: u32 = 60 * 60 * 24;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CreateBolt11InvoicePayload {
