@@ -456,6 +456,7 @@ mod db {
     use std::collections::BTreeMap;
 
     use anyhow::{Context, ensure};
+    use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::bitcoin::hashes::sha256;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
@@ -464,10 +465,12 @@ mod db {
     use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::secp256k1::{SECP256K1, SecretKey};
+    use fedimint_core::secp256k1::{PublicKey, SECP256K1, SecretKey};
     use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
     use fedimint_core::transaction::{Transaction, TransactionSignature};
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, PeerId};
+    use fedimint_lnv2_client::db;
     use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
     use fedimint_lnv2_common::{
         LightningCommonInit, LightningInput, LightningInputV0, LightningOutput, LightningOutputV0,
@@ -481,13 +484,15 @@ mod db {
     use fedimint_server::consensus::db::{AcceptedItemKey, SignedSessionOutcomeKey};
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_with_decoders, validate_migrations_server,
+        TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_client,
+        snapshot_db_migrations_with_decoders, validate_migrations_client,
+        validate_migrations_server,
     };
     use futures::StreamExt;
     use strum::IntoEnumIterator;
     use tpe::{AggregateDecryptionKey, AggregatePublicKey, G1Affine};
 
-    use crate::LightningInit;
+    use crate::{LightningClientInit, LightningClientModule, LightningInit};
 
     /// An incoming contract that is only well-formed enough to survive a
     /// round-trip through the database. `migrate_to_v1` never inspects the
@@ -791,6 +796,97 @@ mod db {
 
             Ok(())
         })
+        .await
+    }
+
+    /// The gateway the client-side snapshot remembers. Nothing dials it, so the
+    /// key and the url only have to survive a database round-trip.
+    fn gateway_key() -> PublicKey {
+        SecretKey::from_slice(&[9; 32])
+            .expect("a repeated non-zero byte is a valid secret key")
+            .public_key(SECP256K1)
+    }
+
+    fn gateway_url() -> SafeUrl {
+        SafeUrl::parse("https://gateway.example/").expect("a hardcoded https url parses")
+    }
+
+    /// The client-side counterpart of `create_server_db_with_v0_data`, seeding
+    /// the module's isolated namespace. The lnv2 client has no migrations yet,
+    /// so what the paired test checks is that these rows still decode.
+    async fn create_client_db_with_v0_data(database: Database) {
+        let mut dbtx = database.begin_transaction().await;
+
+        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`.
+        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
+            .await;
+
+        dbtx.insert_new_entry(&db::GatewayKey(gateway_key()), &gateway_url())
+            .await;
+
+        dbtx.insert_new_entry(&db::IncomingContractStreamIndexKey, &7)
+            .await;
+
+        dbtx.commit_tx().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
+        snapshot_db_migrations_client::<_, _, LightningCommonInit>(
+            "lightningv2-client-v0",
+            |database| Box::pin(async { create_client_db_with_v0_data(database).await }),
+            || (Vec::new(), Vec::new()),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_client_db_migrations() -> anyhow::Result<()> {
+        let _ = TracingSetup::default().init();
+        let module = DynClientModuleInit::from(LightningClientInit::default());
+
+        validate_migrations_client::<_, _, LightningClientModule>(
+            module,
+            "lightningv2-client",
+            |database, _, _| async move {
+                let mut dbtx = database.begin_transaction_nc().await;
+
+                for prefix in db::DbKeyPrefix::iter() {
+                    match prefix {
+                        db::DbKeyPrefix::Gateway => {
+                            let url = dbtx
+                                .get_value(&db::GatewayKey(gateway_key()))
+                                .await
+                                .context("the seeded gateway must still decode")?;
+
+                            ensure!(
+                                url == gateway_url(),
+                                "the gateway url must round-trip unchanged, got {url}"
+                            );
+                        }
+                        db::DbKeyPrefix::IncomingContractStreamIndex => {
+                            let index = dbtx
+                                .get_value(&db::IncomingContractStreamIndexKey)
+                                .await
+                                .context("the seeded stream index must still decode")?;
+
+                            ensure!(
+                                index == 7,
+                                "the stream index must round-trip unchanged, got {index}"
+                            );
+                        }
+                        db::DbKeyPrefix::ExternalReservedStart
+                        | db::DbKeyPrefix::CoreInternalReservedStart
+                        | db::DbKeyPrefix::CoreInternalReservedEnd => {
+                            // Range markers, not prefixes the client writes
+                            // under, so there is no row to seed or read back.
+                        }
+                    }
+                }
+
+                Ok(())
+            },
+        )
         .await
     }
 }

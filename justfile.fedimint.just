@@ -130,6 +130,7 @@ test-server-db-migrations PACKAGE *EXTRA_ARGS:
 # regenerate client db migration snapshots
 # ex: `just snapshot-client-db-migrations fedimint-mint-tests`
 # ex: `just snapshot-client-db-migrations fedimint-ln-tests`
+# ex: `just snapshot-client-db-migrations fedimint-lnv2-tests`
 # ex: `just snapshot-client-db-migrations fedimint-wallet-tests`
 snapshot-client-db-migrations PACKAGE *EXTRA_ARGS:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' snapshot_client_db_migrations {{EXTRA_ARGS}}
@@ -141,6 +142,7 @@ test-client-db-migrations PACKAGE *EXTRA_ARGS:
 test-db-migrations:
   just test-client-db-migrations fedimint-mint-tests
   just test-client-db-migrations fedimint-ln-tests
+  just test-client-db-migrations fedimint-lnv2-tests
   just test-client-db-migrations fedimint-wallet-tests
   just test-server-db-migrations fedimint-mint-tests
   just test-server-db-migrations fedimint-ln-tests
@@ -152,6 +154,7 @@ test-db-migrations:
 snapshot-db-migrations:
   just snapshot-client-db-migrations fedimint-mint-tests
   just snapshot-client-db-migrations fedimint-ln-tests
+  just snapshot-client-db-migrations fedimint-lnv2-tests
   just snapshot-client-db-migrations fedimint-wallet-tests
   just snapshot-server-db-migrations fedimint-mint-tests
   just snapshot-server-db-migrations fedimint-ln-tests
