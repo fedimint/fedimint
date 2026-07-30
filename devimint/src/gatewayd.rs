@@ -193,6 +193,26 @@ impl<'a> GatewayClient {
         }
     }
 
+    /// Query the gateway's payment log for `fed_id`, filtered to
+    /// `event_kinds`, returning the newest `pagination_size` matching entries
+    /// as raw JSON.
+    pub async fn payment_log(
+        &self,
+        fed_id: &str,
+        event_kinds: &[&str],
+        pagination_size: usize,
+    ) -> Result<serde_json::Value> {
+        cmd!(
+            self,
+            "payment-log",
+            "--federation-id={fed_id}",
+            "--pagination-size={pagination_size}"
+        )
+        .args(event_kinds.iter().flat_map(|kind| ["--event-kinds", *kind]))
+        .out_json()
+        .await
+    }
+
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         if gateway_cli_version >= *VERSION_0_11_0_ALPHA {

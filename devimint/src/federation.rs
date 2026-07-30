@@ -916,10 +916,18 @@ impl Federation {
         info!(amount, deposit_fees, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id();
 
+        let uses_walletv2 = crate::util::supports_wallet_v2();
+
+        // Gateways record the walletv2 receive events in their payment log
+        // (since v0.11), which lets devimint wait for each deposit to actually
+        // be claimed before polling balances. Reading the log filtered to
+        // those events needs `payment-log --event-kinds` (since v0.10).
+        let walletv2_claim_wait = uses_walletv2
+            && crate::util::GatewayCli::version_or_default().await >= *VERSION_0_10_0_ALPHA;
+
         // For walletv2, capture initial balances since deposits are auto-claimed
         // and we need to check balance change rather than absolute balance
         // (same approach as pegin_client).
-        let uses_walletv2 = crate::util::supports_wallet_v2();
         let mut initial_balances = Vec::new();
         if uses_walletv2 {
             for gw in &gateways {
@@ -957,6 +965,62 @@ impl Federation {
             elapsed_ms = %pegin_start.elapsed().as_millis(),
             "Mined gateway pegin blocks"
         );
+
+        if walletv2_claim_wait {
+            // Block catch-up and deposit scanning are the slow parts of a
+            // gateway pegin and have pushed past the default 60s poll budget
+            // on degraded CI federations, so the claim wait gets a longer
+            // timeout of its own.
+            const CLAIM_TIMEOUT: Duration = Duration::from_secs(180);
+            const PAYMENT_LOG_PAGE_SIZE: usize = 100;
+
+            try_join_all(
+                gateways
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, gw)| gw.gatewayd_version >= *VERSION_0_11_0_ALPHA)
+                    .map(|(i, gw)| {
+                        let fed_id = fed_id.clone();
+                        let gateway_name = gw.gw_name.clone();
+                        let gateway_ln = gw.ln.ln_type().to_string();
+                        let deposit_address = gateway_deposit_addrs[i].clone();
+                        poll_with_timeout("gateway pegin claim", CLAIM_TIMEOUT, move || {
+                            let fed_id = fed_id.clone();
+                            let gateway_name = gateway_name.clone();
+                            let gateway_ln = gateway_ln.clone();
+                            let deposit_address = deposit_address.clone();
+                            async move {
+                                let events = gw
+                                    .client()
+                                    .payment_log(
+                                        &fed_id,
+                                        &["payment-receive", "payment-receive-update"],
+                                        PAYMENT_LOG_PAGE_SIZE,
+                                    )
+                                    .await
+                                    .map_err(ControlFlow::Continue)?;
+
+                                if !walletv2_receive_claimed(&events, &deposit_address) {
+                                    return Err(ControlFlow::Continue(anyhow::anyhow!(
+                                        "Gateway {gateway_name} ({gateway_ln}) has not claimed the deposit to {deposit_address} yet"
+                                    )));
+                                }
+
+                                debug!(
+                                    gateway = %gateway_name,
+                                    ln = %gateway_ln,
+                                    address = %deposit_address,
+                                    elapsed_ms = %pegin_start.elapsed().as_millis(),
+                                    "Walletv2 gateway pegin claimed"
+                                );
+
+                                Ok(())
+                            }
+                        })
+                    }),
+            )
+            .await?;
+        }
 
         try_join_all(gateways.into_iter().enumerate().map(|(i, gw)| {
             let initial_balance = if uses_walletv2 {
@@ -1324,6 +1388,38 @@ impl Federation {
             .keys()
             .map(|&peer_id| PeerId::from(peer_id as u16))
     }
+}
+
+/// Whether a gateway `payment-log` response contains a successful walletv2
+/// receive for `deposit_address`.
+///
+/// An aborted receive is reprocessed into a new receive operation for the
+/// same still-unspent deposit, so a single address can have several receive
+/// events; the deposit is claimed once any of their operations reports a
+/// `Success` update.
+fn walletv2_receive_claimed(events: &serde_json::Value, deposit_address: &str) -> bool {
+    let Some(events) = events.as_array() else {
+        return false;
+    };
+
+    let is_walletv2 = |event: &serde_json::Value| event["module"]["kind"] == "walletv2";
+
+    let receive_operations = events
+        .iter()
+        .filter(|event| {
+            is_walletv2(event)
+                && event["kind"] == "payment-receive"
+                && event["payload"]["address"] == deposit_address
+        })
+        .map(|event| &event["payload"]["operation_id"])
+        .collect::<Vec<_>>();
+
+    events.iter().any(|event| {
+        is_walletv2(event)
+            && event["kind"] == "payment-receive-update"
+            && event["payload"]["status"] == "Success"
+            && receive_operations.contains(&&event["payload"]["operation_id"])
+    })
 }
 
 #[derive(Clone)]
