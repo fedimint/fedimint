@@ -244,6 +244,7 @@ async fn process_and_print_tweak_source(
                                 | ConsensusItem::CoreConsensusVersion(_)
                                 | ConsensusItem::CoreUnixTime(_)
                                 | ConsensusItem::ModuleFeeConsensus(_)
+                                | ConsensusItem::FeePayoutVoucher(_)
                                 | ConsensusItem::Default { .. } => None,
                             })
                             .collect();

@@ -29,8 +29,8 @@ use fedimint_core::envs::{
     is_core_automatic_consensus_version_voting_disabled, is_running_in_test_env,
 };
 use fedimint_core::epoch::{
-    ConsensusItem, ConsensusUnixTime, ModuleConsensusVersionRequest, ModuleConsensusVersionVote,
-    ModuleFeeConsensusVote,
+    ConsensusItem, ConsensusUnixTime, FeePayoutVoucherVote, ModuleConsensusVersionRequest,
+    ModuleConsensusVersionVote, ModuleFeeConsensusVote,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
@@ -49,8 +49,8 @@ use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMon
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
-use futures::FutureExt;
 use futures::future::join_all;
+use futures::{FutureExt, StreamExt as _};
 use iroh::Endpoint;
 use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
 use jsonrpsee::RpcModule;
@@ -64,7 +64,8 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::db::{
-    CoreConsensusVersionVotingActivationKey, CoreUnixTimeVoteKey,
+    CoreConsensusVersionVotingActivationKey, CoreUnixTimeVoteKey, FeePayoutVoucherDesiredKey,
+    FeePayoutVoucherDesiredPrefix, FeePayoutVoucherVoteKey,
     ModuleConsensusVersionVotingActivationKey, ModuleFeeConsensusDesiredKey,
     active_core_consensus_version, active_module_consensus_version, current_module_fee_consensus,
 };
@@ -511,9 +512,60 @@ fn submit_core_ci_proposals(task_group: &TaskGroup, context: CoreCiProposalConte
                 );
             }
 
+            for vote in fee_payout_voucher_votes(&db, our_peer_id).await {
+                if submission_sender
+                    .send(ConsensusItem::FeePayoutVoucher(vote))
+                    .await
+                    .is_err()
+                {
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Unable to submit fee payout voucher vote proposal via channel"
+                    );
+                }
+            }
+
             interval.tick().await;
         }
     });
+}
+
+/// Payouts this guardian wants to vote for and has not yet voted for.
+///
+/// Our own vote is dropped from the desired set once it is in consensus, so a
+/// payout is never proposed twice. Without that, claiming a voucher would free
+/// its claimant key for a second proposal that no guardian intended.
+async fn fee_payout_voucher_votes(db: &Database, our_peer_id: PeerId) -> Vec<FeePayoutVoucherVote> {
+    let mut dbtx = db.begin_transaction().await;
+
+    let desired = dbtx
+        .find_by_prefix(&FeePayoutVoucherDesiredPrefix)
+        .await
+        .map(|(key, amounts)| (key.claimant, amounts))
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut votes = Vec::new();
+
+    for (claimant, amounts) in desired {
+        let our_vote = dbtx
+            .get_value(&FeePayoutVoucherVoteKey {
+                claimant,
+                peer_id: our_peer_id,
+            })
+            .await;
+
+        if our_vote.as_ref() == Some(&amounts) {
+            dbtx.remove_entry(&FeePayoutVoucherDesiredKey { claimant })
+                .await;
+        } else {
+            votes.push(FeePayoutVoucherVote { claimant, amounts });
+        }
+    }
+
+    dbtx.commit_tx().await;
+
+    votes
 }
 
 struct ModuleCiProposalContext {

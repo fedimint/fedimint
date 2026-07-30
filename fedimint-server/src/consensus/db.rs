@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use anyhow::bail;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
@@ -9,6 +10,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{ConsensusItem, ConsensusUnixTime, CurrentFeeConsensus};
 use fedimint_core::module::{Amounts, CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
@@ -357,6 +359,161 @@ pub async fn debit_accrued_fees(dbtx: &mut DatabaseTransaction<'_>, amounts: &Am
     true
 }
 
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct FeePayoutVoucherVoteKey {
+    pub claimant: PublicKey,
+    pub peer_id: PeerId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct FeePayoutVoucherVotePrefix {
+    pub claimant: PublicKey,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct FeePayoutVoucherVoteFullPrefix;
+
+impl_db_record!(
+    key = FeePayoutVoucherVoteKey,
+    value = Amounts,
+    db_prefix = DbKeyPrefix::FeePayoutVoucherVote,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = FeePayoutVoucherVoteKey,
+    query_prefix = FeePayoutVoucherVotePrefix
+);
+
+impl_db_lookup!(
+    key = FeePayoutVoucherVoteKey,
+    query_prefix = FeePayoutVoucherVoteFullPrefix
+);
+
+/// A payout this guardian wants to vote for, kept locally until its vote has
+/// made it into consensus.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct FeePayoutVoucherDesiredKey {
+    pub claimant: PublicKey,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct FeePayoutVoucherDesiredPrefix;
+
+impl_db_record!(
+    key = FeePayoutVoucherDesiredKey,
+    value = Amounts,
+    db_prefix = DbKeyPrefix::FeePayoutVoucherDesired,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = FeePayoutVoucherDesiredKey,
+    query_prefix = FeePayoutVoucherDesiredPrefix
+);
+
+/// A payout a threshold of guardians has approved, spendable exactly once by
+/// the claimant key it is stored under.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ApprovedFeePayoutVoucherKey {
+    pub claimant: PublicKey,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ApprovedFeePayoutVoucherPrefix;
+
+impl_db_record!(
+    key = ApprovedFeePayoutVoucherKey,
+    value = Amounts,
+    db_prefix = DbKeyPrefix::ApprovedFeePayoutVoucher,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = ApprovedFeePayoutVoucherKey,
+    query_prefix = ApprovedFeePayoutVoucherPrefix
+);
+
+/// Records a peer's vote for a payout and approves it once a threshold of
+/// peers has voted for the same terms.
+///
+/// A vote for [`Amounts::ZERO`] retracts the peer's earlier vote instead.
+///
+/// Returns an error without writing anything if the vote changes nothing, or
+/// if the ledger cannot cover an otherwise approved payout. The proposing
+/// guardian is then free to vote again once enough fees have accrued.
+pub async fn process_fee_payout_voucher_vote(
+    dbtx: &mut DatabaseTransaction<'_>,
+    num_peers: NumPeers,
+    claimant: PublicKey,
+    amounts: &Amounts,
+    peer_id: PeerId,
+) -> anyhow::Result<()> {
+    if dbtx
+        .get_value(&ApprovedFeePayoutVoucherKey { claimant })
+        .await
+        .is_some()
+    {
+        bail!("Payout voucher has already been approved");
+    }
+
+    let key = FeePayoutVoucherVoteKey { claimant, peer_id };
+
+    if *amounts == Amounts::ZERO {
+        if dbtx.remove_entry(&key).await.is_none() {
+            bail!("Payout voucher vote retraction is redundant");
+        }
+
+        return Ok(());
+    }
+
+    if dbtx.get_value(&key).await.as_ref() == Some(amounts) {
+        bail!("Payout voucher vote is redundant");
+    }
+
+    // Counted before this vote is stored, so that an unaffordable payout can be
+    // rejected without having written anything.
+    let matching_votes = dbtx
+        .find_by_prefix(&FeePayoutVoucherVotePrefix { claimant })
+        .await
+        .filter(|(key, voted)| std::future::ready(key.peer_id != peer_id && voted == amounts))
+        .count()
+        .await
+        + 1;
+
+    if matching_votes < num_peers.threshold() {
+        dbtx.insert_entry(&key, amounts).await;
+
+        return Ok(());
+    }
+
+    if !debit_accrued_fees(dbtx, amounts).await {
+        bail!("Accrued fees do not cover the approved payout voucher");
+    }
+
+    dbtx.insert_new_entry(&ApprovedFeePayoutVoucherKey { claimant }, amounts)
+        .await;
+
+    // The votes have served their purpose. Clearing them means a second payout
+    // to the same claimant needs a fresh threshold of votes.
+    dbtx.remove_by_prefix(&FeePayoutVoucherVotePrefix { claimant })
+        .await;
+
+    Ok(())
+}
+
+/// Spends an approved payout voucher, returning what it was worth.
+///
+/// Removing the voucher is what makes it single-use: a second transaction
+/// spending the same claimant key finds nothing left to spend.
+pub async fn spend_fee_payout_voucher(
+    dbtx: &mut DatabaseTransaction<'_>,
+    claimant: PublicKey,
+) -> Option<Amounts> {
+    dbtx.remove_entry(&ApprovedFeePayoutVoucherKey { claimant })
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -366,11 +523,13 @@ mod tests {
     use fedimint_core::module::{
         AmountUnit, Amounts, CoreConsensusVersion, ModuleConsensusVersion,
     };
-    use fedimint_core::{Amount, NumPeers, PeerId};
+    use fedimint_core::secp256k1::{Keypair, PublicKey, SecretKey};
+    use fedimint_core::{Amount, NumPeers, PeerId, secp256k1};
 
     use super::{
-        accrue_fees, accrued_fees, active_core_consensus_version_from_votes,
+        DatabaseTransaction, accrue_fees, accrued_fees, active_core_consensus_version_from_votes,
         active_module_consensus_version_from_votes, debit_accrued_fees,
+        process_fee_payout_voucher_vote, spend_fee_payout_voucher,
     };
 
     fn test_db() -> Database {
@@ -445,6 +604,283 @@ mod tests {
         assert_eq!(
             accrued_fees(&mut dbtx.to_ref_nc()).await,
             Amounts::new_bitcoin_msats(1000)
+        );
+    }
+
+    fn claimant(seed: u8) -> PublicKey {
+        Keypair::from_secret_key(
+            secp256k1::SECP256K1,
+            &SecretKey::from_slice(&[seed; 32]).expect("valid secret key"),
+        )
+        .public_key()
+    }
+
+    /// Votes `amounts` for `claimant` from `peers`, returning the outcome of
+    /// each vote in order.
+    async fn vote_all(
+        dbtx: &mut DatabaseTransaction<'_>,
+        num_peers: NumPeers,
+        claimant: PublicKey,
+        amounts: &Amounts,
+        peers: impl IntoIterator<Item = u16>,
+    ) -> Vec<bool> {
+        let mut outcomes = Vec::new();
+
+        for peer in peers {
+            outcomes.push(
+                process_fee_payout_voucher_vote(
+                    &mut dbtx.to_ref_nc(),
+                    num_peers,
+                    claimant,
+                    amounts,
+                    PeerId::from(peer),
+                )
+                .await
+                .is_ok(),
+            );
+        }
+
+        outcomes
+    }
+
+    #[tokio::test]
+    async fn voucher_is_approved_at_threshold_and_debits_the_ledger() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(1);
+        let amounts = Amounts::new_bitcoin_msats(1000);
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(2500)).await;
+
+        // Threshold of 4 peers is 3, so the first two votes only record.
+        assert_eq!(
+            vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [0, 1]).await,
+            vec![true, true]
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            None,
+            "a voucher below threshold must not be spendable"
+        );
+
+        assert_eq!(
+            vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [2]).await,
+            vec![true]
+        );
+
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(1500),
+            "approval must debit the ledger"
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            Some(amounts),
+            "an approved voucher is worth what was voted for"
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            None,
+            "a voucher must not be spendable twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn votes_for_different_amounts_do_not_add_up() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(2);
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(9999)).await;
+
+        for (peer, msats) in [(0u16, 1000u64), (1, 1000), (2, 1001)] {
+            vote_all(
+                &mut dbtx.to_ref_nc(),
+                num_peers,
+                claimant,
+                &Amounts::new_bitcoin_msats(msats),
+                [peer],
+            )
+            .await;
+        }
+
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            None,
+            "only byte-identical terms may be counted together"
+        );
+    }
+
+    #[tokio::test]
+    async fn approval_is_rejected_when_the_ledger_cannot_cover_it() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(3);
+        let amounts = Amounts::new_bitcoin_msats(1000);
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(999)).await;
+
+        assert_eq!(
+            vote_all(
+                &mut dbtx.to_ref_nc(),
+                num_peers,
+                claimant,
+                &amounts,
+                [0, 1, 2]
+            )
+            .await,
+            vec![true, true, false],
+            "the vote that would approve an unaffordable payout must be rejected"
+        );
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(999),
+            "a rejected approval must not touch the ledger"
+        );
+
+        // Once enough has accrued, the same vote goes through. In production the
+        // rejected item is discarded whole, so the peer is free to vote again.
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(1)).await;
+
+        assert_eq!(
+            vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [2]).await,
+            vec![true]
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            Some(amounts)
+        );
+    }
+
+    #[tokio::test]
+    async fn retraction_prevents_a_stale_proposal_from_being_approved() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(4);
+        let amounts = Amounts::new_bitcoin_msats(1000);
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(5000)).await;
+
+        vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [0, 1]).await;
+
+        // Peer 1 changes its mind before the third guardian ever votes.
+        assert_eq!(
+            vote_all(
+                &mut dbtx.to_ref_nc(),
+                num_peers,
+                claimant,
+                &Amounts::ZERO,
+                [1]
+            )
+            .await,
+            vec![true]
+        );
+        assert_eq!(
+            vote_all(
+                &mut dbtx.to_ref_nc(),
+                num_peers,
+                claimant,
+                &Amounts::ZERO,
+                [1]
+            )
+            .await,
+            vec![false],
+            "retracting a vote that is not there changes nothing"
+        );
+
+        assert_eq!(
+            vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [2]).await,
+            vec![true]
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            None,
+            "a retracted vote must not count towards a later approval"
+        );
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            Amounts::new_bitcoin_msats(5000)
+        );
+    }
+
+    #[tokio::test]
+    async fn redundant_votes_are_rejected() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(5);
+        let amounts = Amounts::new_bitcoin_msats(1000);
+
+        assert_eq!(
+            vote_all(&mut dbtx.to_ref_nc(), num_peers, claimant, &amounts, [0, 0]).await,
+            vec![true, false],
+            "a peer repeating its own vote changes nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn vouchers_are_tracked_per_claimant() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let amounts = Amounts::new_bitcoin_msats(1000);
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(5000)).await;
+
+        vote_all(
+            &mut dbtx.to_ref_nc(),
+            num_peers,
+            claimant(6),
+            &amounts,
+            [0, 1, 2],
+        )
+        .await;
+
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant(7)).await,
+            None,
+            "approving one claimant must not fund another"
+        );
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant(6)).await,
+            Some(amounts)
+        );
+    }
+
+    #[tokio::test]
+    async fn vouchers_carry_any_unit() {
+        let db = test_db();
+        let mut dbtx = db.begin_transaction().await;
+        let num_peers = NumPeers::from(4);
+        let claimant = claimant(8);
+        let amounts = custom(7, 250)
+            .checked_add(&Amounts::new_bitcoin_msats(100))
+            .expect("no overflow");
+
+        accrue_fees(&mut dbtx.to_ref_nc(), &Amounts::new_bitcoin_msats(100)).await;
+        accrue_fees(&mut dbtx.to_ref_nc(), &custom(7, 500)).await;
+
+        vote_all(
+            &mut dbtx.to_ref_nc(),
+            num_peers,
+            claimant,
+            &amounts,
+            [0, 1, 2],
+        )
+        .await;
+
+        assert_eq!(
+            spend_fee_payout_voucher(&mut dbtx.to_ref_nc(), claimant).await,
+            Some(amounts)
+        );
+        assert_eq!(
+            accrued_fees(&mut dbtx.to_ref_nc()).await,
+            custom(7, 250),
+            "every unit of the voucher must be debited"
         );
     }
 
@@ -883,7 +1319,8 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
                             ConsensusItem::ModuleConsensusVersion(_)
                             | ConsensusItem::CoreConsensusVersion(_)
                             | ConsensusItem::CoreUnixTime(_)
-                            | ConsensusItem::ModuleFeeConsensus(_) => vec![],
+                            | ConsensusItem::ModuleFeeConsensus(_)
+                            | ConsensusItem::FeePayoutVoucher(_) => vec![],
                             ConsensusItem::Default { .. } => {
                                 unreachable!("We never save unknown CIs on the server side")
                             }

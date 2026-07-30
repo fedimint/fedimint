@@ -271,7 +271,9 @@ impl DatabaseDump {
         dbtx: &mut DatabaseTransaction<'_>,
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
-        if Self::write_serialized_dynamic_fee_consensus_range(&table, dbtx, consensus).await {
+        if Self::write_serialized_dynamic_fee_consensus_range(&table, dbtx, consensus).await
+            || Self::write_serialized_fee_payout_range(&table, dbtx, consensus).await
+        {
             return;
         }
 
@@ -326,20 +328,14 @@ impl DatabaseDump {
             | server_db::DbKeyPrefix::ModuleFeeConsensusSchedule
             | server_db::DbKeyPrefix::CoreConsensusVersionVote
             | server_db::DbKeyPrefix::CoreConsensusVersionVotingActivation
+            | server_db::DbKeyPrefix::FeePayoutVoucherVote
+            | server_db::DbKeyPrefix::FeePayoutVoucherDesired
+            | server_db::DbKeyPrefix::ApprovedFeePayoutVoucher
+            | server_db::DbKeyPrefix::AccruedFees
             | server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo
             | server_db::DbKeyPrefix::DatabaseVersion
             | server_db::DbKeyPrefix::ClientBackup => {}
-            server_db::DbKeyPrefix::AccruedFees => {
-                push_db_pair_items_no_serde!(
-                    dbtx,
-                    consensus_db::AccruedFeesPrefix,
-                    consensus_db::AccruedFeesKey,
-                    fedimint_core::module::Amounts,
-                    consensus,
-                    "Accrued Fees"
-                );
-            }
             server_db::DbKeyPrefix::ApiAnnouncements => {
                 push_db_pair_items_no_serde!(
                     dbtx,
@@ -361,6 +357,60 @@ impl DatabaseDump {
                 );
             }
         }
+    }
+
+    /// Fee payout ledger and voucher tables, split out of
+    /// `write_serialized_consensus_range` to keep it within the line limit.
+    async fn write_serialized_fee_payout_range(
+        table: &server_db::DbKeyPrefix,
+        dbtx: &mut DatabaseTransaction<'_>,
+        consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
+    ) -> bool {
+        match table {
+            server_db::DbKeyPrefix::FeePayoutVoucherVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::FeePayoutVoucherVoteFullPrefix,
+                    consensus_db::FeePayoutVoucherVoteKey,
+                    fedimint_core::module::Amounts,
+                    consensus,
+                    "Fee Payout Voucher Votes"
+                );
+            }
+            server_db::DbKeyPrefix::FeePayoutVoucherDesired => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::FeePayoutVoucherDesiredPrefix,
+                    consensus_db::FeePayoutVoucherDesiredKey,
+                    fedimint_core::module::Amounts,
+                    consensus,
+                    "Fee Payout Vouchers Desired"
+                );
+            }
+            server_db::DbKeyPrefix::ApprovedFeePayoutVoucher => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::ApprovedFeePayoutVoucherPrefix,
+                    consensus_db::ApprovedFeePayoutVoucherKey,
+                    fedimint_core::module::Amounts,
+                    consensus,
+                    "Approved Fee Payout Vouchers"
+                );
+            }
+            server_db::DbKeyPrefix::AccruedFees => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::AccruedFeesPrefix,
+                    consensus_db::AccruedFeesKey,
+                    fedimint_core::module::Amounts,
+                    consensus,
+                    "Accrued Fees"
+                );
+            }
+            _ => return false,
+        }
+
+        true
     }
 
     async fn write_serialized_dynamic_fee_consensus_range(

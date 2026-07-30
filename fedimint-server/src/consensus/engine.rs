@@ -54,6 +54,7 @@ use crate::consensus::db::{
     ModuleFeeConsensusVoteKey, ModuleFeeConsensusVotePrefix, SignedSessionOutcomeKey,
     SignedSessionOutcomePrefix, active_core_consensus_version, active_module_consensus_version,
     consensus_unix_time, consensus_unix_time_from_votes, current_module_fee_consensus,
+    process_fee_payout_voucher_vote,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -1290,6 +1291,22 @@ impl ConsensusEngine {
                 }
 
                 Ok(())
+            }
+            ConsensusItem::FeePayoutVoucher(vote) => {
+                if self.active_core_consensus_version(dbtx).await
+                    < DYNAMIC_FEES_CORE_CONSENSUS_VERSION
+                {
+                    bail!("Fee payout vouchers are not active for this core consensus version");
+                }
+
+                process_fee_payout_voucher_vote(
+                    dbtx,
+                    self.num_peers(),
+                    vote.claimant,
+                    &vote.amounts,
+                    peer_id,
+                )
+                .await
             }
             ConsensusItem::Transaction(transaction) => {
                 let txid = transaction.tx_hash();

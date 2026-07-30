@@ -150,6 +150,7 @@ fn format_item_type(item: &ConsensusItem) -> String {
         ConsensusItem::CoreConsensusVersion(_) => "Core Consensus Version".to_string(),
         ConsensusItem::CoreUnixTime(_) => "Core Unix Time".to_string(),
         ConsensusItem::ModuleFeeConsensus(_) => "Module Fee Consensus".to_string(),
+        ConsensusItem::FeePayoutVoucher(_) => "Fee Payout Voucher".to_string(),
         ConsensusItem::Default { variant, .. } => format!("Unknown ({variant})"),
     }
 }
@@ -305,6 +306,18 @@ fn format_item_details(item: &AcceptedItem) -> Markup {
                     }
                     div class="mb-2" {
                         "Fee Consensus Size: " code { (vote.fee_consensus.len()) " bytes" }
+                    }
+                }
+            }
+        }
+        ConsensusItem::FeePayoutVoucher(vote) => {
+            html! {
+                div class="consensus-item-details" {
+                    div class="mb-2" {
+                        "Claimant: " code { (vote.claimant) }
+                    }
+                    div class="mb-2" {
+                        "Amounts: " code { (format!("{:?}", vote.amounts)) }
                     }
                 }
             }

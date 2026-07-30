@@ -24,13 +24,14 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AccruedFeesPrefix, AlephUnitsKey, AlephUnitsPrefix, ConsensusUnixTimePrefix,
-    CoreConsensusVersionVotePrefix, CoreConsensusVersionVotingActivationPrefix,
-    CoreUnixTimeVotePrefix, ModuleConsensusVersionVoteFullPrefix,
-    ModuleConsensusVersionVotingActivationPrefix, ModuleFeeConsensusDesiredPrefix,
-    ModuleFeeConsensusScheduleFullPrefix, ModuleFeeConsensusVoteFullPrefix,
-    ServerDbMigrationContext, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
-    get_global_database_migrations,
+    AccruedFeesPrefix, AlephUnitsKey, AlephUnitsPrefix, ApprovedFeePayoutVoucherPrefix,
+    ConsensusUnixTimePrefix, CoreConsensusVersionVotePrefix,
+    CoreConsensusVersionVotingActivationPrefix, CoreUnixTimeVotePrefix,
+    FeePayoutVoucherDesiredPrefix, FeePayoutVoucherVoteFullPrefix,
+    ModuleConsensusVersionVoteFullPrefix, ModuleConsensusVersionVotingActivationPrefix,
+    ModuleFeeConsensusDesiredPrefix, ModuleFeeConsensusScheduleFullPrefix,
+    ModuleFeeConsensusVoteFullPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
+    SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
 use fedimint_server::db::DbKeyPrefix;
@@ -304,6 +305,30 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         // can query them.
                         let _activations = dbtx
                             .find_by_prefix(&CoreConsensusVersionVotingActivationPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::FeePayoutVoucherVote => {
+                        // Payout voucher votes are optional, just verify we can query them.
+                        let _votes = dbtx
+                            .find_by_prefix(&FeePayoutVoucherVoteFullPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::FeePayoutVoucherDesired => {
+                        // Desired payout vouchers are optional, just verify we can query them.
+                        let _desired = dbtx
+                            .find_by_prefix(&FeePayoutVoucherDesiredPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                    }
+                    DbKeyPrefix::ApprovedFeePayoutVoucher => {
+                        // Approved payout vouchers are optional, just verify we can query them.
+                        let _approved = dbtx
+                            .find_by_prefix(&ApprovedFeePayoutVoucherPrefix)
                             .await
                             .collect::<Vec<_>>()
                             .await;

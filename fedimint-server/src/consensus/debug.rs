@@ -55,6 +55,12 @@ impl fmt::Debug for DebugConsensusItem<'_> {
                     vote.fee_consensus.len()
                 ))?;
             }
+            ConsensusItem::FeePayoutVoucher(vote) => {
+                f.write_fmt(format_args!(
+                    "Fee payout voucher vote: claimant={} amounts={:?}",
+                    vote.claimant, vote.amounts
+                ))?;
+            }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
             }
@@ -127,6 +133,9 @@ impl fmt::Display for DebugConsensusItemCompact<'_> {
                     vote.module_instance_id,
                     vote.fee_consensus.len()
                 ))?;
+            }
+            ConsensusItem::FeePayoutVoucher(vote) => {
+                f.write_fmt(format_args!("fee_payout_vote={}; ", vote.claimant))?;
             }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("unknown variant={variant}"))?;
