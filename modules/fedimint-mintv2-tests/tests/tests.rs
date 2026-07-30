@@ -7,17 +7,20 @@ use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::Amounts;
+use fedimint_core::secp256k1::{Keypair, SECP256K1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_mintv2_client::{
     ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, MintOperationMeta,
-    ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendPaymentEvent,
+    ReceiveECashError, ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent,
+    SendPaymentEvent, SpendableNote,
 };
-use fedimint_mintv2_common::KIND;
+use fedimint_mintv2_common::{Denomination, KIND};
 use fedimint_mintv2_server::MintInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -538,6 +541,102 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     };
     assert_eq!(update.operation_id, receive.operation_id);
     assert_eq!(update.status, ReceivePaymentStatus::Success);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let (_operation_id, ecash) = client
+        .get_first_module::<MintClientModule>()?
+        .send(Amount::from_sats(1_000), Value::Null, false)
+        .await?;
+
+    // Re-wrap the same notes under a federation id that is not ours. `receive`
+    // checks the mint id before submitting anything to consensus.
+    let foreign_ecash = ECash::new(FederationId::dummy(), ecash.notes());
+
+    assert_eq!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .receive(foreign_ecash, Value::Null)
+            .await,
+        Err(ReceiveECashError::WrongFederation),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receiving_the_same_ecash_twice_is_rejected() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let (_operation_id, ecash) = client
+        .get_first_module::<MintClientModule>()?
+        .send(Amount::from_sats(1_000), Value::Null, false)
+        .await?;
+
+    let operation_id = client
+        .get_first_module::<MintClientModule>()?
+        .receive(ecash.clone(), Value::Null)
+        .await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .await_final_receive_operation_state(operation_id)
+            .await?,
+        FinalReceiveOperationState::Success,
+    );
+
+    // The operation id is derived from the ecash itself, so a second receive of
+    // the identical notes finds the existing operation and refuses rather than
+    // submitting a duplicate transaction.
+    assert_eq!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .receive(ecash, Value::Null)
+            .await,
+        Err(ReceiveECashError::AlreadyReceived),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    // `Denomination(0)` is one msat, far below the hundred-msat base fee, so
+    // reissuing it could never pay for itself. The signature is never checked
+    // because the denomination guard runs first.
+    let dust_note = SpendableNote {
+        denomination: Denomination(0),
+        keypair: Keypair::from_seckey_slice(SECP256K1, &[1u8; 32])?,
+        signature: tbs::Signature(bls12_381::G1Affine::generator()),
+    };
+
+    let dust_ecash = ECash::new(client.federation_id(), vec![dust_note]);
+
+    assert_eq!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .receive(dust_ecash, Value::Null)
+            .await,
+        Err(ReceiveECashError::UneconomicalDenomination),
+    );
 
     Ok(())
 }
