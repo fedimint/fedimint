@@ -227,7 +227,7 @@ impl_db_lookup!(
     query_prefix = IncomingContractIndexPrefix
 );
 
-pub async fn migrate_to_v1(
+pub(crate) async fn migrate_to_v1(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Lightning>,
 ) -> Result<(), anyhow::Error> {
     let mut contracts = BTreeMap::new();

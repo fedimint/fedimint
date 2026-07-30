@@ -116,6 +116,7 @@ check-wasm *EXTRA_ARGS:
 # ex: `just snapshot-server-db-migrations fedimint-server-tests`
 # ex: `just snapshot-server-db-migrations fedimint-mint-tests`
 # ex: `just snapshot-server-db-migrations fedimint-ln-tests`
+# ex: `just snapshot-server-db-migrations fedimint-lnv2-tests`
 # ex: `just snapshot-server-db-migrations fedimint-wallet-tests`
 # ex: `just snapshot-server-db-migrations fedimint-gateway-server-db`
 snapshot-server-db-migrations PACKAGE *EXTRA_ARGS:
@@ -143,6 +144,7 @@ test-db-migrations:
   just test-client-db-migrations fedimint-wallet-tests
   just test-server-db-migrations fedimint-mint-tests
   just test-server-db-migrations fedimint-ln-tests
+  just test-server-db-migrations fedimint-lnv2-tests
   just test-server-db-migrations fedimint-wallet-tests
   just test-server-db-migrations fedimint-server-tests
   just test-server-db-migrations fedimint-gateway-server-db
@@ -153,6 +155,7 @@ snapshot-db-migrations:
   just snapshot-client-db-migrations fedimint-wallet-tests
   just snapshot-server-db-migrations fedimint-mint-tests
   just snapshot-server-db-migrations fedimint-ln-tests
+  just snapshot-server-db-migrations fedimint-lnv2-tests
   just snapshot-server-db-migrations fedimint-wallet-tests
   just snapshot-server-db-migrations fedimint-server-tests
   just snapshot-server-db-migrations fedimint-gateway-server-db
