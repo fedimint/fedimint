@@ -112,7 +112,8 @@ use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RoutingInfo,
+    SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
@@ -3113,6 +3114,12 @@ impl Gateway {
             )));
         }
 
+        if payload.expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                "The invoice expiry exceeds the maximum of one week".to_string(),
+            )));
+        }
+
         let payment_hash = match payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => {
@@ -3122,15 +3129,10 @@ impl Gateway {
             }
         };
 
-        let invoice = self
-            .create_invoice_via_lnrpc_v2(
-                payment_hash,
-                payload.amount,
-                payload.description.clone(),
-                payload.expiry_secs,
-            )
-            .await?;
-
+        // Reserve the payment hash in the database before requesting the
+        // invoice so a replayed payment hash is rejected without creating any
+        // state on the Lightning node, and so the contract is guaranteed to be
+        // registered by the time the invoice is payable.
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
         if dbtx
@@ -3153,7 +3155,34 @@ impl Gateway {
             ))
         })?;
 
-        Ok(invoice)
+        match self
+            .create_invoice_via_lnrpc_v2(
+                payment_hash,
+                payload.amount,
+                payload.description.clone(),
+                payload.expiry_secs,
+            )
+            .await
+        {
+            Ok(invoice) => Ok(invoice),
+            Err(err) => {
+                // Release the reservation so the payment hash is not burned by
+                // a transient Lightning node failure.
+                let mut dbtx = self.gateway_db.begin_transaction().await;
+                dbtx.delete_registered_incoming_contract(PaymentImage::Hash(payment_hash))
+                    .await;
+                if let Err(db_err) = dbtx.commit_tx_result().await {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %db_err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to release incoming contract reservation after Lightning error"
+                    );
+                }
+
+                Err(err.into())
+            }
+        }
     }
 
     /// Retrieves a BOLT11 invoice from the connected Lightning node with a
