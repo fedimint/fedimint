@@ -327,8 +327,7 @@ impl Decoder {
 
     /// Decodes a specific `DynType` from the `reader` byte stream.
     ///
-    /// # Panics
-    /// * If no decoder is registered for the `DynType`
+    /// Returns a decode error if no decoder is registered for the `DynType`.
     pub fn decode_complete<DynType: Any>(
         &self,
         reader: &mut dyn Read,
@@ -364,17 +363,19 @@ impl Decoder {
         module_id: ModuleInstanceId,
         decoders: &ModuleDecoderRegistry,
     ) -> Result<DynType, DecodeError> {
+        // A decoder need not cover every dyn type. The bytes being decoded are
+        // supplied by peers and clients, so a type this decoder does not know
+        // has to be a decode error rather than a panic.
         let decode_fn = self
             .decode_fns
             .get(&TypeId::of::<DynType>())
             .ok_or_else(|| {
-                anyhow!(
+                DecodeError::new_custom(anyhow!(
                     "Type unknown to decoder: {}, (registered decoders={})",
                     std::any::type_name::<DynType>(),
                     self.decode_fns.len()
-                )
-            })
-            .expect("Types being decoded must be registered");
+                ))
+            })?;
         Ok(*decode_fn(Box::new(reader), module_id, decoders)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
@@ -599,3 +600,99 @@ module_plugin_dyn_newtype_clone_passthrough!(DynInputError);
 module_plugin_dyn_newtype_eq_passthrough!(DynInputError);
 
 module_plugin_dyn_newtype_display_passthrough!(DynInputError);
+
+/// [`ModuleKind`] of the federation itself, for the transaction items the core
+/// owns rather than any module.
+pub const CORE_MODULE_KIND: ModuleKind = ModuleKind::from_static_str("core");
+
+/// A transaction input belonging to the federation as a whole, identified by
+/// [`MODULE_INSTANCE_ID_GLOBAL`] where a module input carries its instance id.
+///
+/// Modules only ever see their own prefixed database, so an input that draws
+/// on federation-wide state such as the accrued fee ledger cannot live in one.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum CoreInput {
+    /// Spends a payout voucher a threshold of guardians approved.
+    ///
+    /// Carries only the claimant key: the approved amount is what the
+    /// guardians voted for, and the key is both the voucher's identity and,
+    /// via the signature the transaction needs anyway, its authorization.
+    FeePayoutVoucher { claimant: secp256k1::PublicKey },
+    /// Allows adding input variants without breaking older clients decoding a
+    /// session log.
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
+
+impl Display for CoreInput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FeePayoutVoucher { claimant } => {
+                write!(f, "Fee payout voucher for {claimant}")
+            }
+            Self::Default { variant, .. } => {
+                write!(f, "Unknown core input variant {variant}")
+            }
+        }
+    }
+}
+
+impl IntoDynInstance for CoreInput {
+    type DynType = DynInput;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> DynInput {
+        DynInput::from_typed(instance_id, self)
+    }
+}
+
+impl Input for CoreInput {
+    const KIND: ModuleKind = CORE_MODULE_KIND;
+}
+
+impl CoreInput {
+    /// Wraps this input for inclusion in a transaction.
+    pub fn into_dyn_input(self) -> DynInput {
+        self.into_dyn(MODULE_INSTANCE_ID_GLOBAL)
+    }
+}
+
+/// Decoder for the transaction items the core owns.
+///
+/// Registered under [`MODULE_INSTANCE_ID_GLOBAL`] so that [`DynInput`] can
+/// decode them the same way it decodes module inputs.
+pub fn core_decoder() -> Decoder {
+    let mut builder = Decoder::builder();
+    builder.with_decodable_type::<CoreInput>();
+    builder.with_decodable_type::<CoreInputError>();
+    builder.build()
+}
+
+/// Reasons a [`CoreInput`] may be rejected.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, thiserror::Error)]
+pub enum CoreInputError {
+    #[error("Core inputs are not active for this core consensus version")]
+    NotActivated,
+    #[error("No approved payout voucher exists for this key")]
+    UnknownPayoutVoucher,
+    #[error("Unknown core input variant {variant}")]
+    UnknownInputVariant { variant: u64 },
+}
+
+impl IntoDynInstance for CoreInputError {
+    type DynType = DynInputError;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> DynInputError {
+        DynInputError::from_typed(instance_id, self)
+    }
+}
+
+impl InputError for CoreInputError {
+    const KIND: ModuleKind = CORE_MODULE_KIND;
+}
+
+impl CoreInputError {
+    /// Wraps this error for return from transaction processing.
+    pub fn into_dyn_input_error(self) -> DynInputError {
+        self.into_dyn(MODULE_INSTANCE_ID_GLOBAL)
+    }
+}

@@ -1,18 +1,23 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{
+    CoreInput, CoreInputError, DynInput, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId,
+};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{
-    Amounts, CoreConsensusVersion, DYNAMIC_FEES_CORE_CONSENSUS_VERSION, ModuleConsensusVersion,
-    TransactionItemAmounts, TransactionItemAmountsWithFees, TransactionItemFees,
+    Amounts, CoreConsensusVersion, DYNAMIC_FEES_CORE_CONSENSUS_VERSION, InputMetaWithFees,
+    ModuleConsensusVersion, TransactionItemAmounts, TransactionItemAmountsWithFees,
+    TransactionItemFees,
 };
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::consensus::db::{accrue_fees, consensus_unix_time, module_fee_consensus_schedules};
+use crate::consensus::db::{
+    accrue_fees, consensus_unix_time, module_fee_consensus_schedules, spend_fee_payout_voucher,
+};
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,6 +52,13 @@ pub async fn process_transaction_with_dbtx(
         .into_par_iter()
         .try_for_each(|input| {
             let module_instance_id = input.module_instance_id();
+
+            // Core inputs belong to no module and have nothing to verify
+            // without database access.
+            if module_instance_id == MODULE_INSTANCE_ID_GLOBAL {
+                return Ok(());
+            }
+
             let module = modules.get_expect(module_instance_id);
             let module_consensus_version = *module_consensus_versions
                 .get(&module_instance_id)
@@ -65,6 +77,16 @@ pub async fn process_transaction_with_dbtx(
 
     for (input, in_idx) in transaction.inputs.iter().zip(0u64..) {
         let module_instance_id = input.module_instance_id();
+
+        if module_instance_id == MODULE_INSTANCE_ID_GLOBAL {
+            let meta = process_core_input(dbtx, input, version).await?;
+
+            funding_verifier.add_input_with_fees(meta.amount)?;
+            public_keys.push(meta.pub_key);
+
+            continue;
+        }
+
         let module_consensus_version = *module_consensus_versions
             .get(&module_instance_id)
             .expect("Module consensus versions were precomputed");
@@ -175,6 +197,51 @@ pub async fn process_transaction_with_dbtx(
     }
 
     Ok(())
+}
+
+/// Processes an input the core owns rather than any module.
+///
+/// The claimant key the guardians approved is returned as the input's public
+/// key, so the signature check every transaction already performs is what
+/// enforces the payout's authorization. Nothing here verifies a signature.
+async fn process_core_input(
+    dbtx: &mut DatabaseTransaction<'_>,
+    input: &DynInput,
+    version: CoreConsensusVersion,
+) -> Result<InputMetaWithFees, TransactionError> {
+    fn reject(error: CoreInputError) -> TransactionError {
+        TransactionError::Input(error.into_dyn_input_error())
+    }
+
+    if version < DYNAMIC_FEES_CORE_CONSENSUS_VERSION {
+        return Err(reject(CoreInputError::NotActivated));
+    }
+
+    let input = input
+        .as_any()
+        .downcast_ref::<CoreInput>()
+        .ok_or_else(|| reject(CoreInputError::UnknownInputVariant { variant: 0 }))?;
+
+    match input {
+        CoreInput::FeePayoutVoucher { claimant } => {
+            // Spending removes the voucher, which is what limits it to a single
+            // transaction.
+            let amounts = spend_fee_payout_voucher(dbtx, *claimant)
+                .await
+                .ok_or_else(|| reject(CoreInputError::UnknownPayoutVoucher))?;
+
+            Ok(InputMetaWithFees {
+                amount: TransactionItemAmountsWithFees {
+                    amounts,
+                    fees: TransactionItemFees::ZERO,
+                },
+                pub_key: *claimant,
+            })
+        }
+        CoreInput::Default { variant, .. } => Err(reject(CoreInputError::UnknownInputVariant {
+            variant: *variant,
+        })),
+    }
 }
 
 #[derive(Clone, Debug)]

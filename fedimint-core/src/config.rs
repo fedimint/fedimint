@@ -8,7 +8,9 @@ use anyhow::{Context, format_err};
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{
+    CORE_MODULE_KIND, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId, ModuleKind, core_decoder,
+};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::util::SafeUrl;
@@ -597,6 +599,10 @@ where
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
+        decoders.insert(
+            MODULE_INSTANCE_ID_GLOBAL,
+            (CORE_MODULE_KIND, core_decoder()),
+        );
         Ok(ModuleDecoderRegistry::from(decoders))
     }
 
@@ -614,6 +620,10 @@ where
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
+        decoders.insert(
+            MODULE_INSTANCE_ID_GLOBAL,
+            (CORE_MODULE_KIND, core_decoder()),
+        );
         Ok(ModuleDecoderRegistry::from(decoders))
     }
 }

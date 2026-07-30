@@ -16,7 +16,9 @@ use fedimint_core::backup::{
 };
 use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME_KEY};
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
-use fedimint_core::core::{DynInput, DynOutput, DynOutputOutcome, ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{
+    DynInput, DynOutput, DynOutputOutcome, MODULE_INSTANCE_ID_GLOBAL, ModuleInstanceId, ModuleKind,
+};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped,
@@ -188,6 +190,14 @@ impl ConsensusApi {
     {
         let mut versions = BTreeMap::new();
         for module_instance_id in module_instance_ids.into_iter().collect::<BTreeSet<_>>() {
+            // Core transaction items carry the reserved instance id and belong
+            // to no module, so there is no module version to look up. Leaving
+            // it out of the map is safe because the core item paths never
+            // consult it.
+            if module_instance_id == MODULE_INSTANCE_ID_GLOBAL {
+                continue;
+            }
+
             versions.insert(
                 module_instance_id,
                 self.active_module_consensus_version(dbtx, module_instance_id)
