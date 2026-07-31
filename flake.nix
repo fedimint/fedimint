@@ -118,6 +118,14 @@
             linker.wild.enable = true;
 
             toolchain.channel = "stable";
+            rust.rustfmt.content = ''
+              group_imports = "StdExternalCrate"
+              wrap_comments = true
+              format_code_in_doc_comments = true
+              imports_granularity = "Module"
+              edition = "2024"
+              style_edition = "2024"
+            '';
 
             toolchain.components = [
               "rustc"
