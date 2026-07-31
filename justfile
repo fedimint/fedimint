@@ -68,6 +68,11 @@ watch *ARGS="-x run":
   env RUST_LOG=${RUST_LOG:-debug} cargo watch {{ARGS}}
 
 
+# scan the project with ast-grep rules
+ast-grep *ARGS="":
+  ast-grep scan --config sgconfig.yml {{ARGS}}
+
+
 # run cargo-crap on the workspace
 crap *ARGS="--workspace":
   #!/usr/bin/env bash
