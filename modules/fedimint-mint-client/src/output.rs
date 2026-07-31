@@ -397,7 +397,17 @@ impl MintOutputStatesCreated {
             };
         }
 
-        let spendable_note = created.issuance_request.finalize(agg_blind_signature);
+        let spendable_note = match created.issuance_request.finalize(agg_blind_signature) {
+            Ok(note) => note,
+            Err(e) => {
+                return MintOutputStateMachine {
+                    common: old_state.common,
+                    state: MintOutputStates::Failed(MintOutputStatesFailed {
+                        error: format!("Failed to finalize note: {e}"),
+                    }),
+                };
+            }
+        };
 
         assert!(spendable_note.note().verify(*amount_key));
 
@@ -770,7 +780,7 @@ impl MintOutputStatesCreatedMulti {
         let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
 
         // Note verification is relatively slow and CPU-bound, so parallelize them
-        blinded_signature_shares
+        let spendable_notes_result: Result<Vec<_>, String> = blinded_signature_shares
             .into_par_iter()
             .map(|(out_idx, blinded_signature_shares)| {
                 let agg_blind_signature = aggregate_signature_shares(
@@ -786,13 +796,24 @@ impl MintOutputStatesCreatedMulti {
 
                 let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
 
-                let spendable_note = issuance_request.finalize(agg_blind_signature);
+                let spendable_note = issuance_request.finalize(agg_blind_signature)
+                    .map_err(|e| format!("Failed to finalize note: {e}"))?;
 
                 assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
 
-                (*amount, spendable_note)
+                Ok((*amount, spendable_note))
             })
-            .collect_into_vec(&mut spendable_notes);
+            .collect();
+
+        let spendable_notes = match spendable_notes_result {
+            Ok(notes) => notes,
+            Err(e) => {
+                return MintOutputStateMachine {
+                    common: old_state.common,
+                    state: MintOutputStates::Failed(MintOutputStatesFailed { error: e }),
+                };
+            }
+        };
 
         for (amount, spendable_note) in spendable_notes {
             debug!(target: LOG_CLIENT_MODULE_MINT, amount = %amount, note=%spendable_note, "Adding new note from transaction output");
@@ -939,11 +960,14 @@ impl NoteIssuanceRequest {
     }
 
     /// Use the blind signature to create spendable e-cash notes
-    pub fn finalize(&self, blinded_signature: BlindedSignature) -> SpendableNote {
-        SpendableNote {
-            signature: unblind_signature(self.blinding_key, blinded_signature),
+    pub fn finalize(
+        &self,
+        blinded_signature: BlindedSignature,
+    ) -> Result<SpendableNote, tbs::Error> {
+        Ok(SpendableNote {
+            signature: unblind_signature(self.blinding_key, blinded_signature)?,
             spend_key: self.spend_key,
-        }
+        })
     }
 
     pub fn blinding_key(&self) -> &BlindingKey {

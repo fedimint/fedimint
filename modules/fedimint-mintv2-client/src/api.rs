@@ -5,7 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::{NumPeersExt, OutPointRange, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, OutPointRange, PeerId};
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
     SIGNATURE_SHARES_ENDPOINT, SIGNATURE_SHARES_RECOVERY_ENDPOINT,
@@ -13,8 +13,8 @@ use fedimint_mintv2_common::endpoint_constants::{
 use fedimint_mintv2_common::{Denomination, RecoveryItem};
 use tbs::{BlindedMessage, BlindedSignatureShare, PublicKeyShare};
 
-use crate::NoteIssuanceRequest;
 use crate::output::verify_blind_shares;
+use crate::NoteIssuanceRequest;
 
 #[apply(async_trait_maybe_send!)]
 pub trait MintV2ModuleApi {

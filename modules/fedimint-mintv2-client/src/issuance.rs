@@ -1,12 +1,12 @@
-use bitcoin_hashes::{Hash, hash160, sha256};
+use bitcoin_hashes::{hash160, sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::rand::Rng;
 use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_mintv2_common::{Denomination, MintOutput, nonce_message};
-use tbs::{BlindedMessage, BlindedSignature, BlindingKey, blind_message, unblind_signature};
+use fedimint_mintv2_common::{nonce_message, Denomination, MintOutput};
+use tbs::{blind_message, unblind_signature, BlindedMessage, BlindedSignature, BlindingKey};
 
-use crate::{SpendableNote, thread_rng};
+use crate::{thread_rng, SpendableNote};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
@@ -32,12 +32,12 @@ impl NoteIssuanceRequest {
         MintOutput::new_v0(self.denomination, self.blinded_message(), self.tweak)
     }
 
-    pub fn finalize(&self, signature: BlindedSignature) -> SpendableNote {
-        SpendableNote {
+    pub fn finalize(&self, signature: BlindedSignature) -> Result<SpendableNote, tbs::Error> {
+        Ok(SpendableNote {
             denomination: self.denomination,
             keypair: self.keypair,
-            signature: unblind_signature(self.blinding_key, signature),
-        }
+            signature: unblind_signature(self.blinding_key, signature)?,
+        })
     }
 
     pub fn blinded_message(&self) -> BlindedMessage {

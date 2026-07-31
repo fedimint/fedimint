@@ -15,6 +15,10 @@ cargo-fuzz = true
 name = "vec"
 path = "src/bin/vec.rs"
 
+[[bin]]
+name = "state_differential"
+path = "src/bin/state_differential.rs"
+
 # cargo-deny just needs at least one `bin` defined
 [lib]
 name = "fedimint_fuzz"
