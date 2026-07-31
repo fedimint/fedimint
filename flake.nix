@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-25.11";
+      url = "github:nixos/nixpkgs/nixos-26.05";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -55,6 +55,7 @@
         (import ./nix/overlays/darwin-compile-fixes.nix)
         (import ./nix/overlays/cargo-honggfuzz.nix)
         (import ./nix/overlays/trustedcoin.nix)
+        (import ./nix/overlays/sqlcipher-static.nix)
       ];
     in
     {
@@ -321,7 +322,7 @@
                     pkgs.cargo-deny
                     pkgs.cargo-sort
                     pkgs.parallel
-                    pkgs.nixfmt-rfc-style
+                    pkgs.nixfmt
                     pkgs.just
                     pkgs.time
                     pkgs.gawk
@@ -338,11 +339,11 @@
                     pkgs.git
 
                     # Nix
-                    pkgs.nixfmt-rfc-style
+                    pkgs.nixfmt
                     pkgs.shellcheck
                     pkgs.nil
                     pkgs.convco
-                    pkgs.nodePackages.bash-language-server
+                    pkgs.bash-language-server
                   ]
                   ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [ pkgs.semgrep ]
                   ++ lib.optionals (!stdenv.isDarwin) [
