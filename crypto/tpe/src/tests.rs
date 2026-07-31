@@ -73,3 +73,37 @@ fn test_roundtrip() {
 
     assert_eq!(preimage, decrypt_preimage(&ct, &agg_dk));
 }
+
+#[test]
+fn test_roundtrip_single_guardian() {
+    // A 1-of-1 federation: one peer, threshold 1.
+    const PEERS: u64 = 1;
+    const THRESHOLD: u64 = 1;
+
+    let encryption_seed = [7_u8; 32];
+    let preimage = [42_u8; 32];
+    let commitment = sha256::Hash::hash(&[0_u8; 32]);
+    let ct = encrypt_preimage(&dealer_agg_pk(), &encryption_seed, &preimage, &commitment);
+
+    assert!(verify_ciphertext(&ct, &commitment));
+
+    for peer in 0..PEERS {
+        assert!(verify_dk_share(
+            &dealer_pk(THRESHOLD, peer),
+            &create_dk_share(&dealer_sk(THRESHOLD, peer), &ct),
+            &ct,
+            &commitment
+        ));
+    }
+
+    let selected_shares = (0..THRESHOLD)
+        .map(|peer| (peer, create_dk_share(&dealer_sk(THRESHOLD, peer), &ct)))
+        .collect();
+
+    // regression: aggregating a single share used to panic in lagrange_multipliers
+    let agg_dk = aggregate_dk_shares(&selected_shares);
+
+    assert_eq!(agg_dk, derive_agg_dk(&dealer_agg_pk(), &encryption_seed));
+    assert!(verify_agg_dk(&dealer_agg_pk(), &agg_dk, &ct, &commitment));
+    assert_eq!(preimage, decrypt_preimage(&ct, &agg_dk));
+}
