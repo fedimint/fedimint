@@ -13,7 +13,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=d80cccdee77ca61b035777e0d7dc9a682cdf80fa";
+      url = "github:rustshop/flakebox?rev=b36f6b7cb77652c1d4cb7279d8f47fddf07066ae";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
       inputs.fenix.follows = "fenix";
     };
