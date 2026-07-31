@@ -899,7 +899,17 @@ impl ILnRpcClient for GatewayLndClient {
                 })?
                 .into_inner();
 
-            let Some(policy) = info.node1_policy else {
+            // The route hint hop describes the remote peer forwarding a payment
+            // *into* the gateway, so it must carry that peer's advertised channel
+            // policy. `node1`/`node2` are ordered by pubkey (BOLT 7), not by which
+            // side is the gateway, so select the policy belonging to the remote
+            // peer rather than always taking node1's.
+            let policy = if info.node1_pub == chan.remote_pubkey {
+                info.node1_policy
+            } else {
+                info.node2_policy
+            };
+            let Some(policy) = policy else {
                 continue;
             };
             let src_node_id =
