@@ -544,7 +544,15 @@ impl Decodable for SystemTime {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let duration = Duration::consensus_decode_partial(d, modules)?;
-        Ok(UNIX_EPOCH + duration)
+        // `UNIX_EPOCH + duration` panics ("overflow when adding duration to
+        // instant") rather than erroring when `duration` exceeds what the
+        // platform's `SystemTime` can represent. A `Decodable` impl must not
+        // panic on arbitrary bytes, so use the checked form. This only rejects
+        // input that previously aborted the process - anything that round-trips
+        // today still round-trips - so no persisted value becomes unreadable.
+        UNIX_EPOCH
+            .checked_add(duration)
+            .ok_or_else(|| DecodeError::from_str("SystemTime overflow: duration too large"))
     }
 }
 
@@ -564,6 +572,15 @@ impl Decodable for Duration {
     ) -> Result<Self, DecodeError> {
         let secs = Decodable::consensus_decode_partial(d, modules)?;
         let nsecs = Decodable::consensus_decode_partial(d, modules)?;
+        // `Encodable for Duration` above writes `subsec_nanos()`, which is always
+        // below one billion, so a larger `nsecs` is outside the encoder's own
+        // image and cannot appear in any value we wrote. Accepting it anyway is
+        // what makes decoding non-canonical (`0s + 1_500_000_000ns` re-encodes to
+        // different bytes) and lets `Duration::new` panic with "overflow in
+        // Duration::new" when the carried second overflows `secs`.
+        if 1_000_000_000 <= nsecs {
+            return Err(DecodeError::from_str("Duration nanoseconds out of range"));
+        }
         Ok(Self::new(secs, nsecs))
     }
 }
@@ -978,6 +995,41 @@ mod tests {
     #[test_log::test]
     fn test_systemtime() {
         test_roundtrip(&fedimint_core::time::now());
+    }
+
+    #[test_log::test]
+    fn test_systemtime_decode_overflow_does_not_panic() {
+        // secs = u64::MAX via BigSize (0xff prefix + 8 big-endian bytes), nsecs = 0.
+        // No encoder we ship can produce this, but the wire format lets a peer
+        // (or a garbled message, or the `systemtime` fuzz target) put any u64
+        // here, and `Decodable` must not abort the process on arbitrary bytes.
+        let mut bytes = vec![0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+        bytes.push(0x00);
+        let res = std::time::SystemTime::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        );
+        assert!(
+            res.is_err(),
+            "expected a decode error, not a panic or success"
+        );
+    }
+
+    #[test_log::test]
+    fn test_duration_decode_rejects_out_of_range_nsecs() {
+        // secs = u64::MAX, nsecs = 1e9 carries a second and overflows `secs`,
+        // panicking inside `Duration::new`; must be rejected instead.
+        let mut bytes = Vec::new();
+        u64::MAX.consensus_encode(&mut bytes).unwrap();
+        1_000_000_000u32.consensus_encode(&mut bytes).unwrap();
+        let reg = ModuleDecoderRegistry::default();
+        assert!(std::time::Duration::consensus_decode_whole(&bytes, &reg).is_err());
+
+        // The largest canonical `nsecs` must still decode.
+        let mut ok = Vec::new();
+        u64::MAX.consensus_encode(&mut ok).unwrap();
+        999_999_999u32.consensus_encode(&mut ok).unwrap();
+        assert!(std::time::Duration::consensus_decode_whole(&ok, &reg).is_ok());
     }
 
     #[test]
