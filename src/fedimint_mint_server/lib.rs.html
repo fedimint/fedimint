@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#27 id=27 data-nosnippet>27</a>    Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
 <a href=#28 id=28 data-nosnippet>28</a>    ModuleConsensusVersion, ModuleInit, SerdeModuleEncodingBase64, TransactionItemAmounts,
-<a href=#29 id=29 data-nosnippet>29</a>    api_endpoint,
+<a href=#29 id=29 data-nosnippet>29</a>    public_api_endpoint,
 <a href=#30 id=30 data-nosnippet>30</a>};
 <a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::{
 <a href=#32 id=32 data-nosnippet>32</a>    Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
@@ -771,7 +771,7 @@
 <a href=#771 id=771 data-nosnippet>771</a>
 <a href=#772 id=772 data-nosnippet>772</a>    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
 <a href=#773 id=773 data-nosnippet>773</a>        <span class="macro">vec!</span>[
-<a href=#774 id=774 data-nosnippet>774</a>            <span class="macro">api_endpoint!</span> {
+<a href=#774 id=774 data-nosnippet>774</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#775 id=775 data-nosnippet>775</a>                NOTE_SPENT_ENDPOINT,
 <a href=#776 id=776 data-nosnippet>776</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#777 id=777 data-nosnippet>777</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, nonce: Nonce| -&gt; bool {
@@ -780,7 +780,7 @@
 <a href=#780 id=780 data-nosnippet>780</a>                    <span class="prelude-val">Ok</span>(dbtx.get_value(<span class="kw-2">&amp;</span>NonceKey(nonce)).<span class="kw">await</span>.is_some())
 <a href=#781 id=781 data-nosnippet>781</a>                }
 <a href=#782 id=782 data-nosnippet>782</a>            },
-<a href=#783 id=783 data-nosnippet>783</a>            <span class="macro">api_endpoint!</span> {
+<a href=#783 id=783 data-nosnippet>783</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#784 id=784 data-nosnippet>784</a>                BLIND_NONCE_USED_ENDPOINT,
 <a href=#785 id=785 data-nosnippet>785</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#786 id=786 data-nosnippet>786</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, blind_nonce: BlindNonce| -&gt; bool {
@@ -789,7 +789,7 @@
 <a href=#789 id=789 data-nosnippet>789</a>                    <span class="prelude-val">Ok</span>(dbtx.get_value(<span class="kw-2">&amp;</span>BlindNonceKey(blind_nonce)).<span class="kw">await</span>.is_some())
 <a href=#790 id=790 data-nosnippet>790</a>                }
 <a href=#791 id=791 data-nosnippet>791</a>            },
-<a href=#792 id=792 data-nosnippet>792</a>            <span class="macro">api_endpoint!</span> {
+<a href=#792 id=792 data-nosnippet>792</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#793 id=793 data-nosnippet>793</a>                RECOVERY_COUNT_ENDPOINT,
 <a href=#794 id=794 data-nosnippet>794</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#795 id=795 data-nosnippet>795</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, _params: ()| -&gt; u64 {
@@ -798,7 +798,7 @@
 <a href=#798 id=798 data-nosnippet>798</a>                    <span class="prelude-val">Ok</span>(get_recovery_count(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>)
 <a href=#799 id=799 data-nosnippet>799</a>                }
 <a href=#800 id=800 data-nosnippet>800</a>            },
-<a href=#801 id=801 data-nosnippet>801</a>            <span class="macro">api_endpoint!</span> {
+<a href=#801 id=801 data-nosnippet>801</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#802 id=802 data-nosnippet>802</a>                RECOVERY_SLICE_ENDPOINT,
 <a href=#803 id=803 data-nosnippet>803</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#804 id=804 data-nosnippet>804</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, range: (u64, u64)| -&gt; SerdeModuleEncodingBase64&lt;Vec&lt;RecoveryItem&gt;&gt; {
@@ -807,7 +807,7 @@
 <a href=#807 id=807 data-nosnippet>807</a>                    <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>get_recovery_slice(<span class="kw-2">&amp;mut </span>dbtx, range).<span class="kw">await</span>).into())
 <a href=#808 id=808 data-nosnippet>808</a>                }
 <a href=#809 id=809 data-nosnippet>809</a>            },
-<a href=#810 id=810 data-nosnippet>810</a>            <span class="macro">api_endpoint!</span> {
+<a href=#810 id=810 data-nosnippet>810</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#811 id=811 data-nosnippet>811</a>                RECOVERY_SLICE_HASH_ENDPOINT,
 <a href=#812 id=812 data-nosnippet>812</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#813 id=813 data-nosnippet>813</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, range: (u64, u64)| -&gt; sha256::Hash {
@@ -816,7 +816,7 @@
 <a href=#816 id=816 data-nosnippet>816</a>                    <span class="prelude-val">Ok</span>(get_recovery_slice(<span class="kw-2">&amp;mut </span>dbtx, range).<span class="kw">await</span>.consensus_hash())
 <a href=#817 id=817 data-nosnippet>817</a>                }
 <a href=#818 id=818 data-nosnippet>818</a>            },
-<a href=#819 id=819 data-nosnippet>819</a>            <span class="macro">api_endpoint!</span> {
+<a href=#819 id=819 data-nosnippet>819</a>            <span class="macro">public_api_endpoint!</span> {
 <a href=#820 id=820 data-nosnippet>820</a>                RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT,
 <a href=#821 id=821 data-nosnippet>821</a>                ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
 <a href=#822 id=822 data-nosnippet>822</a>                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Mint, context, blind_nonces: Vec&lt;BlindNonce&gt;| -&gt; Vec&lt;OutPoint&gt; {
