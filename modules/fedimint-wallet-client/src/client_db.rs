@@ -5,7 +5,13 @@ use std::time::SystemTime;
 
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_option_system_time_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_option_system_time,
+    encode_legacy_system_time, with_decoding_context,
+};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{TransactionId, impl_db_lookup, impl_db_record};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -119,7 +125,7 @@ pub struct PegInTweakIndexKey(pub TweakIdx);
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PegInTweakIndexPrefix;
 
-#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PegInTweakIndexData {
     /// [`OperationId`] corresponding to this peg-in address.
     pub operation_id: OperationId,
@@ -131,6 +137,48 @@ pub struct PegInTweakIndexData {
     pub next_check_time: Option<SystemTime>,
     /// All previous on chain outputs claimed for this peg-in address.
     pub claimed: Vec<bitcoin::OutPoint>,
+}
+
+impl Encodable for PegInTweakIndexData {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.operation_id.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.creation_time, writer)?;
+        encode_legacy_option_system_time(&self.last_check_time, writer)?;
+        encode_legacy_option_system_time(&self.next_check_time, writer)?;
+        self.claimed.consensus_encode(writer)
+    }
+}
+
+impl Decodable for PegInTweakIndexData {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            operation_id: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: PegInTweakIndexData{ ... operation_id ... }",
+            )?,
+            creation_time: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: PegInTweakIndexData{ ... creation_time ... }",
+            )?,
+            last_check_time: with_decoding_context(
+                decode_legacy_option_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: PegInTweakIndexData{ ... last_check_time ... }",
+            )?,
+            next_check_time: with_decoding_context(
+                decode_legacy_option_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: PegInTweakIndexData{ ... next_check_time ... }",
+            )?,
+            claimed: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: PegInTweakIndexData{ ... claimed ... }",
+            )?,
+        })
+    }
 }
 
 impl_db_record!(

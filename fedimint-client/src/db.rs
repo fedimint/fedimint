@@ -15,8 +15,11 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{Amounts, SupportedApiVersionsSummary};
 use fedimint_core::{ChainId, PeerId, TransactionId, impl_db_lookup, impl_db_record};
 use fedimint_eventlog::{
@@ -185,11 +188,37 @@ impl_db_record!(
 );
 
 /// Key used to lookup operation log entries in chronological order
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ChronologicalOperationLogKey {
     pub creation_time: std::time::SystemTime,
     pub operation_id: OperationId,
+}
+
+impl Encodable for ChronologicalOperationLogKey {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        encode_legacy_system_time(&self.creation_time, writer)?;
+        self.operation_id.consensus_encode(writer)
+    }
+}
+
+impl Decodable for ChronologicalOperationLogKey {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            creation_time: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: ChronologicalOperationLogKey{ ... creation_time ... }",
+            )?,
+            operation_id: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: ChronologicalOperationLogKey{ ... operation_id ... }",
+            )?,
+        })
+    }
 }
 
 #[derive(Debug, Encodable)]
@@ -453,10 +482,36 @@ pub(crate) struct MetaFieldPrefix;
 #[derive(Encodable, Decodable, Debug)]
 pub struct MetaServiceInfoKey;
 
-#[derive(Encodable, Decodable, Debug)]
+#[derive(Debug)]
 pub struct MetaServiceInfo {
     pub last_updated: SystemTime,
     pub revision: u64,
+}
+
+impl Encodable for MetaServiceInfo {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        encode_legacy_system_time(&self.last_updated, writer)?;
+        self.revision.consensus_encode(writer)
+    }
+}
+
+impl Decodable for MetaServiceInfo {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            last_updated: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: MetaServiceInfo{ ... last_updated ... }",
+            )?,
+            revision: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: MetaServiceInfo{ ... revision ... }",
+            )?,
+        })
+    }
 }
 
 #[derive(

@@ -6,8 +6,12 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 use fedimint_core::core::OperationId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
 use fedimint_core::module::Amounts;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, TransactionId, runtime};
 use fedimint_mint_common::MintInput;
 
@@ -72,17 +76,75 @@ pub struct MintOOBStateMachine {
     pub(crate) state: MintOOBStates,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MintOOBStatesCreated {
     pub(crate) amount: Amount,
     pub(crate) spendable_note: SpendableNote,
     pub(crate) timeout: SystemTime,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+impl Encodable for MintOOBStatesCreated {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.amount.consensus_encode(writer)?;
+        self.spendable_note.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.timeout, writer)
+    }
+}
+
+impl Decodable for MintOOBStatesCreated {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            amount: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: MintOOBStatesCreated{ ... amount ... }",
+            )?,
+            spendable_note: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: MintOOBStatesCreated{ ... spendable_note ... }",
+            )?,
+            timeout: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: MintOOBStatesCreated{ ... timeout ... }",
+            )?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MintOOBStatesCreatedMulti {
     pub(crate) spendable_notes: Vec<(Amount, SpendableNote)>,
     pub(crate) timeout: SystemTime,
+}
+
+impl Encodable for MintOOBStatesCreatedMulti {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.spendable_notes.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.timeout, writer)
+    }
+}
+
+impl Decodable for MintOOBStatesCreatedMulti {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            spendable_notes: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: MintOOBStatesCreatedMulti{ ... spendable_notes ... }",
+            )?,
+            timeout: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: MintOOBStatesCreatedMulti{ ... timeout ... }",
+            )?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

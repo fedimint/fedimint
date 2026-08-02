@@ -19,7 +19,11 @@ use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
@@ -567,7 +571,7 @@ pub enum RecurringPaymentError {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RecurringPaymentCodeEntry {
     pub protocol: RecurringPaymentProtocol,
     pub root_keypair: Keypair,
@@ -576,6 +580,62 @@ pub struct RecurringPaymentCodeEntry {
     pub last_derivation_index: u64,
     pub creation_time: SystemTime,
     pub meta: String,
+}
+
+impl Encodable for RecurringPaymentCodeEntry {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.protocol.consensus_encode(writer)?;
+        self.root_keypair.consensus_encode(writer)?;
+        self.code.consensus_encode(writer)?;
+        self.recurringd_api.consensus_encode(writer)?;
+        self.last_derivation_index.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.creation_time, writer)?;
+        self.meta.consensus_encode(writer)
+    }
+}
+
+impl Decodable for RecurringPaymentCodeEntry {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            protocol: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... protocol ... }",
+            )?,
+            root_keypair: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... root_keypair ... }",
+            )?,
+            code: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... code ... }",
+            )?,
+            recurringd_api: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... recurringd_api ... }",
+            )?,
+            last_derivation_index: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... last_derivation_index ... }",
+            )?,
+            creation_time: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... creation_time ... }",
+            )?,
+            meta: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: RecurringPaymentCodeEntry{ ... meta ... }",
+            )?,
+        })
+    }
 }
 
 /// Event that is fired when a recurring payment code (i.e. LNURL) had an
