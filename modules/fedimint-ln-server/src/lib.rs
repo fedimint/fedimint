@@ -22,7 +22,7 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::sleep;
@@ -832,7 +832,7 @@ impl ServerModule for Lightning {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
@@ -841,7 +841,7 @@ impl ServerModule for Lightning {
                     Ok(Some(module.consensus_block_count(&mut dbtx).await))
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 ACCOUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
@@ -852,7 +852,7 @@ impl ServerModule for Lightning {
                         .await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_ACCOUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
@@ -861,7 +861,7 @@ impl ServerModule for Lightning {
                         .await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
@@ -871,28 +871,28 @@ impl ServerModule for Lightning {
                     Ok(())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module.wait_outgoing_contract_account_cancelled(context, contract_id).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 GET_DECRYPTED_PREIMAGE_STATUS,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, DecryptedPreimageStatus) {
                     Ok(module.get_decrypted_preimage_status(context, contract_id).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_PREIMAGE_DECRYPTION,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
                     Ok(module.wait_preimage_decrypted(context, contract_id).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 OFFER_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
@@ -903,7 +903,7 @@ impl ServerModule for Lightning {
                         .await)
                }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_OFFER_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
@@ -912,7 +912,7 @@ impl ServerModule for Lightning {
                         .await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 LIST_GATEWAYS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
@@ -921,7 +921,7 @@ impl ServerModule for Lightning {
                     Ok(module.list_gateways(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
@@ -932,7 +932,7 @@ impl ServerModule for Lightning {
                     Ok(())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
@@ -941,7 +941,7 @@ impl ServerModule for Lightning {
                     Ok(module.get_gateway_remove_challenge(gateway_id, &mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {

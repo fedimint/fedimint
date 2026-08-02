@@ -11,7 +11,10 @@ Backward compatibility of the DKG API (setup process) is currently not guarantee
 APIs of the other core server APIs and modules is internally versioned and
 backward compatible for the purpose of consumption by fedimint clients.
 
-Use [github search to find more details about every API](https://github.com/search?q=repo%3Afedimint%2Ffedimint+api_endpoint%21&type=code).
+Endpoints use `public_api_endpoint!` when guardian authentication is not
+required and `admin_api_endpoint!` when it is required.
+
+Use [GitHub search to find more details about every API](https://github.com/search?q=repo%3Afedimint%2Ffedimint+%2F%28public%7Cadmin%29_api_endpoint%2F&type=code).
 
 ## Core Server API Endpoints
 

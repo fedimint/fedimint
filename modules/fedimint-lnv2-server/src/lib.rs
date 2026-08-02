@@ -25,9 +25,9 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, admin_api_endpoint,
+    public_api_endpoint,
 };
-use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
@@ -627,7 +627,7 @@ impl ServerModule for Lightning {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 CONSENSUS_BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _params : () | -> u64 {
@@ -637,7 +637,7 @@ impl ServerModule for Lightning {
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_INCOMING_CONTRACT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, params: (ContractId, u64) | -> Option<OutPoint> {
@@ -646,7 +646,7 @@ impl ServerModule for Lightning {
                     Ok(module.await_incoming_contract(db, params.0, params.1).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_PREIMAGE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, params: (OutPoint, u64)| -> Option<[u8; 32]> {
@@ -655,7 +655,7 @@ impl ServerModule for Lightning {
                     Ok(module.await_preimage(db, params.0, params.1).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 DECRYPTION_KEY_SHARE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, params: OutPoint| -> DecryptionKeyShare {
@@ -670,7 +670,7 @@ impl ServerModule for Lightning {
                         .await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, outpoint: OutPoint| -> Option<(ContractId, u64)> {
@@ -679,7 +679,7 @@ impl ServerModule for Lightning {
                     Ok(module.outgoing_contract_expiration(db, outpoint).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 AWAIT_INCOMING_CONTRACTS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, params: (u64, usize)| -> (Vec<IncomingContract>, u64) {
@@ -692,29 +692,27 @@ impl ServerModule for Lightning {
                     Ok(module.await_incoming_contracts(db, params.0, params.1).await)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 ADD_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
-                    check_auth(context)?;
 
                     let db = context.db();
 
                     Ok(Lightning::add_gateway(db, gateway).await)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
-                    check_auth(context)?;
 
                     let db = context.db();
 
                     Ok(Lightning::remove_gateway(db, gateway).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 GATEWAYS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, _params : () | -> Vec<SafeUrl> {
