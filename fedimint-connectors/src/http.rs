@@ -51,15 +51,21 @@ pub(crate) struct HttpConnection {
 
 #[apply(async_trait_maybe_send!)]
 impl IConnection for HttpConnection {
-    async fn await_disconnection(&self) {}
+    async fn await_disconnection(&self) {
+        // `HttpConnection` is a stateless wrapper over a pooled `reqwest::Client`;
+        // it never actually disconnects. Returning immediately would make the
+        // `ConnectionPool` treat every request as a reconnection and impose its
+        // reconnect backoff (a 500ms floor) before each one, so we pend forever.
+        std::future::pending().await
+    }
 
     fn is_connected(&self) -> bool {
-        // `reqwest::Client` already implemented connection pooling. So instead of
-        // keeping this `HttpConnection` alive, we always return false here and
-        // force the `ConnectionRegistry` to re-create the connection. `HttpConnector`
-        // manages the `reqwest::Client` lifetime, so the same underlying TCP
-        // connection will be used for subsequent requests.
-        false
+        // `reqwest::Client` handles TCP/TLS connection pooling internally, so this
+        // wrapper is always "connected" and safe to cache. Reporting `false` here
+        // forced the `ConnectionPool` to reset the entry to a reconnecting state on
+        // every request, penalizing each one with a 500ms reconnect-backoff sleep
+        // even though the underlying connection was reused the whole time.
+        true
     }
 }
 
