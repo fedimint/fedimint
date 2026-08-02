@@ -2,25 +2,30 @@ mod mock;
 
 use std::pin::pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use async_stream::stream;
 use bitcoin::hashes::sha256;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::db::CachedApiVersionSetKey;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::sm::executor::InactiveStateKeyDb;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
+use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::InactiveStateMeta;
 use fedimint_client_module::sm::executor::InactiveStateKey;
 use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1, Scalar, SecretKey};
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{NextOrPending as _, SafeUrl, backoff_util, retry};
 use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId, msats, sats, secp256k1};
@@ -28,13 +33,15 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_lnurl::parse_lnurl;
+use fedimint_lnv2_client::db::IncomingContractStreamIndexKey;
 use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
     FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
     LightningOperationMeta, LnurlReceiveOperationMeta, ReceiveOperationState, ReceiveSMCommon,
-    ReceiveSMState, ReceiveStateMachine, SendOperationState, SendPaymentError,
+    ReceiveSMState, ReceiveStateMachine, RecoveredReceiveOperationMeta, SendOperationState,
+    SendPaymentError,
 };
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -45,6 +52,7 @@ use fedimint_lnv2_common::{
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
+use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
@@ -102,20 +110,21 @@ fn try_parse_ln_event(entry: &EventLogEntry) -> Option<LnEvent> {
     None
 }
 
+fn lightning_client_init() -> LightningClientInit {
+    LightningClientInit {
+        gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
+        custom_meta_fn: Arc::new(|| {
+            serde_json::json!({
+                "timestamp": chrono::Utc::now().timestamp(),
+            })
+        }),
+    }
+}
+
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
 
-    fixtures.with_module(
-        LightningClientInit {
-            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
-            custom_meta_fn: Arc::new(|| {
-                serde_json::json!({
-                    "timestamp": chrono::Utc::now().timestamp(),
-                })
-            }),
-        },
-        LightningInit,
-    )
+    fixtures.with_module(lightning_client_init(), LightningInit)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -372,6 +381,9 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
         LightningOperationMeta::LnurlReceive(..) => {
             panic!("Operation Meta is a LnurlReceive variant")
+        }
+        LightningOperationMeta::RecoveredReceive(..) => {
+            panic!("Operation Meta is a RecoveredReceive variant")
         }
     };
 
@@ -666,6 +678,446 @@ async fn funded_receive_is_claimed() -> anyhow::Result<()> {
         panic!("Expected Receive event");
     };
     assert_eq!(receive.operation_id, operation_id);
+
+    Ok(())
+}
+
+fn root_secret(bytes: &[u8; 64]) -> RootSecret {
+    RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(bytes))
+}
+
+/// Creates a direct receive on a client derived from `root_secret`, then
+/// shuts the client down, simulating a database lost before the payment was
+/// claimed. Returns the incoming contract and the contract-derived operation
+/// id a rediscovering client will record it under.
+async fn receive_and_lose_db(
+    fed: &FederationTest,
+    root_secret: RootSecret,
+) -> anyhow::Result<(IncomingContract, OperationId)> {
+    let original = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret)
+        .await;
+
+    let operation_id = original
+        .get_first_module::<LightningClientModule>()?
+        .receive(
+            Amount::from_sats(1000),
+            3600,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?
+        .1;
+
+    let operation = original
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    let contract = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Receive(meta) => meta.contract,
+        _ => panic!("Operation meta is not a receive variant"),
+    };
+
+    Arc::into_inner(original)
+        .expect("The test holds the only handle")
+        .shutdown()
+        .await;
+
+    Ok((contract, operation_id))
+}
+
+/// Waits until the recovered receive credits the client's balance and
+/// asserts the operation was recorded with a recovered receive meta.
+async fn await_recovered_receive(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+) -> anyhow::Result<RecoveredReceiveOperationMeta> {
+    let mut balance = Amount::ZERO;
+
+    for _ in 0..300 {
+        balance = client.get_balance_for_btc().await?;
+
+        if balance != Amount::ZERO {
+            break;
+        }
+
+        sleep_in_test(
+            "Waiting for the contract scan to claim the recovered receive",
+            Duration::from_millis(200),
+        )
+        .await;
+    }
+
+    // The claim credits the contract amount minus the lnv2 input fee.
+    assert!(
+        balance >= Amount::from_msats(900_000),
+        "Expected the recovered contract to be claimed, balance is {balance}"
+    );
+
+    // The rediscovered operation is recorded under the contract-derived
+    // operation id with a recovered receive meta.
+    let recovered_operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Recovered operation not found"))?;
+
+    let recovered_meta = match recovered_operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::RecoveredReceive(meta) => meta,
+        meta => panic!("Operation meta is not a recovered receive variant: {meta:?}"),
+    };
+
+    // The invoice was lost with the original database, so the receive event
+    // reports the contract amount with a zero gateway fee rather than
+    // decoding the contract expiration as a fee.
+    let mut events = pin!(ln_event_stream(client));
+
+    let Some(LnEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+
+    assert_eq!(receive.operation_id, operation_id);
+    assert_eq!(receive.fee, Amount::ZERO);
+    assert_eq!(receive.amount, recovered_meta.contract.commitment.amount);
+
+    Ok(recovered_meta)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scan_recovers_direct_receive_after_restore_from_seed() -> anyhow::Result<()> {
+    const RESTORE_SK: [u8; 64] = [0x21; 64];
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+
+    // The original client creates an invoice, then loses its database before
+    // the payment arrives.
+    let (contract, operation_id) = receive_and_lose_db(&fed, root_secret(&RESTORE_SK)).await?;
+
+    // A gateway funds the contract while the original client is gone.
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    fund_incoming_contract(&funder, contract.clone()).await?;
+
+    // The restored client has the seed but a fresh database. The incoming
+    // contract scan rediscovers the funded contract via the static module
+    // key and claims it without any local operation history.
+    let restored = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&RESTORE_SK))
+        .await;
+
+    let recovered_meta = await_recovered_receive(&restored, operation_id).await?;
+
+    // The automatic scan attaches the client's configured custom metadata,
+    // exactly like the lnurl branch of the same loop.
+    assert!(
+        recovered_meta.custom_meta.get("timestamp").is_some(),
+        "Expected the configured custom meta, got {:?}",
+        recovered_meta.custom_meta
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rescan_recovers_direct_receive_missed_by_earlier_scan() -> anyhow::Result<()> {
+    const RESTORE_SK: [u8; 64] = [0x22; 64];
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+
+    let (contract, operation_id) = receive_and_lose_db(&fed, root_secret(&RESTORE_SK)).await?;
+
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    fund_incoming_contract(&funder, contract.clone()).await?;
+
+    // Simulate a database restored from seed by a client from before direct
+    // receives were recovered by the scan: its persisted cursor has already
+    // advanced past the funded contract, so the tail scan alone never
+    // revisits it and only a manual rescan can rediscover it.
+    let lnv2_module_id = funder
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let db: Database = MemDatabase::new().into();
+
+    {
+        let (module_db, _) = db.with_prefix_module_id(lnv2_module_id);
+
+        let mut dbtx = module_db.begin_transaction().await;
+
+        // The module's own scan cursor, under the client's module instance
+        // prefix: already at the stream tip of one funded contract.
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, &1).await;
+
+        dbtx.commit_tx().await;
+    }
+
+    let restored = fed.join_client_with_db(db, root_secret(&RESTORE_SK)).await;
+
+    // The tail scan starts at the cursor, which is already past the funded
+    // contract, so it never records the recovery on its own.
+    assert!(
+        restored
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_none(),
+        "The tail scan must not recover a contract behind the persisted cursor"
+    );
+
+    let operation_ids = restored
+        .get_first_module::<LightningClientModule>()?
+        .rescan_incoming_contracts(Value::Null)
+        .await?;
+
+    assert!(
+        operation_ids.contains(&operation_id),
+        "Expected the rescan to record the recovery of the funded contract, got {operation_ids:?}"
+    );
+
+    let recovered_meta = await_recovered_receive(&restored, operation_id).await?;
+
+    // A manual rescan uses the metadata passed by its caller.
+    assert_eq!(recovered_meta.custom_meta, Value::Null);
+
+    Ok(())
+}
+
+/// Reads the incoming contract scan cursor out of a client's database.
+///
+/// The cursor is the module's own `IncomingContractStreamIndexKey`, read under
+/// the client's module instance prefix the way
+/// `rescan_recovers_direct_receive_missed_by_earlier_scan` writes it. `None`
+/// means the scan has never committed a cursor, i.e. it never got past its
+/// first batch.
+async fn scan_cursor(client: &Client) -> Option<u64> {
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let (module_db, _) = client.db().with_prefix_module_id(lnv2_module_id);
+
+    module_db
+        .begin_transaction_nc()
+        .await
+        .get_value(&IncomingContractStreamIndexKey)
+        .await
+}
+
+/// A batch of nothing but dust must not hold the scan cursor.
+///
+/// Skipping a contract the claim fee would swallow is the point of the dust
+/// check, but pricing one through a fee quote asks the primary module to
+/// balance a claim the contract cannot fund, which fails outright on a wallet
+/// with no balance to top the shortfall up from. Reading that failure as
+/// "cannot price this yet" holds the cursor, and the cursor only ever moves
+/// forward: the scan re-fetches the same batch every ten seconds forever, and
+/// once 128 dust contracts fill a batch no later contract is ever seen again —
+/// a wallet bricked for the price of a few sats, by a different route.
+///
+/// `unsolicited_dust_contract_does_not_wedge_the_client` cannot see this: it
+/// funds a claimable contract in the same batch, which the victim claims
+/// whether or not the cursor ever moved.
+#[tokio::test(flavor = "multi_thread")]
+async fn dust_alone_does_not_hold_the_scan_cursor() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let victim = fed.new_client().await;
+    let attacker = fed.new_client().await;
+
+    attacker
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Everything the attacker needs is in what the victim publishes.
+    let lnurl = victim
+        .get_first_module::<LightningClientModule>()?
+        .generate_lnurl(
+            SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
+            Some(mock::gateway()),
+        )
+        .await?;
+    let url = parse_lnurl(&lnurl).expect("Generated lnurl decodes");
+    let payload = url.rsplit("pay/").next().expect("Url carries a payload");
+    let request = decode_prefixed::<LnurlRequest>(FEDIMINT_PREFIX, payload)?;
+
+    // The stream holds nothing but the dust, and the victim holds no balance
+    // at all — the state a fresh wallet publishing an address is in, and the
+    // one in which no quote for the claim can be taken.
+    let dust = incoming_contract_for(request.recipient_pk, request.aggregate_pk, msats(1));
+    fund_incoming_contract(&attacker, dust.clone()).await?;
+
+    let cursor = retry(
+        "waiting for the scan cursor to advance past the dust contract",
+        backoff_util::aggressive_backoff(),
+        || async {
+            scan_cursor(&victim)
+                .await
+                .context("The scan cursor never advanced past the dust contract")
+        },
+    )
+    .await;
+
+    assert!(
+        matches!(cursor, Ok(1)),
+        "The scan cursor must advance past the only dust contract in the stream, got {cursor:?}"
+    );
+
+    // Advancing past the dust is skipping it, not claiming it.
+    assert!(
+        victim
+            .operation_log()
+            .get_operation(OperationId::from_encodable(&dust))
+            .await
+            .is_none(),
+        "Dust contract should have been ignored"
+    );
+
+    Ok(())
+}
+
+/// A claim that genuinely cannot be priced must hold the scan cursor, and the
+/// contract must still be recovered once pricing works again.
+///
+/// This is the case the dust check must not swallow. The contract is worth
+/// claiming; the client is simply in no position to price it, because a fee
+/// quote is balanced by the primary module and no primary module is in the
+/// registry. That is the real shape of a restore from seed: a module whose
+/// recovery is still running stays out of the module registry until the client
+/// is reopened with that recovery complete (the `initialize_module` branch in
+/// `fedimint-client/src/client/builder.rs`). Advancing the cursor there would
+/// abandon the contract, since the scan only ever moves forward.
+///
+/// The registry is emptied of everything but the lightning module to reach
+/// that state, which is what
+/// `scan_recovers_direct_receive_after_restore_from_seed` cannot do: it joins
+/// with the fixture's registry, primary module included.
+#[tokio::test(flavor = "multi_thread")]
+async fn scan_holds_the_cursor_until_the_claim_can_be_priced() -> anyhow::Result<()> {
+    const RESTORE_SK: [u8; 64] = [0x23; 64];
+    const FILLER_SK: [u8; 64] = [0x24; 64];
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+
+    // `receive_and_lose_db` asks for a thousand satoshis, three orders of
+    // magnitude clear of the one the lightning input fee costs, so the verdict
+    // genuinely depends on the quote rather than being settled by the local
+    // dust check ahead of it. Were that amount ever dropped into dust range,
+    // the cursor assertion below is what fails: the dust check would skip the
+    // contract and let the cursor advance.
+    let (contract, operation_id) = receive_and_lose_db(&fed, root_secret(&RESTORE_SK)).await?;
+
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Consume stream index zero, then claim the contract so the stream is
+    // sparse. This lets the rescan below start before the persisted cursor and
+    // still reach the target exactly at that cursor, proving the unpriceable
+    // recovery path ran without moving the cursor past the target first.
+    let (filler, filler_operation_id) = receive_and_lose_db(&fed, root_secret(&FILLER_SK)).await?;
+
+    fund_incoming_contract(&funder, filler).await?;
+
+    let filler_recipient = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&FILLER_SK))
+        .await;
+
+    await_recovered_receive(&filler_recipient, filler_operation_id).await?;
+
+    fund_incoming_contract(&funder, contract.clone()).await?;
+
+    let db: Database = MemDatabase::new().into();
+
+    {
+        let lnv2_module_id = funder
+            .get_first_instance(&LightningClientModule::kind())
+            .expect("lnv2 module is registered");
+        let (module_db, _) = db.with_prefix_module_id(lnv2_module_id);
+        let mut dbtx = module_db.begin_transaction().await;
+
+        // The module's own scan cursor: index zero was claimed above, and the
+        // target is at index one.
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, &1).await;
+
+        dbtx.commit_tx().await;
+    }
+
+    // A client that runs the lightning module and nothing else, because
+    // nothing else is in its registry. Its scan runs, and every fee quote it
+    // takes fails for want of a primary module to balance against.
+    let unpriceable = {
+        let mut builder = Client::builder().await?;
+
+        builder.with_module(lightning_client_init());
+
+        builder
+            .preview_with_existing_config(funder.endpoints().clone(), funder.config().await, None)
+            .await?
+            .join(db.clone(), root_secret(&RESTORE_SK))
+            .await?
+    };
+
+    // The sparse rescan begins at index zero and reaches the target at index
+    // one. The failed quote returns before `receive_incoming_contract` can
+    // attempt to record the recovery, so the resulting rescan error proves the
+    // direct-recovery verdict was attempted and could not be priced.
+    unpriceable
+        .get_first_module::<LightningClientModule>()?
+        .rescan_incoming_contracts(Value::Null)
+        .await
+        .expect_err("The rescan must report an unpriceable recovery");
+
+    // The rescan itself never writes the cursor, so this catches only the tail
+    // scan advancing it. That the hold actually preserved the claim is what
+    // the recovery after the reopen below proves.
+    assert_eq!(
+        scan_cursor(&unpriceable).await,
+        Some(1),
+        "The scan must not advance past a contract whose claim it could not price"
+    );
+
+    unpriceable.shutdown().await;
+
+    // Joining with a registry short of the primary module also cached an API
+    // version set short of it, and a cached set is reused on the next open —
+    // which would drop the module from the reopened client too. That is an
+    // artifact of how this test takes the module away, not of the state it
+    // stands in for: a restore from seed negotiates against its whole
+    // registry both times, and the module is missing only for as long as its
+    // recovery runs. Dropping the cache lets the reopen negotiate afresh.
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.remove_entry(&CachedApiVersionSetKey).await;
+
+    dbtx.commit_tx().await;
+
+    // Reopening the same database with a primary module present is the other
+    // half of a restore from seed: the recovery is complete, the module is
+    // back in the registry, and the scan resumes from the cursor it held.
+    let restored = fed.open_client_with_db(db, root_secret(&RESTORE_SK)).await;
+
+    await_recovered_receive(&restored, operation_id).await?;
 
     Ok(())
 }
