@@ -48,7 +48,9 @@ pub struct ReceivePaymentEvent {
     pub operation_id: OperationId,
     pub amount: Amount,
     /// Absolute fee paid to the gateway. Defaults to zero for events recorded
-    /// before this field was added.
+    /// before this field was added, and is zero for recovered receives, whose
+    /// invoice - and with it the gateway fee - was lost with the original
+    /// database.
     #[serde(default)]
     pub fee: Amount,
 }

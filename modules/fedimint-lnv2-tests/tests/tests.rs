@@ -2,23 +2,27 @@ mod mock;
 
 use std::pin::pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin::hashes::sha256;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::sm::executor::InactiveStateKeyDb;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
+use fedimint_client::{ClientHandleArc, RootSecret};
 use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::InactiveStateMeta;
 use fedimint_client_module::sm::executor::InactiveStateKey;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::{Keypair, SECP256K1, SecretKey};
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -30,7 +34,8 @@ use fedimint_lnv2_client::events::{
 use fedimint_lnv2_client::{
     FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
     LightningOperationMeta, LnurlReceiveOperationMeta, ReceiveOperationState, ReceiveSMCommon,
-    ReceiveSMState, ReceiveStateMachine, SendOperationState, SendPaymentError,
+    ReceiveSMState, ReceiveStateMachine, RecoveredReceiveOperationMeta, SendOperationState,
+    SendPaymentError,
 };
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -40,6 +45,7 @@ use fedimint_lnv2_common::{
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
+use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
@@ -367,6 +373,9 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         LightningOperationMeta::LnurlReceive(..) => {
             panic!("Operation Meta is a LnurlReceive variant")
         }
+        LightningOperationMeta::RecoveredReceive(..) => {
+            panic!("Operation Meta is a RecoveredReceive variant")
+        }
     };
 
     let client_input = ClientInput::<LightningInput> {
@@ -537,6 +546,224 @@ async fn funded_receive_is_claimed() -> anyhow::Result<()> {
         panic!("Expected Receive event");
     };
     assert_eq!(receive.operation_id, operation_id);
+
+    Ok(())
+}
+
+fn root_secret(bytes: &[u8; 64]) -> RootSecret {
+    RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(bytes))
+}
+
+/// Creates a direct receive on a client derived from `root_secret`, then
+/// shuts the client down, simulating a database lost before the payment was
+/// claimed. Returns the incoming contract and the contract-derived operation
+/// id a rediscovering client will record it under.
+async fn receive_and_lose_db(
+    fed: &FederationTest,
+    root_secret: RootSecret,
+) -> anyhow::Result<(IncomingContract, OperationId)> {
+    let original = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret)
+        .await;
+
+    let operation_id = original
+        .get_first_module::<LightningClientModule>()?
+        .receive(
+            Amount::from_sats(1000),
+            3600,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?
+        .1;
+
+    let operation = original
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    let contract = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Receive(meta) => meta.contract,
+        _ => panic!("Operation meta is not a receive variant"),
+    };
+
+    Arc::into_inner(original)
+        .expect("The test holds the only handle")
+        .shutdown()
+        .await;
+
+    Ok((contract, operation_id))
+}
+
+/// Waits until the recovered receive credits the client's balance and
+/// asserts the operation was recorded with a recovered receive meta.
+async fn await_recovered_receive(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+) -> anyhow::Result<RecoveredReceiveOperationMeta> {
+    let mut balance = Amount::ZERO;
+
+    for _ in 0..300 {
+        balance = client.get_balance_for_btc().await?;
+
+        if balance != Amount::ZERO {
+            break;
+        }
+
+        sleep_in_test(
+            "Waiting for the contract scan to claim the recovered receive",
+            Duration::from_millis(200),
+        )
+        .await;
+    }
+
+    // The claim credits the contract amount minus the lnv2 input fee.
+    assert!(
+        balance >= Amount::from_msats(900_000),
+        "Expected the recovered contract to be claimed, balance is {balance}"
+    );
+
+    // The rediscovered operation is recorded under the contract-derived
+    // operation id with a recovered receive meta.
+    let recovered_operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Recovered operation not found"))?;
+
+    let recovered_meta = match recovered_operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::RecoveredReceive(meta) => meta,
+        meta => panic!("Operation meta is not a recovered receive variant: {meta:?}"),
+    };
+
+    // The invoice was lost with the original database, so the receive event
+    // reports the contract amount with a zero gateway fee rather than
+    // decoding the contract expiration as a fee.
+    let mut events = pin!(ln_event_stream(client));
+
+    let Some(LnEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+
+    assert_eq!(receive.operation_id, operation_id);
+    assert_eq!(receive.fee, Amount::ZERO);
+    assert_eq!(receive.amount, recovered_meta.contract.commitment.amount);
+
+    Ok(recovered_meta)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scan_recovers_direct_receive_after_restore_from_seed() -> anyhow::Result<()> {
+    const RESTORE_SK: [u8; 64] = [0x21; 64];
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+
+    // The original client creates an invoice, then loses its database before
+    // the payment arrives.
+    let (contract, operation_id) = receive_and_lose_db(&fed, root_secret(&RESTORE_SK)).await?;
+
+    // A gateway funds the contract while the original client is gone.
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    fund_incoming_contract(&funder, contract.clone()).await?;
+
+    // The restored client has the seed but a fresh database. The incoming
+    // contract scan rediscovers the funded contract via the static module
+    // key and claims it without any local operation history.
+    let restored = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&RESTORE_SK))
+        .await;
+
+    let recovered_meta = await_recovered_receive(&restored, operation_id).await?;
+
+    // The automatic scan attaches the client's configured custom metadata,
+    // exactly like the lnurl branch of the same loop.
+    assert!(
+        recovered_meta.custom_meta.get("timestamp").is_some(),
+        "Expected the configured custom meta, got {:?}",
+        recovered_meta.custom_meta
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rescan_recovers_direct_receive_missed_by_earlier_scan() -> anyhow::Result<()> {
+    const RESTORE_SK: [u8; 64] = [0x22; 64];
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+
+    let (contract, operation_id) = receive_and_lose_db(&fed, root_secret(&RESTORE_SK)).await?;
+
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    fund_incoming_contract(&funder, contract.clone()).await?;
+
+    // Simulate a database restored from seed by a client from before direct
+    // receives were recovered by the scan: its persisted cursor has already
+    // advanced past the funded contract, so the tail scan alone never
+    // revisits it and only a manual rescan can rediscover it.
+    let lnv2_module_id = funder
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let db: Database = MemDatabase::new().into();
+
+    {
+        let (module_db, _) = db.with_prefix_module_id(lnv2_module_id);
+
+        let mut dbtx = module_db.begin_transaction().await;
+
+        // Raw write of the module's IncomingContractStreamIndexKey (prefix
+        // 0x42), which is private to the module: cursor already at the
+        // stream tip of one funded contract.
+        dbtx.raw_insert_bytes(&[0x42], &1u64.consensus_encode_to_vec())
+            .await?;
+
+        dbtx.commit_tx().await;
+    }
+
+    let restored = fed.join_client_with_db(db, root_secret(&RESTORE_SK)).await;
+
+    // The tail scan starts at the cursor, which is already past the funded
+    // contract, so it never records the recovery on its own.
+    assert!(
+        restored
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_none(),
+        "The tail scan must not recover a contract behind the persisted cursor"
+    );
+
+    let operation_ids = restored
+        .get_first_module::<LightningClientModule>()?
+        .rescan_incoming_contracts(Value::Null)
+        .await?;
+
+    assert!(
+        operation_ids.contains(&operation_id),
+        "Expected the rescan to record the recovery of the funded contract, got {operation_ids:?}"
+    );
+
+    let recovered_meta = await_recovered_receive(&restored, operation_id).await?;
+
+    // A manual rescan uses the metadata passed by its caller.
+    assert_eq!(recovered_meta.custom_meta, Value::Null);
 
     Ok(())
 }
