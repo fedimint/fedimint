@@ -32,12 +32,12 @@ impl NoteIssuanceRequest {
         MintOutput::new_v0(self.denomination, self.blinded_message(), self.tweak)
     }
 
-    pub fn finalize(&self, signature: BlindedSignature) -> SpendableNote {
-        SpendableNote {
+    pub fn finalize(&self, signature: BlindedSignature) -> Result<SpendableNote, tbs::Error> {
+        Ok(SpendableNote {
             denomination: self.denomination,
             keypair: self.keypair,
-            signature: unblind_signature(self.blinding_key, signature),
-        }
+            signature: unblind_signature(self.blinding_key, signature)?,
+        })
     }
 
     pub fn blinded_message(&self) -> BlindedMessage {

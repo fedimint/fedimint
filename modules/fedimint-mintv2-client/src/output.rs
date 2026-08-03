@@ -136,7 +136,15 @@ impl MintOutputStateMachine {
                     .collect(),
             );
 
-            let spendable_note = request.finalize(agg_blind_signature);
+            let spendable_note = match request.finalize(agg_blind_signature) {
+                Ok(note) => note,
+                Err(_) => {
+                    return MintOutputStateMachine {
+                        common: old_state.common,
+                        state: OutputSMState::Failure,
+                    };
+                }
+            };
 
             let pk = *tbs_pks
                 .get(&request.denomination)

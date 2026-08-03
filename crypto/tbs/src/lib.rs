@@ -254,9 +254,28 @@ pub fn verify_blinded_signature(
     pairing(&msg.0, &pk.0) == pairing(&sig.0, &G2Affine::generator())
 }
 
-pub fn unblind_signature(blinding_key: BlindingKey, blinded_sig: BlindedSignature) -> Signature {
-    let sig = blinded_sig.0 * blinding_key.0.invert().unwrap();
-    Signature(sig.to_affine())
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Error {
+    InvalidBlindingKey,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::InvalidBlindingKey => write!(f, "Invalid blinding key (zero scalar)"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+pub fn unblind_signature(
+    blinding_key: BlindingKey,
+    blinded_sig: BlindedSignature,
+) -> Result<Signature, Error> {
+    let inv = Option::from(blinding_key.0.invert()).ok_or(Error::InvalidBlindingKey)?;
+    let sig = blinded_sig.0 * inv;
+    Ok(Signature(sig.to_affine()))
 }
 
 pub fn verify(msg: Message, sig: Signature, pk: AggregatePublicKey) -> bool {
