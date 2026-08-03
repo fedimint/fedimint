@@ -4,42 +4,72 @@
 <a href=#4 id=4 data-nosnippet>4</a>//! clients recover from a snapshot, instead of a blank slate.
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span>std::time::SystemTime;
 <a href=#6 id=6 data-nosnippet>6</a>
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>serde::{Deserialize, Serialize};
-<a href=#10 id=10 data-nosnippet>10</a>
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::db::DbKeyPrefix;
-<a href=#12 id=12 data-nosnippet>12</a>
-<a href=#13 id=13 data-nosnippet>13</a><span class="doccomment">/// Key used to store user's ecash backups
-<a href=#14 id=14 data-nosnippet>14</a></span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">pub struct </span>ClientBackupKey(<span class="kw">pub </span>secp256k1::PublicKey);
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::encoding::{
+<a href=#8 id=8 data-nosnippet>8</a>    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+<a href=#9 id=9 data-nosnippet>9</a>    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+<a href=#10 id=10 data-nosnippet>10</a>};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::db::DbKeyPrefix;
 <a href=#16 id=16 data-nosnippet>16</a>
-<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[derive(Debug, Encodable, Decodable)]
-<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub struct </span>ClientBackupKeyPrefix;
-<a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a><span class="macro">impl_db_record!</span>(
-<a href=#21 id=21 data-nosnippet>21</a>    key = ClientBackupKey,
-<a href=#22 id=22 data-nosnippet>22</a>    value = ClientBackupSnapshot,
-<a href=#23 id=23 data-nosnippet>23</a>    db_prefix = DbKeyPrefix::ClientBackup,
-<a href=#24 id=24 data-nosnippet>24</a>);
-<a href=#25 id=25 data-nosnippet>25</a><span class="macro">impl_db_lookup!</span>(key = ClientBackupKey, query_prefix = ClientBackupKeyPrefix);
-<a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// User's backup, received at certain time, containing encrypted payload
-<a href=#28 id=28 data-nosnippet>28</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
-<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>ClientBackupSnapshot {
-<a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">pub </span>timestamp: SystemTime,
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="attr">#[serde(with = <span class="string">"fedimint_core::hex::serde"</span>)]
-<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="kw">pub </span>data: Vec&lt;u8&gt;,
-<a href=#33 id=33 data-nosnippet>33</a>}
-<a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// Statistics about backups stored in the federation
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
-<a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">pub struct </span>BackupStatistics {
-<a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">pub </span>num_backups: usize,
-<a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">pub </span>total_size: usize,
-<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">pub </span>refreshed_1d: usize,
-<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">pub </span>refreshed_1w: usize,
-<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub </span>refreshed_1m: usize,
-<a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">pub </span>refreshed_3m: usize,
+<a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// Key used to store user's ecash backups
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub struct </span>ClientBackupKey(<span class="kw">pub </span>secp256k1::PublicKey);
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a><span class="attr">#[derive(Debug, Encodable, Decodable)]
+<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">pub struct </span>ClientBackupKeyPrefix;
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="macro">impl_db_record!</span>(
+<a href=#25 id=25 data-nosnippet>25</a>    key = ClientBackupKey,
+<a href=#26 id=26 data-nosnippet>26</a>    value = ClientBackupSnapshot,
+<a href=#27 id=27 data-nosnippet>27</a>    db_prefix = DbKeyPrefix::ClientBackup,
+<a href=#28 id=28 data-nosnippet>28</a>);
+<a href=#29 id=29 data-nosnippet>29</a><span class="macro">impl_db_lookup!</span>(key = ClientBackupKey, query_prefix = ClientBackupKeyPrefix);
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// User's backup, received at certain time, containing encrypted payload
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub struct </span>ClientBackupSnapshot {
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">pub </span>timestamp: SystemTime,
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="attr">#[serde(with = <span class="string">"fedimint_core::hex::serde"</span>)]
+<a href=#36 id=36 data-nosnippet>36</a>    </span><span class="kw">pub </span>data: Vec&lt;u8&gt;,
+<a href=#37 id=37 data-nosnippet>37</a>}
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">impl </span>Encodable <span class="kw">for </span>ClientBackupSnapshot {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+<a href=#41 id=41 data-nosnippet>41</a>        encode_legacy_system_time(<span class="kw-2">&amp;</span><span class="self">self</span>.timestamp, writer)<span class="question-mark">?</span>;
+<a href=#42 id=42 data-nosnippet>42</a>        <span class="self">self</span>.data.consensus_encode(writer)
+<a href=#43 id=43 data-nosnippet>43</a>    }
 <a href=#44 id=44 data-nosnippet>44</a>}
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">impl </span>Decodable <span class="kw">for </span>ClientBackupSnapshot {
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
+<a href=#48 id=48 data-nosnippet>48</a>        decoder: <span class="kw-2">&amp;mut </span>D,
+<a href=#49 id=49 data-nosnippet>49</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#50 id=50 data-nosnippet>50</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<a href=#51 id=51 data-nosnippet>51</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#52 id=52 data-nosnippet>52</a>            timestamp: with_decoding_context(
+<a href=#53 id=53 data-nosnippet>53</a>                decode_legacy_system_time_from_finite_reader(decoder, modules),
+<a href=#54 id=54 data-nosnippet>54</a>                <span class="string">"Decoding named block field: ClientBackupSnapshot{ ... timestamp ... }"</span>,
+<a href=#55 id=55 data-nosnippet>55</a>            )<span class="question-mark">?</span>,
+<a href=#56 id=56 data-nosnippet>56</a>            data: decode_field_from_finite_reader(
+<a href=#57 id=57 data-nosnippet>57</a>                decoder,
+<a href=#58 id=58 data-nosnippet>58</a>                modules,
+<a href=#59 id=59 data-nosnippet>59</a>                <span class="string">"Decoding named block field: ClientBackupSnapshot{ ... data ... }"</span>,
+<a href=#60 id=60 data-nosnippet>60</a>            )<span class="question-mark">?</span>,
+<a href=#61 id=61 data-nosnippet>61</a>        })
+<a href=#62 id=62 data-nosnippet>62</a>    }
+<a href=#63 id=63 data-nosnippet>63</a>}
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a><span class="doccomment">/// Statistics about backups stored in the federation
+<a href=#66 id=66 data-nosnippet>66</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
+<a href=#67 id=67 data-nosnippet>67</a></span><span class="kw">pub struct </span>BackupStatistics {
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">pub </span>num_backups: usize,
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">pub </span>total_size: usize,
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">pub </span>refreshed_1d: usize,
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="kw">pub </span>refreshed_1w: usize,
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">pub </span>refreshed_1m: usize,
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">pub </span>refreshed_3m: usize,
+<a href=#74 id=74 data-nosnippet>74</a>}
 </code></pre></div></section></main></body></html>
