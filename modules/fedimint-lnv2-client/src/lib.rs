@@ -55,6 +55,7 @@ use fedimint_lnv2_common::{
     LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
     lnurl, tweak,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
@@ -63,7 +64,7 @@ use serde_json::Value;
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, derive_agg_dk};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::api::LightningFederationApi;
 use crate::events::SendPaymentEvent;
@@ -83,6 +84,7 @@ pub enum LightningOperationMeta {
     Send(SendOperationMeta),
     Receive(ReceiveOperationMeta),
     LnurlReceive(LnurlReceiveOperationMeta),
+    RecoveredReceive(RecoveredReceiveOperationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +129,19 @@ impl ReceiveOperationMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LnurlReceiveOperationMeta {
+    pub contract: IncomingContract,
+    pub custom_meta: Value,
+}
+
+/// Operation meta of a direct receive rediscovered by the incoming contract
+/// scan rather than driven by a locally created invoice, e.g. after a restore
+/// from seed where the original operation was lost with the database.
+///
+/// The invoice is unavailable on this client, so the gateway fee cannot be
+/// recovered; the receive payment event reports the contract amount with a
+/// zero fee.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveredReceiveOperationMeta {
     pub contract: IncomingContract,
     pub custom_meta: Value,
 }
@@ -1100,7 +1115,7 @@ impl LightningClientModule {
         contract: IncomingContract,
         operation_meta: LightningOperationMeta,
     ) -> Option<OperationId> {
-        let operation_id = OperationId::from_encodable(&contract.clone());
+        let operation_id = OperationId::from_encodable(&contract);
 
         let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(sk, &contract)?;
 
@@ -1114,8 +1129,10 @@ impl LightningClientModule {
             state: ReceiveSMState::Pending,
         });
 
-        // this may only fail if the operation id is already in use, in which case we
-        // ignore the error such that the method is idempotent
+        // Ignore operation-start errors to keep the method idempotent. Callers
+        // that advance persistent progress after this call must verify that the
+        // operation exists, since a failed database commit is also reported as
+        // an operation-start error.
         self.client_ctx
             .manual_operation_start(
                 operation_id,
@@ -1469,6 +1486,176 @@ impl LightningClientModule {
         );
     }
 
+    /// Rescans the incoming contract stream below the persisted scan cursor
+    /// for direct receives locked to the static module key. Returns recovery
+    /// operation ids that became recorded while the call ran, so callers can
+    /// subscribe to them.
+    ///
+    /// This is only needed by a wallet that restored from seed before direct
+    /// receives were recovered by the scan: its cursor has already advanced
+    /// past its historical contracts and the tail scan, which only ever moves
+    /// forward, never revisits them.
+    ///
+    /// This checks only the static module key. An lnurl contract left behind
+    /// the cursor by an older client is not covered.
+    ///
+    /// The rescan keeps no state of its own and does not move the scan
+    /// cursor. It is idempotent - recoveries are recorded under
+    /// contract-derived operation ids - so an interrupted run is simply
+    /// re-run.
+    ///
+    /// The stream endpoint returns the first remaining entries at or after
+    /// the queried index, and claimed contracts are removed from the stream,
+    /// so on a sparse stream the final batch may also include contracts at
+    /// or above the captured cursor. That overlap with the tail scan is
+    /// harmless: whichever caller records the operation first wins and the
+    /// other skips it.
+    ///
+    /// If a run errors or is cancelled, ids collected before the interruption
+    /// are not returned; those operations remain in the operation log and
+    /// their state machines keep claiming. A re-run reports only recoveries
+    /// that were still missing.
+    ///
+    /// A recovered receive whose claim transaction is rejected fails
+    /// terminally, as any other receive does, and is re-driven manually with
+    /// [`LightningClientModule::reclaim_receive`]; rerunning the rescan does
+    /// not retry it, since its operation is already recorded.
+    pub async fn rescan_incoming_contracts(
+        &self,
+        custom_meta: Value,
+    ) -> anyhow::Result<Vec<OperationId>> {
+        let cursor = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&IncomingContractStreamIndexKey)
+            .await
+            .unwrap_or(0);
+
+        let mut operation_ids = Vec::new();
+        let mut failed_contracts = 0_usize;
+        let mut index = 0;
+
+        // Every queried index lies below the cursor and therefore below the
+        // federation's stream tip, so the long-polling endpoint returns
+        // immediately. The batch size is capped to the size of the remaining
+        // range, but since the endpoint returns the first remaining entries
+        // at or after the queried index and claimed contracts are removed
+        // from the stream, a batch on a sparse stream may still include
+        // contracts at or above the cursor. Recovering those overlaps with
+        // the tail scan and is harmless: recording is idempotent and
+        // whichever caller records the operation first wins.
+        while index < cursor {
+            let batch_size =
+                usize::try_from((cursor - index).min(128)).expect("Bounded by the batch size");
+
+            let (contracts, next_index) = self
+                .module_api
+                .await_incoming_contracts(index, batch_size)
+                .await;
+
+            for contract in &contracts {
+                match self
+                    .try_recover_direct_receive(contract, custom_meta.clone())
+                    .await
+                {
+                    DirectReceiveRecovery::Recorded(operation_id) => {
+                        operation_ids.push(operation_id);
+                    }
+                    DirectReceiveRecovery::NotNeeded => {}
+                    DirectReceiveRecovery::Failed => failed_contracts += 1,
+                }
+            }
+
+            index = next_index;
+        }
+
+        // Erroring out instead of skipping keeps the caller from mistaking an
+        // incomplete rescan for a complete one. The whole range is processed
+        // first so one failing contract does not hide later recoverable ones:
+        // the recoveries recorded by this run are already durable, and
+        // re-running the rescan retries only the failed contracts.
+        anyhow::ensure!(
+            failed_contracts == 0,
+            "Recorded {} recoveries but failed to record {failed_contracts}; rerun the rescan",
+            operation_ids.len(),
+        );
+
+        Ok(operation_ids)
+    }
+
+    /// Whether this id belongs to a recorded lnv2 operation. The module-kind
+    /// check avoids treating a cross-module operation-id collision as a
+    /// successfully recorded recovery.
+    async fn operation_recorded(&self, operation_id: OperationId) -> bool {
+        self.client_ctx.get_operation(operation_id).await.is_ok()
+    }
+
+    /// Rediscovers a direct receive for a contract locked to the static
+    /// module key, e.g. after a restore from seed, unless the operation is
+    /// already known to this client.
+    ///
+    /// Seed recovery cannot distinguish a restored replacement device from a
+    /// second live client on the same seed, so - as for lnurl receives - a
+    /// concurrent same-seed client now races the invoice creator for the
+    /// claim; the loser's operation fails even though the payment settled on
+    /// the other device. Concurrent same-seed clients are unsupported.
+    async fn try_recover_direct_receive(
+        &self,
+        contract: &IncomingContract,
+        custom_meta: Value,
+    ) -> DirectReceiveRecovery {
+        // Matches the operation id derivation in `receive_incoming_contract`,
+        // so contracts of receives this client already tracks are skipped
+        // without deriving any keys.
+        let operation_id = OperationId::from_encodable(contract);
+
+        if self.operation_recorded(operation_id).await {
+            return DirectReceiveRecovery::NotNeeded;
+        }
+
+        if self
+            .receive_incoming_contract(
+                self.keypair.secret_key(),
+                contract.clone(),
+                LightningOperationMeta::RecoveredReceive(RecoveredReceiveOperationMeta {
+                    contract: contract.clone(),
+                    custom_meta,
+                }),
+            )
+            .await
+            .is_none()
+        {
+            // The contract is not locked to the static module key; there is
+            // nothing to recover.
+            return DirectReceiveRecovery::NotNeeded;
+        }
+
+        // `receive_incoming_contract` swallows every `manual_operation_start`
+        // error for idempotency, including a failed commit, so whether the
+        // recovery was actually recorded has to be verified before the tail
+        // scan advances past the contract: the scan only ever moves forward
+        // and never revisits it.
+        if self.operation_recorded(operation_id).await {
+            debug!(
+                target: LOG_CLIENT_MODULE_LNV2,
+                contract_id = ?contract.contract_id(),
+                "Discovered incoming contract locked to the static module key"
+            );
+
+            DirectReceiveRecovery::Recorded(operation_id)
+        } else {
+            warn!(
+                target: LOG_CLIENT_MODULE_LNV2,
+                contract_id = ?contract.contract_id(),
+                "Failed to record the recovery of an incoming contract"
+            );
+
+            DirectReceiveRecovery::Failed
+        }
+    }
+
     async fn receive_lnurl(&self, custom_meta: Value) {
         // Read the stream cursor with a short-lived transaction. It must NOT stay open
         // across the long-poll below: RocksDB's optimistic transactions validate a
@@ -1492,6 +1679,8 @@ impl LightningClientModule {
             .await_incoming_contracts(stream_index, 128)
             .await;
 
+        let mut batch_handled = true;
+
         for contract in &contracts {
             if let Some(operation_id) = self
                 .receive_incoming_contract(
@@ -1504,10 +1693,48 @@ impl LightningClientModule {
                 )
                 .await
             {
-                self.await_final_receive_operation_state(operation_id)
-                    .await
-                    .ok();
+                if self.operation_recorded(operation_id).await {
+                    self.await_final_receive_operation_state(operation_id)
+                        .await
+                        .ok();
+                } else {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LNV2,
+                        contract_id = ?contract.contract_id(),
+                        "Failed to record an lnurl receive operation"
+                    );
+
+                    batch_handled = false;
+                }
+            } else {
+                // The contract is not locked to the lnurl key, so check the
+                // static module key used by direct (invoice) receives. On a
+                // client whose database contains the original operation this
+                // is skipped; on a client restored from seed it rediscovers a
+                // funded contract whose operation was lost with the database
+                // and claims it.
+                //
+                // Unlike the lnurl branch above, the final state is not
+                // awaited inline: the recovery is driven by its own
+                // persisted state machine, so the scan need not block on
+                // the claim reaching consensus before moving on.
+                batch_handled &= !matches!(
+                    self.try_recover_direct_receive(contract, custom_meta.clone())
+                        .await,
+                    DirectReceiveRecovery::Failed
+                );
             }
+        }
+
+        // A receive that failed to commit must not be skipped: the scan only
+        // ever moves forward, so nothing revisits a contract once the cursor
+        // is past it. Leaving the cursor in place re-fetches and re-processes
+        // the batch - idempotently, thanks to the contract-derived operation
+        // ids - on the next iteration.
+        if !batch_handled {
+            fedimint_core::runtime::sleep(std::time::Duration::from_secs(10)).await;
+
+            return;
         }
 
         // Advance the cursor in its own short transaction. This is the only writer of
@@ -1525,6 +1752,21 @@ impl LightningClientModule {
 
         dbtx.commit_tx().await;
     }
+}
+
+/// The outcome of attempting to recover a direct receive from a single
+/// incoming contract.
+#[derive(Debug)]
+enum DirectReceiveRecovery {
+    /// A recovery operation was recorded for the contract and verified to
+    /// exist.
+    Recorded(OperationId),
+    /// There is nothing to recover: the operation already exists or the
+    /// contract is not locked to the static module key.
+    NotNeeded,
+    /// The recovery failed to be recorded, so a scan must not advance past
+    /// the contract.
+    Failed,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

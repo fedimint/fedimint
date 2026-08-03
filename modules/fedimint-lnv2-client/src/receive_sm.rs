@@ -228,6 +228,10 @@ impl ReceiveStateMachine {
             // manually created invoices; lnurl receives have no invoice on the
             // client, so the fee is recovered from the fee-encoded expiration.
             Ok(LightningOperationMeta::Receive(meta)) => meta.gateway_fee(),
+            // A recovered receive lost its invoice with the original database
+            // and its expiration is a real timestamp rather than a fee
+            // encoding, so the gateway fee is unknown and reported as zero.
+            Ok(LightningOperationMeta::RecoveredReceive(..)) => Amount::ZERO,
             _ => Amount::from_msats(fee_from_expiration(
                 old_state.common.contract.commitment.expiration_or_fee,
             )),
