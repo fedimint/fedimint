@@ -1,4 +1,3 @@
-use std::ops::Add;
 use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
@@ -224,6 +223,13 @@ impl PaymentFee {
         self.base <= limit.base && self.parts_per_million <= limit.parts_per_million
     }
 
+    pub fn checked_add(self, rhs: PaymentFee) -> Option<PaymentFee> {
+        Some(PaymentFee {
+            base: Amount::from_msats(self.base.msats.checked_add(rhs.base.msats)?),
+            parts_per_million: self.parts_per_million.checked_add(rhs.parts_per_million)?,
+        })
+    }
+
     pub fn add_to(&self, msats: u64) -> Amount {
         Amount::from_msats(msats.saturating_add(self.absolute_fee(msats)))
     }
@@ -242,16 +248,6 @@ impl PaymentFee {
             .saturating_div(1_000_000)
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
-    }
-}
-
-impl Add for PaymentFee {
-    type Output = PaymentFee;
-    fn add(self, rhs: Self) -> Self::Output {
-        PaymentFee {
-            base: Amount::from_msats(self.base.msats.saturating_add(rhs.base.msats)),
-            parts_per_million: self.parts_per_million.saturating_add(rhs.parts_per_million),
-        }
     }
 }
 
@@ -356,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn payment_fee_add_saturates_instead_of_wrapping() {
+    fn payment_fee_checked_add_detects_overflow() {
         let huge = PaymentFee {
             base: Amount::from_msats(u64::MAX),
             parts_per_million: u64::MAX,
@@ -365,10 +361,6 @@ mod tests {
             base: Amount::from_msats(1),
             parts_per_million: 1,
         };
-        let sum = huge + one;
-        // must saturate, not wrap to 0 (a wrap would silently bypass SEND_FEE_LIMIT)
-        assert_eq!(sum.base.msats, u64::MAX);
-        assert_eq!(sum.parts_per_million, u64::MAX);
-        assert!(!sum.is_within(&PaymentFee::SEND_FEE_LIMIT));
+        assert_eq!(huge.checked_add(one), None);
     }
 }
