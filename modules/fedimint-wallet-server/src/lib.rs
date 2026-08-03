@@ -110,11 +110,17 @@ use crate::db::{
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix, migrate_to_v1,
+    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
 mod metrics;
+
+/// Output index of the change output in every peg-out transaction we build.
+///
+/// `StatelessWallet::create_tx` always emits `[destination, change]`, and we
+/// always pay ourselves change to avoid losing value to dust.
+pub const PEG_OUT_CHANGE_VOUT: u32 = 1;
 
 #[derive(Debug, Clone)]
 pub struct WalletInit;
@@ -451,6 +457,10 @@ impl ServerModuleInit for WalletInit {
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_to_v1(ctx).boxed()),
+        );
+        migrations.insert(
+            DatabaseVersion(1),
+            Box::new(|ctx| migrate_to_v2(ctx).boxed()),
         );
         migrations
     }
@@ -851,6 +861,20 @@ impl ServerModule for Wallet {
         for input in &tx.psbt.unsigned_tx.input {
             dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
         }
+
+        // Our own change output pays to the peg-in descriptor, so it is
+        // indistinguishable from a user deposit. Record it as claimed now, in the same
+        // dbtx that spends the inputs, so it is never a peg-in candidate. Doing this at
+        // confirmation time instead would leave it claimable while the transaction is
+        // in flight.
+        dbtx.insert_entry(
+            &ClaimedPegInOutpointKey(bitcoin::OutPoint {
+                txid,
+                vout: PEG_OUT_CHANGE_VOUT,
+            }),
+            &(),
+        )
+        .await;
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .await;
@@ -2075,7 +2099,7 @@ impl StatelessWallet<'_> {
         }
 
         // We always pay ourselves change back to ensure that we don't lose anything due
-        // to dust
+        // to dust. The change output is always at index `PEG_OUT_CHANGE_VOUT`.
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {

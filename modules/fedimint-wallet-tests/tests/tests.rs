@@ -30,8 +30,13 @@ use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModul
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
-use fedimint_wallet_common::{PegOutFees, Rbf, TxOutputSummary};
-use fedimint_wallet_server::WalletInit;
+use fedimint_wallet_common::{
+    PegOutFees, Rbf, TxOutputSummary, WalletOutputError, WalletOutputOutcome,
+};
+use fedimint_wallet_server::db::{
+    ClaimedPegInOutpointKey, PegOutBitcoinTransaction, UnsignedTransactionKey,
+};
+use fedimint_wallet_server::{PEG_OUT_CHANGE_VOUT, WalletInit};
 use futures::stream::StreamExt;
 use secp256k1::rand::rngs::OsRng;
 use tokio::select;
@@ -815,6 +820,213 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             .await,
         Ok(_)
     );
+    dbtx.commit_tx().await;
+    Ok(())
+}
+
+/// Our peg-out change pays to the peg-in descriptor, so on-chain it looks
+/// exactly like a user deposit. It has to be booked as an already-claimed
+/// peg-in as soon as the peg-out is created, otherwise it stays a valid
+/// peg-in candidate while the transaction is in flight.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_out_change_is_recorded_as_claimed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
+    let db = MemDatabase::new().into_database();
+    let task_group = TaskGroup::new();
+
+    let (wallet_server_cfg, _) = build_wallet_server_configs()?;
+    let module_instance_id = 1;
+    let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
+    let finality_delay = wallet_config.consensus.finality_delay;
+
+    let root_secret =
+        PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
+    let secp = fedimint_core::secp256k1::Secp256k1::new();
+    let pk = root_secret.to_secp_key(&secp).public_key();
+    let peg_in_address = wallet_config
+        .consensus
+        .peg_in_descriptor
+        .tweak(&pk, secp256k1::SECP256K1)
+        .address(wallet_config.consensus.network.0)?;
+
+    let mut wallet = fedimint_wallet_server::Wallet::new(
+        wallet_server_cfg[0].to_typed()?,
+        &db,
+        &task_group,
+        PeerId::from(0),
+        DynGlobalApi::new(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            [(
+                PeerId::from(0),
+                SafeUrl::from_str("ws://dummy.xyz").unwrap(),
+            )]
+            .into(),
+            None,
+        )?
+        .with_module(module_instance_id),
+        ServerBitcoinRpcMonitor::new(
+            fixtures.server_bitcoin_rpc(),
+            Duration::from_secs(1),
+            &TaskGroup::new(),
+        ),
+    )
+    .await?;
+
+    let mut dbtx = db.begin_transaction().await;
+
+    // Fund the federation wallet with a peg-in so a peg-out has UTXOs to spend
+    bitcoin.mine_blocks(finality_delay.into()).await;
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    sync_wallet_to_block(
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .0
+            .into_nc(),
+        &mut wallet,
+        block_count - finality_delay,
+    )
+    .await?;
+
+    let (proof, transaction) = bitcoin
+        .send_and_mine_block(&peg_in_address, bsats(PEG_IN_AMOUNT_SATS))
+        .await;
+    bitcoin.mine_blocks(finality_delay.into()).await;
+
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    sync_wallet_to_block(
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .0
+            .into_nc(),
+        &mut wallet,
+        block_count - finality_delay,
+    )
+    .await?;
+
+    let output_index = transaction
+        .output
+        .iter()
+        .position(|o| o.script_pubkey == peg_in_address.script_pubkey())
+        .context("expected to find peg-in output")?;
+    let peg_in_input = fedimint_wallet_common::WalletInput::new_v0(PegInProof::new(
+        proof,
+        transaction,
+        output_index.try_into()?,
+        pk,
+    )?);
+
+    wallet
+        .process_input(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            &peg_in_input,
+            InPoint {
+                txid: TransactionId::all_zeros(),
+                in_idx: 0,
+            },
+        )
+        .await?;
+
+    // Withdraw, leaving change
+    let recipient = bitcoin.get_new_address().await;
+    let out_point = fedimint_core::OutPoint {
+        txid: TransactionId::all_zeros(),
+        out_idx: 0,
+    };
+
+    // The declared fee has to match the weight of the transaction the wallet
+    // actually builds, which depends on how many UTXOs get selected. Ask for it
+    // the same way a client would before withdrawing.
+    let fee_rate = wallet
+        .consensus_fee_rate(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+        )
+        .await;
+    let weight_probe = fedimint_wallet_common::WalletOutput::new_v0_peg_out(
+        recipient.clone(),
+        bsats(PEG_OUT_AMOUNT_SATS),
+        PegOutFees::new(fee_rate.sats_per_kvb, 0),
+    );
+    let total_weight = match wallet
+        .process_output(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            &weight_probe,
+            out_point,
+        )
+        .await
+    {
+        Err(WalletOutputError::TxWeightIncorrect(_, actual)) => actual,
+        other => bail!("expected a weight mismatch while probing for the fee, got {other:?}"),
+    };
+
+    let peg_out_output = fedimint_wallet_common::WalletOutput::new_v0_peg_out(
+        recipient,
+        bsats(PEG_OUT_AMOUNT_SATS),
+        PegOutFees::new(fee_rate.sats_per_kvb, total_weight),
+    );
+
+    wallet
+        .process_output(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            &peg_out_output,
+            out_point,
+        )
+        .await?;
+
+    let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(module_instance_id).0;
+
+    let WalletOutputOutcome::V0(outcome) = module_dbtx
+        .get_value(&PegOutBitcoinTransaction(out_point))
+        .await
+        .context("expected the peg-out to record its bitcoin transaction")?
+    else {
+        bail!("expected a V0 peg-out outcome");
+    };
+
+    let change_outpoint = bitcoin::OutPoint {
+        txid: outcome.0,
+        vout: PEG_OUT_CHANGE_VOUT,
+    };
+
+    // The change output exists and is ours
+    let unsigned = module_dbtx
+        .get_value(&UnsignedTransactionKey(outcome.0))
+        .await
+        .context("expected an unsigned peg-out transaction")?;
+    let change_out = unsigned
+        .psbt
+        .unsigned_tx
+        .output
+        .get(PEG_OUT_CHANGE_VOUT as usize)
+        .context("expected a change output")?;
+    assert!(
+        change_out.value > bitcoin::Amount::ZERO,
+        "expected the peg-out to leave non-dust change"
+    );
+
+    assert!(
+        module_dbtx
+            .get_value(&ClaimedPegInOutpointKey(change_outpoint))
+            .await
+            .is_some(),
+        "peg-out change outpoint should be recorded as claimed when the peg-out is created"
+    );
+
+    drop(module_dbtx);
     dbtx.commit_tx().await;
     Ok(())
 }
