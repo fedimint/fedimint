@@ -4,7 +4,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::similar_names)]
 
-mod db;
+pub mod db;
 
 use std::collections::BTreeMap;
 

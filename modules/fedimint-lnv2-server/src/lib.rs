@@ -4,7 +4,7 @@
 
 pub use fedimint_lnv2_common as common;
 
-mod db;
+pub mod db;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;

@@ -9,7 +9,7 @@ pub use fedimint_lnv2_common as common;
 mod api;
 #[cfg(feature = "cli")]
 mod cli;
-mod db;
+pub mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;

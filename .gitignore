@@ -36,3 +36,4 @@ fedimint-startos/scripts/embassy.js
 # Trunk build artifacts
 fedimint-recoverytoolv2-ui/dist/
 fedimint-recoverytoolv2-ui/.config/
+/db/migrations/*/LOG
