@@ -4,7 +4,10 @@ use std::time::SystemTime;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_legacy_system_time_from_finite_reader,
+    encode_legacy_system_time, with_decoding_context,
+};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync};
 
@@ -55,9 +58,29 @@ impl Decodable for ActiveStateKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone)]
 pub struct ActiveStateMeta {
     pub created_at: SystemTime,
+}
+
+impl Encodable for ActiveStateMeta {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
+        encode_legacy_system_time(&self.created_at, writer)
+    }
+}
+
+impl Decodable for ActiveStateMeta {
+    fn consensus_decode_partial_from_finite_reader<R: Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            created_at: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(reader, modules),
+                "Decoding named block field: ActiveStateMeta{ ... created_at ... }",
+            )?,
+        })
+    }
 }
 
 impl ActiveStateMeta {
@@ -117,10 +140,35 @@ impl Decodable for InactiveStateKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, Decodable, Encodable)]
+#[derive(Debug, Copy, Clone)]
 pub struct InactiveStateMeta {
     pub created_at: SystemTime,
     pub exited_at: SystemTime,
+}
+
+impl Encodable for InactiveStateMeta {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
+        encode_legacy_system_time(&self.created_at, writer)?;
+        encode_legacy_system_time(&self.exited_at, writer)
+    }
+}
+
+impl Decodable for InactiveStateMeta {
+    fn consensus_decode_partial_from_finite_reader<R: Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            created_at: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(reader, modules),
+                "Decoding named block field: InactiveStateMeta{ ... created_at ... }",
+            )?,
+            exited_at: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(reader, modules),
+                "Decoding named block field: InactiveStateMeta{ ... exited_at ... }",
+            )?,
+        })
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

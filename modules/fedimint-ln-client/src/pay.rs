@@ -7,8 +7,12 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
 use fedimint_core::module::Amounts;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::FmtCompact as _;
@@ -228,12 +232,50 @@ impl LightningPayCreatedOutgoingLnContract {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct LightningPayFunded {
     pub payload: PayInvoicePayload,
     pub gateway: LightningGateway,
     pub timelock: u32,
     pub funding_time: SystemTime,
+}
+
+impl Encodable for LightningPayFunded {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.payload.consensus_encode(writer)?;
+        self.gateway.consensus_encode(writer)?;
+        self.timelock.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.funding_time, writer)
+    }
+}
+
+impl Decodable for LightningPayFunded {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            payload: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: LightningPayFunded{ ... payload ... }",
+            )?,
+            gateway: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: LightningPayFunded{ ... gateway ... }",
+            )?,
+            timelock: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: LightningPayFunded{ ... timelock ... }",
+            )?,
+            funding_time: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: LightningPayFunded{ ... funding_time ... }",
+            )?,
+        })
+    }
 }
 
 #[derive(

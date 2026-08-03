@@ -10,7 +10,10 @@ use fedimint_core::db::{
     GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_legacy_option_system_time_from_finite_reader,
+    encode_legacy_option_system_time, with_decoding_context,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
@@ -293,7 +296,9 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
     async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>> {
         self.find_by_prefix(&FederationBackupPrefix)
             .await
-            .map(|(key, time): (FederationBackupKey, Option<SystemTime>)| (key.federation_id, time))
+            .map(|(key, time): (FederationBackupKey, FederationBackupTime)| {
+                (key.federation_id, time.0)
+            })
             .collect::<BTreeMap<FederationId, Option<SystemTime>>>()
             .await
     }
@@ -302,7 +307,9 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         &mut self,
         federation_id: FederationId,
     ) -> Option<Option<SystemTime>> {
-        self.get_value(&FederationBackupKey { federation_id }).await
+        self.get_value(&FederationBackupKey { federation_id })
+            .await
+            .map(|time| time.0)
     }
 
     async fn save_federation_backup_record(
@@ -310,8 +317,11 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         federation_id: FederationId,
         backup_time: Option<SystemTime>,
     ) {
-        self.insert_entry(&FederationBackupKey { federation_id }, &backup_time)
-            .await;
+        self.insert_entry(
+            &FederationBackupKey { federation_id },
+            &FederationBackupTime(backup_time),
+        )
+        .await;
     }
 }
 
@@ -530,9 +540,31 @@ pub struct FederationBackupKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct FederationBackupPrefix;
 
+#[derive(Debug)]
+/// Gateway backup timestamp stored in the legacy timestamp representation.
+pub struct FederationBackupTime(Option<SystemTime>);
+
+impl Encodable for FederationBackupTime {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        encode_legacy_option_system_time(&self.0, writer)
+    }
+}
+
+impl Decodable for FederationBackupTime {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(with_decoding_context(
+            decode_legacy_option_system_time_from_finite_reader(decoder, modules),
+            "Decoding tuple block FederationBackupTime field field_0",
+        )?))
+    }
+}
+
 impl_db_record!(
     key = FederationBackupKey,
-    value = Option<SystemTime>,
+    value = FederationBackupTime,
     db_prefix = DbKeyPrefix::FederationBackup,
 );
 
@@ -760,7 +792,7 @@ async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
             &FederationBackupKey {
                 federation_id: fed_id.id,
             },
-            &None,
+            &FederationBackupTime(None),
         )
         .await;
     }

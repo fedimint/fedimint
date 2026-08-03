@@ -6,7 +6,11 @@ use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
@@ -327,10 +331,36 @@ pub enum DepositStates {
     TimedOut(TimedOutDepositState),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct CreatedDepositState {
     pub(crate) tweak_key: Keypair,
     pub(crate) timeout_at: SystemTime,
+}
+
+impl Encodable for CreatedDepositState {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.tweak_key.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.timeout_at, writer)
+    }
+}
+
+impl Decodable for CreatedDepositState {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            tweak_key: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: CreatedDepositState{ ... tweak_key ... }",
+            )?,
+            timeout_at: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: CreatedDepositState{ ... timeout_at ... }",
+            )?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

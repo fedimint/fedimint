@@ -1185,7 +1185,12 @@ impl Lightning {
     ) -> Option<sha256::Hash> {
         match dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
             Some(gateway) => {
-                let mut valid_until_bytes = gateway.valid_until.to_bytes();
+                let mut valid_until_bytes = vec![];
+                fedimint_core::encoding::encode_legacy_system_time(
+                    &gateway.valid_until,
+                    &mut valid_until_bytes,
+                )
+                .expect("encoding to a vector cannot fail");
                 let mut challenge_bytes = gateway_id.to_bytes();
                 challenge_bytes.append(&mut valid_until_bytes);
                 Some(sha256::Hash::hash(&challenge_bytes))
