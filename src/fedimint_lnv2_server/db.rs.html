@@ -227,7 +227,7 @@
 <a href=#227 id=227 data-nosnippet>227</a>    query_prefix = IncomingContractIndexPrefix
 <a href=#228 id=228 data-nosnippet>228</a>);
 <a href=#229 id=229 data-nosnippet>229</a>
-<a href=#230 id=230 data-nosnippet>230</a><span class="kw">pub async fn </span>migrate_to_v1(
+<a href=#230 id=230 data-nosnippet>230</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>migrate_to_v1(
 <a href=#231 id=231 data-nosnippet>231</a>    <span class="kw-2">mut </span>ctx: ServerModuleDbMigrationFnContext&lt;<span class="lifetime">'_</span>, Lightning&gt;,
 <a href=#232 id=232 data-nosnippet>232</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
 <a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">let </span><span class="kw-2">mut </span>contracts = BTreeMap::new();
