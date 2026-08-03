@@ -1209,10 +1209,11 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
         IDatabaseTransactionOpsCoreTyped, apply_migrations,
     };
-    use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+    use fedimint_core::session_outcome::{
+        AcceptedItem, ConsensusItem, SessionOutcome, SignedSessionOutcome,
+    };
     use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::{
         Amount, BitcoinHash, OutPoint, PeerId, Tiered, TieredMulti, TransactionId, secp256k1,

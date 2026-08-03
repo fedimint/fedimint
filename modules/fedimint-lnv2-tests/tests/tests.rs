@@ -462,11 +462,12 @@ mod db {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::secp256k1::{PublicKey, SECP256K1, SecretKey};
-    use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+    use fedimint_core::session_outcome::{
+        AcceptedItem, ConsensusItem, SessionOutcome, SignedSessionOutcome,
+    };
     use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, PeerId};
