@@ -255,7 +255,10 @@ pub fn verify_blinded_signature(
 }
 
 pub fn unblind_signature(blinding_key: BlindingKey, blinded_sig: BlindedSignature) -> Signature {
-    let sig = blinded_sig.0 * blinding_key.0.invert().unwrap();
+    let sig = blinded_sig.0
+        * blinding_key.0.invert().expect(
+            "scalar inversion only fails for zero, which keygen only produces with negligible probability",
+        );
     Signature(sig.to_affine())
 }
 
