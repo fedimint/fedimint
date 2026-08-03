@@ -2284,7 +2284,11 @@ impl IAdminGateway for Gateway {
                 .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
 
             // Check if the lightning fee + transaction fee is higher than the send limit
-            let send_fees = lightning_fee + transaction_fee;
+            let send_fees = lightning_fee.checked_add(transaction_fee).ok_or_else(|| {
+                AdminGatewayError::GatewayConfigurationError(
+                    "Lightning fee and transaction fee sum overflows".to_string(),
+                )
+            })?;
             if contains_lnv2 && !send_fees.is_within(&PaymentFee::SEND_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Total Send fees exceeded {}",
@@ -3029,6 +3033,12 @@ impl Gateway {
         let lightning_fee = fed_config.lightning_fee;
         let transaction_fee = fed_config.transaction_fee;
 
+        // These are gateway-configured fees, but reject rather than wrap if a
+        // misconfiguration makes their sum overflow.
+        let send_fee_default = lightning_fee.checked_add(transaction_fee).ok_or_else(|| {
+            anyhow::anyhow!("Configured lightning fee and transaction fee sum overflows")
+        })?;
+
         Ok(self
             .public_key_v2(federation_id)
             .await
@@ -3036,7 +3046,7 @@ impl Gateway {
                 lightning_public_key: context.lightning_public_key,
                 lightning_alias: Some(context.lightning_alias.clone()),
                 module_public_key,
-                send_fee_default: lightning_fee + transaction_fee,
+                send_fee_default,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash

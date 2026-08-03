@@ -1,4 +1,3 @@
-use std::ops::Add;
 use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
@@ -243,15 +242,19 @@ impl PaymentFee {
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
     }
-}
 
-impl Add for PaymentFee {
-    type Output = PaymentFee;
-    fn add(self, rhs: Self) -> Self::Output {
-        PaymentFee {
-            base: Amount::from_msats(self.base.msats.saturating_add(rhs.base.msats)),
-            parts_per_million: self.parts_per_million.saturating_add(rhs.parts_per_million),
-        }
+    /// Adds two fees component-wise, returning `None` if either the base or the
+    /// proportional part would overflow `u64`.
+    ///
+    /// There is deliberately no `Add` impl: the caller must choose how to
+    /// handle overflow for its context (a client can `expect`, a server
+    /// rejects the request), and a silent wrap or saturation here could let
+    /// a crafted fee slip past `SEND_FEE_LIMIT`.
+    pub fn checked_add(self, rhs: PaymentFee) -> Option<PaymentFee> {
+        Some(PaymentFee {
+            base: Amount::from_msats(self.base.msats.checked_add(rhs.base.msats)?),
+            parts_per_million: self.parts_per_million.checked_add(rhs.parts_per_million)?,
+        })
     }
 }
 
@@ -356,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn payment_fee_add_saturates_instead_of_wrapping() {
+    fn payment_fee_checked_add_detects_overflow() {
         let huge = PaymentFee {
             base: Amount::from_msats(u64::MAX),
             parts_per_million: u64::MAX,
@@ -365,10 +368,23 @@ mod tests {
             base: Amount::from_msats(1),
             parts_per_million: 1,
         };
-        let sum = huge + one;
-        // must saturate, not wrap to 0 (a wrap would silently bypass SEND_FEE_LIMIT)
-        assert_eq!(sum.base.msats, u64::MAX);
-        assert_eq!(sum.parts_per_million, u64::MAX);
-        assert!(!sum.is_within(&PaymentFee::SEND_FEE_LIMIT));
+        // Overflow in either component yields `None` rather than wrapping past
+        // `SEND_FEE_LIMIT`; the caller decides whether that is a panic or a
+        // rejection.
+        assert!(huge.checked_add(one).is_none());
+        assert!(one.checked_add(huge).is_none());
+
+        // A non-overflowing add sums both components.
+        let a = PaymentFee {
+            base: Amount::from_msats(10),
+            parts_per_million: 20,
+        };
+        let b = PaymentFee {
+            base: Amount::from_msats(3),
+            parts_per_million: 4,
+        };
+        let sum = a.checked_add(b).expect("does not overflow");
+        assert_eq!(sum.base.msats, 13);
+        assert_eq!(sum.parts_per_million, 24);
     }
 }
