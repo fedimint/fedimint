@@ -185,7 +185,12 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
                 // Change the routing fees for a specific federation
                 let fed_id = dev_fed.fed().await?.calculate_federation_id();
-                gw.client().set_federation_routing_fee(fed_id.clone(), 20, 20000)
+                // The gateway rejects a lightning fee whose sum with the transaction fee
+                // exceeds `PaymentFee::SEND_FEE_LIMIT` in either component. The default
+                // transaction fee contributes 3_000 parts per million, so the lightning
+                // fee has to stay at or below 12_000 to keep the total within the 15_000
+                // limit.
+                gw.client().set_federation_routing_fee(fed_id.clone(), 20, 10000)
                     .await?;
 
                 let lightning_fee = gw.client().get_lightning_fee(fed_id.clone()).await?;
@@ -194,8 +199,8 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     "Federation base msat is not 20"
                 );
                 assert_eq!(
-                    lightning_fee.parts_per_million, 20000,
-                    "Federation proportional millionths is not 20000"
+                    lightning_fee.parts_per_million, 10000,
+                    "Federation proportional millionths is not 10000"
                 );
                 info!(target: LOG_TEST, "Verified per-federation routing fees changed");
 

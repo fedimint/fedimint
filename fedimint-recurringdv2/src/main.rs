@@ -198,7 +198,9 @@ async fn create_contract_and_fetch_invoice(
     let (routing_info, gateway) = select_gateway(gateways, federation_id, gateway_conn).await?;
 
     ensure!(
-        routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT),
+        routing_info
+            .receive_fee
+            .is_within(&PaymentFee::RECEIVE_FEE_LIMIT),
         "Payment fee exceeds limit"
     );
 
