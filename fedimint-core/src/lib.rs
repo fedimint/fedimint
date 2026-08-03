@@ -84,7 +84,6 @@ pub mod encoding;
 pub mod endpoint_constants;
 /// Common environment variables
 pub mod envs;
-pub mod epoch;
 /// Formatting helpers
 pub mod fmt_utils;
 /// Federation invite code
