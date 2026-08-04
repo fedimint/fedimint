@@ -151,7 +151,7 @@ See the comments in [`docker/gatewayd/docker-compose.yaml`](../docker/gatewayd/d
 
 #### Installing the Gateway
 
-1. Download the latest `.s9pk` file from the [Fedimint Gateway releases page](https://github.com/fedimint/fedimint/releases) (look for `fedimint-gatewayd-vX.Y.Z.s9pk`)
+1. Download the latest `.s9pk` file from the community [Start9 packages for Fedimint](https://github.com/Start9-Community) (the StartOS package is maintained by the Start9 community and is no longer built in the `fedimint/fedimint` repository)
 
 2. Open your Start9 dashboard and navigate to **System > Sideload a Service**
 
