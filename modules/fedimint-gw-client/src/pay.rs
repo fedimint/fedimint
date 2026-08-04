@@ -635,6 +635,16 @@ impl GatewayPayInvoice {
             return Err(OutgoingContractError::NotOurKey);
         }
 
+        // The contract id and the payment data reach us as independent fields of
+        // `PayInvoicePayload`, and an outgoing contract carries no invoice, so nothing
+        // ties the two together implicitly. Without this check we would pay an invoice
+        // whose preimage cannot satisfy the contract we are being paid from.
+        if account.contract.hash != payment_data.payment_hash() {
+            return Err(OutgoingContractError::InvalidOutgoingContract {
+                contract_id: account.contract.contract_id(),
+            });
+        }
+
         let payment_amount = payment_data
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
@@ -973,5 +983,104 @@ impl GatewayPayCancelContract {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bitcoin::hashes::{Hash as _, sha256};
+    use bitcoin::key::Keypair;
+    use fedimint_core::Amount;
+    use fedimint_core::secp256k1::{self, SecretKey};
+    use fedimint_ln_client::pay::PaymentData;
+    use fedimint_ln_common::PrunedInvoice;
+    use fedimint_ln_common::contracts::IdentifiableContract as _;
+    use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
+    use lightning_invoice::RoutingFees;
+
+    use super::{GatewayPayInvoice, OutgoingContractError};
+
+    const CONSENSUS_BLOCK_COUNT: u64 = 1;
+    const INVOICE_AMOUNT: Amount = Amount::from_msats(1000);
+
+    fn gateway_keypair() -> Keypair {
+        Keypair::from_secret_key(
+            secp256k1::SECP256K1,
+            &SecretKey::from_slice(&[1; 32]).expect("Valid secret key"),
+        )
+    }
+
+    /// An account that is valid in every respect other than the payment hash,
+    /// which the caller chooses so a mismatch can be tested in isolation.
+    fn contract_account(hash: sha256::Hash) -> OutgoingContractAccount {
+        let gateway_key = secp256k1::PublicKey::from_keypair(&gateway_keypair());
+
+        OutgoingContractAccount {
+            amount: INVOICE_AMOUNT,
+            contract: OutgoingContract {
+                hash,
+                gateway_key,
+                // Comfortably beyond `CONSENSUS_BLOCK_COUNT + TIMELOCK_DELTA`
+                timelock: 100,
+                user_key: gateway_key,
+                cancelled: false,
+            },
+        }
+    }
+
+    fn payment_data(payment_hash: sha256::Hash) -> PaymentData {
+        PaymentData::PrunedInvoice(PrunedInvoice {
+            amount: INVOICE_AMOUNT,
+            destination: secp256k1::PublicKey::from_keypair(&gateway_keypair()),
+            destination_features: vec![],
+            payment_hash,
+            payment_secret: [0; 32],
+            route_hints: vec![],
+            min_final_cltv_delta: 0,
+            expiry_timestamp: u64::MAX,
+        })
+    }
+
+    fn validate(
+        contract_hash: sha256::Hash,
+        invoice_hash: sha256::Hash,
+    ) -> Result<(), OutgoingContractError> {
+        GatewayPayInvoice::validate_outgoing_account(
+            &contract_account(contract_hash),
+            gateway_keypair(),
+            CONSENSUS_BLOCK_COUNT,
+            &payment_data(invoice_hash),
+            RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
+        )
+        .map(|_| ())
+    }
+
+    /// Guards against the fixture being invalid for some unrelated reason,
+    /// which would make the rejection test below pass vacuously.
+    #[test]
+    fn accepts_contract_matching_the_invoice() {
+        let hash = sha256::Hash::hash(b"preimage");
+
+        assert_eq!(validate(hash, hash), Ok(()));
+    }
+
+    #[test]
+    fn rejects_contract_not_committing_to_the_invoice() {
+        // A client picks the contract id and the invoice independently, so a
+        // contract funded against an unrelated hash must not authorize paying
+        // this invoice: the preimage we would obtain cannot claim the contract,
+        // leaving the gateway out of pocket with no way to recover.
+        let contract_hash = sha256::Hash::hash(b"contract preimage");
+        let invoice_hash = sha256::Hash::hash(b"unrelated invoice preimage");
+
+        assert_eq!(
+            validate(contract_hash, invoice_hash),
+            Err(OutgoingContractError::InvalidOutgoingContract {
+                contract_id: contract_account(contract_hash).contract.contract_id(),
+            })
+        );
     }
 }
