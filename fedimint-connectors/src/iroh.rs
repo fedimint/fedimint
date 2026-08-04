@@ -294,10 +294,11 @@ impl crate::Connector for IrohConnector {
     ) -> ServerResult<DynGuaridianConnection> {
         if api_secret.is_some() {
             // There seem to be no way to pass secret over current Iroh calling
-            // convention
-            ServerError::Connection(anyhow::format_err!(
+            // convention. Connecting anyway would silently drop the credential and
+            // talk to an API that never authenticates us, so refuse instead.
+            return Err(ServerError::Connection(anyhow::format_err!(
                 "Iroh api secrets currently not supported"
-            ));
+            )));
         }
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
