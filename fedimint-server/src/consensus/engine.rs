@@ -14,6 +14,7 @@ use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -237,12 +238,21 @@ impl ConsensusEngine {
         let mut delay_config = aleph_bft::default_delay_config();
 
         delay_config.unit_creation_delay = Arc::new(move |round_index| {
+            // In a test environment all peers are started in lockstep, so we
+            // add jitter to the unit creation delay to break it; in production
+            // the peers' timing drifts naturally.
+            let jitter = if is_running_in_test_env() {
+                rand::thread_rng().gen_range(0.5..=1.5)
+            } else {
+                1.0
+            };
+
             let delay = if round_index == 0 {
                 0.0
             } else {
                 round_delay
                     * BASE.powf(round_index.saturating_sub(rounds_per_session as usize) as f64)
-                    * rand::thread_rng().gen_range(0.5..=1.5)
+                    * jitter
             };
 
             Duration::from_millis(delay.round() as u64)
