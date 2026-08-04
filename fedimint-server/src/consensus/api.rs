@@ -173,49 +173,55 @@ impl ConsensusApi {
             let accepted_item_key = AcceptedItemKey(item_index);
             let signed_session_outcome_key = SignedSessionOutcomeKey(session_index);
 
-            tokio::select! {
-                _ = self.db.wait_key_exists(&accepted_item_key) => {
-                    let mut dbtx = self.db.begin_transaction_nc().await;
+            let session_completed = tokio::select! {
+                _ = self.db.wait_key_exists(&accepted_item_key) => false,
+                _ = self.db.wait_key_exists(&signed_session_outcome_key) => true,
+            };
 
-                    if dbtx
-                        .get_value(&AcceptedTransactionKey(txid))
-                        .await
-                        .is_some()
-                    {
-                        return Ok(txid);
-                    }
+            let mut dbtx = self.db.begin_transaction_nc().await;
 
-                    dbtx.ignore_uncommitted();
+            // Our transaction may be the item that was just accepted, in which
+            // case revalidation would fail against its own state changes
+            if dbtx
+                .get_value(&AcceptedTransactionKey(txid))
+                .await
+                .is_some()
+            {
+                return Ok(txid);
+            }
 
-                    process_transaction_with_dbtx(
-                        self.modules.clone(),
-                        &mut dbtx,
-                        &transaction,
-                        self.cfg.consensus.version,
-                        TxProcessingMode::Submission,
-                    )
-                    .await
-                    .inspect_err(|err| {
-                        debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
-                    })?;
+            dbtx.ignore_uncommitted();
 
-                    item_index += 1;
-                }
+            process_transaction_with_dbtx(
+                self.modules.clone(),
+                &mut dbtx,
+                &transaction,
+                self.cfg.consensus.version,
+                TxProcessingMode::Submission,
+            )
+            .await
+            .inspect_err(|err| {
+                debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
+            })?;
+
+            drop(dbtx);
+
+            if session_completed {
                 // A pending transaction may have been dropped at the session
                 // boundary since the data provider is recreated every session,
                 // hence we resubmit it for the next session
-                _ = self.db.wait_key_exists(&signed_session_outcome_key) => {
-                    let _ = self
-                        .submission_sender
-                        .send(ConsensusItem::Transaction(transaction.clone()))
-                        .await
-                        .inspect_err(|err| {
-                            warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
-                        });
+                let _ = self
+                    .submission_sender
+                    .send(ConsensusItem::Transaction(transaction.clone()))
+                    .await
+                    .inspect_err(|err| {
+                        warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
+                    });
 
-                    session_index += 1;
-                    item_index = 0;
-                }
+                session_index += 1;
+                item_index = 0;
+            } else {
+                item_index += 1;
             }
         }
     }
