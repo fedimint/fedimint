@@ -631,11 +631,16 @@ impl ClientBuilder {
         let iroh_enable_next = self.should_enable_iroh_next(&connectors);
         let peer_urls = get_api_urls(&db, &config, iroh_enable_next).await;
         let api = match self.admin_creds.as_ref() {
+            // The guardian password is not the federation's api secret: it
+            // authenticates individual admin requests via `ApiRequestErased::auth`,
+            // while the api secret gates the transport. Passing it here would send
+            // it as the transport credential and leave a federation that does use
+            // an api secret unreachable for admins.
             Some(admin_creds) => FederationApi::new(
                 connectors.clone(),
                 peer_urls,
                 Some(admin_creds.peer_id),
-                Some(admin_creds.auth.as_str()),
+                api_secret.as_deref(),
             )
             .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
             .with_request_hook(&request_hook)
