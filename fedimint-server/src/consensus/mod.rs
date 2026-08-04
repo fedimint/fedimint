@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, bail};
+use anyhow::{Context as _, bail, ensure};
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
 use fedimint_api_client::api::DynGlobalApi;
@@ -77,6 +77,45 @@ fn eligible_iroh_next_api_settings(
     } else {
         iroh_next_api_settings
     }
+}
+
+/// Refuse to run with API secrets that we cannot actually enforce.
+///
+/// The websocket API rejects unauthenticated requests in an HTTP middleware,
+/// but the Iroh API carries no credentials at all: every request is dispatched
+/// to the endpoint handler without any check. Serving both at once therefore
+/// leaves the whole non-privileged client API open to anyone who knows a
+/// guardian's Iroh node id, which is public information contained in every
+/// invite code. Since the `invite_code` endpoint hands out the invite code, and
+/// with it the secret itself, that also defeats the websocket API.
+///
+/// Failing to start turns that silent hole into a configuration error the
+/// operator can see and act on.
+fn ensure_api_secrets_enforceable(
+    has_iroh_api: bool,
+    force_api_secrets: &ApiSecrets,
+) -> anyhow::Result<()> {
+    ensure!(
+        !has_iroh_api || force_api_secrets.is_empty(),
+        "This federation serves its API over Iroh, which cannot authenticate clients, so the \
+         configured API secrets would not be enforced. Either unset FM_FORCE_API_SECRETS or run a \
+         federation that does not use Iroh."
+    );
+
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn api_secrets_are_only_accepted_without_the_iroh_api() {
+    use std::str::FromStr as _;
+
+    let secrets = ApiSecrets::from_str("secret").expect("valid api secret");
+
+    ensure_api_secrets_enforceable(false, &secrets).expect("websocket api enforces secrets");
+    ensure_api_secrets_enforceable(true, &ApiSecrets::none()).expect("no secrets to enforce");
+    ensure_api_secrets_enforceable(true, &secrets)
+        .expect_err("the iroh api cannot enforce secrets");
 }
 
 fn resolve_iroh_next_api_bind(
@@ -201,6 +240,11 @@ pub async fn run(
 
     let iroh_next_api_settings =
         eligible_iroh_next_api_settings(cfg.private.iroh_api_sk.is_some(), iroh_next_api_settings);
+
+    ensure_api_secrets_enforceable(
+        cfg.private.iroh_api_sk.is_some() || iroh_next_api_settings.is_some(),
+        &force_api_secrets,
+    )?;
 
     let mut global_dbtx = db.begin_transaction().await;
     apply_migrations_server_dbtx(
