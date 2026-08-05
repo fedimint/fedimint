@@ -641,6 +641,14 @@ impl ServerModule for Lightning {
                             contract.amount,
                         ));
                     }
+
+                    // The offer's ciphertext is verified when the offer is created, but the
+                    // contract carries its own copy, which consensus decoding only checks
+                    // for valid point encodings. `decrypt_share` below returns `None` for
+                    // exactly the ciphertexts that fail `verify()`.
+                    if !incoming.encrypted_preimage.0.verify() {
+                        return Err(LightningOutputError::InvalidEncryptedPreimage);
+                    }
                 }
 
                 if contract.amount == Amount::ZERO {
@@ -698,7 +706,7 @@ impl ServerModule for Lightning {
                         .private
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
-                        .expect("We checked for decryption share validity on contract creation");
+                        .ok_or(LightningOutputError::InvalidEncryptedPreimage)?;
 
                     dbtx.insert_new_entry(
                         &ProposeDecryptionShareKey(contract.contract.contract_id()),
@@ -1264,9 +1272,9 @@ mod tests {
     use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Committable, Database, IDatabaseTransactionOpsCoreTyped};
-    use fedimint_core::encoding::Encodable;
+    use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::envs::BitcoinRpcConfig;
-    use fedimint_core::module::registry::ModuleRegistry;
+    use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
     use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
@@ -1689,6 +1697,82 @@ mod tests {
             .await,
             Err(LightningOutputError::ContractAlreadyFunded(_)),
             "a funder ordered right after the re-arm must not top up the poisoned account"
+        );
+    }
+
+    /// An incoming contract carries its own ciphertext, which used to reach
+    /// `decrypt_share` unvalidated and panic the guardian mid-consensus.
+    #[test_log::test(tokio::test)]
+    async fn incoming_contract_with_unverifiable_ciphertext_is_rejected() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array());
+        let valid_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt(preimage.0));
+
+        server
+            .process_output(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &LightningOutput::new_v0_offer(IncomingContractOffer {
+                    amount: Amount::from_sats(10),
+                    hash,
+                    encrypted_preimage: valid_preimage.clone(),
+                    expiry_time: None,
+                }),
+                OutPoint {
+                    txid: TransactionId::all_zeros(),
+                    out_idx: 0,
+                },
+            )
+            .await
+            .expect("offer with a valid ciphertext is accepted");
+
+        // Mutate the ciphertext and round-trip it through the consensus
+        // encoding, so the poisoned value is one a peer could receive on the
+        // wire rather than one only constructible in-process.
+        let encoded = valid_preimage.consensus_encode_to_vec();
+        let unverifiable = (0..encoded.len())
+            .flat_map(|pos| (0..8u8).map(move |bit| (pos, bit)))
+            .find_map(|(pos, bit)| {
+                let mut mutated = encoded.clone();
+                mutated[pos] ^= 1 << bit;
+                EncryptedPreimage::consensus_decode_whole(
+                    &mutated,
+                    &ModuleDecoderRegistry::default(),
+                )
+                .ok()
+                .filter(|decoded| !decoded.0.verify())
+            })
+            .expect("a decodable but unverifiable ciphertext exists");
+
+        let output = LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_sats(10),
+            contract: Contract::Incoming(IncomingContract {
+                hash,
+                encrypted_preimage: unverifiable,
+                decrypted_preimage: DecryptedPreimage::Pending,
+                gateway_key: random_pub_key(),
+            }),
+        });
+
+        assert_matches!(
+            server
+                .process_output(
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &output,
+                    OutPoint {
+                        txid: TransactionId::all_zeros(),
+                        out_idx: 1,
+                    },
+                )
+                .await,
+            Err(LightningOutputError::InvalidEncryptedPreimage)
         );
     }
 
