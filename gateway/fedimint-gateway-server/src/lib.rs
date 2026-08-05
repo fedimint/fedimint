@@ -1772,7 +1772,7 @@ impl Gateway {
                                         routing_fees,
                                         lightning_context.clone(),
                                         registration.endpoint_url,
-                                        registration.keypair.public_key(),
+                                        registration.keypair,
                                     )
                                     .await;
                             }
@@ -2280,7 +2280,7 @@ impl IAdminGateway for Gateway {
                     routing_fees,
                     lightning_context.clone(),
                     registration.endpoint_url.clone(),
-                    registration.keypair.public_key(),
+                    registration.keypair,
                 )
                 .await;
             }
