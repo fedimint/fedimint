@@ -1054,12 +1054,16 @@ impl ConsensusEngine {
                 Ok(())
             }
             ConsensusItem::Default { variant, .. } => {
+                // `ConsensusItem` has an `#[encodable_default]` variant, so an unknown
+                // discriminant decodes successfully instead of erroring. The variant byte
+                // is attacker-controlled: a malicious peer can put an arbitrary batch into
+                // its unit, so this must be rejected rather than treated as unreachable.
                 warn!(
                     target: LOG_CONSENSUS,
                     "Minor consensus version mismatch: unexpected consensus item type: {variant}"
                 );
 
-                panic!("Unexpected consensus item type: {variant}")
+                bail!("Unexpected consensus item type: {variant}")
             }
         }
     }
