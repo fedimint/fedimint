@@ -757,6 +757,16 @@ impl ServerModule for Wallet {
             }
         };
 
+        // `ClaimedPegInOutpoint` only covers outpoints that reached us as peg-ins, but
+        // `UTXOKey` also holds outputs we recognized as our own, which never pass
+        // through this path. Crediting one of those would overwrite a tracked UTXO, and
+        // the write below panics rather than overwrite, which in consensus is a halt
+        // rather than a rejection. Refuse the input instead, for any outpoint we
+        // already track, however it got there.
+        if dbtx.get_value(&UTXOKey(outpoint)).await.is_some() {
+            return Err(WalletInputError::PegInAlreadyClaimed);
+        }
+
         if dbtx
             .insert_entry(&ClaimedPegInOutpointKey(outpoint), &())
             .await
@@ -2385,6 +2395,72 @@ mod tests {
     use crate::{
         CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
     };
+
+    /// A peg-out recipient is chosen by the user, and nothing stops them from
+    /// picking the very change script the peg-out will use — change tweaks are
+    /// `nonce_from_idx` of a counter, so they are publicly derivable. The
+    /// resulting transaction carries the change script on two outputs, and
+    /// `recognize_change_utxo` matches on script across all of them, so it
+    /// tracks an output other than [`PEG_OUT_CHANGE_VOUT`]. Recording a fixed
+    /// change vout as claimed therefore does not cover everything `UTXOKey`
+    /// ends up holding; `process_input` has to reject on `UTXOKey` itself.
+    #[test]
+    fn peg_out_destination_can_collide_with_the_change_script() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let (secret_key, _) = secp.generate_keypair(&mut OsRng);
+
+        let wallet = StatelessWallet {
+            descriptor: &descriptor,
+            secret_key: &secret_key,
+            secp: &secp,
+        };
+
+        let change_tweak = crate::nonce_from_idx(0);
+        let change_script = wallet.derive_script(&change_tweak);
+
+        let tx = wallet
+            .create_tx(
+                Amount::from_sat(1000),
+                change_script.clone(),
+                vec![],
+                vec![(
+                    UTXOKey(OutPoint::null()),
+                    SpendableUTXO {
+                        tweak: [0; 33],
+                        amount: bitcoin::Amount::from_sat(100_000),
+                    },
+                )],
+                Feerate { sats_per_kvb: 1000 },
+                &change_tweak,
+                None,
+            )
+            .expect("tx creation succeeds");
+
+        let matching = tx
+            .psbt
+            .unsigned_tx
+            .output
+            .iter()
+            .filter(|o| o.script_pubkey == change_script)
+            .count();
+
+        assert_eq!(
+            matching, 2,
+            "both the destination and the change output carry the change script"
+        );
+    }
 
     #[test]
     fn create_tx_should_validate_amounts() {

@@ -31,10 +31,10 @@ use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{
-    PegOutFees, Rbf, TxOutputSummary, WalletOutputError, WalletOutputOutcome,
+    PegOutFees, Rbf, TxOutputSummary, WalletInputError, WalletOutputError, WalletOutputOutcome,
 };
 use fedimint_wallet_server::db::{
-    ClaimedPegInOutpointKey, PegOutBitcoinTransaction, UnsignedTransactionKey,
+    ClaimedPegInOutpointKey, PegOutBitcoinTransaction, UTXOKey, UnsignedTransactionKey,
 };
 use fedimint_wallet_server::{PEG_OUT_CHANGE_VOUT, WalletInit};
 use futures::stream::StreamExt;
@@ -820,6 +820,150 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             .await,
         Ok(_)
     );
+    dbtx.commit_tx().await;
+    Ok(())
+}
+
+/// `UTXOKey` holds every output we track, including ones we recognized as our
+/// own rather than received as peg-ins, and those carry no
+/// `ClaimedPegInOutpoint` record. A peg-in claiming such an outpoint has to be
+/// rejected: the credit would otherwise overwrite a tracked UTXO, and the write
+/// panics rather than overwrite, which in consensus halts the federation
+/// instead of rejecting the transaction.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_in_claiming_an_already_tracked_utxo_is_rejected() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
+    let db = MemDatabase::new().into_database();
+    let task_group = TaskGroup::new();
+
+    let (wallet_server_cfg, _) = build_wallet_server_configs()?;
+    let module_instance_id = 1;
+    let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
+    let finality_delay = wallet_config.consensus.finality_delay;
+
+    let root_secret =
+        PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
+    let secp = fedimint_core::secp256k1::Secp256k1::new();
+    let pk = root_secret.to_secp_key(&secp).public_key();
+    let peg_in_address = wallet_config
+        .consensus
+        .peg_in_descriptor
+        .tweak(&pk, secp256k1::SECP256K1)
+        .address(wallet_config.consensus.network.0)?;
+
+    let mut wallet = fedimint_wallet_server::Wallet::new(
+        wallet_server_cfg[0].to_typed()?,
+        &db,
+        &task_group,
+        PeerId::from(0),
+        DynGlobalApi::new(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            [(
+                PeerId::from(0),
+                SafeUrl::from_str("ws://dummy.xyz").unwrap(),
+            )]
+            .into(),
+            None,
+        )?
+        .with_module(module_instance_id),
+        ServerBitcoinRpcMonitor::new(
+            fixtures.server_bitcoin_rpc(),
+            Duration::from_secs(1),
+            &TaskGroup::new(),
+        ),
+    )
+    .await?;
+
+    let mut dbtx = db.begin_transaction().await;
+
+    bitcoin.mine_blocks(finality_delay.into()).await;
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    sync_wallet_to_block(
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .0
+            .into_nc(),
+        &mut wallet,
+        block_count - finality_delay,
+    )
+    .await?;
+
+    let (proof, transaction) = bitcoin
+        .send_and_mine_block(&peg_in_address, bsats(PEG_IN_AMOUNT_SATS))
+        .await;
+    bitcoin.mine_blocks(finality_delay.into()).await;
+
+    let block_count = dyn_bitcoin_rpc.get_block_count().await? as u32;
+    sync_wallet_to_block(
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .0
+            .into_nc(),
+        &mut wallet,
+        block_count - finality_delay,
+    )
+    .await?;
+
+    let output_index = transaction
+        .output
+        .iter()
+        .position(|o| o.script_pubkey == peg_in_address.script_pubkey())
+        .context("expected to find peg-in output")?;
+    let peg_in_proof = PegInProof::new(proof, transaction, output_index.try_into()?, pk)?;
+    let outpoint = peg_in_proof.outpoint();
+    let input = fedimint_wallet_common::WalletInput::new_v0(peg_in_proof);
+
+    // Claim it once, so the outpoint is tracked under `UTXOKey`.
+    wallet
+        .process_input(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            &input,
+            InPoint {
+                txid: TransactionId::all_zeros(),
+                in_idx: 0,
+            },
+        )
+        .await?;
+
+    let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(module_instance_id).0;
+    assert!(
+        module_dbtx.get_value(&UTXOKey(outpoint)).await.is_some(),
+        "the peg-in should be tracked as a spendable UTXO"
+    );
+
+    // Drop the claim record while leaving the UTXO tracked. This is the state a
+    // recognized-as-ours output is in: `recognize_change_utxo` writes `UTXOKey`
+    // directly and matches on script over every output of the transaction, so it
+    // can track an outpoint that no `ClaimedPegInOutpoint` record covers.
+    module_dbtx
+        .remove_entry(&ClaimedPegInOutpointKey(outpoint))
+        .await;
+    drop(module_dbtx);
+
+    // Claiming it again must be rejected rather than overwrite the tracked UTXO.
+    assert_matches!(
+        wallet
+            .process_input(
+                &mut dbtx
+                    .to_ref_with_prefix_module_id(module_instance_id)
+                    .0
+                    .into_nc(),
+                &input,
+                InPoint {
+                    txid: TransactionId::all_zeros(),
+                    in_idx: 0,
+                },
+            )
+            .await,
+        Err(WalletInputError::PegInAlreadyClaimed)
+    );
+
     dbtx.commit_tx().await;
     Ok(())
 }
