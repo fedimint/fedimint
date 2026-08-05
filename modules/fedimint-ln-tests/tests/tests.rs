@@ -1129,6 +1129,7 @@ mod fedimint_migration_tests {
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,
+            auth: None,
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;
@@ -1194,6 +1195,7 @@ mod fedimint_migration_tests {
             info: gateway_info,
             vetted: false,
             valid_until: fedimint_core::time::now(),
+            auth: None,
         };
 
         dbtx.insert_new_entry(
