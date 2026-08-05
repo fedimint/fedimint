@@ -627,6 +627,10 @@ pub enum LightningOutputError {
     InvalidCancellationSignature,
     #[error("The lightning output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
+    // New variants have to be appended, the `Encodable` derive assigns indices by
+    // declaration order and clients decode this type from the API response.
+    #[error("The incoming contract {0} has already been funded")]
+    ContractAlreadyFunded(ContractId),
 }
 
 /// Data needed to pay an invoice

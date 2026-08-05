@@ -15,9 +15,11 @@ use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::incoming::IncomingSmError;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -79,6 +81,22 @@ async fn pay_invoice(
         None
     };
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+}
+
+async fn await_client_tx_accepted(
+    tx_updates: BoxStream<'static, TxSubmissionStatesSM>,
+) -> Result<(), String> {
+    tx_updates
+        .filter_map(|tx_update| {
+            std::future::ready(match tx_update.state {
+                TxSubmissionStates::Accepted(_) => Some(Ok(())),
+                TxSubmissionStates::Rejected(_, submit_error) => Some(Err(submit_error)),
+                _ => None,
+            })
+        })
+        .next()
+        .await
+        .expect("tx either accepted or rejected")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -690,6 +708,114 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     assert_eq!(
         error.to_string(),
         "Invalid invoice currency: expected=Regtest, got=Signet"
+    );
+
+    Ok(())
+}
+
+/// A funder must refuse to fund a payment hash that already has a contract
+/// account. An incoming contract's id is only its payment hash, so a second
+/// funding is credited to the account the *first* funder created, under their
+/// gateway key — an attacker can plant such an account cheaply and then publish
+/// a fresh offer to bait a gateway into topping it up.
+#[tokio::test(flavor = "multi_thread")]
+async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    client2
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
+    let threshold_pub_key = ln_module.cfg.threshold_pub_key;
+    let amount = sats(250);
+
+    let receiving_keypair = Keypair::new_global(&mut OsRng);
+    let preimage_key: [u8; 33] = receiving_keypair.public_key().serialize();
+    let payment_hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage_key).to_byte_array());
+
+    let submit_offer = async |client: &ClientHandleArc| -> anyhow::Result<()> {
+        let offer_output = LightningOutput::new_v0_offer(IncomingContractOffer {
+            amount,
+            hash: payment_hash,
+            encrypted_preimage: EncryptedPreimage::new(
+                &PreimageKey(preimage_key),
+                &threshold_pub_key,
+            ),
+            expiry_time: None,
+        });
+        let operation_id = OperationId::new_random();
+        client
+            .finalize_and_submit_transaction(
+                operation_id,
+                "",
+                |_| (),
+                TransactionBuilder::new().with_outputs(
+                    ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                        output: offer_output,
+                        amounts: Amounts::ZERO,
+                    }])
+                    .into_dyn(ln_module.id),
+                ),
+            )
+            .await?;
+        await_client_tx_accepted(client.transaction_updates(operation_id).await.update_stream)
+            .await
+            .map_err(|err| anyhow::anyhow!(err))
+    };
+
+    submit_offer(&client1).await.expect("first offer accepted");
+
+    // first funding succeeds and consumes the offer
+    let funder_key = Keypair::new_global(&mut OsRng);
+    let (incoming_output, funded_amount, _) = create_incoming_contract_output(
+        &client2.get_first_module::<LightningClientModule>()?.api,
+        payment_hash,
+        amount,
+        &funder_key,
+    )
+    .await?;
+    let operation_id = OperationId::new_random();
+    client2
+        .finalize_and_submit_transaction(
+            operation_id,
+            LightningCommonInit::KIND.as_str(),
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(incoming_output),
+                    amounts: Amounts::new_bitcoin(funded_amount),
+                }])
+                .into_dyn(ln_module.id),
+            ),
+        )
+        .await?;
+    await_client_tx_accepted(
+        client2
+            .transaction_updates(operation_id)
+            .await
+            .update_stream,
+    )
+    .await
+    .expect("first funding accepted");
+
+    // the offer was consumed, so a fresh one is accepted for the same hash
+    submit_offer(&client1)
+        .await
+        .expect("a second offer for the same hash is accepted once the first was consumed");
+
+    // ... but a funder must not fund it a second time
+    assert_matches!(
+        create_incoming_contract_output(
+            &client2.get_first_module::<LightningClientModule>()?.api,
+            payment_hash,
+            amount,
+            &funder_key,
+        )
+        .await,
+        Err(IncomingSmError::ContractAlreadyExists { .. })
     );
 
     Ok(())

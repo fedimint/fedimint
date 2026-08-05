@@ -151,6 +151,14 @@ pub enum IncomingSmError {
     FailedToFundContract { error_message: String },
     #[error("Failed to parse the amount from the invoice: {invoice}")]
     AmountError { invoice: Bolt11Invoice },
+    // New variants have to be appended: the `Encodable` derive assigns indices by
+    // declaration order and this type is persisted inside `RefundSubmitted` and
+    // `FundingFailed` states, so inserting one mid-enum makes existing client
+    // databases fail to decode.
+    #[error(
+        "A contract already exists for payment hash {payment_hash}, funding it again would credit the existing account"
+    )]
+    ContractAlreadyExists { payment_hash: sha256::Hash },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

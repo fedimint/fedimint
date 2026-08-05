@@ -2191,6 +2191,25 @@ pub async fn create_incoming_contract_output(
         gateway_key: our_pub_key,
     };
     let contract_id = contract.contract_id();
+
+    // An incoming contract's id is only its payment hash, so funding one that
+    // already exists does not create our contract: it adds our money to the
+    // account the first funder created, under the gateway key and preimage state
+    // *they* chose. Anyone can publish a fresh offer for a hash they previously
+    // funded themselves, so refuse to fund a hash that already has an account.
+    match module_api.fetch_contract(contract_id).await {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            return Err(IncomingSmError::ContractAlreadyExists { payment_hash });
+        }
+        Err(error) => {
+            return Err(IncomingSmError::FetchContractError {
+                payment_hash,
+                error_message: error.to_string(),
+            });
+        }
+    }
+
     let incoming_output = LightningOutputV0::Contract(ContractOutput {
         amount: offer.amount,
         contract: Contract::Incoming(contract),

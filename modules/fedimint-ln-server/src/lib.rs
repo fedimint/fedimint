@@ -615,6 +615,20 @@ impl ServerModule for Lightning {
             LightningOutputV0::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
+                    // An incoming contract's id is only its payment hash, so a second
+                    // funding lands on the account created by the first one. While that
+                    // account is still waiting on a decryption proposal, funding it
+                    // again would overwrite the pending proposal, so reject it.
+                    if dbtx
+                        .get_value(&ProposeDecryptionShareKey(incoming.contract_id()))
+                        .await
+                        .is_some()
+                    {
+                        return Err(LightningOutputError::ContractAlreadyFunded(
+                            incoming.contract_id(),
+                        ));
+                    }
+
                     let offer = dbtx
                         .get_value(&OfferKey(incoming.hash))
                         .await
@@ -1249,7 +1263,7 @@ mod tests {
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{Committable, Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
@@ -1264,15 +1278,17 @@ mod tests {
     };
     use fedimint_ln_common::contracts::outgoing::OutgoingContract;
     use fedimint_ln_common::contracts::{
-        DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
-        PreimageKey,
+        Contract, DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract,
+        Preimage, PreimageKey,
     };
-    use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
+    use fedimint_ln_common::{
+        ContractAccount, ContractOutput, LightningInput, LightningOutput, LightningOutputError,
+    };
     use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
     use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
 
-    use crate::db::{ContractKey, LightningAuditItemKey};
+    use crate::db::{ContractKey, LightningAuditItemKey, OfferKey};
     use crate::{Lightning, LightningInit};
 
     #[derive(Debug)]
@@ -1417,6 +1433,262 @@ mod tests {
                 )
                 .await,
             Err(_)
+        );
+    }
+
+    fn mock_server(cfg: &LightningConfig, task_group: &TaskGroup) -> Lightning {
+        Lightning {
+            cfg: cfg.clone(),
+            our_peer_id: 0.into(),
+            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
+                MockBitcoinServerRpc.into_dyn(),
+                Duration::from_secs(1),
+                task_group,
+            ),
+        }
+    }
+
+    fn offer_output(hash: sha256::Hash, encrypted_preimage: &EncryptedPreimage) -> LightningOutput {
+        LightningOutput::new_v0_offer(IncomingContractOffer {
+            amount: Amount::from_msats(1),
+            hash,
+            encrypted_preimage: encrypted_preimage.clone(),
+            expiry_time: None,
+        })
+    }
+
+    fn incoming_contract_output(
+        hash: sha256::Hash,
+        encrypted_preimage: &EncryptedPreimage,
+    ) -> LightningOutput {
+        LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_msats(1),
+            contract: Contract::Incoming(IncomingContract {
+                hash,
+                encrypted_preimage: encrypted_preimage.clone(),
+                decrypted_preimage: DecryptedPreimage::Pending,
+                gateway_key: random_pub_key(),
+            }),
+        })
+    }
+
+    /// Apply `outputs` as if they were the outputs of one transaction.
+    async fn fund(
+        server: &Lightning,
+        dbtx: &mut fedimint_core::db::DatabaseTransaction<'_, Committable>,
+        outputs: &[LightningOutput],
+        txid_byte: u8,
+    ) -> Result<(), LightningOutputError> {
+        for (idx, output) in outputs.iter().enumerate() {
+            server
+                .process_output(
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    output,
+                    OutPoint {
+                        txid: TransactionId::from_byte_array([txid_byte; 32]),
+                        out_idx: idx as u64,
+                    },
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Encryption is randomized and `EncryptedPreimage::verify` does not bind
+    /// the ciphertext to the payment hash, so distinct ciphertexts for one
+    /// hash are free to construct and the offer dedup index does not catch
+    /// them.
+    fn ciphertexts<const N: usize>(
+        cfg: &LightningClientConfig,
+        preimage: [u8; 32],
+    ) -> [EncryptedPreimage; N] {
+        std::array::from_fn(|_| EncryptedPreimage(cfg.threshold_pub_key.encrypt(preimage)))
+    }
+
+    /// Funding a payment hash twice within one transaction: the first funding
+    /// consumes the offer, so a second offer is accepted, and without the guard
+    /// the second funding would overwrite the pending decryption proposal.
+    #[test_log::test(tokio::test)]
+    async fn incoming_funding_rejected_while_decryption_pending() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+
+        let preimage = [42u8; 32];
+        let hash = preimage.consensus_hash();
+        let [ct1, ct2] = ciphertexts(&client_cfg, preimage);
+
+        fund(
+            &server,
+            &mut dbtx,
+            &[
+                offer_output(hash, &ct1),
+                incoming_contract_output(hash, &ct1),
+                offer_output(hash, &ct2),
+            ],
+            0x01,
+        )
+        .await
+        .expect("the first offer/contract pair and the second offer are valid");
+
+        // A distinct txid, so the second funding reaches the pending-decryption
+        // guard rather than colliding on the first transaction's
+        // `ContractUpdateKey` outpoint and passing for the wrong reason.
+        assert_matches!(
+            fund(
+                &server,
+                &mut dbtx,
+                &[incoming_contract_output(hash, &ct2)],
+                0x02
+            )
+            .await,
+            Err(LightningOutputError::ContractAlreadyFunded(_)),
+            "funding again while the decryption proposal is pending must be rejected"
+        );
+    }
+
+    /// Two separately submitted transactions can both pass submission-mode
+    /// validation while neither is committed yet, because the consensus data
+    /// provider never re-validates. The guard therefore has to hold when
+    /// consensus applies them in order, not just within one transaction.
+    #[test_log::test(tokio::test)]
+    async fn incoming_funding_rejected_across_transactions() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+        let preimage = [42u8; 32];
+        let hash = preimage.consensus_hash();
+        let [ct1, ct2] = ciphertexts(&client_cfg, preimage);
+
+        let tx_a = [
+            offer_output(hash, &ct1),
+            incoming_contract_output(hash, &ct1),
+        ];
+        let tx_b = [
+            offer_output(hash, &ct2),
+            incoming_contract_output(hash, &ct2),
+        ];
+
+        // both are validated against the same committed state, as neither has been
+        // ordered yet, and both are queued for consensus
+        for (outputs, txid_byte) in [(&tx_a, 0xaa), (&tx_b, 0xbb)] {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.ignore_uncommitted();
+            fund(&server, &mut dbtx, outputs, txid_byte)
+                .await
+                .expect("both transactions are valid against the pre-funding state");
+        }
+
+        let mut dbtx = db.begin_transaction().await;
+        fund(&server, &mut dbtx, &tx_a, 0xaa)
+            .await
+            .expect("the first transaction is accepted");
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        assert_matches!(
+            fund(&server, &mut dbtx, &tx_b, 0xbb).await,
+            Err(LightningOutputError::ContractAlreadyFunded(_)),
+            "the second transaction must be rejected instead of panicking"
+        );
+    }
+
+    /// Every funding is gated on an offer and consumes it, so a payment hash
+    /// can never be funded twice without a fresh offer being created in
+    /// between. This bounds how fast an attacker can reach a second
+    /// funding, and is what makes the funder-side check in the client
+    /// race-free.
+    #[test_log::test(tokio::test)]
+    async fn incoming_offer_is_consumed_by_funding() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+        let preimage = [42u8; 32];
+        let hash = preimage.consensus_hash();
+        let [ct1] = ciphertexts(&client_cfg, preimage);
+
+        let mut dbtx = db.begin_transaction().await;
+        fund(
+            &server,
+            &mut dbtx,
+            &[
+                offer_output(hash, &ct1),
+                incoming_contract_output(hash, &ct1),
+            ],
+            0x01,
+        )
+        .await
+        .expect("offer and funding accepted");
+
+        assert!(
+            dbtx.to_ref_with_prefix_module_id(42)
+                .0
+                .into_nc()
+                .get_value(&OfferKey(hash))
+                .await
+                .is_none(),
+            "a funding must consume the offer that gated it"
+        );
+    }
+
+    /// The tightest race available to an attacker: poison the account and
+    /// re-arm an offer in a single transaction, so that a funder's
+    /// transaction ordered immediately afterwards still finds an offer. The
+    /// poisoned contract is necessarily still pending at that point, so the
+    /// guard catches it.
+    #[test_log::test(tokio::test)]
+    async fn poisoning_and_rearming_an_offer_leaves_the_contract_pending() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+        let preimage = [42u8; 32];
+        let hash = preimage.consensus_hash();
+        let [ct1, ct2, ct3] = ciphertexts(&client_cfg, preimage);
+
+        let mut dbtx = db.begin_transaction().await;
+        fund(&server, &mut dbtx, &[offer_output(hash, &ct1)], 0x01)
+            .await
+            .expect("offer accepted");
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        fund(
+            &server,
+            &mut dbtx,
+            &[
+                incoming_contract_output(hash, &ct1),
+                offer_output(hash, &ct2),
+            ],
+            0x02,
+        )
+        .await
+        .expect("poisoning funding and re-armed offer accepted");
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        assert_matches!(
+            fund(
+                &server,
+                &mut dbtx,
+                &[incoming_contract_output(hash, &ct3)],
+                0x03
+            )
+            .await,
+            Err(LightningOutputError::ContractAlreadyFunded(_)),
+            "a funder ordered right after the re-arm must not top up the poisoned account"
         );
     }
 
