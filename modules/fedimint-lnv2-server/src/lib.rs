@@ -75,6 +75,14 @@ use crate::db::{
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 
+/// Maximum number of incoming contracts a single `await_incoming_contracts`
+/// request may ask for. The endpoint is public and unauthenticated, so the
+/// batch size is untrusted input; without a cap it flows straight into
+/// `Vec::with_capacity`, letting one request trigger an arbitrarily large
+/// allocation and abort the guardian process. The legitimate client requests
+/// 128 at a time, so this leaves ample headroom.
+const MAX_INCOMING_CONTRACTS_BATCH: usize = 1024;
+
 #[derive(Debug, Clone)]
 pub struct LightningInit;
 
@@ -683,8 +691,10 @@ impl ServerModule for Lightning {
                 async |module: &Lightning, context, params: (u64, usize)| -> (Vec<IncomingContract>, u64) {
                     let db = context.db();
 
-                    if params.1 == 0 {
-                        return Err(ApiError::bad_request("Batch size must be greater than 0".to_string()));
+                    if params.1 == 0 || params.1 > MAX_INCOMING_CONTRACTS_BATCH {
+                        return Err(ApiError::bad_request(format!(
+                            "Batch size must be in 1..={MAX_INCOMING_CONTRACTS_BATCH}"
+                        )));
                     }
 
                     Ok(module.await_incoming_contracts(db, params.0, params.1).await)
@@ -866,7 +876,10 @@ impl Lightning {
             .wait_key_check(&IncomingContractStreamIndexKey, filter)
             .await;
 
-        let mut contracts = Vec::with_capacity(n);
+        // Never pre-allocate from untrusted `n`: even though the endpoint bounds
+        // it, clamping here keeps the allocation safe for any caller. The `.take(n)`
+        // loop below grows the vec as needed anyway.
+        let mut contracts = Vec::with_capacity(n.min(MAX_INCOMING_CONTRACTS_BATCH));
 
         let range = IncomingContractStreamKey(start)..IncomingContractStreamKey(u64::MAX);
 
