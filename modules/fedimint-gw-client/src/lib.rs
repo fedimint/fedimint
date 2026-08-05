@@ -475,12 +475,56 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    /// Attempt fulfill HTLC by buying preimage from the federation
+    /// Attempt fulfill HTLC by buying preimage from the federation.
+    ///
+    /// LND can replay a still-pending HTLC after interceptor reconnect or
+    /// gatewayd restart. Since the operation id is deterministic from the
+    /// payment hash, the replay must not re-fetch the consumed federation offer
+    /// or submit the same funding transaction again.
+    ///
+    /// We only short-circuit if an active `GatewayCompleteStateMachine` is
+    /// handling the exact same LND circuit. Terminal operations, direct swaps
+    /// with the same payment hash, and different circuits fall through to the
+    /// normal failure/cancel path.
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, amount, client_output, client_output_sm, contract_id) = self
+
+        // Check before the funding helper: the first handling consumes the
+        // federation offer. Match the full circuit key, not just `operation_id`.
+        let operation_id = OperationId(htlc.payment_hash.to_byte_array());
+        let replay_of_active_circuit = self
+            .client_ctx
+            .get_own_active_states()
+            .await
+            .into_iter()
+            .any(|(state, _)| {
+                matches!(
+                    state,
+                    GatewayClientStateMachines::Complete(sm)
+                        if sm.common.operation_id == operation_id
+                            && sm.common.incoming_chan_id == htlc.incoming_chan_id
+                            && sm.common.htlc_id == htlc.htlc_id
+                )
+            });
+        if replay_of_active_circuit {
+            debug!(
+                ?operation_id,
+                incoming_chan_id = htlc.incoming_chan_id,
+                htlc_id = htlc.htlc_id,
+                "HTLC circuit already being handled by an active completion state machine, treating as in-flight (likely an LND stream-reconnect replay)"
+            );
+            return Ok(operation_id);
+        }
+
+        let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
+        // Keep the direct derivation above in sync with the funding helper. Return
+        // an error instead of panicking so the caller can fail back the HTLC cleanly.
+        anyhow::ensure!(
+            op_id_from_funding == operation_id,
+            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
+        );
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
@@ -491,6 +535,9 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
+        // The replay check above is only a fast path. Concurrent duplicate
+        // submissions are rejected here; avoiding the resulting cancel/settle race
+        // for the same circuit is a follow-up.
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
