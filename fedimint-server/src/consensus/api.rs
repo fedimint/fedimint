@@ -69,7 +69,9 @@ use tracing::{debug, info, warn};
 
 use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
-use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
+use crate::consensus::db::{
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey,
+};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -115,8 +117,9 @@ impl ConsensusApi {
         self.force_api_secret.clone()
     }
 
-    // we want to return an error if and only if the submitted transaction is
-    // invalid and will be rejected if we were to submit it to consensus
+    // Submit a transaction and long-poll until it is either accepted by
+    // consensus or becomes invalid; we return an error if and only if the
+    // transaction is invalid against the current consensus state
     pub async fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -152,6 +155,12 @@ impl ConsensusApi {
             debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
         })?;
 
+        let mut session_index = get_finished_session_count_static(&mut dbtx).await;
+
+        let mut item_index = dbtx.find_by_prefix(&AcceptedItemPrefix).await.count().await as u64;
+
+        drop(dbtx);
+
         let _ = self
             .submission_sender
             .send(ConsensusItem::Transaction(transaction.clone()))
@@ -160,7 +169,61 @@ impl ConsensusApi {
                 warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
             });
 
-        Ok(txid)
+        loop {
+            let accepted_item_key = AcceptedItemKey(item_index);
+            let signed_session_outcome_key = SignedSessionOutcomeKey(session_index);
+
+            let session_completed = tokio::select! {
+                _ = self.db.wait_key_exists(&accepted_item_key) => false,
+                _ = self.db.wait_key_exists(&signed_session_outcome_key) => true,
+            };
+
+            let mut dbtx = self.db.begin_transaction_nc().await;
+
+            // Our transaction may be the item that was just accepted, in which
+            // case revalidation would fail against its own state changes
+            if dbtx
+                .get_value(&AcceptedTransactionKey(txid))
+                .await
+                .is_some()
+            {
+                return Ok(txid);
+            }
+
+            dbtx.ignore_uncommitted();
+
+            process_transaction_with_dbtx(
+                self.modules.clone(),
+                &mut dbtx,
+                &transaction,
+                self.cfg.consensus.version,
+                TxProcessingMode::Submission,
+            )
+            .await
+            .inspect_err(|err| {
+                debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
+            })?;
+
+            drop(dbtx);
+
+            if session_completed {
+                // A pending transaction may have been dropped at the session
+                // boundary since the data provider is recreated every session,
+                // hence we resubmit it for the next session
+                let _ = self
+                    .submission_sender
+                    .send(ConsensusItem::Transaction(transaction.clone()))
+                    .await
+                    .inspect_err(|err| {
+                        warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
+                    });
+
+                session_index += 1;
+                item_index = 0;
+            } else {
+                item_index += 1;
+            }
+        }
     }
 
     pub async fn await_transaction(

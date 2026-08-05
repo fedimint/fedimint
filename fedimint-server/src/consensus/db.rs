@@ -28,7 +28,7 @@ impl_db_record!(
     key = AcceptedItemKey,
     value = AcceptedItem,
     db_prefix = DbKeyPrefix::AcceptedItem,
-    notify_on_modify = false,
+    notify_on_modify = true,
 );
 impl_db_lookup!(key = AcceptedItemKey, query_prefix = AcceptedItemPrefix);
 
