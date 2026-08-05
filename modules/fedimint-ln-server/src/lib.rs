@@ -839,6 +839,41 @@ impl ServerModule for Lightning {
             .map(LightningOutputOutcome::V0)
     }
 
+    /// Reject funding an incoming contract that already has an account.
+    ///
+    /// An incoming contract's id commits to the payment hash alone, so a second
+    /// funding output for the same hash does not create a new account: it tops
+    /// up the existing one, which keeps the first contract's
+    /// `decrypted_preimage`, `encrypted_preimage` and `gateway_key`. If that
+    /// state is already terminal the new funds are immediately spendable by the
+    /// *first* contract's gateway, and no further decryption can take place.
+    ///
+    /// This is enforced as submission policy rather than in
+    /// [`ServerModule::process_output`] because tightening the latter would
+    /// break consensus. It is therefore only as strong as the weakest guardian:
+    /// a peer that does not run this check still lets such a transaction into
+    /// consensus, where it is accepted. Moving the check into consensus needs a
+    /// module consensus version bump.
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a LightningOutput,
+        _out_point: OutPoint,
+    ) -> Result<(), LightningOutputError> {
+        if let LightningOutputV0::Contract(contract) = output.ensure_v0_ref()? {
+            let contract_id = contract.contract.contract_id();
+
+            if matches!(contract.contract, Contract::Incoming(_))
+                && dbtx.get_value(&ContractKey(contract_id)).await.is_some()
+            {
+                return Err(LightningOutputError::ContractAlreadyFunded(contract_id));
+            }
+        }
+
+        Ok(())
+    }
+
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -1861,6 +1896,171 @@ mod tests {
                 .await,
             Err(LightningOutputError::InvalidEncryptedPreimage)
         );
+    }
+
+    /// Funding an incoming contract that already has an account is rejected at
+    /// submission time, so the stale-state top-up from the security report
+    /// cannot be reached through the transaction submission API.
+    #[test_log::test(tokio::test)]
+    async fn submission_rejects_refunding_an_incoming_contract() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+
+        let op = |i: u64| OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: i,
+        };
+
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array());
+        let ct_1 = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([0xAAu8; 33]));
+        let ct_2 = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt(preimage.0));
+
+        server
+            .process_output(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &LightningOutput::new_v0_offer(IncomingContractOffer {
+                    amount: Amount::from_msats(1),
+                    hash,
+                    encrypted_preimage: ct_1.clone(),
+                    expiry_time: None,
+                }),
+                op(0),
+            )
+            .await
+            .expect("offer #1 accepted");
+
+        let first_contract = Contract::Incoming(IncomingContract {
+            hash,
+            encrypted_preimage: ct_1,
+            decrypted_preimage: DecryptedPreimage::Pending,
+            gateway_key: random_pub_key(),
+        });
+        let contract_id = first_contract.contract_id();
+
+        server
+            .process_output(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &LightningOutput::new_v0_contract(ContractOutput {
+                    amount: Amount::from_msats(1),
+                    contract: first_contract,
+                }),
+                op(1),
+            )
+            .await
+            .expect("contract #1 funded");
+
+        // a second offer for the same payment hash is still accepted, the
+        // contract funding it is not
+        server
+            .process_output(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &LightningOutput::new_v0_offer(IncomingContractOffer {
+                    amount: Amount::from_msats(100_000),
+                    hash,
+                    encrypted_preimage: ct_2.clone(),
+                    expiry_time: None,
+                }),
+                op(2),
+            )
+            .await
+            .expect("offer #2 accepted");
+
+        let second_funding = LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_msats(100_000),
+            contract: Contract::Incoming(IncomingContract {
+                hash,
+                encrypted_preimage: ct_2,
+                decrypted_preimage: DecryptedPreimage::Pending,
+                gateway_key: random_pub_key(),
+            }),
+        });
+
+        assert_eq!(
+            server
+                .verify_output_submission(
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &second_funding,
+                    op(3),
+                )
+                .await,
+            Err(LightningOutputError::ContractAlreadyFunded(contract_id))
+        );
+    }
+
+    /// A first funding of an incoming contract, and any funding of an outgoing
+    /// contract, must not be affected by the submission check.
+    #[test_log::test(tokio::test)]
+    async fn submission_allows_first_funding_and_outgoing_topup() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+
+        let op = |i: u64| OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: i,
+        };
+
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array());
+        let encrypted_preimage =
+            EncryptedPreimage(client_cfg.threshold_pub_key.encrypt(preimage.0));
+
+        let first_funding = LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_msats(100_000),
+            contract: Contract::Incoming(IncomingContract {
+                hash,
+                encrypted_preimage: encrypted_preimage.clone(),
+                decrypted_preimage: DecryptedPreimage::Pending,
+                gateway_key: random_pub_key(),
+            }),
+        });
+
+        server
+            .verify_output_submission(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &first_funding,
+                op(1),
+            )
+            .await
+            .expect("first funding of an incoming contract is allowed");
+
+        // outgoing contracts keep their existing top-up behaviour
+        let outgoing = LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_msats(1000),
+            contract: Contract::Outgoing(OutgoingContract {
+                hash,
+                gateway_key: random_pub_key(),
+                timelock: 1_000_000,
+                user_key: random_pub_key(),
+                cancelled: false,
+            }),
+        });
+
+        server
+            .process_output(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &outgoing,
+                op(2),
+            )
+            .await
+            .expect("outgoing contract funded");
+
+        server
+            .verify_output_submission(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &outgoing,
+                op(3),
+            )
+            .await
+            .expect("outgoing contract top-up is still allowed");
     }
 
     #[test_log::test(tokio::test)]
