@@ -21,7 +21,8 @@ use fedimint_ln_common::federation_endpoint_constants::{
     REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningGateway, LightningGatewayAnnouncement, RemoveGatewayRequest,
+    ContractAccount, FederationPublicKey, LightningGateway, LightningGatewayAnnouncement,
+    RemoveGatewayRequest,
 };
 use itertools::Itertools;
 use tracing::{info, warn};
@@ -59,7 +60,14 @@ pub trait LnFederationApi {
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
 
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+    /// `federation_public_key` is needed to check registration proofs, which
+    /// has to happen before signed announcements are preferred over unsigned
+    /// ones — see
+    /// [`LightningGatewayAnnouncement::registration_proof_is_valid`].
+    async fn fetch_gateways(
+        &self,
+        federation_public_key: FederationPublicKey,
+    ) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
 
     async fn register_gateway(
         &self,
@@ -169,7 +177,10 @@ where
     /// There is no consensus within Fedimint on the gateways, each guardian
     /// might be aware of different ones, so we just return the union of all
     /// responses and allow client selection.
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>> {
+    async fn fetch_gateways(
+        &self,
+        federation_public_key: FederationPublicKey,
+    ) -> FederationResult<Vec<LightningGatewayAnnouncement>> {
         let gateway_announcements = self
             .request_with_strategy(
                 FilterMapThreshold::new(
@@ -183,7 +194,10 @@ where
 
         // Filter out duplicate gateways so that we don't have to deal with
         // multiple guardians having different TTLs for the same gateway.
-        Ok(filter_duplicate_gateways(&gateway_announcements))
+        Ok(filter_duplicate_gateways(
+            &gateway_announcements,
+            federation_public_key,
+        ))
     }
 
     async fn register_gateway(
@@ -267,10 +281,16 @@ where
 /// may not be equal.
 fn filter_duplicate_gateways(
     gateways: &BTreeMap<PeerId, Vec<LightningGatewayAnnouncement>>,
+    federation_public_key: FederationPublicKey,
 ) -> Vec<LightningGatewayAnnouncement> {
     let gateways_by_gateway_id = gateways
         .values()
         .flatten()
+        // Drop forged proofs here, before the preference below acts on them.
+        // Otherwise one peer could attach a garbage signature to another
+        // gateway's id, evict every honest unsigned announcement for it, and
+        // have its own forgery discarded later — removing the gateway entirely.
+        .filter(|announcement| announcement.registration_proof_is_valid(federation_public_key))
         .cloned()
         .map(|announcement| (announcement.info.gateway_id, announcement))
         .into_group_map();
@@ -283,29 +303,43 @@ fn filter_duplicate_gateways(
     // that have the same settings, keeping the one with the longest TTL.
     gateways_by_gateway_id
         .into_values()
-        .flat_map(|announcements| {
-            let mut gateways: HashMap<LightningGateway, Duration> = HashMap::new();
-            for announcement in announcements {
-                let ttl = announcement.ttl;
-                let gateway = announcement.info.clone();
-                // Only insert if the TTL is longer than the one we already have
-                gateways
-                    .entry(gateway)
-                    .and_modify(|t| {
-                        if ttl > *t {
-                            *t = ttl;
-                        }
-                    })
-                    .or_insert(ttl);
+        .flat_map(|mut announcements| {
+            // Guardians that predate registration proofs cannot reject an
+            // unsigned registration overwriting a signed one, so while a
+            // federation is mid-upgrade its peers can disagree about a gateway.
+            // Trust the peers that have a proof: only the gateway itself can
+            // produce one, whereas anyone at all can publish an unsigned
+            // announcement.
+            if announcements.iter().any(|ann| ann.auth.is_some()) {
+                announcements.retain(|ann| ann.auth.is_some());
             }
 
-            gateways
-                .into_iter()
-                .map(|(gateway, ttl)| LightningGatewayAnnouncement {
-                    info: gateway,
-                    ttl,
-                    vetted: false,
-                })
+            let mut gateways: HashMap<LightningGateway, LightningGatewayAnnouncement> =
+                HashMap::new();
+            for announcement in announcements {
+                gateways
+                    .entry(announcement.info.clone())
+                    .and_modify(|existing| {
+                        // Only replace if the TTL is longer than the one we already have
+                        if announcement.ttl > existing.ttl {
+                            existing.ttl = announcement.ttl;
+                        }
+                        // Keep the freshest proof, so a replayed older one cannot
+                        // displace it.
+                        let nonce = |ann: &LightningGatewayAnnouncement| {
+                            ann.auth.as_ref().map_or(0, |auth| auth.nonce)
+                        };
+                        if nonce(&announcement) > nonce(existing) {
+                            existing.auth.clone_from(&announcement.auth);
+                        }
+                    })
+                    .or_insert(LightningGatewayAnnouncement {
+                        vetted: false,
+                        ..announcement
+                    });
+            }
+
+            gateways.into_values()
         })
         .collect()
 }

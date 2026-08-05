@@ -93,7 +93,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::Notify;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -1181,6 +1181,26 @@ impl LightningClientModule {
         gateways.into_iter().find(|g| &g.gateway_id == gateway_id)
     }
 
+    /// Checks a gateway's registration proof, if it carries one.
+    ///
+    /// Announcements without a proof are accepted: gateways predating them are
+    /// still supported, and rejecting them would take working gateways away
+    /// from users. An announcement with a *bad* proof is dropped, since the
+    /// only way to produce one is to be forging it.
+    fn gateway_registration_proof_is_valid(&self, gw: &LightningGatewayAnnouncement) -> bool {
+        let valid = gw.registration_proof_is_valid(self.cfg.threshold_pub_key);
+
+        if !valid {
+            warn!(
+                target: LOG_CLIENT_MODULE_LN,
+                gateway_id = %gw.info.gateway_id,
+                "Discarding gateway announcement with an invalid registration proof"
+            );
+        }
+
+        valid
+    }
+
     /// Updates the gateway cache by fetching the latest registered gateways
     /// from the federation.
     ///
@@ -1188,7 +1208,16 @@ impl LightningClientModule {
     pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
         self.update_gateway_cache_merge
             .merge(async {
-                let gateways = self.module_api.fetch_gateways().await?;
+                let mut gateways = self
+                    .module_api
+                    .fetch_gateways(self.cfg.threshold_pub_key)
+                    .await?;
+
+                // A proof is only worth preferring over an unsigned announcement
+                // if we check it ourselves; otherwise a malicious guardian could
+                // fabricate one to win that preference.
+                gateways.retain(|gw| self.gateway_registration_proof_is_valid(gw));
+
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
                 // Remove all previous gateway entries

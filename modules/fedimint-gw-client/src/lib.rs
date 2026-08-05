@@ -12,7 +12,7 @@ use async_stream::stream;
 use async_trait::async_trait;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::key::Secp256k1;
-use bitcoin::secp256k1::{All, PublicKey};
+use bitcoin::secp256k1::All;
 use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
@@ -34,6 +34,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
@@ -55,9 +56,9 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, RemoveGatewayRequest,
-    create_gateway_remove_message,
+    GatewayRegistrationAuth, KIND, LightningCommonInit, LightningGateway,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    RemoveGatewayRequest, create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
@@ -268,22 +269,38 @@ impl GatewayClientModule {
         fees: RoutingFees,
         lightning_context: LightningContext,
         api: SafeUrl,
-        gateway_id: PublicKey,
+        gateway_keypair: Keypair,
     ) -> LightningGatewayAnnouncement {
+        let info = LightningGateway {
+            federation_index: self.federation_index,
+            gateway_redeem_key: self.redeem_key.public_key(),
+            node_pub_key: lightning_context.lightning_public_key,
+            lightning_alias: lightning_context.lightning_alias,
+            api,
+            route_hints,
+            fees,
+            gateway_id: gateway_keypair.public_key(),
+            supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
+        };
+
+        // Proves to the guardians that we hold the key behind `gateway_id`, so
+        // nobody else can replace our registration. Wall-clock milliseconds give
+        // a nonce that keeps increasing across restarts without persisting
+        // state; guardians only compare it to the nonce they already hold for
+        // us, so our clock need not agree with theirs.
+        let nonce = u64::try_from(duration_since_epoch().as_millis())
+            .expect("milliseconds since the epoch do not exceed u64 for another 500m years");
+        let signature = gateway_keypair.sign_schnorr(create_gateway_registration_message(
+            self.cfg.threshold_pub_key,
+            nonce,
+            &info,
+        ));
+
         LightningGatewayAnnouncement {
-            info: LightningGateway {
-                federation_index: self.federation_index,
-                gateway_redeem_key: self.redeem_key.public_key(),
-                node_pub_key: lightning_context.lightning_public_key,
-                lightning_alias: lightning_context.lightning_alias,
-                api,
-                route_hints,
-                fees,
-                gateway_id,
-                supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
-            },
+            info,
             ttl,
             vetted: false,
+            auth: Some(GatewayRegistrationAuth { nonce, signature }),
         }
     }
 
@@ -399,7 +416,7 @@ impl GatewayClientModule {
         fees: RoutingFees,
         lightning_context: LightningContext,
         api: SafeUrl,
-        gateway_id: PublicKey,
+        gateway_keypair: Keypair,
     ) {
         let registration_info = self.to_gateway_registration_info(
             route_hints,
@@ -407,7 +424,7 @@ impl GatewayClientModule {
             fees,
             lightning_context,
             api,
-            gateway_id,
+            gateway_keypair,
         );
         let gateway_id = registration_info.info.gateway_id;
 

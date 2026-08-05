@@ -20,7 +20,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION,
+    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
     CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
     SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
@@ -53,7 +53,7 @@ use fedimint_ln_common::{
     LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
     LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
     LightningOutputV0, MODULE_CONSENSUS_VERSION, RemoveGatewayRequest,
-    create_gateway_remove_message,
+    create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -949,7 +949,11 @@ impl ServerModule for Lightning {
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction().await;
-                    module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await;
+                    let gateway_id = gateway.info.gateway_id;
+                    module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await.map_err(|err| {
+                        warn!(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), %gateway_id, "Rejected gateway registration");
+                        ApiError::bad_request(err.to_string())
+                    })?;
                     dbtx.commit_tx_result().await?;
                     Ok(())
                 }
@@ -1162,11 +1166,27 @@ impl Lightning {
             .collect::<Vec<LightningGatewayAnnouncement>>()
     }
 
+    /// Stores a gateway registration, rejecting announcements that are not
+    /// entitled to overwrite the record currently held for their `gateway_id`.
+    ///
+    /// A registration carrying a valid
+    /// [`fedimint_ln_common::GatewayRegistrationAuth`] outranks an
+    /// unsigned one. Since only the holder of the secret key behind
+    /// `gateway_id` can produce a signature, this means:
+    ///
+    /// - a gateway that signs cannot have its record replaced by anyone else,
+    /// - a gateway that does not sign is exactly as exposed as it was before
+    ///   proofs existed, and no more,
+    /// - an attacker can never lock a gateway out of its own `gateway_id`,
+    ///   because unsigned records never block other unsigned registrations.
+    ///
+    /// So gateways gain protection individually as they upgrade, with no
+    /// coordinated rollout and no regression for those that have not.
     async fn register_gateway(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        gateway: LightningGatewayAnnouncement,
-    ) {
+        mut gateway: LightningGatewayAnnouncement,
+    ) -> anyhow::Result<()> {
         // Garbage collect expired gateways (since we're already writing to the DB)
         // Note: A "gotcha" of doing this here is that if two gateways are registered
         // at the same time, they will both attempt to delete the same expired gateways
@@ -1174,11 +1194,64 @@ impl Lightning {
         // succeed and the failed one will just try again.
         self.delete_expired_gateways(dbtx).await;
 
-        dbtx.insert_entry(
-            &LightningGatewayKey(gateway.info.gateway_id),
-            &gateway.anchor(),
-        )
-        .await;
+        let gateway_id = gateway.info.gateway_id;
+
+        // Reject a forged proof outright rather than silently downgrading it to an
+        // unsigned registration, which would hide a misconfigured gateway.
+        if let Some(auth) = &gateway.auth {
+            let msg = create_gateway_registration_message(
+                self.cfg.consensus.threshold_pub_keys.public_key(),
+                auth.nonce,
+                &gateway.info,
+            );
+
+            auth.signature
+                .verify(&msg, &gateway_id.x_only_public_key().0)
+                .context("Invalid gateway registration signature")?;
+        }
+
+        // Registrations are garbage collected above, so anything still present is
+        // live and its claim on this `gateway_id` has to be honored.
+        if let Some(existing) = dbtx.get_value(&LightningGatewayKey(gateway_id)).await
+            && let Some(existing_auth) = existing.auth
+        {
+            let auth = gateway.auth.as_ref().context(
+                "Gateway registration is signed and cannot be replaced by an unsigned one",
+            )?;
+
+            // The nonce only has to move for announcements that actually change
+            // something. Re-registering identical settings is the common case —
+            // gateways refresh well inside the TTL — and replaying it cannot
+            // achieve anything beyond extending a lifetime that is clamped
+            // anyway. Exempting it keeps a gateway whose clock stepped backwards
+            // from being locked out of refreshing its own registration.
+            anyhow::ensure!(
+                auth.nonce > existing_auth.nonce || gateway.info == existing.info,
+                "Gateway registration nonce must increase to change settings, got {} but stored {}",
+                auth.nonce,
+                existing_auth.nonce
+            );
+
+            // The exemption must not let the ratchet fall back, or it defeats
+            // itself: gateways refresh every few minutes and `auth` is served
+            // publicly, so an attacker could replay an old identical-settings
+            // announcement to lower the stored nonce and then replay an
+            // intermediate one to restore stale settings. Keep the highest nonce
+            // seen, along with the signature that goes with it, so the stored
+            // proof stays self-consistent for clients that verify it.
+            if auth.nonce < existing_auth.nonce {
+                gateway.auth = Some(existing_auth);
+            }
+        }
+
+        // Whether a gateway is vetted is the federation's judgement to make, not a
+        // property a gateway gets to assert about itself.
+        gateway.vetted = false;
+
+        dbtx.insert_entry(&LightningGatewayKey(gateway_id), &gateway.anchor())
+            .await;
+
+        Ok(())
     }
 
     async fn delete_expired_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) {
@@ -1271,12 +1344,14 @@ mod tests {
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::{Committable, Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
     use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
-    use fedimint_core::secp256k1::{PublicKey, generate_keypair};
+    use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
@@ -1290,14 +1365,16 @@ mod tests {
         Preimage, PreimageKey,
     };
     use fedimint_ln_common::{
-        ContractAccount, ContractOutput, LightningInput, LightningOutput, LightningOutputError,
+        ContractAccount, ContractOutput, GatewayRegistrationAuth, LightningGateway,
+        LightningGatewayAnnouncement, LightningInput, LightningOutput, LightningOutputError,
+        MAX_GATEWAY_REGISTRATION_TTL,
     };
     use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
     use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
 
-    use crate::db::{ContractKey, LightningAuditItemKey, OfferKey};
-    use crate::{Lightning, LightningInit};
+    use crate::db::{ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey};
+    use crate::{Lightning, LightningInit, create_gateway_registration_message};
 
     #[derive(Debug)]
     struct MockBitcoinServerRpc;
@@ -1920,5 +1997,399 @@ mod tests {
 
         let audit_item = module_dbtx.get_value(&audit_key).await;
         assert_eq!(audit_item, None);
+    }
+
+    /// Builds a `Lightning` server module backed by an in-memory database.
+    fn build_server() -> (Lightning, Database, TaskGroup) {
+        let task_group = TaskGroup::new();
+        let (server_cfg, _) = build_configs();
+        let server = Lightning {
+            cfg: server_cfg[0].clone(),
+            our_peer_id: 0.into(),
+            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
+                MockBitcoinServerRpc.into_dyn(),
+                Duration::from_secs(1),
+                &task_group,
+            ),
+        };
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        (server, db, task_group)
+    }
+
+    fn announcement(gateway_id: PublicKey, api: &str) -> LightningGatewayAnnouncement {
+        LightningGatewayAnnouncement {
+            info: LightningGateway {
+                federation_index: 1,
+                gateway_redeem_key: random_pub_key(),
+                node_pub_key: random_pub_key(),
+                lightning_alias: "gw".to_string(),
+                api: api.parse().expect("valid url"),
+                route_hints: vec![],
+                fees: fedimint_ln_common::lightning_invoice::RoutingFees {
+                    base_msat: 1000,
+                    proportional_millionths: 100,
+                },
+                gateway_id,
+                supports_private_payments: true,
+            },
+            vetted: false,
+            ttl: Duration::from_secs(600),
+            auth: None,
+        }
+    }
+
+    /// Signs `announcement` the way an upgraded gateway would.
+    fn sign(
+        server: &Lightning,
+        keypair: &Keypair,
+        nonce: u64,
+        mut announcement: LightningGatewayAnnouncement,
+    ) -> LightningGatewayAnnouncement {
+        let msg = create_gateway_registration_message(
+            server.cfg.consensus.threshold_pub_keys.public_key(),
+            nonce,
+            &announcement.info,
+        );
+        announcement.auth = Some(GatewayRegistrationAuth {
+            nonce,
+            signature: keypair.sign_schnorr(msg),
+        });
+        announcement
+    }
+
+    async fn stored_api(
+        server: &Lightning,
+        dbtx: &mut DatabaseTransaction<'_>,
+        id: PublicKey,
+    ) -> String {
+        server
+            .list_gateways(dbtx)
+            .await
+            .into_iter()
+            .find(|gw| gw.info.gateway_id == id)
+            .expect("gateway is registered")
+            .info
+            .api
+            .to_string()
+    }
+
+    /// The core of the fix: once a gateway proves it holds the key behind its
+    /// `gateway_id`, nobody else can take that identity over.
+    #[test_log::test(tokio::test)]
+    async fn signed_registration_cannot_be_overwritten_by_unsigned_one() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let victim = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = victim.public_key();
+
+        let honest = sign(
+            &server,
+            &victim,
+            1,
+            announcement(gateway_id, "https://honest.gw/v1"),
+        );
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), honest)
+            .await
+            .expect("honest gateway registers");
+
+        // Same `gateway_id`, attacker-chosen everything else, but no proof.
+        let hijack = announcement(gateway_id, "https://attacker.example/v1");
+        let err = server
+            .register_gateway(&mut dbtx.to_ref_nc(), hijack)
+            .await
+            .expect_err("unsigned announcement must not replace a signed one");
+        assert!(
+            err.to_string()
+                .contains("cannot be replaced by an unsigned one")
+        );
+
+        assert_eq!(
+            stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
+            "https://honest.gw/v1"
+        );
+    }
+
+    /// The upgrade path: a gateway that starts signing takes back its own
+    /// `gateway_id`, even if someone squatted it first.
+    #[test_log::test(tokio::test)]
+    async fn signed_registration_overwrites_unsigned_squat() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let victim = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = victim.public_key();
+
+        // Attacker gets there first, while the gateway is still un-upgraded.
+        server
+            .register_gateway(
+                &mut dbtx.to_ref_nc(),
+                announcement(gateway_id, "https://attacker.example/v1"),
+            )
+            .await
+            .expect("unsigned squat is accepted, as it is today");
+
+        let honest = sign(
+            &server,
+            &victim,
+            1,
+            announcement(gateway_id, "https://honest.gw/v1"),
+        );
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), honest)
+            .await
+            .expect("signed registration reclaims the identity");
+
+        assert_eq!(
+            stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
+            "https://honest.gw/v1"
+        );
+    }
+
+    /// Backwards compatibility: gateways that have not upgraded keep working
+    /// exactly as they do today. They are no better protected, but crucially no
+    /// worse off, and an attacker cannot use the new rule to lock them out of
+    /// their own `gateway_id`.
+    #[test_log::test(tokio::test)]
+    async fn unsigned_registrations_still_overwrite_each_other() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let gateway_id = random_pub_key();
+
+        // An attacker squats the identity of a legacy gateway before it first
+        // registers. The legacy gateway must still be able to register.
+        server
+            .register_gateway(
+                &mut dbtx.to_ref_nc(),
+                announcement(gateway_id, "https://attacker.example/v1"),
+            )
+            .await
+            .expect("first unsigned registration accepted");
+        server
+            .register_gateway(
+                &mut dbtx.to_ref_nc(),
+                announcement(gateway_id, "https://legacy.gw/v1"),
+            )
+            .await
+            .expect("legacy gateway must not be locked out of its own identity");
+
+        assert_eq!(
+            stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
+            "https://legacy.gw/v1"
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn registration_with_forged_signature_is_rejected() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let victim = Keypair::new(SECP256K1, &mut OsRng);
+        let attacker = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = victim.public_key();
+
+        // Attacker signs the victim's `gateway_id` with their own key.
+        let forged = sign(
+            &server,
+            &attacker,
+            1,
+            announcement(gateway_id, "https://attacker.example/v1"),
+        );
+        let err = server
+            .register_gateway(&mut dbtx.to_ref_nc(), forged)
+            .await
+            .expect_err("signature by the wrong key must be rejected");
+        assert!(
+            err.to_string()
+                .contains("Invalid gateway registration signature")
+        );
+
+        assert!(server.list_gateways(&mut dbtx.to_ref_nc()).await.is_empty());
+    }
+
+    /// A captured proof must not be replayable to roll a gateway back to
+    /// settings it has since moved off.
+    #[test_log::test(tokio::test)]
+    async fn replayed_registration_is_rejected() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let victim = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = victim.public_key();
+
+        let stale = sign(
+            &server,
+            &victim,
+            1,
+            announcement(gateway_id, "https://old.gw/v1"),
+        );
+        let current = sign(
+            &server,
+            &victim,
+            2,
+            announcement(gateway_id, "https://new.gw/v1"),
+        );
+
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), stale.clone())
+            .await
+            .expect("first registration accepted");
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), current)
+            .await
+            .expect("newer registration accepted");
+
+        let err = server
+            .register_gateway(&mut dbtx.to_ref_nc(), stale)
+            .await
+            .expect_err("replay of the older signed announcement must be rejected");
+        assert!(err.to_string().contains("nonce must increase"));
+
+        assert_eq!(
+            stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
+            "https://new.gw/v1"
+        );
+    }
+
+    /// A proof is bound to one federation, so it cannot be lifted from a
+    /// federation the attacker runs and replayed at the victim's.
+    #[test_log::test(tokio::test)]
+    async fn registration_proof_is_federation_bound() {
+        let (server, db, _tg) = build_server();
+        let (other_server, _other_db, _tg2) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let victim = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = victim.public_key();
+
+        assert_ne!(
+            server.cfg.consensus.threshold_pub_keys.public_key(),
+            other_server.cfg.consensus.threshold_pub_keys.public_key(),
+            "test federations must differ for this to prove anything"
+        );
+
+        // Validly signed, but for a different federation.
+        let foreign = sign(
+            &other_server,
+            &victim,
+            1,
+            announcement(gateway_id, "https://gw/v1"),
+        );
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), foreign)
+            .await
+            .expect_err("proof from another federation must not verify here");
+    }
+
+    /// `vetted` is the federation's judgement, not something a registrant may
+    /// assert about itself.
+    #[test_log::test(tokio::test)]
+    async fn self_asserted_vetted_flag_is_cleared() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let gateway_id = random_pub_key();
+        let mut ann = announcement(gateway_id, "https://attacker.example/v1");
+        ann.vetted = true;
+
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), ann)
+            .await
+            .expect("registration accepted");
+
+        let stored = dbtx
+            .to_ref_nc()
+            .get_value(&LightningGatewayKey(gateway_id))
+            .await
+            .expect("registration exists");
+        assert!(
+            !stored.vetted,
+            "guardian must not store a self-asserted vetted flag"
+        );
+    }
+
+    /// An unbounded TTL previously let a record outlive any expiry sweep, and a
+    /// large enough one overflowed `SystemTime` outright.
+    #[test_log::test(tokio::test)]
+    async fn oversized_ttl_is_clamped_and_does_not_overflow() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let gateway_id = random_pub_key();
+        let mut ann = announcement(gateway_id, "https://gw/v1");
+        ann.ttl = Duration::from_secs(u64::MAX);
+
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), ann)
+            .await
+            .expect("must not panic on an absurd TTL");
+
+        let stored = dbtx
+            .to_ref_nc()
+            .get_value(&LightningGatewayKey(gateway_id))
+            .await
+            .expect("registration exists");
+        assert!(
+            stored.valid_until <= fedimint_core::time::now() + MAX_GATEWAY_REGISTRATION_TTL,
+            "TTL must be clamped"
+        );
+    }
+
+    /// A gateway refreshing identical settings must not be locked out by its
+    /// own stale nonce, e.g. after an NTP correction stepped its clock
+    /// backwards.
+    #[test_log::test(tokio::test)]
+    async fn unchanged_registration_may_be_refreshed_with_a_stale_nonce() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let gateway = Keypair::new(SECP256K1, &mut OsRng);
+        let gateway_id = gateway.public_key();
+        let ann = announcement(gateway_id, "https://gw/v1");
+
+        server
+            .register_gateway(
+                &mut dbtx.to_ref_nc(),
+                sign(&server, &gateway, 500, ann.clone()),
+            )
+            .await
+            .expect("initial registration accepted");
+
+        // Same settings, lower nonce: a refresh, not a rollback.
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), sign(&server, &gateway, 400, ann))
+            .await
+            .expect("identical settings may be refreshed regardless of nonce");
+
+        // But a *change* still requires the nonce to move forward.
+        let err = server
+            .register_gateway(
+                &mut dbtx.to_ref_nc(),
+                sign(
+                    &server,
+                    &gateway,
+                    400,
+                    announcement(gateway_id, "https://other.gw/v1"),
+                ),
+            )
+            .await
+            .expect_err("changing settings with a stale nonce must be rejected");
+        assert!(err.to_string().contains("nonce must increase"));
+
+        assert_eq!(
+            stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
+            "https://gw/v1"
+        );
     }
 }
