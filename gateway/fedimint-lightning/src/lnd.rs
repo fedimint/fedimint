@@ -54,8 +54,9 @@ use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
-    PayInvoiceResponse, PaymentAction, SendOnchainRequest, SendOnchainResponse,
+    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, NO_INCOMING_CIRCUIT,
+    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    SendOnchainResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -180,6 +181,7 @@ impl GatewayLndClient {
                 );
 
                 if hold.state() == InvoiceState::Accepted {
+                    let (incoming_chan_id, htlc_id) = NO_INCOMING_CIRCUIT;
                     let intercept = InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&hold.r_hash.clone())
                             .expect("Failed to convert to Hash"),
@@ -188,8 +190,12 @@ impl GatewayLndClient {
                         // support is over
                         expiry: hold.expiry as u32,
                         short_channel_id: Some(0),
-                        incoming_chan_id: 0,
-                        htlc_id: 0,
+                        // The payment is held by a HOLD invoice on our own
+                        // node rather than by an intercepted forward, which is
+                        // how `complete_htlc` knows to resolve it by settling
+                        // or canceling that invoice.
+                        incoming_chan_id,
+                        htlc_id,
                     };
 
                     match gateway_sender.send(intercept).await {
@@ -523,38 +529,72 @@ impl GatewayLndClient {
         }
     }
 
-    /// Settles a HOLD invoice that is specified by the `payment_hash` with the
-    /// given `preimage`. If there is no invoice corresponding to the
-    /// `payment_hash`, this function will return an error.
+    /// Looks up the invoice carrying `payment_hash`, returning `None` if the
+    /// node has no such invoice.
+    ///
+    /// Any other lookup failure is reported as an error, since callers retry on
+    /// error and an unreachable node is a condition a retry can clear.
+    async fn lookup_invoice(
+        client: &mut LndClient,
+        payment_hash: &[u8],
+    ) -> Result<Option<Invoice>, LightningRpcError> {
+        match client
+            .invoices()
+            .lookup_invoice_v2(LookupInvoiceMsg {
+                invoice_ref: Some(InvoiceRef::PaymentHash(payment_hash.to_vec())),
+                lookup_modifier: 0,
+            })
+            .await
+        {
+            Ok(invoice) => Ok(Some(invoice.into_inner())),
+            Err(err) if err.code() == Code::NotFound => Ok(None),
+            Err(err) => Err(LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: format!("Failed to look up invoice: {}", err.fmt_compact()),
+            }),
+        }
+    }
+
+    /// Settles the LNv2 HOLD invoice carrying `payment_hash` with `preimage`.
+    ///
+    /// Callers retry on error, so this only fails for conditions a retry can
+    /// clear, such as an unreachable node. An invoice that is already settled,
+    /// or that holds no HTLC to settle, is reported as success instead: the
+    /// gateway cannot make the payer send again, so retrying would spin
+    /// forever.
     async fn settle_hold_invoice(
         &self,
         payment_hash: Vec<u8>,
         preimage: Preimage,
     ) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
-        let invoice = client
-            .invoices()
-            .lookup_invoice_v2(LookupInvoiceMsg {
-                invoice_ref: Some(InvoiceRef::PaymentHash(payment_hash.clone())),
-                lookup_modifier: 0,
-            })
-            .await
-            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: "Hold invoice does not exist".to_string(),
-            })?
-            .into_inner();
-
-        let state = invoice.state();
-        if state != InvoiceState::Accepted {
+        let Some(invoice) = Self::lookup_invoice(&mut client, &payment_hash).await? else {
             warn!(
                 target: LOG_LIGHTNING,
-                state = invoice.state,
                 payment_hash = %PrettyPaymentHash(&payment_hash),
-                "HOLD invoice state is not accepted",
+                "Cannot settle HOLD invoice, the node has no invoice for this payment hash",
             );
-            return Err(LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: "HOLD invoice state is not accepted".to_string(),
-            });
+            return Ok(());
+        };
+
+        match invoice.state() {
+            InvoiceState::Accepted => {}
+            InvoiceState::Settled => {
+                info!(
+                    target: LOG_LIGHTNING,
+                    payment_hash = %PrettyPaymentHash(&payment_hash),
+                    "HOLD invoice was already settled",
+                );
+                return Ok(());
+            }
+            state => {
+                warn!(
+                    target: LOG_LIGHTNING,
+                    state = ?state,
+                    payment_hash = %PrettyPaymentHash(&payment_hash),
+                    "Cannot settle HOLD invoice, it holds no HTLC to settle",
+                );
+                return Ok(());
+            }
         }
 
         client
@@ -575,34 +615,47 @@ impl GatewayLndClient {
                 }
             })?;
 
+        info!(
+            target: LOG_LIGHTNING,
+            payment_hash = %PrettyPaymentHash(&payment_hash),
+            "Successfully settled HOLD invoice",
+        );
+
         Ok(())
     }
 
-    /// Cancels a HOLD invoice that is specified by the `payment_hash`.
-    /// If there is no invoice corresponding to the `payment_hash`, this
-    /// function will return an error.
+    /// Cancels the LNv2 HOLD invoice carrying `payment_hash`, failing back any
+    /// HTLC it holds.
+    ///
+    /// Like [`GatewayLndClient::settle_hold_invoice`], an invoice that has
+    /// already reached a terminal state is reported as success so that callers
+    /// do not retry forever.
     async fn cancel_hold_invoice(&self, payment_hash: Vec<u8>) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
-        let invoice = client
-            .invoices()
-            .lookup_invoice_v2(LookupInvoiceMsg {
-                invoice_ref: Some(InvoiceRef::PaymentHash(payment_hash.clone())),
-                lookup_modifier: 0,
-            })
-            .await
-            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: "Hold invoice does not exist".to_string(),
-            })?
-            .into_inner();
-
-        let state = invoice.state();
-        if state != InvoiceState::Open {
+        let Some(invoice) = Self::lookup_invoice(&mut client, &payment_hash).await? else {
             warn!(
                 target: LOG_LIGHTNING,
-                state = %invoice.state,
                 payment_hash = %PrettyPaymentHash(&payment_hash),
-                "Trying to cancel HOLD invoice that is not OPEN",
+                "Cannot cancel HOLD invoice, the node has no invoice for this payment hash",
             );
+            return Ok(());
+        };
+
+        match invoice.state() {
+            InvoiceState::Open | InvoiceState::Accepted => {}
+            InvoiceState::Canceled => return Ok(()),
+            InvoiceState::Settled => {
+                // Only reachable from a duplicate or racing completion: the
+                // preimage that settles the invoice is released by the
+                // federation only once the contract is funded, which is the
+                // same thing that makes the gateway settle rather than cancel.
+                warn!(
+                    target: LOG_LIGHTNING,
+                    payment_hash = %PrettyPaymentHash(&payment_hash),
+                    "Cannot cancel HOLD invoice, it is already settled",
+                );
+                return Ok(());
+            }
         }
 
         client
@@ -622,6 +675,12 @@ impl GatewayLndClient {
                     failure_reason: "Failed to cancel HOLD invoice".to_string(),
                 }
             })?;
+
+        info!(
+            target: LOG_LIGHTNING,
+            payment_hash = %PrettyPaymentHash(&payment_hash),
+            "Successfully canceled HOLD invoice",
+        );
 
         Ok(())
     }
@@ -962,11 +1021,12 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError> {
+        let incoming_circuit = htlc.incoming_circuit();
         let InterceptPaymentResponse {
             action,
             payment_hash,
-            incoming_chan_id,
-            htlc_id,
+            incoming_chan_id: _,
+            htlc_id: _,
         } = htlc;
 
         let (action, preimage) = match action {
@@ -975,49 +1035,47 @@ impl ILnRpcClient for GatewayLndClient {
             PaymentAction::Forward => (ResolveHoldForwardAction::Resume, Preimage([0; 32])),
         };
 
-        // First check if this completion request corresponds to a HOLD LNv2 invoice
-        match action {
-            ResolveHoldForwardAction::Settle => {
-                if let Ok(()) = self
-                    .settle_hold_invoice(payment_hash.to_byte_array().to_vec(), preimage.clone())
-                    .await
-                {
-                    info!(target: LOG_LIGHTNING, payment_hash = %PrettyPaymentHash(&payment_hash.consensus_encode_to_vec()), "Successfully settled HOLD invoice");
-                    return Ok(());
+        // Resolve the payment the way it arrived. Deciding instead by probing
+        // LND for a HOLD invoice carrying the payment hash would conflate the
+        // two ways, because the hash is chosen by whoever is being paid: an
+        // attacker can register an LNv2 receive and an LNv1 offer for the same
+        // hash, and the completion for the intercepted LNv1 HTLC would then
+        // settle or cancel the unrelated LNv2 HOLD invoice.
+        let Some((chan_id, htlc_id)) = incoming_circuit else {
+            // LNv2: the payment is held by a HOLD invoice on our own node, so
+            // there is no forward to resolve.
+            return match action {
+                ResolveHoldForwardAction::Settle => {
+                    self.settle_hold_invoice(payment_hash.to_byte_array().to_vec(), preimage)
+                        .await
                 }
-            }
-            _ => {
-                if let Ok(()) = self
-                    .cancel_hold_invoice(payment_hash.to_byte_array().to_vec())
-                    .await
-                {
-                    info!(target: LOG_LIGHTNING, payment_hash = %PrettyPaymentHash(&payment_hash.consensus_encode_to_vec()), "Successfully canceled HOLD invoice");
-                    return Ok(());
+                // Neither `Fail` nor `Resume` has a meaning for a HOLD invoice
+                // beyond "the gateway could not claim this payment": there is
+                // no next hop to resume towards, so fail it back to the payer.
+                _ => {
+                    self.cancel_hold_invoice(payment_hash.to_byte_array().to_vec())
+                        .await
                 }
-            }
-        }
-
-        // If we can't settle/cancel the payment via LNv2, try LNv1
-        if let Some(lnd_sender) = self.lnd_sender.clone() {
-            let response = ForwardHtlcInterceptResponse {
-                incoming_circuit_key: Some(CircuitKey {
-                    chan_id: incoming_chan_id,
-                    htlc_id,
-                }),
-                action: action.into(),
-                preimage: preimage.0.to_vec(),
-                failure_message: vec![],
-                failure_code: FailureCode::TemporaryChannelFailure.into(),
             };
+        };
 
-            Self::send_lnd_response(lnd_sender, response).await?;
-            return Ok(());
-        }
+        // LNv1: hand the interceptor its response for this exact circuit.
+        let Some(lnd_sender) = self.lnd_sender.clone() else {
+            crit!("Gatewayd has not started to route HTLCs");
+            return Err(LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "Gatewayd has not started to route HTLCs".to_string(),
+            });
+        };
 
-        crit!("Gatewayd has not started to route HTLCs");
-        Err(LightningRpcError::FailedToCompleteHtlc {
-            failure_reason: "Gatewayd has not started to route HTLCs".to_string(),
-        })
+        let response = ForwardHtlcInterceptResponse {
+            incoming_circuit_key: Some(CircuitKey { chan_id, htlc_id }),
+            action: action.into(),
+            preimage: preimage.0.to_vec(),
+            failure_message: vec![],
+            failure_code: FailureCode::TemporaryChannelFailure.into(),
+        };
+
+        Self::send_lnd_response(lnd_sender, response).await
     }
 
     async fn create_invoice(

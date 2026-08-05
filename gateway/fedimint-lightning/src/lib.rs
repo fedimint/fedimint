@@ -335,6 +335,18 @@ pub struct GetNodeInfoResponse {
     pub synced_to_chain: bool,
 }
 
+/// The `(incoming_chan_id, htlc_id)` circuit key reported for a payment that
+/// did not arrive as an intercepted forward and therefore has no incoming
+/// circuit to resolve: an LNv2 payment held by a HOLD invoice on the gateway's
+/// own node, and every payment reported by the LDK backend.
+///
+/// Zero is unambiguous as a marker because no channel is assigned a zero short
+/// channel id: a confirmed channel's id encodes its funding block height, and
+/// an unconfirmed one gets an alias from a high range. LND reserves zero for
+/// locally originated payments and exit hops, neither of which is a forward
+/// the gateway intercepts.
+pub const NO_INCOMING_CIRCUIT: (u64, u64) = (0, 0);
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InterceptPaymentRequest {
     pub payment_hash: sha256::Hash,
@@ -351,6 +363,21 @@ pub struct InterceptPaymentResponse {
     pub htlc_id: u64,
     pub payment_hash: sha256::Hash,
     pub action: PaymentAction,
+}
+
+impl InterceptPaymentResponse {
+    /// The incoming circuit this response resolves, or `None` when the payment
+    /// was not an intercepted forward (see [`NO_INCOMING_CIRCUIT`]).
+    ///
+    /// Backends must pick how to resolve a payment from this, never from the
+    /// payment hash. The hash is chosen by whoever is being paid, so two
+    /// unrelated payments — one intercepted forward and one HOLD invoice —
+    /// can carry the same hash, and resolving by hash would let a completion
+    /// for one settle or cancel the other.
+    pub fn incoming_circuit(&self) -> Option<(u64, u64)> {
+        let circuit = (self.incoming_chan_id, self.htlc_id);
+        (circuit != NO_INCOMING_CIRCUIT).then_some(circuit)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -697,5 +724,36 @@ impl ILnRpcClient for LnRpcTracked {
         timer.observe_duration();
         self.record_call("sync_wallet", &result);
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bitcoin::hashes::{Hash as _, sha256};
+
+    use super::{InterceptPaymentResponse, NO_INCOMING_CIRCUIT, PaymentAction, Preimage};
+
+    fn response(incoming_chan_id: u64, htlc_id: u64) -> InterceptPaymentResponse {
+        InterceptPaymentResponse {
+            incoming_chan_id,
+            htlc_id,
+            payment_hash: sha256::Hash::all_zeros(),
+            action: PaymentAction::Settle(Preimage([0; 32])),
+        }
+    }
+
+    #[test]
+    fn payment_without_incoming_circuit_is_recognized() {
+        let (chan_id, htlc_id) = NO_INCOMING_CIRCUIT;
+        assert_eq!(response(chan_id, htlc_id).incoming_circuit(), None);
+    }
+
+    #[test]
+    fn intercepted_forward_keeps_its_circuit() {
+        // An intercepted forward must never be mistaken for a payment held by
+        // a HOLD invoice, including when it is the first HTLC on its channel
+        // and so has htlc id 0.
+        assert_eq!(response(101, 0).incoming_circuit(), Some((101, 0)));
+        assert_eq!(response(101, 7).incoming_circuit(), Some((101, 7)));
     }
 }
