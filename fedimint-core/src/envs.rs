@@ -74,6 +74,25 @@ pub fn is_running_in_test_env() -> bool {
     unit_test || is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV)
 }
 
+/// How long to wait before polling peers for their supported module consensus
+/// version again.
+///
+/// The first poll of a freshly started process races the peers' API servers
+/// binding and normally loses, so a round that failed to reach everyone is
+/// retried soon rather than after the full interval -- otherwise activation is
+/// dead for that interval after every restart. A peer that stays unreachable is
+/// then polled at the short interval indefinitely, which is a few requests per
+/// minute.
+pub fn next_poll_delay(reached_all_peers: bool) -> std::time::Duration {
+    if is_running_in_test_env() {
+        std::time::Duration::from_secs(5)
+    } else if reached_all_peers {
+        std::time::Duration::from_secs(600)
+    } else {
+        std::time::Duration::from_secs(30)
+    }
+}
+
 /// Get value of `FEDIMINT_BUILD_CODE_VERSION` at compile time
 #[macro_export]
 macro_rules! fedimint_build_code_version_env {

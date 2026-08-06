@@ -49,7 +49,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
+use fedimint_core::envs::{
+    BitcoinRpcConfig, is_running_in_test_env, next_poll_delay,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
@@ -1964,12 +1966,7 @@ impl Wallet {
                     break;
                 }
 
-                if is_running_in_test_env() {
-                    // Even in tests we don't want to spam the federation with requests about it
-                    sleep(Duration::from_secs(5)).await;
-                } else {
-                    sleep(Duration::from_secs(600)).await;
-                }
+                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
             }
         });
         receiver
