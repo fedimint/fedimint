@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-25.11";
+      url = "github:nixos/nixpkgs/nixos-26.05";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -13,7 +13,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=d80cccdee77ca61b035777e0d7dc9a682cdf80fa";
+      url = "github:rustshop/flakebox?rev=b36f6b7cb77652c1d4cb7279d8f47fddf07066ae";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
       inputs.fenix.follows = "fenix";
     };
@@ -55,6 +55,7 @@
         (import ./nix/overlays/darwin-compile-fixes.nix)
         (import ./nix/overlays/cargo-honggfuzz.nix)
         (import ./nix/overlays/trustedcoin.nix)
+        (import ./nix/overlays/sqlcipher-static.nix)
       ];
     in
     {
@@ -117,6 +118,14 @@
             linker.wild.enable = true;
 
             toolchain.channel = "stable";
+            rust.rustfmt.content = ''
+              group_imports = "StdExternalCrate"
+              wrap_comments = true
+              format_code_in_doc_comments = true
+              imports_granularity = "Module"
+              edition = "2024"
+              style_edition = "2024"
+            '';
 
             toolchain.components = [
               "rustc"
@@ -321,7 +330,7 @@
                     pkgs.cargo-deny
                     pkgs.cargo-sort
                     pkgs.parallel
-                    pkgs.nixfmt-rfc-style
+                    pkgs.nixfmt
                     pkgs.just
                     pkgs.time
                     pkgs.gawk
@@ -338,11 +347,11 @@
                     pkgs.git
 
                     # Nix
-                    pkgs.nixfmt-rfc-style
+                    pkgs.nixfmt
                     pkgs.shellcheck
                     pkgs.nil
                     pkgs.convco
-                    pkgs.nodePackages.bash-language-server
+                    pkgs.bash-language-server
                   ]
                   ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [ pkgs.semgrep ]
                   ++ lib.optionals (!stdenv.isDarwin) [

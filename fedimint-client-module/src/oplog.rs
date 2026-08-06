@@ -3,12 +3,15 @@ use std::future;
 use std::time::SystemTime;
 
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 use futures::{StreamExt, stream};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -63,22 +66,54 @@ pub trait IOperationLog {
         operation_meta: serde_json::Value,
     );
 
-    fn outcome_or_updates(
+    /// Wrap a module's operation update stream so that its last update is
+    /// cached as the operation's outcome — only when `is_terminal` reports
+    /// that update as a final state of the operation. Outcome resolution
+    /// (returning a cached outcome instead of a stream) happens in the typed
+    /// caller ([`crate::module::ClientContext::outcome_or_updates`]), which
+    /// can deserialize the cached value into the module's update type and
+    /// fall back to this stream when that fails.
+    fn caching_operation_update_stream(
         &self,
-        db: &Database,
         operation_id: OperationId,
-        operation_log_entry: OperationLogEntry,
-        stream_gen: Box<dyn FnOnce() -> BoxStream<'static, serde_json::Value>>,
-    ) -> UpdateStreamOrOutcome<serde_json::Value>;
+        stream_gen: Box<maybe_add_send!(dyn FnOnce() -> BoxStream<'static, serde_json::Value>)>,
+        is_terminal: Box<maybe_add_send_sync!(dyn Fn(&serde_json::Value) -> bool)>,
+    ) -> BoxStream<'static, serde_json::Value>;
 }
 
 /// Represents the outcome of an operation, combining both the outcome value and
 /// its timestamp
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OperationOutcome {
     pub time: SystemTime,
     pub outcome: JsonStringed,
+}
+
+impl Encodable for OperationOutcome {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        encode_legacy_system_time(&self.time, writer)?;
+        self.outcome.consensus_encode(writer)
+    }
+}
+
+impl Decodable for OperationOutcome {
+    fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            time: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(reader, modules),
+                "Decoding named block field: OperationOutcome{ ... time ... }",
+            )?,
+            outcome: decode_field_from_finite_reader(
+                reader,
+                modules,
+                "Decoding named block field: OperationOutcome{ ... outcome ... }",
+            )?,
+        })
+    }
 }
 
 /// Represents an operation triggered by a user, typically related to sending or

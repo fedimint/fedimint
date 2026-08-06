@@ -1355,18 +1355,32 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     assert_eq!(transactions.0.len(), 10);
 
     // Verify filtering by `EventKind` works
-    let transactions = gateway
-        .handle_payment_log_msg(PaymentLogPayload {
-            end_position: None,
-            pagination_size: 20,
-            federation_id: fed2.id(),
-            event_kinds: vec![
-                IncomingPaymentSucceeded::KIND,
-                CompleteLightningPaymentSucceeded::KIND,
-            ],
-        })
-        .await?;
-    assert_eq!(transactions.0.len(), 2);
+    retry(
+        "Get filtered transactions",
+        backoff_util::custom_backoff(Duration::ZERO, Duration::ZERO, Some(10)),
+        || async {
+            let transactions = gateway
+                .handle_payment_log_msg(PaymentLogPayload {
+                    end_position: None,
+                    pagination_size: 20,
+                    federation_id: fed2.id(),
+                    event_kinds: vec![
+                        IncomingPaymentSucceeded::KIND,
+                        CompleteLightningPaymentSucceeded::KIND,
+                    ],
+                })
+                .await?;
+            if transactions.0.len() == 2 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!(
+                    "Invalid number of transactions: {}, expected 2",
+                    transactions.0.len()
+                ))
+            }
+        },
+    )
+    .await?;
 
     Ok(())
 }

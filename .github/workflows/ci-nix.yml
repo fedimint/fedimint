@@ -398,7 +398,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
@@ -432,7 +432,7 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
       - name: Login to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
@@ -673,7 +673,7 @@ jobs:
           path: "bins/**"
 
       - name: Release Binaries
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "bins/**"
@@ -711,7 +711,7 @@ jobs:
 
       - name: Release DEB packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -726,7 +726,7 @@ jobs:
 
       - name: Release RPM packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -770,229 +770,6 @@ jobs:
           else
             echo "SUCCESS: NixOS system is $age_days days old (within $MAX_AGE_DAYS day limit)"
           fi
-
-  start9:
-    if: github.repository == 'fedimint/fedimint' && github.ref_type == 'tag'
-    name: "Build fedimintd.s9pk"
-    permissions:
-      contents: write # softprops/action-gh-release attaches the .s9pk to the release
-    needs: manifest
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    env:
-      # Strip refs/tags/ to get the bare tag (e.g. v0.11.0-beta.1).
-      # Avoids accidentally using a branch name if the guard is ever loosened.
-      TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-      IS_PRERELEASE: ${{
-          contains(github.ref_name, 'beta') ||
-          contains(github.ref_name, 'rc')
-        }}
-    steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "20"
-      - name: Install system dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          sudo apt-get install -y git build-essential openssl libssl-dev libc6-dev clang libclang-dev ca-certificates curl
-      - name: Install yq
-        run: |
-          curl -sS https://webi.sh/yq | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - name: Install deno
-        run: |
-          curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
-      # md-packer's ICU dependencies require rustc 1.86+
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          toolchain: "1.86.0"
-      - name: Install cargo tools
-        run: |
-          # web-static-pack-packer 0.5.2 requires rustc 1.88+
-          cargo install --force --locked toml-cli "web-static-pack-packer@0.5.0"
-          cargo install --git=https://github.com/Start9Labs/md-packer.git --branch=main
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      - name: Checkout start-os SDK
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: Start9Labs/start-os
-          ref: v0.3.5.1
-          submodules: recursive
-      - name: Cache start-sdk
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: cache
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-${{ runner.arch }}-start-sdk-${{ hashFiles('**/install-sdk.sh') }}
-      - name: Build start-sdk
-        run: |
-          if [ -z "$(command -v start-sdk)" ]; then
-            export RUSTFLAGS=""
-            export OS_ARCH=$(uname -m)
-            # Several git deps pinned by start-os v0.3.5.1 (Start9Labs/avahi-sys and
-            # Start9Labs/jsonpath) were deleted upstream, breaking the s9pk build.
-            # Redirect them to fedimint-controlled mirrors of the same commits.
-            # See fedimint/fedimint#8810.
-            git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
-            git config --global url."https://github.com/fedimint/jsonpath".insteadOf "https://github.com/Start9Labs/jsonpath"
-            export CARGO_NET_GIT_FETCH_WITH_CLI=true
-            mkdir -p web/dist/static
-            ./check-git-hash.sh
-            cargo update -p time --manifest-path=core/Cargo.toml
-            cd core && ./install-sdk.sh
-            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          fi
-      - name: Checkout fedimint
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Stamp version from tag
-        working-directory: fedimint-startos
-        run: |
-          VERSION="${TAG_NAME#v}"
-          yq -i ".version = \"${VERSION}\"" manifest.yaml
-          yq -i ".release-notes = \"Read more about the release [here](https://github.com/fedimint/fedimint/releases/tag/${TAG_NAME})\n\"" manifest.yaml
-          sed -i "s/\"0.0.0-dev\"/\"${VERSION}\"/" scripts/procedures/migrations.ts
-      - name: Build s9pk
-        id: build
-        working-directory: fedimint-startos
-        run: |
-          start-sdk init
-          make FEDIMINTD_TAG="${TAG_NAME}"
-          VERSION=$(yq -oy '.version' manifest.yaml)
-          mv fedimintd.s9pk "fedimintd-v${VERSION}.s9pk"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-      - name: Upload s9pk
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: fedimintd-v${{ steps.build.outputs.version }}.s9pk
-          path: fedimint-startos/fedimintd-v*.s9pk
-      - name: Attach to release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: fedimint-startos/fedimintd-v*.s9pk
-          prerelease: ${{ env.IS_PRERELEASE }}
-
-  start9-gatewayd:
-    if: github.repository == 'fedimint/fedimint' && github.ref_type == 'tag'
-    name: "Build fedimint-gatewayd.s9pk"
-    permissions:
-      contents: write # softprops/action-gh-release attaches the .s9pk to the release
-    needs: manifest
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    env:
-      TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-      IS_PRERELEASE: ${{
-          contains(github.ref_name, 'beta') ||
-          contains(github.ref_name, 'rc')
-        }}
-    steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "20"
-      - name: Install system dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo apt-get update
-          sudo apt-get install -y git build-essential openssl libssl-dev libc6-dev clang libclang-dev ca-certificates curl
-      - name: Install yq
-        run: |
-          curl -sS https://webi.sh/yq | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - name: Install deno
-        run: |
-          curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
-      # md-packer's ICU dependencies require rustc 1.86+
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          toolchain: "1.86.0"
-      - name: Install cargo tools
-        run: |
-          # web-static-pack-packer 0.5.2 requires rustc 1.88+
-          cargo install --force --locked toml-cli "web-static-pack-packer@0.5.0"
-          cargo install --git=https://github.com/Start9Labs/md-packer.git --branch=main
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      - name: Checkout start-os SDK
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: Start9Labs/start-os
-          ref: v0.3.5.1
-          submodules: recursive
-      - name: Cache start-sdk
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: cache
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-${{ runner.arch }}-start-sdk-${{ hashFiles('**/install-sdk.sh') }}
-      - name: Build start-sdk
-        run: |
-          if [ -z "$(command -v start-sdk)" ]; then
-            export RUSTFLAGS=""
-            export OS_ARCH=$(uname -m)
-            # Several git deps pinned by start-os v0.3.5.1 (Start9Labs/avahi-sys and
-            # Start9Labs/jsonpath) were deleted upstream, breaking the s9pk build.
-            # Redirect them to fedimint-controlled mirrors of the same commits.
-            # See fedimint/fedimint#8810.
-            git config --global url."https://github.com/fedimint/avahi-sys".insteadOf "https://github.com/Start9Labs/avahi-sys"
-            git config --global url."https://github.com/fedimint/jsonpath".insteadOf "https://github.com/Start9Labs/jsonpath"
-            export CARGO_NET_GIT_FETCH_WITH_CLI=true
-            mkdir -p web/dist/static
-            ./check-git-hash.sh
-            cargo update -p time --manifest-path=core/Cargo.toml
-            cd core && ./install-sdk.sh
-            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          fi
-      - name: Checkout fedimint
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Stamp version from tag
-        working-directory: gatewayd-startos
-        run: |
-          VERSION="${TAG_NAME#v}"
-          yq -i ".version = \"${VERSION}\"" manifest.yaml
-          yq -i ".release-notes = \"Read more about the release [here](https://github.com/fedimint/fedimint/releases/tag/${TAG_NAME})\n\"" manifest.yaml
-      - name: Build s9pk
-        id: build
-        working-directory: gatewayd-startos
-        run: |
-          start-sdk init
-          make GATEWAYD_TAG="${TAG_NAME}"
-          VERSION=$(yq -oy '.version' manifest.yaml)
-          mv fedimint-gatewayd.s9pk "fedimint-gatewayd-v${VERSION}.s9pk"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-      - name: Upload s9pk
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: fedimint-gatewayd-v${{ steps.build.outputs.version }}.s9pk
-          path: gatewayd-startos/fedimint-gatewayd-v*.s9pk
-      - name: Attach to release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: gatewayd-startos/fedimint-gatewayd-v*.s9pk
-          prerelease: ${{ env.IS_PRERELEASE }}
 
   status-pr:
     name: Status (PR)

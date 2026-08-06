@@ -441,23 +441,12 @@ impl From<DatabaseError> for ApiError {
 pub struct ApiEndpointContext {
     db: Database,
     has_auth: bool,
-    request_auth: Option<ApiAuth>,
 }
 
 impl ApiEndpointContext {
     /// `db` should be isolated.
-    pub fn new(db: Database, has_auth: bool, request_auth: Option<ApiAuth>) -> Self {
-        Self {
-            db,
-            has_auth,
-            request_auth,
-        }
-    }
-
-    /// Returns the auth set on the request (regardless of whether it was
-    /// correct)
-    pub fn request_auth(&self) -> Option<ApiAuth> {
-        self.request_auth.clone()
+    pub fn new(db: Database, has_auth: bool) -> Self {
+        Self { db, has_auth }
     }
 
     /// Whether the request was authenticated as the guardian who controls this
@@ -514,14 +503,16 @@ pub trait TypedApiEndpoint {
 
 pub use serde_json;
 
+/// Declares an API endpoint that does not require guardian authentication.
+///
 /// # Example
 ///
 /// ```rust
 /// # use fedimint_core::module::ApiVersion;
-/// # use fedimint_core::module::{api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
+/// # use fedimint_core::module::{public_api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
 /// struct State;
 ///
-/// let _: ApiEndpoint<State> = api_endpoint! {
+/// let _: ApiEndpoint<State> = public_api_endpoint! {
 ///     "/foobar",
 ///     ApiVersion::new(0, 3),
 ///     async |state: &State, _dbtx, params: ()| -> i32 {
@@ -530,7 +521,7 @@ pub use serde_json;
 /// };
 /// ```
 #[macro_export]
-macro_rules! __api_endpoint {
+macro_rules! __public_api_endpoint {
     (
         $path:expr_2021,
         // API version this endpoint was introduced in, at the current consensus level.
@@ -561,7 +552,52 @@ macro_rules! __api_endpoint {
     }};
 }
 
-pub use __api_endpoint as api_endpoint;
+pub use __public_api_endpoint as public_api_endpoint;
+
+/// Declares an API endpoint that verifies guardian authentication before
+/// entering the handler body.
+///
+/// An optional token argument between the context and request binds the
+/// verified [`GuardianAuthToken`](crate::net::auth::GuardianAuthToken) for
+/// handlers that pass the proof of authentication to privileged inner
+/// functions.
+#[macro_export]
+macro_rules! __admin_api_endpoint {
+    (
+        $path:expr_2021,
+        $version_introduced:expr_2021,
+        async |$state:ident: &$state_ty:ty, $context:ident, $auth:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+    ) => {{
+        $crate::module::public_api_endpoint! {
+            $path,
+            $version_introduced,
+            async |$state: &$state_ty, $context, $param: $param_ty| -> $resp_ty {
+                // Match normal function-parameter behavior: duplicate binder
+                // names must fail to compile instead of shadowing.
+                #[allow(unused_variables)]
+                let _ = |$state: (), $context: (), $auth: (), $param: ()| {};
+                let $auth = $crate::net::auth::check_auth($context)?;
+                $body
+            }
+        }
+    }};
+    (
+        $path:expr_2021,
+        $version_introduced:expr_2021,
+        async |$state:ident: &$state_ty:ty, $context:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+    ) => {{
+        $crate::module::public_api_endpoint! {
+            $path,
+            $version_introduced,
+            async |$state: &$state_ty, $context, $param: $param_ty| -> $resp_ty {
+                $crate::net::auth::check_auth($context)?;
+                $body
+            }
+        }
+    }};
+}
+
+pub use __admin_api_endpoint as admin_api_endpoint;
 
 use self::registry::ModuleDecoderRegistry;
 

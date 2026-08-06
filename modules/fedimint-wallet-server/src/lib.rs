@@ -61,9 +61,9 @@ use fedimint_core::envs::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, admin_api_endpoint,
+    public_api_endpoint,
 };
-use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
@@ -117,11 +117,17 @@ use crate::db::{
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2,
+    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2, migrate_to_v3,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
 mod metrics;
+
+/// Output index of the change output in every peg-out transaction we build.
+///
+/// `StatelessWallet::create_tx` always emits `[destination, change]`, and we
+/// always pay ourselves change to avoid losing value to dust.
+pub const PEG_OUT_CHANGE_VOUT: u32 = 1;
 
 #[derive(Debug, Clone)]
 pub struct WalletInit;
@@ -484,6 +490,10 @@ impl ServerModuleInit for WalletInit {
         migrations.insert(
             DatabaseVersion(1),
             Box::new(|ctx| migrate_to_v2(ctx).boxed()),
+        );
+        migrations.insert(
+            DatabaseVersion(2),
+            Box::new(|ctx| migrate_to_v3(ctx).boxed()),
         );
         migrations
     }
@@ -895,6 +905,20 @@ impl ServerModule for Wallet {
             dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
         }
 
+        // Our own change output pays to the peg-in descriptor, so it is
+        // indistinguishable from a user deposit. Record it as claimed now, in the same
+        // dbtx that spends the inputs, so it is never a peg-in candidate. Doing this at
+        // confirmation time instead would leave it claimable while the transaction is
+        // in flight.
+        dbtx.insert_entry(
+            &ClaimedPegInOutpointKey(bitcoin::OutPoint {
+                txid,
+                vout: PEG_OUT_CHANGE_VOUT,
+            }),
+            &(),
+        )
+        .await;
+
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .await;
 
@@ -960,7 +984,7 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
@@ -969,14 +993,14 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 BLOCK_COUNT_LOCAL_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, _context, _params: ()| -> Option<u32> {
                     Ok(module.get_block_count().ok())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 PEG_OUT_FEES_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (Address<NetworkUnchecked>, u64)| -> Option<PegOutFees> {
@@ -1011,19 +1035,18 @@ impl ServerModule for Wallet {
                     }
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 BITCOIN_KIND_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, _context, _params: ()| -> String {
                     Ok(module.btc_rpc.get_bitcoin_rpc_config().kind)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 BITCOIN_RPC_CONFIG_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> BitcoinRpcConfig {
-                    check_auth(context)?;
-                    let config = module.btc_rpc.get_bitcoin_rpc_config();
+                        let config = module.btc_rpc.get_bitcoin_rpc_config();
 
                     // we need to remove auth, otherwise we'll send over the wire
                     let without_auth = config.url.clone().without_auth().map_err(|()| {
@@ -1036,7 +1059,7 @@ impl ServerModule for Wallet {
                     })
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 WALLET_SUMMARY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
@@ -1045,7 +1068,7 @@ impl ServerModule for Wallet {
                     Ok(module.get_wallet_summary(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
@@ -1054,18 +1077,17 @@ impl ServerModule for Wallet {
                     Ok(module.consensus_module_consensus_version(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |_module: &Wallet, _context, _params: ()| -> ModuleConsensusVersion {
                     Ok(MODULE_CONSENSUS_VERSION)
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |_module: &Wallet, context, _params: ()| -> () {
-                    check_auth(context)?;
 
                     let db = context.db();
                     let mut dbtx = db.begin_transaction().await;
@@ -1074,7 +1096,7 @@ impl ServerModule for Wallet {
                     Ok(())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 UTXO_CONFIRMED_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, outpoint: bitcoin::OutPoint| -> bool {
@@ -1083,7 +1105,7 @@ impl ServerModule for Wallet {
                     Ok(module.is_utxo_confirmed(&mut dbtx, outpoint).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_COUNT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, _params: ()| -> u64 {
@@ -1092,7 +1114,7 @@ impl ServerModule for Wallet {
                     Ok(get_recovery_count(&mut dbtx).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, range: (u64, u64)| -> Vec<RecoveryItem> {
@@ -2177,7 +2199,7 @@ impl StatelessWallet<'_> {
         }
 
         // We always pay ourselves change back to ensure that we don't lose anything due
-        // to dust
+        // to dust. The change output is always at index `PEG_OUT_CHANGE_VOUT`.
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {

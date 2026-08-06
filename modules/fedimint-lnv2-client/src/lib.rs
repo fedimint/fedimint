@@ -9,7 +9,7 @@ pub use fedimint_lnv2_common as common;
 mod api;
 #[cfg(feature = "cli")]
 mod cli;
-mod db;
+pub mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
@@ -588,7 +588,7 @@ impl LightningClientModule {
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
-        if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT) {
+        if !send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT) {
             return Err(SendPaymentError::GatewayFeeExceedsLimit);
         }
 
@@ -738,7 +738,14 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let module_api = self.module_api.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                SendOperationState::Funding
+                | SendOperationState::Funded
+                | SendOperationState::Refunding => false,
+                SendOperationState::Success(_)
+                | SendOperationState::Refunded
+                | SendOperationState::Failure => true,
+            }, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
@@ -969,7 +976,7 @@ impl LightningClientModule {
         let send_fee = routing_info.send_fee_default;
 
         anyhow::ensure!(
-            send_fee.le(&PaymentFee::SEND_FEE_LIMIT),
+            send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT),
             "Gateway's default send fee exceeds the limit"
         );
 
@@ -1019,7 +1026,10 @@ impl LightningClientModule {
                 .map_err(ReceiveError::SelectGateway)?,
         };
 
-        if !routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT) {
+        if !routing_info
+            .receive_fee
+            .is_within(&PaymentFee::RECEIVE_FEE_LIMIT)
+        {
             return Err(ReceiveError::GatewayFeeExceedsLimit);
         }
 
@@ -1154,7 +1164,12 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
+                ReceiveOperationState::Pending | ReceiveOperationState::Claiming => false,
+                ReceiveOperationState::Expired
+                | ReceiveOperationState::Claimed
+                | ReceiveOperationState::Failure => true,
+            }, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {

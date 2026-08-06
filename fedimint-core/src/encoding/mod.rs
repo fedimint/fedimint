@@ -281,6 +281,90 @@ pub trait Decodable: Sized {
     }
 }
 
+/// Encodes a timestamp as the legacy `(seconds, nanoseconds)` `SystemTime`
+/// representation.
+///
+/// Existing encoded types use this only to preserve their stored
+/// representation. It panics when `time` precedes the Unix epoch.
+pub fn encode_legacy_system_time<W: std::io::Write>(
+    time: &SystemTime,
+    writer: &mut W,
+) -> Result<(), std::io::Error> {
+    let duration = time
+        .duration_since(UNIX_EPOCH)
+        .expect("timestamps before the Unix epoch are unsupported");
+    duration.consensus_encode_dyn(writer)
+}
+
+/// Decodes a timestamp from the legacy `(seconds, nanoseconds)` representation.
+///
+/// Existing encoded types use this only to preserve their stored
+/// representation.
+pub fn decode_legacy_system_time_from_finite_reader<D: std::io::Read>(
+    decoder: &mut D,
+    modules: &ModuleDecoderRegistry,
+) -> Result<SystemTime, DecodeError> {
+    let duration = Duration::consensus_decode_partial_from_finite_reader(decoder, modules)?;
+    Ok(UNIX_EPOCH + duration)
+}
+
+/// Encodes an optional timestamp in the legacy `SystemTime` representation.
+///
+/// Existing encoded types use this only to preserve their stored
+/// representation.
+pub fn encode_legacy_option_system_time<W: std::io::Write>(
+    time: &Option<SystemTime>,
+    writer: &mut W,
+) -> Result<(), std::io::Error> {
+    match time {
+        Some(time) => {
+            1u8.consensus_encode(writer)?;
+            encode_legacy_system_time(time, writer)
+        }
+        None => 0u8.consensus_encode(writer),
+    }
+}
+
+/// Decodes an optional timestamp in the legacy `SystemTime` representation.
+///
+/// Existing encoded types use this only to preserve their stored
+/// representation.
+pub fn decode_legacy_option_system_time_from_finite_reader<D: std::io::Read>(
+    decoder: &mut D,
+    modules: &ModuleDecoderRegistry,
+) -> Result<Option<SystemTime>, DecodeError> {
+    match u8::consensus_decode_partial_from_finite_reader(decoder, modules)? {
+        0 => Ok(None),
+        1 => Ok(Some(decode_legacy_system_time_from_finite_reader(
+            decoder, modules,
+        )?)),
+        _ => Err(DecodeError::from_str(
+            "Invalid flag for option enum, expected 0 or 1",
+        )),
+    }
+}
+
+/// Decodes a field from a finite reader and annotates errors with its schema
+/// context.
+pub fn decode_field_from_finite_reader<T: Decodable, D: std::io::Read>(
+    decoder: &mut D,
+    modules: &ModuleDecoderRegistry,
+    context: &'static str,
+) -> Result<T, DecodeError> {
+    with_decoding_context(
+        T::consensus_decode_partial_from_finite_reader(decoder, modules),
+        context,
+    )
+}
+
+/// Adds schema context to an error returned while decoding a field.
+pub fn with_decoding_context<T>(
+    result: Result<T, DecodeError>,
+    context: &'static str,
+) -> Result<T, DecodeError> {
+    result.map_err(|error| DecodeError::new_custom(anyhow::Error::new(error).context(context)))
+}
+
 impl Encodable for SafeUrl {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.to_string().consensus_encode(writer)
@@ -528,23 +612,6 @@ impl Decodable for String {
             d, modules,
         )?)
         .map_err(DecodeError::from_err)
-    }
-}
-
-impl Encodable for SystemTime {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let duration = self.duration_since(UNIX_EPOCH).expect("valid duration");
-        duration.consensus_encode_dyn(writer)
-    }
-}
-
-impl Decodable for SystemTime {
-    fn consensus_decode_partial<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let duration = Duration::consensus_decode_partial(d, modules)?;
-        Ok(UNIX_EPOCH + duration)
     }
 }
 
@@ -943,12 +1010,149 @@ mod tests {
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestTupleStruct(Vec<u8>, u32);
 
+    #[derive(Debug)]
+    struct TestFiniteReader;
+
+    impl Decodable for TestFiniteReader {
+        fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
+            reader: &mut R,
+            modules: &ModuleDecoderRegistry,
+        ) -> Result<Self, DecodeError> {
+            let _: Vec<u8> = decode_field_from_finite_reader(
+                reader,
+                modules,
+                "Decoding tuple block TestFiniteReader field field_0",
+            )?;
+            let _: Vec<u8> = decode_field_from_finite_reader(
+                reader,
+                modules,
+                "Decoding tuple block TestFiniteReader field field_1",
+            )?;
+            Ok(Self)
+        }
+    }
+
     #[test_log::test]
     fn test_derive_tuple_struct() {
         let reference = TestTupleStruct(vec![1, 2, 3], 42);
         let bytes = [3, 1, 2, 3, 42];
 
         test_roundtrip_expected(&reference, &bytes);
+    }
+
+    #[test_log::test]
+    fn test_legacy_system_time_encoding() {
+        let time = UNIX_EPOCH + Duration::new(42, 100);
+        let expected = [42, 100];
+        let mut bytes = vec![];
+        encode_legacy_system_time(&time, &mut bytes).expect("encoding to a vector cannot fail");
+        assert_eq!(bytes, expected);
+
+        let mut cursor = Cursor::new(expected);
+        let decoded = decode_legacy_system_time_from_finite_reader(
+            &mut cursor,
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect("valid encoding");
+        assert_eq!(decoded, time);
+    }
+
+    #[test_log::test]
+    fn test_client_backup_snapshot_uses_legacy_system_time_encoding() {
+        let reference = crate::backup::ClientBackupSnapshot {
+            timestamp: UNIX_EPOCH + Duration::new(42, 100),
+            data: vec![1, 2, 3],
+        };
+        let expected = [42, 100, 3, 1, 2, 3];
+
+        test_roundtrip_expected(&reference, &expected);
+    }
+
+    #[test_log::test]
+    fn test_legacy_optional_system_time_encoding() {
+        let time = Some(UNIX_EPOCH + Duration::new(42, 100));
+        let expected = [1, 42, 100];
+        let mut bytes = vec![];
+        encode_legacy_option_system_time(&time, &mut bytes)
+            .expect("encoding to a vector cannot fail");
+        assert_eq!(bytes, expected);
+
+        let mut cursor = Cursor::new(expected);
+        let decoded = decode_legacy_option_system_time_from_finite_reader(
+            &mut cursor,
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect("valid encoding");
+        assert_eq!(decoded, time);
+    }
+
+    #[test_log::test]
+    fn test_legacy_optional_system_time_encoding_none() {
+        let mut bytes = vec![];
+        encode_legacy_option_system_time(&None, &mut bytes)
+            .expect("encoding to a vector cannot fail");
+        assert_eq!(bytes, [0]);
+
+        let mut cursor = Cursor::new(bytes);
+        let decoded = decode_legacy_option_system_time_from_finite_reader(
+            &mut cursor,
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect("valid encoding");
+        assert_eq!(decoded, None);
+    }
+
+    #[test_log::test]
+    fn test_legacy_optional_system_time_encoding_rejects_invalid_flag() {
+        let error = decode_legacy_option_system_time_from_finite_reader(
+            &mut Cursor::new([2]),
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect_err("invalid option flag must fail");
+        assert_eq!(
+            error.to_string(),
+            "Invalid flag for option enum, expected 0 or 1"
+        );
+    }
+
+    #[test_log::test]
+    fn test_legacy_system_time_field_decode_adds_context() {
+        let error = with_decoding_context(
+            decode_legacy_system_time_from_finite_reader(
+                &mut Cursor::new([42]),
+                &ModuleDecoderRegistry::default(),
+            ),
+            "Decoding named block field: Test{ ... timestamp ... }",
+        )
+        .expect_err("truncated timestamp must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Decoding named block field: Test{ ... timestamp ... }")
+        );
+    }
+
+    #[test_log::test]
+    fn test_finite_reader_shares_decode_limit_between_fields() {
+        let field = vec![0u8; MAX_DECODE_SIZE / 2];
+        let mut bytes = vec![];
+        field
+            .consensus_encode(&mut bytes)
+            .expect("encoding to a vector cannot fail");
+        field
+            .consensus_encode(&mut bytes)
+            .expect("encoding to a vector cannot fail");
+
+        let error = TestFiniteReader::consensus_decode_partial(
+            &mut Cursor::new(bytes),
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect_err("both fields cannot exceed one decode limit");
+        assert!(
+            error
+                .to_string()
+                .contains("Decoding tuple block TestFiniteReader field field_1")
+        );
     }
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
@@ -973,11 +1177,6 @@ mod tests {
         for (reference, bytes) in test_cases {
             test_roundtrip_expected(&reference, &bytes);
         }
-    }
-
-    #[test_log::test]
-    fn test_systemtime() {
-        test_roundtrip(&fedimint_core::time::now());
     }
 
     #[test]

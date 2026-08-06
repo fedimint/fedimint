@@ -4,7 +4,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::similar_names)]
 
-mod db;
+pub mod db;
 
 use std::collections::BTreeMap;
 
@@ -23,7 +23,7 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::{
     Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
@@ -504,7 +504,7 @@ impl ServerModule for Mint {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 SIGNATURE_SHARES_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: fedimint_core::OutPointRange| -> Vec<BlindedSignatureShare> {
@@ -513,7 +513,7 @@ impl ServerModule for Mint {
                     Ok(get_signature_shares(&mut dbtx, range).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 SIGNATURE_SHARES_RECOVERY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, messages: Vec<tbs::BlindedMessage>| -> Vec<BlindedSignatureShare> {
@@ -522,7 +522,7 @@ impl ServerModule for Mint {
                     get_signature_shares_recovery(&mut dbtx, messages).await
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> Vec<RecoveryItem> {
@@ -531,7 +531,7 @@ impl ServerModule for Mint {
                     Ok(get_recovery_slice(&mut dbtx, range).await)
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_SLICE_HASH_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> bitcoin::hashes::sha256::Hash {
@@ -540,7 +540,7 @@ impl ServerModule for Mint {
                     Ok(get_recovery_slice(&mut dbtx, range).await.consensus_hash())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 RECOVERY_COUNT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, _params: ()| -> u64 {

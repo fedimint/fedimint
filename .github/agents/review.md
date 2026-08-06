@@ -162,10 +162,9 @@ blocker — even if the change is semantically correct.
   of a hard error on older versions.
 - Public API changes that integrators (Fedi team, gateways, UI packages)
   depend on should be called out — consider cc'ing integrators on the PR.
-- Docker image tags, StartOS manifests, umbrel packages, and nix flake pins
-  are load-bearing. Invalid YAML, wrong env-var names (`FM_DEFAULT_ESPLORA_API`
-  vs `_URL`), misusing `EXPOSE`, missing restart policies, and incorrect
-  StartOS emver bumps are common issues.
+- Docker image tags, umbrel packages, and nix flake pins are load-bearing.
+  Invalid YAML, wrong env-var names (`FM_DEFAULT_ESPLORA_API` vs `_URL`),
+  misusing `EXPOSE`, and missing restart policies are common issues.
 - `sort -V` ordering is buggy for rc-suffixed tags; the project uses
   `s/-/~` to fix it in shell scripts.
 

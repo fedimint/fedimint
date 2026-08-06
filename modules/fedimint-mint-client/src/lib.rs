@@ -300,8 +300,26 @@ impl OOBNotes {
         for notes in &self.0 {
             match notes {
                 OOBNotesPart::Notes(notes) => {
-                    let notes_json = serde_json::to_value(notes)?;
-                    notes_map.insert("notes".to_string(), notes_json);
+                    let notes_json: serde_json::Map<String, serde_json::Value> = notes
+                        .iter()
+                        .map(|(amount, notes_vec)| {
+                            let notes_with_nonce: Vec<serde_json::Value> = notes_vec
+                                .iter()
+                                .map(|note| {
+                                    serde_json::json!({
+                                        "signature": note.signature,
+                                        "spend_key": note.spend_key,
+                                        "nonce": note.nonce(),
+                                    })
+                                })
+                                .collect();
+                            (
+                                amount.msats.to_string(),
+                                serde_json::Value::Array(notes_with_nonce),
+                            )
+                        })
+                        .collect();
+                    notes_map.insert("notes".to_string(), serde_json::Value::Object(notes_json));
                 }
                 OOBNotesPart::FederationIdPrefix(prefix) => {
                     notes_map.insert(
@@ -2074,7 +2092,14 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                ReissueExternalNotesState::Created | ReissueExternalNotesState::Issuing => false,
+                ReissueExternalNotesState::Done | ReissueExternalNotesState::Failed(_) => true,
+            },
+            move || {
             stream! {
                 yield ReissueExternalNotesState::Created;
 
@@ -2548,9 +2573,17 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| match state {
+                SpendOOBState::Created | SpendOOBState::UserCanceledProcessing => false,
+                SpendOOBState::UserCanceledSuccess
+                | SpendOOBState::UserCanceledFailure
+                | SpendOOBState::Success
+                | SpendOOBState::Refunded => true,
+            },
+            move || {
                 stream! {
                     yield SpendOOBState::Created;
 
@@ -2609,7 +2642,8 @@ impl MintClientModule {
                         }
                     }
                 }
-            }))
+            },
+        ))
     }
 
     async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {

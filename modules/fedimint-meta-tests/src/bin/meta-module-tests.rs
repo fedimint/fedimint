@@ -4,7 +4,8 @@ use anyhow::{Result, bail};
 use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
-use devimint::util::poll_simple;
+use devimint::util::{FedimintdCmd, poll_simple};
+use devimint::version_constants::VERSION_0_13_0_ALPHA;
 use fedimint_core::PeerId;
 use serde_json::json;
 use tracing::{info, warn};
@@ -34,6 +35,37 @@ async fn sanity_tests() -> anyhow::Result<()> {
 
             async fn get_consensus(client: &Client) -> anyhow::Result<serde_json::Value> {
                 cmd!(client, "module", "meta", "get").out_json().await
+            }
+
+            // Older fedimintd versions do not enforce authentication for these
+            // endpoints, so only assert the new behavior when testing a current server.
+            if *VERSION_0_13_0_ALPHA <= FedimintdCmd::version_or_default().await {
+                cmd!(
+                    client,
+                    "--our-id",
+                    "0",
+                    "--password",
+                    "incorrect",
+                    "module",
+                    "meta",
+                    "get-submissions"
+                )
+                .assert_error_contains("Invalid authorization")
+                .await?;
+
+                cmd!(
+                    client,
+                    "--our-id",
+                    "0",
+                    "--password",
+                    "incorrect",
+                    "module",
+                    "meta",
+                    "submit",
+                    "\"unauthorized\""
+                )
+                .assert_error_contains("Invalid authorization")
+                .await?;
             }
 
             async fn get_submissions(

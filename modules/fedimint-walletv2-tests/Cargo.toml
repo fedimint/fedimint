@@ -31,6 +31,7 @@ fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-server-core = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-walletv2-client = { workspace = true }
 fedimint-walletv2-common = { workspace = true }

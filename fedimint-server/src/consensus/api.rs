@@ -40,12 +40,13 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
-    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
+    admin_api_endpoint, public_api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
-use fedimint_core::net::auth::{GuardianAuthToken, check_auth};
+use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
     SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
@@ -69,7 +70,9 @@ use tracing::{debug, info, warn};
 
 use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
-use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
+use crate::consensus::db::{
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey,
+};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -115,8 +118,9 @@ impl ConsensusApi {
         self.force_api_secret.clone()
     }
 
-    // we want to return an error if and only if the submitted transaction is
-    // invalid and will be rejected if we were to submit it to consensus
+    // Submit a transaction and long-poll until it is either accepted by
+    // consensus or becomes invalid; we return an error if and only if the
+    // transaction is invalid against the current consensus state
     pub async fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -152,6 +156,12 @@ impl ConsensusApi {
             debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
         })?;
 
+        let mut session_index = get_finished_session_count_static(&mut dbtx).await;
+
+        let mut item_index = dbtx.find_by_prefix(&AcceptedItemPrefix).await.count().await as u64;
+
+        drop(dbtx);
+
         let _ = self
             .submission_sender
             .send(ConsensusItem::Transaction(transaction.clone()))
@@ -160,7 +170,61 @@ impl ConsensusApi {
                 warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
             });
 
-        Ok(txid)
+        loop {
+            let accepted_item_key = AcceptedItemKey(item_index);
+            let signed_session_outcome_key = SignedSessionOutcomeKey(session_index);
+
+            let session_completed = tokio::select! {
+                _ = self.db.wait_key_exists(&accepted_item_key) => false,
+                _ = self.db.wait_key_exists(&signed_session_outcome_key) => true,
+            };
+
+            let mut dbtx = self.db.begin_transaction_nc().await;
+
+            // Our transaction may be the item that was just accepted, in which
+            // case revalidation would fail against its own state changes
+            if dbtx
+                .get_value(&AcceptedTransactionKey(txid))
+                .await
+                .is_some()
+            {
+                return Ok(txid);
+            }
+
+            dbtx.ignore_uncommitted();
+
+            process_transaction_with_dbtx(
+                self.modules.clone(),
+                &mut dbtx,
+                &transaction,
+                self.cfg.consensus.version,
+                TxProcessingMode::Submission,
+            )
+            .await
+            .inspect_err(|err| {
+                debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
+            })?;
+
+            drop(dbtx);
+
+            if session_completed {
+                // A pending transaction may have been dropped at the session
+                // boundary since the data provider is recreated every session,
+                // hence we resubmit it for the next session
+                let _ = self
+                    .submission_sender
+                    .send(ConsensusItem::Transaction(transaction.clone()))
+                    .await
+                    .inspect_err(|err| {
+                        warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
+                    });
+
+                session_index += 1;
+                item_index = 0;
+            } else {
+                item_index += 1;
+            }
+        }
     }
 
     pub async fn await_transaction(
@@ -674,10 +738,7 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
             _ => false,
         };
 
-        (
-            self,
-            ApiEndpointContext::new(db, has_auth, request.auth.clone()),
-        )
+        (self, ApiEndpointContext::new(db, has_auth))
     }
 }
 
@@ -793,14 +854,14 @@ impl IDashboardApi for ConsensusApi {
 
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
     vec![
-        api_endpoint! {
+        public_api_endpoint! {
             VERSION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
                 Ok(fedimint.api_versions_summary().to_owned())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SUBMIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<TransactionSubmissionOutcome> {
@@ -813,7 +874,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok((&TransactionSubmissionOutcome(fedimint.submit_transaction(transaction).await)).into())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             AWAIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
@@ -822,7 +883,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(tx_hash)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             AWAIT_OUTPUT_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeModuleEncoding<DynOutputOutcome> {
@@ -834,7 +895,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(outcome)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
             ApiVersion::new(0, 8),
             async |fedimint: &ConsensusApi, _context, outpoint_range: OutPointRange| -> Vec<Option<SerdeModuleEncoding<DynOutputOutcome>>> {
@@ -846,21 +907,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(outcomes)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.get_invite_code(fedimint.get_active_api_secret()).await.to_string())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             FEDERATION_ID_ENDPOINT,
             ApiVersion::new(0, 2),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.cfg.calculate_federation_id().to_string())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             CLIENT_CONFIG_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ClientConfig {
@@ -868,21 +929,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         // Helper endpoint for Admin UI that can't parse consensus encoding
-        api_endpoint! {
+        public_api_endpoint! {
             CLIENT_CONFIG_JSON_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> JsonClientConfig {
                 Ok(fedimint.client_cfg.to_json())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(legacy_consensus_config_hash(&fedimint.cfg.consensus))
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
@@ -891,21 +952,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     federation: Some(fedimint.get_federation_status().await?)
                 })}
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SETUP_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |_f: &ConsensusApi, _c, _v: ()| -> SetupStatus {
                 Ok(SetupStatus::ConsensusIsRunning)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             CONSENSUS_ORD_LATENCY_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _c, _v: ()| -> Option<Duration> {
                 Ok(*fedimint.ord_latency_receiver.borrow())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             P2P_CONNECTION_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
@@ -915,67 +976,64 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     .collect())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SESSION_COUNT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
                 Ok(fedimint.session_count().await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             AWAIT_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await.session_outcome).into())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await).into())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SESSION_STATUS_ENDPOINT,
             ApiVersion::new(0, 1),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionStatus> {
                 Ok((&SessionStatus::from(fedimint.session_status(index).await)).into())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SESSION_STATUS_V2_ENDPOINT,
             ApiVersion::new(0, 5),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncodingBase64<SessionStatusV2> {
                 Ok((&fedimint.session_status(index).await).into())
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             SHUTDOWN_ENDPOINT,
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, context, index: Option<u64>| -> () {
-                check_auth(context)?;
                 fedimint.shutdown(index);
                 Ok(())
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             AUDIT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
-                check_auth(context)?;
                 Ok(fedimint.get_federation_audit().await?)
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             GUARDIAN_CONFIG_BACKUP_ENDPOINT,
             ApiVersion::new(0, 2),
-            async |fedimint: &ConsensusApi, context, _v: ()| -> GuardianConfigBackup {
-                let auth = check_auth(context)?;
+            async |fedimint: &ConsensusApi, context, auth, _v: ()| -> GuardianConfigBackup {
                 Ok(fedimint.get_guardian_config_backup(&auth))
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             BACKUP_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
@@ -988,7 +1046,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
 
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             RECOVER_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, id: PublicKey| -> Option<ClientBackupSnapshot> {
@@ -998,76 +1056,72 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     .handle_recover_request(&mut dbtx, id).await)
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             AUTH_ENDPOINT,
             ApiVersion::new(0, 0),
             async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
-                check_auth(context)?;
                 Ok(())
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             API_ANNOUNCEMENTS_ENDPOINT,
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<PeerId, SignedApiAnnouncement> {
                 Ok(fedimint.api_announcements().await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, _context, submission: SignedApiAnnouncementSubmission| -> () {
                 fedimint.submit_api_announcement(submission.peer_id, submission.signed_api_announcement).await
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             SIGN_API_ANNOUNCEMENT_ENDPOINT,
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, context, new_url: SafeUrl| -> SignedApiAnnouncement {
-                check_auth(context)?;
                 Ok(fedimint.sign_api_announcement(new_url).await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             GUARDIAN_METADATA_ENDPOINT,
             ApiVersion::new(0, 9),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata> {
                 Ok(fedimint.guardian_metadata_list().await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             SUBMIT_GUARDIAN_METADATA_ENDPOINT,
             ApiVersion::new(0, 9),
             async |fedimint: &ConsensusApi, _context, submission: fedimint_core::net::guardian_metadata::SignedGuardianMetadataSubmission| -> () {
                 fedimint.submit_guardian_metadata(submission.peer_id, submission.signed_guardian_metadata).await
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             SIGN_GUARDIAN_METADATA_ENDPOINT,
             ApiVersion::new(0, 9),
             async |fedimint: &ConsensusApi, context, metadata: fedimint_core::net::guardian_metadata::GuardianMetadata| -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
-                check_auth(context)?;
                 Ok(fedimint.sign_guardian_metadata(metadata).await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             FEDIMINTD_VERSION_ENDPOINT,
             ApiVersion::new(0, 4),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> String {
                 Ok(fedimint.fedimintd_version())
             }
         },
-        api_endpoint! {
+        admin_api_endpoint! {
             BACKUP_STATISTICS_ENDPOINT,
             ApiVersion::new(0, 5),
             async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
-                check_auth(context)?;
                 let db = context.db();
                 let mut dbtx = db.begin_transaction_nc().await;
                 Ok(backup_statistics_static(&mut dbtx).await)
             }
         },
-        api_endpoint! {
+        public_api_endpoint! {
             CHAIN_ID_ENDPOINT,
             ApiVersion::new(0, 9),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ChainId {

@@ -2285,7 +2285,7 @@ impl IAdminGateway for Gateway {
 
             // Check if the lightning fee + transaction fee is higher than the send limit
             let send_fees = lightning_fee + transaction_fee;
-            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
+            if contains_lnv2 && !send_fees.is_within(&PaymentFee::SEND_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Total Send fees exceeded {}",
                     PaymentFee::SEND_FEE_LIMIT
@@ -2293,7 +2293,7 @@ impl IAdminGateway for Gateway {
             }
 
             // Check if the transaction fee is higher than the receive limit
-            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
+            if contains_lnv2 && !transaction_fee.is_within(&PaymentFee::RECEIVE_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Transaction fees exceeded RECEIVE LIMIT {}",
                     PaymentFee::RECEIVE_FEE_LIMIT

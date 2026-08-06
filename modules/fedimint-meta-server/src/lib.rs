@@ -28,9 +28,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
     ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, TransactionItemAmounts, api_endpoint, serde_json,
+    ModuleInit, TransactionItemAmounts, admin_api_endpoint, public_api_endpoint, serde_json,
 };
-use fedimint_core::net::auth::check_auth;
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
 use fedimint_meta_common::config::{
@@ -414,11 +413,10 @@ impl ServerModule for Meta {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            admin_api_endpoint! {
                 SUBMIT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: SubmitRequest| -> () {
-                    check_auth(context)?;
 
                     let db = context.db();
                     let mut dbtx = db.begin_transaction().await;
@@ -428,7 +426,7 @@ impl ServerModule for Meta {
                     Ok(())
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 GET_CONSENSUS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<MetaConsensusValue> {
@@ -437,7 +435,7 @@ impl ServerModule for Meta {
                     module.handle_get_consensus_request(&mut dbtx, &request).await
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 GET_CONSENSUS_REV_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<u64> {
@@ -446,11 +444,10 @@ impl ServerModule for Meta {
                     module.handle_get_consensus_revision_request(&mut dbtx, &request).await
                 }
             },
-            api_endpoint! {
+            admin_api_endpoint! {
                 GET_SUBMISSIONS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetSubmissionsRequest| -> GetSubmissionResponse {
-                    check_auth(context)?;
 
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
@@ -525,7 +522,8 @@ impl Meta {
 // UI Methods for Meta Module
 
 impl Meta {
-    /// UI helper to submit a value change with default auth
+    /// Submits a value after the server UI's `UserAuth` boundary authenticates
+    /// the caller.
     pub async fn handle_submit_request_ui(&self, value: Value) -> Result<(), ApiError> {
         let mut dbtx = self.db.begin_transaction().await;
 
@@ -567,7 +565,8 @@ impl Meta {
         .map(|r| r.unwrap_or(0))
     }
 
-    /// Get the submissions for UI display,
+    /// Gets submissions after the server UI's `UserAuth` boundary authenticates
+    /// the caller.
     pub async fn handle_get_submissions_request_ui(
         &self,
     ) -> Result<BTreeMap<PeerId, Value>, ApiError> {

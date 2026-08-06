@@ -8,3 +8,5 @@ pub static VERSION_0_11_0_ALPHA: LazyLock<Version> =
     LazyLock::new(|| Version::parse("0.11.0-alpha").expect("version is parsable"));
 pub static VERSION_0_12_0_ALPHA: LazyLock<Version> =
     LazyLock::new(|| Version::parse("0.12.0-alpha").expect("version is parsable"));
+pub static VERSION_0_13_0_ALPHA: LazyLock<Version> =
+    LazyLock::new(|| Version::parse("0.13.0-alpha").expect("version is parsable"));

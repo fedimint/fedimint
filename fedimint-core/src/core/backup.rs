@@ -1,7 +1,11 @@
 use std::fmt::{self, Debug};
 
 use bitcoin::hashes::{Hash, sha256};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{
+    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use secp256k1::{Keypair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
@@ -14,12 +18,44 @@ use serde::{Deserialize, Serialize};
 /// backup with 52 notes is around 5.1K.
 pub const BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES: usize = 128 * 1024;
 
-#[derive(Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Serialize, Deserialize)]
 pub struct BackupRequest {
     pub id: secp256k1::PublicKey,
     #[serde(with = "fedimint_core::hex::serde")]
     pub payload: Vec<u8>,
     pub timestamp: std::time::SystemTime,
+}
+
+impl Encodable for BackupRequest {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.id.consensus_encode(writer)?;
+        self.payload.consensus_encode(writer)?;
+        encode_legacy_system_time(&self.timestamp, writer)
+    }
+}
+
+impl Decodable for BackupRequest {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        decoder: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            id: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: BackupRequest{ ... id ... }",
+            )?,
+            payload: decode_field_from_finite_reader(
+                decoder,
+                modules,
+                "Decoding named block field: BackupRequest{ ... payload ... }",
+            )?,
+            timestamp: with_decoding_context(
+                decode_legacy_system_time_from_finite_reader(decoder, modules),
+                "Decoding named block field: BackupRequest{ ... timestamp ... }",
+            )?,
+        })
+    }
 }
 
 impl BackupRequest {
