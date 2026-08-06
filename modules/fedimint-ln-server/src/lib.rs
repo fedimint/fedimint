@@ -19,7 +19,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, is_running_in_test_env};
+use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, next_poll_delay};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
@@ -1290,12 +1290,7 @@ impl Lightning {
                     break;
                 }
 
-                if is_running_in_test_env() {
-                    // Even in tests we don't want to spam the federation with requests about it
-                    sleep(Duration::from_secs(5)).await;
-                } else {
-                    sleep(Duration::from_mins(10)).await;
-                }
+                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
             }
         });
         receiver

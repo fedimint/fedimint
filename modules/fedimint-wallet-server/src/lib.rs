@@ -56,6 +56,7 @@ use fedimint_core::envs::{
     BitcoinRpcConfig, FM_ENABLE_MODULE_WALLET_ENV,
     FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
     is_automatic_consensus_version_voting_disabled, is_env_var_set_opt, is_running_in_test_env,
+    next_poll_delay,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -2057,12 +2058,7 @@ impl Wallet {
                     break;
                 }
 
-                if is_running_in_test_env() {
-                    // Even in tests we don't want to spam the federation with requests about it
-                    sleep(Duration::from_secs(5)).await;
-                } else {
-                    sleep(Duration::from_mins(10)).await;
-                }
+                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
             }
         });
         receiver
