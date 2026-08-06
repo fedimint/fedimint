@@ -3705,6 +3705,7 @@ dependencies = [
  "async-trait",
  "bitcoin_hashes 0.14.0",
  "erased-serde",
+ "fedimint-api-client",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-logging",
