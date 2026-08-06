@@ -740,6 +740,8 @@ pub enum LightningOutputError {
     OfferForFundedContract(ContractId),
     #[error("The contract's encrypted preimage does not match the offer's")]
     EncryptedPreimageMismatch,
+    #[error("An incoming contract must be funded with a pending decryption")]
+    PreDecryptedIncomingContract,
 }
 
 /// Data needed to pay an invoice
