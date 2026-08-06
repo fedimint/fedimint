@@ -80,8 +80,6 @@ pub enum EcashCommands {
         /// E-cash notes (`OOBNotes` for v1 or `ECash` for v2)
         #[clap(long)]
         notes: String,
-        #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
-        wait: bool,
     },
 }
 
@@ -183,9 +181,9 @@ impl EcashCommands {
 
                 Ok(CliOutput::SpendEcash(response))
             }
-            Self::Receive { notes, wait } => {
+            Self::Receive { notes } => {
                 let response =
-                    receive_ecash(client, base_url, ReceiveEcashPayload { notes, wait }).await?;
+                    receive_ecash(client, base_url, ReceiveEcashPayload { notes }).await?;
                 Ok(CliOutput::ReceiveEcash(response))
             }
         }

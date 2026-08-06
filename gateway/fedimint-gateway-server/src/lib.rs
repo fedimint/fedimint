@@ -1547,20 +1547,35 @@ impl Gateway {
                     failure_reason: e.to_string(),
                 }
             })?;
-            if payload.wait {
-                let mut updates = mint
-                    .subscribe_reissue_external_notes(operation_id)
-                    .await
-                    .unwrap()
-                    .into_stream();
 
-                while let Some(update) = updates.next().await {
-                    if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                        return Err(PublicGatewayError::ReceiveEcashError {
-                            failure_reason: e.clone(),
-                        });
+            let mut updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .await
+                .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                    failure_reason: format!("Could not subscribe to reissue operation: {e}"),
+                })?
+                .into_stream();
+
+            // Only `Done` and `Failed` are terminal for this stream. Ending on
+            // `Created` or `Issuing` means the outputs were never finalized, so
+            // their blind signatures were never verified, and reporting the notes'
+            // claimed amount would credit e-cash the gateway does not hold.
+            let mut reissued = false;
+            while let Some(update) = updates.next().await {
+                match update {
+                    ReissueExternalNotesState::Failed(failure_reason) => {
+                        return Err(PublicGatewayError::ReceiveEcashError { failure_reason });
                     }
+                    ReissueExternalNotesState::Done => reissued = true,
+                    ReissueExternalNotesState::Created | ReissueExternalNotesState::Issuing => {}
                 }
+            }
+
+            if !reissued {
+                return Err(PublicGatewayError::ReceiveEcashError {
+                    failure_reason: "Reissue operation ended before the notes were reissued"
+                        .to_string(),
+                });
             }
 
             Ok(ReceiveEcashResponse { amount })
@@ -1580,20 +1595,18 @@ impl Gateway {
                     failure_reason: e.to_string(),
                 })?;
 
-            if payload.wait {
-                let final_state = mint
-                    .await_final_receive_operation_state(operation_id)
-                    .await
-                    .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                        failure_reason: e.to_string(),
-                    })?;
-                match final_state {
-                    fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
-                    fedimint_mintv2_client::FinalReceiveOperationState::Rejected => {
-                        return Err(PublicGatewayError::ReceiveEcashError {
-                            failure_reason: "ECash receive was rejected".to_string(),
-                        });
-                    }
+            let final_state = mint
+                .await_final_receive_operation_state(operation_id)
+                .await
+                .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                    failure_reason: e.to_string(),
+                })?;
+            match final_state {
+                fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
+                fedimint_mintv2_client::FinalReceiveOperationState::Rejected => {
+                    return Err(PublicGatewayError::ReceiveEcashError {
+                        failure_reason: "ECash receive was rejected".to_string(),
+                    });
                 }
             }
 
