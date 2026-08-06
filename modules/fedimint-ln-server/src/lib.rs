@@ -52,11 +52,12 @@ use fedimint_ln_common::federation_endpoint_constants::{
     REMOVE_GATEWAY_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
-    LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
-    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
-    LightningOutputV0, MODULE_CONSENSUS_VERSION, RemoveGatewayRequest,
-    create_gateway_registration_message, create_gateway_remove_message,
+    CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION, ContractAccount, LightningCommonInit,
+    LightningConsensusItem, LightningGatewayAnnouncement, LightningGatewayRegistration,
+    LightningInput, LightningInputError, LightningModuleTypes, LightningOutput,
+    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
+    MODULE_CONSENSUS_VERSION, RemoveGatewayRequest, create_gateway_registration_message,
+    create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -677,6 +678,26 @@ impl ServerModule for Lightning {
 
         match output {
             LightningOutputV0::Contract(contract) => {
+                // From consensus version 2.1 on, a contract account is funded
+                // exactly once. Contract ids do not commit to the full contract
+                // state, so before this version a second funding output for the
+                // same id topped up the existing account while keeping its
+                // state; for an incoming contract whose preimage decryption
+                // already reached a terminal state, the first contract's
+                // gateway or preimage holder could sweep the new funds. The
+                // pre-2.1 top-up path below must remain reachable so historic
+                // sessions replay identically.
+                if self.is_contract_funded_once_active(dbtx).await
+                    && dbtx
+                        .get_value(&ContractKey(contract.contract.contract_id()))
+                        .await
+                        .is_some()
+                {
+                    return Err(LightningOutputError::ContractAlreadyFunded(
+                        contract.contract.contract_id(),
+                    ));
+                }
+
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
                     // An incoming contract's id is only its payment hash, so a second
@@ -787,6 +808,23 @@ impl ServerModule for Lightning {
                 })
             }
             LightningOutputV0::Offer(offer) => {
+                // From consensus version 2.1 on, no offer can be created for a
+                // payment hash whose incoming contract account already exists:
+                // funding it could only top up that account (rejected above
+                // once 2.1 is active), so such an offer is a dead end that
+                // could still lure a gateway into accepting an HTLC it can
+                // never get funded for.
+                if self.is_contract_funded_once_active(dbtx).await
+                    && dbtx
+                        .get_value(&ContractKey(offer.contract_id()))
+                        .await
+                        .is_some()
+                {
+                    return Err(LightningOutputError::OfferForFundedContract(
+                        offer.contract_id(),
+                    ));
+                }
+
                 if !offer.encrypted_preimage.0.verify() {
                     return Err(LightningOutputError::InvalidEncryptedPreimage);
                 }
@@ -898,21 +936,23 @@ impl ServerModule for Lightning {
             .map(LightningOutputOutcome::V0)
     }
 
-    /// Reject funding an incoming contract that already has an account.
+    /// Reject funding a contract that already has an account, and creating an
+    /// offer for a payment hash whose incoming contract account already exists.
     ///
-    /// An incoming contract's id commits to the payment hash alone, so a second
-    /// funding output for the same hash does not create a new account: it tops
-    /// up the existing one, which keeps the first contract's
-    /// `decrypted_preimage`, `encrypted_preimage` and `gateway_key`. If that
-    /// state is already terminal the new funds are immediately spendable by the
-    /// *first* contract's gateway, and no further decryption can take place.
+    /// Contract ids do not commit to the full contract state — an incoming
+    /// contract's id commits to the payment hash alone — so a second funding
+    /// output for the same id does not create a new account: it tops up the
+    /// existing one, which keeps the first contract's `decrypted_preimage`,
+    /// `encrypted_preimage` and `gateway_key`. If that state is already
+    /// terminal the new funds are immediately spendable by the *first*
+    /// contract's gateway, and no further decryption can take place.
     ///
-    /// This is enforced as submission policy rather than in
-    /// [`ServerModule::process_output`] because tightening the latter would
-    /// break consensus. It is therefore only as strong as the weakest guardian:
-    /// a peer that does not run this check still lets such a transaction into
-    /// consensus, where it is accepted. Moving the check into consensus needs a
-    /// module consensus version bump.
+    /// These are the same rules [`ServerModule::process_output`] enforces in
+    /// consensus from module consensus version 2.1 on. Enforcing them here as
+    /// well protects federations that have not activated 2.1 yet, with policy
+    /// strength only: it is only as strong as the weakest guardian and cannot
+    /// see intra-session ordering, so it does not cover two fundings submitted
+    /// in the same session.
     #[doc(hidden)]
     async fn verify_output_submission<'a, 'b>(
         &'a self,
@@ -920,14 +960,26 @@ impl ServerModule for Lightning {
         output: &'a LightningOutput,
         _out_point: OutPoint,
     ) -> Result<(), LightningOutputError> {
-        if let LightningOutputV0::Contract(contract) = output.ensure_v0_ref()? {
-            let contract_id = contract.contract.contract_id();
+        match output.ensure_v0_ref()? {
+            LightningOutputV0::Contract(contract) => {
+                let contract_id = contract.contract.contract_id();
 
-            if matches!(contract.contract, Contract::Incoming(_))
-                && dbtx.get_value(&ContractKey(contract_id)).await.is_some()
-            {
-                return Err(LightningOutputError::ContractAlreadyFunded(contract_id));
+                if dbtx.get_value(&ContractKey(contract_id)).await.is_some() {
+                    return Err(LightningOutputError::ContractAlreadyFunded(contract_id));
+                }
             }
+            LightningOutputV0::Offer(offer) => {
+                if dbtx
+                    .get_value(&ContractKey(offer.contract_id()))
+                    .await
+                    .is_some()
+                {
+                    return Err(LightningOutputError::OfferForFundedContract(
+                        offer.contract_id(),
+                    ));
+                }
+            }
+            LightningOutputV0::CancelOutgoing { .. } => {}
         }
 
         Ok(())
@@ -1162,6 +1214,14 @@ impl Lightning {
         assert!(versions.first() <= versions.last());
 
         versions[self.num_peers.max_evil()]
+    }
+
+    /// Whether the funded-exactly-once rules of
+    /// [`CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION`] are active, i.e. the
+    /// federation has voted that version in.
+    async fn is_contract_funded_once_active(&self, dbtx: &mut DatabaseTransaction<'_>) -> bool {
+        CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION
+            <= self.consensus_module_consensus_version(dbtx).await
     }
 
     /// Tracks the highest module consensus version supported by *every* peer.
@@ -1597,16 +1657,18 @@ mod tests {
         Preimage, PreimageKey,
     };
     use fedimint_ln_common::{
-        ContractAccount, ContractOutput, GatewayRegistrationAuth, LightningGateway,
-        LightningGatewayAnnouncement, LightningInput, LightningOutput, LightningOutputError,
-        MAX_GATEWAY_REGISTRATION_TTL,
+        CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION, ContractAccount, ContractOutput,
+        GatewayRegistrationAuth, LightningGateway, LightningGatewayAnnouncement, LightningInput,
+        LightningOutput, LightningOutputError, MAX_GATEWAY_REGISTRATION_TTL,
     };
     use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
     use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
     use tokio::sync::watch;
 
-    use crate::db::{ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey};
+    use crate::db::{
+        ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey,
+    };
     use crate::{Lightning, LightningInit, create_gateway_registration_message};
 
     #[derive(Debug)]
@@ -2143,17 +2205,30 @@ mod tests {
             .await
             .expect("contract #1 funded");
 
-        // a second offer for the same payment hash is still accepted, the
-        // contract funding it is not
+        // pre-2.1 consensus still accepts a second offer for the same payment
+        // hash, but the submission policy rejects it
+        let second_offer = LightningOutput::new_v0_offer(IncomingContractOffer {
+            amount: Amount::from_msats(100_000),
+            hash,
+            encrypted_preimage: ct_2.clone(),
+            expiry_time: None,
+        });
+
+        assert_eq!(
+            server
+                .verify_output_submission(
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &second_offer,
+                    op(2),
+                )
+                .await,
+            Err(LightningOutputError::OfferForFundedContract(contract_id))
+        );
+
         server
             .process_output(
                 &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
-                &LightningOutput::new_v0_offer(IncomingContractOffer {
-                    amount: Amount::from_msats(100_000),
-                    hash,
-                    encrypted_preimage: ct_2.clone(),
-                    expiry_time: None,
-                }),
+                &second_offer,
                 op(2),
             )
             .await
@@ -2181,10 +2256,11 @@ mod tests {
         );
     }
 
-    /// A first funding of an incoming contract, and any funding of an outgoing
-    /// contract, must not be affected by the submission check.
+    /// A first funding of any contract passes the submission check; a second
+    /// funding of the same contract id is rejected for outgoing contracts as
+    /// well, since their id does not commit to the amount either.
     #[test_log::test(tokio::test)]
-    async fn submission_allows_first_funding_and_outgoing_topup() {
+    async fn submission_allows_only_first_fundings() {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
         let server = mock_server(&server_cfg[0], &task_group);
@@ -2221,17 +2297,26 @@ mod tests {
             .await
             .expect("first funding of an incoming contract is allowed");
 
-        // outgoing contracts keep their existing top-up behaviour
+        let outgoing_contract = OutgoingContract {
+            hash,
+            gateway_key: random_pub_key(),
+            timelock: 1_000_000,
+            user_key: random_pub_key(),
+            cancelled: false,
+        };
         let outgoing = LightningOutput::new_v0_contract(ContractOutput {
             amount: Amount::from_msats(1000),
-            contract: Contract::Outgoing(OutgoingContract {
-                hash,
-                gateway_key: random_pub_key(),
-                timelock: 1_000_000,
-                user_key: random_pub_key(),
-                cancelled: false,
-            }),
+            contract: Contract::Outgoing(outgoing_contract.clone()),
         });
+
+        server
+            .verify_output_submission(
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &outgoing,
+                op(2),
+            )
+            .await
+            .expect("first funding of an outgoing contract is allowed");
 
         server
             .process_output(
@@ -2242,14 +2327,145 @@ mod tests {
             .await
             .expect("outgoing contract funded");
 
-        server
-            .verify_output_submission(
-                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
-                &outgoing,
-                op(3),
+        assert_eq!(
+            server
+                .verify_output_submission(
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &outgoing,
+                    op(3),
+                )
+                .await,
+            Err(LightningOutputError::ContractAlreadyFunded(
+                outgoing_contract.contract_id()
+            ))
+        );
+    }
+
+    /// Once the federation has voted in consensus version 2.1, re-funding an
+    /// existing contract and creating an offer for an already funded incoming
+    /// contract are rejected by consensus itself, not just submission policy.
+    ///
+    /// The incoming account is seeded in the stale terminal state from the
+    /// security report (`DecryptedPreimage::Invalid`, no pending decryption
+    /// proposal), which the pre-2.1 consensus rules would happily top up.
+    #[test_log::test(tokio::test)]
+    async fn consensus_v21_rejects_refunding_and_offers_for_funded_contracts() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
+
+        // Three of four peers vote for 2.1, so the max_evil()-th lowest vote
+        // (index 1 of the sorted votes, with the fourth peer padded to 2.0)
+        // reaches 2.1 and activates the funded-exactly-once rules.
+        for peer in 0..3u16 {
+            module_dbtx
+                .insert_new_entry(
+                    &ConsensusVersionVoteKey(PeerId::from(peer)),
+                    &CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION,
+                )
+                .await;
+        }
+
+        let op = |i: u64| OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: i,
+        };
+
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array());
+        let ct_1 = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([0xAAu8; 33]));
+        let ct_2 = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt(preimage.0));
+
+        let stale_contract = IncomingContract {
+            hash,
+            encrypted_preimage: ct_1,
+            decrypted_preimage: DecryptedPreimage::Invalid,
+            gateway_key: random_pub_key(),
+        };
+        let contract_id = stale_contract.contract_id();
+
+        module_dbtx
+            .insert_new_entry(
+                &ContractKey(contract_id),
+                &ContractAccount {
+                    amount: Amount::from_msats(1),
+                    contract: FundedContract::Incoming(FundedIncomingContract {
+                        contract: stale_contract,
+                        out_point: op(0),
+                    }),
+                },
             )
+            .await;
+
+        // an offer for the funded contract's payment hash is rejected
+        assert_eq!(
+            server
+                .process_output(
+                    &mut module_dbtx.to_ref_nc(),
+                    &LightningOutput::new_v0_offer(IncomingContractOffer {
+                        amount: Amount::from_msats(100_000),
+                        hash,
+                        encrypted_preimage: ct_2.clone(),
+                        expiry_time: None,
+                    }),
+                    op(1),
+                )
+                .await
+                .expect_err("offer for a funded contract must be rejected"),
+            LightningOutputError::OfferForFundedContract(contract_id)
+        );
+
+        // and so is a second funding of the same contract id
+        assert_eq!(
+            server
+                .process_output(
+                    &mut module_dbtx.to_ref_nc(),
+                    &LightningOutput::new_v0_contract(ContractOutput {
+                        amount: Amount::from_msats(100_000),
+                        contract: Contract::Incoming(IncomingContract {
+                            hash,
+                            encrypted_preimage: ct_2,
+                            decrypted_preimage: DecryptedPreimage::Pending,
+                            gateway_key: random_pub_key(),
+                        }),
+                    }),
+                    op(2),
+                )
+                .await
+                .expect_err("re-funding a funded contract must be rejected"),
+            LightningOutputError::ContractAlreadyFunded(contract_id)
+        );
+
+        // outgoing contracts: the first funding passes, a second one is
+        // rejected as well
+        let outgoing_contract = OutgoingContract {
+            hash,
+            gateway_key: random_pub_key(),
+            timelock: 1_000_000,
+            user_key: random_pub_key(),
+            cancelled: false,
+        };
+        let outgoing = LightningOutput::new_v0_contract(ContractOutput {
+            amount: Amount::from_msats(1000),
+            contract: Contract::Outgoing(outgoing_contract.clone()),
+        });
+
+        server
+            .process_output(&mut module_dbtx.to_ref_nc(), &outgoing, op(3))
             .await
-            .expect("outgoing contract top-up is still allowed");
+            .expect("first funding of an outgoing contract is accepted");
+
+        assert_eq!(
+            server
+                .process_output(&mut module_dbtx.to_ref_nc(), &outgoing, op(4))
+                .await
+                .expect_err("re-funding an outgoing contract must be rejected"),
+            LightningOutputError::ContractAlreadyFunded(outgoing_contract.contract_id())
+        );
     }
 
     #[test_log::test(tokio::test)]
