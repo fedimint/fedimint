@@ -801,12 +801,16 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
     .await
     .expect("first funding accepted");
 
-    // the offer was consumed, so a fresh one is accepted for the same hash
+    // the offer was consumed, and since an incoming contract account exists
+    // for the hash now, a fresh offer for it is rejected at submission time
     submit_offer(&client1)
         .await
-        .expect("a second offer for the same hash is accepted once the first was consumed");
+        .expect_err("an offer for an already funded payment hash is rejected");
 
-    // ... but a funder must not fund it a second time
+    // ... so a funder cannot even fetch an offer to fund the hash a second
+    // time. The client-side `ContractAlreadyExists` guard in
+    // `create_incoming_contract_output` remains as defense in depth for
+    // federations whose guardians do not enforce the offer policy yet.
     assert_matches!(
         create_incoming_contract_output(
             &client2.get_first_module::<LightningClientModule>()?.api,
@@ -815,7 +819,7 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
             &funder_key,
         )
         .await,
-        Err(IncomingSmError::ContractAlreadyExists { .. })
+        Err(IncomingSmError::TimeoutFetchingOffer { .. })
     );
 
     Ok(())

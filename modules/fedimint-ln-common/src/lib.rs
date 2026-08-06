@@ -73,7 +73,20 @@ use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, Preimage
 use crate::route_hints::RouteHint;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
+
+/// From this module consensus version on, a contract account is funded exactly
+/// once and no offer can be created for a payment hash whose incoming contract
+/// account already exists.
+///
+/// Contract ids do not commit to the full contract state — an incoming
+/// contract's id is its payment hash and an outgoing contract's id omits the
+/// amount — so before this version a second funding output for the same id
+/// topped up the existing account while keeping its state. For an incoming
+/// contract whose preimage decryption already reached a terminal state, that
+/// let the first contract's gateway or preimage holder sweep the new funds.
+pub const CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
+    ModuleConsensusVersion::new(2, 1);
 
 extensible_associated_module_type!(
     LightningInput,
@@ -723,6 +736,8 @@ pub enum LightningOutputError {
     // declaration order and clients decode this type from the API response.
     #[error("The incoming contract {0} has already been funded")]
     ContractAlreadyFunded(ContractId),
+    #[error("An incoming contract account for the offer's payment hash already exists: {0}")]
+    OfferForFundedContract(ContractId),
 }
 
 /// Data needed to pay an invoice
