@@ -8,7 +8,7 @@ use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, ServerError,
 };
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_core::module::ApiRequestErased;
+use fedimint_core::module::{ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
@@ -17,8 +17,9 @@ use fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus, Preimag
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
+    OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_ln_common::{
     ContractAccount, FederationPublicKey, LightningGateway, LightningGatewayAnnouncement,
@@ -29,6 +30,16 @@ use tracing::{info, warn};
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
+    /// The module consensus version the federation currently runs on, which is
+    /// the version its peers have voted in, not the one their binaries
+    /// support.
+    ///
+    /// Federations predating the endpoint report [`MODULE_CONSENSUS_VERSION`]
+    /// 2.0, the version before voting existed.
+    ///
+    /// [`MODULE_CONSENSUS_VERSION`]: fedimint_ln_common::MODULE_CONSENSUS_VERSION
+    async fn module_consensus_version(&self) -> FederationResult<ModuleConsensusVersion>;
+
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
 
     async fn fetch_contract(
@@ -95,6 +106,23 @@ impl<T: ?Sized> LnFederationApi for T
 where
     T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
+    async fn module_consensus_version(&self) -> FederationResult<ModuleConsensusVersion> {
+        let response = self
+            .request_current_consensus(
+                MODULE_CONSENSUS_VERSION_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .await;
+
+        if let Err(e) = &response
+            && e.any_peer_error_method_not_found()
+        {
+            return Ok(ModuleConsensusVersion::new(2, 0));
+        }
+
+        response
+    }
+
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>> {
         self.request_current_consensus(
             BLOCK_COUNT_ENDPOINT.to_string(),
