@@ -75,7 +75,7 @@ use tracing::{debug, error, info, warn};
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingPaymentError,
+    OutgoingContractError, OutgoingPaymentError,
 };
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
@@ -763,6 +763,14 @@ impl GatewayClientModule {
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await?;
 
+        // `validate_outgoing_account` reports this gracefully, but it only runs once
+        // the state machine is under way, and the operation log entry we write below
+        // needs the amount before that.
+        let invoice_amount = payload
+            .payment_data
+            .amount()
+            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
+
         self.client_ctx.module_db()
             .autocommit(
                 |dbtx, _| {
@@ -771,7 +779,7 @@ impl GatewayClientModule {
 
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
                             contract_id: payload.contract_id,
-                            invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
+                            invoice_amount,
                             operation_id,
                         }).await;
 

@@ -2630,13 +2630,14 @@ impl Gateway {
             .read()
             .await
             .client(federation_id)
-            .map(|client| {
+            .and_then(|client| {
+                // A federation only has to offer one of the two lightning modules, so a
+                // client we serve over LNv1 may well have no LNv2 module at all.
                 client
                     .value()
                     .get_first_module::<GatewayClientModuleV2>()
-                    .expect("Must have client module")
-                    .keypair
-                    .public_key()
+                    .ok()
+                    .map(|module| module.keypair.public_key())
             })
     }
 
@@ -2679,15 +2680,19 @@ impl Gateway {
 
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    async fn send_payment_v2(
+    pub async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
     ) -> Result<std::result::Result<[u8; 32], Signature>> {
-        self.select_client(payload.federation_id)
-            .await?
+        let client = self.select_client(payload.federation_id).await?;
+        // A federation only has to offer one of the two lightning modules, so a
+        // client we serve over LNv1 may well have no LNv2 module at all.
+        let module = client
             .value()
             .get_first_module::<GatewayClientModuleV2>()
-            .expect("Must have client module")
+            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err)))?;
+
+        module
             .send_payment(payload)
             .await
             .map_err(LNv2Error::OutgoingPayment)
