@@ -720,7 +720,7 @@ impl ServerModule for Wallet {
                 );
             }
             WalletConsensusItem::Default { variant, .. } => {
-                panic!("Received wallet consensus item with unknown variant {variant}");
+                bail!("Unknown wallet consensus item received, variant={variant}");
             }
         }
 
