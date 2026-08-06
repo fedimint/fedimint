@@ -49,7 +49,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{BitcoinRpcConfig, is_rbf_withdrawal_enabled, is_running_in_test_env};
+use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
@@ -810,17 +810,12 @@ impl ServerModule for Wallet {
         // In 0.4.0 we began preventing RBF withdrawals. Once we reach EoL support
         // for 0.4.0, we can safely remove RBF withdrawal logic.
         // see: https://github.com/fedimint/fedimint/issues/5453
+        //
+        // Rejection must not depend on per-guardian configuration: any
+        // conditional acceptance here lets guardians diverge on whether a
+        // transaction is valid, forking consensus.
         if let WalletOutputV0::Rbf(_) = output {
-            // This exists as an escape hatch for any federations that successfully
-            // processed an RBF withdrawal due to having a single UTXO owned by the
-            // federation. If a peer needs to resync the federation's history, they can
-            // enable this variable until they've successfully synced, then restart with
-            // this disabled.
-            if is_rbf_withdrawal_enabled() {
-                warn!(target: LOG_MODULE_WALLET, "processing rbf withdrawal");
-            } else {
-                return Err(DEPRECATED_RBF_ERROR);
-            }
+            return Err(DEPRECATED_RBF_ERROR);
         }
 
         let change_tweak = self.consensus_nonce(dbtx).await;
