@@ -727,6 +727,19 @@ impl ServerModule for Lightning {
                         ));
                     }
 
+                    // Nothing ties the funding contract's ciphertext to the one
+                    // the offer put up for sale, so a funder other than the
+                    // intended payer can consume an offer with a ciphertext of
+                    // their own. It decrypts to garbage, the `Invalid` arm hands
+                    // the funds back to their own `gateway_key`, and the account
+                    // they leave behind makes the payment hash unofferable and
+                    // unfundable for good.
+                    if self.is_contract_funded_once_active(dbtx).await
+                        && incoming.encrypted_preimage != offer.encrypted_preimage
+                    {
+                        return Err(LightningOutputError::EncryptedPreimageMismatch);
+                    }
+
                     // The offer's ciphertext is verified when the offer is created, but the
                     // contract carries its own copy, which consensus decoding only checks
                     // for valid point encodings. `decrypt_share` below returns `None` for
@@ -2334,6 +2347,79 @@ mod tests {
                 outgoing_contract.contract_id()
             ))
         );
+    }
+
+    /// Once 2.1 is active, a funder cannot consume an offer with a ciphertext
+    /// of their own. Without the binding the funding is accepted, decrypts to
+    /// garbage, refunds to the funder's own `gateway_key`, and leaves an
+    /// account that makes the payment hash permanently unofferable.
+    #[test_log::test(tokio::test)]
+    async fn consensus_v21_rejects_a_contract_whose_ciphertext_is_not_the_offers() {
+        let task_group = TaskGroup::new();
+        let (server_cfg, client_cfg) = build_configs();
+        let server = mock_server(&server_cfg[0], &task_group);
+
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+        let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
+
+        for peer in 0..3u16 {
+            module_dbtx
+                .insert_new_entry(
+                    &ConsensusVersionVoteKey(PeerId::from(peer)),
+                    &CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION,
+                )
+                .await;
+        }
+
+        let op = |i: u64| OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: i,
+        };
+
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array());
+        let offered = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt(preimage.0));
+        let attackers = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([0xAAu8; 33]));
+
+        server
+            .process_output(
+                &mut module_dbtx.to_ref_nc(),
+                &LightningOutput::new_v0_offer(IncomingContractOffer {
+                    amount: Amount::from_msats(1),
+                    hash,
+                    encrypted_preimage: offered.clone(),
+                    expiry_time: None,
+                }),
+                op(0),
+            )
+            .await
+            .expect("offer accepted");
+
+        let fund = |ciphertext: EncryptedPreimage| {
+            LightningOutput::new_v0_contract(ContractOutput {
+                amount: Amount::from_msats(1),
+                contract: Contract::Incoming(IncomingContract {
+                    hash,
+                    encrypted_preimage: ciphertext,
+                    decrypted_preimage: DecryptedPreimage::Pending,
+                    gateway_key: random_pub_key(),
+                }),
+            })
+        };
+
+        assert_eq!(
+            server
+                .process_output(&mut module_dbtx.to_ref_nc(), &fund(attackers), op(1))
+                .await
+                .expect_err("a ciphertext that is not the offer's must be rejected"),
+            LightningOutputError::EncryptedPreimageMismatch
+        );
+
+        server
+            .process_output(&mut module_dbtx.to_ref_nc(), &fund(offered), op(2))
+            .await
+            .expect("the offer's own ciphertext still funds it");
     }
 
     /// Once the federation has voted in consensus version 2.1, re-funding an
