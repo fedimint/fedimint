@@ -10,11 +10,13 @@ use fedimint_client::transaction::{
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::module::{Amounts, CommonModuleInit as _};
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
+use fedimint_core::util::backoff_util::aggressive_backoff_long;
+use fedimint_core::util::{BoxStream, NextOrPending, retry};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::IncomingSmError;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
@@ -23,7 +25,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
-use fedimint_ln_common::{LightningCommonInit, LightningOutput};
+use fedimint_ln_common::{LightningCommonInit, LightningOutput, MODULE_CONSENSUS_VERSION};
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::Gateway;
 use fedimint_testing::federation::FederationTest;
@@ -59,6 +61,44 @@ fn fixtures() -> Fixtures {
         },
         LightningInit,
     )
+}
+
+/// Consensus version voting must actually reach activation: peers fetch each
+/// other's supported version over the API, propose it as a consensus item, and
+/// the active version rises to what their binaries support. Without this the
+/// whole mechanism could silently never fire and every other test would still
+/// pass, leaving the consensus rules it gates permanently inactive.
+///
+/// Automatic voting requires *every* peer to answer, and unlike walletv1 LNv1
+/// has no manual activation override, so a degraded federation never
+/// activates — hence the non-degraded fixture.
+#[tokio::test(flavor = "multi_thread")]
+async fn consensus_version_voting_activates() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    retry(
+        "waiting for lnv1 consensus version activation",
+        aggressive_backoff_long(),
+        || async {
+            let active_version = client
+                .get_first_module::<LightningClientModule>()?
+                .api
+                .module_consensus_version()
+                .await?;
+
+            anyhow::ensure!(
+                active_version == MODULE_CONSENSUS_VERSION,
+                "active consensus version is {active_version:?}, waiting for {MODULE_CONSENSUS_VERSION:?}"
+            );
+
+            Ok(())
+        },
+    )
+    .await
+    .expect("LNv1 consensus version voting did not activate in time");
+
+    Ok(())
 }
 
 /// Setup a gateway connected to the fed and client
