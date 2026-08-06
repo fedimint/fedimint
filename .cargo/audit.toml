@@ -31,8 +31,51 @@ ignore = [
   "RUSTSEC-2023-0089",
   # rustls-webpki CRL matching logic, pinned by iroh-relay 0.35.0 on 0.102.x with no patch available
   "RUSTSEC-2026-0049",
+  # Advisories published after the releases/v0.11 branch was cut. These are
+  # transitive deps whose fixes require dependency bumps not appropriate on a
+  # release branch; allowed here so the release-branch audit stays green.
+  # rustls-webpki: name-constraint / wildcard / URI handling (transitive via iroh)
+  "RUSTSEC-2026-0098",
+  "RUSTSEC-2026-0099",
+  # rustls-webpki: reachable panic in CRL parsing (transitive via iroh)
+  "RUSTSEC-2026-0104",
+  # `bincode` unmaintained
+  "RUSTSEC-2025-0141",
+  # `proc-macro-error2` unmaintained
+  "RUSTSEC-2026-0173",
+  # `rustls-pemfile` unmaintained
+  "RUSTSEC-2025-0134",
+  # `anyhow` unsound Error::downcast_mut() (not exercised by us)
+  "RUSTSEC-2026-0190",
+  # `event-listener` unsound !Send across threads via StackSlot
+  "RUSTSEC-2026-0221",
+  # `keccak` unsound opt-in ARMv8 asm backend (not enabled)
+  "RUSTSEC-2026-0012",
+  # `lru` IterMut Stacked-Borrows unsoundness
+  "RUSTSEC-2026-0002",
+  # `memmap2` unchecked pointer offset unsoundness
+  "RUSTSEC-2026-0186",
+  # `rand` unsound with a custom logger using rand::rng()
+  "RUSTSEC-2026-0097",
+  # `crossbeam-epoch` invalid pointer deref in Debug/Pointer impl (transitive)
+  "RUSTSEC-2026-0204",
+  # `hickory-proto` NSEC3 unbounded loop; no fixed upgrade available (transitive via iroh)
+  "RUSTSEC-2026-0118",
+  # `hickory-proto` O(n^2) name-compression CPU exhaustion (transitive via iroh)
+  "RUSTSEC-2026-0119",
+  # `quinn-proto` remote memory exhaustion (7.5 high), fixed in >=0.11.15; bump
+  # belongs on master, not this release branch (transitive via iroh)
+  "RUSTSEC-2026-0185",
 ]
 
 [output]
 quiet = true
 show_tree = false
+
+[yanked]
+# The audit job runs in a sandbox where the crates.io index is not reliably
+# resolvable, so the yank check spuriously reports common crates (windows-*,
+# winnow, zerocopy, ...) as "No such crate in crates.io index" and fails the
+# run. Yank status is not a security advisory, so disable the check here to keep
+# the release-branch audit deterministic.
+enabled = false
