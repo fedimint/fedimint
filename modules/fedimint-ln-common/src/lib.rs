@@ -738,6 +738,8 @@ pub enum LightningOutputError {
     ContractAlreadyFunded(ContractId),
     #[error("An incoming contract account for the offer's payment hash already exists: {0}")]
     OfferForFundedContract(ContractId),
+    #[error("The contract's encrypted preimage does not match the offer's")]
+    EncryptedPreimageMismatch,
 }
 
 /// Data needed to pay an invoice
