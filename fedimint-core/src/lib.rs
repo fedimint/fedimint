@@ -387,6 +387,17 @@ impl IdxRange {
         self.into_iter().count()
     }
 
+    /// Number of indexes in the range, or `None` if the range is descending or
+    /// does not fit into a `usize`.
+    ///
+    /// Ranges are deserialized verbatim from untrusted API requests, so a
+    /// caller validating one has to go through this rather than
+    /// [`Self::count`], which reports a descending range as empty and panics on
+    /// `usize` overflow.
+    pub fn checked_count(self) -> Option<usize> {
+        usize::try_from(self.end.checked_sub(self.start)?).ok()
+    }
+
     pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
         range.end().checked_add(1).map(|end| Self {
             start: *range.start(),
@@ -439,6 +450,11 @@ impl OutPointRange {
 
     pub fn count(self) -> usize {
         self.idx_range.count()
+    }
+
+    /// See [`IdxRange::checked_count`].
+    pub fn checked_count(self) -> Option<usize> {
+        self.idx_range.checked_count()
     }
 
     pub fn start_out_point(self) -> OutPoint {

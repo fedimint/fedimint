@@ -14,6 +14,21 @@ fn calculate_fee() {
 }
 
 #[test]
+fn idx_range_checked_count_rejects_descending_ranges() {
+    use super::IdxRange;
+
+    let range = |start: u64, end: u64| IdxRange::from(start..end);
+
+    assert_eq!(range(3, 7).checked_count(), Some(4));
+    assert_eq!(range(7, 7).checked_count(), Some(0));
+
+    // Descending ranges are silently empty when iterated, which hides a request
+    // we should never be answering in the first place.
+    assert_eq!(range(7, 3).checked_count(), None);
+    assert_eq!(range(u64::MAX, 0).checked_count(), None);
+}
+
+#[test]
 fn test_deserialize_amount_or_all() {
     let all: BitcoinAmountOrAll = serde_json::from_str("\"all\"").unwrap();
     assert_eq!(all, BitcoinAmountOrAll::All);

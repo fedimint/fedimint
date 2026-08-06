@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
@@ -78,6 +78,33 @@ use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 use crate::net::p2p::P2PStatusReceivers;
+
+/// Maximum number of output outcomes a single `await_outputs_outcomes` request
+/// may ask for. The endpoint is public and unauthenticated and the requested
+/// range is used verbatim to size a `Vec`, so without a cap one request can
+/// trigger a terabyte-scale allocation and abort the guardian process.
+///
+/// Real transactions have a handful of outputs; a client that somehow needs
+/// more can still ask for them one outpoint at a time.
+const MAX_OUTPUTS_OUTCOMES_BATCH: usize = 1024;
+
+/// Number of output outcomes `outpoint_range` asks for, if it is a range we are
+/// willing to serve.
+///
+/// The range is deserialized verbatim from an unauthenticated request, so it
+/// has to be bounded before anything is sized from it.
+fn checked_outputs_outcomes_count(outpoint_range: OutPointRange) -> Result<usize> {
+    let count = outpoint_range
+        .checked_count()
+        .context("Outpoint range is descending or too large")?;
+
+    ensure!(
+        count <= MAX_OUTPUTS_OUTCOMES_BATCH,
+        "Outpoint range must cover at most {MAX_OUTPUTS_OUTCOMES_BATCH} outputs, got {count}"
+    );
+
+    Ok(count)
+}
 
 #[derive(Clone)]
 pub struct ConsensusApi {
@@ -205,10 +232,14 @@ impl ConsensusApi {
         &self,
         outpoint_range: OutPointRange,
     ) -> Result<Vec<Option<SerdeModuleEncoding<DynOutputOutcome>>>> {
+        // Has to happen before `await_transaction`, which blocks until the
+        // transaction shows up.
+        let count = checked_outputs_outcomes_count(outpoint_range)?;
+
         // Wait for the transaction to be accepted first
         let (module_ids, mut dbtx) = self.await_transaction(outpoint_range.txid()).await;
 
-        let mut outcomes = Vec::with_capacity(outpoint_range.count());
+        let mut outcomes = Vec::with_capacity(count);
 
         for outpoint in outpoint_range {
             let module_id = module_ids
@@ -1149,4 +1180,40 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::{BitcoinHash as _, IdxRange, TransactionId};
+
+    use super::*;
+
+    /// `AWAIT_OUTPUTS_OUTCOMES` is public and unauthenticated, and the range it
+    /// takes has no validation of its own. A single request used to size a
+    /// `Vec` from `u64::MAX` indexes.
+    #[test]
+    fn outputs_outcomes_range_is_bounded() {
+        let txid = TransactionId::from_slice(&[0; 32]).expect("32 bytes is a valid txid");
+        let range = |start, end| OutPointRange::new(txid, IdxRange::from(start..end));
+
+        assert_eq!(
+            checked_outputs_outcomes_count(range(0, MAX_OUTPUTS_OUTCOMES_BATCH as u64))
+                .expect("a range at the limit is served"),
+            MAX_OUTPUTS_OUTCOMES_BATCH
+        );
+
+        for rejected in [
+            range(0, u64::MAX),
+            range(0, MAX_OUTPUTS_OUTCOMES_BATCH as u64 + 1),
+            // Descending ranges are rejected here rather than left to the
+            // iterator's tolerance of them.
+            range(u64::MAX, 0),
+            range(5, 4),
+        ] {
+            assert!(
+                checked_outputs_outcomes_count(rejected).is_err(),
+                "{rejected:?} must be rejected"
+            );
+        }
+    }
 }
