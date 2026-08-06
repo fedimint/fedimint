@@ -1531,6 +1531,95 @@ async fn unknown_consensus_item_variant_is_rejected_without_panicking() -> anyho
     Ok(())
 }
 
+/// `Feerate::calculate_fee` multiplies the declared rate by the transaction's
+/// virtual size unchecked, so a rate near `u64::MAX / vbytes` wraps to an
+/// arbitrarily small fee. `validate_tx` compares the declared rate against the
+/// consensus and relay floors and never the computed fee, so such a peg-out is
+/// signed and broadcast with a fee too low to confirm — stranding the inputs it
+/// removed from `UTXOKey`, largest first, with no RBF, CPFP or cancel.
+#[tokio::test(flavor = "multi_thread")]
+async fn submission_rejects_a_fee_rate_that_cannot_produce_a_real_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let bitcoin = fixtures.bitcoin();
+    let _bitcoin = bitcoin.lock_exclusive().await;
+    let db = MemDatabase::new().into_database();
+    let task_group = TaskGroup::new();
+
+    let (wallet_server_cfg, _) = build_wallet_server_configs()?;
+    let module_instance_id = 1;
+
+    let wallet = fedimint_wallet_server::Wallet::new(
+        wallet_server_cfg[0].to_typed()?,
+        &db,
+        &task_group,
+        PeerId::from(0),
+        DynGlobalApi::new(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            [(
+                PeerId::from(0),
+                SafeUrl::from_str("ws://dummy.xyz").unwrap(),
+            )]
+            .into(),
+            None,
+        )?
+        .with_module(module_instance_id),
+        ServerBitcoinRpcMonitor::new(
+            fixtures.server_bitcoin_rpc(),
+            Duration::from_secs(1),
+            &TaskGroup::new(),
+        ),
+    )
+    .await?;
+
+    let mut dbtx = db.begin_transaction().await;
+    let recipient = bitcoin::Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf")?;
+    let out_point = fedimint_core::OutPoint {
+        txid: TransactionId::all_zeros(),
+        out_idx: 0,
+    };
+
+    let peg_out = |sats_per_kvb: u64| {
+        fedimint_wallet_common::WalletOutput::new_v0_peg_out(
+            recipient.clone().assume_checked(),
+            bitcoin::Amount::from_sat(100_000),
+            PegOutFees {
+                fee_rate: fedimint_core::Feerate { sats_per_kvb },
+                total_weight: 958,
+            },
+        )
+    };
+
+    // A rate that wraps the fee computation is rejected before it can be signed.
+    assert_eq!(
+        wallet
+            .verify_output_submission(
+                &mut dbtx
+                    .to_ref_with_prefix_module_id(module_instance_id)
+                    .0
+                    .into_nc(),
+                &peg_out(u64::MAX),
+                out_point,
+            )
+            .await,
+        Err(WalletOutputError::NotEnoughSpendableUTXO)
+    );
+
+    // An ordinary rate is untouched.
+    wallet
+        .verify_output_submission(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            &peg_out(1000),
+            out_point,
+        )
+        .await
+        .expect("an ordinary peg-out fee rate is accepted");
+
+    Ok(())
+}
+
 async fn sync_wallet_to_block(
     dbtx: &mut DatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,

@@ -63,7 +63,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
-    get_network_for_address, push_db_key_items, push_db_pair_items,
+    get_network_for_address, push_db_key_items, push_db_pair_items, weight_to_vbytes,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -899,6 +899,50 @@ impl ServerModule for Wallet {
             amounts: Amounts::new_bitcoin(amount),
             fees: Amounts::new_bitcoin(fee),
         })
+    }
+
+    /// Reject a peg-out whose declared fee rate cannot produce a fee that
+    /// exists on chain.
+    ///
+    /// [`Feerate::calculate_fee`] multiplies the declared rate by the
+    /// transaction's virtual size without checking for overflow, so a rate near
+    /// `u64::MAX / vbytes` wraps to an arbitrarily small fee. Such a peg-out
+    /// passes [`StatelessWallet::validate_tx`], which compares the *declared*
+    /// rate against the consensus and relay floors and never the computed fee,
+    /// and is then signed and broadcast with a fee too low to confirm. Its
+    /// inputs leave [`UTXOKey`] the moment the peg-out is accepted and only
+    /// return once the transaction confirms, so they are stranded for as long
+    /// as it does not — and selection spends largest-first.
+    ///
+    /// This is enforced as submission policy rather than in
+    /// [`ServerModule::process_output`] because tightening the latter would
+    /// change transaction validity. Release builds wrap rather than panic here,
+    /// so such peg-outs were accepted historically and rejecting them in
+    /// consensus needs a module consensus version bump. As policy it is only as
+    /// strong as the weakest guardian.
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a WalletOutput,
+        _out_point: OutPoint,
+    ) -> Result<(), WalletOutputError> {
+        let fees = match output.ensure_v0_ref()? {
+            WalletOutputV0::PegOut(peg_out) => peg_out.fees,
+            WalletOutputV0::Rbf(rbf) => rbf.fees,
+        };
+
+        let fee_sats = weight_to_vbytes(fees.total_weight)
+            .checked_mul(fees.fee_rate.sats_per_kvb)
+            .map(|sats| sats / 1000);
+
+        // A fee larger than the money supply can no more be funded than an
+        // amount larger than it can, which is what this variant already reports
+        // for the peg-out amount itself.
+        match fee_sats {
+            Some(sats) if sats <= bitcoin::Amount::MAX_MONEY.to_sat() => Ok(()),
+            _ => Err(WalletOutputError::NotEnoughSpendableUTXO),
+        }
     }
 
     async fn output_status(
