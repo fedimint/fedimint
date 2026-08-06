@@ -83,11 +83,6 @@ pub fn is_running_in_test_env() -> bool {
     unit_test || is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV)
 }
 
-/// Use to allow `process_output` to process RBF withdrawal outputs.
-pub fn is_rbf_withdrawal_enabled() -> bool {
-    is_env_var_set("FM_UNSAFE_ENABLE_RBF_WITHDRAWAL")
-}
-
 /// Use to disable automatic consensus version voting for testing and
 /// development environments
 pub fn is_automatic_consensus_version_voting_disabled() -> bool {
