@@ -10,6 +10,7 @@ use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
+const ESPLORA_CLIENT_TIMEOUT_SECONDS: u64 = 60;
 #[derive(Debug)]
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
@@ -27,7 +28,8 @@ impl EsploraClient {
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
-        let builder = esplora_client::Builder::new(without_trailing);
+        let builder =
+            esplora_client::Builder::new(without_trailing).timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS);
         let client = builder.build_async()?;
         Ok(Self {
             client,
