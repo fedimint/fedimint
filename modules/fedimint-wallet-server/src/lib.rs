@@ -84,8 +84,8 @@ use fedimint_wallet_common::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    MODULE_CONSENSUS_VERSION, Rbf, UnknownWalletInputVariantError, WalletInputError,
-    WalletOutputError, WalletOutputV0,
+    CHECKED_PEG_OUT_FEE_MODULE_CONSENSUS_VERSION, MODULE_CONSENSUS_VERSION, Rbf,
+    UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
 };
 use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
@@ -1028,7 +1028,10 @@ impl ServerModule for Wallet {
                         module.available_utxos(&mut dbtx).await,
                         feerate,
                         &dummy_tweak,
-                        None
+                        None,
+                        // A quote is not consensus, so it can always refuse a
+                        // rate whose fee could not exist on chain.
+                        FeeArithmetic::Checked
                     );
 
                     match tx {
@@ -1640,6 +1643,14 @@ impl Wallet {
         output: &WalletOutputV0,
         change_tweak: &[u8; 33],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
+        let fee_arithmetic = if CHECKED_PEG_OUT_FEE_MODULE_CONSENSUS_VERSION
+            <= self.consensus_module_consensus_version(dbtx).await
+        {
+            FeeArithmetic::Checked
+        } else {
+            FeeArithmetic::Wrapping
+        };
+
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
@@ -1652,6 +1663,7 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
                 None,
+                fee_arithmetic,
             ),
             WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
@@ -1667,6 +1679,7 @@ impl Wallet {
                     tx.fees.fee_rate,
                     change_tweak,
                     Some(rbf.clone()),
+                    fee_arithmetic,
                 )
             }
         }
@@ -2014,6 +2027,35 @@ pub async fn broadcast_pending_tx(
     }
 }
 
+/// Whether peg-out fee computation rejects a rate that cannot produce a fee
+/// which exists on chain.
+///
+/// Pre-2.3 sessions accepted such peg-outs -- the multiplication wrapped in
+/// release profiles -- so replaying them has to reproduce that, and the gate
+/// cannot simply be removed once every federation has upgraded.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum FeeArithmetic {
+    /// Pre-2.3: multiply unchecked, as historic sessions did.
+    Wrapping,
+    /// From 2.3 on: reject a rate whose fee cannot exist on chain.
+    Checked,
+}
+
+impl FeeArithmetic {
+    fn calculate_fee(
+        self,
+        fee_rate: Feerate,
+        weight: u64,
+    ) -> Result<bitcoin::Amount, WalletOutputError> {
+        match self {
+            FeeArithmetic::Wrapping => Ok(fee_rate.wrapping_calculate_fee(weight)),
+            FeeArithmetic::Checked => fee_rate
+                .checked_calculate_fee(weight)
+                .ok_or(WalletOutputError::NotEnoughSpendableUTXO),
+        }
+    }
+}
+
 struct StatelessWallet<'a> {
     descriptor: &'a Descriptor<CompressedPublicKey>,
     secret_key: &'a secp256k1::SecretKey,
@@ -2091,6 +2133,7 @@ impl StatelessWallet<'_> {
         mut fee_rate: Feerate,
         change_tweak: &[u8; 33],
         rbf: Option<Rbf>,
+        fee_arithmetic: FeeArithmetic,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         // `peg_out_amount` arrives unvalidated from whoever asked for the peg-out,
         // and `bitcoin::Amount` arithmetic panics on overflow. An amount that
@@ -2143,7 +2186,7 @@ impl StatelessWallet<'_> {
         // Finally we initialize our accumulator for selected input amounts
         let mut total_selected_value = bitcoin::Amount::from_sat(0);
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
-        let mut fees = fee_rate.calculate_fee(total_weight);
+        let mut fees = fee_arithmetic.calculate_fee(fee_rate, total_weight)?;
 
         loop {
             // Fees grow with every selected input and are not bounded by `MAX_MONEY`,
@@ -2165,7 +2208,7 @@ impl StatelessWallet<'_> {
 
             total_selected_value += utxo.amount;
             total_weight += max_input_weight;
-            fees = fee_rate.calculate_fee(total_weight);
+            fees = fee_arithmetic.calculate_fee(fee_rate, total_weight)?;
             selected_utxos.push((utxo_key, utxo));
         }
 
@@ -2454,7 +2497,8 @@ mod tests {
 
     use crate::common::PegInDescriptor;
     use crate::{
-        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
+        CompressedPublicKey, FeeArithmetic, OsRng, SpendableUTXO, StatelessWallet, UTXOKey,
+        WalletOutputError,
     };
 
     /// A peg-out recipient is chosen by the user, and nothing stops them from
@@ -2506,6 +2550,7 @@ mod tests {
                 Feerate { sats_per_kvb: 1000 },
                 &change_tweak,
                 None,
+                FeeArithmetic::Checked,
             )
             .expect("tx creation succeeds");
 
@@ -2521,6 +2566,52 @@ mod tests {
             matching, 2,
             "both the destination and the change output carry the change script"
         );
+    }
+
+    /// Pre-2.3 the fee multiplication wrapped in release profiles, so a peg-out
+    /// declaring an enormous rate was accepted and broadcast with a fee too low
+    /// to confirm. From 2.3 on it is rejected. Both regimes must keep working:
+    /// replaying a pre-2.3 session has to reproduce the acceptance.
+    #[test]
+    fn fee_arithmetic_rejects_an_unpayable_rate_only_once_active() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let absurd = Feerate {
+            sats_per_kvb: u64::MAX,
+        };
+        let ordinary = Feerate { sats_per_kvb: 1000 };
+
+        assert_eq!(
+            FeeArithmetic::Checked.calculate_fee(absurd, 958),
+            Err(WalletOutputError::NotEnoughSpendableUTXO),
+            "an unpayable rate is rejected once 2.3 is active"
+        );
+        assert_eq!(
+            FeeArithmetic::Wrapping.calculate_fee(absurd, 958),
+            Ok(absurd.wrapping_calculate_fee(958)),
+            "pre-2.3 behaviour is reproduced exactly, wrap and all"
+        );
+
+        for arithmetic in [FeeArithmetic::Checked, FeeArithmetic::Wrapping] {
+            assert_eq!(
+                arithmetic.calculate_fee(ordinary, 958),
+                Ok(ordinary.calculate_fee(958)),
+                "an ordinary rate is unaffected in either regime"
+            );
+        }
+
+        let _ = descriptor;
     }
 
     /// A peg-out amount reaches `create_tx` straight from an unauthenticated
@@ -2571,6 +2662,7 @@ mod tests {
                 Feerate { sats_per_kvb: 1000 },
                 &[0; 33],
                 None,
+                FeeArithmetic::Checked,
             );
 
             assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
@@ -2622,6 +2714,7 @@ mod tests {
             fee,
             &[0; 33],
             None,
+            FeeArithmetic::Checked,
         );
         assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
 
@@ -2635,6 +2728,7 @@ mod tests {
                 fee,
                 &[0; 33],
                 None,
+                FeeArithmetic::Checked,
             )
             .expect("is ok");
 

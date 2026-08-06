@@ -469,6 +469,29 @@ impl Feerate {
         let sats = weight_to_vbytes(weight) * self.sats_per_kvb / 1000;
         bitcoin::Amount::from_sat(sats)
     }
+
+    /// Fee for a transaction of the given weight, reproducing the wrapping the
+    /// unchecked multiplication used to do in release profiles.
+    ///
+    /// Consensus behaviour must not depend on the build profile, and
+    /// [`Self::calculate_fee`]'s `*` panics with overflow checks on and wraps
+    /// without them. Sessions ordered before the fee computation was checked
+    /// have to replay as release binaries ran them, so the wrap is explicit.
+    pub fn wrapping_calculate_fee(&self, weight: u64) -> bitcoin::Amount {
+        let sats = weight_to_vbytes(weight).wrapping_mul(self.sats_per_kvb) / 1000;
+        bitcoin::Amount::from_sat(sats)
+    }
+
+    /// Fee for a transaction of the given weight, or `None` if the rate and
+    /// weight do not describe a fee that can exist on chain.
+    ///
+    /// [`Self::calculate_fee`] multiplies unchecked, which wraps to an
+    /// arbitrarily small fee in release profiles. Callers that decide whether
+    /// to accept a transaction must use this instead.
+    pub fn checked_calculate_fee(&self, weight: u64) -> Option<bitcoin::Amount> {
+        let sats = weight_to_vbytes(weight).checked_mul(self.sats_per_kvb)? / 1000;
+        (sats <= bitcoin::Amount::MAX_MONEY.to_sat()).then(|| bitcoin::Amount::from_sat(sats))
+    }
 }
 
 const WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR as u64;
