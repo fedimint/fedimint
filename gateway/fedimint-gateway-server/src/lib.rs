@@ -965,7 +965,7 @@ impl Gateway {
 
         let lnv1_start = fedimint_core::time::now();
         let lnv1_result = self
-            .try_handle_lightning_payment_ln_legacy(&payment_request)
+            .try_handle_lightning_payment_ln_legacy(&payment_request, lightning_context)
             .await;
         let lnv1_outcome = if lnv1_result.is_ok() {
             "success"
@@ -1060,6 +1060,7 @@ impl Gateway {
     async fn try_handle_lightning_payment_ln_legacy(
         &self,
         htlc_request: &InterceptPaymentRequest,
+        lightning_context: &LightningContext,
     ) -> Result<()> {
         // Check if the payment corresponds to a federation supporting legacy Lightning.
         let Some(federation_index) = htlc_request.short_channel_id else {
@@ -1077,6 +1078,10 @@ impl Gateway {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
 
+        // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
+        // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
+        // no federation short-channel id), but using the backend's own best
+        // height keeps the unit and chain view consistent for every backend.
         client
             .borrow()
             .with(|client| async {
@@ -1091,7 +1096,12 @@ impl Gateway {
                                         "Federation does not have LNv1 module".to_string(),
                                     ))
                                 })?;
-                        match lnv1.gateway_handle_intercepted_htlc(htlc).await {
+                        match lnv1
+                            .gateway_handle_intercepted_htlc(htlc, async {
+                                Ok(lightning_context.lnrpc.info().await?.block_height)
+                            })
+                            .await
+                        {
                             Ok(_) => Ok(()),
                             Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                                 format!("Error intercepting lightning payment {e:?}"),

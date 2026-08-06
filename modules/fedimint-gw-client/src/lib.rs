@@ -1,10 +1,13 @@
 mod complete;
 pub mod events;
 pub mod pay;
+#[cfg(test)]
+mod tests;
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -56,7 +59,8 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    GatewayRegistrationAuth, KIND, LightningCommonInit, LightningGateway,
+    GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
+    LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
     RemoveGatewayRequest, create_gateway_registration_message, create_gateway_remove_message,
 };
@@ -65,6 +69,7 @@ use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
@@ -72,6 +77,16 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
+
+/// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
+///
+/// This reserves the worst-case time to claim the HTLC on-chain after
+/// federation funding and threshold decryption. Exactly the margin is
+/// rejected; fresh funding requires at least one additional block. The value
+/// deliberately matches the route-hint delta advertised by pre-upgrade
+/// clients so their invoices remain payable; see
+/// [`LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN`] for the plan to raise it.
+pub const LNV1_HTLC_EXPIRY_SAFETY_MARGIN: u32 = LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN as u32;
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
@@ -499,7 +514,7 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    /// Attempt fulfill HTLC by buying preimage from the federation.
+    /// Attempt to fulfill an HTLC by buying its preimage from the federation.
     ///
     /// LND can replay a still-pending HTLC after interceptor reconnect or
     /// gatewayd restart. Since the operation id is deterministic from the
@@ -509,8 +524,17 @@ impl GatewayClientModule {
     /// We only short-circuit if a `GatewayCompleteStateMachine` is or was
     /// handling the exact same LND circuit. Direct swaps with the same payment
     /// hash and different circuits fall through to the normal failure/cancel
-    /// path.
-    pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
+    /// path. Exact-circuit replays bypass fresh-funding expiry validation so an
+    /// already-funded operation can still settle after reconnect or restart.
+    ///
+    /// `current_block_height` resolves to the Lightning backend's absolute best
+    /// Bitcoin block height. It is awaited only after replay detection, before
+    /// any fresh funding.
+    pub async fn gateway_handle_intercepted_htlc(
+        &self,
+        htlc: Htlc,
+        current_block_height: impl Future<Output = anyhow::Result<u32>>,
+    ) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
@@ -558,6 +582,21 @@ impl GatewayClientModule {
                 "HTLC circuit was already handled by a completion state machine, treating as idempotent replay"
             );
             return Ok(operation_id);
+        }
+
+        let current_block_height = current_block_height.await?;
+        htlc.ensure_safe_expiry(current_block_height)?;
+        let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
+        if remaining_blocks <= u32::from(LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA) {
+            // Tracks how much traffic still arrives via pre-upgrade invoices;
+            // enforcement can be raised to the advertised delta once this stops
+            // firing in the wild.
+            warn!(
+                payment_hash = %htlc.payment_hash,
+                remaining_blocks,
+                advertised_delta = LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
+                "Accepting LNv1 HTLC with less remaining expiry than newly created invoices advertise, likely paid to a pre-upgrade invoice"
+            );
         }
 
         let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
@@ -948,7 +987,10 @@ pub struct Htlc {
     pub incoming_amount_msat: Amount,
     /// The outgoing HTLC amount in millisatoshi
     pub outgoing_amount_msat: Amount,
-    /// The incoming HTLC expiry
+    /// Absolute Bitcoin block height at which the incoming HTLC expires.
+    ///
+    /// This uses the same coordinate system as the Lightning backend's current
+    /// best block height.
     pub incoming_expiry: u32,
     /// The short channel id of the HTLC.
     pub short_channel_id: Option<u64>,
@@ -956,6 +998,37 @@ pub struct Htlc {
     pub incoming_chan_id: u64,
     /// The index of the incoming htlc in the incoming channel
     pub htlc_id: u64,
+}
+
+/// An intercepted LNv1 HTLC does not leave enough time for safe settlement.
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[error(
+    "incoming HTLC expiry is unsafe: expiry {incoming_expiry}, current height {current_block_height}, required remaining blocks greater than {expiry_safety_margin}"
+)]
+pub struct UnsafeHtlcExpiry {
+    /// Absolute Bitcoin block height at which the HTLC expires.
+    pub incoming_expiry: u32,
+    /// Lightning backend's current best Bitcoin block height.
+    pub current_block_height: u32,
+    /// Reserved settlement and on-chain safety margin in blocks.
+    pub expiry_safety_margin: u32,
+}
+
+impl Htlc {
+    /// Rejects an HTLC unless its remaining lifetime exceeds the LNv1 safety
+    /// margin.
+    pub fn ensure_safe_expiry(&self, current_block_height: u32) -> Result<(), UnsafeHtlcExpiry> {
+        let remaining_blocks = self.incoming_expiry.saturating_sub(current_block_height);
+        if LNV1_HTLC_EXPIRY_SAFETY_MARGIN < remaining_blocks {
+            return Ok(());
+        }
+
+        Err(UnsafeHtlcExpiry {
+            incoming_expiry: self.incoming_expiry,
+            current_block_height,
+            expiry_safety_margin: LNV1_HTLC_EXPIRY_SAFETY_MARGIN,
+        })
+    }
 }
 
 impl TryFrom<InterceptPaymentRequest> for Htlc {

@@ -530,7 +530,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         };
         let intercept_op = gateway_client
             .get_first_module::<GatewayClientModule>()?
-            .gateway_handle_intercepted_htlc(htlc)
+            .gateway_handle_intercepted_htlc(htlc, async { Ok(0) })
             .await?;
         let mut intercept_sub = gateway_client
             .get_first_module::<GatewayClientModule>()?
@@ -545,6 +545,91 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
             gateway_client.get_balance_for_btc().await?
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("expiry boundary".to_string())?),
+                None,
+                "test intercept HTLC expiry boundary",
+                lightning_gateway,
+            )
+            .await?;
+        let route_hints = invoice.route_hints();
+        let route_hint_last_hops = route_hints
+            .iter()
+            .filter_map(|route_hint| route_hint.0.last())
+            .collect::<Vec<_>>();
+        assert!(!route_hint_last_hops.is_empty());
+        assert!(route_hint_last_hops.iter().all(|hop| {
+            hop.cltv_expiry_delta == fedimint_ln_common::LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA
+        }));
+
+        let current_block_height = 1_000;
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: invoice_amount,
+            outgoing_amount_msat: invoice_amount,
+            incoming_expiry: current_block_height
+                + fedimint_gw_client::LNV1_HTLC_EXPIRY_SAFETY_MARGIN,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+
+        let err = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(current_block_height) })
+            .await
+            .expect_err("HTLC at the expiry boundary must be rejected");
+        assert!(err.to_string().contains("incoming HTLC expiry is unsafe"));
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        let accepted_htlc = Htlc {
+            incoming_expiry: htlc.incoming_expiry + 1,
+            ..htlc
+        };
+        let operation_id = gateway_ln_module
+            .gateway_handle_intercepted_htlc(accepted_htlc, async { Ok(current_block_height) })
+            .await?;
+        let mut receive_updates = gateway_ln_module
+            .gateway_subscribe_ln_receive(operation_id)
+            .await?
+            .into_stream();
+        assert_eq!(
+            receive_updates.ok().await?,
+            GatewayExtReceiveStates::Funding
+        );
+        assert_matches!(
+            receive_updates.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance.saturating_sub(invoice_amount)
         );
 
         Ok(())
@@ -582,7 +667,7 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
             payment_hash: *invoice.payment_hash(),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
-            incoming_expiry: u32::MAX,
+            incoming_expiry: fedimint_gw_client::LNV1_HTLC_EXPIRY_SAFETY_MARGIN + 1,
             short_channel_id: Some(1),
             incoming_chan_id: 2,
             htlc_id: 1,
@@ -590,12 +675,19 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
         let (first, second) = tokio::join!(
-            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone()),
-            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone()),
+            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(0) }),
+            gateway_ln_module.gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(0) }),
         );
         let first_op = first?;
         let second_op = second?;
         assert_eq!(first_op, second_op);
+
+        let active_replay_op = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc.clone(), async {
+                anyhow::bail!("backend info must not be queried for active replay")
+            })
+            .await?;
+        assert_eq!(first_op, active_replay_op);
 
         let mut intercept_sub = gateway_ln_module
             .gateway_subscribe_ln_receive(first_op)
@@ -613,9 +705,15 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
         gateway_ln_module.await_completion(first_op).await;
 
         let terminal_replay_op = gateway_ln_module
-            .gateway_handle_intercepted_htlc(htlc)
+            .gateway_handle_intercepted_htlc(htlc, async {
+                anyhow::bail!("backend info must not be queried for inactive replay")
+            })
             .await?;
         assert_eq!(first_op, terminal_replay_op);
+        assert_eq!(
+            initial_gateway_balance.saturating_sub(invoice_amount),
+            gateway_client.get_balance_for_btc().await?
+        );
 
         Ok(())
     })
@@ -646,7 +744,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 
         match gateway_client
             .get_first_module::<GatewayClientModule>()?
-            .gateway_handle_intercepted_htlc(htlc)
+            .gateway_handle_intercepted_htlc(htlc, async { Ok(0) })
             .await
         {
             Ok(_) => panic!(
@@ -693,7 +791,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         // Attempt to route an HTLC while the gateway has no funds
         match gateway_client
             .get_first_module::<GatewayClientModule>()?
-            .gateway_handle_intercepted_htlc(htlc)
+            .gateway_handle_intercepted_htlc(htlc, async { Ok(0) })
             .await
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
@@ -790,7 +888,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             let intercept_op = gateway_client
                 .get_first_module::<GatewayClientModule>()?
-                .gateway_handle_intercepted_htlc(htlc)
+                .gateway_handle_intercepted_htlc(htlc, async { Ok(0) })
                 .await?;
             let mut intercept_sub = gateway_client
                 .get_first_module::<GatewayClientModule>()?

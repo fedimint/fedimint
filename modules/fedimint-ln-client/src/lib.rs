@@ -74,9 +74,9 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
 use fedimint_ln_common::{
-    ContractOutput, KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    ContractOutput, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA, LightningCommonInit,
+    LightningGateway, LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
@@ -1007,7 +1007,7 @@ impl LightningClientModule {
                 base_msat: 0,
                 proportional_millionths: 0,
             },
-            cltv_expiry_delta: 30,
+            cltv_expiry_delta: LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
         };

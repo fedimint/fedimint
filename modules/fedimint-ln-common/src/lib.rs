@@ -20,6 +20,24 @@ pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
 
+/// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
+///
+/// Fresh intercepted HTLCs must have more remaining blocks than this margin.
+/// The value matches the route-hint delta advertised by pre-upgrade clients so
+/// that their invoices remain payable; once the deployed client fleet
+/// advertises [`LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA`], enforcement can
+/// be raised towards it.
+pub const LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN: u16 = 30;
+
+/// Route-hint CLTV delta advertised in newly created LNv1 invoices.
+///
+/// Deliberately larger than the enforced
+/// [`LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN`]: new invoices reserve enough
+/// time for federation funding, threshold decryption, Lightning settlement,
+/// and on-chain recovery, so a future release can raise enforcement to this
+/// value without breaking payments.
+pub const LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA: u16 = 144;
+
 use std::collections::BTreeMap;
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
