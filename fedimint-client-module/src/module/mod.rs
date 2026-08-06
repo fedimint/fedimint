@@ -745,6 +745,26 @@ where
             .await
     }
 
+    /// Reads an operation log entry within an ongoing database transaction.
+    ///
+    /// Unlike [`Self::get_operation`] this observes writes made earlier in
+    /// `dbtx`, which is what a caller needs to decide atomically whether it is
+    /// about to create an operation that already exists.
+    pub async fn get_operation_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Option<oplog::OperationLogEntry> {
+        self.client
+            .get()
+            .operation_log()
+            .get_operation_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+            )
+            .await
+    }
+
     pub async fn add_operation_log_entry_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
