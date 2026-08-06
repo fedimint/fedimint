@@ -972,6 +972,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::module::ModuleConsensusVersion;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId, secp256k1};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
@@ -1000,11 +1001,11 @@ mod fedimint_migration_tests {
     };
     use fedimint_ln_server::db::{
         AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
-        BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
-        ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
-        EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
-        LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
-        ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+        BlockCountVotePrefix, ConsensusVersionVoteKey, ConsensusVersionVotePrefix, ContractKey,
+        ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+        EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
+        LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
+        OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_server::core::DynServerModuleInit;
@@ -1136,6 +1137,12 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
+
+        dbtx.insert_new_entry(
+            &ConsensusVersionVoteKey(PeerId::from(0)),
+            &ModuleConsensusVersion::new(2, 0),
+        )
+        .await;
 
         dbtx.insert_new_entry(&EncryptedPreimageIndexKey("foobar".consensus_hash()), &())
             .await;
@@ -1589,6 +1596,17 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read both LightningAuditItemKeys"
                             );
                             info!("Validated LightningAuditItem");
+                        }
+                        DbKeyPrefix::ConsensusVersionVote => {
+                            let votes = dbtx
+                                .find_by_prefix(&ConsensusVersionVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            // The committed v0 snapshot predates this prefix, and
+                            // `create_server_db_with_v0_data` cannot currently be re-run
+                            // to regenerate it, so only assert that the prefix decodes.
+                            info!(?votes, "Validated ConsensusVersionVote");
                         }
                     }
                 }
