@@ -1465,6 +1465,72 @@ async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `WalletConsensusItem` carries an `#[encodable_default]` variant, so an
+/// unknown discriminant decodes successfully rather than failing. Consensus
+/// items are ordered before they are interpreted and a peer chooses its own,
+/// so a single peer can put an unknown variant in front of every other
+/// guardian. Rejecting the item has to be an error and never a panic: a panic
+/// here unwinds a root task-group task and exits the process, and because the
+/// item is never recorded as accepted it is replayed on restart.
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_consensus_item_variant_is_rejected_without_panicking() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let bitcoin = fixtures.bitcoin();
+    let _bitcoin = bitcoin.lock_exclusive().await;
+    let db = MemDatabase::new().into_database();
+    let task_group = TaskGroup::new();
+
+    let (wallet_server_cfg, _) = build_wallet_server_configs()?;
+    let module_instance_id = 1;
+
+    let wallet = fedimint_wallet_server::Wallet::new(
+        wallet_server_cfg[0].to_typed()?,
+        &db,
+        &task_group,
+        PeerId::from(0),
+        DynGlobalApi::new(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            [(
+                PeerId::from(0),
+                SafeUrl::from_str("ws://dummy.xyz").unwrap(),
+            )]
+            .into(),
+            None,
+        )?
+        .with_module(module_instance_id),
+        ServerBitcoinRpcMonitor::new(
+            fixtures.server_bitcoin_rpc(),
+            Duration::from_secs(1),
+            &TaskGroup::new(),
+        ),
+    )
+    .await?;
+
+    let mut dbtx = db.begin_transaction().await;
+
+    let error = wallet
+        .process_consensus_item(
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .0
+                .into_nc(),
+            fedimint_wallet_common::WalletConsensusItem::Default {
+                variant: 99,
+                bytes: vec![],
+            },
+            PeerId::from(1),
+        )
+        .await
+        .expect_err("an unknown consensus item variant must be rejected");
+
+    assert!(
+        error.to_string().contains("99"),
+        "the rejection should name the unknown variant, got: {error}"
+    );
+
+    Ok(())
+}
+
 async fn sync_wallet_to_block(
     dbtx: &mut DatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
