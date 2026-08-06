@@ -24,7 +24,7 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
-use fedimint_gateway_server::Gateway;
+use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
@@ -1804,6 +1804,97 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
                     .checked_add(outgoing_fee)
                     .expect("Should not wrap around")
             );
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+/// `Gateway::run` awaits `load_clients` before `start_gateway`, and building a
+/// federation client starts its executor, so a `PayInvoice` state machine that
+/// was persisted before a restart runs again while the gateway is still
+/// `Disconnected`. `get_lightning_context` then reports `FailedToConnect`
+/// without any RPC having been attempted, and the send path used to read that
+/// local verdict as the lightning node refusing the payment: it cancelled the
+/// outgoing contract, refunding a sender whose HTLC the previous process may
+/// already have settled and leaving the gateway short the difference.
+///
+/// Only the lightning node knows whether an HTLC of ours is in flight, so the
+/// gateway has to wait until it can ask, rather than answer for it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_waits_to_reach_lightning_before_cancelling_outgoing_payment()
+-> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_id = gateway.http_gateway_id().await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+            user_client
+                .get_first_module::<DummyClientModule>()?
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await?;
+
+            let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
+            let invoice = other_lightning_client.invoice(sats(250), None)?;
+
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee: _,
+            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
+            let PayType::Lightning(pay_op) = payment_type else {
+                panic!("Expected Lightning payment!");
+            };
+            let mut pay_sub = lightning_module
+                .subscribe_ln_pay(pay_op)
+                .await?
+                .into_stream();
+            assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+            assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
+
+            // Stand in for the restart: the outgoing contract is funded and the
+            // gateway's state machine is about to run against a gateway that has
+            // not (re-)established its lightning session yet.
+            let lightning_context = gateway.get_lightning_context().await?;
+            gateway
+                .set_gateway_state_out_of_band(GatewayState::Disconnected)
+                .await;
+
+            let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+            let operation_id = gateway_module
+                .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                    federation_id: user_client.federation_id(),
+                    contract_id,
+                    payment_data: PaymentData::Invoice(invoice),
+                    preimage_auth: Hash::hash(&[0; 32]),
+                })
+                .await?;
+            let mut gw_pay_sub = gateway_module
+                .gateway_subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
+            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+
+            // Any verdict reached here is one the lightning node was never asked
+            // for, and a cancellation cannot be taken back.
+            if let Ok(state) = fedimint_core::task::timeout(
+                Duration::from_secs(5),
+                futures::StreamExt::next(&mut gw_pay_sub),
+            )
+            .await
+            {
+                panic!(
+                    "Gateway settled the fate of an outgoing payment while not connected to its lightning node: {state:?}"
+                );
+            }
+
+            // Reconnected, the payment resolves the way it always should have.
+            gateway
+                .set_gateway_state_out_of_band(GatewayState::Running { lightning_context })
+                .await;
+
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
 
             Ok(())
         },
