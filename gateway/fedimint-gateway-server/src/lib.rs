@@ -3194,7 +3194,10 @@ impl Gateway {
 
 #[async_trait]
 impl IGatewayClientV2 for Gateway {
-    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse) {
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
         loop {
             match self.get_lightning_context().await {
                 Ok(lightning_context) => {
@@ -3203,7 +3206,15 @@ impl IGatewayClientV2 for Gateway {
                         .complete_htlc(htlc_response.clone())
                         .await
                     {
-                        Ok(..) => return,
+                        Ok(..) => return Ok(()),
+                        Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
+                            warn!(
+                                target: LOG_GATEWAY,
+                                err = %err.fmt_compact(),
+                                "Lightning cannot reach the requested terminal HTLC outcome",
+                            );
+                            return Err(err);
+                        }
                         Err(err) => {
                             warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                         }

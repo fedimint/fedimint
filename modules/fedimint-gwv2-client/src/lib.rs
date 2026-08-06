@@ -52,15 +52,125 @@ use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
 use crate::api::GatewayFederationApi;
-use crate::complete_sm::{CompleteSMCommon, CompleteSMState, CompleteStateMachine};
+pub use crate::complete_sm::IncomingCircuitKey;
+use crate::complete_sm::{
+    CircuitCompleteSMCommon, CircuitCompleteStateMachine, CompleteSMState, CompleteStateMachine,
+};
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
 
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
+fn incoming_circuit_operation_id(
+    receive_operation_id: OperationId,
+    circuit: IncomingCircuitKey,
+) -> OperationId {
+    OperationId::from_encodable(&(
+        "gateway-lnv2-incoming-circuit",
+        receive_operation_id,
+        circuit,
+    ))
+}
+
+fn is_legacy_completion_for_circuit(
+    state: &GatewayClientStateMachinesV2,
+    circuit: IncomingCircuitKey,
+) -> bool {
+    let IncomingCircuitKey {
+        incoming_chan_id,
+        htlc_id,
+    } = circuit;
+    matches!(
+        state,
+        GatewayClientStateMachinesV2::Complete(CompleteStateMachine {
+            common,
+            ..
+        }) if common.incoming_chan_id == incoming_chan_id && common.htlc_id == htlc_id
+    )
+}
+
+fn legacy_completion_in_states(
+    active: &[GatewayClientStateMachinesV2],
+    inactive: &[GatewayClientStateMachinesV2],
+    circuit: IncomingCircuitKey,
+) -> bool {
+    active
+        .iter()
+        .chain(inactive)
+        .any(|state| is_legacy_completion_for_circuit(state, circuit))
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum IncomingRelayPlan {
+    Replay,
+    AddCompletion,
+    CreateReceiveAndCompletion,
+}
+
+fn incoming_relay_plan(
+    receive_exists: bool,
+    completion_exists: bool,
+    legacy_completion_exists: bool,
+) -> IncomingRelayPlan {
+    if completion_exists || legacy_completion_exists {
+        IncomingRelayPlan::Replay
+    } else if receive_exists {
+        IncomingRelayPlan::AddCompletion
+    } else {
+        IncomingRelayPlan::CreateReceiveAndCompletion
+    }
+}
+
+fn operation_creation_failed_permanently(
+    creation_failed: bool,
+    operation_exists_after_failure: bool,
+) -> bool {
+    creation_failed && !operation_exists_after_failure
+}
+
+/// Identifies the role of an LNv2 gateway operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GatewayOperationMetaV2;
+#[serde(untagged)]
+pub enum GatewayOperationMetaV2 {
+    /// Metadata written before operation roles were distinguished.
+    Legacy(()),
+    /// Metadata written for a role-specific operation.
+    Role {
+        /// Role used when recovering active operations.
+        role: GatewayOperationRoleV2,
+    },
+}
+
+/// Role of an LNv2 gateway operation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayOperationRoleV2 {
+    /// An outgoing payment operation.
+    Send,
+    /// A federation receive operation.
+    Receive,
+    /// An incoming Lightning circuit completion operation.
+    CircuitCompletion,
+}
+
+impl GatewayOperationMetaV2 {
+    /// Constructs metadata for `role`.
+    pub fn role(role: GatewayOperationRoleV2) -> Self {
+        Self::Role { role }
+    }
+
+    /// Returns whether shutdown must await Lightning circuit completion.
+    pub fn waits_for_completion(&self) -> bool {
+        matches!(
+            self,
+            Self::Legacy(())
+                | Self::Role {
+                    role: GatewayOperationRoleV2::CircuitCompletion
+                }
+        )
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientInitV2 {
@@ -172,7 +282,12 @@ impl ClientModule for GatewayClientModuleV2 {
 pub enum GatewayClientStateMachinesV2 {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),
+    /// Legacy completion state retained to decode and resume combined receive
+    /// operations created by older clients.
     Complete(CompleteStateMachine),
+    /// Completes one incoming circuit independently of other circuits carrying
+    /// the same payment hash and amount.
+    CircuitComplete(CircuitCompleteStateMachine),
 }
 
 impl fmt::Display for GatewayClientStateMachinesV2 {
@@ -185,6 +300,9 @@ impl fmt::Display for GatewayClientStateMachinesV2 {
                 write!(f, "{receive}")
             }
             GatewayClientStateMachinesV2::Complete(complete) => {
+                write!(f, "{complete}")
+            }
+            GatewayClientStateMachinesV2::CircuitComplete(complete) => {
                 write!(f, "{complete}")
             }
         }
@@ -226,6 +344,12 @@ impl State for GatewayClientStateMachinesV2 {
                     GatewayClientStateMachinesV2::Complete
                 )
             }
+            GatewayClientStateMachinesV2::CircuitComplete(state) => {
+                sm_enum_variant_translation!(
+                    state.transitions(context, global_context),
+                    GatewayClientStateMachinesV2::CircuitComplete
+                )
+            }
         }
     }
 
@@ -234,6 +358,7 @@ impl State for GatewayClientStateMachinesV2 {
             GatewayClientStateMachinesV2::Send(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Receive(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Complete(state) => state.operation_id(),
+            GatewayClientStateMachinesV2::CircuitComplete(state) => state.operation_id(),
         }
     }
 }
@@ -338,7 +463,7 @@ impl GatewayClientModuleV2 {
                 &mut dbtx.to_ref_nc(),
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                GatewayOperationMetaV2,
+                GatewayOperationMetaV2::role(GatewayOperationRoleV2::Send),
                 vec![self.client_ctx.make_dyn_state(send_sm)],
             )
             .await
@@ -398,6 +523,29 @@ impl GatewayClientModuleV2 {
         }
     }
 
+    async fn legacy_completion_exists(
+        &self,
+        operation_id: OperationId,
+        circuit: IncomingCircuitKey,
+    ) -> bool {
+        let active = self
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .into_iter()
+            .map(|(state, _)| state)
+            .collect::<Vec<_>>();
+        let inactive = self
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .into_iter()
+            .map(|(state, _)| state)
+            .collect::<Vec<_>>();
+
+        legacy_completion_in_states(&active, &inactive, circuit)
+    }
+
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -407,74 +555,112 @@ impl GatewayClientModuleV2 {
         amount_msat: u64,
     ) -> anyhow::Result<()> {
         let operation_start = now();
-
-        let operation_id = OperationId::from_encodable(&contract);
-
-        if self.client_ctx.operation_exists(operation_id).await {
+        let receive_operation_id = OperationId::from_encodable(&contract);
+        let circuit = IncomingCircuitKey {
+            incoming_chan_id,
+            htlc_id,
+        };
+        let completion_operation_id = incoming_circuit_operation_id(receive_operation_id, circuit);
+        let receive_exists = self.client_ctx.operation_exists(receive_operation_id).await;
+        let completion_exists = self
+            .client_ctx
+            .operation_exists(completion_operation_id)
+            .await;
+        let legacy_completion_exists = self
+            .legacy_completion_exists(receive_operation_id, circuit)
+            .await;
+        let plan = incoming_relay_plan(receive_exists, completion_exists, legacy_completion_exists);
+        if plan == IncomingRelayPlan::Replay {
             return Ok(());
         }
 
-        let refund_keypair = self.keypair;
-
-        let client_output = ClientOutput::<LightningOutput> {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
-            amounts: Amounts::new_bitcoin(contract.commitment.amount),
-        };
         let commitment = contract.commitment.clone();
-        let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |range: OutPointRange| {
-                assert_eq!(range.count(), 1);
+        if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            let refund_keypair = self.keypair;
+            let client_output = ClientOutput::<LightningOutput> {
+                output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+                amounts: Amounts::new_bitcoin(contract.commitment.amount),
+            };
+            let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
+                state_machines: Arc::new(move |range: OutPointRange| {
+                    assert_eq!(range.count(), 1);
 
-                vec![
-                    GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
+                    vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
-                            operation_id,
+                            operation_id: receive_operation_id,
                             contract: contract.clone(),
                             outpoint: range.into_iter().next().unwrap(),
                             refund_keypair,
                         },
                         state: ReceiveSMState::Funding,
-                    }),
-                    GatewayClientStateMachinesV2::Complete(CompleteStateMachine {
-                        common: CompleteSMCommon {
-                            operation_id,
-                            payment_hash,
-                            incoming_chan_id,
-                            htlc_id,
+                    })]
+                }),
+            };
+
+            let client_output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+                vec![client_output],
+                vec![client_output_sm],
+            ));
+            let transaction = TransactionBuilder::new().with_outputs(client_output);
+
+            let creation_result = self
+                .client_ctx
+                .finalize_and_submit_transaction(
+                    receive_operation_id,
+                    LightningCommonInit::KIND.as_str(),
+                    |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
+                    transaction,
+                )
+                .await;
+            if let Err(error) = creation_result {
+                let operation_exists = self.client_ctx.operation_exists(receive_operation_id).await;
+                if operation_creation_failed_permanently(true, operation_exists) {
+                    return Err(error);
+                }
+            } else {
+                let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+                self.client_ctx
+                    .log_event(
+                        &mut dbtx,
+                        IncomingPaymentStarted {
+                            operation_start,
+                            incoming_contract_commitment: commitment,
+                            invoice_amount: Amount::from_msats(amount_msat),
                         },
-                        state: CompleteSMState::Pending,
-                    }),
-                ]
-            }),
-        };
+                    )
+                    .await;
+                dbtx.commit_tx().await;
+            }
+        }
 
-        let client_output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
-            vec![client_output],
-            vec![client_output_sm],
-        ));
-        let transaction = TransactionBuilder::new().with_outputs(client_output);
-
-        self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                LightningCommonInit::KIND.as_str(),
-                |_| GatewayOperationMetaV2,
-                transaction,
-            )
-            .await?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
-                    operation_start,
-                    incoming_contract_commitment: commitment,
-                    invoice_amount: Amount::from_msats(amount_msat),
+        let completion =
+            GatewayClientStateMachinesV2::CircuitComplete(CircuitCompleteStateMachine {
+                common: CircuitCompleteSMCommon {
+                    operation_id: completion_operation_id,
+                    receive_operation_id,
+                    payment_hash,
+                    circuit,
                 },
+                state: CompleteSMState::Pending,
+            });
+        let creation_result = self
+            .client_ctx
+            .manual_operation_start(
+                completion_operation_id,
+                LightningCommonInit::KIND.as_str(),
+                GatewayOperationMetaV2::role(GatewayOperationRoleV2::CircuitCompletion),
+                vec![self.client_ctx.make_dyn_state(completion)],
             )
             .await;
-        dbtx.commit_tx().await;
+        if let Err(error) = creation_result {
+            let operation_exists = self
+                .client_ctx
+                .operation_exists(completion_operation_id)
+                .await;
+            if operation_creation_failed_permanently(true, operation_exists) {
+                return Err(error);
+            }
+        }
 
         Ok(())
     }
@@ -526,7 +712,7 @@ impl GatewayClientModuleV2 {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |_| GatewayOperationMetaV2,
+                |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
                 transaction,
             )
             .await?;
@@ -576,15 +762,24 @@ impl GatewayClientModuleV2 {
         }
     }
 
-    /// For the given `OperationId`, this function will wait until the Complete
-    /// state machine has finished or failed.
+    /// Waits for a legacy combined receive operation or a circuit-completion
+    /// operation to finish.
+    ///
+    /// `operation_id` must identify either a legacy operation containing
+    /// [`GatewayClientStateMachinesV2::Complete`] or a role-specific operation
+    /// containing [`GatewayClientStateMachinesV2::CircuitComplete`]. Both
+    /// successful completion and a durable permanent outcome conflict terminate
+    /// the wait.
     pub async fn await_completion(&self, operation_id: OperationId) {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
             match stream.next().await {
                 Some(GatewayClientStateMachinesV2::Complete(state)) => {
-                    if state.state == CompleteSMState::Completed {
+                    if matches!(
+                        state.state,
+                        CompleteSMState::Completed | CompleteSMState::CompletionFailed(_)
+                    ) {
                         info!(%state, "LNv2 completion state machine finished");
                         return;
                     }
@@ -594,6 +789,17 @@ impl GatewayClientModuleV2 {
                 Some(GatewayClientStateMachinesV2::Receive(state)) => {
                     info!(%state, "Waiting for LNv2 completion state machine");
                     continue;
+                }
+                Some(GatewayClientStateMachinesV2::CircuitComplete(state)) => {
+                    if matches!(
+                        state.state,
+                        CompleteSMState::Completed | CompleteSMState::CompletionFailed(_)
+                    ) {
+                        info!(%state, "LNv2 circuit completion state machine finished");
+                        return;
+                    }
+
+                    info!(%state, "Waiting for LNv2 circuit completion state machine");
                 }
                 Some(state) => {
                     warn!(%state, "Operation is not an LNv2 completion state machine");
@@ -612,8 +818,18 @@ impl GatewayClientModuleV2 {
 /// LNv2 operations that require access to the database or lightning node.
 #[async_trait]
 pub trait IGatewayClientV2: Debug + Send + Sync {
-    /// Use the gateway's lightning node to complete a payment
-    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse);
+    /// Uses the gateway's Lightning node to complete a payment.
+    ///
+    /// Implementations must absorb and retry every transient node or
+    /// connectivity failure. They return `Err` only when Lightning has reached
+    /// a permanent state that makes the requested outcome impossible. The
+    /// future may block while retrying and must remain cancellation-safe.
+    /// Completion state machines persist any returned error as terminal
+    /// `CompletionFailed`.
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> Result<(), LightningRpcError>;
 
     /// Determines if the payment can be completed using a direct swap to
     /// another federation.
@@ -661,3 +877,6 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         invoice: &Bolt11Invoice,
     ) -> anyhow::Result<FinalReceiveState>;
 }
+
+#[cfg(test)]
+mod tests;
