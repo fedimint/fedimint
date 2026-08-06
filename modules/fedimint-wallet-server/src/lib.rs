@@ -2048,9 +2048,19 @@ impl StatelessWallet<'_> {
         change_tweak: &[u8; 33],
         rbf: Option<Rbf>,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
+        // `peg_out_amount` arrives unvalidated from whoever asked for the peg-out,
+        // and `bitcoin::Amount` arithmetic panics on overflow. An amount that
+        // cannot exist on chain can never be funded by our UTXOs anyway, so reject
+        // it before doing any arithmetic with it.
+        if peg_out_amount > bitcoin::Amount::MAX_MONEY {
+            return Err(WalletOutputError::NotEnoughSpendableUTXO);
+        }
+
         // Add the rbf fees to the existing tx fees
         if let Some(rbf) = &rbf {
-            fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
+            fee_rate.sats_per_kvb = fee_rate
+                .sats_per_kvb
+                .saturating_add(rbf.fees.fee_rate.sats_per_kvb);
         }
 
         // When building a transaction we need to take care of two things:
@@ -2091,16 +2101,28 @@ impl StatelessWallet<'_> {
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
         let mut fees = fee_rate.calculate_fee(total_weight);
 
-        while total_selected_value < peg_out_amount + change_script.minimal_non_dust() + fees {
-            match included_utxos.pop() {
-                Some((utxo_key, utxo)) => {
-                    total_selected_value += utxo.amount;
-                    total_weight += max_input_weight;
-                    fees = fee_rate.calculate_fee(total_weight);
-                    selected_utxos.push((utxo_key, utxo));
-                }
-                _ => return Err(WalletOutputError::NotEnoughSpendableUTXO), // Not enough UTXOs
+        loop {
+            // Fees grow with every selected input and are not bounded by `MAX_MONEY`,
+            // so the target has to be recomputed with checked arithmetic on every
+            // iteration. A target we cannot even represent is by definition more than
+            // our UTXOs can cover.
+            let target = peg_out_amount
+                .checked_add(change_script.minimal_non_dust())
+                .and_then(|target| target.checked_add(fees))
+                .ok_or(WalletOutputError::NotEnoughSpendableUTXO)?;
+
+            if total_selected_value >= target {
+                break;
             }
+
+            let Some((utxo_key, utxo)) = included_utxos.pop() else {
+                return Err(WalletOutputError::NotEnoughSpendableUTXO); // Not enough UTXOs
+            };
+
+            total_selected_value += utxo.amount;
+            total_weight += max_input_weight;
+            fees = fee_rate.calculate_fee(total_weight);
+            selected_utxos.push((utxo_key, utxo));
         }
 
         // We always pay ourselves change back to ensure that we don't lose anything due
@@ -2455,6 +2477,60 @@ mod tests {
             matching, 2,
             "both the destination and the change output carry the change script"
         );
+    }
+
+    /// A peg-out amount reaches `create_tx` straight from an unauthenticated
+    /// caller, both via `PEG_OUT_FEES_ENDPOINT` and via a submitted peg-out
+    /// output. Summing it with the dust limit and the fees used to overflow
+    /// `bitcoin::Amount`'s panicking `Add`, killing the guardian process.
+    #[test]
+    fn create_tx_rejects_amounts_that_cannot_exist_on_chain() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let (secret_key, _) = secp.generate_keypair(&mut OsRng);
+
+        let wallet = StatelessWallet {
+            descriptor: &descriptor,
+            secret_key: &secret_key,
+            secp: &secp,
+        };
+
+        let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap();
+        let utxos = vec![(
+            UTXOKey(OutPoint::null()),
+            SpendableUTXO {
+                tweak: [0; 33],
+                amount: bitcoin::Amount::from_sat(100_000),
+            },
+        )];
+
+        for amount in [
+            Amount::from_sat(u64::MAX),
+            Amount::MAX_MONEY + Amount::from_sat(1),
+        ] {
+            let tx = wallet.create_tx(
+                amount,
+                recipient.clone().assume_checked().script_pubkey(),
+                vec![],
+                utxos.clone(),
+                Feerate { sats_per_kvb: 1000 },
+                &[0; 33],
+                None,
+            );
+
+            assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
+        }
     }
 
     #[test]
