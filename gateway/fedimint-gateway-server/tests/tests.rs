@@ -31,6 +31,7 @@ use fedimint_gw_client::pay::{
 };
 use fedimint_gw_client::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
+    SwapParameters,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
@@ -1899,5 +1900,113 @@ async fn test_gateway_waits_to_reach_lightning_before_cancelling_outgoing_paymen
             Ok(())
         },
     )
+    .await
+}
+
+/// A direct swap is the other half of an outgoing contract in a second
+/// federation: the gateway funds an incoming contract here to buy the preimage
+/// that claims that contract. `gateway_handle_direct_swap` used to have no
+/// idempotency guard, so a `GatewayPayInvoice` state machine re-entering after
+/// a gateway restart tried to fund the swap a second time. Funding consumed the
+/// federation's offer the first time round, so the retry fails -- either
+/// waiting out `fetch_and_validate_offer` or bailing on the operation that
+/// already exists -- and `buy_preimage_via_direct_swap` reads that as
+/// `SwapFailed` and cancels the outgoing contract. The sender is refunded while
+/// the recipient is still paid out of the incoming contract the gateway funded.
+///
+/// The second call has nothing left to fund and everything to gain from the
+/// preimage the first one is buying, so hand it that operation.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("direct swap".to_string())?),
+                None,
+                "test direct swap re-entry",
+                lightning_gateway,
+            )
+            .await?;
+
+        let swap_params = SwapParameters {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: invoice_amount,
+        };
+        let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+        let first = gateway_module
+            .gateway_handle_direct_swap(swap_params.clone())
+            .await?;
+        let mut receive_sub = gateway_module
+            .gateway_subscribe_ln_receive(first)
+            .await?
+            .into_stream();
+        assert_eq!(receive_sub.ok().await?, GatewayExtReceiveStates::Funding);
+        assert_matches!(
+            receive_sub.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+
+        // The restart: the same swap is asked for again, with the offer that
+        // funded it already consumed.
+        let second = fedimint_core::task::timeout(
+            Duration::from_secs(30),
+            gateway_module.gateway_handle_direct_swap(swap_params),
+        )
+        .await
+        .expect("a re-entrant direct swap must not wait on the offer it already consumed")?;
+
+        assert_eq!(
+            first, second,
+            "the re-entrant swap joins the operation already holding the preimage"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance.saturating_sub(invoice_amount),
+            "the incoming contract must only be funded once"
+        );
+
+        // The check above the funding helper cannot settle a race on its own, so
+        // two callers that both get past it must still end up on one operation.
+        let (_invoice_op, concurrent_invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("concurrent".to_string())?),
+                None,
+                "test concurrent direct swap",
+                ln_module.select_gateway(&gateway_id).await,
+            )
+            .await?;
+        let concurrent_swap_params = SwapParameters {
+            payment_hash: *concurrent_invoice.payment_hash(),
+            amount_msat: invoice_amount,
+        };
+        let (left, right) = tokio::join!(
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params.clone()),
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params),
+        );
+        assert_eq!(
+            left?, right?,
+            "concurrent requests for one swap must share the single funded operation"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance.saturating_sub(invoice_amount + invoice_amount),
+            "the second swap's incoming contract must also only be funded once"
+        );
+
+        Ok(())
+    })
     .await
 }

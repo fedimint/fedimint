@@ -642,31 +642,113 @@ impl GatewayClientModule {
     /// Attempt buying preimage from this federation in order to fulfill a pay
     /// request in another federation served by this gateway. In direct swap
     /// scenario, the gateway DOES NOT send payment over the lightning network
+    ///
+    /// The operation is keyed on the payment hash, so an existing one means the
+    /// incoming contract for this swap is already funded and only ever pays out
+    /// one preimage. A second call therefore has nothing to fund; it wants the
+    /// preimage the first call is buying, and gets it by being handed the
+    /// operation already in progress for
+    /// [`pay::GatewayPayWaitForSwapPreimage`] to follow. Reporting a failure
+    /// instead would cancel the outgoing contract that this swap is the other
+    /// half of, refunding the sender while the recipient still gets paid out of
+    /// the gateway's own funds.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
         debug!("Handling direct swap {swap_params:?}");
-        let (operation_id, client_output, client_output_sm) = self
+
+        let payment_hash = swap_params.payment_hash;
+        let operation_id = OperationId(payment_hash.to_byte_array());
+
+        // Check before the funding helper: funding the incoming contract consumes
+        // the federation's offer, and the await-offer endpoint waits for one to
+        // appear rather than reporting that it is gone, so a re-entrant call gets
+        // no further than that helper's timeout.
+        if self.client_ctx.operation_exists(operation_id).await {
+            debug!(
+                operation_id = %operation_id.fmt_short(),
+                %payment_hash,
+                "Direct swap already in progress, returning the operation already funding it"
+            );
+
+            return Ok(operation_id);
+        }
+
+        let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
-
-        let output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            amounts: client_output.amounts,
-        };
-        let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
-            ClientOutputBundle::new(vec![output], vec![client_output_sm]),
-        ));
-        let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-        debug!(
-            ?operation_id,
-            "Submitted transaction for direct swap {swap_params:?}"
+        // Keep the direct derivation above in sync with the funding helper.
+        anyhow::ensure!(
+            op_id_from_funding == operation_id,
+            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
         );
-        Ok(operation_id)
+
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let client_output = client_output.clone();
+                    let client_output_sm = client_output_sm.clone();
+                    Box::pin(async move {
+                        // The check above raced anyone who got here first; this one
+                        // shares a transaction with the write that would settle the
+                        // race, so exactly one of us funds the contract and the
+                        // other joins that operation.
+                        if self
+                            .client_ctx
+                            .get_operation_dbtx(dbtx, operation_id)
+                            .await
+                            .is_some()
+                        {
+                            debug!(
+                                operation_id = %operation_id.fmt_short(),
+                                %payment_hash,
+                                "Concurrent direct swap won the race, returning the operation already funding it"
+                            );
+
+                            return Ok(operation_id);
+                        }
+
+                        let output = ClientOutput {
+                            output: LightningOutput::V0(client_output.output),
+                            amounts: client_output.amounts,
+                        };
+                        let tx = TransactionBuilder::new().with_outputs(
+                            self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+                                vec![output],
+                                vec![client_output_sm],
+                            )),
+                        );
+
+                        self.client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                |_: OutPointRange| GatewayMeta::Receive,
+                                tx,
+                            )
+                            .await?;
+
+                        debug!(
+                            ?operation_id,
+                            %payment_hash,
+                            "Submitted funding transaction for direct swap"
+                        );
+
+                        Ok(operation_id)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
