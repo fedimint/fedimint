@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -11,11 +12,12 @@ use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
 use fedimint_gateway_common::STOP_ENDPOINT;
 use fedimint_logging::LOG_GATEWAY;
+use futures::FutureExt as _;
 use iroh::endpoint::Incoming;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tracing::info;
+use tracing::{error, info};
 use url::Url;
 
 use crate::Gateway;
@@ -198,11 +200,14 @@ async fn handle_incoming_iroh_request(
         let request = recv.read_to_end(100_000).await?;
         let request = serde_json::from_slice::<IrohGatewayRequest>(&request)?;
 
-        let (status, body) = handle_request(
-            &request,
-            gateway.clone(),
-            handlers.clone(),
-            task_group.clone(),
+        let (status, body) = run_handler(
+            &request.route,
+            handle_request(
+                &request,
+                gateway.clone(),
+                handlers.clone(),
+                task_group.clone(),
+            ),
         )
         .await?;
 
@@ -216,6 +221,35 @@ async fn handle_incoming_iroh_request(
         send.finish()?;
     }
     Ok(())
+}
+
+/// Runs a request handler, turning a panic into a 500 response for the caller
+/// that triggered it.
+///
+/// Iroh requests are spawned on the gateway's root task group, so a panic
+/// escaping a handler trips the task group's panic guard and shuts the whole
+/// gateway down. The HTTP path does not need this: `axum::serve` spawns its
+/// connection tasks outside any task group, so a panic there only drops that
+/// one connection.
+async fn run_handler(
+    route: &str,
+    handler: impl Future<Output = anyhow::Result<(StatusCode, Json<serde_json::Value>)>>,
+) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
+    // Using `AssertUnwindSafe` here is far from ideal. In theory this means we
+    // could end up with an inconsistent state. In practice this is only the last
+    // line of defense, and losing the gateway process entirely is strictly worse.
+    AssertUnwindSafe(handler)
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|_| {
+            error!(
+                target: LOG_GATEWAY,
+                route,
+                "Gateway API handler panicked, DO NOT IGNORE, FIX IT!!!"
+            );
+
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(json!(()))))
+        })
 }
 
 /// Checks if the requested route is authenticated and will reject the request
@@ -298,4 +332,18 @@ fn iroh_verify_password(
     }
 
     Err(anyhow!("Invalid password"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn panicking_handler_returns_an_error_instead_of_unwinding() {
+        let (status, _body) = run_handler("/pay_invoice", async { panic!("handler panic") })
+            .await
+            .expect("a panicking handler is contained");
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }
