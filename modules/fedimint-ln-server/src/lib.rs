@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use bitcoin_hashes::{Hash as BitcoinHash, sha256};
+use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -18,17 +19,18 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt};
+use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiVersion, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
+    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, TransactionItemAmounts,
+    public_api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
-use fedimint_core::task::sleep;
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow};
 use fedimint_core::{
-    Amount, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     push_db_pair_items,
 };
 pub use fedimint_ln_common as common;
@@ -45,8 +47,9 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
+    OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
 };
 use fedimint_ln_common::{
     ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
@@ -62,21 +65,24 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 use futures::StreamExt;
+use futures::future::join_all;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKeySet, SecretKeyShare};
+use tokio::sync::watch;
 use tracing::{debug, error, info, info_span, trace, warn};
 
 use crate::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
-    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
-    EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
-    LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
-    OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix,
+    ConsensusVersionVoteKey, ConsensusVersionVotePrefix, ContractKey, ContractKeyPrefix,
+    ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
+    EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
+    LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
+    ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 
 mod metrics;
@@ -189,6 +195,16 @@ impl ModuleInit for LightningInit {
                         "Lightning Audit Items"
                     );
                 }
+                DbKeyPrefix::ConsensusVersionVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ConsensusVersionVotePrefix,
+                        ConsensusVersionVoteKey,
+                        ModuleConsensusVersion,
+                        lightning,
+                        "Consensus Version Votes"
+                    );
+                }
             }
         }
 
@@ -219,9 +235,18 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
+        let peer_supported_consensus_version =
+            Lightning::spawn_peer_supported_consensus_version_task(
+                args.module_api().clone(),
+                args.task_group(),
+                args.our_peer_id(),
+            );
+
         Ok(Lightning {
             cfg: args.cfg().to_typed()?,
             our_peer_id: args.our_peer_id(),
+            num_peers: args.num_peers(),
+            peer_supported_consensus_version,
             server_bitcoin_rpc_monitor: args.server_bitcoin_rpc_monitor(),
         })
     }
@@ -332,6 +357,10 @@ impl ServerModuleInit for LightningInit {
 pub struct Lightning {
     cfg: LightningConfig,
     our_peer_id: PeerId,
+    num_peers: NumPeers,
+    /// The highest module consensus version supported by every peer, as
+    /// reported by their APIs, or `None` while any peer has yet to answer.
+    peer_supported_consensus_version: watch::Receiver<Option<ModuleConsensusVersion>>,
     server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
 }
 
@@ -356,6 +385,23 @@ impl ServerModule for Lightning {
         if let Ok(block_count_vote) = self.get_block_count() {
             trace!(target: LOG_MODULE_LN, ?block_count_vote, "Proposing block count");
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
+        }
+
+        // Consensus upgrade activation voting. There is deliberately no manual
+        // override: a new consensus item variant is only understood by upgraded
+        // peers, and peers that predate it skip it rather than fail, which would
+        // silently fork their state. Requiring every peer to report support
+        // before we ever propose the item is what keeps that from happening.
+        let active_consensus_version = self.consensus_module_consensus_version(dbtx).await;
+
+        if let Some(supported_consensus_version) = *self.peer_supported_consensus_version.borrow()
+            // Only vote if the commonly supported version is higher than the
+            // currently active one
+            && active_consensus_version < supported_consensus_version
+        {
+            items.push(LightningConsensusItem::ModuleConsensusVersion(
+                supported_consensus_version,
+            ));
         }
 
         items
@@ -509,6 +555,24 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
+            }
+            LightningConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
+                let current_vote = dbtx
+                    .get_value(&ConsensusVersionVoteKey(peer_id))
+                    .await
+                    .unwrap_or(ModuleConsensusVersion::new(2, 0));
+
+                if module_consensus_version <= current_vote {
+                    bail!("Module consensus version vote is redundant");
+                }
+
+                dbtx.insert_entry(&ConsensusVersionVoteKey(peer_id), &module_consensus_version)
+                    .await;
+
+                assert!(
+                    self.consensus_module_consensus_version(dbtx).await <= MODULE_CONSENSUS_VERSION,
+                    "Lightning module does not support new consensus version, please upgrade the module"
+                );
             }
             LightningConsensusItem::Default { variant, .. } => {
                 bail!("Unknown lightning consensus item received, variant={variant}");
@@ -899,6 +963,22 @@ impl ServerModule for Lightning {
                 }
             },
             public_api_endpoint! {
+                MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Lightning, context, _params: ()| -> ModuleConsensusVersion {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.consensus_module_consensus_version(&mut dbtx).await)
+                }
+            },
+            public_api_endpoint! {
+                SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Lightning, _context, _params: ()| -> ModuleConsensusVersion {
+                    Ok(MODULE_CONSENSUS_VERSION)
+                }
+            },
+            public_api_endpoint! {
                 ACCOUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
@@ -1058,6 +1138,107 @@ impl Lightning {
         while block_height >= self.consensus_block_count(dbtx).await {
             sleep(Duration::from_secs(5)).await;
         }
+    }
+
+    async fn consensus_module_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> ModuleConsensusVersion {
+        let mut versions = dbtx
+            .find_by_prefix(&ConsensusVersionVotePrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<ModuleConsensusVersion>>()
+            .await;
+
+        while versions.len() < self.num_peers.total() {
+            versions.push(ModuleConsensusVersion::new(2, 0));
+        }
+
+        assert_eq!(versions.len(), self.num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[self.num_peers.max_evil()]
+    }
+
+    /// Tracks the highest module consensus version supported by *every* peer.
+    ///
+    /// A vote is only ever proposed once this reports a version, which requires
+    /// every peer to have answered. Peers that predate a version do not serve
+    /// [`SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT`] at all, so they hold the
+    /// federation back rather than being voted past.
+    fn spawn_peer_supported_consensus_version_task(
+        api_client: DynModuleApi,
+        task_group: &TaskGroup,
+        our_peer_id: PeerId,
+    ) -> watch::Receiver<Option<ModuleConsensusVersion>> {
+        let (sender, receiver) = watch::channel(None);
+        task_group.spawn_cancellable("fetch-peer-consensus-versions", async move {
+            loop {
+                let request_futures = api_client
+                    .all_peers()
+                    .iter()
+                    .filter(|&&peer| peer != our_peer_id)
+                    .map(|&peer| {
+                        let api_client = api_client.clone();
+
+                        async move {
+                            api_client
+                                .request_single_peer::<ModuleConsensusVersion>(
+                                    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
+                                    ApiRequestErased::default(),
+                                    peer,
+                                )
+                                .await
+                                .inspect_err(|err| warn!(
+                                    target: LOG_MODULE_LN,
+                                    %peer,
+                                    err = %err.fmt_compact(),
+                                    "Failed to fetch supported consensus version from peer"
+                                ))
+                                .ok()
+                        }
+                    });
+
+                // A peer that does not answer runs a binary without version voting, so
+                // collecting into an `Option` holds the federation back on any absence
+                // rather than voting that peer past a version it cannot decode.
+                let all_peers_supported_version = join_all(request_futures)
+                    .await
+                    .into_iter()
+                    .collect::<Option<Vec<_>>>()
+                    .map(|peer_versions| {
+                        peer_versions
+                            .into_iter()
+                            .chain(std::iter::once(MODULE_CONSENSUS_VERSION))
+                            .min()
+                            .expect("Our own version is always present")
+                    });
+
+                debug!(
+                    target: LOG_MODULE_LN,
+                    ?all_peers_supported_version,
+                    "Fetched supported consensus versions from peers"
+                );
+
+                #[allow(clippy::disallowed_methods)]
+                if sender.send(all_peers_supported_version).is_err() {
+                    warn!(target: LOG_MODULE_LN, "Failed to send consensus version to watch channel, stopping task");
+                    break;
+                }
+
+                if is_running_in_test_env() {
+                    // Even in tests we don't want to spam the federation with requests about it
+                    sleep(Duration::from_secs(5)).await;
+                } else {
+                    sleep(Duration::from_mins(10)).await;
+                }
+            }
+        });
+        receiver
     }
 
     fn validate_decryption_share(
@@ -1403,7 +1584,9 @@ mod tests {
     use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, ChainId, Feerate, InPoint, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{
+        Amount, ChainId, Feerate, InPoint, NumPeers, OutPoint, PeerId, TransactionId,
+    };
     use fedimint_ln_common::config::{LightningClientConfig, LightningConfig, Network};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1421,6 +1604,7 @@ mod tests {
     use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
     use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
+    use tokio::sync::watch;
 
     use crate::db::{ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey};
     use crate::{Lightning, LightningInit, create_gateway_registration_message};
@@ -1512,15 +1696,7 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
 
-        let server = Lightning {
-            cfg: server_cfg[0].clone(),
-            our_peer_id: 0.into(),
-            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
-                MockBitcoinServerRpc.into_dyn(),
-                Duration::from_secs(1),
-                &task_group,
-            ),
-        };
+        let server = mock_server(&server_cfg[0], &task_group);
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1579,6 +1755,10 @@ mod tests {
         Lightning {
             cfg: cfg.clone(),
             our_peer_id: 0.into(),
+            num_peers: NumPeers::from(usize::from(MINTS)),
+            // No peer has reported a supported version, so no upgrade is ever
+            // proposed. None of these tests exercise version voting.
+            peer_supported_consensus_version: watch::channel(None).1,
             server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
                 MockBitcoinServerRpc.into_dyn(),
                 Duration::from_secs(1),
@@ -2080,15 +2260,7 @@ mod tests {
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
-        let server = Lightning {
-            cfg: server_cfg[0].clone(),
-            our_peer_id: 0.into(),
-            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
-                MockBitcoinServerRpc.into_dyn(),
-                Duration::from_secs(1),
-                &task_group,
-            ),
-        };
+        let server = mock_server(&server_cfg[0], &task_group);
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -2157,15 +2329,7 @@ mod tests {
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
-        let server = Lightning {
-            cfg: server_cfg[0].clone(),
-            our_peer_id: 0.into(),
-            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
-                MockBitcoinServerRpc.into_dyn(),
-                Duration::from_secs(1),
-                &task_group,
-            ),
-        };
+        let server = mock_server(&server_cfg[0], &task_group);
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
@@ -2260,15 +2424,7 @@ mod tests {
     fn build_server() -> (Lightning, Database, TaskGroup) {
         let task_group = TaskGroup::new();
         let (server_cfg, _) = build_configs();
-        let server = Lightning {
-            cfg: server_cfg[0].clone(),
-            our_peer_id: 0.into(),
-            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
-                MockBitcoinServerRpc.into_dyn(),
-                Duration::from_secs(1),
-                &task_group,
-            ),
-        };
+        let server = mock_server(&server_cfg[0], &task_group);
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         (server, db, task_group)
     }

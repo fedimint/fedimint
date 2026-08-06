@@ -1,4 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -22,6 +23,7 @@ pub enum DbKeyPrefix {
     BlockCountVote = 0x46,
     EncryptedPreimageIndex = 0x47,
     LightningAuditItem = 0x48,
+    ConsensusVersionVote = 0x49,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -207,3 +209,20 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = BlockCountVoteKey, query_prefix = BlockCountVotePrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusVersionVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotePrefix;
+
+impl_db_record!(
+    key = ConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ConsensusVersionVote
+);
+
+impl_db_lookup!(
+    key = ConsensusVersionVoteKey,
+    query_prefix = ConsensusVersionVotePrefix
+);
