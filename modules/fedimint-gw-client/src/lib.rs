@@ -777,6 +777,28 @@ impl GatewayClientModule {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.to_byte_array());
 
+                        // The operation id is the contract id, so an existing entry means we
+                        // already accepted a request to pay this very contract. The state
+                        // machine's own dedupe key covers the whole payload, so a caller who
+                        // varies any field of it -- `preimage_auth`, say -- slips past that
+                        // and would have us buy the preimage a second time, spending the
+                        // gateway's funds twice against a contract that only pays out once.
+                        // Hand back the operation already under way instead.
+                        if self
+                            .client_ctx
+                            .get_operation_dbtx(dbtx, operation_id)
+                            .await
+                            .is_some()
+                        {
+                            debug!(
+                                operation_id = %operation_id.fmt_short(),
+                                contract_id = %payload.contract_id,
+                                "Duplicate request to pay an outgoing contract, returning the operation already in progress"
+                            );
+
+                            return Ok(operation_id);
+                        }
+
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
                             contract_id: payload.contract_id,
                             invoice_amount,

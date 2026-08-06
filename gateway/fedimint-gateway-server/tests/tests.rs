@@ -1708,3 +1708,105 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
     })
     .await
 }
+
+/// `pay_invoice` is unauthenticated and keys its operation on the contract id,
+/// but the state machine's dedupe key covers the whole payload, so a second
+/// request that differs only in `preimage_auth` slips past it. That used to
+/// panic on the duplicate operation log entry, taking the gateway down.
+///
+/// Not panicking is not enough on its own: nothing else pins a contract to a
+/// single payment attempt, so the duplicate has to be recognised as one and
+/// answered with the operation already in flight rather than buying the
+/// preimage a second time out of the gateway's own funds.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_id = gateway.http_gateway_id().await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
+            dummy_module
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await?;
+
+            let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
+            let invoice = other_lightning_client.invoice(sats(250), None)?;
+            let selected_gateway = lightning_module.select_gateway(&gateway_id).await;
+
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee: _,
+            } = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id).await?;
+            let PayType::Lightning(pay_op) = payment_type else {
+                panic!("Expected Lightning payment!");
+            };
+            let mut pay_sub = lightning_module
+                .subscribe_ln_pay(pay_op)
+                .await?
+                .into_stream();
+            assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+            assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
+
+            let payload = |preimage_auth| PayInvoicePayload {
+                federation_id: user_client.federation_id(),
+                contract_id,
+                payment_data: get_payment_data(selected_gateway.clone(), invoice.clone()),
+                preimage_auth,
+            };
+
+            let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+            let first = gateway_module
+                .gateway_pay_bolt11_invoice(payload(Hash::hash(&[0; 32])))
+                .await?;
+            // Same contract, different `preimage_auth`: a distinct state machine
+            // state, so the executor's dedupe does not catch this one.
+            let second = gateway_module
+                .gateway_pay_bolt11_invoice(payload(Hash::hash(&[1; 32])))
+                .await?;
+
+            assert_eq!(
+                first, second,
+                "the duplicate request joins the payment already in flight"
+            );
+            assert_eq!(
+                gateway_client
+                    .operation_log()
+                    .paginate_operations_rev(10, None)
+                    .await
+                    .len(),
+                1,
+                "the duplicate request must not start a second payment for the contract"
+            );
+
+            let mut gw_pay_sub = gateway_module
+                .gateway_subscribe_ln_pay(first)
+                .await?
+                .into_stream();
+            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+
+            // One purchase of the preimage, so exactly one claim of the contract.
+            let outgoing_fee = gateway
+                .handle_get_info()
+                .await?
+                .federations
+                .first()
+                .expect("Only one federation")
+                .config
+                .lightning_fee
+                .fee(250_000);
+            assert_eq!(
+                gateway_client.get_balance_for_btc().await?,
+                sats(250)
+                    .checked_add(outgoing_fee)
+                    .expect("Should not wrap around")
+            );
+
+            Ok(())
+        },
+    )
+    .await
+}
