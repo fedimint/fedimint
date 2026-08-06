@@ -11,7 +11,7 @@ use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
 use fedimint_gw_client::GatewayClientModule;
-use fedimint_gwv2_client::GatewayClientModuleV2;
+use fedimint_gwv2_client::{GatewayClientModuleV2, GatewayOperationMetaV2};
 use fedimint_logging::LOG_GATEWAY;
 use tracing::{info, warn};
 
@@ -108,6 +108,17 @@ impl FederationManager {
                 if let Some(entry) = log_entry {
                     match entry.operation_module_kind() {
                         "lnv2" => {
+                            let Ok(meta) = entry.try_meta::<GatewayOperationMetaV2>() else {
+                                warn!(
+                                    target: LOG_GATEWAY,
+                                    operation_id = %op_id.fmt_short(),
+                                    "Skipping LNv2 operation with invalid metadata while waiting for incoming payments",
+                                );
+                                continue;
+                            };
+                            if !meta.waits_for_completion() {
+                                continue;
+                            }
                             let lnv2 =
                                 client.value().get_first_module::<GatewayClientModuleV2>()?;
                             lnv2.await_completion(op_id).await;

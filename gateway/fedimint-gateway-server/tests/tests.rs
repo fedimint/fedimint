@@ -36,7 +36,10 @@ use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
     OutgoingPaymentStarted, OutgoingPaymentSucceeded,
 };
-use fedimint_gwv2_client::{FinalReceiveState, GatewayClientModuleV2};
+use fedimint_gwv2_client::{
+    FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
+    IncomingCircuitKey,
+};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -1101,6 +1104,121 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
             .await?,
         FinalReceiveState::Refunded
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let preimage = [23; 32];
+    let payment_hash = preimage.consensus_hash();
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        preimage,
+        PaymentImage::Hash(payment_hash),
+        Amount::from_sats(1000),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+    let receive_operation_id = OperationId::from_encodable(&contract);
+    let completion_id = |circuit: IncomingCircuitKey| {
+        OperationId::from_encodable(&(
+            "gateway-lnv2-incoming-circuit",
+            receive_operation_id,
+            circuit,
+        ))
+    };
+    let hold = IncomingCircuitKey {
+        incoming_chan_id: 0,
+        htlc_id: 0,
+    };
+    let forward = IncomingCircuitKey {
+        incoming_chan_id: 42,
+        htlc_id: 7,
+    };
+
+    let (hold_result, forward_result) = tokio::join!(
+        module.relay_incoming_htlc(
+            payment_hash,
+            hold.incoming_chan_id,
+            hold.htlc_id,
+            contract.clone(),
+            1_000_000,
+        ),
+        module.relay_incoming_htlc(
+            payment_hash,
+            forward.incoming_chan_id,
+            forward.htlc_id,
+            contract.clone(),
+            1_000_000,
+        ),
+    );
+    hold_result?;
+    forward_result?;
+
+    // Same-circuit replay must not add another operation or state machine.
+    module
+        .relay_incoming_htlc(
+            payment_hash,
+            forward.incoming_chan_id,
+            forward.htlc_id,
+            contract,
+            1_000_000,
+        )
+        .await?;
+
+    let receive_entry = client
+        .operation_log()
+        .get_operation(receive_operation_id)
+        .await
+        .expect("receive operation must be persisted");
+    assert!(
+        !receive_entry
+            .meta::<GatewayOperationMetaV2>()
+            .waits_for_completion()
+    );
+
+    for circuit in [hold, forward] {
+        let operation_id = completion_id(circuit);
+        let entry = client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .expect("circuit completion operation must be persisted");
+        assert!(
+            entry
+                .meta::<GatewayOperationMetaV2>()
+                .waits_for_completion()
+        );
+
+        let active = module
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await;
+        let inactive = module
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await;
+        assert_eq!(active.len() + inactive.len(), 1);
+        assert!(
+            active
+                .into_iter()
+                .map(|(state, _)| state)
+                .chain(inactive.into_iter().map(|(state, _)| state))
+                .all(|state| matches!(state, GatewayClientStateMachinesV2::CircuitComplete(_)))
+        );
+    }
 
     Ok(())
 }
