@@ -713,13 +713,12 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    // All unique pairs of gateways.
-    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C)].
-    // Since the first gateway within each pair initiates the channel open,
-    // order within each pair needs to be enforced so that each Lightning node opens
-    // 1 channel.
+    // Cyclic pairs of gateways, so every node gets a channel with every other
+    // node for our typical 3-gateway setup. For a list [A, B, C] this produces
+    // [(A, B), (B, C), (C, A)]. The first gateway in each pair initiates the
+    // channel open, so each Lightning node opens exactly one channel.
     let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> =
-        gateways.iter().tuple_windows::<(_, _)>().collect();
+        gateways.iter().circular_tuple_windows::<(_, _)>().collect();
 
     info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
     let sats_per_side = 5_000_000;
