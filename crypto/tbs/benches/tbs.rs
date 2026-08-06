@@ -88,7 +88,7 @@ fn bench_unblind(c: &mut Criterion) {
     let bsig = aggregate_signature_shares(&shares);
 
     c.bench_function("signature unblinding", |b| {
-        b.iter(|| unblind_signature(bkey, bsig).unwrap())
+        b.iter(|| unblind_signature(bkey, bsig))
     });
 }
 
@@ -102,7 +102,7 @@ fn bench_verify(c: &mut Criterion) {
         .take(4)
         .collect();
     let bsig = aggregate_signature_shares(&shares);
-    let sig = unblind_signature(bkey, bsig).unwrap();
+    let sig = unblind_signature(bkey, bsig);
 
     c.bench_function("signature verification", |b| {
         b.iter(|| verify(msg, sig, pk))
@@ -119,7 +119,7 @@ fn bench_decode_signature(c: &mut Criterion) {
         .take(4)
         .collect();
     let bsig = aggregate_signature_shares(&shares);
-    let sig = unblind_signature(bkey, bsig).unwrap();
+    let sig = unblind_signature(bkey, bsig);
     let sig_bytes = sig.consensus_encode_to_vec();
 
     c.bench_function("signature decoding", |b| {

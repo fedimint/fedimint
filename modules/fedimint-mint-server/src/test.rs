@@ -86,7 +86,7 @@ fn issue_note(
         .collect();
 
     let blind_signature = tbs::aggregate_signature_shares(&bsig_shares);
-    let signature = tbs::unblind_signature(blinding_key, blind_signature).unwrap();
+    let signature = tbs::unblind_signature(blinding_key, blind_signature);
 
     (note_key, Note { nonce, signature })
 }

@@ -143,20 +143,7 @@ impl MintOutputStateMachine {
                     .collect(),
             );
 
-            let spendable_note = match request.finalize(agg_blind_signature) {
-                Ok(note) => note,
-                Err(e) => {
-                    warn!(
-                        error = %e,
-                        denomination = ?request.denomination,
-                        "Failed to unblind signature: invalid blinding key scalar"
-                    );
-                    return MintOutputStateMachine {
-                        common: old_state.common,
-                        state: OutputSMState::Failure,
-                    };
-                }
-            };
+            let spendable_note = request.finalize(agg_blind_signature);
 
             let pk = *tbs_pks
                 .get(&request.denomination)
