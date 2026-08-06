@@ -75,6 +75,10 @@ pub enum LightningRpcError {
     InvalidMetadata { failure_reason: String },
     #[error("Bolt12 Error: {failure_reason}")]
     Bolt12Error { failure_reason: String },
+    // This type is consensus-encoded with positional variant indices and is
+    // persisted in gateway client state machines: only append new variants.
+    #[error("HTLC completion cannot reach the requested outcome: {failure_reason}")]
+    HtlcCompletionRejected { failure_reason: String },
 }
 
 /// Represents an active connection to the lightning node.

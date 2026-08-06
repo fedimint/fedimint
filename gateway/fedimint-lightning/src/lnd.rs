@@ -63,6 +63,56 @@ type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum HoldInvoiceAction {
+    Complete,
+    AlreadyComplete,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct HoldInvoiceStateError {
+    failure_reason: &'static str,
+    permanent: bool,
+}
+
+fn hold_invoice_action(
+    requested_action: PaymentActionKind,
+    invoice_state: Option<InvoiceState>,
+) -> Result<HoldInvoiceAction, HoldInvoiceStateError> {
+    match (requested_action, invoice_state) {
+        (PaymentActionKind::Settle, Some(InvoiceState::Accepted))
+        | (PaymentActionKind::Cancel, Some(InvoiceState::Open | InvoiceState::Accepted)) => {
+            Ok(HoldInvoiceAction::Complete)
+        }
+        (PaymentActionKind::Settle, Some(InvoiceState::Settled))
+        | (PaymentActionKind::Cancel, Some(InvoiceState::Canceled)) => {
+            Ok(HoldInvoiceAction::AlreadyComplete)
+        }
+        (PaymentActionKind::Settle, Some(InvoiceState::Canceled)) => Err(HoldInvoiceStateError {
+            failure_reason: "HOLD invoice was canceled instead of settled",
+            permanent: true,
+        }),
+        (PaymentActionKind::Cancel, Some(InvoiceState::Settled)) => Err(HoldInvoiceStateError {
+            failure_reason: "HOLD invoice was settled instead of canceled",
+            permanent: true,
+        }),
+        (PaymentActionKind::Settle, Some(InvoiceState::Open)) => Err(HoldInvoiceStateError {
+            failure_reason: "HOLD invoice is open and has no accepted HTLC to settle",
+            permanent: false,
+        }),
+        (_, None) => Err(HoldInvoiceStateError {
+            failure_reason: "HOLD invoice does not exist",
+            permanent: true,
+        }),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum PaymentActionKind {
+    Settle,
+    Cancel,
+}
+
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -556,29 +606,22 @@ impl GatewayLndClient {
 
     /// Settles the LNv2 HOLD invoice carrying `payment_hash` with `preimage`.
     ///
-    /// Callers retry on error, so this only fails for conditions a retry can
-    /// clear, such as an unreachable node. An invoice that is already settled,
-    /// or that holds no HTLC to settle, is reported as success instead: the
-    /// gateway cannot make the payer send again, so retrying would spin
-    /// forever.
+    /// Only an already-settled invoice is an idempotent success. Missing,
+    /// nonterminal, and canceled invoices fail so callers cannot record a
+    /// settle outcome that Lightning did not produce.
     async fn settle_hold_invoice(
         &self,
         payment_hash: Vec<u8>,
         preimage: Preimage,
     ) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
-        let Some(invoice) = Self::lookup_invoice(&mut client, &payment_hash).await? else {
-            warn!(
-                target: LOG_LIGHTNING,
-                payment_hash = %PrettyPaymentHash(&payment_hash),
-                "Cannot settle HOLD invoice, the node has no invoice for this payment hash",
-            );
-            return Ok(());
-        };
-
-        match invoice.state() {
-            InvoiceState::Accepted => {}
-            InvoiceState::Settled => {
+        let invoice = Self::lookup_invoice(&mut client, &payment_hash).await?;
+        match hold_invoice_action(
+            PaymentActionKind::Settle,
+            invoice.as_ref().map(Invoice::state),
+        ) {
+            Ok(HoldInvoiceAction::Complete) => {}
+            Ok(HoldInvoiceAction::AlreadyComplete) => {
                 info!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&payment_hash),
@@ -586,14 +629,23 @@ impl GatewayLndClient {
                 );
                 return Ok(());
             }
-            state => {
+            Err(error) => {
                 warn!(
                     target: LOG_LIGHTNING,
-                    state = ?state,
+                    state = ?invoice.as_ref().map(Invoice::state),
                     payment_hash = %PrettyPaymentHash(&payment_hash),
-                    "Cannot settle HOLD invoice, it holds no HTLC to settle",
+                    failure_reason = error.failure_reason,
+                    "Cannot settle HOLD invoice",
                 );
-                return Ok(());
+                return Err(if error.permanent {
+                    LightningRpcError::HtlcCompletionRejected {
+                        failure_reason: error.failure_reason.to_owned(),
+                    }
+                } else {
+                    LightningRpcError::FailedToCompleteHtlc {
+                        failure_reason: error.failure_reason.to_owned(),
+                    }
+                });
             }
         }
 
@@ -627,34 +679,36 @@ impl GatewayLndClient {
     /// Cancels the LNv2 HOLD invoice carrying `payment_hash`, failing back any
     /// HTLC it holds.
     ///
-    /// Like [`GatewayLndClient::settle_hold_invoice`], an invoice that has
-    /// already reached a terminal state is reported as success so that callers
-    /// do not retry forever.
+    /// Only an already-canceled invoice is an idempotent success. A settled
+    /// invoice fails so callers cannot record a cancel outcome after a racing
+    /// settle won.
     async fn cancel_hold_invoice(&self, payment_hash: Vec<u8>) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
-        let Some(invoice) = Self::lookup_invoice(&mut client, &payment_hash).await? else {
-            warn!(
-                target: LOG_LIGHTNING,
-                payment_hash = %PrettyPaymentHash(&payment_hash),
-                "Cannot cancel HOLD invoice, the node has no invoice for this payment hash",
-            );
-            return Ok(());
-        };
-
-        match invoice.state() {
-            InvoiceState::Open | InvoiceState::Accepted => {}
-            InvoiceState::Canceled => return Ok(()),
-            InvoiceState::Settled => {
-                // Only reachable from a duplicate or racing completion: the
-                // preimage that settles the invoice is released by the
-                // federation only once the contract is funded, which is the
-                // same thing that makes the gateway settle rather than cancel.
-                warn!(
+        let invoice = Self::lookup_invoice(&mut client, &payment_hash).await?;
+        match hold_invoice_action(
+            PaymentActionKind::Cancel,
+            invoice.as_ref().map(Invoice::state),
+        ) {
+            Ok(HoldInvoiceAction::Complete) => {}
+            Ok(HoldInvoiceAction::AlreadyComplete) => {
+                info!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&payment_hash),
-                    "Cannot cancel HOLD invoice, it is already settled",
+                    "HOLD invoice was already canceled",
                 );
                 return Ok(());
+            }
+            Err(error) => {
+                warn!(
+                    target: LOG_LIGHTNING,
+                    state = ?invoice.as_ref().map(Invoice::state),
+                    payment_hash = %PrettyPaymentHash(&payment_hash),
+                    failure_reason = error.failure_reason,
+                    "Cannot cancel HOLD invoice",
+                );
+                return Err(LightningRpcError::HtlcCompletionRejected {
+                    failure_reason: error.failure_reason.to_owned(),
+                });
             }
         }
 
