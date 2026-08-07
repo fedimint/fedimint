@@ -10,7 +10,7 @@ use fedimint_client::transaction::{
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
+use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::{BoxStream, NextOrPending, retry};
 use fedimint_core::{Amount, sats, secp256k1};
@@ -763,10 +763,9 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
-    client2
-        .get_first_module::<DummyClientModule>()?
-        .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+    let dummy_module = client2.get_first_module::<DummyClientModule>()?;
+    let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    dummy_module.receive_money_hack(outpoint).await?;
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let threshold_pub_key = ln_module.cfg.threshold_pub_key;

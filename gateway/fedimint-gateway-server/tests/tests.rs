@@ -560,10 +560,9 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
         let gateway_id = gateway.http_gateway_id().await;
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         let initial_gateway_balance = sats(1000);
-        gateway_client
-            .get_first_module::<DummyClientModule>()?
-            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
-            .await?;
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
+        let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
+        dummy_module.receive_money_hack(outpoint).await?;
 
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;
@@ -647,9 +646,8 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
-        dummy_module
-            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
-            .await?;
+        let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
+        dummy_module.receive_money_hack(outpoint).await?;
 
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;
@@ -1727,9 +1725,8 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
 
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
-            dummy_module
-                .mock_receive(sats(1000), AmountUnit::BITCOIN)
-                .await?;
+            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
 
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -1830,10 +1827,9 @@ async fn test_gateway_waits_to_reach_lightning_before_cancelling_outgoing_paymen
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway_id = gateway.http_gateway_id().await;
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
-            user_client
-                .get_first_module::<DummyClientModule>()?
-                .mock_receive(sats(1000), AmountUnit::BITCOIN)
-                .await?;
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
+            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
 
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -1922,10 +1918,9 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         let gateway_id = gateway.http_gateway_id().await;
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         let initial_gateway_balance = sats(1000);
-        gateway_client
-            .get_first_module::<DummyClientModule>()?
-            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
-            .await?;
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
+        let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
+        dummy_module.receive_money_hack(outpoint).await?;
 
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;

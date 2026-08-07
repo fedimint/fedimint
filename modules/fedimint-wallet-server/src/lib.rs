@@ -49,9 +49,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{
-    BitcoinRpcConfig, is_running_in_test_env, next_poll_delay,
-};
+use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env, next_poll_delay};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,

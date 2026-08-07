@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};

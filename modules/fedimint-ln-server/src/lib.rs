@@ -19,7 +19,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, next_poll_delay};
+use fedimint_core::envs::next_poll_delay;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
@@ -1660,9 +1660,7 @@ mod tests {
     use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{
-        Amount, Feerate, InPoint, NumPeers, OutPoint, PeerId, TransactionId,
-    };
+    use fedimint_core::{Amount, Feerate, InPoint, NumPeers, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{LightningClientConfig, LightningConfig, Network};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,

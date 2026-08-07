@@ -61,11 +61,11 @@ use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-use tracing::error;
 /// The federation's aggregate public key, as committed to by a gateway
 /// registration proof. Re-exported so callers can verify proofs without
 /// depending on `threshold_crypto` directly.
 pub use threshold_crypto::PublicKey as FederationPublicKey;
+use tracing::error;
 pub use {bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
