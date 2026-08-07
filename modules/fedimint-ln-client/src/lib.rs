@@ -1304,6 +1304,11 @@ impl LightningClientModule {
             .await
     }
 
+    /// Federation fee charged for creating one outgoing Lightning contract.
+    pub fn outgoing_contract_fee(&self) -> Amount {
+        self.cfg.fee_consensus.contract_output
+    }
+
     /// Pays a LN invoice with our available funds using the supplied `gateway`
     /// if one was provided and the invoice is not an internal one. If none is
     /// supplied only internal payments are possible.

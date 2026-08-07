@@ -1507,6 +1507,24 @@ impl MintClientModule {
         self.get_note_counts_by_denomination(dbtx).await
     }
 
+    /// Net value available when every economical note is used as transaction
+    /// funding, after paying the mint input fee for each note.
+    pub async fn get_spendable_balance(&self) -> Amount {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
+
+        note_counts
+            .iter()
+            .filter_map(|(amount, count)| {
+                amount
+                    .checked_sub(self.cfg.fee_consensus.fee(amount))
+                    .and_then(|net| net.checked_mul(count as u64))
+            })
+            .fold(Amount::ZERO, |acc, value| {
+                acc.checked_add(value).expect("spendable balance overflow")
+            })
+    }
+
     /// Estimates the total fees to spend all currently held notes.
     ///
     /// This is useful for calculating max withdrawable amounts, where all

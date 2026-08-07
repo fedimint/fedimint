@@ -519,6 +519,11 @@ impl LightningClientModule {
             .map_err(|_| RoutingInfoError::FailedToRequestRoutingInfo)
     }
 
+    /// Federation fee charged for an outgoing Lightning contract of `amount`.
+    pub fn outgoing_contract_fee(&self, amount: Amount) -> Amount {
+        self.cfg.fee_consensus.fee(amount)
+    }
+
     /// Pay an invoice. For testing you can optionally specify a gateway to
     /// route with, otherwise a gateway will be selected automatically. If the
     /// invoice was created by a gateway connected to our federation, the same

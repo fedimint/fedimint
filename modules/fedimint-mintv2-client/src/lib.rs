@@ -533,6 +533,24 @@ impl ClientModule for MintClientModule {
 }
 
 impl MintClientModule {
+    /// Net value available when every note is used as transaction funding,
+    /// after paying the mint input fee for each note.
+    pub async fn get_spendable_balance(&self) -> Amount {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        self.get_count_by_denomination_dbtx(&mut dbtx)
+            .await
+            .into_iter()
+            .filter_map(|(denomination, count)| {
+                let amount = denomination.amount();
+                amount
+                    .checked_sub(self.cfg.fee_consensus.fee(amount))
+                    .and_then(|net| net.checked_mul(count))
+            })
+            .fold(Amount::ZERO, |acc, value| {
+                acc.checked_add(value).expect("spendable balance overflow")
+            })
+    }
+
     async fn select_funding_input(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
