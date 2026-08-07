@@ -56,7 +56,7 @@ use crate::api_announcements::{
     run_api_announcement_refresh_task, store_api_announcements_updates_from_peers,
 };
 use crate::backup::{ClientBackup, Metadata};
-use crate::client::{ModuleRecoveryFuture, PrimaryModuleCandidates};
+use crate::client::{ModuleRecoveryFuture, PrimaryModuleCandidates, RecoveryStatus};
 use crate::db::{
     self, ApiSecretKey, ChainIdKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
@@ -1019,9 +1019,14 @@ impl ClientBuilder {
 
         let recovery_receiver_init_val = module_recovery_progress_receivers
             .iter()
-            .map(|(module_instance_id, rx)| (*module_instance_id, *rx.borrow()))
+            .map(|(module_instance_id, rx)| {
+                (
+                    *module_instance_id,
+                    RecoveryStatus::InProgress(*rx.borrow()),
+                )
+            })
             .collect::<BTreeMap<_, _>>();
-        let (client_recovery_progress_sender, client_recovery_progress_receiver) =
+        let (client_recovery_status_sender, client_recovery_status_receiver) =
             watch::channel(recovery_receiver_init_val);
 
         let client_inner = Arc::new(Client {
@@ -1047,7 +1052,7 @@ impl ClientBuilder {
             task_group,
             client_span,
             operation_log: OperationLog::new(db.clone()),
-            client_recovery_progress_receiver,
+            client_recovery_status_receiver,
             meta_service: self.meta_service,
             iroh_enable_dht: self.iroh_enable_dht,
             iroh_enable_next,
@@ -1156,7 +1161,7 @@ impl ClientBuilder {
                 .map(|(id, module_config)| (*id, module_config.kind().clone()))
                 .collect();
             client_arc.spawn_module_recoveries_task(
-                client_recovery_progress_sender,
+                client_recovery_status_sender,
                 module_recoveries,
                 module_recovery_progress_receivers,
                 module_kinds,
