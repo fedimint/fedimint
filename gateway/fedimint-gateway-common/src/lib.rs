@@ -12,7 +12,9 @@ use envs::{
     FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_PAYMENT_TIMEOUT_SECS_ENV, FM_LND_RPC_ADDR_ENV,
     FM_LND_TIME_PREF_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
+use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::config::{FederationId, JsonClientConfig};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::{SafeUrl, get_average, get_median};
@@ -52,6 +54,7 @@ pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const PAY_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/pay_invoice_for_operator";
 pub const PAY_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/pay_offer_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
+pub const OPERATION_LOG_ENDPOINT: &str = "/operation_log";
 pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
 pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
@@ -296,6 +299,28 @@ pub struct PaymentLogPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentLogResponse(pub Vec<PersistedLogEntry>);
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct OperationLogPaginationKey {
+    pub creation_time: SystemTime,
+    pub operation_id: OperationId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OperationLogPayload {
+    pub federation_id: FederationId,
+    pub pagination_size: usize,
+    pub last_seen: Option<OperationLogPaginationKey>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GatewayOperationLogEntry {
+    pub pagination_key: OperationLogPaginationKey,
+    pub operation: OperationLogEntry,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OperationLogResponse(pub Vec<GatewayOperationLogEntry>);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentSummaryResponse {

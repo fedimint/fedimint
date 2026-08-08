@@ -22,8 +22,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerResponse, CreateOfferResponse, FederationConfig,
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceResponse,
-    ListTransactionsResponse, MnemonicResponse, PayOfferResponse, PaymentLogResponse,
-    PaymentSummaryResponse, ReceiveEcashResponse, SpendEcashResponse, WithdrawResponse,
+    ListTransactionsResponse, MnemonicResponse, OperationLogResponse, PayOfferResponse,
+    PaymentLogResponse, PaymentSummaryResponse, ReceiveEcashResponse, SpendEcashResponse,
+    WithdrawResponse,
 };
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_logging::TracingSetup;
@@ -46,6 +47,7 @@ pub enum CliOutput {
     Federation(FederationInfo),
     Mnemonic(MnemonicResponse),
     PaymentLog(PaymentLogResponse),
+    OperationLog(OperationLogResponse),
     PaymentSummary(PaymentSummaryResponse),
     InviteCodes(BTreeMap<FederationId, BTreeMap<PeerId, (String, InviteCode)>>),
     PasswordHash(String),

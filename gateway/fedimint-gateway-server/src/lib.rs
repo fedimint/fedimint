@@ -76,9 +76,10 @@ use fedimint_gateway_common::{
     ConnectFedPayload, ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload,
     CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
-    LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
+    GatewayInfo, GatewayOperationLogEntry, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload,
+    LightningInfo, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
+    MnemonicResponse, OpenChannelRequest, OperationLogPaginationKey, OperationLogPayload,
+    OperationLogResponse, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
@@ -2872,6 +2873,46 @@ impl IAdminGateway for Gateway {
         payment_log.truncate(pagination_size);
 
         Ok(PaymentLogResponse(payment_log))
+    }
+
+    /// Queries the client operation log for one federation and returns entries
+    /// ordered from newest to oldest.
+    async fn handle_operation_log_msg(
+        &self,
+        OperationLogPayload {
+            federation_id,
+            pagination_size,
+            last_seen,
+        }: OperationLogPayload,
+    ) -> AdminResult<OperationLogResponse> {
+        let federation_manager = self.federation_manager.read().await;
+        let client = federation_manager
+            .client(&federation_id)
+            .ok_or(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })?
+            .value();
+
+        let last_seen = last_seen.map(|key| fedimint_client::db::ChronologicalOperationLogKey {
+            creation_time: key.creation_time,
+            operation_id: key.operation_id,
+        });
+
+        let operations = client
+            .operation_log()
+            .paginate_operations_rev(pagination_size, last_seen)
+            .await
+            .into_iter()
+            .map(|(key, operation)| GatewayOperationLogEntry {
+                pagination_key: OperationLogPaginationKey {
+                    creation_time: key.creation_time,
+                    operation_id: key.operation_id,
+                },
+                operation,
+            })
+            .collect();
+
+        Ok(OperationLogResponse(operations))
     }
 
     /// Set the gateway's root mnemonic by generating a new one or using the
