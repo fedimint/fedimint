@@ -22,6 +22,7 @@ mod events;
 mod federation_manager;
 mod iroh_server;
 mod metrics;
+mod rate_limit;
 pub mod rpc_server;
 mod types;
 
@@ -112,7 +113,8 @@ use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RoutingInfo,
+    SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
@@ -129,6 +131,7 @@ use tracing::{debug, info, info_span, warn};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
+use crate::rate_limit::TokenBucketRateLimiter;
 use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -138,6 +141,13 @@ const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_mins(10);
 /// The default number of route hints that the legacy gateway provides for
 /// invoice creation.
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
+
+/// Default maximum burst of requests to the public invoice creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_BURST: u32 = 50;
+
+/// Default sustained number of requests per second to the public invoice
+/// creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND: u32 = 5;
 
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
@@ -283,6 +293,8 @@ impl Gateway {
                 iroh_relays,
                 skip_setup: true,
                 metrics_listen,
+                invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
+                invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
             },
             gateway_db,
             client_builder,
@@ -364,6 +376,9 @@ pub struct Gateway {
     /// A map of the network protocols the gateway supports to the data needed
     /// for registering with a federation.
     registrations: BTreeMap<RegisteredProtocol, Registration>,
+
+    /// Rate limiter for the public invoice creation endpoint.
+    invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -730,6 +745,10 @@ impl Gateway {
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
             registrations,
+            invoice_rate_limiter: Arc::new(TokenBucketRateLimiter::new(
+                gateway_parameters.invoice_rate_limit_burst,
+                gateway_parameters.invoice_rate_limit_per_second,
+            )),
         })
     }
 
@@ -785,6 +804,7 @@ impl Gateway {
         self.load_clients().await?;
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
+        self.spawn_prune_registered_contracts_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -812,6 +832,53 @@ impl Gateway {
                     }
                 }
             });
+    }
+
+    /// Spawns a background task that periodically deletes registered incoming
+    /// contract records whose invoice has long expired, so unpaid invoice
+    /// registrations cannot grow the database without bound.
+    fn spawn_prune_registered_contracts_task(&self) {
+        let self_copy = self.clone();
+        self.task_group.spawn_cancellable_silent(
+            "prune registered incoming contracts",
+            async move {
+                const PRUNE_INTERVAL: Duration = Duration::from_hours(1);
+                // Records are kept for a day past invoice expiry so payments
+                // settled shortly before expiry can still complete and be
+                // verified via the preimage verification endpoint.
+                const RETENTION_AFTER_EXPIRY: Duration = Duration::from_hours(24);
+
+                let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+                loop {
+                    interval.tick().await;
+
+                    let cutoff_secs = duration_since_epoch()
+                        .saturating_sub(RETENTION_AFTER_EXPIRY)
+                        .as_secs();
+
+                    let mut dbtx = self_copy.gateway_db.begin_transaction().await;
+                    let num_pruned = dbtx.prune_registered_incoming_contracts(cutoff_secs).await;
+                    match dbtx.commit_tx_result().await {
+                        Ok(()) => {
+                            if num_pruned > 0 {
+                                info!(
+                                    target: LOG_GATEWAY,
+                                    num_pruned,
+                                    "Pruned expired incoming contract records"
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_GATEWAY,
+                                err = %err.fmt_compact(),
+                                "Failed to prune expired incoming contract records"
+                            );
+                        }
+                    }
+                }
+            },
+        );
     }
 
     /// Loops through all federations and checks their last save backup time. If
@@ -3074,6 +3141,13 @@ impl Gateway {
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
+        // Unauthenticated invoice creation consumes resources on the Lightning
+        // node and burns CPU on contract verification, so the request rate is
+        // limited before any other work is done.
+        if !self.invoice_rate_limiter.try_acquire() {
+            return Err(PublicGatewayError::RateLimited);
+        }
+
         if !payload.contract.verify() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
@@ -3113,6 +3187,12 @@ impl Gateway {
             )));
         }
 
+        if payload.expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                "The invoice expiry exceeds the maximum of one day".to_string(),
+            )));
+        }
+
         let payment_hash = match payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => {
@@ -3122,21 +3202,21 @@ impl Gateway {
             }
         };
 
-        let invoice = self
-            .create_invoice_via_lnrpc_v2(
-                payment_hash,
-                payload.amount,
-                payload.description.clone(),
-                payload.expiry_secs,
-            )
-            .await?;
-
+        // Reserve the payment hash in the database before requesting the
+        // invoice so a replayed payment hash is rejected without creating any
+        // state on the Lightning node, and so the contract is guaranteed to be
+        // registered by the time the invoice is payable.
         let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let invoice_expires_at_secs = duration_since_epoch()
+            .as_secs()
+            .saturating_add(u64::from(payload.expiry_secs));
 
         if dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
                 payload.amount,
+                invoice_expires_at_secs,
                 payload.contract,
             )
             .await
@@ -3153,7 +3233,34 @@ impl Gateway {
             ))
         })?;
 
-        Ok(invoice)
+        match self
+            .create_invoice_via_lnrpc_v2(
+                payment_hash,
+                payload.amount,
+                payload.description.clone(),
+                payload.expiry_secs,
+            )
+            .await
+        {
+            Ok(invoice) => Ok(invoice),
+            Err(err) => {
+                // Release the reservation so the payment hash is not burned by
+                // a transient Lightning node failure.
+                let mut dbtx = self.gateway_db.begin_transaction().await;
+                dbtx.delete_registered_incoming_contract(PaymentImage::Hash(payment_hash))
+                    .await;
+                if let Err(db_err) = dbtx.commit_tx_result().await {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %db_err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to release incoming contract reservation after Lightning error"
+                    );
+                }
+
+                Err(err.into())
+            }
+        }
     }
 
     /// Retrieves a BOLT11 invoice from the connected Lightning node with a
