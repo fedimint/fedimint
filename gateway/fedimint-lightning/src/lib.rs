@@ -45,6 +45,71 @@ pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;
 pub type Lnv2HoldInvoiceFilter =
     Arc<dyn Fn(sha256::Hash) -> BoxFuture<'static, bool> + Send + Sync + 'static>;
 
+/// Lightning backend that produced structured payment failure details.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub enum LightningPaymentBackend {
+    /// LND lightning backend.
+    Lnd,
+    /// LDK lightning backend.
+    Ldk,
+}
+
+/// Best-effort structured details for a failed outgoing Lightning payment.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailure {
+    /// Backend that produced these diagnostics.
+    pub backend: LightningPaymentBackend,
+    /// Backend-level failure reason, when available.
+    pub failure_reason: Option<String>,
+    /// Per-attempt failure details, when exposed by the backend.
+    pub attempts: Vec<LightningPaymentFailureAttempt>,
+}
+
+/// Best-effort details for one failed Lightning payment attempt.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentFailureAttempt {
+    /// Backend-specific payment attempt id.
+    pub attempt_id: Option<u64>,
+    /// BOLT failure source index, when provided by the backend.
+    pub failure_source_index: Option<u32>,
+    /// BOLT or backend-specific failure code.
+    pub failure_code: Option<String>,
+    /// Public key of the node that failed the attempt, when known.
+    pub failure_node_pub_key: Option<String>,
+    /// Channel id associated with the failure, when known.
+    pub failure_channel_id: Option<u64>,
+    /// Route attempted by this failed payment attempt, when known.
+    pub route: Option<LightningPaymentRoute>,
+}
+
+/// Route attempted by a failed Lightning payment attempt.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentRoute {
+    /// Total amount carried by the route in millisatoshis.
+    pub total_amount_msat: Option<u64>,
+    /// Total routing fees for the route in millisatoshis.
+    pub total_fees_msat: Option<u64>,
+    /// Total CLTV time lock for the route.
+    pub total_time_lock: u32,
+    /// Hops that made up this attempted route.
+    pub hops: Vec<LightningPaymentRouteHop>,
+}
+
+/// Hop in a route attempted by a failed Lightning payment attempt.
+#[derive(Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash)]
+pub struct LightningPaymentRouteHop {
+    /// Public key of the hop node, when known.
+    pub pub_key: Option<String>,
+    /// Channel id used for this hop, when known.
+    pub channel_id: Option<u64>,
+    /// Amount forwarded by this hop in millisatoshis.
+    pub amount_to_forward_msat: Option<u64>,
+    /// Fee paid to this hop in millisatoshis.
+    pub fee_msat: Option<u64>,
+    /// CLTV expiry for this hop.
+    pub expiry: u32,
+}
+
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
@@ -87,6 +152,20 @@ pub enum LightningRpcError {
     InvalidMetadata { failure_reason: String },
     #[error("Bolt12 Error: {failure_reason}")]
     Bolt12Error { failure_reason: String },
+    /// Payment failed and backend-specific structured diagnostics are
+    /// available.
+    ///
+    /// `failure_reason` is the human-readable summary used for display and
+    /// compatibility with [`LightningRpcError::FailedPayment`].
+    /// `payment_failure` carries best-effort backend diagnostics that may
+    /// repeat the summary in `payment_failure.failure_reason` and may
+    /// include richer per-attempt route details when the backend exposes
+    /// them.
+    #[error("Payment failed: {failure_reason}")]
+    FailedPaymentWithDetails {
+        failure_reason: String,
+        payment_failure: LightningPaymentFailure,
+    },
 }
 
 /// Represents an active connection to the lightning node.
