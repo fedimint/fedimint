@@ -34,8 +34,6 @@ use crate::{
 #[derive(Deserialize)]
 pub struct ReceiveEcashForm {
     pub notes: String,
-    #[serde(default)]
-    pub wait: bool,
 }
 
 pub fn scripts() -> Markup {
@@ -505,8 +503,6 @@ pub fn render<E: Display>(
                                      hx-target=(format!("#receive-result-{}", fed.federation_id))
                                      hx-swap="innerHTML"
                                 {
-                                    input type="hidden" name="wait" value="true";
-
                                     div class="mb-3" {
                                         label class="form-label" for=(format!("receive-notes-{}", fed.federation_id)) {
                                             "Ecash Notes"
@@ -1114,10 +1110,7 @@ pub async fn receive_ecash_handler<E: Display>(
     };
 
     // Construct payload with string notes
-    let payload = ReceiveEcashPayload {
-        notes: notes_str,
-        wait: form.wait,
-    };
+    let payload = ReceiveEcashPayload { notes: notes_str };
 
     let markup = match state.api.handle_receive_ecash_msg(payload).await {
         Ok(response) => {

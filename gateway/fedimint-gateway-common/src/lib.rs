@@ -240,8 +240,6 @@ pub struct SpendEcashResponse {
 pub struct ReceiveEcashPayload {
     /// Can be OOBNotes (v1) or ECash (v2)
     pub notes: String,
-    #[serde(default)]
-    pub wait: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
