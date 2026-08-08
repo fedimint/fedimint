@@ -2,13 +2,18 @@ mod mock;
 
 use std::pin::pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::stream;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::encoding::Encodable as _;
 use fedimint_core::module::{AmountUnit, Amounts};
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::{Keypair, SECP256K1};
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -17,10 +22,12 @@ use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
+use fedimint_lnv2_client::htlc::HtlcError;
 use fedimint_lnv2_client::{
     InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
     ReceiveOperationState, SendOperationState, SendPaymentError,
 };
+use fedimint_lnv2_common::contracts::PaymentImage;
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
 };
@@ -349,10 +356,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let (contract, txid) = match operation.meta::<LightningOperationMeta>() {
         LightningOperationMeta::Send(meta) => (meta.contract, meta.change_outpoint_range.txid),
-        LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
-        LightningOperationMeta::LnurlReceive(..) => {
-            panic!("Operation Meta is a LnurlReceive variant")
-        }
+        _ => panic!("Operation Meta is not a Send variant"),
     };
 
     let client_input = ClientInput::<LightningInput> {
@@ -392,6 +396,256 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     assert_eq!(
         update.status,
         SendPaymentStatus::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
+/// Wait until the federation has committed its first block count votes.
+///
+/// A freshly started federation reports a consensus block count of zero until
+/// the votes of its first consensus sessions are committed, while the backing
+/// chain may already be at a positive height - over one hundred blocks for
+/// the pre-mined regtest chain in CI. A contract created against the stale
+/// zero count would be expired the moment the votes land. Mining one block
+/// ensures even a pristine mock chain reaches a nonzero height for the votes
+/// to reflect.
+async fn await_block_count_consensus(
+    fixtures: &Fixtures,
+    client: &ClientHandleArc,
+) -> anyhow::Result<()> {
+    fixtures.bitcoin().mine_blocks(1).await;
+
+    loop {
+        match client
+            .get_first_module::<LightningClientModule>()?
+            .consensus_block_count()
+            .await
+        {
+            Ok(..) => return Ok(()),
+            Err(HtlcError::NoBlockCountConsensus) => {
+                sleep_in_test(
+                    "block count votes to be committed",
+                    Duration::from_millis(200),
+                )
+                .await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_claim() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+    let claimer = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let payment_image = PaymentImage::Hash(preimage.consensus_hash());
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+    let claimer_lnv2 = claimer.get_first_module::<LightningClientModule>()?;
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            payment_image,
+            claim_keypair.public_key(),
+            100,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    let remaining_blocks = claimer_lnv2.await_htlc_funded(outpoint, &contract).await?;
+
+    assert!(remaining_blocks > 0);
+
+    // An incorrect preimage is rejected before anything is submitted.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(
+                outpoint,
+                contract.clone(),
+                claim_keypair,
+                [21; 32],
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::InvalidPreimage)
+    );
+
+    let claim_operation_id = claimer_lnv2
+        .claim_htlc(
+            outpoint,
+            contract.clone(),
+            claim_keypair,
+            preimage,
+            Value::Null,
+        )
+        .await?;
+
+    claimer_lnv2
+        .await_htlc_operation_settled(claim_operation_id)
+        .await?;
+
+    assert!(claimer.get_balance_for_btc().await? > Amount::ZERO);
+
+    // The funder learns the preimage from the federation.
+    assert_eq!(
+        funder_lnv2
+            .await_htlc_resolution(outpoint, &contract)
+            .await?,
+        Some(preimage)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_refund() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            PaymentImage::Hash(preimage.consensus_hash()),
+            claim_keypair.public_key(),
+            20,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    // The contract cannot be refunded before its expiration.
+    assert!(matches!(
+        funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await,
+        Err(HtlcError::NotExpired(..))
+    ));
+
+    fixtures.bitcoin().mine_blocks(30).await;
+
+    // The funder is notified that the contract expired unclaimed...
+    assert_eq!(
+        funder_lnv2
+            .await_htlc_resolution(outpoint, &contract)
+            .await?,
+        None
+    );
+
+    // ...and can refund it once the consensus block count catches up.
+    let refund_operation_id = loop {
+        match funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await
+        {
+            Ok(operation_id) => break operation_id,
+            Err(HtlcError::NotExpired(..)) => {
+                sleep_in_test(
+                    "consensus block count catches up",
+                    Duration::from_millis(100),
+                )
+                .await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+
+    funder_lnv2
+        .await_htlc_operation_settled(refund_operation_id)
+        .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_cancel() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+    let claimer = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+    let claimer_lnv2 = claimer.get_first_module::<LightningClientModule>()?;
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            PaymentImage::Hash(preimage.consensus_hash()),
+            claim_keypair.public_key(),
+            1_000,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    let balance_before_cancel = funder.get_balance_for_btc().await?;
+
+    // The claiming side fails the HTLC cooperatively with a forfeit signature.
+    let forfeit_signature =
+        LightningClientModule::create_htlc_forfeit_signature(&contract, &claim_keypair)?;
+
+    let cancel_operation_id = funder_lnv2
+        .cancel_htlc(outpoint, contract.clone(), forfeit_signature, Value::Null)
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(cancel_operation_id)
+        .await?;
+
+    assert!(funder.get_balance_for_btc().await? > balance_before_cancel);
+
+    // The contract cannot be claimed anymore.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(outpoint, contract, claim_keypair, preimage, Value::Null)
+            .await,
+        Err(HtlcError::ContractNotFound)
     );
 
     Ok(())
