@@ -23,3 +23,6 @@ miniscript = { workspace = true, features = ["serde"] }
 secp256k1 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+
+[lints]
+workspace = true
