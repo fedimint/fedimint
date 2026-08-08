@@ -978,6 +978,15 @@ impl Client {
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     ///
+    /// ## Cancel safety
+    /// This method is cancel safe. It performs all its work (funding the
+    /// inputs, registering the state machines, and creating the operation log
+    /// entry) inside a single `autocommit` transaction, so dropping the future
+    /// either commits that unit in full or leaves the database untouched.
+    /// Submission to the federation is not awaited here, it is carried out by
+    /// the transaction-submission state machine in the executor, so cancelling
+    /// does not abort an already-committed submission.
+    ///
     /// ## Errors
     /// The function will return an error if the operation with given ID already
     /// exists.
@@ -1035,6 +1044,12 @@ impl Client {
 
     /// See [`Self::finalize_and_submit_transaction`], just inside a database
     /// transaction.
+    ///
+    /// ## Cancel safety
+    /// Unlike [`Self::finalize_and_submit_transaction`], this does not own the
+    /// transaction: all writes go to the passed `dbtx`, so its cancel safety
+    /// is that of the caller's transaction. The caller is responsible for
+    /// committing (or rolling back) `dbtx` atomically.
     pub async fn finalize_and_submit_transaction_dbtx<F, M>(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
