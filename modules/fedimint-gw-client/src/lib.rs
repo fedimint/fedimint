@@ -69,7 +69,7 @@ use tracing::{debug, error, info, warn};
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingPaymentError,
+    OutgoingContractError, OutgoingPaymentError,
 };
 
 /// The high-level state of a reissue operation started with
@@ -710,6 +710,17 @@ impl GatewayClientModule {
         pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
+
+        // `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
+        // route, so an amountless BOLT11 reaches us here. The state machine
+        // rejects it in `validate_outgoing_account`, but that runs only after
+        // this function has already recorded the invoice amount, so the amount
+        // has to be resolved before any of that work starts.
+        let invoice_amount = pay_invoice_payload
+            .payment_data
+            .amount()
+            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
+
         self.lightning_manager
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await?;
@@ -722,7 +733,7 @@ impl GatewayClientModule {
 
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
                             contract_id: payload.contract_id,
-                            invoice_amount: payload.payment_data.amount().expect("LNv1 invoices should have an amount"),
+                            invoice_amount,
                             operation_id,
                         }).await;
 

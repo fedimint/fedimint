@@ -115,7 +115,7 @@ use fedimint_lnv2_common::gateway_api::{
     CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
-use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState};
 use fedimint_mintv2_client::{
     MintClientInit as MintV2ClientInit, MintClientModule as MintV2ClientModule,
 };
@@ -1551,15 +1551,33 @@ impl Gateway {
                 let mut updates = mint
                     .subscribe_reissue_external_notes(operation_id)
                     .await
-                    .unwrap()
+                    .map_err(|e| PublicGatewayError::ReceiveEcashError {
+                        failure_reason: format!("Could not subscribe to reissue operation: {e}"),
+                    })?
                     .into_stream();
 
+                // Only `Done` and `Failed` are terminal for this stream. Ending on
+                // `Created` or `Issuing` means the outputs were never finalized, so
+                // their blind signatures were never verified, and reporting the
+                // notes' claimed amount would credit e-cash the gateway does not
+                // hold.
+                let mut reissued = false;
                 while let Some(update) = updates.next().await {
-                    if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                        return Err(PublicGatewayError::ReceiveEcashError {
-                            failure_reason: e.clone(),
-                        });
+                    match update {
+                        ReissueExternalNotesState::Failed(failure_reason) => {
+                            return Err(PublicGatewayError::ReceiveEcashError { failure_reason });
+                        }
+                        ReissueExternalNotesState::Done => reissued = true,
+                        ReissueExternalNotesState::Created | ReissueExternalNotesState::Issuing => {
+                        }
                     }
+                }
+
+                if !reissued {
+                    return Err(PublicGatewayError::ReceiveEcashError {
+                        failure_reason: "Reissue operation ended before the notes were reissued"
+                            .to_string(),
+                    });
                 }
             }
 
