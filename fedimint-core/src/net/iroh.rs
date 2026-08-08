@@ -18,9 +18,22 @@ use crate::envs::{
     is_env_var_set_opt,
 };
 
+/// Fedimint-operated relays running the Iroh 0.35 relay protocol.
 const DEFAULT_IROH_RELAYS: [&str; 2] = [
     "https://euc1-1.relay.elsirion.fedimint.iroh.link/",
     "https://use1-1.relay.elsirion.fedimint.iroh.link/",
+];
+
+/// Fedimint-operated relays running the Iroh 1.0 relay protocol.
+///
+/// The relay wire protocol changed incompatibly between 0.35 and 1.0, so these
+/// are separate deployments from [`DEFAULT_IROH_RELAYS`] and the two lists must
+/// never be mixed. Kept here next to the 0.35 list so both are maintained in
+/// one place; the `RelayMode` is built by callers that have the `iroh_next`
+/// types in scope.
+pub const DEFAULT_IROH_V1_RELAYS: [&str; 2] = [
+    "https://euc1-2.relay.elsirion.fedimint.iroh.link/",
+    "https://use1-2.relay.elsirion.fedimint.iroh.link/",
 ];
 
 /// QUIC idle timeout used for iroh API endpoints.
@@ -183,8 +196,21 @@ mod tests {
 
     #[test]
     fn default_iroh_relays_are_valid_urls() {
-        for relay in DEFAULT_IROH_RELAYS {
+        for relay in DEFAULT_IROH_RELAYS
+            .into_iter()
+            .chain(DEFAULT_IROH_V1_RELAYS)
+        {
             Url::parse(relay).expect("default Iroh relay URL is valid");
+        }
+    }
+
+    #[test]
+    fn default_iroh_relay_lists_are_disjoint() {
+        for relay in DEFAULT_IROH_V1_RELAYS {
+            assert!(
+                !DEFAULT_IROH_RELAYS.contains(&relay),
+                "{relay} is listed as both an Iroh 0.35 and an Iroh 1.0 relay"
+            );
         }
     }
 }
