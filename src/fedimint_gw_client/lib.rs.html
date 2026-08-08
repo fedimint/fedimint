@@ -69,7 +69,7 @@
 <a href=#69 id=69 data-nosnippet>69</a><span class="kw">use </span><span class="self">self</span>::complete::GatewayCompleteStateMachine;
 <a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span><span class="self">self</span>::pay::{
 <a href=#71 id=71 data-nosnippet>71</a>    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-<a href=#72 id=72 data-nosnippet>72</a>    OutgoingPaymentError,
+<a href=#72 id=72 data-nosnippet>72</a>    OutgoingContractError, OutgoingPaymentError,
 <a href=#73 id=73 data-nosnippet>73</a>};
 <a href=#74 id=74 data-nosnippet>74</a>
 <a href=#75 id=75 data-nosnippet>75</a><span class="doccomment">/// The high-level state of a reissue operation started with
@@ -710,354 +710,365 @@
 <a href=#710 id=710 data-nosnippet>710</a>        pay_invoice_payload: PayInvoicePayload,
 <a href=#711 id=711 data-nosnippet>711</a>    ) -&gt; anyhow::Result&lt;OperationId&gt; {
 <a href=#712 id=712 data-nosnippet>712</a>        <span class="kw">let </span>payload = pay_invoice_payload.clone();
-<a href=#713 id=713 data-nosnippet>713</a>        <span class="self">self</span>.lightning_manager
-<a href=#714 id=714 data-nosnippet>714</a>            .verify_pruned_invoice(pay_invoice_payload.payment_data)
-<a href=#715 id=715 data-nosnippet>715</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#716 id=716 data-nosnippet>716</a>
-<a href=#717 id=717 data-nosnippet>717</a>        <span class="self">self</span>.client_ctx.module_db()
-<a href=#718 id=718 data-nosnippet>718</a>            .autocommit(
-<a href=#719 id=719 data-nosnippet>719</a>                |dbtx, <span class="kw">_</span>| {
-<a href=#720 id=720 data-nosnippet>720</a>                    Box::pin(<span class="kw">async </span>{
-<a href=#721 id=721 data-nosnippet>721</a>                        <span class="kw">let </span>operation_id = OperationId(payload.contract_id.to_byte_array());
-<a href=#722 id=722 data-nosnippet>722</a>
-<a href=#723 id=723 data-nosnippet>723</a>                        <span class="self">self</span>.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
-<a href=#724 id=724 data-nosnippet>724</a>                            contract_id: payload.contract_id,
-<a href=#725 id=725 data-nosnippet>725</a>                            invoice_amount: payload.payment_data.amount().expect(<span class="string">"LNv1 invoices should have an amount"</span>),
-<a href=#726 id=726 data-nosnippet>726</a>                            operation_id,
-<a href=#727 id=727 data-nosnippet>727</a>                        }).<span class="kw">await</span>;
-<a href=#728 id=728 data-nosnippet>728</a>
-<a href=#729 id=729 data-nosnippet>729</a>                        <span class="kw">let </span>state_machines =
-<a href=#730 id=730 data-nosnippet>730</a>                            <span class="macro">vec!</span>[GatewayClientStateMachines::Pay(GatewayPayStateMachine {
-<a href=#731 id=731 data-nosnippet>731</a>                                common: GatewayPayCommon { operation_id },
-<a href=#732 id=732 data-nosnippet>732</a>                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-<a href=#733 id=733 data-nosnippet>733</a>                                    pay_invoice_payload: payload.clone(),
-<a href=#734 id=734 data-nosnippet>734</a>                                }),
-<a href=#735 id=735 data-nosnippet>735</a>                            })];
-<a href=#736 id=736 data-nosnippet>736</a>
-<a href=#737 id=737 data-nosnippet>737</a>                        <span class="kw">let </span>dyn_states = state_machines
-<a href=#738 id=738 data-nosnippet>738</a>                            .into_iter()
-<a href=#739 id=739 data-nosnippet>739</a>                            .map(|s| <span class="self">self</span>.client_ctx.make_dyn(s))
-<a href=#740 id=740 data-nosnippet>740</a>                            .collect();
-<a href=#741 id=741 data-nosnippet>741</a>
-<a href=#742 id=742 data-nosnippet>742</a>                            <span class="kw">match </span><span class="self">self</span>.client_ctx.add_state_machines_dbtx(dbtx, dyn_states).<span class="kw">await </span>{
-<a href=#743 id=743 data-nosnippet>743</a>                                <span class="prelude-val">Ok</span>(()) =&gt; {
-<a href=#744 id=744 data-nosnippet>744</a>                                    <span class="self">self</span>.client_ctx
-<a href=#745 id=745 data-nosnippet>745</a>                                        .add_operation_log_entry_dbtx(
-<a href=#746 id=746 data-nosnippet>746</a>                                            dbtx,
-<a href=#747 id=747 data-nosnippet>747</a>                                            operation_id,
-<a href=#748 id=748 data-nosnippet>748</a>                                            KIND.as_str(),
-<a href=#749 id=749 data-nosnippet>749</a>                                            GatewayMeta::Pay,
-<a href=#750 id=750 data-nosnippet>750</a>                                        )
-<a href=#751 id=751 data-nosnippet>751</a>                                        .<span class="kw">await</span>;
-<a href=#752 id=752 data-nosnippet>752</a>                                }
-<a href=#753 id=753 data-nosnippet>753</a>                                <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
-<a href=#754 id=754 data-nosnippet>754</a>                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {} already exists, will not add a new one"</span>, operation_id.fmt_short());
-<a href=#755 id=755 data-nosnippet>755</a>                                }
-<a href=#756 id=756 data-nosnippet>756</a>                                <span class="prelude-val">Err</span>(other) =&gt; {
-<a href=#757 id=757 data-nosnippet>757</a>                                    <span class="macro">anyhow::bail!</span>(<span class="string">"Failed to add state machines: {other:?}"</span>)
-<a href=#758 id=758 data-nosnippet>758</a>                                }
-<a href=#759 id=759 data-nosnippet>759</a>                            }
-<a href=#760 id=760 data-nosnippet>760</a>                            <span class="prelude-val">Ok</span>(operation_id)
-<a href=#761 id=761 data-nosnippet>761</a>                    })
-<a href=#762 id=762 data-nosnippet>762</a>                },
-<a href=#763 id=763 data-nosnippet>763</a>                <span class="prelude-val">Some</span>(<span class="number">100</span>),
-<a href=#764 id=764 data-nosnippet>764</a>            )
-<a href=#765 id=765 data-nosnippet>765</a>            .<span class="kw">await
-<a href=#766 id=766 data-nosnippet>766</a>            </span>.map_err(|e| <span class="kw">match </span>e {
-<a href=#767 id=767 data-nosnippet>767</a>                AutocommitError::ClosureError { error, .. } =&gt; error,
-<a href=#768 id=768 data-nosnippet>768</a>                AutocommitError::CommitFailed { last_error, .. } =&gt; {
-<a href=#769 id=769 data-nosnippet>769</a>                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"Commit to DB failed: {last_error}"</span>)
-<a href=#770 id=770 data-nosnippet>770</a>                }
-<a href=#771 id=771 data-nosnippet>771</a>            })
-<a href=#772 id=772 data-nosnippet>772</a>    }
-<a href=#773 id=773 data-nosnippet>773</a>
-<a href=#774 id=774 data-nosnippet>774</a>    <span class="kw">pub async fn </span>gateway_subscribe_ln_pay(
-<a href=#775 id=775 data-nosnippet>775</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#776 id=776 data-nosnippet>776</a>        operation_id: OperationId,
-<a href=#777 id=777 data-nosnippet>777</a>    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
-<a href=#778 id=778 data-nosnippet>778</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
-<a href=#779 id=779 data-nosnippet>779</a>        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#780 id=780 data-nosnippet>780</a>        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
-<a href=#781 id=781 data-nosnippet>781</a>
-<a href=#782 id=782 data-nosnippet>782</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, |state| <span class="kw">match </span>state {
-<a href=#783 id=783 data-nosnippet>783</a>                GatewayExtPayStates::Created | GatewayExtPayStates::Preimage { .. } =&gt; <span class="bool-val">false</span>,
-<a href=#784 id=784 data-nosnippet>784</a>                GatewayExtPayStates::Success { .. }
-<a href=#785 id=785 data-nosnippet>785</a>                | GatewayExtPayStates::Canceled { .. }
-<a href=#786 id=786 data-nosnippet>786</a>                | GatewayExtPayStates::Fail { .. }
-<a href=#787 id=787 data-nosnippet>787</a>                | GatewayExtPayStates::OfferDoesNotExist { .. } =&gt; <span class="bool-val">true</span>,
-<a href=#788 id=788 data-nosnippet>788</a>            }, <span class="kw">move </span>|| {
-<a href=#789 id=789 data-nosnippet>789</a>            <span class="macro">stream!</span> {
-<a href=#790 id=790 data-nosnippet>790</a>                <span class="kw">yield </span>GatewayExtPayStates::Created;
-<a href=#791 id=791 data-nosnippet>791</a>
-<a href=#792 id=792 data-nosnippet>792</a>                <span class="kw">loop </span>{
-<a href=#793 id=793 data-nosnippet>793</a>                    <span class="macro">debug!</span>(<span class="string">"Getting next ln pay state for {}"</span>, operation_id.fmt_short());
-<a href=#794 id=794 data-nosnippet>794</a>                    <span class="kw">match </span>stream.next().<span class="kw">await </span>{ <span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) =&gt; {
-<a href=#795 id=795 data-nosnippet>795</a>                        <span class="kw">match </span>state.state {
-<a href=#796 id=796 data-nosnippet>796</a>                            GatewayPayStates::Preimage(out_points, preimage) =&gt; {
-<a href=#797 id=797 data-nosnippet>797</a>                                <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
-<a href=#798 id=798 data-nosnippet>798</a>
-<a href=#799 id=799 data-nosnippet>799</a>                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
-<a href=#800 id=800 data-nosnippet>800</a>                                    <span class="prelude-val">Ok</span>(()) =&gt; {
-<a href=#801 id=801 data-nosnippet>801</a>                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Success"</span>);
-<a href=#802 id=802 data-nosnippet>802</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
-<a href=#803 id=803 data-nosnippet>803</a>                                        <span class="kw">return</span>;
-<a href=#804 id=804 data-nosnippet>804</a>
-<a href=#805 id=805 data-nosnippet>805</a>                                    }
-<a href=#806 id=806 data-nosnippet>806</a>                                    <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#807 id=807 data-nosnippet>807</a>                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for outputs {out_points:?}"</span>);
-<a href=#808 id=808 data-nosnippet>808</a>                                        <span class="comment">// TODO: yield something here?
-<a href=#809 id=809 data-nosnippet>809</a>                                    </span>}
-<a href=#810 id=810 data-nosnippet>810</a>                                }
-<a href=#811 id=811 data-nosnippet>811</a>                            }
-<a href=#812 id=812 data-nosnippet>812</a>                            GatewayPayStates::Canceled { txid, contract_id, error } =&gt; {
-<a href=#813 id=813 data-nosnippet>813</a>                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Trying to cancel contract {contract_id:?} due to {error:?}"</span>);
-<a href=#814 id=814 data-nosnippet>814</a>                                <span class="kw">match </span>client_ctx.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
-<a href=#815 id=815 data-nosnippet>815</a>                                    <span class="prelude-val">Ok</span>(()) =&gt; {
-<a href=#816 id=816 data-nosnippet>816</a>                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Canceled contract {contract_id:?} due to {error:?}"</span>);
-<a href=#817 id=817 data-nosnippet>817</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
-<a href=#818 id=818 data-nosnippet>818</a>                                        <span class="kw">return</span>;
-<a href=#819 id=819 data-nosnippet>819</a>                                    }
-<a href=#820 id=820 data-nosnippet>820</a>                                    <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#821 id=821 data-nosnippet>821</a>                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for transaction {txid} to be accepted for"</span>);
-<a href=#822 id=822 data-nosnippet>822</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">"Refund transaction {txid} was not accepted by the federation. OperationId: {} Error: {e:?}"</span>, operation_id.fmt_short()) };
-<a href=#823 id=823 data-nosnippet>823</a>                                    }
-<a href=#824 id=824 data-nosnippet>824</a>                                }
-<a href=#825 id=825 data-nosnippet>825</a>                            }
-<a href=#826 id=826 data-nosnippet>826</a>                            GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
-<a href=#827 id=827 data-nosnippet>827</a>                                <span class="macro">warn!</span>(<span class="string">"Yielding OfferDoesNotExist state for {} and contract {contract_id}"</span>, operation_id.fmt_short());
-<a href=#828 id=828 data-nosnippet>828</a>                                <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
-<a href=#829 id=829 data-nosnippet>829</a>                            }
-<a href=#830 id=830 data-nosnippet>830</a>                            GatewayPayStates::Failed{ error, error_message } =&gt; {
-<a href=#831 id=831 data-nosnippet>831</a>                                <span class="macro">warn!</span>(<span class="string">"Yielding Fail state for {} due to {error:?} {error_message:?}"</span>, operation_id.fmt_short());
-<a href=#832 id=832 data-nosnippet>832</a>                                <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
-<a href=#833 id=833 data-nosnippet>833</a>                            },
-<a href=#834 id=834 data-nosnippet>834</a>                            GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
-<a href=#835 id=835 data-nosnippet>835</a>                                <span class="macro">debug!</span>(<span class="string">"Got initial state PayInvoice while awaiting for output of {}"</span>, operation_id.fmt_short());
+<a href=#713 id=713 data-nosnippet>713</a>
+<a href=#714 id=714 data-nosnippet>714</a>        <span class="comment">// `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
+<a href=#715 id=715 data-nosnippet>715</a>        // route, so an amountless BOLT11 reaches us here. The state machine
+<a href=#716 id=716 data-nosnippet>716</a>        // rejects it in `validate_outgoing_account`, but that runs only after
+<a href=#717 id=717 data-nosnippet>717</a>        // this function has already recorded the invoice amount, so the amount
+<a href=#718 id=718 data-nosnippet>718</a>        // has to be resolved before any of that work starts.
+<a href=#719 id=719 data-nosnippet>719</a>        </span><span class="kw">let </span>invoice_amount = pay_invoice_payload
+<a href=#720 id=720 data-nosnippet>720</a>            .payment_data
+<a href=#721 id=721 data-nosnippet>721</a>            .amount()
+<a href=#722 id=722 data-nosnippet>722</a>            .ok_or(OutgoingContractError::InvoiceMissingAmount)<span class="question-mark">?</span>;
+<a href=#723 id=723 data-nosnippet>723</a>
+<a href=#724 id=724 data-nosnippet>724</a>        <span class="self">self</span>.lightning_manager
+<a href=#725 id=725 data-nosnippet>725</a>            .verify_pruned_invoice(pay_invoice_payload.payment_data)
+<a href=#726 id=726 data-nosnippet>726</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#727 id=727 data-nosnippet>727</a>
+<a href=#728 id=728 data-nosnippet>728</a>        <span class="self">self</span>.client_ctx.module_db()
+<a href=#729 id=729 data-nosnippet>729</a>            .autocommit(
+<a href=#730 id=730 data-nosnippet>730</a>                |dbtx, <span class="kw">_</span>| {
+<a href=#731 id=731 data-nosnippet>731</a>                    Box::pin(<span class="kw">async </span>{
+<a href=#732 id=732 data-nosnippet>732</a>                        <span class="kw">let </span>operation_id = OperationId(payload.contract_id.to_byte_array());
+<a href=#733 id=733 data-nosnippet>733</a>
+<a href=#734 id=734 data-nosnippet>734</a>                        <span class="self">self</span>.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
+<a href=#735 id=735 data-nosnippet>735</a>                            contract_id: payload.contract_id,
+<a href=#736 id=736 data-nosnippet>736</a>                            invoice_amount,
+<a href=#737 id=737 data-nosnippet>737</a>                            operation_id,
+<a href=#738 id=738 data-nosnippet>738</a>                        }).<span class="kw">await</span>;
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>                        <span class="kw">let </span>state_machines =
+<a href=#741 id=741 data-nosnippet>741</a>                            <span class="macro">vec!</span>[GatewayClientStateMachines::Pay(GatewayPayStateMachine {
+<a href=#742 id=742 data-nosnippet>742</a>                                common: GatewayPayCommon { operation_id },
+<a href=#743 id=743 data-nosnippet>743</a>                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
+<a href=#744 id=744 data-nosnippet>744</a>                                    pay_invoice_payload: payload.clone(),
+<a href=#745 id=745 data-nosnippet>745</a>                                }),
+<a href=#746 id=746 data-nosnippet>746</a>                            })];
+<a href=#747 id=747 data-nosnippet>747</a>
+<a href=#748 id=748 data-nosnippet>748</a>                        <span class="kw">let </span>dyn_states = state_machines
+<a href=#749 id=749 data-nosnippet>749</a>                            .into_iter()
+<a href=#750 id=750 data-nosnippet>750</a>                            .map(|s| <span class="self">self</span>.client_ctx.make_dyn(s))
+<a href=#751 id=751 data-nosnippet>751</a>                            .collect();
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>                            <span class="kw">match </span><span class="self">self</span>.client_ctx.add_state_machines_dbtx(dbtx, dyn_states).<span class="kw">await </span>{
+<a href=#754 id=754 data-nosnippet>754</a>                                <span class="prelude-val">Ok</span>(()) =&gt; {
+<a href=#755 id=755 data-nosnippet>755</a>                                    <span class="self">self</span>.client_ctx
+<a href=#756 id=756 data-nosnippet>756</a>                                        .add_operation_log_entry_dbtx(
+<a href=#757 id=757 data-nosnippet>757</a>                                            dbtx,
+<a href=#758 id=758 data-nosnippet>758</a>                                            operation_id,
+<a href=#759 id=759 data-nosnippet>759</a>                                            KIND.as_str(),
+<a href=#760 id=760 data-nosnippet>760</a>                                            GatewayMeta::Pay,
+<a href=#761 id=761 data-nosnippet>761</a>                                        )
+<a href=#762 id=762 data-nosnippet>762</a>                                        .<span class="kw">await</span>;
+<a href=#763 id=763 data-nosnippet>763</a>                                }
+<a href=#764 id=764 data-nosnippet>764</a>                                <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
+<a href=#765 id=765 data-nosnippet>765</a>                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {} already exists, will not add a new one"</span>, operation_id.fmt_short());
+<a href=#766 id=766 data-nosnippet>766</a>                                }
+<a href=#767 id=767 data-nosnippet>767</a>                                <span class="prelude-val">Err</span>(other) =&gt; {
+<a href=#768 id=768 data-nosnippet>768</a>                                    <span class="macro">anyhow::bail!</span>(<span class="string">"Failed to add state machines: {other:?}"</span>)
+<a href=#769 id=769 data-nosnippet>769</a>                                }
+<a href=#770 id=770 data-nosnippet>770</a>                            }
+<a href=#771 id=771 data-nosnippet>771</a>                            <span class="prelude-val">Ok</span>(operation_id)
+<a href=#772 id=772 data-nosnippet>772</a>                    })
+<a href=#773 id=773 data-nosnippet>773</a>                },
+<a href=#774 id=774 data-nosnippet>774</a>                <span class="prelude-val">Some</span>(<span class="number">100</span>),
+<a href=#775 id=775 data-nosnippet>775</a>            )
+<a href=#776 id=776 data-nosnippet>776</a>            .<span class="kw">await
+<a href=#777 id=777 data-nosnippet>777</a>            </span>.map_err(|e| <span class="kw">match </span>e {
+<a href=#778 id=778 data-nosnippet>778</a>                AutocommitError::ClosureError { error, .. } =&gt; error,
+<a href=#779 id=779 data-nosnippet>779</a>                AutocommitError::CommitFailed { last_error, .. } =&gt; {
+<a href=#780 id=780 data-nosnippet>780</a>                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"Commit to DB failed: {last_error}"</span>)
+<a href=#781 id=781 data-nosnippet>781</a>                }
+<a href=#782 id=782 data-nosnippet>782</a>            })
+<a href=#783 id=783 data-nosnippet>783</a>    }
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a>    <span class="kw">pub async fn </span>gateway_subscribe_ln_pay(
+<a href=#786 id=786 data-nosnippet>786</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#787 id=787 data-nosnippet>787</a>        operation_id: OperationId,
+<a href=#788 id=788 data-nosnippet>788</a>    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
+<a href=#789 id=789 data-nosnippet>789</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
+<a href=#790 id=790 data-nosnippet>790</a>        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#791 id=791 data-nosnippet>791</a>        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
+<a href=#792 id=792 data-nosnippet>792</a>
+<a href=#793 id=793 data-nosnippet>793</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, |state| <span class="kw">match </span>state {
+<a href=#794 id=794 data-nosnippet>794</a>                GatewayExtPayStates::Created | GatewayExtPayStates::Preimage { .. } =&gt; <span class="bool-val">false</span>,
+<a href=#795 id=795 data-nosnippet>795</a>                GatewayExtPayStates::Success { .. }
+<a href=#796 id=796 data-nosnippet>796</a>                | GatewayExtPayStates::Canceled { .. }
+<a href=#797 id=797 data-nosnippet>797</a>                | GatewayExtPayStates::Fail { .. }
+<a href=#798 id=798 data-nosnippet>798</a>                | GatewayExtPayStates::OfferDoesNotExist { .. } =&gt; <span class="bool-val">true</span>,
+<a href=#799 id=799 data-nosnippet>799</a>            }, <span class="kw">move </span>|| {
+<a href=#800 id=800 data-nosnippet>800</a>            <span class="macro">stream!</span> {
+<a href=#801 id=801 data-nosnippet>801</a>                <span class="kw">yield </span>GatewayExtPayStates::Created;
+<a href=#802 id=802 data-nosnippet>802</a>
+<a href=#803 id=803 data-nosnippet>803</a>                <span class="kw">loop </span>{
+<a href=#804 id=804 data-nosnippet>804</a>                    <span class="macro">debug!</span>(<span class="string">"Getting next ln pay state for {}"</span>, operation_id.fmt_short());
+<a href=#805 id=805 data-nosnippet>805</a>                    <span class="kw">match </span>stream.next().<span class="kw">await </span>{ <span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) =&gt; {
+<a href=#806 id=806 data-nosnippet>806</a>                        <span class="kw">match </span>state.state {
+<a href=#807 id=807 data-nosnippet>807</a>                            GatewayPayStates::Preimage(out_points, preimage) =&gt; {
+<a href=#808 id=808 data-nosnippet>808</a>                                <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
+<a href=#809 id=809 data-nosnippet>809</a>
+<a href=#810 id=810 data-nosnippet>810</a>                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
+<a href=#811 id=811 data-nosnippet>811</a>                                    <span class="prelude-val">Ok</span>(()) =&gt; {
+<a href=#812 id=812 data-nosnippet>812</a>                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Success"</span>);
+<a href=#813 id=813 data-nosnippet>813</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
+<a href=#814 id=814 data-nosnippet>814</a>                                        <span class="kw">return</span>;
+<a href=#815 id=815 data-nosnippet>815</a>
+<a href=#816 id=816 data-nosnippet>816</a>                                    }
+<a href=#817 id=817 data-nosnippet>817</a>                                    <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#818 id=818 data-nosnippet>818</a>                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for outputs {out_points:?}"</span>);
+<a href=#819 id=819 data-nosnippet>819</a>                                        <span class="comment">// TODO: yield something here?
+<a href=#820 id=820 data-nosnippet>820</a>                                    </span>}
+<a href=#821 id=821 data-nosnippet>821</a>                                }
+<a href=#822 id=822 data-nosnippet>822</a>                            }
+<a href=#823 id=823 data-nosnippet>823</a>                            GatewayPayStates::Canceled { txid, contract_id, error } =&gt; {
+<a href=#824 id=824 data-nosnippet>824</a>                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Trying to cancel contract {contract_id:?} due to {error:?}"</span>);
+<a href=#825 id=825 data-nosnippet>825</a>                                <span class="kw">match </span>client_ctx.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
+<a href=#826 id=826 data-nosnippet>826</a>                                    <span class="prelude-val">Ok</span>(()) =&gt; {
+<a href=#827 id=827 data-nosnippet>827</a>                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Canceled contract {contract_id:?} due to {error:?}"</span>);
+<a href=#828 id=828 data-nosnippet>828</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
+<a href=#829 id=829 data-nosnippet>829</a>                                        <span class="kw">return</span>;
+<a href=#830 id=830 data-nosnippet>830</a>                                    }
+<a href=#831 id=831 data-nosnippet>831</a>                                    <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#832 id=832 data-nosnippet>832</a>                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for transaction {txid} to be accepted for"</span>);
+<a href=#833 id=833 data-nosnippet>833</a>                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">"Refund transaction {txid} was not accepted by the federation. OperationId: {} Error: {e:?}"</span>, operation_id.fmt_short()) };
+<a href=#834 id=834 data-nosnippet>834</a>                                    }
+<a href=#835 id=835 data-nosnippet>835</a>                                }
 <a href=#836 id=836 data-nosnippet>836</a>                            }
-<a href=#837 id=837 data-nosnippet>837</a>                            other =&gt; {
-<a href=#838 id=838 data-nosnippet>838</a>                                <span class="macro">info!</span>(<span class="string">"Got state {other:?} while awaiting for output of {}"</span>, operation_id.fmt_short());
-<a href=#839 id=839 data-nosnippet>839</a>                            }
-<a href=#840 id=840 data-nosnippet>840</a>                        }
-<a href=#841 id=841 data-nosnippet>841</a>                    } <span class="kw">_ </span>=&gt; {
-<a href=#842 id=842 data-nosnippet>842</a>                        <span class="macro">warn!</span>(<span class="string">"Got None while getting next ln pay state for {}"</span>, operation_id.fmt_short());
-<a href=#843 id=843 data-nosnippet>843</a>                    }}
-<a href=#844 id=844 data-nosnippet>844</a>                }
-<a href=#845 id=845 data-nosnippet>845</a>            }
-<a href=#846 id=846 data-nosnippet>846</a>        }))
-<a href=#847 id=847 data-nosnippet>847</a>    }
-<a href=#848 id=848 data-nosnippet>848</a>}
-<a href=#849 id=849 data-nosnippet>849</a>
-<a href=#850 id=850 data-nosnippet>850</a><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-<a href=#851 id=851 data-nosnippet>851</a></span><span class="kw">struct </span>HtlcCircuitKey {
-<a href=#852 id=852 data-nosnippet>852</a>    operation_id: OperationId,
-<a href=#853 id=853 data-nosnippet>853</a>    incoming_chan_id: u64,
-<a href=#854 id=854 data-nosnippet>854</a>    htlc_id: u64,
-<a href=#855 id=855 data-nosnippet>855</a>}
-<a href=#856 id=856 data-nosnippet>856</a>
-<a href=#857 id=857 data-nosnippet>857</a><span class="kw">impl </span>HtlcCircuitKey {
-<a href=#858 id=858 data-nosnippet>858</a>    <span class="kw">fn </span>matches_state(<span class="self">self</span>, state: <span class="kw-2">&amp;</span>GatewayClientStateMachines) -&gt; bool {
-<a href=#859 id=859 data-nosnippet>859</a>        <span class="macro">matches!</span>(
-<a href=#860 id=860 data-nosnippet>860</a>            state,
-<a href=#861 id=861 data-nosnippet>861</a>            GatewayClientStateMachines::Complete(sm)
-<a href=#862 id=862 data-nosnippet>862</a>                <span class="kw">if </span>sm.common.operation_id == <span class="self">self</span>.operation_id
-<a href=#863 id=863 data-nosnippet>863</a>                    &amp;&amp; sm.common.incoming_chan_id == <span class="self">self</span>.incoming_chan_id
-<a href=#864 id=864 data-nosnippet>864</a>                    &amp;&amp; sm.common.htlc_id == <span class="self">self</span>.htlc_id
-<a href=#865 id=865 data-nosnippet>865</a>        )
-<a href=#866 id=866 data-nosnippet>866</a>    }
-<a href=#867 id=867 data-nosnippet>867</a>}
-<a href=#868 id=868 data-nosnippet>868</a>
-<a href=#869 id=869 data-nosnippet>869</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-<a href=#870 id=870 data-nosnippet>870</a></span><span class="kw">pub enum </span>GatewayClientStateMachines {
-<a href=#871 id=871 data-nosnippet>871</a>    Pay(GatewayPayStateMachine),
-<a href=#872 id=872 data-nosnippet>872</a>    Receive(IncomingStateMachine),
-<a href=#873 id=873 data-nosnippet>873</a>    Complete(GatewayCompleteStateMachine),
-<a href=#874 id=874 data-nosnippet>874</a>}
-<a href=#875 id=875 data-nosnippet>875</a>
-<a href=#876 id=876 data-nosnippet>876</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>GatewayClientStateMachines {
-<a href=#877 id=877 data-nosnippet>877</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#878 id=878 data-nosnippet>878</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#879 id=879 data-nosnippet>879</a>            GatewayClientStateMachines::Pay(pay) =&gt; {
-<a href=#880 id=880 data-nosnippet>880</a>                <span class="macro">write!</span>(f, <span class="string">"{pay}"</span>)
-<a href=#881 id=881 data-nosnippet>881</a>            }
-<a href=#882 id=882 data-nosnippet>882</a>            GatewayClientStateMachines::Receive(receive) =&gt; {
-<a href=#883 id=883 data-nosnippet>883</a>                <span class="macro">write!</span>(f, <span class="string">"{receive}"</span>)
-<a href=#884 id=884 data-nosnippet>884</a>            }
-<a href=#885 id=885 data-nosnippet>885</a>            GatewayClientStateMachines::Complete(complete) =&gt; {
-<a href=#886 id=886 data-nosnippet>886</a>                <span class="macro">write!</span>(f, <span class="string">"{complete}"</span>)
-<a href=#887 id=887 data-nosnippet>887</a>            }
-<a href=#888 id=888 data-nosnippet>888</a>        }
-<a href=#889 id=889 data-nosnippet>889</a>    }
-<a href=#890 id=890 data-nosnippet>890</a>}
-<a href=#891 id=891 data-nosnippet>891</a>
-<a href=#892 id=892 data-nosnippet>892</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachines {
-<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">type </span>DynType = DynState;
-<a href=#894 id=894 data-nosnippet>894</a>
-<a href=#895 id=895 data-nosnippet>895</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
-<a href=#896 id=896 data-nosnippet>896</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
-<a href=#897 id=897 data-nosnippet>897</a>    }
-<a href=#898 id=898 data-nosnippet>898</a>}
-<a href=#899 id=899 data-nosnippet>899</a>
-<a href=#900 id=900 data-nosnippet>900</a><span class="kw">impl </span>State <span class="kw">for </span>GatewayClientStateMachines {
-<a href=#901 id=901 data-nosnippet>901</a>    <span class="kw">type </span>ModuleContext = GatewayClientContext;
+<a href=#837 id=837 data-nosnippet>837</a>                            GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
+<a href=#838 id=838 data-nosnippet>838</a>                                <span class="macro">warn!</span>(<span class="string">"Yielding OfferDoesNotExist state for {} and contract {contract_id}"</span>, operation_id.fmt_short());
+<a href=#839 id=839 data-nosnippet>839</a>                                <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
+<a href=#840 id=840 data-nosnippet>840</a>                            }
+<a href=#841 id=841 data-nosnippet>841</a>                            GatewayPayStates::Failed{ error, error_message } =&gt; {
+<a href=#842 id=842 data-nosnippet>842</a>                                <span class="macro">warn!</span>(<span class="string">"Yielding Fail state for {} due to {error:?} {error_message:?}"</span>, operation_id.fmt_short());
+<a href=#843 id=843 data-nosnippet>843</a>                                <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
+<a href=#844 id=844 data-nosnippet>844</a>                            },
+<a href=#845 id=845 data-nosnippet>845</a>                            GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
+<a href=#846 id=846 data-nosnippet>846</a>                                <span class="macro">debug!</span>(<span class="string">"Got initial state PayInvoice while awaiting for output of {}"</span>, operation_id.fmt_short());
+<a href=#847 id=847 data-nosnippet>847</a>                            }
+<a href=#848 id=848 data-nosnippet>848</a>                            other =&gt; {
+<a href=#849 id=849 data-nosnippet>849</a>                                <span class="macro">info!</span>(<span class="string">"Got state {other:?} while awaiting for output of {}"</span>, operation_id.fmt_short());
+<a href=#850 id=850 data-nosnippet>850</a>                            }
+<a href=#851 id=851 data-nosnippet>851</a>                        }
+<a href=#852 id=852 data-nosnippet>852</a>                    } <span class="kw">_ </span>=&gt; {
+<a href=#853 id=853 data-nosnippet>853</a>                        <span class="macro">warn!</span>(<span class="string">"Got None while getting next ln pay state for {}"</span>, operation_id.fmt_short());
+<a href=#854 id=854 data-nosnippet>854</a>                    }}
+<a href=#855 id=855 data-nosnippet>855</a>                }
+<a href=#856 id=856 data-nosnippet>856</a>            }
+<a href=#857 id=857 data-nosnippet>857</a>        }))
+<a href=#858 id=858 data-nosnippet>858</a>    }
+<a href=#859 id=859 data-nosnippet>859</a>}
+<a href=#860 id=860 data-nosnippet>860</a>
+<a href=#861 id=861 data-nosnippet>861</a><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+<a href=#862 id=862 data-nosnippet>862</a></span><span class="kw">struct </span>HtlcCircuitKey {
+<a href=#863 id=863 data-nosnippet>863</a>    operation_id: OperationId,
+<a href=#864 id=864 data-nosnippet>864</a>    incoming_chan_id: u64,
+<a href=#865 id=865 data-nosnippet>865</a>    htlc_id: u64,
+<a href=#866 id=866 data-nosnippet>866</a>}
+<a href=#867 id=867 data-nosnippet>867</a>
+<a href=#868 id=868 data-nosnippet>868</a><span class="kw">impl </span>HtlcCircuitKey {
+<a href=#869 id=869 data-nosnippet>869</a>    <span class="kw">fn </span>matches_state(<span class="self">self</span>, state: <span class="kw-2">&amp;</span>GatewayClientStateMachines) -&gt; bool {
+<a href=#870 id=870 data-nosnippet>870</a>        <span class="macro">matches!</span>(
+<a href=#871 id=871 data-nosnippet>871</a>            state,
+<a href=#872 id=872 data-nosnippet>872</a>            GatewayClientStateMachines::Complete(sm)
+<a href=#873 id=873 data-nosnippet>873</a>                <span class="kw">if </span>sm.common.operation_id == <span class="self">self</span>.operation_id
+<a href=#874 id=874 data-nosnippet>874</a>                    &amp;&amp; sm.common.incoming_chan_id == <span class="self">self</span>.incoming_chan_id
+<a href=#875 id=875 data-nosnippet>875</a>                    &amp;&amp; sm.common.htlc_id == <span class="self">self</span>.htlc_id
+<a href=#876 id=876 data-nosnippet>876</a>        )
+<a href=#877 id=877 data-nosnippet>877</a>    }
+<a href=#878 id=878 data-nosnippet>878</a>}
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<a href=#881 id=881 data-nosnippet>881</a></span><span class="kw">pub enum </span>GatewayClientStateMachines {
+<a href=#882 id=882 data-nosnippet>882</a>    Pay(GatewayPayStateMachine),
+<a href=#883 id=883 data-nosnippet>883</a>    Receive(IncomingStateMachine),
+<a href=#884 id=884 data-nosnippet>884</a>    Complete(GatewayCompleteStateMachine),
+<a href=#885 id=885 data-nosnippet>885</a>}
+<a href=#886 id=886 data-nosnippet>886</a>
+<a href=#887 id=887 data-nosnippet>887</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>GatewayClientStateMachines {
+<a href=#888 id=888 data-nosnippet>888</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#890 id=890 data-nosnippet>890</a>            GatewayClientStateMachines::Pay(pay) =&gt; {
+<a href=#891 id=891 data-nosnippet>891</a>                <span class="macro">write!</span>(f, <span class="string">"{pay}"</span>)
+<a href=#892 id=892 data-nosnippet>892</a>            }
+<a href=#893 id=893 data-nosnippet>893</a>            GatewayClientStateMachines::Receive(receive) =&gt; {
+<a href=#894 id=894 data-nosnippet>894</a>                <span class="macro">write!</span>(f, <span class="string">"{receive}"</span>)
+<a href=#895 id=895 data-nosnippet>895</a>            }
+<a href=#896 id=896 data-nosnippet>896</a>            GatewayClientStateMachines::Complete(complete) =&gt; {
+<a href=#897 id=897 data-nosnippet>897</a>                <span class="macro">write!</span>(f, <span class="string">"{complete}"</span>)
+<a href=#898 id=898 data-nosnippet>898</a>            }
+<a href=#899 id=899 data-nosnippet>899</a>        }
+<a href=#900 id=900 data-nosnippet>900</a>    }
+<a href=#901 id=901 data-nosnippet>901</a>}
 <a href=#902 id=902 data-nosnippet>902</a>
-<a href=#903 id=903 data-nosnippet>903</a>    <span class="kw">fn </span>transitions(
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#905 id=905 data-nosnippet>905</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-<a href=#906 id=906 data-nosnippet>906</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-<a href=#907 id=907 data-nosnippet>907</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
-<a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#909 id=909 data-nosnippet>909</a>            GatewayClientStateMachines::Pay(pay_state) =&gt; {
-<a href=#910 id=910 data-nosnippet>910</a>                <span class="macro">sm_enum_variant_translation!</span>(
-<a href=#911 id=911 data-nosnippet>911</a>                    pay_state.transitions(context, global_context),
-<a href=#912 id=912 data-nosnippet>912</a>                    GatewayClientStateMachines::Pay
-<a href=#913 id=913 data-nosnippet>913</a>                )
-<a href=#914 id=914 data-nosnippet>914</a>            }
-<a href=#915 id=915 data-nosnippet>915</a>            GatewayClientStateMachines::Receive(receive_state) =&gt; {
-<a href=#916 id=916 data-nosnippet>916</a>                <span class="macro">sm_enum_variant_translation!</span>(
-<a href=#917 id=917 data-nosnippet>917</a>                    receive_state.transitions(<span class="kw-2">&amp;</span>context.into(), global_context),
-<a href=#918 id=918 data-nosnippet>918</a>                    GatewayClientStateMachines::Receive
-<a href=#919 id=919 data-nosnippet>919</a>                )
-<a href=#920 id=920 data-nosnippet>920</a>            }
-<a href=#921 id=921 data-nosnippet>921</a>            GatewayClientStateMachines::Complete(complete_state) =&gt; {
-<a href=#922 id=922 data-nosnippet>922</a>                <span class="macro">sm_enum_variant_translation!</span>(
-<a href=#923 id=923 data-nosnippet>923</a>                    complete_state.transitions(context, global_context),
-<a href=#924 id=924 data-nosnippet>924</a>                    GatewayClientStateMachines::Complete
-<a href=#925 id=925 data-nosnippet>925</a>                )
-<a href=#926 id=926 data-nosnippet>926</a>            }
-<a href=#927 id=927 data-nosnippet>927</a>        }
-<a href=#928 id=928 data-nosnippet>928</a>    }
-<a href=#929 id=929 data-nosnippet>929</a>
-<a href=#930 id=930 data-nosnippet>930</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::OperationId {
-<a href=#931 id=931 data-nosnippet>931</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#932 id=932 data-nosnippet>932</a>            GatewayClientStateMachines::Pay(pay_state) =&gt; pay_state.operation_id(),
-<a href=#933 id=933 data-nosnippet>933</a>            GatewayClientStateMachines::Receive(receive_state) =&gt; receive_state.operation_id(),
-<a href=#934 id=934 data-nosnippet>934</a>            GatewayClientStateMachines::Complete(complete_state) =&gt; complete_state.operation_id(),
-<a href=#935 id=935 data-nosnippet>935</a>        }
-<a href=#936 id=936 data-nosnippet>936</a>    }
-<a href=#937 id=937 data-nosnippet>937</a>}
-<a href=#938 id=938 data-nosnippet>938</a>
-<a href=#939 id=939 data-nosnippet>939</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
-<a href=#940 id=940 data-nosnippet>940</a></span><span class="kw">pub struct </span>Htlc {
-<a href=#941 id=941 data-nosnippet>941</a>    <span class="doccomment">/// The HTLC payment hash.
-<a href=#942 id=942 data-nosnippet>942</a>    </span><span class="kw">pub </span>payment_hash: sha256::Hash,
-<a href=#943 id=943 data-nosnippet>943</a>    <span class="doccomment">/// The incoming HTLC amount in millisatoshi.
-<a href=#944 id=944 data-nosnippet>944</a>    </span><span class="kw">pub </span>incoming_amount_msat: Amount,
-<a href=#945 id=945 data-nosnippet>945</a>    <span class="doccomment">/// The outgoing HTLC amount in millisatoshi
-<a href=#946 id=946 data-nosnippet>946</a>    </span><span class="kw">pub </span>outgoing_amount_msat: Amount,
-<a href=#947 id=947 data-nosnippet>947</a>    <span class="doccomment">/// The incoming HTLC expiry
-<a href=#948 id=948 data-nosnippet>948</a>    </span><span class="kw">pub </span>incoming_expiry: u32,
-<a href=#949 id=949 data-nosnippet>949</a>    <span class="doccomment">/// The short channel id of the HTLC.
-<a href=#950 id=950 data-nosnippet>950</a>    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#951 id=951 data-nosnippet>951</a>    <span class="doccomment">/// The id of the incoming channel
-<a href=#952 id=952 data-nosnippet>952</a>    </span><span class="kw">pub </span>incoming_chan_id: u64,
-<a href=#953 id=953 data-nosnippet>953</a>    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
-<a href=#954 id=954 data-nosnippet>954</a>    </span><span class="kw">pub </span>htlc_id: u64,
-<a href=#955 id=955 data-nosnippet>955</a>}
-<a href=#956 id=956 data-nosnippet>956</a>
-<a href=#957 id=957 data-nosnippet>957</a><span class="kw">impl </span>TryFrom&lt;InterceptPaymentRequest&gt; <span class="kw">for </span>Htlc {
-<a href=#958 id=958 data-nosnippet>958</a>    <span class="kw">type </span>Error = anyhow::Error;
-<a href=#959 id=959 data-nosnippet>959</a>
-<a href=#960 id=960 data-nosnippet>960</a>    <span class="kw">fn </span>try_from(s: InterceptPaymentRequest) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-<a href=#961 id=961 data-nosnippet>961</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#962 id=962 data-nosnippet>962</a>            payment_hash: s.payment_hash,
-<a href=#963 id=963 data-nosnippet>963</a>            incoming_amount_msat: Amount::from_msats(s.amount_msat),
-<a href=#964 id=964 data-nosnippet>964</a>            outgoing_amount_msat: Amount::from_msats(s.amount_msat),
-<a href=#965 id=965 data-nosnippet>965</a>            incoming_expiry: s.expiry,
-<a href=#966 id=966 data-nosnippet>966</a>            short_channel_id: s.short_channel_id,
-<a href=#967 id=967 data-nosnippet>967</a>            incoming_chan_id: s.incoming_chan_id,
-<a href=#968 id=968 data-nosnippet>968</a>            htlc_id: s.htlc_id,
-<a href=#969 id=969 data-nosnippet>969</a>        })
-<a href=#970 id=970 data-nosnippet>970</a>    }
-<a href=#971 id=971 data-nosnippet>971</a>}
-<a href=#972 id=972 data-nosnippet>972</a>
-<a href=#973 id=973 data-nosnippet>973</a><span class="attr">#[derive(Debug, Clone)]
-<a href=#974 id=974 data-nosnippet>974</a></span><span class="kw">pub struct </span>SwapParameters {
-<a href=#975 id=975 data-nosnippet>975</a>    <span class="kw">pub </span>payment_hash: sha256::Hash,
-<a href=#976 id=976 data-nosnippet>976</a>    <span class="kw">pub </span>amount_msat: Amount,
-<a href=#977 id=977 data-nosnippet>977</a>}
-<a href=#978 id=978 data-nosnippet>978</a>
-<a href=#979 id=979 data-nosnippet>979</a><span class="kw">impl </span>TryFrom&lt;PaymentData&gt; <span class="kw">for </span>SwapParameters {
-<a href=#980 id=980 data-nosnippet>980</a>    <span class="kw">type </span>Error = anyhow::Error;
-<a href=#981 id=981 data-nosnippet>981</a>
-<a href=#982 id=982 data-nosnippet>982</a>    <span class="kw">fn </span>try_from(s: PaymentData) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-<a href=#983 id=983 data-nosnippet>983</a>        <span class="kw">let </span>payment_hash = s.payment_hash();
-<a href=#984 id=984 data-nosnippet>984</a>        <span class="kw">let </span>amount_msat = s
-<a href=#985 id=985 data-nosnippet>985</a>            .amount()
-<a href=#986 id=986 data-nosnippet>986</a>            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Amountless invoice cannot be used in direct swap"</span>))<span class="question-mark">?</span>;
-<a href=#987 id=987 data-nosnippet>987</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#988 id=988 data-nosnippet>988</a>            payment_hash,
-<a href=#989 id=989 data-nosnippet>989</a>            amount_msat,
-<a href=#990 id=990 data-nosnippet>990</a>        })
-<a href=#991 id=991 data-nosnippet>991</a>    }
-<a href=#992 id=992 data-nosnippet>992</a>}
-<a href=#993 id=993 data-nosnippet>993</a>
-<a href=#994 id=994 data-nosnippet>994</a><span class="doccomment">/// An interface between module implementation and the general `Gateway`
-<a href=#995 id=995 data-nosnippet>995</a>///
-<a href=#996 id=996 data-nosnippet>996</a>/// To abstract away and decouple the core gateway from the modules, the
-<a href=#997 id=997 data-nosnippet>997</a>/// interface between them is expressed as a trait. The gateway handles
-<a href=#998 id=998 data-nosnippet>998</a>/// operations that require Lightning node access or database access.
-<a href=#999 id=999 data-nosnippet>999</a></span><span class="attr">#[async_trait]
-<a href=#1000 id=1000 data-nosnippet>1000</a></span><span class="kw">pub trait </span>IGatewayClientV1: Debug + Send + Sync {
-<a href=#1001 id=1001 data-nosnippet>1001</a>    <span class="doccomment">/// Verifies that the supplied `preimage_auth` is the same as the
-<a href=#1002 id=1002 data-nosnippet>1002</a>    /// `preimage_auth` that initiated the payment.
-<a href=#1003 id=1003 data-nosnippet>1003</a>    ///
-<a href=#1004 id=1004 data-nosnippet>1004</a>    /// If it is not, then this will return an error because this client is not
-<a href=#1005 id=1005 data-nosnippet>1005</a>    /// authorized to receive the preimage.
-<a href=#1006 id=1006 data-nosnippet>1006</a>    </span><span class="kw">async fn </span>verify_preimage_authentication(
-<a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1008 id=1008 data-nosnippet>1008</a>        payment_hash: sha256::Hash,
-<a href=#1009 id=1009 data-nosnippet>1009</a>        preimage_auth: sha256::Hash,
-<a href=#1010 id=1010 data-nosnippet>1010</a>        contract: OutgoingContractAccount,
-<a href=#1011 id=1011 data-nosnippet>1011</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), OutgoingPaymentError&gt;;
-<a href=#1012 id=1012 data-nosnippet>1012</a>
-<a href=#1013 id=1013 data-nosnippet>1013</a>    <span class="doccomment">/// Verify that the lightning node supports private payments if a pruned
-<a href=#1014 id=1014 data-nosnippet>1014</a>    /// invoice is supplied.
-<a href=#1015 id=1015 data-nosnippet>1015</a>    </span><span class="kw">async fn </span>verify_pruned_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_data: PaymentData) -&gt; anyhow::Result&lt;()&gt;;
-<a href=#1016 id=1016 data-nosnippet>1016</a>
-<a href=#1017 id=1017 data-nosnippet>1017</a>    <span class="doccomment">/// Retrieves the federation's routing fees from the federation's config.
-<a href=#1018 id=1018 data-nosnippet>1018</a>    </span><span class="kw">async fn </span>get_routing_fees(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingFees&gt;;
-<a href=#1019 id=1019 data-nosnippet>1019</a>
-<a href=#1020 id=1020 data-nosnippet>1020</a>    <span class="doccomment">/// Retrieve a client given a federation ID, used for swapping ecash between
-<a href=#1021 id=1021 data-nosnippet>1021</a>    /// federations.
-<a href=#1022 id=1022 data-nosnippet>1022</a>    </span><span class="kw">async fn </span>get_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt;;
+<a href=#903 id=903 data-nosnippet>903</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachines {
+<a href=#904 id=904 data-nosnippet>904</a>    <span class="kw">type </span>DynType = DynState;
+<a href=#905 id=905 data-nosnippet>905</a>
+<a href=#906 id=906 data-nosnippet>906</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+<a href=#907 id=907 data-nosnippet>907</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
+<a href=#908 id=908 data-nosnippet>908</a>    }
+<a href=#909 id=909 data-nosnippet>909</a>}
+<a href=#910 id=910 data-nosnippet>910</a>
+<a href=#911 id=911 data-nosnippet>911</a><span class="kw">impl </span>State <span class="kw">for </span>GatewayClientStateMachines {
+<a href=#912 id=912 data-nosnippet>912</a>    <span class="kw">type </span>ModuleContext = GatewayClientContext;
+<a href=#913 id=913 data-nosnippet>913</a>
+<a href=#914 id=914 data-nosnippet>914</a>    <span class="kw">fn </span>transitions(
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#916 id=916 data-nosnippet>916</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
+<a href=#917 id=917 data-nosnippet>917</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+<a href=#918 id=918 data-nosnippet>918</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#920 id=920 data-nosnippet>920</a>            GatewayClientStateMachines::Pay(pay_state) =&gt; {
+<a href=#921 id=921 data-nosnippet>921</a>                <span class="macro">sm_enum_variant_translation!</span>(
+<a href=#922 id=922 data-nosnippet>922</a>                    pay_state.transitions(context, global_context),
+<a href=#923 id=923 data-nosnippet>923</a>                    GatewayClientStateMachines::Pay
+<a href=#924 id=924 data-nosnippet>924</a>                )
+<a href=#925 id=925 data-nosnippet>925</a>            }
+<a href=#926 id=926 data-nosnippet>926</a>            GatewayClientStateMachines::Receive(receive_state) =&gt; {
+<a href=#927 id=927 data-nosnippet>927</a>                <span class="macro">sm_enum_variant_translation!</span>(
+<a href=#928 id=928 data-nosnippet>928</a>                    receive_state.transitions(<span class="kw-2">&amp;</span>context.into(), global_context),
+<a href=#929 id=929 data-nosnippet>929</a>                    GatewayClientStateMachines::Receive
+<a href=#930 id=930 data-nosnippet>930</a>                )
+<a href=#931 id=931 data-nosnippet>931</a>            }
+<a href=#932 id=932 data-nosnippet>932</a>            GatewayClientStateMachines::Complete(complete_state) =&gt; {
+<a href=#933 id=933 data-nosnippet>933</a>                <span class="macro">sm_enum_variant_translation!</span>(
+<a href=#934 id=934 data-nosnippet>934</a>                    complete_state.transitions(context, global_context),
+<a href=#935 id=935 data-nosnippet>935</a>                    GatewayClientStateMachines::Complete
+<a href=#936 id=936 data-nosnippet>936</a>                )
+<a href=#937 id=937 data-nosnippet>937</a>            }
+<a href=#938 id=938 data-nosnippet>938</a>        }
+<a href=#939 id=939 data-nosnippet>939</a>    }
+<a href=#940 id=940 data-nosnippet>940</a>
+<a href=#941 id=941 data-nosnippet>941</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::OperationId {
+<a href=#942 id=942 data-nosnippet>942</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#943 id=943 data-nosnippet>943</a>            GatewayClientStateMachines::Pay(pay_state) =&gt; pay_state.operation_id(),
+<a href=#944 id=944 data-nosnippet>944</a>            GatewayClientStateMachines::Receive(receive_state) =&gt; receive_state.operation_id(),
+<a href=#945 id=945 data-nosnippet>945</a>            GatewayClientStateMachines::Complete(complete_state) =&gt; complete_state.operation_id(),
+<a href=#946 id=946 data-nosnippet>946</a>        }
+<a href=#947 id=947 data-nosnippet>947</a>    }
+<a href=#948 id=948 data-nosnippet>948</a>}
+<a href=#949 id=949 data-nosnippet>949</a>
+<a href=#950 id=950 data-nosnippet>950</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+<a href=#951 id=951 data-nosnippet>951</a></span><span class="kw">pub struct </span>Htlc {
+<a href=#952 id=952 data-nosnippet>952</a>    <span class="doccomment">/// The HTLC payment hash.
+<a href=#953 id=953 data-nosnippet>953</a>    </span><span class="kw">pub </span>payment_hash: sha256::Hash,
+<a href=#954 id=954 data-nosnippet>954</a>    <span class="doccomment">/// The incoming HTLC amount in millisatoshi.
+<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">pub </span>incoming_amount_msat: Amount,
+<a href=#956 id=956 data-nosnippet>956</a>    <span class="doccomment">/// The outgoing HTLC amount in millisatoshi
+<a href=#957 id=957 data-nosnippet>957</a>    </span><span class="kw">pub </span>outgoing_amount_msat: Amount,
+<a href=#958 id=958 data-nosnippet>958</a>    <span class="doccomment">/// The incoming HTLC expiry
+<a href=#959 id=959 data-nosnippet>959</a>    </span><span class="kw">pub </span>incoming_expiry: u32,
+<a href=#960 id=960 data-nosnippet>960</a>    <span class="doccomment">/// The short channel id of the HTLC.
+<a href=#961 id=961 data-nosnippet>961</a>    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#962 id=962 data-nosnippet>962</a>    <span class="doccomment">/// The id of the incoming channel
+<a href=#963 id=963 data-nosnippet>963</a>    </span><span class="kw">pub </span>incoming_chan_id: u64,
+<a href=#964 id=964 data-nosnippet>964</a>    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
+<a href=#965 id=965 data-nosnippet>965</a>    </span><span class="kw">pub </span>htlc_id: u64,
+<a href=#966 id=966 data-nosnippet>966</a>}
+<a href=#967 id=967 data-nosnippet>967</a>
+<a href=#968 id=968 data-nosnippet>968</a><span class="kw">impl </span>TryFrom&lt;InterceptPaymentRequest&gt; <span class="kw">for </span>Htlc {
+<a href=#969 id=969 data-nosnippet>969</a>    <span class="kw">type </span>Error = anyhow::Error;
+<a href=#970 id=970 data-nosnippet>970</a>
+<a href=#971 id=971 data-nosnippet>971</a>    <span class="kw">fn </span>try_from(s: InterceptPaymentRequest) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#973 id=973 data-nosnippet>973</a>            payment_hash: s.payment_hash,
+<a href=#974 id=974 data-nosnippet>974</a>            incoming_amount_msat: Amount::from_msats(s.amount_msat),
+<a href=#975 id=975 data-nosnippet>975</a>            outgoing_amount_msat: Amount::from_msats(s.amount_msat),
+<a href=#976 id=976 data-nosnippet>976</a>            incoming_expiry: s.expiry,
+<a href=#977 id=977 data-nosnippet>977</a>            short_channel_id: s.short_channel_id,
+<a href=#978 id=978 data-nosnippet>978</a>            incoming_chan_id: s.incoming_chan_id,
+<a href=#979 id=979 data-nosnippet>979</a>            htlc_id: s.htlc_id,
+<a href=#980 id=980 data-nosnippet>980</a>        })
+<a href=#981 id=981 data-nosnippet>981</a>    }
+<a href=#982 id=982 data-nosnippet>982</a>}
+<a href=#983 id=983 data-nosnippet>983</a>
+<a href=#984 id=984 data-nosnippet>984</a><span class="attr">#[derive(Debug, Clone)]
+<a href=#985 id=985 data-nosnippet>985</a></span><span class="kw">pub struct </span>SwapParameters {
+<a href=#986 id=986 data-nosnippet>986</a>    <span class="kw">pub </span>payment_hash: sha256::Hash,
+<a href=#987 id=987 data-nosnippet>987</a>    <span class="kw">pub </span>amount_msat: Amount,
+<a href=#988 id=988 data-nosnippet>988</a>}
+<a href=#989 id=989 data-nosnippet>989</a>
+<a href=#990 id=990 data-nosnippet>990</a><span class="kw">impl </span>TryFrom&lt;PaymentData&gt; <span class="kw">for </span>SwapParameters {
+<a href=#991 id=991 data-nosnippet>991</a>    <span class="kw">type </span>Error = anyhow::Error;
+<a href=#992 id=992 data-nosnippet>992</a>
+<a href=#993 id=993 data-nosnippet>993</a>    <span class="kw">fn </span>try_from(s: PaymentData) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+<a href=#994 id=994 data-nosnippet>994</a>        <span class="kw">let </span>payment_hash = s.payment_hash();
+<a href=#995 id=995 data-nosnippet>995</a>        <span class="kw">let </span>amount_msat = s
+<a href=#996 id=996 data-nosnippet>996</a>            .amount()
+<a href=#997 id=997 data-nosnippet>997</a>            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Amountless invoice cannot be used in direct swap"</span>))<span class="question-mark">?</span>;
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#999 id=999 data-nosnippet>999</a>            payment_hash,
+<a href=#1000 id=1000 data-nosnippet>1000</a>            amount_msat,
+<a href=#1001 id=1001 data-nosnippet>1001</a>        })
+<a href=#1002 id=1002 data-nosnippet>1002</a>    }
+<a href=#1003 id=1003 data-nosnippet>1003</a>}
+<a href=#1004 id=1004 data-nosnippet>1004</a>
+<a href=#1005 id=1005 data-nosnippet>1005</a><span class="doccomment">/// An interface between module implementation and the general `Gateway`
+<a href=#1006 id=1006 data-nosnippet>1006</a>///
+<a href=#1007 id=1007 data-nosnippet>1007</a>/// To abstract away and decouple the core gateway from the modules, the
+<a href=#1008 id=1008 data-nosnippet>1008</a>/// interface between them is expressed as a trait. The gateway handles
+<a href=#1009 id=1009 data-nosnippet>1009</a>/// operations that require Lightning node access or database access.
+<a href=#1010 id=1010 data-nosnippet>1010</a></span><span class="attr">#[async_trait]
+<a href=#1011 id=1011 data-nosnippet>1011</a></span><span class="kw">pub trait </span>IGatewayClientV1: Debug + Send + Sync {
+<a href=#1012 id=1012 data-nosnippet>1012</a>    <span class="doccomment">/// Verifies that the supplied `preimage_auth` is the same as the
+<a href=#1013 id=1013 data-nosnippet>1013</a>    /// `preimage_auth` that initiated the payment.
+<a href=#1014 id=1014 data-nosnippet>1014</a>    ///
+<a href=#1015 id=1015 data-nosnippet>1015</a>    /// If it is not, then this will return an error because this client is not
+<a href=#1016 id=1016 data-nosnippet>1016</a>    /// authorized to receive the preimage.
+<a href=#1017 id=1017 data-nosnippet>1017</a>    </span><span class="kw">async fn </span>verify_preimage_authentication(
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1019 id=1019 data-nosnippet>1019</a>        payment_hash: sha256::Hash,
+<a href=#1020 id=1020 data-nosnippet>1020</a>        preimage_auth: sha256::Hash,
+<a href=#1021 id=1021 data-nosnippet>1021</a>        contract: OutgoingContractAccount,
+<a href=#1022 id=1022 data-nosnippet>1022</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), OutgoingPaymentError&gt;;
 <a href=#1023 id=1023 data-nosnippet>1023</a>
-<a href=#1024 id=1024 data-nosnippet>1024</a>    <span class="comment">// Retrieve a client given an invoice.
-<a href=#1025 id=1025 data-nosnippet>1025</a>    //
-<a href=#1026 id=1026 data-nosnippet>1026</a>    // Checks if the invoice route hint last hop has source node id matching this
-<a href=#1027 id=1027 data-nosnippet>1027</a>    // gateways node pubkey and if the short channel id matches one assigned by
-<a href=#1028 id=1028 data-nosnippet>1028</a>    // this gateway to a connected federation. In this case, the gateway can
-<a href=#1029 id=1029 data-nosnippet>1029</a>    // avoid paying the invoice over the lightning network and instead perform a
-<a href=#1030 id=1030 data-nosnippet>1030</a>    // direct swap between the two federations.
-<a href=#1031 id=1031 data-nosnippet>1031</a>    </span><span class="kw">async fn </span>get_client_for_invoice(
-<a href=#1032 id=1032 data-nosnippet>1032</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1033 id=1033 data-nosnippet>1033</a>        payment_data: PaymentData,
-<a href=#1034 id=1034 data-nosnippet>1034</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt;;
-<a href=#1035 id=1035 data-nosnippet>1035</a>
-<a href=#1036 id=1036 data-nosnippet>1036</a>    <span class="doccomment">/// Pay a Lightning invoice using the gateway's lightning node.
-<a href=#1037 id=1037 data-nosnippet>1037</a>    </span><span class="kw">async fn </span>pay(
-<a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1039 id=1039 data-nosnippet>1039</a>        payment_data: PaymentData,
-<a href=#1040 id=1040 data-nosnippet>1040</a>        max_delay: u64,
-<a href=#1041 id=1041 data-nosnippet>1041</a>        max_fee: Amount,
-<a href=#1042 id=1042 data-nosnippet>1042</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt;;
-<a href=#1043 id=1043 data-nosnippet>1043</a>
-<a href=#1044 id=1044 data-nosnippet>1044</a>    <span class="doccomment">/// Use the gateway's lightning node to send a complete HTLC response.
-<a href=#1045 id=1045 data-nosnippet>1045</a>    </span><span class="kw">async fn </span>complete_htlc(
-<a href=#1046 id=1046 data-nosnippet>1046</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1047 id=1047 data-nosnippet>1047</a>        htlc_response: InterceptPaymentResponse,
-<a href=#1048 id=1048 data-nosnippet>1048</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt;;
-<a href=#1049 id=1049 data-nosnippet>1049</a>
-<a href=#1050 id=1050 data-nosnippet>1050</a>    <span class="doccomment">/// Check if the gateway satisfy the LNv1 payment by funding an LNv2
-<a href=#1051 id=1051 data-nosnippet>1051</a>    /// `IncomingContract`
-<a href=#1052 id=1052 data-nosnippet>1052</a>    </span><span class="kw">async fn </span>is_lnv2_direct_swap(
-<a href=#1053 id=1053 data-nosnippet>1053</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1054 id=1054 data-nosnippet>1054</a>        payment_hash: sha256::Hash,
-<a href=#1055 id=1055 data-nosnippet>1055</a>        amount: Amount,
-<a href=#1056 id=1056 data-nosnippet>1056</a>    ) -&gt; anyhow::Result&lt;
-<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="prelude-ty">Option</span>&lt;(
-<a href=#1058 id=1058 data-nosnippet>1058</a>            fedimint_lnv2_common::contracts::IncomingContract,
-<a href=#1059 id=1059 data-nosnippet>1059</a>            ClientHandleArc,
-<a href=#1060 id=1060 data-nosnippet>1060</a>        )&gt;,
-<a href=#1061 id=1061 data-nosnippet>1061</a>    &gt;;
-<a href=#1062 id=1062 data-nosnippet>1062</a>}
+<a href=#1024 id=1024 data-nosnippet>1024</a>    <span class="doccomment">/// Verify that the lightning node supports private payments if a pruned
+<a href=#1025 id=1025 data-nosnippet>1025</a>    /// invoice is supplied.
+<a href=#1026 id=1026 data-nosnippet>1026</a>    </span><span class="kw">async fn </span>verify_pruned_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_data: PaymentData) -&gt; anyhow::Result&lt;()&gt;;
+<a href=#1027 id=1027 data-nosnippet>1027</a>
+<a href=#1028 id=1028 data-nosnippet>1028</a>    <span class="doccomment">/// Retrieves the federation's routing fees from the federation's config.
+<a href=#1029 id=1029 data-nosnippet>1029</a>    </span><span class="kw">async fn </span>get_routing_fees(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingFees&gt;;
+<a href=#1030 id=1030 data-nosnippet>1030</a>
+<a href=#1031 id=1031 data-nosnippet>1031</a>    <span class="doccomment">/// Retrieve a client given a federation ID, used for swapping ecash between
+<a href=#1032 id=1032 data-nosnippet>1032</a>    /// federations.
+<a href=#1033 id=1033 data-nosnippet>1033</a>    </span><span class="kw">async fn </span>get_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt;;
+<a href=#1034 id=1034 data-nosnippet>1034</a>
+<a href=#1035 id=1035 data-nosnippet>1035</a>    <span class="comment">// Retrieve a client given an invoice.
+<a href=#1036 id=1036 data-nosnippet>1036</a>    //
+<a href=#1037 id=1037 data-nosnippet>1037</a>    // Checks if the invoice route hint last hop has source node id matching this
+<a href=#1038 id=1038 data-nosnippet>1038</a>    // gateways node pubkey and if the short channel id matches one assigned by
+<a href=#1039 id=1039 data-nosnippet>1039</a>    // this gateway to a connected federation. In this case, the gateway can
+<a href=#1040 id=1040 data-nosnippet>1040</a>    // avoid paying the invoice over the lightning network and instead perform a
+<a href=#1041 id=1041 data-nosnippet>1041</a>    // direct swap between the two federations.
+<a href=#1042 id=1042 data-nosnippet>1042</a>    </span><span class="kw">async fn </span>get_client_for_invoice(
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1044 id=1044 data-nosnippet>1044</a>        payment_data: PaymentData,
+<a href=#1045 id=1045 data-nosnippet>1045</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt;;
+<a href=#1046 id=1046 data-nosnippet>1046</a>
+<a href=#1047 id=1047 data-nosnippet>1047</a>    <span class="doccomment">/// Pay a Lightning invoice using the gateway's lightning node.
+<a href=#1048 id=1048 data-nosnippet>1048</a>    </span><span class="kw">async fn </span>pay(
+<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1050 id=1050 data-nosnippet>1050</a>        payment_data: PaymentData,
+<a href=#1051 id=1051 data-nosnippet>1051</a>        max_delay: u64,
+<a href=#1052 id=1052 data-nosnippet>1052</a>        max_fee: Amount,
+<a href=#1053 id=1053 data-nosnippet>1053</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt;;
+<a href=#1054 id=1054 data-nosnippet>1054</a>
+<a href=#1055 id=1055 data-nosnippet>1055</a>    <span class="doccomment">/// Use the gateway's lightning node to send a complete HTLC response.
+<a href=#1056 id=1056 data-nosnippet>1056</a>    </span><span class="kw">async fn </span>complete_htlc(
+<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1058 id=1058 data-nosnippet>1058</a>        htlc_response: InterceptPaymentResponse,
+<a href=#1059 id=1059 data-nosnippet>1059</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt;;
+<a href=#1060 id=1060 data-nosnippet>1060</a>
+<a href=#1061 id=1061 data-nosnippet>1061</a>    <span class="doccomment">/// Check if the gateway satisfy the LNv1 payment by funding an LNv2
+<a href=#1062 id=1062 data-nosnippet>1062</a>    /// `IncomingContract`
+<a href=#1063 id=1063 data-nosnippet>1063</a>    </span><span class="kw">async fn </span>is_lnv2_direct_swap(
+<a href=#1064 id=1064 data-nosnippet>1064</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1065 id=1065 data-nosnippet>1065</a>        payment_hash: sha256::Hash,
+<a href=#1066 id=1066 data-nosnippet>1066</a>        amount: Amount,
+<a href=#1067 id=1067 data-nosnippet>1067</a>    ) -&gt; anyhow::Result&lt;
+<a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="prelude-ty">Option</span>&lt;(
+<a href=#1069 id=1069 data-nosnippet>1069</a>            fedimint_lnv2_common::contracts::IncomingContract,
+<a href=#1070 id=1070 data-nosnippet>1070</a>            ClientHandleArc,
+<a href=#1071 id=1071 data-nosnippet>1071</a>        )&gt;,
+<a href=#1072 id=1072 data-nosnippet>1072</a>    &gt;;
+<a href=#1073 id=1073 data-nosnippet>1073</a>}
 </code></pre></div></section></main></body></html>
