@@ -2753,8 +2753,7 @@ impl GatewayConnection for RealGatewayConnection {
                 error_code: None,
                 error_message: e.to_string(),
             })?;
-        let length = preimage.len();
-        Ok(preimage[1..length - 1].to_string())
+        Ok(preimage)
     }
 }
 
