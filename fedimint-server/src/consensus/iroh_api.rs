@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, IrohApiRequest};
@@ -203,6 +203,50 @@ impl IrohApiVersion {
     }
 }
 
+/// Whether a connection error is an ordinary client hang-up rather than a fault
+/// an operator should be told about.
+///
+/// Clients close a connection whose request budget elapsed, which is routine
+/// for a long-poll refresh, and abrupt client death surfaces as the idle
+/// timeout or a reset. `ConnectionClosed` is deliberately excluded: it means
+/// the peer's QUIC stack aborted the connection, which is a transport fault
+/// rather than a client hanging up.
+fn is_client_hang_up(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<iroh::endpoint::ConnectionError>()
+        .is_some_and(|error| {
+            use iroh::endpoint::ConnectionError as E;
+            matches!(
+                error,
+                E::ApplicationClosed(_) | E::LocallyClosed | E::TimedOut | E::Reset
+            )
+        })
+        || error
+            .downcast_ref::<iroh_next::endpoint::ConnectionError>()
+            .is_some_and(|error| {
+                use iroh_next::endpoint::ConnectionError as E;
+                matches!(
+                    error,
+                    E::ApplicationClosed(_) | E::LocallyClosed | E::TimedOut | E::Reset
+                )
+            })
+}
+
+fn handle_accept_bi_error(error: anyhow::Error, version: IrohApiVersion) -> anyhow::Result<()> {
+    if !is_client_hang_up(&error) {
+        return Err(error);
+    }
+
+    tracing::debug!(
+        target: LOG_NET_API,
+        version = version.log_label(),
+        err = %error.fmt_compact_anyhow(),
+        "Iroh API client hung up"
+    );
+    Ok(())
+}
+
+#[derive(Clone)]
 enum VersionedIrohConnection {
     Legacy(iroh::endpoint::Connection),
     Next(iroh_next::endpoint::Connection),
@@ -228,6 +272,18 @@ impl VersionedIrohConnection {
         })
     }
 
+    /// Resolves once this connection is closed, for either iroh version.
+    async fn closed(&self) {
+        match self {
+            Self::Legacy(connection) => {
+                connection.closed().await;
+            }
+            Self::Next(connection) => {
+                connection.closed().await;
+            }
+        }
+    }
+
     fn close_for_idle_timeout(&self) {
         match self {
             Self::Legacy(connection) => connection.close(
@@ -248,6 +304,26 @@ enum VersionedSendStream {
 }
 
 impl VersionedSendStream {
+    /// Resolves once the client stops waiting for this request: dropping its
+    /// `RecvStream` makes quinn send `STOP_SENDING`, which surfaces here.
+    ///
+    /// This cannot fire spuriously before a response is written. The only other
+    /// ways it resolves are the local side finishing the stream, which has not
+    /// happened since nothing has been written yet, and the connection being
+    /// lost, which cancels the request just as legitimately. The outcome is
+    /// therefore deliberately discarded: every way this resolves means the
+    /// response has nowhere left to go.
+    async fn stopped(&mut self) {
+        match self {
+            Self::Legacy(send) => {
+                let _ = send.stopped().await;
+            }
+            Self::Next(send) => {
+                let _ = send.stopped().await;
+            }
+        }
+    }
+
     async fn write_response(mut self, response: &[u8]) -> anyhow::Result<()> {
         match &mut self {
             Self::Legacy(send) => {
@@ -277,6 +353,17 @@ impl VersionedRecvStream {
     }
 }
 
+async fn cancel_on_connection_close(
+    connection: &VersionedIrohConnection,
+    handler: impl Future<Output = anyhow::Result<()>>,
+) -> Option<anyhow::Result<()>> {
+    tokio::select! {
+        biased;
+        () = connection.closed() => None,
+        result = handler => Some(result),
+    }
+}
+
 async fn handle_iroh_api_connection(
     api: Arc<IrohApiState>,
     task_group: TaskGroup,
@@ -296,7 +383,8 @@ async fn handle_iroh_api_connection(
         .await;
 
         let (send_stream, recv_stream) = match accept_result {
-            Ok(streams) => streams?,
+            Ok(Ok(streams)) => streams,
+            Ok(Err(err)) => return handle_accept_bi_error(err, version),
             Err(_) if parallel_requests_limit.available_permits() < max_requests => continue,
             Err(_) => {
                 IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
@@ -318,21 +406,46 @@ async fn handle_iroh_api_connection(
             "request",
         )
         .await;
-        task_group.spawn_cancellable_silent(
-            version.request_task_name(),
-            handle_iroh_api_stream(
-                api.clone(),
-                send_stream,
-                recv_stream,
-                permit,
-                version.metric_label(),
+        let api = api.clone();
+        let connection_for_request = connection.clone();
+        task_group.spawn_cancellable_silent(version.request_task_name(), async move {
+            // Cancelling an in-flight request once the client is gone is safe:
+            // the response can no longer be delivered, and a dbtx that has not
+            // committed is dropped atomically. Where a write HAS committed the
+            // client sees a failed request and may retry, which is equivalent -
+            // not literally identical, since a retried `sign_api_announcement`
+            // bumps its nonce and a retried meta submit draws a fresh salt -
+            // and is already what happens when a connection drops mid-response.
+            // A quorum write or best-effort cleanup may instead leave a slow
+            // peer unchanged; those APIs already tolerate incomplete coverage.
+            //
+            // This outer race also covers a handler still parked in
+            // `read_request()` when the connection goes away, since `stopped()`
+            // is only polled once the request has been read in full.
+            let result = cancel_on_connection_close(
+                &connection_for_request,
+                handle_iroh_api_stream(
+                    api,
+                    send_stream,
+                    recv_stream,
+                    permit,
+                    version.metric_label(),
+                ),
             )
-            .then(|result| async {
-                if let Err(err) = result {
+            .await;
+
+            match result {
+                Some(Ok(())) => {}
+                Some(Err(err)) => {
                     warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle Iroh API request");
                 }
-            }),
-        );
+                None => tracing::debug!(
+                    target: LOG_NET_API,
+                    version = version.log_label(),
+                    "Cancelling in-flight Iroh API request, connection closed"
+                ),
+            }
+        });
     }
 }
 
@@ -344,7 +457,31 @@ async fn handle_iroh_api_stream(
     metric_label: &'static str,
 ) -> anyhow::Result<()> {
     let request = recv_stream.read_request().await?;
-    let response = handle_iroh_api_request(&api, &request, metric_label).await?;
+    write_iroh_api_response(
+        send_stream,
+        handle_iroh_api_request(&api, &request, metric_label),
+    )
+    .await
+}
+
+async fn write_iroh_api_response(
+    mut send_stream: VersionedSendStream,
+    response: impl Future<Output = anyhow::Result<Vec<u8>>>,
+) -> anyhow::Result<()> {
+    // A client that gives up on this one request while keeping the connection
+    // for its others drops its `RecvStream`, which arrives here as `stopped()`.
+    let response = tokio::select! {
+        biased;
+        () = send_stream.stopped() => {
+            tracing::debug!(
+                target: LOG_NET_API,
+                "Cancelling in-flight Iroh API request, client is no longer waiting for it"
+            );
+            return Ok(());
+        },
+        response = response => response?,
+    };
+
     send_stream.write_response(&response).await
 }
 
@@ -355,11 +492,14 @@ async fn handle_iroh_api_request(
 ) -> anyhow::Result<Vec<u8>> {
     let request = serde_json::from_slice::<IrohApiRequest>(request)?;
     let method = request.method.to_string();
-    let timer = IROH_API_REQUEST_DURATION_SECONDS
-        .with_label_values(&[&method])
-        .start_timer();
+    // Timed by hand rather than with a `HistogramTimer`, which observes on drop:
+    // a cancelled request would otherwise file the time it sat parked as if it
+    // were a served request's latency, with no matching response code below.
+    let started = Instant::now();
     let response = await_response(api, request).await;
-    timer.observe_duration();
+    IROH_API_REQUEST_DURATION_SECONDS
+        .with_label_values(&[&method])
+        .observe(started.elapsed().as_secs_f64());
 
     let response_code = response
         .as_ref()
@@ -503,12 +643,212 @@ mod tests {
     use std::net::SocketAddr;
 
     use anyhow::Context as _;
+    use bytes::Bytes;
     use iroh_next::endpoint::presets::Minimal;
-    use iroh_next::{EndpointAddr, RelayMode, SecretKey, TransportAddr};
+    use iroh_next::{EndpointAddr, RelayMode, TransportAddr};
 
     use super::*;
 
     const TEST_ALPN: &[u8] = b"fedimint-iroh-api-adapter-test";
+    const TEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+    struct ConnectedPair {
+        _server_endpoint: iroh_next::Endpoint,
+        _client_endpoint: iroh_next::Endpoint,
+        server: iroh_next::endpoint::Connection,
+        client: iroh_next::endpoint::Connection,
+    }
+
+    async fn connected_pair() -> anyhow::Result<ConnectedPair> {
+        let server_endpoint = iroh_next::Endpoint::builder(Minimal)
+            .relay_mode(RelayMode::Disabled)
+            .alpns(vec![TEST_ALPN.to_vec()])
+            .bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))?
+            .bind()
+            .await?;
+        let client_endpoint = iroh_next::Endpoint::builder(Minimal)
+            .relay_mode(RelayMode::Disabled)
+            .bind()
+            .await?;
+        let server_addr = EndpointAddr::from_parts(
+            server_endpoint.id(),
+            server_endpoint
+                .bound_sockets()
+                .into_iter()
+                .map(TransportAddr::Ip),
+        );
+
+        let (server, client) = tokio::time::timeout(
+            TEST_TIMEOUT,
+            futures::future::try_join(
+                async {
+                    let incoming = server_endpoint
+                        .accept()
+                        .await
+                        .context("server endpoint closed")?;
+
+                    anyhow::Ok(incoming.accept()?.await?)
+                },
+                async { anyhow::Ok(client_endpoint.connect(server_addr, TEST_ALPN).await?) },
+            ),
+        )
+        .await
+        .context("connecting the test endpoints timed out")??;
+
+        Ok(ConnectedPair {
+            _server_endpoint: server_endpoint,
+            _client_endpoint: client_endpoint,
+            server,
+            client,
+        })
+    }
+
+    #[tokio::test]
+    async fn parked_handler_is_dropped_when_the_connection_closes() -> anyhow::Result<()> {
+        let pair = connected_pair().await?;
+        let (mut client_send, _client_recv) = pair.client.open_bi().await?;
+        client_send.write_all(b"request").await?;
+        client_send.finish()?;
+        let (send_stream, _recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
+            .accept_bi()
+            .await?;
+
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let handler = write_iroh_api_response(send_stream, async move {
+            started_tx.send(()).expect("test is still waiting");
+            std::future::pending::<anyhow::Result<Vec<u8>>>().await
+        });
+        let server_connection = VersionedIrohConnection::Next(pair.server.clone());
+        let server_task =
+            fedimint_core::runtime::spawn("test-iroh-connection-cancellation", async move {
+                cancel_on_connection_close(&server_connection, handler).await
+            });
+        tokio::time::timeout(TEST_TIMEOUT, started_rx).await??;
+
+        pair.client
+            .close(iroh_next::endpoint::VarInt::from_u32(0), b"done");
+        let result = tokio::time::timeout(TEST_TIMEOUT, server_task).await??;
+        assert!(result.is_none(), "handler won the connection-close race");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn parked_handler_is_dropped_when_its_own_request_is_abandoned() -> anyhow::Result<()> {
+        let pair = connected_pair().await?;
+        let (mut client_send, mut client_recv) = pair.client.open_bi().await?;
+        client_send.write_all(b"request").await?;
+        client_send.finish()?;
+        let (send_stream, _recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
+            .accept_bi()
+            .await?;
+
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let handler_task = fedimint_core::runtime::spawn(
+            "test-iroh-request-cancellation",
+            write_iroh_api_response(send_stream, async move {
+                started_tx.send(()).expect("test is still waiting");
+                std::future::pending::<anyhow::Result<Vec<u8>>>().await
+            }),
+        );
+        tokio::time::timeout(TEST_TIMEOUT, started_rx).await??;
+
+        client_recv.stop(iroh_next::endpoint::VarInt::from_u32(0))?;
+        tokio::time::timeout(TEST_TIMEOUT, handler_task)
+            .await
+            .expect("handler remained parked after STOP_SENDING")??;
+        assert!(pair.server.close_reason().is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn benign_connection_errors_end_the_accept_loop_without_hiding_transport_faults() {
+        use iroh::endpoint::{
+            ApplicationClose, ConnectionClose, ConnectionError, TransportErrorCode,
+        };
+        use iroh_next::endpoint::{
+            ApplicationClose as ApplicationCloseNext, ConnectionError as ConnectionErrorNext,
+            TransportError as TransportErrorNext, TransportErrorCode as TransportErrorCodeNext,
+            VarInt as VarIntNext,
+        };
+
+        for error in [
+            ConnectionError::ApplicationClosed(ApplicationClose {
+                error_code: VarInt::from_u32(1),
+                reason: Bytes::default(),
+            }),
+            ConnectionError::LocallyClosed,
+            ConnectionError::TimedOut,
+            ConnectionError::Reset,
+        ] {
+            assert!(handle_accept_bi_error(error.into(), IrohApiVersion::Legacy).is_ok());
+        }
+        assert!(
+            handle_accept_bi_error(
+                ConnectionError::ConnectionClosed(ConnectionClose {
+                    error_code: TransportErrorCode::PROTOCOL_VIOLATION,
+                    frame_type: None,
+                    reason: Bytes::default(),
+                })
+                .into(),
+                IrohApiVersion::Legacy,
+            )
+            .is_err()
+        );
+
+        for error in [
+            ConnectionErrorNext::ApplicationClosed(ApplicationCloseNext {
+                error_code: VarIntNext::from_u32(1),
+                reason: Bytes::default(),
+            }),
+            ConnectionErrorNext::LocallyClosed,
+            ConnectionErrorNext::TimedOut,
+            ConnectionErrorNext::Reset,
+        ] {
+            assert!(handle_accept_bi_error(error.into(), IrohApiVersion::Next).is_ok());
+        }
+        // `iroh-next`'s `ConnectionClose` has an unnameable `frame_type`, so
+        // build it from a `TransportError` instead of a struct literal.
+        assert!(
+            handle_accept_bi_error(
+                ConnectionErrorNext::ConnectionClosed(
+                    TransportErrorNext::new(
+                        TransportErrorCodeNext::PROTOCOL_VIOLATION,
+                        String::new()
+                    )
+                    .into()
+                )
+                .into(),
+                IrohApiVersion::Next,
+            )
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn normal_request_completes_and_writes_its_response() -> anyhow::Result<()> {
+        let pair = connected_pair().await?;
+        let (mut client_send, mut client_recv) = pair.client.open_bi().await?;
+        client_send.write_all(b"request").await?;
+        client_send.finish()?;
+        let (send_stream, mut recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
+            .accept_bi()
+            .await?;
+        assert_eq!(recv_stream.read_request().await?, b"request");
+
+        write_iroh_api_response(send_stream, async move {
+            // Give `stopped()` a deterministic chance to cancel the handler if
+            // it were to resolve before the client actually abandoned it.
+            tokio::task::yield_now().await;
+            Ok(b"response".to_vec())
+        })
+        .await?;
+
+        let response = tokio::time::timeout(TEST_TIMEOUT, client_recv.read_to_end(100_000))
+            .await
+            .context("client never received the response")??;
+        assert_eq!(response, b"response");
+        Ok(())
+    }
 
     #[tokio::test]
     async fn panicking_handler_returns_an_error_instead_of_unwinding() {
@@ -548,56 +888,5 @@ mod tests {
         )
         .await
         .expect("v1 acquires the shared permit after the legacy connection releases it");
-    }
-
-    #[tokio::test]
-    async fn iroh_v1_request_uses_shared_stream_adapter() -> anyhow::Result<()> {
-        let server = iroh_next::Endpoint::builder(Minimal)
-            .relay_mode(RelayMode::Disabled)
-            .secret_key(SecretKey::from_bytes(&[11; 32]))
-            .alpns(vec![TEST_ALPN.to_vec()])
-            .bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))?
-            .bind()
-            .await?;
-        let client = iroh_next::Endpoint::builder(Minimal)
-            .relay_mode(RelayMode::Disabled)
-            .bind()
-            .await?;
-        let server_addr = EndpointAddr::from_parts(
-            server.id(),
-            server.bound_sockets().into_iter().map(TransportAddr::Ip),
-        );
-        let (client_done_tx, client_done_rx) = tokio::sync::oneshot::channel();
-
-        let server_request = async {
-            let incoming = server.accept().await.context("server endpoint closed")?;
-            let connection = incoming.accept()?.await?;
-            let (send, mut recv) = VersionedIrohConnection::Next(connection)
-                .accept_bi()
-                .await?;
-            assert_eq!(recv.read_request().await?, b"request");
-            send.write_response(b"response").await?;
-            client_done_rx.await?;
-            anyhow::Ok(())
-        };
-        let client_request = async {
-            let connection = client.connect(server_addr, TEST_ALPN).await?;
-            let (mut send, mut recv) = connection.open_bi().await?;
-            send.write_all(b"request").await?;
-            send.finish()?;
-            let response = recv.read_to_end(100_000).await?;
-            anyhow::ensure!(response == b"response");
-            client_done_tx.send(()).expect("server is still running");
-            anyhow::Ok(())
-        };
-
-        tokio::time::timeout(Duration::from_secs(10), async {
-            tokio::try_join!(server_request, client_request)
-        })
-        .await
-        .context("Iroh v1 adapter test timed out")??;
-        client.close().await;
-        server.close().await;
-        Ok(())
     }
 }
