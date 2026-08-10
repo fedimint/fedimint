@@ -5,12 +5,13 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::{IncomingContract, fee_from_expiration};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use tpe::AggregateDecryptionKey;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use crate::api::LightningFederationApi;
 use crate::events::ReceivePaymentEvent;
@@ -44,6 +45,11 @@ pub enum ReceiveSMState {
     Pending,
     Claiming(Vec<OutPoint>),
     Expired,
+    /// Claiming the contract costs more in federation fees than the contract is
+    /// worth, so there is nothing to recover. Terminal: the verdict follows
+    /// from the contract amount and the federation's fee consensus, so waiting
+    /// does not change it.
+    Uneconomical,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -55,6 +61,7 @@ pub enum ReceiveSMState {
 ///
 ///     Pending -- incoming contract is confirmed --> Claiming
 ///     Pending -- decryption contract expires --> Expired
+///     Pending -- claim fee exceeds the contract --> Uneconomical
 /// ```
 impl State for ReceiveStateMachine {
     type ModuleContext = LightningClientContext;
@@ -82,7 +89,9 @@ impl State for ReceiveStateMachine {
                     },
                 )]
             }
-            ReceiveSMState::Claiming(..) | ReceiveSMState::Expired => {
+            ReceiveSMState::Claiming(..)
+            | ReceiveSMState::Expired
+            | ReceiveSMState::Uneconomical => {
                 vec![]
             }
         }
@@ -128,10 +137,29 @@ impl ReceiveStateMachine {
             keys: vec![old_state.common.claim_keypair],
         };
 
-        let change_range = global_context
+        let change_range = match global_context
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
-            .expect("Cannot claim input, additional funding needed");
+        {
+            Ok(change_range) => change_range,
+            // The contract is the transaction's only input, so the primary module has
+            // to top the transaction up exactly when the federation's fees exceed the
+            // contract - and a wallet with nothing in it cannot top it up at all.
+            // Anyone can address an incoming contract to a published lnurl key, so
+            // this has to end in a state rather than a panic: the executor polls this
+            // transition, a panic in it takes the whole client down, and because
+            // nothing commits it would do so again on every restart.
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LNV2,
+                    err = %err.fmt_compact_anyhow(),
+                    amount = %old_state.common.contract.commitment.amount,
+                    "Not claiming incoming contract, its amount does not cover the claim fee"
+                );
+
+                return old_state.update(ReceiveSMState::Uneconomical);
+            }
+        };
 
         // The event reports the invoice amount and the gateway fee separately.
         // Manual receives carry the invoice in their operation meta, so the fee

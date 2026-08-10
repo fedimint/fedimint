@@ -11,6 +11,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
@@ -274,16 +275,49 @@ impl ReceiveStateMachine {
             keys: vec![old_state.common.refund_keypair],
         };
 
-        let outpoints = global_context
+        let outpoints = match global_context
             .claim_inputs(
                 dbtx,
                 // The input of the refund tx is managed by this state machine
                 ClientInputBundle::new_no_sm(vec![client_input]),
             )
             .await
-            .expect("Cannot claim input, additional funding needed")
-            .into_iter()
-            .collect();
+        {
+            Ok(outpoints) => outpoints.into_iter().collect(),
+            // The contract is the refund transaction's only input, so this fails
+            // exactly when the federation's fees exceed the contract, leaving nothing
+            // to refund. The gateway keeps the lightning payment it already received
+            // for it, so the loss is bounded by the contract; a panic here would not
+            // be, because it runs in the executor and would take down every payment
+            // this gateway handles for the federation, on every restart.
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_GW,
+                    err = %err.fmt_compact_anyhow(),
+                    amount = %old_state.common.contract.commitment.amount,
+                    "Not refunding incoming contract, its amount does not cover the refund fee"
+                );
+
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        IncomingPaymentFailed {
+                            payment_image: old_state
+                                .common
+                                .contract
+                                .commitment
+                                .payment_image
+                                .clone(),
+                            error: "Contract does not cover the refund fee".to_string(),
+                        },
+                    )
+                    .await;
+
+                return old_state.update(ReceiveSMState::Failure);
+            }
+        };
 
         client_ctx
             .module
