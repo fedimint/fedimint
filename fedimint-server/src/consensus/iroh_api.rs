@@ -225,6 +225,7 @@ async fn handle_incoming(
         VersionedIrohConnection::Legacy(connection),
         connection_permit,
         request_limit,
+        IROH_API_CONNECTION_IDLE_TIMEOUT,
         IrohApiVersion::Legacy,
         move |send_stream, recv_stream, permit| {
             let api = api.clone();
@@ -516,12 +517,14 @@ async fn cancel_on_connection_close(
 ///
 /// `request_limit` must be built for this connection alone: the idle reap below
 /// reads any outstanding permit as a request of this connection still in
-/// flight.
+/// flight. `idle_timeout` is `IROH_API_CONNECTION_IDLE_TIMEOUT` in production;
+/// tests inject a short one to drive the reap.
 async fn handle_iroh_api_connection<Handler, HandlerFuture>(
     task_group: TaskGroup,
     connection: VersionedIrohConnection,
     _connection_permit: tokio::sync::OwnedSemaphorePermit,
     request_limit: ConnectionRequestLimit,
+    idle_timeout: Duration,
     version: IrohApiVersion,
     handle_stream: Handler,
 ) -> anyhow::Result<()>
@@ -539,11 +542,8 @@ where
     let _metrics = ActiveIrohApiConnection::new();
 
     loop {
-        let accept_result = fedimint_core::runtime::timeout(
-            IROH_API_CONNECTION_IDLE_TIMEOUT,
-            connection.accept_bi(),
-        )
-        .await;
+        let accept_result =
+            fedimint_core::runtime::timeout(idle_timeout, connection.accept_bi()).await;
 
         let (send_stream, recv_stream) = match accept_result {
             Ok(Ok(streams)) => streams,
@@ -554,7 +554,7 @@ where
                 tracing::debug!(
                     target: LOG_NET_API,
                     version = version.log_label(),
-                    idle_timeout_secs = IROH_API_CONNECTION_IDLE_TIMEOUT.as_secs(),
+                    idle_timeout_secs = idle_timeout.as_secs(),
                     "Closing idle Iroh API connection"
                 );
                 connection.close_for_idle_timeout();
@@ -587,6 +587,17 @@ where
             // connection drops mid-response. The threshold-quorum `upload_backup`
             // and `register_gateway` writes land on at least `threshold()` peers
             // but may leave slower peers unchanged; those APIs tolerate that.
+            // `submit_transaction` is the one writing endpoint whose side effect
+            // is a resubmission loop rather than a single dbtx: it re-sends the
+            // transaction into consensus at every session boundary
+            // (`consensus/api.rs:210-220`), so cancelling it ends that
+            // server-side safety net once the client's 60s budget elapses
+            // (`request_timeout_for_method`, `fedimint-connectors/src/iroh.rs:66-76`,
+            // grants the long-poll hour only to `await_` / `wait_` methods)
+            // instead of keeping it running across sessions. Funds are not at
+            // risk: the endpoint is reached through
+            // `request_current_consensus_retry`, which retries indefinitely
+            // client-side.
             //
             // This outer race ties the whole handler lifetime to the connection,
             // including any state not currently polling a stream-local signal.
@@ -842,6 +853,7 @@ async fn handle_incoming_next(
         VersionedIrohConnection::Next(connection),
         connection_permit,
         request_limit,
+        IROH_API_CONNECTION_IDLE_TIMEOUT,
         IrohApiVersion::Next,
         move |send_stream, recv_stream, permit| {
             let api = api.clone();
@@ -1001,6 +1013,7 @@ mod tests {
                     server_connection,
                     connection_permit,
                     request_limit_for_server,
+                    IROH_API_CONNECTION_IDLE_TIMEOUT,
                     IrohApiVersion::Next,
                     move |send_stream, mut recv_stream, permit| {
                         let request_started = request_started_for_handler.clone();
@@ -1043,6 +1056,61 @@ mod tests {
         .context("request permit remained held after the connection closed")?
         .context("request limit was closed")?;
 
+        Ok(())
+    }
+
+    /// The accept timeout reaps a connection nobody is using, but a connection
+    /// with a request still in flight must survive it - reaping that one would
+    /// cancel the request under the client. Both arms run against the same
+    /// connection, with a short injected timeout standing in for the production
+    /// five minutes.
+    #[tokio::test]
+    async fn accept_timeout_reaps_an_idle_connection_but_spares_a_busy_one() -> anyhow::Result<()> {
+        const TEST_IDLE_TIMEOUT: Duration = Duration::from_millis(50);
+
+        let pair = connected_pair().await?;
+        let request_limit = ConnectionRequestLimit::new(1);
+        let in_flight = request_limit.acquire(IrohApiVersion::Next).await;
+        let connection_permit = Arc::new(Semaphore::new(1))
+            .acquire_owned()
+            .await
+            .expect("test semaphore is open");
+        let server_connection = VersionedIrohConnection::Next(pair.server.clone());
+        let request_limit_for_server = request_limit.clone();
+        let server_task = fedimint_core::runtime::spawn("test-iroh-idle-reap", async move {
+            handle_iroh_api_connection(
+                TaskGroup::new(),
+                server_connection,
+                connection_permit,
+                request_limit_for_server,
+                TEST_IDLE_TIMEOUT,
+                IrohApiVersion::Next,
+                |_send_stream, _recv_stream, _permit| async { Ok(()) },
+            )
+            .await
+        });
+
+        assert!(
+            tokio::time::timeout(TEST_IDLE_TIMEOUT * 5, pair.client.closed())
+                .await
+                .is_err(),
+            "a connection with a request in flight was reaped"
+        );
+
+        drop(in_flight);
+        let close_reason = tokio::time::timeout(TEST_TIMEOUT, pair.client.closed())
+            .await
+            .context("idle connection was never reaped")?;
+        assert!(
+            matches!(
+                close_reason,
+                iroh_next::endpoint::ConnectionError::ApplicationClosed(_)
+            ),
+            "connection ended with {close_reason:?} rather than the idle reap"
+        );
+        tokio::time::timeout(TEST_TIMEOUT, server_task)
+            .await
+            .context("connection task did not stop after the idle reap")???;
         Ok(())
     }
 
