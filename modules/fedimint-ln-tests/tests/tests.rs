@@ -16,6 +16,7 @@ use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer,
@@ -371,6 +372,60 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     let same_balance = client.get_balance_for_btc().await?;
     assert_eq!(prev_balance, same_balance);
+
+    drop(gw);
+
+    Ok(())
+}
+
+/// `GET_DECRYPTED_PREIMAGE_STATUS` is a public, unauthenticated endpoint whose
+/// `ContractKey` lookup resolves for outgoing contracts as well as incoming
+/// ones, and every client that pays an invoice holds an outgoing contract id.
+/// Passing one used to panic the guardian's API handler; only the jsonrpsee
+/// transport contains such a panic, the iroh one lets it take the process down.
+#[tokio::test(flavor = "multi_thread")]
+async fn preimage_status_of_an_outgoing_contract_is_an_error() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let client = fed.new_client().await;
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
+
+    dummy_module
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    let other_ln = FakeLightningTest::new();
+    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id,
+        fee: _,
+    } = pay_invoice(&client, invoice, Some(gw.http_gateway_id().await)).await?;
+    let PayType::Lightning(operation_id) = payment_type else {
+        panic!("Expected lightning payment!")
+    };
+
+    // The contract has to exist before it is queried, otherwise the endpoint
+    // long-polls for it.
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+    let mut sub = ln_module
+        .subscribe_ln_pay(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(sub.ok().await?, LnPayState::Created);
+    assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+
+    let error = ln_module
+        .api
+        .get_decrypted_preimage_status(contract_id)
+        .await
+        .expect_err("An outgoing contract has no decrypted preimage status");
+    assert!(
+        error.to_string().contains("not an incoming contract"),
+        "Expected the guardians to reject the contract kind, got: {error}"
+    );
 
     drop(gw);
 

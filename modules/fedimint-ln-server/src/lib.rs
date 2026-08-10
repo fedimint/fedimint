@@ -21,8 +21,8 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
+    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiVersion, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::sleep;
@@ -882,14 +882,14 @@ impl ServerModule for Lightning {
                 GET_DECRYPTED_PREIMAGE_STATUS,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, DecryptedPreimageStatus) {
-                    Ok(module.get_decrypted_preimage_status(context, contract_id).await)
+                    module.get_decrypted_preimage_status(context, contract_id).await
                 }
             },
             public_api_endpoint! {
                 AWAIT_PREIMAGE_DECRYPTION,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
-                    Ok(module.wait_preimage_decrypted(context, contract_id).await)
+                    module.wait_preimage_decrypted(context, contract_id).await
                 }
             },
             public_api_endpoint! {
@@ -1066,29 +1066,33 @@ impl Lightning {
         &self,
         context: &mut ApiEndpointContext,
         contract_id: ContractId,
-    ) -> (IncomingContractAccount, DecryptedPreimageStatus) {
+    ) -> Result<(IncomingContractAccount, DecryptedPreimageStatus), ApiError> {
         let f_contract = context.wait_key_exists(ContractKey(contract_id));
         let contract = f_contract.await;
-        let incoming_contract_account = Self::get_incoming_contract_account(contract);
-        match &incoming_contract_account.contract.decrypted_preimage {
-            DecryptedPreimage::Some(key) => (
-                incoming_contract_account.clone(),
-                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
-            ),
-            DecryptedPreimage::Pending => {
-                (incoming_contract_account, DecryptedPreimageStatus::Pending)
-            }
-            DecryptedPreimage::Invalid => {
-                (incoming_contract_account, DecryptedPreimageStatus::Invalid)
-            }
-        }
+        let incoming_contract_account = Self::get_incoming_contract_account(contract)?;
+        Ok(
+            match &incoming_contract_account.contract.decrypted_preimage {
+                DecryptedPreimage::Some(key) => (
+                    incoming_contract_account.clone(),
+                    DecryptedPreimageStatus::Some(Preimage(
+                        sha256::Hash::hash(&key.0).to_byte_array(),
+                    )),
+                ),
+                DecryptedPreimage::Pending => {
+                    (incoming_contract_account, DecryptedPreimageStatus::Pending)
+                }
+                DecryptedPreimage::Invalid => {
+                    (incoming_contract_account, DecryptedPreimageStatus::Invalid)
+                }
+            },
+        )
     }
 
     async fn wait_preimage_decrypted(
         &self,
         context: &mut ApiEndpointContext,
         contract_id: ContractId,
-    ) -> (IncomingContractAccount, Option<Preimage>) {
+    ) -> Result<(IncomingContractAccount, Option<Preimage>), ApiError> {
         let future =
             context.wait_value_matches(ContractKey(contract_id), |contract| {
                 match &contract.contract {
@@ -1101,29 +1105,39 @@ impl Lightning {
             });
 
         let decrypt_preimage = future.await;
-        let incoming_contract_account = Self::get_incoming_contract_account(decrypt_preimage);
-        match incoming_contract_account
-            .clone()
-            .contract
-            .decrypted_preimage
-        {
-            DecryptedPreimage::Some(key) => (
-                incoming_contract_account,
-                Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
-            ),
-            _ => (incoming_contract_account, None),
-        }
+        let incoming_contract_account = Self::get_incoming_contract_account(decrypt_preimage)?;
+        Ok(
+            match incoming_contract_account
+                .clone()
+                .contract
+                .decrypted_preimage
+            {
+                DecryptedPreimage::Some(key) => (
+                    incoming_contract_account,
+                    Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
+                ),
+                _ => (incoming_contract_account, None),
+            },
+        )
     }
 
-    fn get_incoming_contract_account(contract: ContractAccount) -> IncomingContractAccount {
-        if let FundedContract::Incoming(incoming) = contract.contract {
-            return IncomingContractAccount {
+    /// `ContractKey` is shared by incoming and outgoing contracts, so a caller
+    /// can always reach this with the id of an outgoing contract - every client
+    /// that pays an invoice has one to hand. It has to be an error rather than
+    /// a panic: the endpoints below are public and unauthenticated, and only
+    /// the jsonrpsee transport contains a panicking handler.
+    fn get_incoming_contract_account(
+        contract: ContractAccount,
+    ) -> Result<IncomingContractAccount, ApiError> {
+        match contract.contract {
+            FundedContract::Incoming(incoming) => Ok(IncomingContractAccount {
                 amount: contract.amount,
                 contract: incoming.contract,
-            };
+            }),
+            FundedContract::Outgoing(_) => Err(ApiError::bad_request(
+                "Contract is not an incoming contract".to_string(),
+            )),
         }
-
-        panic!("Contract is not an IncomingContractAccount");
     }
 
     async fn list_gateways(
