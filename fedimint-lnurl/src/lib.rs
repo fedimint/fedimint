@@ -130,13 +130,19 @@ pub async fn get_invoice(
 
     let callback_url = format!("{}{}amount={}", response.callback, separator, amount_msat);
 
-    reqwest::get(callback_url)
+    let invoice = reqwest::get(callback_url)
         .await
         .map_err(|_| "Failed to fetch lnurl callback response".to_string())?
         .json::<LnurlResponse<InvoiceResponse>>()
         .await
         .map_err(|_| "Failed to parse lnurl callback response".to_string())?
-        .into_result()
+        .into_result()?;
+
+    if invoice.pr.amount_milli_satoshis() != Some(amount_msat) {
+        return Err("Invoice amount does not match requested amount".to_string());
+    }
+
+    Ok(invoice)
 }
 
 /// Verify a payment using LUD-21
