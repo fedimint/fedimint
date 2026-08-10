@@ -459,14 +459,20 @@ enum VersionedSendStream {
 
 impl VersionedSendStream {
     /// Resolves once the client stops waiting for this request: dropping its
-    /// `RecvStream` makes quinn send `STOP_SENDING`, which surfaces here.
+    /// `RecvStream` makes the peer send `STOP_SENDING`, which surfaces here.
+    /// Both stacks do this - `quinn` and `noq` alike - unless the stream was
+    /// already read to the end.
     ///
     /// This cannot fire spuriously before a response is written. It can also
     /// resolve when the connection is lost, which cancels the request just as
     /// legitimately. Local completion cannot happen before anything is written,
-    /// and 0-RTT rejection is impossible because the server does not create
-    /// 0-RTT streams. The outcome is therefore deliberately discarded: every
-    /// way this resolves here means the response has nowhere left to go.
+    /// and 0-RTT rejection cannot reach a server: `check_0rtt` returns `Ok`
+    /// unconditionally on the server side, so `ZeroRttRejected` is only ever
+    /// produced for a client. (Accepted streams *are* flagged 0-RTT while the
+    /// handshake is in flight, so the guarantee comes from `check_0rtt`, not
+    /// from the server declining to create such streams.) The outcome is
+    /// therefore deliberately discarded: every way this resolves here means the
+    /// response has nowhere left to go.
     async fn stopped(&mut self) {
         match self {
             Self::Legacy(send) => {
@@ -1159,12 +1165,18 @@ mod tests {
         let close_reason = tokio::time::timeout(TEST_TIMEOUT, pair.client.closed())
             .await
             .context("idle connection was never reaped")?;
-        assert!(
-            matches!(
-                close_reason,
-                iroh_next::endpoint::ConnectionError::ApplicationClosed(_)
-            ),
-            "connection ended with {close_reason:?} rather than the idle reap"
+        // Match the reap's own code and reason, not just "some application
+        // close": an implicit drop-close also closes with code 0.
+        let iroh_next::endpoint::ConnectionError::ApplicationClosed(close) = &close_reason else {
+            panic!("connection ended with {close_reason:?} rather than the idle reap");
+        };
+        assert_eq!(
+            close.error_code.into_inner(),
+            u64::from(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE)
+        );
+        assert_eq!(
+            close.reason.as_ref(),
+            IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON
         );
         tokio::time::timeout(TEST_TIMEOUT, server_task)
             .await
@@ -1213,12 +1225,18 @@ mod tests {
         let close_reason = tokio::time::timeout(TEST_TIMEOUT, pair.client.closed())
             .await
             .context("idle connection was never reaped")?;
-        assert!(
-            matches!(
-                close_reason,
-                iroh::endpoint::ConnectionError::ApplicationClosed(_)
-            ),
-            "connection ended with {close_reason:?} rather than the idle reap"
+        // Match the reap's own code and reason, not just "some application
+        // close": an implicit drop-close also closes with code 0.
+        let iroh::endpoint::ConnectionError::ApplicationClosed(close) = &close_reason else {
+            panic!("connection ended with {close_reason:?} rather than the idle reap");
+        };
+        assert_eq!(
+            close.error_code.into_inner(),
+            u64::from(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE)
+        );
+        assert_eq!(
+            close.reason.as_ref(),
+            IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON
         );
         tokio::time::timeout(TEST_TIMEOUT, server_task)
             .await
@@ -1414,6 +1432,7 @@ mod tests {
             anyhow::Error::from(ReadToEndError::Read(ReadError::ConnectionLost(
                 ConnectionError::TimedOut,
             ))),
+            anyhow::Error::from(WriteErrorNext::Stopped(VarIntNext::from_u32(1))),
             anyhow::Error::from(WriteErrorNext::ConnectionLost(
                 ConnectionErrorNext::TimedOut,
             )),
