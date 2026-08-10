@@ -39,7 +39,9 @@ async fn create_gatewayd_db_data(db: Database) {
         invite_code,
         federation_index: 2,
         timelock_delta: 10,
-        fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
+        fees: PaymentFee::TRANSACTION_FEE_DEFAULT
+            .try_into()
+            .expect("The default transaction fee fits into RoutingFees"),
     };
 
     dbtx.insert_new_entry(
@@ -56,7 +58,9 @@ async fn create_gatewayd_db_data(db: Database) {
     let gateway_configuration = GatewayConfigurationV0 {
         password: "EXAMPLE".to_string(),
         num_route_hints: 2,
-        routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT.into(),
+        routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT
+            .try_into()
+            .expect("The default transaction fee fits into RoutingFees"),
         network: NetworkLegacyEncodingWrapper(bitcoin::Network::Regtest),
     };
 

@@ -1,4 +1,3 @@
-use std::ops::Add;
 use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
@@ -12,6 +11,7 @@ use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::contracts::{IncomingContract, OutgoingContract};
 use crate::endpoint_constants::{
@@ -224,6 +224,18 @@ impl PaymentFee {
         self.base <= limit.base && self.parts_per_million <= limit.parts_per_million
     }
 
+    /// Adds two fees, returning `None` if either component overflows.
+    ///
+    /// Fees reach this method straight from operator input, so the addition
+    /// has to happen before the limit checks can run. A panicking `Add` would
+    /// therefore be reachable with a fee that the limits are meant to reject.
+    pub fn checked_add(self, rhs: Self) -> Option<PaymentFee> {
+        Some(PaymentFee {
+            base: self.base.checked_add(rhs.base)?,
+            parts_per_million: self.parts_per_million.checked_add(rhs.parts_per_million)?,
+        })
+    }
+
     pub fn add_to(&self, msats: u64) -> Amount {
         Amount::from_msats(msats.saturating_add(self.absolute_fee(msats)))
     }
@@ -237,27 +249,21 @@ impl PaymentFee {
     }
 
     fn absolute_fee(&self, msats: u64) -> u64 {
+        // The base fee is bounded well below `u64::MAX` for any fee that passed
+        // the limit checks, but a fee decoded from an older database has not
+        // necessarily passed them, so saturate rather than panic.
         msats
             .saturating_mul(self.parts_per_million)
             .saturating_div(1_000_000)
-            .checked_add(self.base.msats)
-            .expect("The division creates sufficient headroom to add the base fee")
+            .saturating_add(self.base.msats)
     }
 }
 
-impl Add for PaymentFee {
-    type Output = PaymentFee;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        PaymentFee {
-            base: self.base.checked_add(rhs.base).expect("fee base overflow"),
-            parts_per_million: self
-                .parts_per_million
-                .checked_add(rhs.parts_per_million)
-                .expect("fee parts per million overflow"),
-        }
-    }
-}
+/// A [`PaymentFee`] that does not fit into the `u32` components of
+/// [`RoutingFees`] and therefore cannot be announced to lightning clients.
+#[derive(Debug, Error)]
+#[error("Payment fee {0} exceeds the range of RoutingFees")]
+pub struct FeeOutOfRangeError(PaymentFee);
 
 impl From<RoutingFees> for PaymentFee {
     fn from(value: RoutingFees) -> Self {
@@ -268,13 +274,15 @@ impl From<RoutingFees> for PaymentFee {
     }
 }
 
-impl From<PaymentFee> for RoutingFees {
-    fn from(value: PaymentFee) -> Self {
-        RoutingFees {
-            base_msat: u32::try_from(value.base.msats).expect("base msat was truncated from u64"),
+impl TryFrom<PaymentFee> for RoutingFees {
+    type Error = FeeOutOfRangeError;
+
+    fn try_from(value: PaymentFee) -> Result<Self, Self::Error> {
+        Ok(RoutingFees {
+            base_msat: u32::try_from(value.base.msats).map_err(|_| FeeOutOfRangeError(value))?,
             proportional_millionths: u32::try_from(value.parts_per_million)
-                .expect("ppm was truncated from u64"),
-        }
+                .map_err(|_| FeeOutOfRangeError(value))?,
+        })
     }
 }
 
@@ -314,6 +322,7 @@ impl FromStr for PaymentFee {
 #[cfg(test)]
 mod tests {
     use fedimint_core::Amount;
+    use lightning_invoice::RoutingFees;
 
     use super::PaymentFee;
 
@@ -359,27 +368,79 @@ mod tests {
         assert!(ok.is_within(&PaymentFee::SEND_FEE_LIMIT));
     }
 
+    /// Adding two operator-supplied fees must not panic on overflow, in either
+    /// component.
     #[test]
-    #[should_panic(expected = "fee base overflow")]
-    fn payment_fee_add_panics_on_base_overflow() {
-        let _ = PaymentFee {
+    fn checked_add_reports_overflow_instead_of_panicking() {
+        let max_base = PaymentFee {
             base: Amount::from_msats(u64::MAX),
             parts_per_million: 0,
-        } + PaymentFee {
+        };
+        let one_msat = PaymentFee {
             base: Amount::from_msats(1),
             parts_per_million: 0,
         };
-    }
+        assert!(max_base.checked_add(one_msat).is_none());
 
-    #[test]
-    #[should_panic(expected = "fee parts per million overflow")]
-    fn payment_fee_add_panics_on_ppm_overflow() {
-        let _ = PaymentFee {
+        let max_ppm = PaymentFee {
             base: Amount::ZERO,
             parts_per_million: u64::MAX,
-        } + PaymentFee {
+        };
+        let one_ppm = PaymentFee {
             base: Amount::ZERO,
             parts_per_million: 1,
         };
+        assert!(max_ppm.checked_add(one_ppm).is_none());
+
+        assert_eq!(
+            PaymentFee::TRANSACTION_FEE_DEFAULT
+                .checked_add(PaymentFee::TRANSACTION_FEE_DEFAULT)
+                .expect("Two default fees fit"),
+            PaymentFee {
+                base: Amount::from_sats(4),
+                parts_per_million: 6_000,
+            }
+        );
+    }
+
+    /// A fee that outgrew the `u32`s of `RoutingFees` must surface as an error
+    /// rather than a panic: the conversion runs on every lightning payment and
+    /// on federation registration at startup, so a panic here boot-loops the
+    /// gateway.
+    #[test]
+    fn routing_fees_conversion_rejects_out_of_range_fees() {
+        let over_base = PaymentFee {
+            base: Amount::from_msats(u64::from(u32::MAX) + 1),
+            parts_per_million: 0,
+        };
+        assert!(RoutingFees::try_from(over_base).is_err());
+
+        let over_ppm = PaymentFee {
+            base: Amount::ZERO,
+            parts_per_million: u64::from(u32::MAX) + 1,
+        };
+        assert!(RoutingFees::try_from(over_ppm).is_err());
+
+        let fees = RoutingFees::try_from(PaymentFee::SEND_FEE_LIMIT)
+            .expect("The send fee limit is within range");
+        assert_eq!(fees.base_msat, 100_000);
+        assert_eq!(fees.proportional_millionths, 15_000);
+    }
+
+    /// Any fee that `set_fees` accepts is small enough for the fee arithmetic
+    /// to stay exact, and an out-of-range fee left in an old database must
+    /// saturate instead of panicking.
+    #[test]
+    fn absolute_fee_saturates_instead_of_panicking() {
+        let huge = PaymentFee {
+            base: Amount::from_msats(u64::MAX),
+            parts_per_million: u64::MAX,
+        };
+        assert_eq!(huge.fee(u64::MAX), Amount::from_msats(u64::MAX));
+
+        assert_eq!(
+            PaymentFee::TRANSACTION_FEE_DEFAULT.fee(1_000_000),
+            Amount::from_msats(2_000 + 3_000)
+        );
     }
 }

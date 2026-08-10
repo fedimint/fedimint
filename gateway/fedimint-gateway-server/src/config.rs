@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow::ensure;
 use bitcoin::Network;
 use clap::builder::BoolishValueParser;
 use clap::{ArgGroup, Parser};
@@ -158,6 +159,31 @@ impl GatewayOpts {
             } else {
                 None
             };
+
+        // The defaults are copied into the config of every federation the gateway
+        // connects to, so they have to satisfy the same limits `set_fees` enforces.
+        // Rejecting them here means a fee that cannot be announced to LNv1 clients
+        // never reaches the database.
+        let send_fees = self
+            .default_routing_fees
+            .checked_add(self.default_transaction_fees)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Total of default routing and transaction fees overflowed, they may not exceed {}",
+                    PaymentFee::SEND_FEE_LIMIT
+                )
+            })?;
+        ensure!(
+            send_fees.is_within(&PaymentFee::SEND_FEE_LIMIT),
+            "Total of default routing and transaction fees exceeded {}",
+            PaymentFee::SEND_FEE_LIMIT
+        );
+        ensure!(
+            self.default_transaction_fees
+                .is_within(&PaymentFee::RECEIVE_FEE_LIMIT),
+            "Default transaction fees exceeded RECEIVE LIMIT {}",
+            PaymentFee::RECEIVE_FEE_LIMIT
+        );
 
         // Default metrics listen to localhost on UI port + 1
         let metrics_listen = self.metrics_listen.unwrap_or_else(|| {

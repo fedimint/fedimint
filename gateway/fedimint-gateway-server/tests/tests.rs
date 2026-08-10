@@ -929,6 +929,119 @@ async fn test_gateway_rejects_amountless_invoice() -> anyhow::Result<()> {
     .await
 }
 
+/// `set_fees` takes operator-supplied fees whose only bound is `u64`, and
+/// `/set_fees` is reachable with the lesser liquidity-manager credential. Both
+/// summing the two fee components and converting the result into `RoutingFees`
+/// must therefore be total: the conversion runs on every LNv1 payment and on
+/// the federation registration that happens at startup, so a persisted
+/// out-of-range fee boot-loops an LND gateway.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_rejects_fees_it_cannot_announce() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let federation_id = fed.id();
+        let routing_info_before = gateway
+            .routing_info_v2(&federation_id)
+            .await?
+            .expect("Gateway is connected to the federation");
+
+        let template = SetFeesPayload {
+            federation_id: Some(federation_id),
+            lightning_base: None,
+            lightning_parts_per_million: None,
+            transaction_base: None,
+            transaction_parts_per_million: None,
+        };
+
+        let rejected = [
+            // Overflows the addition of the lightning and transaction fee, which
+            // happens before any limit can be checked.
+            SetFeesPayload {
+                lightning_base: Some(Amount::from_msats(u64::MAX)),
+                ..template.clone()
+            },
+            SetFeesPayload {
+                lightning_parts_per_million: Some(u64::MAX),
+                ..template.clone()
+            },
+            // Sats entered where msats were expected: no overflow, but the value
+            // does not fit into the `u32` components of `RoutingFees`.
+            SetFeesPayload {
+                lightning_base: Some(Amount::from_msats(u64::from(u32::MAX) + 1)),
+                ..template.clone()
+            },
+            SetFeesPayload {
+                transaction_parts_per_million: Some(u64::from(u32::MAX) + 1),
+                ..template.clone()
+            },
+        ];
+
+        for payload in rejected {
+            let error = gateway
+                .handle_set_fees_msg(payload.clone())
+                .await
+                .expect_err(&format!("Fee outside the limits was accepted: {payload:?}"));
+            assert!(
+                error.to_string().contains("Error configuring the gateway"),
+                "Expected a gateway configuration error, got: {error}"
+            );
+        }
+
+        // A rejected fee must not have been persisted.
+        let routing_info_after = gateway
+            .routing_info_v2(&federation_id)
+            .await?
+            .expect("Gateway is connected to the federation");
+        assert_eq!(
+            routing_info_before.send_fee_default,
+            routing_info_after.send_fee_default
+        );
+        assert_eq!(
+            routing_info_before.receive_fee,
+            routing_info_after.receive_fee
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The fee limits used to be checked only for federations running LNv2, so a
+/// federation with LNv1 alone accepted any fee at all — including one that
+/// cannot be converted into the `RoutingFees` that LNv1 registration announces.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_enforces_fee_limits_without_lnv2() -> anyhow::Result<()> {
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit)
+        .with_server_only_module(UnknownInit)
+        .with_module(
+            LightningClientInit {
+                gateway_conn: Some(Arc::new(MockGatewayConnection)),
+            },
+            LightningInit,
+        );
+
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let error = gateway
+        .handle_set_fees_msg(SetFeesPayload {
+            federation_id: Some(fed.id()),
+            // A base fee in sats where msats were expected.
+            lightning_base: Some(Amount::from_msats(u64::from(u32::MAX) + 1)),
+            lightning_parts_per_million: None,
+            transaction_base: None,
+            transaction_parts_per_million: None,
+        })
+        .await
+        .expect_err("Fee above the send limit was accepted for an LNv1-only federation");
+    assert!(
+        error.to_string().contains("Total Send fees exceeded"),
+        "Expected the send fee limit to be enforced, got: {error}"
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, fed1, fed2, _| async move {
