@@ -169,11 +169,15 @@ async fn handle_incoming(
 ) -> anyhow::Result<()> {
     let accepting = match incoming.accept() {
         Ok(accepting) => accepting,
-        Err(err) => return log_client_hang_up_or_propagate(err.into(), IrohApiVersion::Legacy),
+        Err(err) => {
+            return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Legacy);
+        }
     };
     let connection = match accepting.await {
         Ok(connection) => connection,
-        Err(err) => return log_client_hang_up_or_propagate(err.into(), IrohApiVersion::Legacy),
+        Err(err) => {
+            return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Legacy);
+        }
     };
     let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
     handle_iroh_api_connection(
@@ -181,14 +185,19 @@ async fn handle_incoming(
         VersionedIrohConnection::Legacy(connection),
         connection_permit,
         parallel_requests_limit,
+        iroh_api_max_requests_per_connection,
         IrohApiVersion::Legacy,
         move |send_stream, recv_stream, permit| {
+            let api = api.clone();
             handle_iroh_api_stream(
-                api.clone(),
                 send_stream,
                 recv_stream,
                 permit,
                 IrohApiVersion::Legacy,
+                move |request| async move {
+                    handle_iroh_api_request(&api, &request, IrohApiVersion::Legacy.metric_label())
+                        .await
+                },
             )
         },
     )
@@ -224,25 +233,28 @@ impl IrohApiVersion {
     }
 }
 
-/// Whether an Iroh error is an ordinary client hang-up rather than a fault an
-/// operator should be told about.
+/// Whether an Iroh error is an ordinary end of a connection rather than a fault
+/// an operator should be told about.
 ///
 /// Clients close a connection whose request budget elapsed, which is routine
 /// for a long-poll refresh, and abrupt client death surfaces as the idle
-/// timeout or a reset. `ConnectionClosed` is deliberately excluded: it means
-/// the peer's QUIC stack aborted the connection, which is a transport fault
-/// rather than a client hanging up.
+/// timeout or a reset. `LocallyClosed` is not a client hang-up at all - it is
+/// this server closing the connection, via `close_for_idle_timeout` or endpoint
+/// shutdown - but it is no more a fault than the rest, so it belongs here too.
+/// `ConnectionClosed` is deliberately excluded: it means the peer's QUIC stack
+/// aborted the connection, which is a transport fault rather than a client
+/// hanging up.
 ///
 /// Errors that merely wrap a `ConnectionError` are classified by what they
 /// wrap, so a transport fault keeps its `warn!` however deep it is buried:
 /// the stream-level `ConnectionLost` on both transports, and iroh-next's
 /// handshake `ConnectingError` (iroh 0.35's `Connecting` yields a bare
 /// `ConnectionError` instead, so it needs no unwrapping).
-fn is_client_hang_up(error: &anyhow::Error) -> bool {
-    is_legacy_client_hang_up(error) || is_next_client_hang_up(error)
+fn is_benign_connection_end(error: &anyhow::Error) -> bool {
+    is_legacy_benign_connection_end(error) || is_next_benign_connection_end(error)
 }
 
-fn is_legacy_client_hang_up(error: &anyhow::Error) -> bool {
+fn is_legacy_benign_connection_end(error: &anyhow::Error) -> bool {
     use iroh::endpoint::{ConnectionError, ReadError, ReadToEndError, WriteError};
 
     fn connection(error: &ConnectionError) -> bool {
@@ -279,7 +291,7 @@ fn is_legacy_client_hang_up(error: &anyhow::Error) -> bool {
             .is_some_and(|error| matches!(error, ReadToEndError::Read(error) if read(error)))
 }
 
-fn is_next_client_hang_up(error: &anyhow::Error) -> bool {
+fn is_next_benign_connection_end(error: &anyhow::Error) -> bool {
     use iroh_next::endpoint::{
         ConnectingError, ConnectionError, ReadError, ReadToEndError, WriteError,
     };
@@ -321,16 +333,16 @@ fn is_next_client_hang_up(error: &anyhow::Error) -> bool {
         })
 }
 
-/// Demotes a client hang-up to `debug` and hands every other error back to the
-/// caller, which decides how loudly to report a genuine fault.
+/// Demotes a benign connection end to `debug` and hands every other error back
+/// to the caller, which decides how loudly to report a genuine fault.
 ///
 /// Shared by the three places an Iroh error surfaces: connection
 /// establishment, `accept_bi`, and a per-request handler.
-fn log_client_hang_up_or_propagate(
+fn log_benign_connection_end_or_propagate(
     error: anyhow::Error,
     version: IrohApiVersion,
 ) -> anyhow::Result<()> {
-    if !is_client_hang_up(&error) {
+    if !is_benign_connection_end(&error) {
         return Err(error);
     }
 
@@ -338,7 +350,7 @@ fn log_client_hang_up_or_propagate(
         target: LOG_NET_API,
         version = version.log_label(),
         err = %error.fmt_compact_anyhow(),
-        "Iroh API client hung up"
+        "Iroh API connection ended without a fault"
     );
     Ok(())
 }
@@ -464,13 +476,14 @@ async fn cancel_on_connection_close(
 /// Serves requests off one Iroh API connection until it goes away.
 ///
 /// `parallel_requests_limit` must be a semaphore built for this connection
-/// alone and not yet acquired from: its initial permit count is this
-/// connection's request budget, which the idle reap below compares against.
+/// alone, holding `max_requests` permits: the idle reap below reads any
+/// outstanding permit as a request of this connection still in flight.
 async fn handle_iroh_api_connection<Handler, HandlerFuture>(
     task_group: TaskGroup,
     connection: VersionedIrohConnection,
     _connection_permit: tokio::sync::OwnedSemaphorePermit,
     parallel_requests_limit: Arc<Semaphore>,
+    max_requests: usize,
     version: IrohApiVersion,
     handle_stream: Handler,
 ) -> anyhow::Result<()>
@@ -485,7 +498,6 @@ where
         + 'static,
     HandlerFuture: Future<Output = anyhow::Result<()>> + Send + 'static,
 {
-    let max_requests = parallel_requests_limit.available_permits();
     let _metrics = ActiveIrohApiConnection::new();
 
     loop {
@@ -497,7 +509,7 @@ where
 
         let (send_stream, recv_stream) = match accept_result {
             Ok(Ok(streams)) => streams,
-            Ok(Err(err)) => return log_client_hang_up_or_propagate(err, version),
+            Ok(Err(err)) => return log_benign_connection_end_or_propagate(err, version),
             Err(_) if parallel_requests_limit.available_permits() < max_requests => continue,
             Err(_) => {
                 IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
@@ -527,6 +539,15 @@ where
             // committed is dropped atomically. A dirty uncommitted dbtx emits the
             // standard warning and captures a backtrace when cancellation drops
             // it (`submit_transaction` is exempt via `ignore_uncommitted()`).
+            // Reaching that warning means landing between a handler's first
+            // dbtx write and its `commit_tx*` call, so it takes a non-database
+            // await inside that stretch to be reachable at all - the database
+            // ones resolve within a single poll, since `fedimint-rocksdb` runs
+            // them under `block_in_place`. Today's writing endpoints have no
+            // such await: `consensus/api.rs`'s unauthenticated
+            // `BACKUP_ENDPOINT`, the widest-open of them, runs `insert_entry`
+            // straight through `commit_tx_result`, and the LN module's gateway
+            // register and remove endpoints have the same shape.
             // Where a write HAS committed the client sees a failed request and
             // may retry, which is equivalent - not literally identical, since a
             // retried `sign_api_announcement` bumps its nonce and a retried meta
@@ -546,7 +567,7 @@ where
             match result {
                 Some(Ok(())) => {}
                 Some(Err(err)) => {
-                    if let Err(err) = log_client_hang_up_or_propagate(err, version) {
+                    if let Err(err) = log_benign_connection_end_or_propagate(err, version) {
                         warn!(
                             target: LOG_NET_API,
                             version = version.log_label(),
@@ -565,23 +586,27 @@ where
     }
 }
 
-async fn handle_iroh_api_stream(
-    api: Arc<IrohApiState>,
+/// Reads one request off a stream and writes back what `respond` makes of it,
+/// racing each half against the client abandoning this request.
+///
+/// The `stopped()` future the read races against is dropped with that read; the
+/// write below builds a fresh one, so the two halves never share a race.
+async fn handle_iroh_api_stream<Respond, RespondFuture>(
     mut send_stream: VersionedSendStream,
     mut recv_stream: VersionedRecvStream,
     _request_permit: tokio::sync::OwnedSemaphorePermit,
     version: IrohApiVersion,
-) -> anyhow::Result<()> {
+    respond: Respond,
+) -> anyhow::Result<()>
+where
+    Respond: FnOnce(Vec<u8>) -> RespondFuture,
+    RespondFuture: Future<Output = anyhow::Result<Vec<u8>>>,
+{
     let Some(request) = read_iroh_api_request(&mut send_stream, &mut recv_stream, version).await?
     else {
         return Ok(());
     };
-    write_iroh_api_response(
-        send_stream,
-        handle_iroh_api_request(&api, &request, version.metric_label()),
-        version,
-    )
-    .await
+    write_iroh_api_response(send_stream, respond(request), version).await
 }
 
 async fn read_iroh_api_request(
@@ -811,11 +836,15 @@ async fn handle_incoming_next(
 ) -> anyhow::Result<()> {
     let accepting = match incoming.accept() {
         Ok(accepting) => accepting,
-        Err(err) => return log_client_hang_up_or_propagate(err.into(), IrohApiVersion::Next),
+        Err(err) => {
+            return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Next);
+        }
     };
     let connection = match accepting.await {
         Ok(connection) => connection,
-        Err(err) => return log_client_hang_up_or_propagate(err.into(), IrohApiVersion::Next),
+        Err(err) => {
+            return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Next);
+        }
     };
     let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
     handle_iroh_api_connection(
@@ -823,14 +852,19 @@ async fn handle_incoming_next(
         VersionedIrohConnection::Next(connection),
         connection_permit,
         parallel_requests_limit,
+        iroh_api_max_requests_per_connection,
         IrohApiVersion::Next,
         move |send_stream, recv_stream, permit| {
+            let api = api.clone();
             handle_iroh_api_stream(
-                api.clone(),
                 send_stream,
                 recv_stream,
                 permit,
                 IrohApiVersion::Next,
+                move |request| async move {
+                    handle_iroh_api_request(&api, &request, IrohApiVersion::Next.metric_label())
+                        .await
+                },
             )
         },
     )
@@ -983,14 +1017,16 @@ mod tests {
                     server_connection,
                     connection_permit,
                     request_limit_for_server,
+                    MAX_REQUESTS,
                     IrohApiVersion::Next,
                     move |send_stream, mut recv_stream, permit| {
                         let request_started = request_started_for_handler.clone();
                         async move {
                             recv_stream.read_request().await?;
                             request_started.notify_one();
+                            // Held so only the connection close can free them.
+                            let _keep = (send_stream, permit);
                             std::future::pending::<()>().await;
-                            drop((send_stream, permit));
                             Ok(())
                         }
                     },
@@ -1024,7 +1060,6 @@ mod tests {
         .await
         .context("request permit remained held after the connection closed")?;
 
-        assert_eq!(request_limit.available_permits(), MAX_REQUESTS);
         Ok(())
     }
 
@@ -1167,11 +1202,17 @@ mod tests {
             ConnectionError::TimedOut,
             ConnectionError::Reset,
         ] {
-            assert!(log_client_hang_up_or_propagate(error.into(), IrohApiVersion::Legacy).is_ok());
+            assert!(
+                log_benign_connection_end_or_propagate(error.into(), IrohApiVersion::Legacy)
+                    .is_ok()
+            );
         }
         assert!(
-            log_client_hang_up_or_propagate(transport_fault().into(), IrohApiVersion::Legacy)
-                .is_err()
+            log_benign_connection_end_or_propagate(
+                transport_fault().into(),
+                IrohApiVersion::Legacy
+            )
+            .is_err()
         );
 
         for error in [
@@ -1183,11 +1224,16 @@ mod tests {
             ConnectionErrorNext::TimedOut,
             ConnectionErrorNext::Reset,
         ] {
-            assert!(log_client_hang_up_or_propagate(error.into(), IrohApiVersion::Next).is_ok());
+            assert!(
+                log_benign_connection_end_or_propagate(error.into(), IrohApiVersion::Next).is_ok()
+            );
         }
         assert!(
-            log_client_hang_up_or_propagate(transport_fault_next().into(), IrohApiVersion::Next)
-                .is_err()
+            log_benign_connection_end_or_propagate(
+                transport_fault_next().into(),
+                IrohApiVersion::Next
+            )
+            .is_err()
         );
     }
 
@@ -1220,7 +1266,10 @@ mod tests {
             // `ConnectingError`, never as a bare `ConnectionError`.
             anyhow::Error::from(ConnectingErrorNext::from(ConnectionErrorNext::TimedOut)),
         ] {
-            assert!(is_client_hang_up(&error), "{error:?} was not demoted");
+            assert!(
+                is_benign_connection_end(&error),
+                "{error:?} was not demoted"
+            );
         }
 
         for error in [
@@ -1236,7 +1285,7 @@ mod tests {
             ))),
             anyhow::Error::from(ConnectingErrorNext::from(transport_fault_next())),
         ] {
-            assert!(!is_client_hang_up(&error), "{error:?} was demoted");
+            assert!(!is_benign_connection_end(&error), "{error:?} was demoted");
         }
     }
 
@@ -1482,6 +1531,90 @@ mod tests {
             assert!(duration_series(&method).is_empty());
             assert!(response_series(&method).is_empty());
         }
+    }
+
+    /// The legacy twin of the test above. The success path needs pinning on
+    /// `quinn` in its own right: were `stopped()` to resolve early there, every
+    /// iroh-0.35 request would silently become a debug-logged no-op. Both
+    /// halves race it, so this goes through `read_iroh_api_request` rather than
+    /// reading the stream directly - the legacy tests below only pin that race
+    /// in its cancelling direction.
+    #[tokio::test]
+    async fn legacy_transport_completes_a_normal_request_and_writes_its_response()
+    -> anyhow::Result<()> {
+        let pair = connected_pair_legacy().await?;
+        let (mut client_send, mut client_recv) = pair.client.open_bi().await?;
+        client_send.write_all(b"request").await?;
+        client_send.finish()?;
+        let (mut send_stream, mut recv_stream) =
+            VersionedIrohConnection::Legacy(pair.server.clone())
+                .accept_bi()
+                .await?;
+        let request =
+            read_iroh_api_request(&mut send_stream, &mut recv_stream, IrohApiVersion::Legacy)
+                .await?
+                .context("the read race cancelled a request the client never abandoned")?;
+        assert_eq!(request, b"request");
+
+        write_iroh_api_response(
+            send_stream,
+            async move {
+                // Give `stopped()` a deterministic chance to cancel the handler
+                // if it were to resolve before the client actually abandoned it.
+                tokio::task::yield_now().await;
+                Ok(b"response".to_vec())
+            },
+            IrohApiVersion::Legacy,
+        )
+        .await?;
+
+        let response = tokio::time::timeout(TEST_TIMEOUT, client_recv.read_to_end(100_000))
+            .await
+            .context("client never received the response")??;
+        assert_eq!(response, b"response");
+        Ok(())
+    }
+
+    /// The two tests above cover the read and the write in isolation.
+    /// `handle_iroh_api_stream` is where they compose - the read's `stopped()`
+    /// future is dropped and the write builds a fresh one - so drive that
+    /// sequence once against a real client, with a real permit to release.
+    #[tokio::test]
+    async fn iroh_api_stream_answers_a_request_and_releases_its_permit() -> anyhow::Result<()> {
+        const MAX_REQUESTS: usize = 1;
+
+        let pair = connected_pair().await?;
+        let (mut client_send, mut client_recv) = pair.client.open_bi().await?;
+        client_send.write_all(b"request").await?;
+        client_send.finish()?;
+        let (send_stream, recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
+            .accept_bi()
+            .await?;
+        let request_limit = Arc::new(Semaphore::new(MAX_REQUESTS));
+        let permit = request_limit
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("test semaphore is open");
+
+        handle_iroh_api_stream(
+            send_stream,
+            recv_stream,
+            permit,
+            IrohApiVersion::Next,
+            |request| async move {
+                assert_eq!(request, b"request");
+                Ok(b"response".to_vec())
+            },
+        )
+        .await?;
+
+        let response = tokio::time::timeout(TEST_TIMEOUT, client_recv.read_to_end(100_000))
+            .await
+            .context("client never received the response")??;
+        assert_eq!(response, b"response");
+        assert_eq!(request_limit.available_permits(), MAX_REQUESTS);
+        Ok(())
     }
 
     /// Both `stopped()` races run over `quinn` on the legacy transport instead
