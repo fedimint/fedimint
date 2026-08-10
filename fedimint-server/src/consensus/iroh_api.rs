@@ -584,18 +584,24 @@ where
             // may retry, which is equivalent - not literally identical, since a
             // retried `sign_api_announcement` bumps its nonce and a retried meta
             // submit draws a fresh salt - and is already what happens when a
-            // connection drops mid-response. The threshold-quorum `upload_backup`
-            // and `register_gateway` writes land on at least `threshold()` peers
-            // but may leave slower peers unchanged; those APIs tolerate that.
+            // connection drops mid-response. The threshold-quorum writes
+            // (`upload_backup`, `register_gateway`, `submit_transaction`) land on
+            // at least `threshold()` peers but may leave slower ones unchanged;
+            // those APIs tolerate that.
+            //
             // `submit_transaction` is the one writing endpoint whose side effect
             // is a resubmission loop rather than a single dbtx: it re-sends the
             // transaction into consensus at every session boundary
-            // (`consensus/api.rs:210-220`), so cancelling it ends that
-            // server-side safety net once the client's 60s budget elapses
-            // (`request_timeout_for_method`, `fedimint-connectors/src/iroh.rs:66-76`,
-            // grants the long-poll hour only to `await_` / `wait_` methods)
-            // instead of keeping it running across sessions. Funds are not at
-            // risk: the endpoint is reached through
+            // (`consensus/api.rs:210-220`), and cancelling the request ends that
+            // server-side safety net. This fires on the ORDINARY path, not just
+            // on timeout: `request_with_strategy_retry` returns as soon as
+            // `ThresholdConsensus` is satisfied and drops the losing futures, so
+            // the slowest peers are cancelled the moment a quorum answers - the
+            // client's 60s budget (`request_timeout_for_method`,
+            // `fedimint-connectors/src/iroh.rs:66-76`, grants the long-poll hour
+            // only to `await_` / `wait_` methods) is the slower of the two paths.
+            // Neither risks funds: by quorum the transaction is already headed
+            // for a session outcome, and the endpoint is reached through
             // `request_current_consensus_retry`, which retries indefinitely
             // client-side.
             //
@@ -1105,6 +1111,60 @@ mod tests {
             matches!(
                 close_reason,
                 iroh_next::endpoint::ConnectionError::ApplicationClosed(_)
+            ),
+            "connection ended with {close_reason:?} rather than the idle reap"
+        );
+        tokio::time::timeout(TEST_TIMEOUT, server_task)
+            .await
+            .context("connection task did not stop after the idle reap")???;
+        Ok(())
+    }
+
+    /// `close_for_idle_timeout` is a separate call per transport, so pin the
+    /// reap on `quinn` too rather than only arguing the two stacks behave the
+    /// same.
+    #[tokio::test]
+    async fn legacy_transport_reaps_an_idle_connection_but_spares_a_busy_one() -> anyhow::Result<()>
+    {
+        const TEST_IDLE_TIMEOUT: Duration = Duration::from_millis(50);
+
+        let pair = connected_pair_legacy().await?;
+        let request_limit = ConnectionRequestLimit::new(1);
+        let in_flight = request_limit.acquire(IrohApiVersion::Legacy).await;
+        let connection_permit = Arc::new(Semaphore::new(1))
+            .acquire_owned()
+            .await
+            .expect("test semaphore is open");
+        let server_connection = VersionedIrohConnection::Legacy(pair.server.clone());
+        let request_limit_for_server = request_limit.clone();
+        let server_task = fedimint_core::runtime::spawn("test-iroh-idle-reap-legacy", async move {
+            handle_iroh_api_connection(
+                TaskGroup::new(),
+                server_connection,
+                connection_permit,
+                request_limit_for_server,
+                TEST_IDLE_TIMEOUT,
+                IrohApiVersion::Legacy,
+                |_send_stream, _recv_stream, _permit| async { Ok(()) },
+            )
+            .await
+        });
+
+        assert!(
+            tokio::time::timeout(TEST_IDLE_TIMEOUT * 5, pair.client.closed())
+                .await
+                .is_err(),
+            "a connection with a request in flight was reaped"
+        );
+
+        drop(in_flight);
+        let close_reason = tokio::time::timeout(TEST_TIMEOUT, pair.client.closed())
+            .await
+            .context("idle connection was never reaped")?;
+        assert!(
+            matches!(
+                close_reason,
+                iroh::endpoint::ConnectionError::ApplicationClosed(_)
             ),
             "connection ended with {close_reason:?} rather than the idle reap"
         );
