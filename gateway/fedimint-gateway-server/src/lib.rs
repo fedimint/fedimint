@@ -1686,12 +1686,28 @@ impl Gateway {
             }
 
             for (federation_id, federation_config) in federations {
+                // A fee that predates the fee limits may be too large to announce. Skip
+                // that federation rather than failing the whole registration pass: this
+                // runs on the root task group at startup, so an error here would keep
+                // the gateway from booting at all.
+                let routing_fees = match RoutingFees::try_from(federation_config.lightning_fee) {
+                    Ok(routing_fees) => routing_fees,
+                    Err(err) => {
+                        warn!(
+                            target: LOG_GATEWAY,
+                            %federation_id,
+                            err = %err.fmt_compact(),
+                            "Skipping registration, the configured lightning fee cannot be announced. Set a smaller fee with `set_fees`."
+                        );
+                        continue;
+                    }
+                };
+
                 let fed_manager = self.federation_manager.read().await;
                 if let Some(client) = fed_manager.client(federation_id) {
                     let client_arc = client.clone().into_value();
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
-                    let federation_config = federation_config.clone();
                     let registrations =
                         self.registrations.clone().into_values().collect::<Vec<_>>();
 
@@ -1709,7 +1725,7 @@ impl Gateway {
                                     .try_register_with_federation(
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
-                                        federation_config.lightning_fee.into(),
+                                        routing_fees,
                                         lightning_context.clone(),
                                         registration.endpoint_url,
                                         registration.keypair.public_key(),
@@ -2165,6 +2181,12 @@ impl IAdminGateway for Gateway {
             _connector: ConnectorType::Tcp,
         };
 
+        // The default fees are validated at startup, so this only fails if the gateway
+        // is running with fees that predate that check. Refuse to join a federation
+        // whose fee could not be announced rather than persisting its config.
+        let routing_fees = RoutingFees::try_from(federation_config.lightning_fee)
+            .map_err(|err| AdminGatewayError::GatewayConfigurationError(err.to_string()))?;
+
         let mnemonic = Self::load_mnemonic(&self.gateway_db)
             .await
             .expect("mnemonic should be set");
@@ -2211,7 +2233,7 @@ impl IAdminGateway for Gateway {
                     // Route hints will be updated in the background
                     Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
-                    federation_config.lightning_fee.into(),
+                    routing_fees,
                     lightning_context.clone(),
                     registration.endpoint_url.clone(),
                     registration.keypair.public_key(),
@@ -2289,21 +2311,28 @@ impl IAdminGateway for Gateway {
                 transaction_fee.parts_per_million = transaction_ppm;
             }
 
-            let client =
-                federation_manager
-                    .client(federation_id)
-                    .ok_or(FederationNotConnected {
-                        federation_id_prefix: federation_id.to_prefix(),
-                    })?;
-            let client_config = client.value().config().await;
-            let contains_lnv2 = client_config
-                .modules
-                .values()
-                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
+            // Changing the fees of a federation the gateway is not connected to is
+            // rejected, as it was before the fee limits applied to every federation.
+            federation_manager
+                .client(federation_id)
+                .ok_or(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })?;
+
+            // The limits are enforced for every federation, not just the ones running
+            // LNv2. An unchecked fee is persisted verbatim and is converted into
+            // `RoutingFees` on every LNv1 payment and on every registration, including
+            // the one at startup, so a fee that does not fit into the `u32` components
+            // of `RoutingFees` would leave the gateway unable to boot.
+            let send_fees = lightning_fee.checked_add(transaction_fee).ok_or_else(|| {
+                AdminGatewayError::GatewayConfigurationError(format!(
+                    "Total Send fees overflowed, they may not exceed {}",
+                    PaymentFee::SEND_FEE_LIMIT
+                ))
+            })?;
 
             // Check if the lightning fee + transaction fee is higher than the send limit
-            let send_fees = lightning_fee + transaction_fee;
-            if contains_lnv2 && !send_fees.is_within(&PaymentFee::SEND_FEE_LIMIT) {
+            if !send_fees.is_within(&PaymentFee::SEND_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Total Send fees exceeded {}",
                     PaymentFee::SEND_FEE_LIMIT
@@ -2311,7 +2340,7 @@ impl IAdminGateway for Gateway {
             }
 
             // Check if the transaction fee is higher than the receive limit
-            if contains_lnv2 && !transaction_fee.is_within(&PaymentFee::RECEIVE_FEE_LIMIT) {
+            if !transaction_fee.is_within(&PaymentFee::RECEIVE_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Transaction fees exceeded RECEIVE LIMIT {}",
                     PaymentFee::RECEIVE_FEE_LIMIT
@@ -3047,6 +3076,14 @@ impl Gateway {
         let lightning_fee = fed_config.lightning_fee;
         let transaction_fee = fed_config.transaction_fee;
 
+        // This route is public and unauthenticated, so the sum of two fees stored
+        // before the fee limits applied must not be able to panic here.
+        let send_fee_default = lightning_fee.checked_add(transaction_fee).ok_or_else(|| {
+            PublicGatewayError::Unexpected(anyhow!(
+                "The configured fees of federation {federation_id} cannot be added"
+            ))
+        })?;
+
         Ok(self
             .public_key_v2(federation_id)
             .await
@@ -3054,7 +3091,7 @@ impl Gateway {
                 lightning_public_key: context.lightning_public_key,
                 lightning_alias: Some(context.lightning_alias.clone()),
                 module_public_key,
-                send_fee_default: lightning_fee + transaction_fee,
+                send_fee_default,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
                 // subsequent transactions spending the newly issued ecash
@@ -3514,10 +3551,24 @@ impl IGatewayClientV1 for Gateway {
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {
         let mut gateway_dbtx = self.gateway_db.begin_transaction_nc().await;
-        gateway_dbtx
+        let lightning_fee = gateway_dbtx
             .load_federation_config(federation_id)
-            .await
-            .map(|c| c.lightning_fee.into())
+            .await?
+            .lightning_fee;
+
+        // A fee stored before the fee limits applied may not be announceable. The
+        // caller treats `None` as a federation configuration error, which is
+        // preferable to panicking in the middle of a payment.
+        RoutingFees::try_from(lightning_fee)
+            .inspect_err(|err| {
+                warn!(
+                    target: LOG_GATEWAY,
+                    %federation_id,
+                    err = %err.fmt_compact(),
+                    "Configured lightning fee cannot be used. Set a smaller fee with `set_fees`."
+                );
+            })
+            .ok()
     }
 
     async fn get_client(&self, federation_id: &FederationId) -> Option<Spanned<ClientHandleArc>> {
