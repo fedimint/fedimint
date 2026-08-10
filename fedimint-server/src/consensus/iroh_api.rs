@@ -141,6 +141,51 @@ async fn acquire_iroh_api_permit(
         .expect("semaphore should not be closed")
 }
 
+/// A per-connection request limit: a semaphore plus the capacity it was built
+/// with, so the two can never disagree. Not `Clone` outside tests - sharing one
+/// across connections would leak connection slots, because an idle connection
+/// would never be reaped while another still has work outstanding.
+#[cfg_attr(test, derive(Clone))]
+struct ConnectionRequestLimit {
+    semaphore: Arc<Semaphore>,
+    capacity: usize,
+}
+
+impl ConnectionRequestLimit {
+    fn new(capacity: usize) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(capacity)),
+            capacity,
+        }
+    }
+
+    fn available_permits(&self) -> usize {
+        self.semaphore.available_permits()
+    }
+
+    fn has_in_flight_requests(&self) -> bool {
+        self.available_permits() < self.capacity
+    }
+
+    async fn acquire(&self, version: IrohApiVersion) -> tokio::sync::OwnedSemaphorePermit {
+        acquire_iroh_api_permit(
+            &self.semaphore,
+            self.capacity,
+            version.log_label(),
+            "request",
+        )
+        .await
+    }
+
+    #[cfg(test)]
+    async fn acquire_many(
+        &self,
+        permits: u32,
+    ) -> Result<tokio::sync::OwnedSemaphorePermit, tokio::sync::AcquireError> {
+        self.semaphore.clone().acquire_many_owned(permits).await
+    }
+}
+
 struct ActiveIrohApiConnection {
     _duration: HistogramTimer,
 }
@@ -179,13 +224,12 @@ async fn handle_incoming(
             return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Legacy);
         }
     };
-    let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
+    let request_limit = ConnectionRequestLimit::new(iroh_api_max_requests_per_connection);
     handle_iroh_api_connection(
         task_group,
         VersionedIrohConnection::Legacy(connection),
         connection_permit,
-        parallel_requests_limit,
-        iroh_api_max_requests_per_connection,
+        request_limit,
         IrohApiVersion::Legacy,
         move |send_stream, recv_stream, permit| {
             let api = api.clone();
@@ -475,15 +519,14 @@ async fn cancel_on_connection_close(
 
 /// Serves requests off one Iroh API connection until it goes away.
 ///
-/// `parallel_requests_limit` must be a semaphore built for this connection
-/// alone, holding `max_requests` permits: the idle reap below reads any
-/// outstanding permit as a request of this connection still in flight.
+/// `request_limit` must be built for this connection alone: the idle reap below
+/// reads any outstanding permit as a request of this connection still in
+/// flight.
 async fn handle_iroh_api_connection<Handler, HandlerFuture>(
     task_group: TaskGroup,
     connection: VersionedIrohConnection,
     _connection_permit: tokio::sync::OwnedSemaphorePermit,
-    parallel_requests_limit: Arc<Semaphore>,
-    max_requests: usize,
+    request_limit: ConnectionRequestLimit,
     version: IrohApiVersion,
     handle_stream: Handler,
 ) -> anyhow::Result<()>
@@ -510,7 +553,7 @@ where
         let (send_stream, recv_stream) = match accept_result {
             Ok(Ok(streams)) => streams,
             Ok(Err(err)) => return log_benign_connection_end_or_propagate(err, version),
-            Err(_) if parallel_requests_limit.available_permits() < max_requests => continue,
+            Err(_) if request_limit.has_in_flight_requests() => continue,
             Err(_) => {
                 IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
                 tracing::debug!(
@@ -524,13 +567,7 @@ where
             }
         };
 
-        let permit = acquire_iroh_api_permit(
-            &parallel_requests_limit,
-            max_requests,
-            version.log_label(),
-            "request",
-        )
-        .await;
+        let permit = request_limit.acquire(version).await;
         let connection_for_request = connection.clone();
         let handle_stream = handle_stream.clone();
         task_group.spawn_cancellable_silent(version.request_task_name(), async move {
@@ -846,13 +883,12 @@ async fn handle_incoming_next(
             return log_benign_connection_end_or_propagate(err.into(), IrohApiVersion::Next);
         }
     };
-    let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
+    let request_limit = ConnectionRequestLimit::new(iroh_api_max_requests_per_connection);
     handle_iroh_api_connection(
         task_group,
         VersionedIrohConnection::Next(connection),
         connection_permit,
-        parallel_requests_limit,
-        iroh_api_max_requests_per_connection,
+        request_limit,
         IrohApiVersion::Next,
         move |send_stream, recv_stream, permit| {
             let api = api.clone();
@@ -1003,7 +1039,7 @@ mod tests {
             .acquire_owned()
             .await
             .expect("test semaphore is open");
-        let request_limit = Arc::new(Semaphore::new(MAX_REQUESTS));
+        let request_limit = ConnectionRequestLimit::new(MAX_REQUESTS);
         let request_started = Arc::new(tokio::sync::Notify::new());
         let request_started_for_handler = request_started.clone();
         let server_connection = VersionedIrohConnection::Next(pair.server.clone());
@@ -1017,7 +1053,6 @@ mod tests {
                     server_connection,
                     connection_permit,
                     request_limit_for_server,
-                    MAX_REQUESTS,
                     IrohApiVersion::Next,
                     move |send_stream, mut recv_stream, permit| {
                         let request_started = request_started_for_handler.clone();
@@ -1052,13 +1087,13 @@ mod tests {
             connection_result.is_ok(),
             "connection task returned {connection_result:?}"
         );
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while request_limit.available_permits() != MAX_REQUESTS {
-                tokio::task::yield_now().await;
-            }
-        })
+        let _all_request_permits = tokio::time::timeout(
+            TEST_TIMEOUT,
+            request_limit.acquire_many(MAX_REQUESTS as u32),
+        )
         .await
-        .context("request permit remained held after the connection closed")?;
+        .context("request permit remained held after the connection closed")?
+        .context("request limit was closed")?;
 
         Ok(())
     }
@@ -1073,12 +1108,8 @@ mod tests {
         let (mut send_stream, mut recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
             .accept_bi()
             .await?;
-        let request_limit = Arc::new(Semaphore::new(MAX_REQUESTS));
-        let permit = request_limit
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("test semaphore is open");
+        let request_limit = ConnectionRequestLimit::new(MAX_REQUESTS);
+        let permit = request_limit.acquire(IrohApiVersion::Next).await;
         let handler_task =
             fedimint_core::runtime::spawn("test-iroh-partial-request-cancellation", async move {
                 let result =
@@ -1590,12 +1621,8 @@ mod tests {
         let (send_stream, recv_stream) = VersionedIrohConnection::Next(pair.server.clone())
             .accept_bi()
             .await?;
-        let request_limit = Arc::new(Semaphore::new(MAX_REQUESTS));
-        let permit = request_limit
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("test semaphore is open");
+        let request_limit = ConnectionRequestLimit::new(MAX_REQUESTS);
+        let permit = request_limit.acquire(IrohApiVersion::Next).await;
 
         handle_iroh_api_stream(
             send_stream,
