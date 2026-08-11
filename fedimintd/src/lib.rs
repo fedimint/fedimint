@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use bitcoin::Network;
-use clap::builder::BoolishValueParser;
+use clap::builder::{BoolishValueParser, RangedU64ValueParser};
 use clap::{ArgGroup, CommandFactory, FromArgMatches, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
@@ -248,11 +248,11 @@ struct ServerOpts {
     force_api_secrets: ApiSecrets,
 
     /// Maximum number of concurrent Iroh API connections
-    #[arg(long = "iroh-api-max-connections", env = FM_IROH_API_MAX_CONNECTIONS_ENV, default_value = "1000")]
+    #[arg(long = "iroh-api-max-connections", env = FM_IROH_API_MAX_CONNECTIONS_ENV, default_value = "1000", value_parser = RangedU64ValueParser::<usize>::new().range(1..))]
     iroh_api_max_connections: usize,
 
     /// Maximum number of parallel requests per Iroh API connection
-    #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
+    #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50", value_parser = RangedU64ValueParser::<usize>::new().range(1..))]
     iroh_api_max_requests_per_connection: usize,
 
     /// Enable the transitional Iroh 1.0 API endpoint alongside Iroh 0.35.
@@ -653,5 +653,20 @@ mod tests {
 
         assert!(opts.iroh_relays.is_empty());
         assert_eq!(opts.iroh_p2p_relays.len(), 1);
+    }
+
+    #[test]
+    fn iroh_api_limits_reject_zero() {
+        for flag in [
+            "--iroh-api-max-connections=0",
+            "--iroh-api-max-requests-per-connection=0",
+        ] {
+            let mut args = server_opts_args();
+            args.push(flag);
+            let Err(err) = ServerOpts::try_parse_from(args) else {
+                panic!("{flag} should fail argument parsing");
+            };
+            assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
+        }
     }
 }
