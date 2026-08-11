@@ -153,6 +153,18 @@ struct ConnectionRequestLimit {
 
 impl ConnectionRequestLimit {
     fn new(capacity: usize) -> Self {
+        // A zero capacity wedges the connection permanently rather than
+        // rejecting anything: `has_in_flight_requests()` stays false while
+        // `acquire()` never returns, so the accept loop parks on the first
+        // stream and the idle reap can never run again - holding a global
+        // connection slot for the life of the process. This runs per inbound
+        // connection, so it is only a last-resort internal invariant - the
+        // value is already gated by `ConnectionLimits::new` at startup and by
+        // the `--iroh-api-max-requests-per-connection` argument parser.
+        assert!(
+            capacity > 0,
+            "iroh API request limit must allow at least one request per connection"
+        );
         Self {
             semaphore: Arc::new(Semaphore::new(capacity)),
             capacity,
@@ -1052,6 +1064,14 @@ mod tests {
         })
     }
 
+    #[test]
+    #[should_panic(
+        expected = "iroh API request limit must allow at least one request per connection"
+    )]
+    fn connection_request_limit_rejects_zero_capacity() {
+        ConnectionRequestLimit::new(0);
+    }
+
     #[tokio::test]
     async fn connection_loop_cancels_request_and_releases_permit_when_connection_closes()
     -> anyhow::Result<()> {
@@ -1270,7 +1290,10 @@ mod tests {
             .await
             .context("handler remained parked on the partial request after STOP_SENDING")??;
         assert!(handler_result?.is_none());
-        assert_eq!(request_limit.available_permits(), MAX_REQUESTS);
+        // No permit assertion here: `read_iroh_api_request` only borrows the
+        // streams, so the permit is released by this test's own `drop`, not by
+        // anything under test. Permit release is pinned where the code owns it -
+        // see `iroh_api_stream_answers_a_request_and_releases_its_permit`.
         assert!(pair.server.close_reason().is_none());
         Ok(())
     }
