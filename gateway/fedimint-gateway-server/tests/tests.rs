@@ -16,7 +16,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::task::{TaskGroup, sleep_in_test, timeout};
 use fedimint_core::time::now;
 use fedimint_core::util::{NextOrPending, backoff_util, retry};
 use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
@@ -552,6 +552,89 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
             .gateway_subscribe_ln_receive(intercept_op)
             .await?
             .into_stream();
+        assert_eq!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
+        assert_matches!(
+            intercept_sub.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+        assert_eq!(
+            initial_gateway_balance.saturating_sub(invoice_amount),
+            gateway_client.get_balance_for_btc().await?
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// `/stop` drains the payments that are still in flight before shutting the
+/// gateway down. It must not hold the state write lock while it does, because
+/// finishing an incoming payment goes through `complete_htlc`, which loops on
+/// `get_lightning_context` and so needs to read that same lock. Holding it
+/// deadlocks the shutdown: the HTLC expires, its sender is refunded, and the
+/// ecash the gateway already spent buying the preimage is gone.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_shutdown_completes_in_flight_payment() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
+        dummy_module
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let desc = Description::new("description".to_string())?;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(desc),
+                None,
+                "test shutdown with a payment in flight",
+                lightning_gateway,
+            )
+            .await?;
+
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            incoming_expiry: u32::MAX,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let intercept_op = gateway_client
+            .get_first_module::<GatewayClientModule>()?
+            .gateway_handle_intercepted_htlc(htlc)
+            .await?;
+        let mut intercept_sub = gateway_client
+            .get_first_module::<GatewayClientModule>()?
+            .gateway_subscribe_ln_receive(intercept_op)
+            .await?
+            .into_stream();
+
+        // Shut down before the payment had a chance to finish, so the drain has to
+        // wait for a completion that calls `complete_htlc`. The task group is a
+        // throwaway one: only the draining half of the shutdown is under test.
+        timeout(
+            Duration::from_secs(30),
+            gateway.handle_shutdown_msg(TaskGroup::new()),
+        )
+        .await
+        .expect("Shutdown deadlocked while draining an in-flight payment")?;
+
+        // Shutting down is one-way, so the gateway accepts no further payments.
+        assert_eq!(
+            gateway.handle_get_info().await?.gateway_state,
+            "ShuttingDown"
+        );
+
+        // The drained payment ran to completion, so the gateway holds the preimage
+        // it paid the federation for.
         assert_eq!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
         assert_matches!(
             intercept_sub.ok().await?,

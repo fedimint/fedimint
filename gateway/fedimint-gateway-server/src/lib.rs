@@ -973,9 +973,17 @@ impl Gateway {
             lightning_alias,
             lightning_network,
         };
-        self.set_gateway_state(GatewayState::Running { lightning_context })
-            .await;
-        info!(target: LOG_GATEWAY, "Gateway is running");
+        if let GatewayState::ShuttingDown { .. } = self
+            .set_gateway_state(GatewayState::Running { lightning_context })
+            .await
+        {
+            info!(
+                target: LOG_GATEWAY,
+                "Reconnected to the lightning node while shutting down, not accepting payments"
+            );
+        } else {
+            info!(target: LOG_GATEWAY, "Gateway is running");
+        }
 
         if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             // Re-register the gateway with all federations after connecting to the
@@ -1320,9 +1328,36 @@ impl Gateway {
     }
 
     /// Helper function for atomically changing the Gateway's internal state.
-    async fn set_gateway_state(&self, state: GatewayState) {
+    ///
+    /// Shutting down is one-way. The lightning connection loop keeps running
+    /// while `handle_shutdown_msg` drains the payments that are still in
+    /// flight, and a reconnect in that window must not move the gateway back
+    /// into a state that accepts new payments. A reconnect may still hand over
+    /// a fresh `LightningContext`, which the drain needs to complete the
+    /// payments it is waiting for.
+    /// Returns the state that is in effect afterwards, which is not the
+    /// requested one if the gateway is shutting down.
+    async fn set_gateway_state(&self, state: GatewayState) -> GatewayState {
         let mut lock = self.state.write().await;
-        *lock = state;
+
+        if let GatewayState::ShuttingDown { .. } = *lock {
+            match state {
+                GatewayState::Running { lightning_context } => {
+                    *lock = GatewayState::ShuttingDown { lightning_context };
+                }
+                ignored => {
+                    info!(
+                        target: LOG_GATEWAY,
+                        ignored_state = %ignored,
+                        "Gateway is shutting down, ignoring state change"
+                    );
+                }
+            }
+        } else {
+            *lock = state;
+        }
+
+        lock.clone()
     }
 
     /// If the Gateway is connected to the Lightning node, returns the
@@ -1666,11 +1701,25 @@ impl Gateway {
     }
 
     /// Registers the gateway with each specified federation.
+    ///
+    /// Does nothing once the gateway is shutting down: the lightning connection
+    /// loop keeps reconnecting while `handle_shutdown_msg` drains the payments
+    /// that are still in flight, and re-announcing there would advertise a
+    /// route that is about to disappear, undoing the
+    /// `unannounce_from_all_federations` the shutdown just performed.
     async fn register_federations(
         &self,
         federations: &BTreeMap<FederationId, FederationConfig>,
         register_task_group: &TaskGroup,
     ) {
+        if let GatewayState::ShuttingDown { .. } = self.get_state().await {
+            info!(
+                target: LOG_GATEWAY,
+                "Gateway is shutting down, skipping federation registration"
+            );
+            return;
+        }
+
         if let Ok(lightning_context) = self.get_lightning_context().await {
             let route_hints = lightning_context
                 .lnrpc
@@ -2637,11 +2686,27 @@ impl IAdminGateway for Gateway {
     /// Instructs the gateway to shutdown, but only after all incoming payments
     /// have been handled.
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        // Take the write lock on the state so that no additional payments are processed
-        let mut state_guard = self.state.write().await;
-        if let GatewayState::Running { lightning_context } = state_guard.clone() {
-            *state_guard = GatewayState::ShuttingDown { lightning_context };
+        // Take the write lock on the state so that no additional payments are
+        // processed. `ShuttingDown` is terminal, so the state cannot move back to
+        // `Running` once this returns.
+        let was_running = {
+            let mut state_guard = self.state.write().await;
+            if let GatewayState::Running { lightning_context } = state_guard.clone() {
+                *state_guard = GatewayState::ShuttingDown { lightning_context };
+                true
+            } else {
+                false
+            }
+        };
 
+        // The guard has to be released before waiting. Finishing an incoming payment
+        // that already bought the preimage from the federation goes through
+        // `complete_htlc`, which loops on `get_lightning_context` and would block on
+        // the write guard forever. `/stop` would never return, the HTLC would expire,
+        // and the gateway would be left having spent ecash for a payment its sender
+        // gets refunded. `get_lightning_context` accepts `ShuttingDown`, so the
+        // in-flight payments can complete while the gateway drains.
+        if was_running {
             self.federation_manager
                 .read()
                 .await
