@@ -1078,7 +1078,7 @@ impl ConsensusEngine {
                     "Minor consensus version mismatch: unexpected consensus item type: {variant}"
                 );
 
-                panic!("Unexpected consensus item type: {variant}")
+                bail!("Unexpected consensus item type: {variant}")
             }
         }
     }
