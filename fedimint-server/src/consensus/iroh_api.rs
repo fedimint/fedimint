@@ -108,10 +108,25 @@ impl IrohApiState {
             consensus,
             core: core_api,
             modules: module_api,
-            parallel_connections_limit: Arc::new(Semaphore::new(limits.max_connections)),
+            parallel_connections_limit: validate_limits_and_build_connection_semaphore(limits),
             limits,
         })
     }
+}
+
+/// `ConnectionLimits` keeps public fields for downstream source compatibility,
+/// so a struct literal can bypass `ConnectionLimits::new`. Assert again when
+/// constructing the iroh API state.
+fn validate_limits_and_build_connection_semaphore(limits: ConnectionLimits) -> Arc<Semaphore> {
+    assert!(
+        limits.max_connections > 0,
+        "iroh API connection limit must allow at least one connection"
+    );
+    assert!(
+        limits.max_requests_per_connection > 0,
+        "iroh API request limit must allow at least one request per connection"
+    );
+    Arc::new(Semaphore::new(limits.max_connections))
 }
 
 async fn acquire_iroh_api_permit(
@@ -154,8 +169,9 @@ impl ConnectionRequestLimit {
         // stream and the idle reap can never run again - holding a global
         // connection slot for the life of the process. This runs per inbound
         // connection, so it is only a last-resort internal invariant - the
-        // value is already gated by `ConnectionLimits::new` at startup and by
-        // the `--iroh-api-max-requests-per-connection` argument parser.
+        // value is already gated by `ConnectionLimits::new`, again at iroh API
+        // startup, and by the `--iroh-api-max-requests-per-connection` argument
+        // parser.
         assert!(
             capacity > 0,
             "iroh API request limit must allow at least one request per connection"
@@ -1018,6 +1034,28 @@ mod tests {
     )]
     fn connection_request_limit_rejects_zero_capacity() {
         ConnectionRequestLimit::new(0);
+    }
+
+    /// Limits built by struct literal skip `ConnectionLimits::new`, so pin the
+    /// startup gate that catches them.
+    #[test]
+    #[should_panic(expected = "iroh API connection limit must allow at least one connection")]
+    fn startup_rejects_zero_max_connections() {
+        validate_limits_and_build_connection_semaphore(ConnectionLimits {
+            max_connections: 0,
+            max_requests_per_connection: 50,
+        });
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "iroh API request limit must allow at least one request per connection"
+    )]
+    fn startup_rejects_zero_max_requests_per_connection() {
+        validate_limits_and_build_connection_semaphore(ConnectionLimits {
+            max_connections: 1000,
+            max_requests_per_connection: 0,
+        });
     }
 
     #[tokio::test]
