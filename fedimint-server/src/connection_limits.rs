@@ -1,14 +1,16 @@
 /// Configuration for connection and request limits
 ///
-/// The fields are crate-private so `new` is the only way to build one: a zero
-/// limit wedges the iroh API rather than rejecting anything, so the invariant
-/// has to hold for every caller, not just the ones that go through the CLI.
+/// A zero limit wedges the iroh API rather than rejecting anything, so `new`
+/// validates both values. The fields remain public for downstream source
+/// compatibility, so the iroh API asserts the same invariant again during its
+/// startup when the state is constructed in case a struct literal bypasses
+/// `new`.
 #[derive(Debug, Clone, Copy)]
 pub struct ConnectionLimits {
     /// Maximum number of concurrent connections
-    pub(crate) max_connections: usize,
+    pub max_connections: usize,
     /// Maximum number of parallel requests per connection
-    pub(crate) max_requests_per_connection: usize,
+    pub max_requests_per_connection: usize,
 }
 
 impl ConnectionLimits {
