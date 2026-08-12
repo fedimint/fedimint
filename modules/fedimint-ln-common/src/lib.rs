@@ -20,6 +20,24 @@ pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
 
+/// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
+///
+/// Fresh intercepted HTLCs must have more remaining blocks than this margin.
+/// The value matches the route-hint delta advertised by pre-upgrade clients so
+/// that their invoices remain payable; once the deployed client fleet
+/// advertises [`LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA`], enforcement can
+/// be raised towards it.
+pub const LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN: u16 = 30;
+
+/// Route-hint CLTV delta advertised in newly created LNv1 invoices.
+///
+/// Deliberately larger than the enforced
+/// [`LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN`]: new invoices reserve enough
+/// time for federation funding, threshold decryption, Lightning settlement,
+/// and on-chain recovery, so a future release can raise enforcement to this
+/// value without breaking payments.
+pub const LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA: u16 = 144;
+
 use std::collections::BTreeMap;
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
@@ -43,6 +61,10 @@ use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
+/// The federation's aggregate public key, as committed to by a gateway
+/// registration proof. Re-exported so callers can verify proofs without
+/// depending on `threshold_crypto` directly.
+pub use threshold_crypto::PublicKey as FederationPublicKey;
 pub use {bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
@@ -50,7 +72,20 @@ use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, Preimage
 use crate::route_hints::RouteHint;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
+
+/// From this module consensus version on, a contract account is funded exactly
+/// once and no offer can be created for a payment hash whose incoming contract
+/// account already exists.
+///
+/// Contract ids do not commit to the full contract state — an incoming
+/// contract's id is its payment hash and an outgoing contract's id omits the
+/// amount — so before this version a second funding output for the same id
+/// topped up the existing account while keeping its state. For an incoming
+/// contract whose preimage decryption already reached a terminal state, that
+/// let the first contract's gateway or preimage holder sweep the new funds.
+pub const CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
+    ModuleConsensusVersion::new(2, 1);
 
 extensible_associated_module_type!(
     LightningInput,
@@ -248,6 +283,25 @@ impl std::fmt::Display for LightningOutputOutcomeV0 {
     }
 }
 
+/// Proof that a gateway registration was authorized by the holder of the
+/// secret key behind [`LightningGateway::gateway_id`].
+///
+/// Optional for backwards compatibility: gateways predating this field register
+/// unsigned, and guardians keep accepting them. A registration carrying a valid
+/// proof cannot be overwritten by an unsigned one, so a gateway becomes immune
+/// to identity hijacking as soon as it upgrades, without needing any other
+/// gateway, guardian or client to upgrade with it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct GatewayRegistrationAuth {
+    /// Strictly increasing per gateway, so a captured signature cannot be
+    /// replayed to roll a registration back to stale settings. Guardians only
+    /// ever compare this against the value they already stored, never against
+    /// their own clock, so gateway and guardian clocks need not agree.
+    pub nonce: u64,
+    /// Schnorr signature over [`create_gateway_registration_message`].
+    pub signature: Signature,
+}
+
 /// Information about a gateway that is stored locally and expires based on
 /// local system time
 ///
@@ -261,6 +315,10 @@ pub struct LightningGatewayRegistration {
     /// Limits the validity of the announcement to allow updates, anchored to
     /// local system time
     pub valid_until: SystemTime,
+    /// Proof of possession of `info.gateway_id`, absent for registrations made
+    /// by gateways that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<GatewayRegistrationAuth>,
 }
 
 impl Encodable for LightningGatewayRegistration {
@@ -302,6 +360,7 @@ impl LightningGatewayRegistration {
                 .duration_since(fedimint_core::time::now())
                 .unwrap_or_default(),
             vetted: self.vetted,
+            auth: self.auth,
         }
     }
 
@@ -326,16 +385,54 @@ pub struct LightningGatewayAnnouncement {
     /// local system time to allow sharing between nodes with unsynchronized
     /// clocks
     pub ttl: Duration,
+    /// Proof of possession of `info.gateway_id`, absent for gateways that
+    /// predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<GatewayRegistrationAuth>,
 }
 
+/// Upper bound guardians place on a registration's lifetime. Gateways announce
+/// a TTL two orders of magnitude below this, so it only ever binds on
+/// announcements that are trying to squat a `gateway_id` indefinitely.
+pub const MAX_GATEWAY_REGISTRATION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+
 impl LightningGatewayAnnouncement {
+    /// Whether this announcement's proof of possession holds, treating an
+    /// announcement without one as valid — unsigned registrations are still
+    /// accepted, they simply earn no preference.
+    ///
+    /// Callers must apply this *before* preferring signed announcements over
+    /// unsigned ones. A proof that is merely present is worthless: anyone can
+    /// attach a garbage signature to someone else's `gateway_id`, so preferring
+    /// on presence alone lets a single peer evict every honest unsigned
+    /// announcement for a gateway.
+    pub fn registration_proof_is_valid(&self, federation_public_key: PublicKey) -> bool {
+        let Some(auth) = &self.auth else {
+            return true;
+        };
+
+        let msg =
+            create_gateway_registration_message(federation_public_key, auth.nonce, &self.info);
+
+        auth.signature
+            .verify(&msg, &self.info.gateway_id.x_only_public_key().0)
+            .is_ok()
+    }
+
     /// Create a registration from this announcement that is anchored to the
     /// local system time.
+    ///
+    /// The TTL is clamped to [`MAX_GATEWAY_REGISTRATION_TTL`], which also keeps
+    /// the addition below from having to handle an attacker-supplied
+    /// [`Duration`] large enough to overflow [`SystemTime`].
     pub fn anchor(self) -> LightningGatewayRegistration {
+        let ttl = self.ttl.min(MAX_GATEWAY_REGISTRATION_TTL);
+
         LightningGatewayRegistration {
             info: self.info,
             vetted: self.vetted,
-            valid_until: fedimint_core::time::now() + self.ttl,
+            valid_until: fedimint_core::time::now() + ttl,
+            auth: self.auth,
         }
     }
 }
@@ -373,6 +470,7 @@ pub struct LightningGateway {
 pub enum LightningConsensusItem {
     DecryptPreimage(ContractId, PreimageDecryptionShare),
     BlockCount(u64),
+    ModuleConsensusVersion(ModuleConsensusVersion),
     #[encodable_default]
     Default {
         variant: u64,
@@ -387,6 +485,13 @@ impl std::fmt::Display for LightningConsensusItem {
                 write!(f, "LN Decryption Share - contract_id: {contract_id}")
             }
             LightningConsensusItem::BlockCount(count) => write!(f, "LN Block Count {count}"),
+            LightningConsensusItem::ModuleConsensusVersion(version) => {
+                write!(
+                    f,
+                    "LN Consensus Version {}.{}",
+                    version.major, version.minor
+                )
+            }
             LightningConsensusItem::Default { variant, .. } => {
                 write!(f, "LN Unknown - variant={variant}")
             }
@@ -626,6 +731,16 @@ pub enum LightningOutputError {
     InvalidCancellationSignature,
     #[error("The lightning output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
+    // New variants have to be appended, the `Encodable` derive assigns indices by
+    // declaration order and clients decode this type from the API response.
+    #[error("The incoming contract {0} has already been funded")]
+    ContractAlreadyFunded(ContractId),
+    #[error("An incoming contract account for the offer's payment hash already exists: {0}")]
+    OfferForFundedContract(ContractId),
+    #[error("The contract's encrypted preimage does not match the offer's")]
+    EncryptedPreimageMismatch,
+    #[error("An incoming contract must be funded with a pending decryption")]
+    PreDecryptedIncomingContract,
 }
 
 /// Data needed to pay an invoice
@@ -698,6 +813,34 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
 pub struct RemoveGatewayRequest {
     pub gateway_id: secp256k1::PublicKey,
     pub signatures: BTreeMap<PeerId, Signature>,
+}
+
+/// Creates a message to be signed by the gateway's private key to prove that a
+/// registration was authorized by the holder of `info.gateway_id`. Message is
+/// defined as:
+///
+/// msg = sha256(tag + federation_public_key + nonce + info)
+///
+/// Tag is always `register-gateway`. Binding the federation public key stops a
+/// registration being replayed at a different federation, and the nonce stops
+/// an old registration being replayed at the same one.
+///
+/// Note this deliberately covers `info` but *not* the announcement's `ttl` or
+/// `vetted` flag. `ttl` is recomputed from `valid_until` every time a
+/// registration is read back ([`LightningGatewayRegistration::unanchor`]), so a
+/// signature over it would not survive being served to clients; it is bounded
+/// by [`MAX_GATEWAY_REGISTRATION_TTL`] instead. `vetted` is not the gateway's
+/// to assert, and guardians clear it on registration.
+pub fn create_gateway_registration_message(
+    federation_public_key: PublicKey,
+    nonce: u64,
+    info: &LightningGateway,
+) -> Message {
+    let mut message_preimage = "register-gateway".as_bytes().to_vec();
+    message_preimage.append(&mut federation_public_key.consensus_encode_to_vec());
+    message_preimage.append(&mut nonce.consensus_encode_to_vec());
+    message_preimage.append(&mut info.consensus_encode_to_vec());
+    Message::from_digest(*sha256::Hash::hash(message_preimage.as_slice()).as_ref())
 }
 
 /// Creates a message to be signed by the Gateway's private key for the purpose

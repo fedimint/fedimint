@@ -387,6 +387,17 @@ impl IdxRange {
         self.into_iter().count()
     }
 
+    /// Number of indexes in the range, or `None` if the range is descending or
+    /// does not fit into a `usize`.
+    ///
+    /// Ranges are deserialized verbatim from untrusted API requests, so a
+    /// caller validating one has to go through this rather than
+    /// [`Self::count`], which reports a descending range as empty and panics on
+    /// `usize` overflow.
+    pub fn checked_count(self) -> Option<usize> {
+        usize::try_from(self.end.checked_sub(self.start)?).ok()
+    }
+
     pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
         range.end().checked_add(1).map(|end| Self {
             start: *range.start(),
@@ -439,6 +450,11 @@ impl OutPointRange {
 
     pub fn count(self) -> usize {
         self.idx_range.count()
+    }
+
+    /// See [`IdxRange::checked_count`].
+    pub fn checked_count(self) -> Option<usize> {
+        self.idx_range.checked_count()
     }
 
     pub fn start_out_point(self) -> OutPoint {
@@ -535,6 +551,29 @@ impl Feerate {
     pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
         let sats = weight_to_vbytes(weight) * self.sats_per_kvb / 1000;
         bitcoin::Amount::from_sat(sats)
+    }
+
+    /// Fee for a transaction of the given weight, reproducing the wrapping the
+    /// unchecked multiplication used to do in release profiles.
+    ///
+    /// Consensus behaviour must not depend on the build profile, and
+    /// [`Self::calculate_fee`]'s `*` panics with overflow checks on and wraps
+    /// without them. Sessions ordered before the fee computation was checked
+    /// have to replay as release binaries ran them, so the wrap is explicit.
+    pub fn wrapping_calculate_fee(&self, weight: u64) -> bitcoin::Amount {
+        let sats = weight_to_vbytes(weight).wrapping_mul(self.sats_per_kvb) / 1000;
+        bitcoin::Amount::from_sat(sats)
+    }
+
+    /// Fee for a transaction of the given weight, or `None` if the rate and
+    /// weight do not describe a fee that can exist on chain.
+    ///
+    /// [`Self::calculate_fee`] multiplies unchecked, which wraps to an
+    /// arbitrarily small fee in release profiles. Callers that decide whether
+    /// to accept a transaction must use this instead.
+    pub fn checked_calculate_fee(&self, weight: u64) -> Option<bitcoin::Amount> {
+        let sats = weight_to_vbytes(weight).checked_mul(self.sats_per_kvb)? / 1000;
+        (sats <= bitcoin::Amount::MAX_MONEY.to_sat()).then(|| bitcoin::Amount::from_sat(sats))
     }
 }
 

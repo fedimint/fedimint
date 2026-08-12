@@ -26,7 +26,7 @@ use fedimint_core::{
 };
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::warn;
@@ -490,6 +490,61 @@ where
             .collect()
     }
 
+    /// Returns this module's currently active state machines for the operation.
+    pub async fn get_own_operation_active_states(
+        &self,
+        operation_id: OperationId,
+    ) -> Vec<(M::States, ActiveStateMeta)> {
+        let db = self.global_db();
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        self.client
+            .get()
+            .read_operation_active_states(operation_id, self.module_instance_id, &mut dbtx)
+            .await
+            .map(|(key, meta)| {
+                (
+                    Clone::clone(
+                        key.state
+                            .as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("incorrect output type passed to module plugin"),
+                    ),
+                    meta,
+                )
+            })
+            .collect()
+            .await
+    }
+
+    /// Returns this module's previously active state machines for the
+    /// operation.
+    pub async fn get_own_operation_inactive_states(
+        &self,
+        operation_id: OperationId,
+    ) -> Vec<(M::States, InactiveStateMeta)> {
+        let db = self.global_db();
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        self.client
+            .get()
+            .read_operation_inactive_states(operation_id, self.module_instance_id, &mut dbtx)
+            .await
+            .map(|(key, meta)| {
+                (
+                    Clone::clone(
+                        key.state
+                            .as_any()
+                            .downcast_ref::<M::States>()
+                            .expect("incorrect output type passed to module plugin"),
+                    ),
+                    meta,
+                )
+            })
+            .collect()
+            .await
+    }
+
     pub async fn get_config(&self) -> ClientConfig {
         self.client.get().config().await
     }
@@ -687,6 +742,26 @@ where
             .get()
             .executor()
             .add_state_machines_dbtx(&mut dbtx.global_dbtx(self.global_dbtx_access_token), states)
+            .await
+    }
+
+    /// Reads an operation log entry within an ongoing database transaction.
+    ///
+    /// Unlike [`Self::get_operation`] this observes writes made earlier in
+    /// `dbtx`, which is what a caller needs to decide atomically whether it is
+    /// about to create an operation that already exists.
+    pub async fn get_operation_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Option<oplog::OperationLogEntry> {
+        self.client
+            .get()
+            .operation_log()
+            .get_operation_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+            )
             .await
     }
 

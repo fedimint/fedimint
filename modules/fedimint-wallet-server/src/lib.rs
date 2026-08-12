@@ -54,7 +54,7 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_ENABLE_MODULE_WALLET_ENV, is_automatic_consensus_version_voting_disabled,
-    is_env_var_set_opt, is_rbf_withdrawal_enabled, is_running_in_test_env,
+    is_env_var_set_opt, is_running_in_test_env, next_poll_delay,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -69,7 +69,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
-    get_network_for_address, push_db_key_items, push_db_pair_items,
+    get_network_for_address, push_db_key_items, push_db_pair_items, weight_to_vbytes,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -90,8 +90,8 @@ use fedimint_wallet_common::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    MODULE_CONSENSUS_VERSION, Rbf, RecoveryItem, UnknownWalletInputVariantError, WalletInputError,
-    WalletOutputError, WalletOutputV0,
+    CHECKED_PEG_OUT_FEE_MODULE_CONSENSUS_VERSION, MODULE_CONSENSUS_VERSION, Rbf, RecoveryItem,
+    UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
 };
 use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
@@ -116,11 +116,17 @@ use crate::db::{
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2,
+    UnspentTxOutPrefix, migrate_to_v1, migrate_to_v2, migrate_to_v3,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
 mod metrics;
+
+/// Output index of the change output in every peg-out transaction we build.
+///
+/// `StatelessWallet::create_tx` always emits `[destination, change]`, and we
+/// always pay ourselves change to avoid losing value to dust.
+pub const PEG_OUT_CHANGE_VOUT: u32 = 1;
 
 #[derive(Debug, Clone)]
 pub struct WalletInit;
@@ -474,6 +480,10 @@ impl ServerModuleInit for WalletInit {
             DatabaseVersion(1),
             Box::new(|ctx| migrate_to_v2(ctx).boxed()),
         );
+        migrations.insert(
+            DatabaseVersion(2),
+            Box::new(|ctx| migrate_to_v3(ctx).boxed()),
+        );
         migrations
     }
 
@@ -710,7 +720,7 @@ impl ServerModule for Wallet {
                 );
             }
             WalletConsensusItem::Default { variant, .. } => {
-                panic!("Received wallet consensus item with unknown variant {variant}");
+                bail!("Unknown wallet consensus item received, variant={variant}");
             }
         }
 
@@ -769,6 +779,16 @@ impl ServerModule for Wallet {
             }
         };
 
+        // `ClaimedPegInOutpoint` only covers outpoints that reached us as peg-ins, but
+        // `UTXOKey` also holds outputs we recognized as our own, which never pass
+        // through this path. Crediting one of those would overwrite a tracked UTXO, and
+        // the write below panics rather than overwrite, which in consensus is a halt
+        // rather than a rejection. Refuse the input instead, for any outpoint we
+        // already track, however it got there.
+        if dbtx.get_value(&UTXOKey(outpoint)).await.is_some() {
+            return Err(WalletInputError::PegInAlreadyClaimed);
+        }
+
         if dbtx
             .insert_entry(&ClaimedPegInOutpointKey(outpoint), &())
             .await
@@ -822,17 +842,12 @@ impl ServerModule for Wallet {
         // In 0.4.0 we began preventing RBF withdrawals. Once we reach EoL support
         // for 0.4.0, we can safely remove RBF withdrawal logic.
         // see: https://github.com/fedimint/fedimint/issues/5453
+        //
+        // Rejection must not depend on per-guardian configuration: any
+        // conditional acceptance here lets guardians diverge on whether a
+        // transaction is valid, forking consensus.
         if let WalletOutputV0::Rbf(_) = output {
-            // This exists as an escape hatch for any federations that successfully
-            // processed an RBF withdrawal due to having a single UTXO owned by the
-            // federation. If a peer needs to resync the federation's history, they can
-            // enable this variable until they've successfully synced, then restart with
-            // this disabled.
-            if is_rbf_withdrawal_enabled() {
-                warn!(target: LOG_MODULE_WALLET, "processing rbf withdrawal");
-            } else {
-                return Err(DEPRECATED_RBF_ERROR);
-            }
+            return Err(DEPRECATED_RBF_ERROR);
         }
 
         let change_tweak = self.consensus_nonce(dbtx).await;
@@ -884,6 +899,20 @@ impl ServerModule for Wallet {
             dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
         }
 
+        // Our own change output pays to the peg-in descriptor, so it is
+        // indistinguishable from a user deposit. Record it as claimed now, in the same
+        // dbtx that spends the inputs, so it is never a peg-in candidate. Doing this at
+        // confirmation time instead would leave it claimable while the transaction is
+        // in flight.
+        dbtx.insert_entry(
+            &ClaimedPegInOutpointKey(bitcoin::OutPoint {
+                txid,
+                vout: PEG_OUT_CHANGE_VOUT,
+            }),
+            &(),
+        )
+        .await;
+
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .await;
 
@@ -902,6 +931,50 @@ impl ServerModule for Wallet {
             amounts: Amounts::new_bitcoin(amount),
             fees: Amounts::new_bitcoin(fee),
         })
+    }
+
+    /// Reject a peg-out whose declared fee rate cannot produce a fee that
+    /// exists on chain.
+    ///
+    /// [`Feerate::calculate_fee`] multiplies the declared rate by the
+    /// transaction's virtual size without checking for overflow, so a rate near
+    /// `u64::MAX / vbytes` wraps to an arbitrarily small fee. Such a peg-out
+    /// passes [`StatelessWallet::validate_tx`], which compares the *declared*
+    /// rate against the consensus and relay floors and never the computed fee,
+    /// and is then signed and broadcast with a fee too low to confirm. Its
+    /// inputs leave [`UTXOKey`] the moment the peg-out is accepted and only
+    /// return once the transaction confirms, so they are stranded for as long
+    /// as it does not — and selection spends largest-first.
+    ///
+    /// This is enforced as submission policy rather than in
+    /// [`ServerModule::process_output`] because tightening the latter would
+    /// change transaction validity. Release builds wrap rather than panic here,
+    /// so such peg-outs were accepted historically and rejecting them in
+    /// consensus needs a module consensus version bump. As policy it is only as
+    /// strong as the weakest guardian.
+    #[doc(hidden)]
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a WalletOutput,
+        _out_point: OutPoint,
+    ) -> Result<(), WalletOutputError> {
+        let fees = match output.ensure_v0_ref()? {
+            WalletOutputV0::PegOut(peg_out) => peg_out.fees,
+            WalletOutputV0::Rbf(rbf) => rbf.fees,
+        };
+
+        let fee_sats = weight_to_vbytes(fees.total_weight)
+            .checked_mul(fees.fee_rate.sats_per_kvb)
+            .map(|sats| sats / 1000);
+
+        // A fee larger than the money supply can no more be funded than an
+        // amount larger than it can, which is what this variant already reports
+        // for the peg-out amount itself.
+        match fee_sats {
+            Some(sats) if sats <= bitcoin::Amount::MAX_MONEY.to_sat() => Ok(()),
+            _ => Err(WalletOutputError::NotEnoughSpendableUTXO),
+        }
     }
 
     async fn output_status(
@@ -987,7 +1060,10 @@ impl ServerModule for Wallet {
                         module.available_utxos(&mut dbtx).await,
                         feerate,
                         &dummy_tweak,
-                        None
+                        None,
+                        // A quote is not consensus, so it can always refuse a
+                        // rate whose fee could not exist on chain.
+                        FeeArithmetic::Checked
                     );
 
                     match tx {
@@ -1636,6 +1712,14 @@ impl Wallet {
         output: &WalletOutputV0,
         change_tweak: &[u8; 33],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
+        let fee_arithmetic = if CHECKED_PEG_OUT_FEE_MODULE_CONSENSUS_VERSION
+            <= self.consensus_module_consensus_version(dbtx).await
+        {
+            FeeArithmetic::Checked
+        } else {
+            FeeArithmetic::Wrapping
+        };
+
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
@@ -1648,6 +1732,7 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
                 None,
+                fee_arithmetic,
             ),
             WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
@@ -1663,6 +1748,7 @@ impl Wallet {
                     tx.fees.fee_rate,
                     change_tweak,
                     Some(rbf.clone()),
+                    fee_arithmetic,
                 )
             }
         }
@@ -1947,12 +2033,7 @@ impl Wallet {
                     break;
                 }
 
-                if is_running_in_test_env() {
-                    // Even in tests we don't want to spam the federation with requests about it
-                    sleep(Duration::from_secs(5)).await;
-                } else {
-                    sleep(Duration::from_mins(10)).await;
-                }
+                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
             }
         });
         receiver
@@ -2012,6 +2093,35 @@ pub async fn broadcast_pending_tx(
                     "Error broadcasting peg-out transaction"
                 );
             }
+        }
+    }
+}
+
+/// Whether peg-out fee computation rejects a rate that cannot produce a fee
+/// which exists on chain.
+///
+/// Pre-2.3 sessions accepted such peg-outs -- the multiplication wrapped in
+/// release profiles -- so replaying them has to reproduce that, and the gate
+/// cannot simply be removed once every federation has upgraded.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum FeeArithmetic {
+    /// Pre-2.3: multiply unchecked, as historic sessions did.
+    Wrapping,
+    /// From 2.3 on: reject a rate whose fee cannot exist on chain.
+    Checked,
+}
+
+impl FeeArithmetic {
+    fn calculate_fee(
+        self,
+        fee_rate: Feerate,
+        weight: u64,
+    ) -> Result<bitcoin::Amount, WalletOutputError> {
+        match self {
+            FeeArithmetic::Wrapping => Ok(fee_rate.wrapping_calculate_fee(weight)),
+            FeeArithmetic::Checked => fee_rate
+                .checked_calculate_fee(weight)
+                .ok_or(WalletOutputError::NotEnoughSpendableUTXO),
         }
     }
 }
@@ -2093,10 +2203,21 @@ impl StatelessWallet<'_> {
         mut fee_rate: Feerate,
         change_tweak: &[u8; 33],
         rbf: Option<Rbf>,
+        fee_arithmetic: FeeArithmetic,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
+        // `peg_out_amount` arrives unvalidated from whoever asked for the peg-out,
+        // and `bitcoin::Amount` arithmetic panics on overflow. An amount that
+        // cannot exist on chain can never be funded by our UTXOs anyway, so reject
+        // it before doing any arithmetic with it.
+        if peg_out_amount > bitcoin::Amount::MAX_MONEY {
+            return Err(WalletOutputError::NotEnoughSpendableUTXO);
+        }
+
         // Add the rbf fees to the existing tx fees
         if let Some(rbf) = &rbf {
-            fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
+            fee_rate.sats_per_kvb = fee_rate
+                .sats_per_kvb
+                .saturating_add(rbf.fees.fee_rate.sats_per_kvb);
         }
 
         // When building a transaction we need to take care of two things:
@@ -2135,22 +2256,34 @@ impl StatelessWallet<'_> {
         // Finally we initialize our accumulator for selected input amounts
         let mut total_selected_value = bitcoin::Amount::from_sat(0);
         let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
-        let mut fees = fee_rate.calculate_fee(total_weight);
+        let mut fees = fee_arithmetic.calculate_fee(fee_rate, total_weight)?;
 
-        while total_selected_value < peg_out_amount + change_script.minimal_non_dust() + fees {
-            match included_utxos.pop() {
-                Some((utxo_key, utxo)) => {
-                    total_selected_value += utxo.amount;
-                    total_weight += max_input_weight;
-                    fees = fee_rate.calculate_fee(total_weight);
-                    selected_utxos.push((utxo_key, utxo));
-                }
-                _ => return Err(WalletOutputError::NotEnoughSpendableUTXO), // Not enough UTXOs
+        loop {
+            // Fees grow with every selected input and are not bounded by `MAX_MONEY`,
+            // so the target has to be recomputed with checked arithmetic on every
+            // iteration. A target we cannot even represent is by definition more than
+            // our UTXOs can cover.
+            let target = peg_out_amount
+                .checked_add(change_script.minimal_non_dust())
+                .and_then(|target| target.checked_add(fees))
+                .ok_or(WalletOutputError::NotEnoughSpendableUTXO)?;
+
+            if total_selected_value >= target {
+                break;
             }
+
+            let Some((utxo_key, utxo)) = included_utxos.pop() else {
+                return Err(WalletOutputError::NotEnoughSpendableUTXO); // Not enough UTXOs
+            };
+
+            total_selected_value += utxo.amount;
+            total_weight += max_input_weight;
+            fees = fee_arithmetic.calculate_fee(fee_rate, total_weight)?;
+            selected_utxos.push((utxo_key, utxo));
         }
 
         // We always pay ourselves change back to ensure that we don't lose anything due
-        // to dust
+        // to dust. The change output is always at index `PEG_OUT_CHANGE_VOUT`.
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {
@@ -2435,8 +2568,177 @@ mod tests {
 
     use crate::common::PegInDescriptor;
     use crate::{
-        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
+        CompressedPublicKey, FeeArithmetic, OsRng, SpendableUTXO, StatelessWallet, UTXOKey,
+        WalletOutputError,
     };
+
+    /// A peg-out recipient is chosen by the user, and nothing stops them from
+    /// picking the very change script the peg-out will use — change tweaks are
+    /// `nonce_from_idx` of a counter, so they are publicly derivable. The
+    /// resulting transaction carries the change script on two outputs, and
+    /// `recognize_change_utxo` matches on script across all of them, so it
+    /// tracks an output other than [`PEG_OUT_CHANGE_VOUT`]. Recording a fixed
+    /// change vout as claimed therefore does not cover everything `UTXOKey`
+    /// ends up holding; `process_input` has to reject on `UTXOKey` itself.
+    #[test]
+    fn peg_out_destination_can_collide_with_the_change_script() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let (secret_key, _) = secp.generate_keypair(&mut OsRng);
+
+        let wallet = StatelessWallet {
+            descriptor: &descriptor,
+            secret_key: &secret_key,
+            secp: &secp,
+        };
+
+        let change_tweak = crate::nonce_from_idx(0);
+        let change_script = wallet.derive_script(&change_tweak);
+
+        let tx = wallet
+            .create_tx(
+                Amount::from_sat(1000),
+                change_script.clone(),
+                vec![],
+                vec![(
+                    UTXOKey(OutPoint::null()),
+                    SpendableUTXO {
+                        tweak: [0; 33],
+                        amount: bitcoin::Amount::from_sat(100_000),
+                    },
+                )],
+                Feerate { sats_per_kvb: 1000 },
+                &change_tweak,
+                None,
+                FeeArithmetic::Checked,
+            )
+            .expect("tx creation succeeds");
+
+        let matching = tx
+            .psbt
+            .unsigned_tx
+            .output
+            .iter()
+            .filter(|o| o.script_pubkey == change_script)
+            .count();
+
+        assert_eq!(
+            matching, 2,
+            "both the destination and the change output carry the change script"
+        );
+    }
+
+    /// Pre-2.3 the fee multiplication wrapped in release profiles, so a peg-out
+    /// declaring an enormous rate was accepted and broadcast with a fee too low
+    /// to confirm. From 2.3 on it is rejected. Both regimes must keep working:
+    /// replaying a pre-2.3 session has to reproduce the acceptance.
+    #[test]
+    fn fee_arithmetic_rejects_an_unpayable_rate_only_once_active() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let absurd = Feerate {
+            sats_per_kvb: u64::MAX,
+        };
+        let ordinary = Feerate { sats_per_kvb: 1000 };
+
+        assert_eq!(
+            FeeArithmetic::Checked.calculate_fee(absurd, 958),
+            Err(WalletOutputError::NotEnoughSpendableUTXO),
+            "an unpayable rate is rejected once 2.3 is active"
+        );
+        assert_eq!(
+            FeeArithmetic::Wrapping.calculate_fee(absurd, 958),
+            Ok(absurd.wrapping_calculate_fee(958)),
+            "pre-2.3 behaviour is reproduced exactly, wrap and all"
+        );
+
+        for arithmetic in [FeeArithmetic::Checked, FeeArithmetic::Wrapping] {
+            assert_eq!(
+                arithmetic.calculate_fee(ordinary, 958),
+                Ok(ordinary.calculate_fee(958)),
+                "an ordinary rate is unaffected in either regime"
+            );
+        }
+
+        let _ = descriptor;
+    }
+
+    /// A peg-out amount reaches `create_tx` straight from an unauthenticated
+    /// caller, both via `PEG_OUT_FEES_ENDPOINT` and via a submitted peg-out
+    /// output. Summing it with the dust limit and the fees used to overflow
+    /// `bitcoin::Amount`'s panicking `Add`, killing the guardian process.
+    #[test]
+    fn create_tx_rejects_amounts_that_cannot_exist_on_chain() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let (secret_key, _) = secp.generate_keypair(&mut OsRng);
+
+        let wallet = StatelessWallet {
+            descriptor: &descriptor,
+            secret_key: &secret_key,
+            secp: &secp,
+        };
+
+        let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap();
+        let utxos = vec![(
+            UTXOKey(OutPoint::null()),
+            SpendableUTXO {
+                tweak: [0; 33],
+                amount: bitcoin::Amount::from_sat(100_000),
+            },
+        )];
+
+        for amount in [
+            Amount::from_sat(u64::MAX),
+            Amount::MAX_MONEY + Amount::from_sat(1),
+        ] {
+            let tx = wallet.create_tx(
+                amount,
+                recipient.clone().assume_checked().script_pubkey(),
+                vec![],
+                utxos.clone(),
+                Feerate { sats_per_kvb: 1000 },
+                &[0; 33],
+                None,
+                FeeArithmetic::Checked,
+            );
+
+            assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
+        }
+    }
 
     #[test]
     fn create_tx_should_validate_amounts() {
@@ -2483,6 +2785,7 @@ mod tests {
             fee,
             &[0; 33],
             None,
+            FeeArithmetic::Checked,
         );
         assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
 
@@ -2496,6 +2799,7 @@ mod tests {
                 fee,
                 &[0; 33],
                 None,
+                FeeArithmetic::Checked,
             )
             .expect("is ok");
 

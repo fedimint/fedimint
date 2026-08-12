@@ -33,8 +33,8 @@ use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-    SendOnchainResponse,
+    NO_INCOMING_CIRCUIT, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
+    PaymentAction, SendOnchainRequest, SendOnchainResponse,
 };
 
 pub struct GatewayLdkClient {
@@ -207,8 +207,10 @@ impl GatewayLdkClient {
                         amount_msat: claimable_amount_msat,
                         expiry: claim_deadline.unwrap_or_default(),
                         short_channel_id: None,
-                        incoming_chan_id: 0,
-                        htlc_id: 0,
+                        // LDK claims payments through its own payment store,
+                        // so it never intercepts forwards for the gateway.
+                        incoming_chan_id: NO_INCOMING_CIRCUIT.0,
+                        htlc_id: NO_INCOMING_CIRCUIT.1,
                     })
                     .await
                 {
