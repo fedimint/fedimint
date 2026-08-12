@@ -43,12 +43,15 @@ impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager, skip_setup: bool) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
 
+        let esplora_pid_file_path = processmgr.globals.FM_TEST_DIR.join("esplora.pid");
+        let esplora_pid_file = utf8(&esplora_pid_file_path);
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+            esplora_pid_file = esplora_pid_file,
             tx_index = "0",
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
@@ -74,7 +77,7 @@ impl Bitcoind {
             .without_auth()
             .map_err(|()| anyhow!("Failed to strip auth from Bitcoin Rpc Url"))?
             .to_string();
-        let wallet_name = "";
+        let wallet_name = "default";
         let host = format!("{host}wallet/{wallet_name}");
 
         debug!(target: LOG_DEVIMINT, "bitcoind host: {:?}, auth: {:?}", &host, auth);
@@ -119,7 +122,7 @@ impl Bitcoind {
         debug!(target: LOG_DEVIMINT, "Setting up bitcoind...");
         // create RPC wallet
         for attempt in 0.. {
-            match block_in_place(|| client.create_wallet("", None, None, None, None)) {
+            match block_in_place(|| client.create_wallet("default", None, None, None, None)) {
                 Ok(_) => {
                     break;
                 }
@@ -708,13 +711,12 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    // All unique pairs of gateways.
-    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C)].
-    // Since the first gateway within each pair initiates the channel open,
-    // order within each pair needs to be enforced so that each Lightning node opens
-    // 1 channel.
+    // Cyclic pairs of gateways, so every node gets a channel with every other
+    // node for our typical 3-gateway setup. For a list [A, B, C] this produces
+    // [(A, B), (B, C), (C, A)]. The first gateway in each pair initiates the
+    // channel open, so each Lightning node opens exactly one channel.
     let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> =
-        gateways.iter().tuple_windows::<(_, _)>().collect();
+        gateways.iter().circular_tuple_windows::<(_, _)>().collect();
 
     info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
     let sats_per_side = 5_000_000;
@@ -842,6 +844,13 @@ impl Esplora {
 
         Self::wait_for_ready(process_mgr).await?;
         debug!(target: LOG_DEVIMINT, "Esplora ready");
+        if let Some(pid) = process.id().await {
+            write_overwrite_async(
+                process_mgr.globals.FM_TEST_DIR.join("esplora.pid"),
+                pid.to_string(),
+            )
+            .await?;
+        }
 
         Ok(Self {
             _bitcoind: bitcoind,

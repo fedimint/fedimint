@@ -11,7 +11,10 @@ use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, Wallet, WalletOutputOutcome};
+use crate::{
+    PEG_OUT_CHANGE_VOUT, PendingTransaction, SpendableUTXO, UnsignedTransaction, Wallet,
+    WalletOutputOutcome,
+};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -284,3 +287,41 @@ impl_db_lookup!(
     key = ConsensusVersionVotingActivationKey,
     query_prefix = ConsensusVersionVotingActivationPrefix
 );
+/// Migrate to v2, backfilling the change outputs of all peg-outs made so far.
+///
+/// Change outputs pay to the peg-in descriptor and so are indistinguishable
+/// from user deposits; going forward they are recorded as claimed when the
+/// peg-out is created, but transactions built before that change have no such
+/// record. Every peg-out we ever made is still listed under
+/// [`PegOutBitcoinTransaction`], which is never removed, so the set is
+/// recoverable in full.
+pub async fn migrate_to_v2(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
+) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
+    let change_outpoints = dbtx
+        .find_by_prefix(&PegOutBitcoinTransactionPrefix)
+        .await
+        .map(|(_, outcome)| {
+            let WalletOutputOutcome::V0(outcome) = outcome else {
+                // Only V0 outcomes have ever been written, but an unknown variant
+                // carries no txid we could derive a change outpoint from.
+                return None;
+            };
+
+            Some(OutPoint {
+                txid: outcome.0,
+                vout: PEG_OUT_CHANGE_VOUT,
+            })
+        })
+        .collect::<Vec<_>>()
+        .await;
+
+    for outpoint in change_outpoints.into_iter().flatten() {
+        dbtx.insert_entry(&ClaimedPegInOutpointKey(outpoint), &())
+            .await;
+    }
+
+    Ok(())
+}

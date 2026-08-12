@@ -34,7 +34,17 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 2);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 3);
+
+/// From this module consensus version on, a peg-out whose declared fee rate and
+/// weight do not describe a fee that can exist on chain is rejected.
+///
+/// Before it, `Feerate::calculate_fee` multiplied unchecked and wrapped in
+/// release profiles, so such a peg-out was accepted and broadcast with a fee
+/// too low to confirm, stranding the inputs it had already removed from the
+/// wallet.
+pub const CHECKED_PEG_OUT_FEE_MODULE_CONSENSUS_VERSION: ModuleConsensusVersion =
+    ModuleConsensusVersion::new(2, 3);
 
 /// Module consensus version that introduced support for processing Bitcoin
 /// transactions that exceed the `ALEPH_BFT_UNIT_BYTE_LIMIT`.

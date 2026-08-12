@@ -6,7 +6,9 @@ pub mod engine;
 pub mod transaction;
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::net::SocketAddr;
+use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,7 +43,7 @@ use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, watch};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
@@ -633,24 +635,88 @@ async fn await_response(
 ) -> Result<Value, ApiError> {
     match request.method {
         ApiMethod::Core(method) => {
-            let endpoint = core_api.get(&method).ok_or(ApiError::not_found(method))?;
+            let endpoint = core_api
+                .get(&method)
+                .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
             let (state, context) = consensus_api.context(&request.request, None).await;
 
-            (endpoint.handler)(state, context, request.request).await
+            run_handler(
+                None,
+                &method,
+                (endpoint.handler)(state, context, request.request),
+            )
+            .await
         }
         ApiMethod::Module(module_id, method) => {
             let endpoint = module_api
                 .get(&module_id)
-                .ok_or(ApiError::not_found(module_id.to_string()))?
+                .ok_or_else(|| ApiError::not_found(module_id.to_string()))?
                 .get(&method)
-                .ok_or(ApiError::not_found(method))?;
+                .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
             let (state, context) = consensus_api
                 .context(&request.request, Some(module_id))
                 .await;
 
-            (endpoint.handler)(state, context, request.request).await
+            run_handler(
+                Some(module_id),
+                &method,
+                (endpoint.handler)(state, context, request.request),
+            )
+            .await
         }
+    }
+}
+
+/// Runs an API endpoint handler, turning a panic into an error response for the
+/// caller that triggered it.
+///
+/// Iroh API requests run on the root task group, so an escaping panic would
+/// trip the task group's panic guard and shut the whole guardian down. The
+/// jsonrpsee path contains handler panics the same way.
+async fn run_handler(
+    module_id: Option<ModuleInstanceId>,
+    method: &str,
+    handler: impl Future<Output = Result<Value, ApiError>>,
+) -> Result<Value, ApiError> {
+    // Using `AssertUnwindSafe` here is far from ideal. In theory this means we
+    // could end up with an inconsistent state. In practice most API functions are
+    // only reading and the few that do write anything are atomic. Lastly, this is
+    // only the last line of defense.
+    AssertUnwindSafe(handler)
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|_| {
+            error!(
+                target: LOG_NET_API,
+                module_id = ?module_id,
+                method,
+                "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+            );
+
+            Err(ApiError::server_error("API handler panicked".to_string()))
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_handler;
+
+    #[tokio::test]
+    async fn panicking_handler_returns_an_error_instead_of_unwinding() {
+        let error = run_handler(None, "test_endpoint", async { panic!("handler panic") })
+            .await
+            .expect_err("a panicking handler is reported as a server error");
+
+        assert_eq!(error.code, 500);
+
+        let error = run_handler(Some(3), "test_endpoint", async {
+            panic!("module handler panic")
+        })
+        .await
+        .expect_err("a panicking module handler is reported as a server error");
+
+        assert_eq!(error.code, 500);
     }
 }
