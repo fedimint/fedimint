@@ -303,7 +303,10 @@ jobs:
           - host: linux
             runs-on: [self-hosted, linux, x64]
             build-in-pr: true
-            timeout: 20
+            # a warm cache builds each target in ~1-2 minutes, but a change
+            # touching fedimint-core rebuilds the whole workspace per target,
+            # and a cold aarch64-android build does not fit in 20 minutes
+            timeout: 45
 
 
     runs-on: ${{ matrix.runs-on }}
