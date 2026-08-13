@@ -294,11 +294,11 @@ async fn handle_request(
     // The handlers struct also currently does not support query parameters. The
     // LNURL-verify endpoint is the only endpoint that requires these, so we
     // handle these separately as well.
-    if request.route.starts_with("/verify") {
-        let Ok((payment_hash, query_map)) = parse_verify_route(&request.route) else {
-            // The route is the caller's input, so a route we cannot parse is their
-            // mistake, the same way the HTTP path's `Path<sha256::Hash>` extractor
-            // rejects a malformed payment hash.
+    if let Some(verify_route) = parse_verify_route(&request.route) {
+        let Ok((payment_hash, query_map)) = verify_route else {
+            // The route is the caller's input, so a payment hash we cannot parse is
+            // their mistake, the same way the HTTP path's `Path<sha256::Hash>`
+            // extractor rejects a malformed payment hash.
             return Ok((StatusCode::BAD_REQUEST, Json(json!(()))));
         };
 
@@ -342,22 +342,51 @@ fn unknown_route(route: &str) -> (StatusCode, Json<serde_json::Value>) {
 
 /// Parses the LNURL-verify route `/verify/{payment_hash}` into the payment hash
 /// and the query parameters (`?wait`) of the request.
-fn parse_verify_route(route: &str) -> anyhow::Result<(sha256::Hash, HashMap<String, String>)> {
+///
+/// Returns `None` if the route is not shaped like the verify route at all, so
+/// that the caller falls through to the regular handler lookup and answers with
+/// a 404. Only the exact `/verify/{payment_hash}` shape is this endpoint, the
+/// same way the HTTP path registers it as an exact route: neither a route that
+/// merely starts with `/verify` nor one that appends further path segments may
+/// reach this unauthenticated handler.
+fn parse_verify_route(
+    route: &str,
+) -> Option<anyhow::Result<(sha256::Hash, HashMap<String, String>)>> {
+    // Check the prefix on the raw route, so that a route the URL parser below
+    // normalizes into the verify route (`/../verify/{payment_hash}`) is not this
+    // endpoint either.
+    if !route.starts_with("/verify/") {
+        return None;
+    }
+
     // Use dummy URL for easier parsing
-    let url = Url::parse(&format!("http://localhost{route}"))?;
+    let url = Url::parse(&format!("http://localhost{route}")).ok()?;
 
     // Extract segments: /verify/<payment_hash>. The first segment is the route
-    // prefix itself, so the payment hash is the second one.
-    let payment_hash: sha256::Hash = url
-        .path_segments()
-        .and_then(|mut segments| segments.nth(1))
-        .ok_or_else(|| anyhow!("Verify route does not contain a payment hash"))?
-        .parse()?;
+    // prefix itself, so the payment hash is the second one, and there must not be
+    // a third. The prefix is re-checked here because the raw route may normalize
+    // to a different path (`/verify/../stop`).
+    let mut segments = url.path_segments()?;
+
+    if segments.next() != Some("verify") {
+        return None;
+    }
+
+    let hash_str = segments.next()?;
+
+    if segments.next().is_some() {
+        return None;
+    }
+
+    let payment_hash = match hash_str.parse::<sha256::Hash>() {
+        Ok(payment_hash) => payment_hash,
+        Err(err) => return Some(Err(anyhow!(err).context("Invalid payment hash"))),
+    };
 
     // Parse query params (?wait etc.)
     let query_map: HashMap<String, String> = url.query_pairs().into_owned().collect();
 
-    Ok((payment_hash, query_map))
+    Some(Ok((payment_hash, query_map)))
 }
 
 /// Verifies if the supplied password in the Iroh request matches the gateway's
@@ -403,6 +432,7 @@ mod tests {
         let payment_hash = sha256::Hash::hash(b"payment hash");
 
         let (parsed_hash, _query) = parse_verify_route(&format!("/verify/{payment_hash}"))
+            .expect("the route is the verify route")
             .expect("the payment hash is the second path segment, not the first");
 
         assert_eq!(parsed_hash, payment_hash);
@@ -413,6 +443,7 @@ mod tests {
         let payment_hash = sha256::Hash::hash(b"payment hash");
 
         let (parsed_hash, query) = parse_verify_route(&format!("/verify/{payment_hash}?wait"))
+            .expect("the route is the verify route")
             .expect("query parameters do not affect path parsing");
 
         assert_eq!(parsed_hash, payment_hash);
@@ -420,12 +451,38 @@ mod tests {
     }
 
     #[test]
-    fn verify_route_without_a_payment_hash_is_rejected() {
-        parse_verify_route("/verify")
-            .expect_err("a route without a payment hash has nothing to verify");
+    fn verify_route_with_a_malformed_payment_hash_is_rejected() {
         parse_verify_route("/verify/")
+            .expect("the route is shaped like the verify route")
             .expect_err("a route with an empty payment hash has nothing to verify");
         parse_verify_route("/verify/not-a-payment-hash")
+            .expect("the route is shaped like the verify route")
             .expect_err("a payment hash that is not a sha256 hash is rejected");
+    }
+
+    #[test]
+    fn only_the_exact_verify_route_reaches_the_verify_endpoint() {
+        let payment_hash = sha256::Hash::hash(b"payment hash");
+
+        // A route that is not exactly `/verify/{payment_hash}` is not this endpoint,
+        // no matter that it starts with `/verify` or contains a valid payment hash
+        // somewhere. Falling through to the handler lookup answers it with a 404,
+        // like the HTTP path's exact route does.
+        for route in [
+            "/verify".to_string(),
+            format!("/verifyfoo/{payment_hash}"),
+            format!("/verify_something/{payment_hash}?wait"),
+            format!("/verify/{payment_hash}/extra"),
+            // Routes the URL parser normalizes are not the verify route either,
+            // whether they normalize into it or out of it.
+            format!("/../verify/{payment_hash}"),
+            format!("/verify/{payment_hash}/../../stop"),
+            "/verify/../stop".to_string(),
+        ] {
+            assert!(
+                parse_verify_route(&route).is_none(),
+                "{route} must not reach the unauthenticated verify handler"
+            );
+        }
     }
 }
