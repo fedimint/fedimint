@@ -82,9 +82,9 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
 use fedimint_ln_common::{
-    ContractOutput, KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    ContractOutput, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA, LightningCommonInit,
+    LightningGateway, LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
@@ -101,7 +101,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::Notify;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -1050,7 +1050,7 @@ impl LightningClientModule {
                 base_msat: 0,
                 proportional_millionths: 0,
             },
-            cltv_expiry_delta: 30,
+            cltv_expiry_delta: LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
         };
@@ -1224,6 +1224,26 @@ impl LightningClientModule {
         gateways.into_iter().find(|g| &g.gateway_id == gateway_id)
     }
 
+    /// Checks a gateway's registration proof, if it carries one.
+    ///
+    /// Announcements without a proof are accepted: gateways predating them are
+    /// still supported, and rejecting them would take working gateways away
+    /// from users. An announcement with a *bad* proof is dropped, since the
+    /// only way to produce one is to be forging it.
+    fn gateway_registration_proof_is_valid(&self, gw: &LightningGatewayAnnouncement) -> bool {
+        let valid = gw.registration_proof_is_valid(self.cfg.threshold_pub_key);
+
+        if !valid {
+            warn!(
+                target: LOG_CLIENT_MODULE_LN,
+                gateway_id = %gw.info.gateway_id,
+                "Discarding gateway announcement with an invalid registration proof"
+            );
+        }
+
+        valid
+    }
+
     /// Updates the gateway cache by fetching the latest registered gateways
     /// from the federation.
     ///
@@ -1231,7 +1251,16 @@ impl LightningClientModule {
     pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
         self.update_gateway_cache_merge
             .merge(async {
-                let gateways = self.module_api.fetch_gateways().await?;
+                let mut gateways = self
+                    .module_api
+                    .fetch_gateways(self.cfg.threshold_pub_key)
+                    .await?;
+
+                // A proof is only worth preferring over an unsigned announcement
+                // if we check it ourselves; otherwise a malicious guardian could
+                // fabricate one to win that preference.
+                gateways.retain(|gw| self.gateway_registration_proof_is_valid(gw));
+
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
                 // Remove all previous gateway entries
@@ -2525,6 +2554,25 @@ pub async fn create_incoming_contract_output(
         gateway_key: our_pub_key,
     };
     let contract_id = contract.contract_id();
+
+    // An incoming contract's id is only its payment hash, so funding one that
+    // already exists does not create our contract: it adds our money to the
+    // account the first funder created, under the gateway key and preimage state
+    // *they* chose. Anyone can publish a fresh offer for a hash they previously
+    // funded themselves, so refuse to fund a hash that already has an account.
+    match module_api.fetch_contract(contract_id).await {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            return Err(IncomingSmError::ContractAlreadyExists { payment_hash });
+        }
+        Err(error) => {
+            return Err(IncomingSmError::FetchContractError {
+                payment_hash,
+                error_message: error.to_string(),
+            });
+        }
+    }
+
     let incoming_output = LightningOutputV0::Contract(ContractOutput {
         amount: offer.amount,
         contract: Contract::Incoming(contract),

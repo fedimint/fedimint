@@ -1,10 +1,13 @@
 mod complete;
 pub mod events;
 pub mod pay;
+#[cfg(test)]
+mod tests;
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,7 +15,7 @@ use async_stream::stream;
 use async_trait::async_trait;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::key::Secp256k1;
-use bitcoin::secp256k1::{All, PublicKey};
+use bitcoin::secp256k1::All;
 use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
@@ -34,6 +37,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
@@ -55,15 +59,17 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, RemoveGatewayRequest,
-    create_gateway_remove_message,
+    GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
+    LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    RemoveGatewayRequest, create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
@@ -71,6 +77,16 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingContractError, OutgoingPaymentError,
 };
+
+/// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
+///
+/// This reserves the worst-case time to claim the HTLC on-chain after
+/// federation funding and threshold decryption. Exactly the margin is
+/// rejected; fresh funding requires at least one additional block. The value
+/// deliberately matches the route-hint delta advertised by pre-upgrade
+/// clients so their invoices remain payable; see
+/// [`LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN`] for the plan to raise it.
+pub const LNV1_HTLC_EXPIRY_SAFETY_MARGIN: u32 = LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN as u32;
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
@@ -269,22 +285,38 @@ impl GatewayClientModule {
         fees: RoutingFees,
         lightning_context: LightningContext,
         api: SafeUrl,
-        gateway_id: PublicKey,
+        gateway_keypair: Keypair,
     ) -> LightningGatewayAnnouncement {
+        let info = LightningGateway {
+            federation_index: self.federation_index,
+            gateway_redeem_key: self.redeem_key.public_key(),
+            node_pub_key: lightning_context.lightning_public_key,
+            lightning_alias: lightning_context.lightning_alias,
+            api,
+            route_hints,
+            fees,
+            gateway_id: gateway_keypair.public_key(),
+            supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
+        };
+
+        // Proves to the guardians that we hold the key behind `gateway_id`, so
+        // nobody else can replace our registration. Wall-clock milliseconds give
+        // a nonce that keeps increasing across restarts without persisting
+        // state; guardians only compare it to the nonce they already hold for
+        // us, so our clock need not agree with theirs.
+        let nonce = u64::try_from(duration_since_epoch().as_millis())
+            .expect("milliseconds since the epoch do not exceed u64 for another 500m years");
+        let signature = gateway_keypair.sign_schnorr(create_gateway_registration_message(
+            self.cfg.threshold_pub_key,
+            nonce,
+            &info,
+        ));
+
         LightningGatewayAnnouncement {
-            info: LightningGateway {
-                federation_index: self.federation_index,
-                gateway_redeem_key: self.redeem_key.public_key(),
-                node_pub_key: lightning_context.lightning_public_key,
-                lightning_alias: lightning_context.lightning_alias,
-                api,
-                route_hints,
-                fees,
-                gateway_id,
-                supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
-            },
+            info,
             ttl,
             vetted: false,
+            auth: Some(GatewayRegistrationAuth { nonce, signature }),
         }
     }
 
@@ -400,7 +432,7 @@ impl GatewayClientModule {
         fees: RoutingFees,
         lightning_context: LightningContext,
         api: SafeUrl,
-        gateway_id: PublicKey,
+        gateway_keypair: Keypair,
     ) {
         let registration_info = self.to_gateway_registration_info(
             route_hints,
@@ -408,7 +440,7 @@ impl GatewayClientModule {
             fees,
             lightning_context,
             api,
-            gateway_id,
+            gateway_keypair,
         );
         let gateway_id = registration_info.info.gateway_id;
 
@@ -483,7 +515,7 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    /// Attempt fulfill HTLC by buying preimage from the federation.
+    /// Attempt to fulfill an HTLC by buying its preimage from the federation.
     ///
     /// LND can replay a still-pending HTLC after interceptor reconnect or
     /// gatewayd restart. Since the operation id is deterministic from the
@@ -493,8 +525,17 @@ impl GatewayClientModule {
     /// We only short-circuit if a `GatewayCompleteStateMachine` is or was
     /// handling the exact same LND circuit. Direct swaps with the same payment
     /// hash and different circuits fall through to the normal failure/cancel
-    /// path.
-    pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
+    /// path. Exact-circuit replays bypass fresh-funding expiry validation so an
+    /// already-funded operation can still settle after reconnect or restart.
+    ///
+    /// `current_block_height` resolves to the Lightning backend's absolute best
+    /// Bitcoin block height. It is awaited only after replay detection, before
+    /// any fresh funding.
+    pub async fn gateway_handle_intercepted_htlc(
+        &self,
+        htlc: Htlc,
+        current_block_height: impl Future<Output = anyhow::Result<u32>>,
+    ) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
@@ -544,6 +585,21 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
+        let current_block_height = current_block_height.await?;
+        htlc.ensure_safe_expiry(current_block_height)?;
+        let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
+        if remaining_blocks <= u32::from(LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA) {
+            // Tracks how much traffic still arrives via pre-upgrade invoices;
+            // enforcement can be raised to the advertised delta once this stops
+            // firing in the wild.
+            warn!(
+                payment_hash = %htlc.payment_hash,
+                remaining_blocks,
+                advertised_delta = LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
+                "Accepting LNv1 HTLC with less remaining expiry than newly created invoices advertise, likely paid to a pre-upgrade invoice"
+            );
+        }
+
         let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
@@ -587,31 +643,113 @@ impl GatewayClientModule {
     /// Attempt buying preimage from this federation in order to fulfill a pay
     /// request in another federation served by this gateway. In direct swap
     /// scenario, the gateway DOES NOT send payment over the lightning network
+    ///
+    /// The operation is keyed on the payment hash, so an existing one means the
+    /// incoming contract for this swap is already funded and only ever pays out
+    /// one preimage. A second call therefore has nothing to fund; it wants the
+    /// preimage the first call is buying, and gets it by being handed the
+    /// operation already in progress for
+    /// [`pay::GatewayPayWaitForSwapPreimage`] to follow. Reporting a failure
+    /// instead would cancel the outgoing contract that this swap is the other
+    /// half of, refunding the sender while the recipient still gets paid out of
+    /// the gateway's own funds.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
         debug!("Handling direct swap {swap_params:?}");
-        let (operation_id, client_output, client_output_sm) = self
+
+        let payment_hash = swap_params.payment_hash;
+        let operation_id = OperationId(payment_hash.to_byte_array());
+
+        // Check before the funding helper: funding the incoming contract consumes
+        // the federation's offer, and the await-offer endpoint waits for one to
+        // appear rather than reporting that it is gone, so a re-entrant call gets
+        // no further than that helper's timeout.
+        if self.client_ctx.operation_exists(operation_id).await {
+            debug!(
+                operation_id = %operation_id.fmt_short(),
+                %payment_hash,
+                "Direct swap already in progress, returning the operation already funding it"
+            );
+
+            return Ok(operation_id);
+        }
+
+        let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
-
-        let output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            amounts: client_output.amounts,
-        };
-        let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
-            ClientOutputBundle::new(vec![output], vec![client_output_sm]),
-        ));
-        let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-        debug!(
-            ?operation_id,
-            "Submitted transaction for direct swap {swap_params:?}"
+        // Keep the direct derivation above in sync with the funding helper.
+        anyhow::ensure!(
+            op_id_from_funding == operation_id,
+            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
         );
-        Ok(operation_id)
+
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let client_output = client_output.clone();
+                    let client_output_sm = client_output_sm.clone();
+                    Box::pin(async move {
+                        // The check above raced anyone who got here first; this one
+                        // shares a transaction with the write that would settle the
+                        // race, so exactly one of us funds the contract and the
+                        // other joins that operation.
+                        if self
+                            .client_ctx
+                            .get_operation_dbtx(dbtx, operation_id)
+                            .await
+                            .is_some()
+                        {
+                            debug!(
+                                operation_id = %operation_id.fmt_short(),
+                                %payment_hash,
+                                "Concurrent direct swap won the race, returning the operation already funding it"
+                            );
+
+                            return Ok(operation_id);
+                        }
+
+                        let output = ClientOutput {
+                            output: LightningOutput::V0(client_output.output),
+                            amounts: client_output.amounts,
+                        };
+                        let tx = TransactionBuilder::new().with_outputs(
+                            self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+                                vec![output],
+                                vec![client_output_sm],
+                            )),
+                        );
+
+                        self.client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                |_: OutPointRange| GatewayMeta::Receive,
+                                tx,
+                            )
+                            .await?;
+
+                        debug!(
+                            ?operation_id,
+                            %payment_hash,
+                            "Submitted funding transaction for direct swap"
+                        );
+
+                        Ok(operation_id)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
@@ -730,6 +868,28 @@ impl GatewayClientModule {
                 |dbtx, _| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.to_byte_array());
+
+                        // The operation id is the contract id, so an existing entry means we
+                        // already accepted a request to pay this very contract. The state
+                        // machine's own dedupe key covers the whole payload, so a caller who
+                        // varies any field of it -- `preimage_auth`, say -- slips past that
+                        // and would have us buy the preimage a second time, spending the
+                        // gateway's funds twice against a contract that only pays out once.
+                        // Hand back the operation already under way instead.
+                        if self
+                            .client_ctx
+                            .get_operation_dbtx(dbtx, operation_id)
+                            .await
+                            .is_some()
+                        {
+                            debug!(
+                                operation_id = %operation_id.fmt_short(),
+                                contract_id = %payload.contract_id,
+                                "Duplicate request to pay an outgoing contract, returning the operation already in progress"
+                            );
+
+                            return Ok(operation_id);
+                        }
 
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
                             contract_id: payload.contract_id,
@@ -955,7 +1115,10 @@ pub struct Htlc {
     pub incoming_amount_msat: Amount,
     /// The outgoing HTLC amount in millisatoshi
     pub outgoing_amount_msat: Amount,
-    /// The incoming HTLC expiry
+    /// Absolute Bitcoin block height at which the incoming HTLC expires.
+    ///
+    /// This uses the same coordinate system as the Lightning backend's current
+    /// best block height.
     pub incoming_expiry: u32,
     /// The short channel id of the HTLC.
     pub short_channel_id: Option<u64>,
@@ -963,6 +1126,37 @@ pub struct Htlc {
     pub incoming_chan_id: u64,
     /// The index of the incoming htlc in the incoming channel
     pub htlc_id: u64,
+}
+
+/// An intercepted LNv1 HTLC does not leave enough time for safe settlement.
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[error(
+    "incoming HTLC expiry is unsafe: expiry {incoming_expiry}, current height {current_block_height}, required remaining blocks greater than {expiry_safety_margin}"
+)]
+pub struct UnsafeHtlcExpiry {
+    /// Absolute Bitcoin block height at which the HTLC expires.
+    pub incoming_expiry: u32,
+    /// Lightning backend's current best Bitcoin block height.
+    pub current_block_height: u32,
+    /// Reserved settlement and on-chain safety margin in blocks.
+    pub expiry_safety_margin: u32,
+}
+
+impl Htlc {
+    /// Rejects an HTLC unless its remaining lifetime exceeds the LNv1 safety
+    /// margin.
+    pub fn ensure_safe_expiry(&self, current_block_height: u32) -> Result<(), UnsafeHtlcExpiry> {
+        let remaining_blocks = self.incoming_expiry.saturating_sub(current_block_height);
+        if LNV1_HTLC_EXPIRY_SAFETY_MARGIN < remaining_blocks {
+            return Ok(());
+        }
+
+        Err(UnsafeHtlcExpiry {
+            incoming_expiry: self.incoming_expiry,
+            current_block_height,
+            expiry_safety_margin: LNV1_HTLC_EXPIRY_SAFETY_MARGIN,
+        })
+    }
 }
 
 impl TryFrom<InterceptPaymentRequest> for Htlc {

@@ -142,6 +142,10 @@ const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
+/// How long code that needs to talk to the lightning node backs off before
+/// re-checking whether the gateway has (re)connected to it.
+const LIGHTNING_CONTEXT_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
 pub type Result<T> = std::result::Result<T, PublicGatewayError>;
 pub type AdminResult<T> = std::result::Result<T, AdminGatewayError>;
 
@@ -1116,7 +1120,7 @@ impl Gateway {
 
         let lnv1_start = fedimint_core::time::now();
         let lnv1_result = self
-            .try_handle_lightning_payment_ln_legacy(&payment_request)
+            .try_handle_lightning_payment_ln_legacy(&payment_request, lightning_context)
             .await;
         let lnv1_outcome = if lnv1_result.is_ok() {
             "success"
@@ -1232,6 +1236,7 @@ impl Gateway {
     async fn try_handle_lightning_payment_ln_legacy(
         &self,
         htlc_request: &InterceptPaymentRequest,
+        lightning_context: &LightningContext,
     ) -> Result<()> {
         // Check if the payment corresponds to a federation supporting legacy Lightning.
         let Some(federation_index) = htlc_request.short_channel_id else {
@@ -1249,6 +1254,10 @@ impl Gateway {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
 
+        // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
+        // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
+        // no federation short-channel id), but using the backend's own best
+        // height keeps the unit and chain view consistent for every backend.
         client
             .borrow()
             .with(|client| async {
@@ -1263,7 +1272,12 @@ impl Gateway {
                                         "Federation does not have LNv1 module".to_string(),
                                     ))
                                 })?;
-                        match lnv1.gateway_handle_intercepted_htlc(htlc).await {
+                        match lnv1
+                            .gateway_handle_intercepted_htlc(htlc, async {
+                                Ok(lightning_context.lnrpc.info().await?.block_height)
+                            })
+                            .await
+                        {
                             Ok(_) => Ok(()),
                             Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                                 format!("Error intercepting lightning payment {e:?}"),
@@ -1358,6 +1372,18 @@ impl Gateway {
         }
 
         lock.clone()
+    }
+
+    /// Drives the gateway's state directly, bypassing the lightning connection
+    /// loop in [`Self::start_gateway`] that owns every real transition.
+    ///
+    /// Tests need to observe behaviour in states the builder cannot start them
+    /// in -- notably "connected later than the federation clients" -- and have
+    /// no lightning node to get there with. Nothing in production should call
+    /// this.
+    #[doc(hidden)]
+    pub async fn set_gateway_state_out_of_band(&self, state: GatewayState) {
+        self.set_gateway_state(state).await;
     }
 
     /// If the Gateway is connected to the Lightning node, returns the
@@ -1772,7 +1798,7 @@ impl Gateway {
                                         routing_fees,
                                         lightning_context.clone(),
                                         registration.endpoint_url,
-                                        registration.keypair.public_key(),
+                                        registration.keypair,
                                     )
                                     .await;
                             }
@@ -1951,8 +1977,14 @@ impl Gateway {
     }
 
     /// Checks the Gateway's current state and returns the proper
-    /// `LightningContext` if it is available. Sometimes the lightning node
-    /// will not be connected and this will return an error.
+    /// `LightningContext` if it is available.
+    ///
+    /// The error is synthesised from the gateway's own state: no RPC is
+    /// attempted, so `Err` means "this process does not currently hold a
+    /// session with the lightning node", never "the lightning node was asked
+    /// and answered no". Callers that would turn a failure here into a
+    /// decision about a payment must use `await_lightning_context`
+    /// instead.
     pub async fn get_lightning_context(
         &self,
     ) -> std::result::Result<LightningContext, LightningRpcError> {
@@ -1960,6 +1992,47 @@ impl Gateway {
             GatewayState::Running { lightning_context }
             | GatewayState::ShuttingDown { lightning_context } => Ok(lightning_context),
             _ => Err(LightningRpcError::FailedToConnect),
+        }
+    }
+
+    /// Waits until the gateway holds a `LightningContext` and returns it.
+    ///
+    /// The lightning node is the only oracle for whether an HTLC of ours is in
+    /// flight, so code deciding the fate of a payment must actually ask it.
+    /// [`Self::get_lightning_context`] cannot stand in for that: its `Err` is
+    /// produced locally, and the gateway spends part of every startup without
+    /// a context. [`Self::run`] awaits `load_clients` before `start_gateway`,
+    /// and building a client starts its executor, so payment state machines
+    /// persisted across a restart re-enter while the state is still
+    /// `Disconnected`. Reading that as a payment failure cancels an outgoing
+    /// contract whose HTLC the previous process may already have settled,
+    /// leaving the gateway out of pocket for a payment it did make.
+    ///
+    /// Waiting is the conservative side of that trade. It ends when the
+    /// gateway connects, or when the caller is dropped: every caller runs
+    /// inside a client state machine transition or a webserver request, both
+    /// of which are cancelled when the gateway shuts down. It does not strand
+    /// the payer either, since the outgoing contract's timelock refunds them
+    /// without the gateway's cooperation, whereas a cancellation is final (see
+    /// `LightningInput` processing in `fedimint-ln-server`).
+    async fn await_lightning_context(&self) -> LightningContext {
+        loop {
+            match self.get_lightning_context().await {
+                Ok(lightning_context) => return lightning_context,
+                Err(err) => {
+                    let state = self.get_state().await;
+
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        %state,
+                        retry_interval_secs = LIGHTNING_CONTEXT_RETRY_INTERVAL.as_secs(),
+                        "Not connected to the lightning node, waiting before asking it again",
+                    );
+
+                    sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+                }
+            }
         }
     }
 
@@ -2280,7 +2353,7 @@ impl IAdminGateway for Gateway {
                     routing_fees,
                     lightning_context.clone(),
                     registration.endpoint_url.clone(),
-                    registration.keypair.public_key(),
+                    registration.keypair,
                 )
                 .await;
             }
@@ -3108,13 +3181,14 @@ impl Gateway {
             .read()
             .await
             .client(federation_id)
-            .map(|client| {
+            .and_then(|client| {
+                // A federation only has to offer one of the two lightning modules, so a
+                // client we serve over LNv1 may well have no LNv2 module at all.
                 client
                     .value()
                     .get_first_module::<GatewayClientModuleV2>()
-                    .expect("Must have client module")
-                    .keypair
-                    .public_key()
+                    .ok()
+                    .map(|module| module.keypair.public_key())
             })
     }
 
@@ -3166,15 +3240,19 @@ impl Gateway {
 
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    async fn send_payment_v2(
+    pub async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
     ) -> Result<std::result::Result<[u8; 32], Signature>> {
-        self.select_client(payload.federation_id)
-            .await?
+        let client = self.select_client(payload.federation_id).await?;
+        // A federation only has to offer one of the two lightning modules, so a
+        // client we serve over LNv1 may well have no LNv2 module at all.
+        let module = client
             .value()
             .get_first_module::<GatewayClientModuleV2>()
-            .expect("Must have client module")
+            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err)))?;
+
+        module
             .send_payment(payload)
             .await
             .map_err(LNv2Error::OutgoingPayment)
@@ -3395,27 +3473,33 @@ impl Gateway {
 
 #[async_trait]
 impl IGatewayClientV2 for Gateway {
-    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse) {
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
         loop {
-            match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    match lightning_context
-                        .lnrpc
-                        .complete_htlc(htlc_response.clone())
-                        .await
-                    {
-                        Ok(..) => return,
-                        Err(err) => {
-                            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
-                        }
-                    }
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context
+                .lnrpc
+                .complete_htlc(htlc_response.clone())
+                .await
+            {
+                Ok(..) => return Ok(()),
+                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Lightning cannot reach the requested terminal HTLC outcome",
+                    );
+                    return Err(err);
                 }
                 Err(err) => {
                     warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                 }
             }
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
         }
     }
 
@@ -3423,7 +3507,11 @@ impl IGatewayClientV2 for Gateway {
         &self,
         invoice: &Bolt11Invoice,
     ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>> {
-        let lightning_context = self.get_lightning_context().await?;
+        // Deciding this from a locally synthesised "not connected" would route a
+        // direct swap onto the lightning network, or -- once the send state
+        // machine turns the error into a cancellation -- forfeit a contract we
+        // may already be committed to. Ask once we can actually answer.
+        let lightning_context = self.await_lightning_context().await;
         if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
             let (contract, client) = self
                 .get_registered_incoming_contract_and_client_v2(
@@ -3445,7 +3533,9 @@ impl IGatewayClientV2 for Gateway {
         max_delay: u64,
         max_fee: Amount,
     ) -> std::result::Result<[u8; 32], LightningRpcError> {
-        let lightning_context = self.get_lightning_context().await?;
+        // The send state machine forfeits the outgoing contract on any error from
+        // here, so only the lightning node gets to say this payment failed.
+        let lightning_context = self.await_lightning_context().await;
         lightning_context
             .lnrpc
             .pay(invoice, max_delay, max_fee)
@@ -3468,22 +3558,19 @@ impl IGatewayClientV2 for Gateway {
 
     async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>> {
         let rhints = invoice.route_hints();
-        match rhints.first().and_then(|rh| rh.0.last()) {
-            None => None,
-            Some(hop) => match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
-                        return None;
-                    }
+        let hop = rhints.first().and_then(|rh| rh.0.last())?;
 
-                    self.federation_manager
-                        .read()
-                        .await
-                        .get_client_for_index(hop.short_channel_id)
-                }
-                Err(_) => None,
-            },
+        // Answering `None` because we happen to be between lightning connections
+        // sends a swap that never needed the lightning network out over it.
+        let lightning_context = self.await_lightning_context().await;
+        if hop.src_node_id != lightning_context.lightning_public_key {
+            return None;
         }
+
+        self.federation_manager
+            .read()
+            .await
+            .get_client_for_index(hop.short_channel_id)
     }
 
     async fn relay_lnv1_swap(
@@ -3597,9 +3684,9 @@ impl IGatewayClientV1 for Gateway {
     }
 
     async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()> {
-        let lightning_context = self.get_lightning_context().await?;
-
         if matches!(payment_data, PaymentData::PrunedInvoice { .. }) {
+            let lightning_context = self.get_lightning_context().await?;
+
             ensure!(
                 lightning_context.lnrpc.supports_private_payments(),
                 "Private payments are not supported by the lightning node"
@@ -3644,22 +3731,19 @@ impl IGatewayClientV1 for Gateway {
         payment_data: PaymentData,
     ) -> Option<Spanned<ClientHandleArc>> {
         let rhints = payment_data.route_hints();
-        match rhints.first().and_then(|rh| rh.0.last()) {
-            None => None,
-            Some(hop) => match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
-                        return None;
-                    }
+        let hop = rhints.first().and_then(|rh| rh.0.last())?;
 
-                    self.federation_manager
-                        .read()
-                        .await
-                        .get_client_for_index(hop.short_channel_id)
-                }
-                Err(_) => None,
-            },
+        // Answering `None` because we happen to be between lightning connections
+        // sends a swap that never needed the lightning network out over it.
+        let lightning_context = self.await_lightning_context().await;
+        if hop.src_node_id != lightning_context.lightning_public_key {
+            return None;
         }
+
+        self.federation_manager
+            .read()
+            .await
+            .get_client_for_index(hop.short_channel_id)
     }
 
     async fn pay(
@@ -3668,7 +3752,9 @@ impl IGatewayClientV1 for Gateway {
         max_delay: u64,
         max_fee: Amount,
     ) -> std::result::Result<PayInvoiceResponse, LightningRpcError> {
-        let lightning_context = self.get_lightning_context().await?;
+        // `GatewayPayInvoice` cancels the outgoing contract on any error from
+        // here, so only the lightning node gets to say this payment failed.
+        let lightning_context = self.await_lightning_context().await;
 
         match payment_data {
             PaymentData::Invoice(invoice) => {
@@ -3691,15 +3777,7 @@ impl IGatewayClientV1 for Gateway {
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
         // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = loop {
-            match self.get_lightning_context().await {
-                Ok(lightning_context) => break lightning_context,
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
-                    sleep(Duration::from_secs(5)).await;
-                }
-            }
-        };
+        let lightning_context = self.await_lightning_context().await;
 
         lightning_context.lnrpc.complete_htlc(htlc).await
     }
