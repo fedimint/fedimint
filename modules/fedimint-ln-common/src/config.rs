@@ -95,14 +95,102 @@ pub trait FeeToAmount {
 
 impl FeeToAmount for RoutingFees {
     fn to_amount(&self, payment: &Amount) -> Amount {
-        let base_fee = u64::from(self.base_msat);
-        let margin_fee: u64 = if self.proportional_millionths > 0 {
-            let fee_percent = 1_000_000 / u64::from(self.proportional_millionths);
-            payment.msats / fee_percent
-        } else {
-            0
-        };
+        // `proportional_millionths` arrives in a gateway registration served by a
+        // public API endpoint, and clients union the announcements they get from
+        // each guardian, so no bound on it can be assumed here even once
+        // guardians validate it. Compute the margin in `u128` and saturate on the
+        // way back down: an absurd fee has to surface as an absurd `Amount` the
+        // caller rejects, never as a panic taking down the whole client.
+        //
+        // Multiplying before dividing is also what makes this agree with the
+        // other places that price the same fee — `PaymentFee::absolute_fee`, the
+        // gateway ranking in `fedimint-ln-client`, and `fedimint-recurringd`.
+        // Dividing `1_000_000` by the rate first, as this used to, truncates the
+        // divisor and overcharges: 3_000 millionths billed 0.3003% rather than
+        // 0.3%, and any rate above 500_000 billed a flat 100%.
+        let margin_fee =
+            u128::from(payment.msats) * u128::from(self.proportional_millionths) / 1_000_000;
 
-        msats(base_fee + margin_fee)
+        msats(
+            u64::try_from(margin_fee)
+                .unwrap_or(u64::MAX)
+                .saturating_add(u64::from(self.base_msat)),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::{Amount, msats};
+    use lightning_invoice::RoutingFees;
+
+    use super::FeeToAmount;
+
+    fn fees(base_msat: u32, proportional_millionths: u32) -> RoutingFees {
+        RoutingFees {
+            base_msat,
+            proportional_millionths,
+        }
+    }
+
+    /// A rate above one million used to make `1_000_000 / rate` truncate to
+    /// zero, and the division by it panicked. The value reaches this code
+    /// straight off the wire, so it has to price instead of panic.
+    #[test]
+    fn rate_above_one_million_does_not_panic() {
+        assert_eq!(
+            fees(0, 1_000_001).to_amount(&msats(1_000_000)),
+            msats(1_000_001)
+        );
+
+        // The whole range that used to panic, including its top end.
+        assert_eq!(
+            fees(0, u32::MAX).to_amount(&msats(1_000_000)),
+            msats(u64::from(u32::MAX))
+        );
+    }
+
+    #[test]
+    fn fee_is_the_stated_fraction_of_the_payment() {
+        // 100 millionths of 1_000_000 msat is 0.01%.
+        assert_eq!(fees(0, 100).to_amount(&msats(1_000_000)), msats(100));
+
+        // 3_000 millionths is 0.3% exactly. The old divisor form billed 3_003
+        // here, because `1_000_000 / 3_000` truncated 333.33 to 333.
+        assert_eq!(fees(0, 3_000).to_amount(&msats(1_000_000)), msats(3_000));
+
+        // A rate this side of one million is not a flat 100% either: the old
+        // form truncated the divisor to 1 for everything above 500_000.
+        assert_eq!(
+            fees(0, 600_000).to_amount(&msats(1_000_000)),
+            msats(600_000)
+        );
+
+        assert_eq!(
+            fees(0, 1_000_000).to_amount(&msats(1_000_000)),
+            msats(1_000_000)
+        );
+    }
+
+    #[test]
+    fn base_fee_is_added_to_the_margin() {
+        assert_eq!(fees(500, 0).to_amount(&msats(1_000_000)), msats(500));
+        assert_eq!(fees(500, 100).to_amount(&msats(1_000_000)), msats(600));
+        assert_eq!(fees(500, 0).to_amount(&Amount::ZERO), msats(500));
+    }
+
+    /// Neither the margin nor the base fee added to it may overflow `u64`.
+    #[test]
+    fn absurd_fees_saturate_rather_than_overflow() {
+        assert_eq!(
+            fees(u32::MAX, u32::MAX).to_amount(&msats(u64::MAX)),
+            msats(u64::MAX)
+        );
+
+        // The margin alone fits, but adding the base fee to it does not.
+        assert_eq!(
+            fees(u32::MAX, 1_000_000).to_amount(&msats(u64::MAX)),
+            msats(u64::MAX)
+        );
     }
 }
