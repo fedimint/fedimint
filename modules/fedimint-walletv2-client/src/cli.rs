@@ -3,6 +3,7 @@ use std::{ffi, iter};
 use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
 use clap::{Parser, Subcommand};
+use fedimint_core::BitcoinAmountOrAll;
 use fedimint_eventlog::EventLogId;
 use serde::Serialize;
 use serde_json::Value;
@@ -21,7 +22,8 @@ enum Opts {
     /// Send an onchain payment.
     Send {
         address: Address<NetworkUnchecked>,
-        value: bitcoin::Amount,
+        /// Value to send, or "all" to sweep the entire balance.
+        value: BitcoinAmountOrAll,
         #[arg(long)]
         fee: Option<bitcoin::Amount>,
     },
@@ -75,15 +77,37 @@ pub(crate) async fn handle_cli_command(
             address,
             value,
             fee,
-        } => json(
-            wallet
-                .await_final_send_operation_state(
-                    wallet
-                        .send(address, value, fee, serde_json::Value::Null)
-                        .await?,
-                )
-                .await?,
-        ),
+        } => {
+            // Resolve the on-chain fee up front so the same value sizes the
+            // sweep and funds the send: the required feerate rises with each
+            // pending federation transaction, and a value computed against a
+            // stale fee would be rejected.
+            let fee = match fee {
+                Some(fee) => fee,
+                None => wallet.send_fee().await?,
+            };
+
+            let value = match value {
+                // The on-chain fee is only part of the cost of sending
+                // everything: funding the wallet output also incurs the
+                // federation's per-note fees.
+                BitcoinAmountOrAll::All => {
+                    let balance = wallet.client_ctx.get_balance_for_btc().await?;
+                    wallet.max_sendable_amount(balance, fee).await?
+                }
+                BitcoinAmountOrAll::Amount(value) => value,
+            };
+
+            json(
+                wallet
+                    .await_final_send_operation_state(
+                        wallet
+                            .send(address, value, Some(fee), serde_json::Value::Null)
+                            .await?,
+                    )
+                    .await?,
+            )
+        }
         Opts::Receive => json(wallet.receive().await),
         Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
     };
