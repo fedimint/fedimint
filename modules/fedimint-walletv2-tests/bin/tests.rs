@@ -5,7 +5,9 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
-use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
+use devimint::version_constants::{
+    VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
+};
 use devimint::{cmd, util};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::sleep_in_test;
@@ -399,6 +401,54 @@ async fn main() -> anyhow::Result<()> {
             await_no_pending_txs(&client).await?;
 
             ensure_tx_chain_length(&client, 6).await?;
+
+            // `send ... all` was added in 0.13.0-alpha; older CLIs parse the
+            // value as a plain amount and reject "all".
+            if fedimint_cli_version >= *VERSION_0_13_0_ALPHA {
+                info!("Sweep the entire remaining balance onchain...");
+
+                let sweep_address = bitcoind.get_new_address().await?;
+
+                // A sweep can only spend notes that exist when it runs. The
+                // aborted send above is refunded by the mint's input state
+                // machine, which settles independently of the federation's
+                // bitcoin transactions — `await_final_send_operation_state`
+                // returns as soon as the send aborts, while the refunded notes
+                // are still being reissued. Wait for every in-flight state
+                // machine to finish, or that refund lands after the sweep and
+                // looks like funds left behind.
+                cmd!(client, "dev", "wait-complete").run().await?;
+
+                let pre_sweep_balance = client.balance().await?;
+
+                // Sweeping the whole balance has to leave room for the mint's
+                // per-note fees and the wallet module's own output fee on top
+                // of the on-chain fee. With base fees enabled (the default) a
+                // naive `balance - onchain_fee` is underfunded and note
+                // selection rejects the send.
+                let value = cmd!(client, "module", "walletv2", "send", sweep_address, "all")
+                    .out_json()
+                    .await?;
+
+                let FinalSendState::Success(txid) = serde_json::from_value(value)? else {
+                    panic!("Sweep send operation failed");
+                };
+
+                bitcoind.poll_get_transaction(txid).await?;
+
+                // A sweep cannot always drain to exactly zero — the fee is
+                // stepwise in the amount, so a sub-denomination remainder can
+                // be left behind — but it must move all but a negligible part
+                // of the balance.
+                let post_sweep_balance = client.balance().await?;
+
+                ensure!(
+                    post_sweep_balance < pre_sweep_balance / 100,
+                    "Sweep left {post_sweep_balance} msats of {pre_sweep_balance} msats behind"
+                );
+
+                await_no_pending_txs(&client).await?;
+            }
 
             block_miner.abort();
 
