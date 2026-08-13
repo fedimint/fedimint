@@ -535,12 +535,40 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 .pegout_gateways(500_000_000, gateways.clone())
                 .await?;
 
+            info!(target: LOG_TEST, "Testing pegging-out the entire ecash balance...");
+            // Sweeping the full balance has to leave room for the federation's
+            // per-note fees on top of the on-chain fee. With base fees enabled
+            // (the default) a naive `balance - onchain_fee` is underfunded and
+            // note selection rejects the peg-out. Only one gateway is drained:
+            // the required feerate doubles per pending federation transaction,
+            // and the federation needs a non-dust change UTXO of its own.
+            let bitcoind = dev_fed.bitcoind().await?;
+            let fed_id = federation.calculate_federation_id();
+            let sweep_balance = gw_lnd.client().ecash_balance(fed_id.clone()).await?;
+            assert!(sweep_balance > 0, "Gateway has no ecash left to sweep");
+
+            let pegout_address = bitcoind.get_new_address().await?;
+            let sweep = gw_lnd
+                .client()
+                .pegout_all(fed_id.clone(), pegout_address)
+                .await?;
+            bitcoind.mine_blocks(21).await?;
+            bitcoind.poll_get_transaction(sweep.txid).await?;
+
+            // A sweep cannot always drain to exactly zero — fees are stepwise in
+            // the amount, so sub-denomination dust can be left behind — but it
+            // must move all but a negligible remainder.
+            let remaining = gw_lnd.client().ecash_balance(fed_id).await?;
+            assert!(
+                remaining < sweep_balance / 100,
+                "Sweep left {remaining} msats of {sweep_balance} msats behind",
+            );
+
             info!(target: LOG_TEST, "Testing only admin can send onchain...");
             let send_result = gw_lnd.client().with_password("secondbest").send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await;
             assert!(send_result.is_err(), "Only admins can send onchain");
 
             info!(target: LOG_TEST, "Testing sending onchain...");
-            let bitcoind = dev_fed.bitcoind().await?;
             for gw in &gateways {
                 let txid = gw
                     .client()
