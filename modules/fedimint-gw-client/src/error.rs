@@ -147,9 +147,16 @@ pub enum GatewayPayInvoiceError {
     #[error("A payment for this payment hash was already accepted")]
     PaymentHashAlreadyClaimed,
 
-    /// The federation could not return the contract to refund.
-    #[error("Failed to fetch outgoing contract for refund")]
+    /// The federation could not return the outgoing contract.
+    #[error("Failed to fetch outgoing contract")]
     ContractLookup(#[source] FederationError),
+
+    /// The federation has not confirmed the outgoing contract.
+    #[error("The outgoing contract {contract_id} has not yet been confirmed")]
+    UnconfirmedContract {
+        /// The contract the request asked to pay.
+        contract_id: ContractId,
+    },
 
     /// A payment of this contract is already under way, and the request does
     /// not carry the authentication it was started with.

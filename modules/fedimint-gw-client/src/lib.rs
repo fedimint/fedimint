@@ -25,7 +25,7 @@ use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
@@ -943,7 +943,8 @@ impl GatewayClientModule {
     /// operation already claimed the invoice's payment hash and this request
     /// has no matching funded contract to refund,
     /// [`GatewayPayInvoiceError::ContractLookup`] if the contract cannot be
-    /// fetched for a refund,
+    /// fetched, [`GatewayPayInvoiceError::UnconfirmedContract`] if the
+    /// federation does not know the contract,
     /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
     /// is already under way and the request does not carry the
     /// authentication it was started with,
@@ -971,6 +972,27 @@ impl GatewayClientModule {
             .await
             .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
 
+        let operation_id = OperationId(payload.contract_id.to_byte_array());
+        let db = self.client_ctx.module_db();
+        let existing_operation = self
+            .client_ctx
+            .get_operation_dbtx(&mut db.begin_transaction_nc().await, operation_id)
+            .await;
+        if let Some(entry) = existing_operation {
+            return Self::join_outgoing_payment(&payload, &entry);
+        }
+
+        // Confirm new contracts before claiming the payment image or starting
+        // an operation. LNv1 clients retry while confirmation is pending.
+        let account = self
+            .module_api
+            .fetch_contract(payload.contract_id)
+            .await
+            .map_err(GatewayPayInvoiceError::ContractLookup)?
+            .ok_or(GatewayPayInvoiceError::UnconfirmedContract {
+                contract_id: payload.contract_id,
+            })?;
+
         // Only the first operation to claim a payment image may ever pay it out,
         // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
         // The claim is taken before the operation is created, and a retry of the
@@ -981,7 +1003,7 @@ impl GatewayClientModule {
                 &fedimint_lnv2_common::contracts::PaymentImage::Hash(
                     payload.payment_data.payment_hash(),
                 ),
-                OperationId(payload.contract_id.to_byte_array()),
+                operation_id,
             )
             .await
         {
@@ -989,12 +1011,6 @@ impl GatewayClientModule {
                 pay_invoice_payload: payload.clone(),
             })
         } else {
-            let account = self
-                .module_api
-                .fetch_contract(payload.contract_id)
-                .await
-                .map_err(GatewayPayInvoiceError::ContractLookup)?
-                .ok_or(GatewayPayInvoiceError::PaymentHashAlreadyClaimed)?;
             let FundedContract::Outgoing(contract) = account.contract else {
                 return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
             };
@@ -1013,47 +1029,16 @@ impl GatewayClientModule {
             )))
         };
 
-        self.client_ctx.module_db()
+        db
             .autocommit(
                 |dbtx, _| {
                     Box::pin(async {
-                        let operation_id = OperationId(payload.contract_id.to_byte_array());
-
-                        // The operation id is the contract id, so an existing entry means we
-                        // already accepted a request to pay this very contract. The state
-                        // machine's own dedupe key covers the whole payload, so a caller who
-                        // varies any field of it -- `preimage_auth`, say -- slips past that
-                        // and would have us buy the preimage a second time, spending the
-                        // gateway's funds twice against a contract that only pays out once.
-                        // Hand back the operation already under way instead.
+                        // A concurrent request may have started this operation
+                        // while we were confirming the contract.
                         if let Some(entry) =
                             self.client_ctx.get_operation_dbtx(dbtx, operation_id).await
                         {
-                            // This operation id yields the preimage, so only the
-                            // caller that started the payment may join it. The
-                            // state machine's own check comes too late for a
-                            // request that never reaches one, and it is keyed on
-                            // `payment_data`, which the caller supplies
-                            // independently of `contract_id` -- so it would answer
-                            // for the wrong payment here.
-                            if !matches!(
-                                entry.try_meta::<GatewayMeta>(),
-                                Ok(GatewayMeta::Pay { preimage_auth })
-                                    if PreimageAuth::new(preimage_auth)
-                                        .verifies(payload.preimage_auth)
-                            ) {
-                                return Err(GatewayPayInvoiceError::Unauthorized {
-                                    contract_id: payload.contract_id,
-                                });
-                            }
-
-                            debug!(
-                                operation_id = %operation_id.fmt_short(),
-                                contract_id = %payload.contract_id,
-                                "Duplicate request to pay an outgoing contract, returning the operation already in progress"
-                            );
-
-                            return Ok(operation_id);
+                            return Self::join_outgoing_payment(&payload, &entry);
                         }
 
                         self.client_ctx.log_event(dbtx, OutgoingPaymentStarted {
@@ -1095,6 +1080,31 @@ impl GatewayClientModule {
             )
             .await
             .map_err(GatewayPayInvoiceError::from)
+    }
+
+    fn join_outgoing_payment(
+        payload: &PayInvoicePayload,
+        entry: &OperationLogEntry,
+    ) -> Result<OperationId, GatewayPayInvoiceError> {
+        // Only the authentication recorded for this contract may join its
+        // operation and receive the preimage, regardless of the retry's invoice.
+        if !matches!(
+            entry.try_meta::<GatewayMeta>(),
+            Ok(GatewayMeta::Pay { preimage_auth })
+                if PreimageAuth::new(preimage_auth).verifies(payload.preimage_auth)
+        ) {
+            return Err(GatewayPayInvoiceError::Unauthorized {
+                contract_id: payload.contract_id,
+            });
+        }
+
+        let operation_id = OperationId(payload.contract_id.to_byte_array());
+        debug!(
+            operation_id = %operation_id.fmt_short(),
+            contract_id = %payload.contract_id,
+            "Duplicate request to pay an outgoing contract, returning the existing operation"
+        );
+        Ok(operation_id)
     }
 
     /// Subscribe to updates of a payment started with
