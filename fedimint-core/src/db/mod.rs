@@ -2141,6 +2141,20 @@ pub enum DatabaseError {
     #[error("Write-write conflict detected")]
     WriteConflict,
 
+    /// The backend could not tell whether this transaction conflicted with
+    /// another one, because its snapshot is older than the write history the
+    /// backend still keeps around for conflict detection.
+    ///
+    /// This is *not* a conflict: it says nothing about whether any other
+    /// transaction touched the same keys, only that the transaction was open
+    /// for too many intervening writes to check. Nothing was written, and
+    /// rerunning the whole operation against a fresh transaction is the only
+    /// supported recovery — the failed transaction cannot be committed again.
+    ///
+    /// The usual cause is a transaction held open across something slow.
+    #[error("Transaction snapshot is older than the retained write history: {0}")]
+    SnapshotTooOld(Box<dyn Error + Send + Sync>),
+
     /// The transaction has already been consumed (committed or dropped).
     /// Operations cannot be performed on a consumed transaction.
     #[error("Transaction already consumed")]
@@ -2164,6 +2178,11 @@ impl DatabaseError {
     /// Create a DatabaseBackend error from any error type
     pub fn backend<E: Error + Send + Sync + 'static>(error: E) -> Self {
         Self::DatabaseBackend(Box::new(error))
+    }
+
+    /// Create a `SnapshotTooOld` error, preserving the backend's own error
+    pub fn snapshot_too_old<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::SnapshotTooOld(Box::new(error))
     }
 }
 

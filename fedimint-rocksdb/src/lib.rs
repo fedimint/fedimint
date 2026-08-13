@@ -418,15 +418,22 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
             match self.0.commit() {
                 Ok(()) => Ok(()),
                 Err(err) => {
-                    // RocksDB's OptimisticTransactionDB can return Busy/TryAgain errors
-                    // when concurrent transactions conflict on the same keys.
-                    // These are retriable - return WriteConflict so autocommit retries.
+                    // `Busy` means another transaction wrote a key this one also wrote,
+                    // after our snapshot was taken. `TryAgain` means RocksDB could not
+                    // check for conflicts at all, because our snapshot is older than the
+                    // write history it retains — a different failure with a different
+                    // fix, so it gets its own variant.
+                    //
+                    // Anything else keeps its original kind and message: collapsing
+                    // unrelated failures into a conflict hides what actually went wrong.
+                    // Note that `Database::autocommit` retries on any commit error, so
+                    // nothing here changes which errors it recovers from.
+                    //
                     // See: https://github.com/fedimint/fedimint/issues/8077
+                    // See: https://github.com/fedimint/fedimint/issues/8872
                     match err.kind() {
-                        rocksdb::ErrorKind::Busy
-                        | rocksdb::ErrorKind::TryAgain
-                        | rocksdb::ErrorKind::MergeInProgress
-                        | rocksdb::ErrorKind::TimedOut => Err(DatabaseError::WriteConflict),
+                        rocksdb::ErrorKind::Busy => Err(DatabaseError::WriteConflict),
+                        rocksdb::ErrorKind::TryAgain => Err(DatabaseError::snapshot_too_old(err)),
                         _ => Err(DatabaseError::backend(err)),
                     }
                 }
@@ -857,6 +864,95 @@ mod fedimint_rocksdb_tests {
                 (TestKey2(vec![254]), TestVal2(vec![1])),
                 (TestKey2(vec![0]), TestVal2(vec![3]))
             ]
+        );
+    }
+
+    /// `RocksDB` validates an optimistic transaction at commit time against the
+    /// write history it still keeps in memory. That history is bounded by
+    /// `max_write_buffer_size_to_maintain`, which `OptimisticTransactionDB`
+    /// defaults to `max_write_buffer_number * write_buffer_size` — 4 MiB with
+    /// our options. Once a transaction's snapshot falls out of that window
+    /// `RocksDB` can no longer tell whether anything conflicted, and fails the
+    /// commit with `TryAgain` even though no other transaction ever touched any
+    /// of its keys.
+    ///
+    /// This is not a write conflict, and must not be reported as one: the
+    /// caller has to be able to tell a genuine race from a transaction that
+    /// was simply held open too long.
+    ///
+    /// See: <https://github.com/fedimint/fedimint/issues/8872>
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_long_lived_transaction_fails_without_key_overlap() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-long-lived-transaction")
+            .tempdir()
+            .unwrap();
+
+        let db = Database::new(
+            RocksDb::build(path.as_ref()).open_blocking().unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        // A transaction that writes a single key and then stays open, standing in
+        // for one that waits on something slow before committing.
+        let mut long_lived_dbtx = db.begin_transaction().await;
+        long_lived_dbtx
+            .insert_entry(&TestKey(vec![0]), &TestVal(vec![0]))
+            .await;
+
+        // Unrelated writers commit 8 MiB over keys that are disjoint from the
+        // above, which is enough to push the retained history past the snapshot.
+        // 6 MiB was the observed threshold, so this leaves some headroom.
+        let value = vec![0xab; 64 * 1024];
+
+        for index in 0u32..128 {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.insert_entry(
+                &TestKey2(index.to_be_bytes().to_vec()),
+                &TestVal2(value.clone()),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
+
+        let result = long_lived_dbtx.commit_tx_result().await;
+
+        assert!(
+            matches!(result, Err(DatabaseError::SnapshotTooOld(_))),
+            "expected a stale snapshot, got {result:?}"
+        );
+    }
+
+    /// The counterpart to the test above: two transactions writing the *same*
+    /// key is a genuine conflict, and stays reported as one.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_same_key_write_is_a_conflict() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test-same-key-write")
+            .tempdir()
+            .unwrap();
+
+        let db = Database::new(
+            RocksDb::build(path.as_ref()).open_blocking().unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+
+        let mut first_dbtx = db.begin_transaction().await;
+        first_dbtx
+            .insert_entry(&TestKey(vec![0]), &TestVal(vec![1]))
+            .await;
+
+        let mut second_dbtx = db.begin_transaction().await;
+        second_dbtx
+            .insert_entry(&TestKey(vec![0]), &TestVal(vec![2]))
+            .await;
+        second_dbtx.commit_tx().await;
+
+        let result = first_dbtx.commit_tx_result().await;
+
+        assert!(
+            matches!(result, Err(DatabaseError::WriteConflict)),
+            "expected a write conflict, got {result:?}"
         );
     }
 }
