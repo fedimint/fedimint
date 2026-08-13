@@ -1073,12 +1073,22 @@ impl ConsensusEngine {
                 Ok(())
             }
             ConsensusItem::Default { variant, .. } => {
+                // This panic is intentional and preserves forward compatibility
+                // for consensus upgrades. An unrecognized item variant means a
+                // newer consensus version produced an item this (older) guardian
+                // cannot interpret. The item is already ordered, so every guardian
+                // sees it. We fail-stop rather than skip it: if we skipped,
+                // upgraded guardians would process the item while this one ignored
+                // it, diverging the accepted-item set across the federation -- a
+                // consensus fork, which is a safety failure. A halt is recoverable
+                // (upgrade the guardian and it reprocesses the item), so we
+                // deliberately trade liveness for safety here.
                 warn!(
                     target: LOG_CONSENSUS,
                     "Minor consensus version mismatch: unexpected consensus item type: {variant}"
                 );
 
-                bail!("Unexpected consensus item type: {variant}")
+                panic!("Unexpected consensus item type: {variant}")
             }
         }
     }
