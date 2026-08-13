@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CompleteSMState"],"struct":["CompleteSMCommon","CompleteStateMachine"]};
+window.SIDEBAR_ITEMS = {"enum":["CompleteSMState","CompletionOutcome"],"fn":["await_receive","complete_circuit","completion_outcome","log_completion"],"struct":["CircuitCompleteSMCommon","CircuitCompleteStateMachine","CompleteSMCommon","CompleteStateMachine","IncomingCircuitKey"]};

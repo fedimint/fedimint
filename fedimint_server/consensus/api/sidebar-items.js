@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["backup_statistics_static","server_endpoints","sign_guardian_metadata_preserving_iroh_endpoint"],"struct":["ConsensusApi"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_OUTPUTS_OUTCOMES_BATCH"],"fn":["backup_statistics_static","checked_outputs_outcomes_count","server_endpoints","sign_guardian_metadata_preserving_iroh_endpoint"],"struct":["ConsensusApi"]};

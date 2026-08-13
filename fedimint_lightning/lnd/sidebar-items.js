@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["route_hints_to_lnd","wire_features_to_lnd_feature_vec"],"struct":["GatewayLndClient","PrettyPaymentHash"],"type":["HtlcSubscriptionSender"]};
+window.SIDEBAR_ITEMS = {"enum":["HoldInvoiceAction","PaymentActionKind"],"fn":["hold_invoice_action","route_hints_to_lnd","wire_features_to_lnd_feature_vec"],"struct":["GatewayLndClient","HoldInvoiceStateError","PrettyPaymentHash"],"type":["HtlcSubscriptionSender"]};

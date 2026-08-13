@@ -432,248 +432,287 @@
 <a href=#432 id=432 data-nosnippet>432</a>        <span class="self">self</span>.into_iter().count()
 <a href=#433 id=433 data-nosnippet>433</a>    }
 <a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">pub fn </span>from_inclusive(range: ops::RangeInclusive&lt;u64&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#436 id=436 data-nosnippet>436</a>        range.end().checked_add(<span class="number">1</span>).map(|end| <span class="self">Self </span>{
-<a href=#437 id=437 data-nosnippet>437</a>            start: <span class="kw-2">*</span>range.start(),
-<a href=#438 id=438 data-nosnippet>438</a>            end,
-<a href=#439 id=439 data-nosnippet>439</a>        })
-<a href=#440 id=440 data-nosnippet>440</a>    }
-<a href=#441 id=441 data-nosnippet>441</a>}
-<a href=#442 id=442 data-nosnippet>442</a>
-<a href=#443 id=443 data-nosnippet>443</a><span class="kw">impl </span>From&lt;Range&lt;u64&gt;&gt; <span class="kw">for </span>IdxRange {
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">fn </span>from(Range { start, end }: Range&lt;u64&gt;) -&gt; <span class="self">Self </span>{
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="self">Self </span>{ start, end }
-<a href=#446 id=446 data-nosnippet>446</a>    }
-<a href=#447 id=447 data-nosnippet>447</a>}
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>IdxRange {
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">type </span>Item = u64;
-<a href=#451 id=451 data-nosnippet>451</a>    <span class="kw">type </span>IntoIter = ops::Range&lt;u64&gt;;
-<a href=#452 id=452 data-nosnippet>452</a>
-<a href=#453 id=453 data-nosnippet>453</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-<a href=#454 id=454 data-nosnippet>454</a>        ops::Range {
-<a href=#455 id=455 data-nosnippet>455</a>            start: <span class="self">self</span>.start,
-<a href=#456 id=456 data-nosnippet>456</a>            end: <span class="self">self</span>.end,
-<a href=#457 id=457 data-nosnippet>457</a>        }
-<a href=#458 id=458 data-nosnippet>458</a>    }
-<a href=#459 id=459 data-nosnippet>459</a>}
-<a href=#460 id=460 data-nosnippet>460</a>
-<a href=#461 id=461 data-nosnippet>461</a><span class="doccomment">/// Represents a range of output indices for a single transaction
-<a href=#462 id=462 data-nosnippet>462</a></span><span class="attr">#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#463 id=463 data-nosnippet>463</a></span><span class="kw">pub struct </span>OutPointRange {
-<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">pub </span>txid: TransactionId,
-<a href=#465 id=465 data-nosnippet>465</a>    idx_range: IdxRange,
-<a href=#466 id=466 data-nosnippet>466</a>}
-<a href=#467 id=467 data-nosnippet>467</a>
-<a href=#468 id=468 data-nosnippet>468</a><span class="kw">impl </span>OutPointRange {
-<a href=#469 id=469 data-nosnippet>469</a>    <span class="kw">pub fn </span>new(txid: TransactionId, idx_range: IdxRange) -&gt; <span class="self">Self </span>{
-<a href=#470 id=470 data-nosnippet>470</a>        <span class="self">Self </span>{ txid, idx_range }
-<a href=#471 id=471 data-nosnippet>471</a>    }
-<a href=#472 id=472 data-nosnippet>472</a>
-<a href=#473 id=473 data-nosnippet>473</a>    <span class="kw">pub fn </span>new_single(txid: TransactionId, idx: u64) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
-<a href=#474 id=474 data-nosnippet>474</a>        IdxRange::new_single(idx).map(|idx_range| <span class="self">Self </span>{ txid, idx_range })
-<a href=#475 id=475 data-nosnippet>475</a>    }
-<a href=#476 id=476 data-nosnippet>476</a>
-<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">pub fn </span>start_idx(<span class="self">self</span>) -&gt; u64 {
-<a href=#478 id=478 data-nosnippet>478</a>        <span class="self">self</span>.idx_range.start()
-<a href=#479 id=479 data-nosnippet>479</a>    }
-<a href=#480 id=480 data-nosnippet>480</a>
-<a href=#481 id=481 data-nosnippet>481</a>    <span class="kw">pub fn </span>out_idx_iter(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = u64&gt; {
-<a href=#482 id=482 data-nosnippet>482</a>        <span class="self">self</span>.idx_range.into_iter()
-<a href=#483 id=483 data-nosnippet>483</a>    }
-<a href=#484 id=484 data-nosnippet>484</a>
-<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">pub fn </span>count(<span class="self">self</span>) -&gt; usize {
-<a href=#486 id=486 data-nosnippet>486</a>        <span class="self">self</span>.idx_range.count()
-<a href=#487 id=487 data-nosnippet>487</a>    }
-<a href=#488 id=488 data-nosnippet>488</a>
-<a href=#489 id=489 data-nosnippet>489</a>    <span class="kw">pub fn </span>start_out_point(<span class="self">self</span>) -&gt; OutPoint {
-<a href=#490 id=490 data-nosnippet>490</a>        OutPoint {
-<a href=#491 id=491 data-nosnippet>491</a>            txid: <span class="self">self</span>.txid,
-<a href=#492 id=492 data-nosnippet>492</a>            out_idx: <span class="self">self</span>.idx_range.start(),
-<a href=#493 id=493 data-nosnippet>493</a>        }
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="doccomment">/// Number of indexes in the range, or `None` if the range is descending or
+<a href=#436 id=436 data-nosnippet>436</a>    /// does not fit into a `usize`.
+<a href=#437 id=437 data-nosnippet>437</a>    ///
+<a href=#438 id=438 data-nosnippet>438</a>    /// Ranges are deserialized verbatim from untrusted API requests, so a
+<a href=#439 id=439 data-nosnippet>439</a>    /// caller validating one has to go through this rather than
+<a href=#440 id=440 data-nosnippet>440</a>    /// [`Self::count`], which reports a descending range as empty and panics on
+<a href=#441 id=441 data-nosnippet>441</a>    /// `usize` overflow.
+<a href=#442 id=442 data-nosnippet>442</a>    </span><span class="kw">pub fn </span>checked_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+<a href=#443 id=443 data-nosnippet>443</a>        usize::try_from(<span class="self">self</span>.end.checked_sub(<span class="self">self</span>.start)<span class="question-mark">?</span>).ok()
+<a href=#444 id=444 data-nosnippet>444</a>    }
+<a href=#445 id=445 data-nosnippet>445</a>
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">pub fn </span>from_inclusive(range: ops::RangeInclusive&lt;u64&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#447 id=447 data-nosnippet>447</a>        range.end().checked_add(<span class="number">1</span>).map(|end| <span class="self">Self </span>{
+<a href=#448 id=448 data-nosnippet>448</a>            start: <span class="kw-2">*</span>range.start(),
+<a href=#449 id=449 data-nosnippet>449</a>            end,
+<a href=#450 id=450 data-nosnippet>450</a>        })
+<a href=#451 id=451 data-nosnippet>451</a>    }
+<a href=#452 id=452 data-nosnippet>452</a>}
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a><span class="kw">impl </span>From&lt;Range&lt;u64&gt;&gt; <span class="kw">for </span>IdxRange {
+<a href=#455 id=455 data-nosnippet>455</a>    <span class="kw">fn </span>from(Range { start, end }: Range&lt;u64&gt;) -&gt; <span class="self">Self </span>{
+<a href=#456 id=456 data-nosnippet>456</a>        <span class="self">Self </span>{ start, end }
+<a href=#457 id=457 data-nosnippet>457</a>    }
+<a href=#458 id=458 data-nosnippet>458</a>}
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>IdxRange {
+<a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">type </span>Item = u64;
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">type </span>IntoIter = ops::Range&lt;u64&gt;;
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+<a href=#465 id=465 data-nosnippet>465</a>        ops::Range {
+<a href=#466 id=466 data-nosnippet>466</a>            start: <span class="self">self</span>.start,
+<a href=#467 id=467 data-nosnippet>467</a>            end: <span class="self">self</span>.end,
+<a href=#468 id=468 data-nosnippet>468</a>        }
+<a href=#469 id=469 data-nosnippet>469</a>    }
+<a href=#470 id=470 data-nosnippet>470</a>}
+<a href=#471 id=471 data-nosnippet>471</a>
+<a href=#472 id=472 data-nosnippet>472</a><span class="doccomment">/// Represents a range of output indices for a single transaction
+<a href=#473 id=473 data-nosnippet>473</a></span><span class="attr">#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<a href=#474 id=474 data-nosnippet>474</a></span><span class="kw">pub struct </span>OutPointRange {
+<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">pub </span>txid: TransactionId,
+<a href=#476 id=476 data-nosnippet>476</a>    idx_range: IdxRange,
+<a href=#477 id=477 data-nosnippet>477</a>}
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a><span class="kw">impl </span>OutPointRange {
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="kw">pub fn </span>new(txid: TransactionId, idx_range: IdxRange) -&gt; <span class="self">Self </span>{
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="self">Self </span>{ txid, idx_range }
+<a href=#482 id=482 data-nosnippet>482</a>    }
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">pub fn </span>new_single(txid: TransactionId, idx: u64) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#485 id=485 data-nosnippet>485</a>        IdxRange::new_single(idx).map(|idx_range| <span class="self">Self </span>{ txid, idx_range })
+<a href=#486 id=486 data-nosnippet>486</a>    }
+<a href=#487 id=487 data-nosnippet>487</a>
+<a href=#488 id=488 data-nosnippet>488</a>    <span class="kw">pub fn </span>start_idx(<span class="self">self</span>) -&gt; u64 {
+<a href=#489 id=489 data-nosnippet>489</a>        <span class="self">self</span>.idx_range.start()
+<a href=#490 id=490 data-nosnippet>490</a>    }
+<a href=#491 id=491 data-nosnippet>491</a>
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">pub fn </span>out_idx_iter(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = u64&gt; {
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="self">self</span>.idx_range.into_iter()
 <a href=#494 id=494 data-nosnippet>494</a>    }
 <a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">pub fn </span>end_out_point(<span class="self">self</span>) -&gt; OutPoint {
-<a href=#497 id=497 data-nosnippet>497</a>        OutPoint {
-<a href=#498 id=498 data-nosnippet>498</a>            txid: <span class="self">self</span>.txid,
-<a href=#499 id=499 data-nosnippet>499</a>            out_idx: <span class="self">self</span>.idx_range.end,
-<a href=#500 id=500 data-nosnippet>500</a>        }
-<a href=#501 id=501 data-nosnippet>501</a>    }
-<a href=#502 id=502 data-nosnippet>502</a>
-<a href=#503 id=503 data-nosnippet>503</a>    <span class="kw">pub fn </span>txid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
-<a href=#504 id=504 data-nosnippet>504</a>        <span class="self">self</span>.txid
-<a href=#505 id=505 data-nosnippet>505</a>    }
-<a href=#506 id=506 data-nosnippet>506</a>}
-<a href=#507 id=507 data-nosnippet>507</a>
-<a href=#508 id=508 data-nosnippet>508</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>OutPointRange {
-<a href=#509 id=509 data-nosnippet>509</a>    <span class="kw">type </span>Item = OutPoint;
-<a href=#510 id=510 data-nosnippet>510</a>    <span class="kw">type </span>IntoIter = OutPointRangeIter;
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">pub fn </span>count(<span class="self">self</span>) -&gt; usize {
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="self">self</span>.idx_range.count()
+<a href=#498 id=498 data-nosnippet>498</a>    }
+<a href=#499 id=499 data-nosnippet>499</a>
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="doccomment">/// See [`IdxRange::checked_count`].
+<a href=#501 id=501 data-nosnippet>501</a>    </span><span class="kw">pub fn </span>checked_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+<a href=#502 id=502 data-nosnippet>502</a>        <span class="self">self</span>.idx_range.checked_count()
+<a href=#503 id=503 data-nosnippet>503</a>    }
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">pub fn </span>start_out_point(<span class="self">self</span>) -&gt; OutPoint {
+<a href=#506 id=506 data-nosnippet>506</a>        OutPoint {
+<a href=#507 id=507 data-nosnippet>507</a>            txid: <span class="self">self</span>.txid,
+<a href=#508 id=508 data-nosnippet>508</a>            out_idx: <span class="self">self</span>.idx_range.start(),
+<a href=#509 id=509 data-nosnippet>509</a>        }
+<a href=#510 id=510 data-nosnippet>510</a>    }
 <a href=#511 id=511 data-nosnippet>511</a>
-<a href=#512 id=512 data-nosnippet>512</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-<a href=#513 id=513 data-nosnippet>513</a>        OutPointRangeIter {
+<a href=#512 id=512 data-nosnippet>512</a>    <span class="kw">pub fn </span>end_out_point(<span class="self">self</span>) -&gt; OutPoint {
+<a href=#513 id=513 data-nosnippet>513</a>        OutPoint {
 <a href=#514 id=514 data-nosnippet>514</a>            txid: <span class="self">self</span>.txid,
-<a href=#515 id=515 data-nosnippet>515</a>            inner: <span class="self">self</span>.idx_range.into_iter(),
+<a href=#515 id=515 data-nosnippet>515</a>            out_idx: <span class="self">self</span>.idx_range.end,
 <a href=#516 id=516 data-nosnippet>516</a>        }
 <a href=#517 id=517 data-nosnippet>517</a>    }
-<a href=#518 id=518 data-nosnippet>518</a>}
-<a href=#519 id=519 data-nosnippet>519</a>
-<a href=#520 id=520 data-nosnippet>520</a><span class="kw">pub struct </span>OutPointRangeIter {
-<a href=#521 id=521 data-nosnippet>521</a>    txid: TransactionId,
-<a href=#522 id=522 data-nosnippet>522</a>    inner: ops::Range&lt;u64&gt;,
-<a href=#523 id=523 data-nosnippet>523</a>}
-<a href=#524 id=524 data-nosnippet>524</a>
-<a href=#525 id=525 data-nosnippet>525</a><span class="kw">impl </span>Iterator <span class="kw">for </span>OutPointRangeIter {
-<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">type </span>Item = OutPoint;
+<a href=#518 id=518 data-nosnippet>518</a>
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">pub fn </span>txid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="self">self</span>.txid
+<a href=#521 id=521 data-nosnippet>521</a>    }
+<a href=#522 id=522 data-nosnippet>522</a>}
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>OutPointRange {
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">type </span>Item = OutPoint;
+<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">type </span>IntoIter = OutPointRangeIter;
 <a href=#527 id=527 data-nosnippet>527</a>
-<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
-<a href=#529 id=529 data-nosnippet>529</a>        <span class="self">self</span>.inner.next().map(|idx| OutPoint {
+<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+<a href=#529 id=529 data-nosnippet>529</a>        OutPointRangeIter {
 <a href=#530 id=530 data-nosnippet>530</a>            txid: <span class="self">self</span>.txid,
-<a href=#531 id=531 data-nosnippet>531</a>            out_idx: idx,
-<a href=#532 id=532 data-nosnippet>532</a>        })
+<a href=#531 id=531 data-nosnippet>531</a>            inner: <span class="self">self</span>.idx_range.into_iter(),
+<a href=#532 id=532 data-nosnippet>532</a>        }
 <a href=#533 id=533 data-nosnippet>533</a>    }
 <a href=#534 id=534 data-nosnippet>534</a>}
 <a href=#535 id=535 data-nosnippet>535</a>
-<a href=#536 id=536 data-nosnippet>536</a><span class="kw">impl </span>Encodable <span class="kw">for </span>TransactionId {
-<a href=#537 id=537 data-nosnippet>537</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
-<a href=#539 id=539 data-nosnippet>539</a>        writer.write_all(bytes)<span class="question-mark">?</span>;
-<a href=#540 id=540 data-nosnippet>540</a>        <span class="prelude-val">Ok</span>(())
-<a href=#541 id=541 data-nosnippet>541</a>    }
-<a href=#542 id=542 data-nosnippet>542</a>}
+<a href=#536 id=536 data-nosnippet>536</a><span class="kw">pub struct </span>OutPointRangeIter {
+<a href=#537 id=537 data-nosnippet>537</a>    txid: TransactionId,
+<a href=#538 id=538 data-nosnippet>538</a>    inner: ops::Range&lt;u64&gt;,
+<a href=#539 id=539 data-nosnippet>539</a>}
+<a href=#540 id=540 data-nosnippet>540</a>
+<a href=#541 id=541 data-nosnippet>541</a><span class="kw">impl </span>Iterator <span class="kw">for </span>OutPointRangeIter {
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">type </span>Item = OutPoint;
 <a href=#543 id=543 data-nosnippet>543</a>
-<a href=#544 id=544 data-nosnippet>544</a><span class="kw">impl </span>Decodable <span class="kw">for </span>TransactionId {
-<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
-<a href=#546 id=546 data-nosnippet>546</a>        d: <span class="kw-2">&amp;mut </span>D,
-<a href=#547 id=547 data-nosnippet>547</a>        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-<a href=#548 id=548 data-nosnippet>548</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-<a href=#549 id=549 data-nosnippet>549</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
-<a href=#550 id=550 data-nosnippet>550</a>        d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
-<a href=#551 id=551 data-nosnippet>551</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_byte_array(bytes))
-<a href=#552 id=552 data-nosnippet>552</a>    }
-<a href=#553 id=553 data-nosnippet>553</a>}
-<a href=#554 id=554 data-nosnippet>554</a>
-<a href=#555 id=555 data-nosnippet>555</a><span class="attr">#[derive(
-<a href=#556 id=556 data-nosnippet>556</a>    Copy,
-<a href=#557 id=557 data-nosnippet>557</a>    Clone,
-<a href=#558 id=558 data-nosnippet>558</a>    Debug,
-<a href=#559 id=559 data-nosnippet>559</a>    PartialEq,
-<a href=#560 id=560 data-nosnippet>560</a>    Ord,
-<a href=#561 id=561 data-nosnippet>561</a>    PartialOrd,
-<a href=#562 id=562 data-nosnippet>562</a>    Eq,
-<a href=#563 id=563 data-nosnippet>563</a>    Hash,
-<a href=#564 id=564 data-nosnippet>564</a>    Serialize,
-<a href=#565 id=565 data-nosnippet>565</a>    Deserialize,
-<a href=#566 id=566 data-nosnippet>566</a>    Encodable,
-<a href=#567 id=567 data-nosnippet>567</a>    Decodable,
-<a href=#568 id=568 data-nosnippet>568</a>)]
-<a href=#569 id=569 data-nosnippet>569</a></span><span class="kw">pub struct </span>Feerate {
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">pub </span>sats_per_kvb: u64,
-<a href=#571 id=571 data-nosnippet>571</a>}
-<a href=#572 id=572 data-nosnippet>572</a>
-<a href=#573 id=573 data-nosnippet>573</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Feerate {
-<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#575 id=575 data-nosnippet>575</a>        f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{}sat/kvb"</span>, <span class="self">self</span>.sats_per_kvb))
-<a href=#576 id=576 data-nosnippet>576</a>    }
-<a href=#577 id=577 data-nosnippet>577</a>}
-<a href=#578 id=578 data-nosnippet>578</a>
-<a href=#579 id=579 data-nosnippet>579</a><span class="kw">impl </span>Feerate {
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
-<a href=#581 id=581 data-nosnippet>581</a>        <span class="kw">let </span>sats = weight_to_vbytes(weight) * <span class="self">self</span>.sats_per_kvb / <span class="number">1000</span>;
-<a href=#582 id=582 data-nosnippet>582</a>        bitcoin::Amount::from_sat(sats)
-<a href=#583 id=583 data-nosnippet>583</a>    }
-<a href=#584 id=584 data-nosnippet>584</a>}
-<a href=#585 id=585 data-nosnippet>585</a>
-<a href=#586 id=586 data-nosnippet>586</a><span class="kw">const </span>WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR <span class="kw">as </span>u64;
-<a href=#587 id=587 data-nosnippet>587</a>
-<a href=#588 id=588 data-nosnippet>588</a><span class="doccomment">/// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
-<a href=#589 id=589 data-nosnippet>589</a>/// (rounded up to the next integer).
-<a href=#590 id=590 data-nosnippet>590</a>///
-<a href=#591 id=591 data-nosnippet>591</a>/// [BIP-141]: https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#transaction-size-calculations
-<a href=#592 id=592 data-nosnippet>592</a></span><span class="kw">pub fn </span>weight_to_vbytes(weight: u64) -&gt; u64 {
-<a href=#593 id=593 data-nosnippet>593</a>    weight.div_ceil(WITNESS_SCALE_FACTOR)
-<a href=#594 id=594 data-nosnippet>594</a>}
-<a href=#595 id=595 data-nosnippet>595</a>
-<a href=#596 id=596 data-nosnippet>596</a><span class="attr">#[derive(Debug, Error)]
-<a href=#597 id=597 data-nosnippet>597</a></span><span class="kw">pub enum </span>CoreError {
-<a href=#598 id=598 data-nosnippet>598</a>    <span class="attr">#[error(<span class="string">"Mismatching outcome variant: expected {0}, got {1}"</span>)]
-<a href=#599 id=599 data-nosnippet>599</a>    </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
-<a href=#600 id=600 data-nosnippet>600</a>}
-<a href=#601 id=601 data-nosnippet>601</a>
-<a href=#602 id=602 data-nosnippet>602</a><span class="comment">// Encode features for a bolt11 invoice without encoding the length.
-<a href=#603 id=603 data-nosnippet>603</a>// This functionality was available in `lightning` v0.0.123, but has since been
-<a href=#604 id=604 data-nosnippet>604</a>// removed. See the original code here:
-<a href=#605 id=605 data-nosnippet>605</a>// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#745-750
-<a href=#606 id=606 data-nosnippet>606</a>// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#1008-1012
-<a href=#607 id=607 data-nosnippet>607</a></span><span class="kw">pub fn </span>encode_bolt11_invoice_features_without_length(features: <span class="kw-2">&amp;</span>Bolt11InvoiceFeatures) -&gt; Vec&lt;u8&gt; {
-<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">let </span><span class="kw-2">mut </span>feature_bytes = <span class="macro">vec!</span>[];
-<a href=#609 id=609 data-nosnippet>609</a>    <span class="kw">for </span>f <span class="kw">in </span>features.le_flags().iter().rev() {
-<a href=#610 id=610 data-nosnippet>610</a>        f.write(<span class="kw-2">&amp;mut </span>feature_bytes)
-<a href=#611 id=611 data-nosnippet>611</a>            .expect(<span class="string">"Writing to byte vec can't fail"</span>);
-<a href=#612 id=612 data-nosnippet>612</a>    }
-<a href=#613 id=613 data-nosnippet>613</a>    feature_bytes
-<a href=#614 id=614 data-nosnippet>614</a>}
-<a href=#615 id=615 data-nosnippet>615</a>
-<a href=#616 id=616 data-nosnippet>616</a><span class="doccomment">/// Outputs hex into an object implementing `fmt::Write`.
-<a href=#617 id=617 data-nosnippet>617</a>///
-<a href=#618 id=618 data-nosnippet>618</a>/// Vendored from `bitcoin_hashes` v0.11.0:
-<a href=#619 id=619 data-nosnippet>619</a>/// &lt;https://docs.rs/bitcoin_hashes/0.11.0/src/bitcoin_hashes/hex.rs.html#173-189&gt;
-<a href=#620 id=620 data-nosnippet>620</a></span><span class="kw">pub fn </span>format_hex(data: <span class="kw-2">&amp;</span>[u8], f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
-<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">let </span>prec = f.precision().unwrap_or(<span class="number">2 </span>* data.len());
-<a href=#622 id=622 data-nosnippet>622</a>    <span class="kw">let </span>width = f.width().unwrap_or(<span class="number">2 </span>* data.len());
-<a href=#623 id=623 data-nosnippet>623</a>    <span class="kw">for _ in </span>(<span class="number">2 </span>* data.len())..width {
-<a href=#624 id=624 data-nosnippet>624</a>        f.write_str(<span class="string">"0"</span>)<span class="question-mark">?</span>;
-<a href=#625 id=625 data-nosnippet>625</a>    }
-<a href=#626 id=626 data-nosnippet>626</a>    <span class="kw">for </span>ch <span class="kw">in </span>data.iter().take(prec / <span class="number">2</span>) {
-<a href=#627 id=627 data-nosnippet>627</a>        <span class="macro">write!</span>(f, <span class="string">"{:02x}"</span>, <span class="kw-2">*</span>ch)<span class="question-mark">?</span>;
-<a href=#628 id=628 data-nosnippet>628</a>    }
-<a href=#629 id=629 data-nosnippet>629</a>    <span class="kw">if </span>prec &lt; <span class="number">2 </span>* data.len() &amp;&amp; prec % <span class="number">2 </span>== <span class="number">1 </span>{
-<a href=#630 id=630 data-nosnippet>630</a>        <span class="macro">write!</span>(f, <span class="string">"{:x}"</span>, data[prec / <span class="number">2</span>] / <span class="number">16</span>)<span class="question-mark">?</span>;
-<a href=#631 id=631 data-nosnippet>631</a>    }
-<a href=#632 id=632 data-nosnippet>632</a>    <span class="prelude-val">Ok</span>(())
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="self">self</span>.inner.next().map(|idx| OutPoint {
+<a href=#546 id=546 data-nosnippet>546</a>            txid: <span class="self">self</span>.txid,
+<a href=#547 id=547 data-nosnippet>547</a>            out_idx: idx,
+<a href=#548 id=548 data-nosnippet>548</a>        })
+<a href=#549 id=549 data-nosnippet>549</a>    }
+<a href=#550 id=550 data-nosnippet>550</a>}
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a><span class="kw">impl </span>Encodable <span class="kw">for </span>TransactionId {
+<a href=#553 id=553 data-nosnippet>553</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
+<a href=#555 id=555 data-nosnippet>555</a>        writer.write_all(bytes)<span class="question-mark">?</span>;
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="prelude-val">Ok</span>(())
+<a href=#557 id=557 data-nosnippet>557</a>    }
+<a href=#558 id=558 data-nosnippet>558</a>}
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a><span class="kw">impl </span>Decodable <span class="kw">for </span>TransactionId {
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">fn </span>consensus_decode_partial&lt;D: std::io::Read&gt;(
+<a href=#562 id=562 data-nosnippet>562</a>        d: <span class="kw-2">&amp;mut </span>D,
+<a href=#563 id=563 data-nosnippet>563</a>        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#564 id=564 data-nosnippet>564</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<a href=#565 id=565 data-nosnippet>565</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
+<a href=#566 id=566 data-nosnippet>566</a>        d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_byte_array(bytes))
+<a href=#568 id=568 data-nosnippet>568</a>    }
+<a href=#569 id=569 data-nosnippet>569</a>}
+<a href=#570 id=570 data-nosnippet>570</a>
+<a href=#571 id=571 data-nosnippet>571</a><span class="attr">#[derive(
+<a href=#572 id=572 data-nosnippet>572</a>    Copy,
+<a href=#573 id=573 data-nosnippet>573</a>    Clone,
+<a href=#574 id=574 data-nosnippet>574</a>    Debug,
+<a href=#575 id=575 data-nosnippet>575</a>    PartialEq,
+<a href=#576 id=576 data-nosnippet>576</a>    Ord,
+<a href=#577 id=577 data-nosnippet>577</a>    PartialOrd,
+<a href=#578 id=578 data-nosnippet>578</a>    Eq,
+<a href=#579 id=579 data-nosnippet>579</a>    Hash,
+<a href=#580 id=580 data-nosnippet>580</a>    Serialize,
+<a href=#581 id=581 data-nosnippet>581</a>    Deserialize,
+<a href=#582 id=582 data-nosnippet>582</a>    Encodable,
+<a href=#583 id=583 data-nosnippet>583</a>    Decodable,
+<a href=#584 id=584 data-nosnippet>584</a>)]
+<a href=#585 id=585 data-nosnippet>585</a></span><span class="kw">pub struct </span>Feerate {
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">pub </span>sats_per_kvb: u64,
+<a href=#587 id=587 data-nosnippet>587</a>}
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Feerate {
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#591 id=591 data-nosnippet>591</a>        f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{}sat/kvb"</span>, <span class="self">self</span>.sats_per_kvb))
+<a href=#592 id=592 data-nosnippet>592</a>    }
+<a href=#593 id=593 data-nosnippet>593</a>}
+<a href=#594 id=594 data-nosnippet>594</a>
+<a href=#595 id=595 data-nosnippet>595</a><span class="kw">impl </span>Feerate {
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
+<a href=#597 id=597 data-nosnippet>597</a>        <span class="kw">let </span>sats = weight_to_vbytes(weight) * <span class="self">self</span>.sats_per_kvb / <span class="number">1000</span>;
+<a href=#598 id=598 data-nosnippet>598</a>        bitcoin::Amount::from_sat(sats)
+<a href=#599 id=599 data-nosnippet>599</a>    }
+<a href=#600 id=600 data-nosnippet>600</a>
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="doccomment">/// Fee for a transaction of the given weight, reproducing the wrapping the
+<a href=#602 id=602 data-nosnippet>602</a>    /// unchecked multiplication used to do in release profiles.
+<a href=#603 id=603 data-nosnippet>603</a>    ///
+<a href=#604 id=604 data-nosnippet>604</a>    /// Consensus behaviour must not depend on the build profile, and
+<a href=#605 id=605 data-nosnippet>605</a>    /// [`Self::calculate_fee`]'s `*` panics with overflow checks on and wraps
+<a href=#606 id=606 data-nosnippet>606</a>    /// without them. Sessions ordered before the fee computation was checked
+<a href=#607 id=607 data-nosnippet>607</a>    /// have to replay as release binaries ran them, so the wrap is explicit.
+<a href=#608 id=608 data-nosnippet>608</a>    </span><span class="kw">pub fn </span>wrapping_calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">let </span>sats = weight_to_vbytes(weight).wrapping_mul(<span class="self">self</span>.sats_per_kvb) / <span class="number">1000</span>;
+<a href=#610 id=610 data-nosnippet>610</a>        bitcoin::Amount::from_sat(sats)
+<a href=#611 id=611 data-nosnippet>611</a>    }
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="doccomment">/// Fee for a transaction of the given weight, or `None` if the rate and
+<a href=#614 id=614 data-nosnippet>614</a>    /// weight do not describe a fee that can exist on chain.
+<a href=#615 id=615 data-nosnippet>615</a>    ///
+<a href=#616 id=616 data-nosnippet>616</a>    /// [`Self::calculate_fee`] multiplies unchecked, which wraps to an
+<a href=#617 id=617 data-nosnippet>617</a>    /// arbitrarily small fee in release profiles. Callers that decide whether
+<a href=#618 id=618 data-nosnippet>618</a>    /// to accept a transaction must use this instead.
+<a href=#619 id=619 data-nosnippet>619</a>    </span><span class="kw">pub fn </span>checked_calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Amount&gt; {
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">let </span>sats = weight_to_vbytes(weight).checked_mul(<span class="self">self</span>.sats_per_kvb)<span class="question-mark">? </span>/ <span class="number">1000</span>;
+<a href=#621 id=621 data-nosnippet>621</a>        (sats &lt;= bitcoin::Amount::MAX_MONEY.to_sat()).then(|| bitcoin::Amount::from_sat(sats))
+<a href=#622 id=622 data-nosnippet>622</a>    }
+<a href=#623 id=623 data-nosnippet>623</a>}
+<a href=#624 id=624 data-nosnippet>624</a>
+<a href=#625 id=625 data-nosnippet>625</a><span class="kw">const </span>WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR <span class="kw">as </span>u64;
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a><span class="doccomment">/// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
+<a href=#628 id=628 data-nosnippet>628</a>/// (rounded up to the next integer).
+<a href=#629 id=629 data-nosnippet>629</a>///
+<a href=#630 id=630 data-nosnippet>630</a>/// [BIP-141]: https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#transaction-size-calculations
+<a href=#631 id=631 data-nosnippet>631</a></span><span class="kw">pub fn </span>weight_to_vbytes(weight: u64) -&gt; u64 {
+<a href=#632 id=632 data-nosnippet>632</a>    weight.div_ceil(WITNESS_SCALE_FACTOR)
 <a href=#633 id=633 data-nosnippet>633</a>}
 <a href=#634 id=634 data-nosnippet>634</a>
-<a href=#635 id=635 data-nosnippet>635</a><span class="doccomment">/// Gets the (approximate) network from a bitcoin address.
-<a href=#636 id=636 data-nosnippet>636</a>///
-<a href=#637 id=637 data-nosnippet>637</a>/// This function mimics how `Address.network` is calculated in bitcoin v0.30.
-<a href=#638 id=638 data-nosnippet>638</a>/// However, that field was removed in more recent versions in part because it
-<a href=#639 id=639 data-nosnippet>639</a>/// can only distinguish between `Bitcoin`, `Testnet` and `Regtest`.
-<a href=#640 id=640 data-nosnippet>640</a>///
-<a href=#641 id=641 data-nosnippet>641</a>/// As of bitcoin v0.32.4, `Address::is_valid_for_network()` performs equality
-<a href=#642 id=642 data-nosnippet>642</a>/// checks using `NetworkKind` and `KnownHrp`, which only distinguish between
-<a href=#643 id=643 data-nosnippet>643</a>/// `Bitcoin`, `Testnet` and `Regtest`.
-<a href=#644 id=644 data-nosnippet>644</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#709-716&gt;
-<a href=#645 id=645 data-nosnippet>645</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/network.rs.html#51-58&gt;
-<a href=#646 id=646 data-nosnippet>646</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#200-209&gt;
-<a href=#647 id=647 data-nosnippet>647</a></span><span class="kw">pub fn </span>get_network_for_address(address: <span class="kw-2">&amp;</span>Address&lt;NetworkUnchecked&gt;) -&gt; Network {
-<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">if </span>address.is_valid_for_network(Network::Bitcoin) {
-<a href=#649 id=649 data-nosnippet>649</a>        Network::Bitcoin
-<a href=#650 id=650 data-nosnippet>650</a>    } <span class="kw">else if </span>address.is_valid_for_network(Network::Testnet) {
-<a href=#651 id=651 data-nosnippet>651</a>        Network::Testnet
-<a href=#652 id=652 data-nosnippet>652</a>    } <span class="kw">else if </span>address.is_valid_for_network(Network::Regtest) {
-<a href=#653 id=653 data-nosnippet>653</a>        Network::Regtest
-<a href=#654 id=654 data-nosnippet>654</a>    } <span class="kw">else </span>{
-<a href=#655 id=655 data-nosnippet>655</a>        <span class="macro">panic!</span>(<span class="string">"Address is not valid for any network"</span>);
-<a href=#656 id=656 data-nosnippet>656</a>    }
-<a href=#657 id=657 data-nosnippet>657</a>}
-<a href=#658 id=658 data-nosnippet>658</a>
-<a href=#659 id=659 data-nosnippet>659</a><span class="doccomment">/// Returns the default esplora server according to the network
-<a href=#660 id=660 data-nosnippet>660</a></span><span class="kw">pub fn </span>default_esplora_server(network: Network, port: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; BitcoinRpcConfig {
-<a href=#661 id=661 data-nosnippet>661</a>    BitcoinRpcConfig {
-<a href=#662 id=662 data-nosnippet>662</a>        kind: <span class="string">"esplora"</span>.to_string(),
-<a href=#663 id=663 data-nosnippet>663</a>        url: <span class="kw">match </span>network {
-<a href=#664 id=664 data-nosnippet>664</a>            Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/api/"</span>),
-<a href=#665 id=665 data-nosnippet>665</a>            Network::Testnet =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet/api/"</span>),
-<a href=#666 id=666 data-nosnippet>666</a>            Network::Testnet4 =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet4/api/"</span>),
-<a href=#667 id=667 data-nosnippet>667</a>            Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>),
-<a href=#668 id=668 data-nosnippet>668</a>            Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#669 id=669 data-nosnippet>669</a>                <span class="string">"http://127.0.0.1:{}/"</span>,
-<a href=#670 id=670 data-nosnippet>670</a>                port.unwrap_or_else(|| String::from(<span class="string">"50002"</span>))
-<a href=#671 id=671 data-nosnippet>671</a>            )),
-<a href=#672 id=672 data-nosnippet>672</a>        }
-<a href=#673 id=673 data-nosnippet>673</a>        .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#674 id=674 data-nosnippet>674</a>    }
-<a href=#675 id=675 data-nosnippet>675</a>}
-<a href=#676 id=676 data-nosnippet>676</a>
-<a href=#677 id=677 data-nosnippet>677</a><span class="attr">#[cfg(test)]
-<a href=#678 id=678 data-nosnippet>678</a></span><span class="kw">mod </span>tests;
+<a href=#635 id=635 data-nosnippet>635</a><span class="attr">#[derive(Debug, Error)]
+<a href=#636 id=636 data-nosnippet>636</a></span><span class="kw">pub enum </span>CoreError {
+<a href=#637 id=637 data-nosnippet>637</a>    <span class="attr">#[error(<span class="string">"Mismatching outcome variant: expected {0}, got {1}"</span>)]
+<a href=#638 id=638 data-nosnippet>638</a>    </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
+<a href=#639 id=639 data-nosnippet>639</a>}
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a><span class="comment">// Encode features for a bolt11 invoice without encoding the length.
+<a href=#642 id=642 data-nosnippet>642</a>// This functionality was available in `lightning` v0.0.123, but has since been
+<a href=#643 id=643 data-nosnippet>643</a>// removed. See the original code here:
+<a href=#644 id=644 data-nosnippet>644</a>// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#745-750
+<a href=#645 id=645 data-nosnippet>645</a>// https://docs.rs/lightning/0.0.123/src/lightning/ln/features.rs.html#1008-1012
+<a href=#646 id=646 data-nosnippet>646</a></span><span class="kw">pub fn </span>encode_bolt11_invoice_features_without_length(features: <span class="kw-2">&amp;</span>Bolt11InvoiceFeatures) -&gt; Vec&lt;u8&gt; {
+<a href=#647 id=647 data-nosnippet>647</a>    <span class="kw">let </span><span class="kw-2">mut </span>feature_bytes = <span class="macro">vec!</span>[];
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">for </span>f <span class="kw">in </span>features.le_flags().iter().rev() {
+<a href=#649 id=649 data-nosnippet>649</a>        f.write(<span class="kw-2">&amp;mut </span>feature_bytes)
+<a href=#650 id=650 data-nosnippet>650</a>            .expect(<span class="string">"Writing to byte vec can't fail"</span>);
+<a href=#651 id=651 data-nosnippet>651</a>    }
+<a href=#652 id=652 data-nosnippet>652</a>    feature_bytes
+<a href=#653 id=653 data-nosnippet>653</a>}
+<a href=#654 id=654 data-nosnippet>654</a>
+<a href=#655 id=655 data-nosnippet>655</a><span class="doccomment">/// Outputs hex into an object implementing `fmt::Write`.
+<a href=#656 id=656 data-nosnippet>656</a>///
+<a href=#657 id=657 data-nosnippet>657</a>/// Vendored from `bitcoin_hashes` v0.11.0:
+<a href=#658 id=658 data-nosnippet>658</a>/// &lt;https://docs.rs/bitcoin_hashes/0.11.0/src/bitcoin_hashes/hex.rs.html#173-189&gt;
+<a href=#659 id=659 data-nosnippet>659</a></span><span class="kw">pub fn </span>format_hex(data: <span class="kw-2">&amp;</span>[u8], f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+<a href=#660 id=660 data-nosnippet>660</a>    <span class="kw">let </span>prec = f.precision().unwrap_or(<span class="number">2 </span>* data.len());
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="kw">let </span>width = f.width().unwrap_or(<span class="number">2 </span>* data.len());
+<a href=#662 id=662 data-nosnippet>662</a>    <span class="kw">for _ in </span>(<span class="number">2 </span>* data.len())..width {
+<a href=#663 id=663 data-nosnippet>663</a>        f.write_str(<span class="string">"0"</span>)<span class="question-mark">?</span>;
+<a href=#664 id=664 data-nosnippet>664</a>    }
+<a href=#665 id=665 data-nosnippet>665</a>    <span class="kw">for </span>ch <span class="kw">in </span>data.iter().take(prec / <span class="number">2</span>) {
+<a href=#666 id=666 data-nosnippet>666</a>        <span class="macro">write!</span>(f, <span class="string">"{:02x}"</span>, <span class="kw-2">*</span>ch)<span class="question-mark">?</span>;
+<a href=#667 id=667 data-nosnippet>667</a>    }
+<a href=#668 id=668 data-nosnippet>668</a>    <span class="kw">if </span>prec &lt; <span class="number">2 </span>* data.len() &amp;&amp; prec % <span class="number">2 </span>== <span class="number">1 </span>{
+<a href=#669 id=669 data-nosnippet>669</a>        <span class="macro">write!</span>(f, <span class="string">"{:x}"</span>, data[prec / <span class="number">2</span>] / <span class="number">16</span>)<span class="question-mark">?</span>;
+<a href=#670 id=670 data-nosnippet>670</a>    }
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="prelude-val">Ok</span>(())
+<a href=#672 id=672 data-nosnippet>672</a>}
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a><span class="doccomment">/// Gets the (approximate) network from a bitcoin address.
+<a href=#675 id=675 data-nosnippet>675</a>///
+<a href=#676 id=676 data-nosnippet>676</a>/// This function mimics how `Address.network` is calculated in bitcoin v0.30.
+<a href=#677 id=677 data-nosnippet>677</a>/// However, that field was removed in more recent versions in part because it
+<a href=#678 id=678 data-nosnippet>678</a>/// can only distinguish between `Bitcoin`, `Testnet` and `Regtest`.
+<a href=#679 id=679 data-nosnippet>679</a>///
+<a href=#680 id=680 data-nosnippet>680</a>/// As of bitcoin v0.32.4, `Address::is_valid_for_network()` performs equality
+<a href=#681 id=681 data-nosnippet>681</a>/// checks using `NetworkKind` and `KnownHrp`, which only distinguish between
+<a href=#682 id=682 data-nosnippet>682</a>/// `Bitcoin`, `Testnet` and `Regtest`.
+<a href=#683 id=683 data-nosnippet>683</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#709-716&gt;
+<a href=#684 id=684 data-nosnippet>684</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/network.rs.html#51-58&gt;
+<a href=#685 id=685 data-nosnippet>685</a>/// &lt;https://docs.rs/bitcoin/0.32.4/src/bitcoin/address/mod.rs.html#200-209&gt;
+<a href=#686 id=686 data-nosnippet>686</a></span><span class="kw">pub fn </span>get_network_for_address(address: <span class="kw-2">&amp;</span>Address&lt;NetworkUnchecked&gt;) -&gt; Network {
+<a href=#687 id=687 data-nosnippet>687</a>    <span class="kw">if </span>address.is_valid_for_network(Network::Bitcoin) {
+<a href=#688 id=688 data-nosnippet>688</a>        Network::Bitcoin
+<a href=#689 id=689 data-nosnippet>689</a>    } <span class="kw">else if </span>address.is_valid_for_network(Network::Testnet) {
+<a href=#690 id=690 data-nosnippet>690</a>        Network::Testnet
+<a href=#691 id=691 data-nosnippet>691</a>    } <span class="kw">else if </span>address.is_valid_for_network(Network::Regtest) {
+<a href=#692 id=692 data-nosnippet>692</a>        Network::Regtest
+<a href=#693 id=693 data-nosnippet>693</a>    } <span class="kw">else </span>{
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="macro">panic!</span>(<span class="string">"Address is not valid for any network"</span>);
+<a href=#695 id=695 data-nosnippet>695</a>    }
+<a href=#696 id=696 data-nosnippet>696</a>}
+<a href=#697 id=697 data-nosnippet>697</a>
+<a href=#698 id=698 data-nosnippet>698</a><span class="doccomment">/// Returns the default esplora server according to the network
+<a href=#699 id=699 data-nosnippet>699</a></span><span class="kw">pub fn </span>default_esplora_server(network: Network, port: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; BitcoinRpcConfig {
+<a href=#700 id=700 data-nosnippet>700</a>    BitcoinRpcConfig {
+<a href=#701 id=701 data-nosnippet>701</a>        kind: <span class="string">"esplora"</span>.to_string(),
+<a href=#702 id=702 data-nosnippet>702</a>        url: <span class="kw">match </span>network {
+<a href=#703 id=703 data-nosnippet>703</a>            Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/api/"</span>),
+<a href=#704 id=704 data-nosnippet>704</a>            Network::Testnet =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet/api/"</span>),
+<a href=#705 id=705 data-nosnippet>705</a>            Network::Testnet4 =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet4/api/"</span>),
+<a href=#706 id=706 data-nosnippet>706</a>            Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>),
+<a href=#707 id=707 data-nosnippet>707</a>            Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#708 id=708 data-nosnippet>708</a>                <span class="string">"http://127.0.0.1:{}/"</span>,
+<a href=#709 id=709 data-nosnippet>709</a>                port.unwrap_or_else(|| String::from(<span class="string">"50002"</span>))
+<a href=#710 id=710 data-nosnippet>710</a>            )),
+<a href=#711 id=711 data-nosnippet>711</a>        }
+<a href=#712 id=712 data-nosnippet>712</a>        .expect(<span class="string">"Failed to parse default esplora server"</span>),
+<a href=#713 id=713 data-nosnippet>713</a>    }
+<a href=#714 id=714 data-nosnippet>714</a>}
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a><span class="attr">#[cfg(test)]
+<a href=#717 id=717 data-nosnippet>717</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
