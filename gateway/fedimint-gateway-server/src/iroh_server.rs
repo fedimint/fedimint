@@ -10,6 +10,7 @@ use bitcoin::hashes::sha256;
 use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_gateway_common::STOP_ENDPOINT;
 use fedimint_logging::LOG_GATEWAY;
 use futures::FutureExt as _;
@@ -17,7 +18,7 @@ use iroh::endpoint::Incoming;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use url::Url;
 
 use crate::Gateway;
@@ -209,7 +210,7 @@ async fn handle_incoming_iroh_request(
                 task_group.clone(),
             ),
         )
-        .await?;
+        .await;
 
         let response = IrohGatewayResponse {
             status: status.as_u16(),
@@ -223,22 +224,27 @@ async fn handle_incoming_iroh_request(
     Ok(())
 }
 
-/// Runs a request handler, turning a panic into a 500 response for the caller
-/// that triggered it.
+/// Runs a request handler, turning a panic or an error into a 500 response for
+/// the caller that triggered it.
 ///
 /// Iroh requests are spawned on the gateway's root task group, so a panic
 /// escaping a handler trips the task group's panic guard and shuts the whole
 /// gateway down. The HTTP path does not need this: `axum::serve` spawns its
 /// connection tasks outside any task group, so a panic there only drops that
 /// one connection.
+///
+/// A failing handler has to be answered as well: propagating the error would
+/// end the connection's request loop, leaving the caller with a closed stream
+/// and no response at all. Like the HTTP path, the response body carries no
+/// details about the failure, since callers are unauthenticated.
 async fn run_handler(
     route: &str,
     handler: impl Future<Output = anyhow::Result<(StatusCode, Json<serde_json::Value>)>>,
-) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
+) -> (StatusCode, Json<serde_json::Value>) {
     // Using `AssertUnwindSafe` here is far from ideal. In theory this means we
     // could end up with an inconsistent state. In practice this is only the last
     // line of defense, and losing the gateway process entirely is strictly worse.
-    AssertUnwindSafe(handler)
+    let result = AssertUnwindSafe(handler)
         .catch_unwind()
         .await
         .unwrap_or_else(|_| {
@@ -249,7 +255,18 @@ async fn run_handler(
             );
 
             Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(json!(()))))
-        })
+        });
+
+    result.unwrap_or_else(|err| {
+        warn!(
+            target: LOG_GATEWAY,
+            route,
+            err = %err.fmt_compact_anyhow(),
+            "Gateway API handler returned an error"
+        );
+
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!(())))
+    })
 }
 
 /// Checks if the requested route is authenticated and will reject the request
@@ -278,16 +295,12 @@ async fn handle_request(
     // LNURL-verify endpoint is the only endpoint that requires these, so we
     // handle these separately as well.
     if request.route.starts_with("/verify") {
-        // Use dummy URL for easier parsing
-        let url = Url::parse(&format!("http://localhost{}", request.route))?;
-        // Extract segments: /verify/<payment_hash>
-        let mut segments = url.path_segments().unwrap();
-        let hash_str = segments.next();
-
-        let payment_hash: sha256::Hash = hash_str.ok_or(anyhow!("No has present"))?.parse()?;
-
-        // Parse query params (?wait etc.)
-        let query_map: HashMap<String, String> = url.query_pairs().into_owned().collect();
+        let Ok((payment_hash, query_map)) = parse_verify_route(&request.route) else {
+            // The route is the caller's input, so a route we cannot parse is their
+            // mistake, the same way the HTTP path's `Path<sha256::Hash>` extractor
+            // rejects a malformed payment hash.
+            return Ok((StatusCode::BAD_REQUEST, Json(json!(()))));
+        };
 
         let body =
             verify_bolt11_preimage_v2_get(Extension(gateway), Path(payment_hash), Query(query_map))
@@ -296,27 +309,55 @@ async fn handle_request(
         return Ok((StatusCode::OK, body));
     }
 
-    let (status, body) = match &request.params {
-        Some(params) => {
-            if let Some(handler) = handlers.get_handler_with_payload(&request.route) {
-                (
-                    StatusCode::OK,
-                    handler(Extension(gateway), params.clone()).await?,
-                )
-            } else {
-                return Err(anyhow!("Iroh handler received request with unknown route"));
-            }
-        }
-        None => {
-            if let Some(handler) = handlers.get_handler(&request.route) {
-                (StatusCode::OK, handler(Extension(gateway)).await?)
-            } else {
-                return Err(anyhow!("Iroh handler received request with unknown route"));
-            }
-        }
+    let (status, body) = if let Some(params) = &request.params {
+        let Some(handler) = handlers.get_handler_with_payload(&request.route) else {
+            return Ok(unknown_route(&request.route));
+        };
+
+        (
+            StatusCode::OK,
+            handler(Extension(gateway), params.clone()).await?,
+        )
+    } else {
+        let Some(handler) = handlers.get_handler(&request.route) else {
+            return Ok(unknown_route(&request.route));
+        };
+
+        (StatusCode::OK, handler(Extension(gateway)).await?)
     };
 
     Ok((status, body))
+}
+
+/// Response for a route that no handler is registered for.
+fn unknown_route(route: &str) -> (StatusCode, Json<serde_json::Value>) {
+    warn!(
+        target: LOG_GATEWAY,
+        route,
+        "Iroh handler received request with unknown route"
+    );
+
+    (StatusCode::NOT_FOUND, Json(json!(())))
+}
+
+/// Parses the LNURL-verify route `/verify/{payment_hash}` into the payment hash
+/// and the query parameters (`?wait`) of the request.
+fn parse_verify_route(route: &str) -> anyhow::Result<(sha256::Hash, HashMap<String, String>)> {
+    // Use dummy URL for easier parsing
+    let url = Url::parse(&format!("http://localhost{route}"))?;
+
+    // Extract segments: /verify/<payment_hash>. The first segment is the route
+    // prefix itself, so the payment hash is the second one.
+    let payment_hash: sha256::Hash = url
+        .path_segments()
+        .and_then(|mut segments| segments.nth(1))
+        .ok_or_else(|| anyhow!("Verify route does not contain a payment hash"))?
+        .parse()?;
+
+    // Parse query params (?wait etc.)
+    let query_map: HashMap<String, String> = url.query_pairs().into_owned().collect();
+
+    Ok((payment_hash, query_map))
 }
 
 /// Verifies if the supplied password in the Iroh request matches the gateway's
@@ -336,14 +377,55 @@ fn iroh_verify_password(
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::hashes::Hash as _;
+
     use super::*;
 
     #[tokio::test]
     async fn panicking_handler_returns_an_error_instead_of_unwinding() {
-        let (status, _body) = run_handler("/pay_invoice", async { panic!("handler panic") })
-            .await
-            .expect("a panicking handler is contained");
+        let (status, _body) = run_handler("/pay_invoice", async { panic!("handler panic") }).await;
 
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn failing_handler_is_answered_instead_of_ending_the_connection() {
+        let (status, _body) = run_handler("/verify/nonsense", async {
+            Err(anyhow!("Verify route does not contain a payment hash"))
+        })
+        .await;
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn verify_route_parses_the_payment_hash_not_the_route_prefix() {
+        let payment_hash = sha256::Hash::hash(b"payment hash");
+
+        let (parsed_hash, _query) = parse_verify_route(&format!("/verify/{payment_hash}"))
+            .expect("the payment hash is the second path segment, not the first");
+
+        assert_eq!(parsed_hash, payment_hash);
+    }
+
+    #[test]
+    fn verify_route_parses_the_wait_query_parameter() {
+        let payment_hash = sha256::Hash::hash(b"payment hash");
+
+        let (parsed_hash, query) = parse_verify_route(&format!("/verify/{payment_hash}?wait"))
+            .expect("query parameters do not affect path parsing");
+
+        assert_eq!(parsed_hash, payment_hash);
+        assert!(query.contains_key("wait"));
+    }
+
+    #[test]
+    fn verify_route_without_a_payment_hash_is_rejected() {
+        parse_verify_route("/verify")
+            .expect_err("a route without a payment hash has nothing to verify");
+        parse_verify_route("/verify/")
+            .expect_err("a route with an empty payment hash has nothing to verify");
+        parse_verify_route("/verify/not-a-payment-hash")
+            .expect_err("a payment hash that is not a sha256 hash is rejected");
     }
 }
