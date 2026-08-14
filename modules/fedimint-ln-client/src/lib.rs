@@ -209,12 +209,45 @@ pub enum InternalPayState {
 pub enum LnPayState {
     Created,
     Canceled,
-    Funded { block_height: u32 },
-    WaitingForRefund { error_reason: String },
+    Funded {
+        block_height: u32,
+    },
+    WaitingForRefund {
+        error_reason: String,
+    },
     AwaitingChange,
-    Success { preimage: String },
-    Refunded { gateway_error: GatewayPayError },
-    UnexpectedError { error_message: String },
+    Success {
+        preimage: String,
+    },
+    Refunded {
+        gateway_error: GatewayPayError,
+    },
+    /// The gateway could not reach enough federation peers and the outgoing
+    /// contract refund has finalized.
+    ///
+    /// Unlike the gateway's earlier terminal response, the client publishes
+    /// this state only after cancellation or timeout, refund acceptance, and
+    /// primary-module output finalization.
+    FederationUnreachable,
+    UnexpectedError {
+        error_message: String,
+    },
+}
+
+impl LightningPayStates {
+    fn to_public_terminal(&self) -> Option<LnPayState> {
+        match self {
+            LightningPayStates::FederationUnreachable(_) => Some(LnPayState::FederationUnreachable),
+            LightningPayStates::FederationUnreachableRefundFailed(_) => {
+                Some(LnPayState::UnexpectedError {
+                    error_message:
+                        "Federation-unreachable refund output failed; manual recovery required"
+                            .to_owned(),
+                })
+            }
+            _ => None,
+        }
+    }
 }
 
 /// The high-level state of a reissue operation started with
@@ -1652,9 +1685,10 @@ impl LightningClientModule {
                 | LnPayState::WaitingForRefund { .. }
                 | LnPayState::AwaitingChange => false,
                 LnPayState::Success { .. }
-                | LnPayState::Canceled
-                | LnPayState::Refunded { .. }
-                | LnPayState::UnexpectedError { .. } => true,
+                 | LnPayState::Canceled
+                 | LnPayState::Refunded { .. }
+                 | LnPayState::FederationUnreachable
+                 | LnPayState::UnexpectedError { .. } => true,
             }, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
@@ -1727,6 +1761,49 @@ impl LightningClientModule {
                                 };
                             }
                         }
+                    }
+                    Some(
+                        state @ (LightningPayStates::FederationUnreachablePendingRefund(_)
+                        | LightningPayStates::FederationUnreachableRefundSubmitted(_)),
+                    ) => {
+                        let error_reason = match state {
+                            LightningPayStates::FederationUnreachablePendingRefund(refundable) => {
+                                refundable.error.to_string()
+                            }
+                            LightningPayStates::FederationUnreachableRefundSubmitted(_) => {
+                                GatewayPayError::FederationUnreachable.to_string()
+                            }
+                            _ => unreachable!("matched the two refund-in-progress states"),
+                        };
+                        yield LnPayState::WaitingForRefund {
+                            error_reason,
+                        };
+
+                        loop {
+                            match get_next_pay_state(&mut stream).await {
+                                Some(state @ (LightningPayStates::FederationUnreachable(_)
+                                    | LightningPayStates::FederationUnreachableRefundFailed(_))) => {
+                                    yield state.to_public_terminal()
+                                        .expect("matched a public terminal refund state");
+                                    break;
+                                }
+                                Some(LightningPayStates::FederationUnreachablePendingRefund(_)
+                                    | LightningPayStates::FederationUnreachableRefundSubmitted(_)) => {}
+                                Some(state) => {
+                                    yield LnPayState::UnexpectedError { error_message: format!("Found unexpected state after gateway federation failure: {state:?}") };
+                                    break;
+                                }
+                                None => {
+                                    yield LnPayState::UnexpectedError { error_message: "Unexpected end of lightning pay state machine".to_string() };
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Some(state @ (LightningPayStates::FederationUnreachable(_)
+                        | LightningPayStates::FederationUnreachableRefundFailed(_))) => {
+                        yield state.to_public_terminal()
+                            .expect("matched a public terminal refund state");
                     }
                     Some(state) => {
                         yield LnPayState::UnexpectedError { error_message: format!("Found unexpected state during lightning payment: {state:?}") };
@@ -2428,6 +2505,13 @@ impl LightningClientModule {
                             ),
                         });
                     }
+                    LnPayState::FederationUnreachable => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message:
+                                "LNv1 external payment was refunded: federation_unreachable"
+                                    .to_string(),
+                        });
+                    }
                     LnPayState::UnexpectedError { error_message } => {
                         final_state = Some(LightningPaymentOutcome::Failure { error_message });
                     }
@@ -2797,10 +2881,7 @@ impl GatewayConnection for RealGatewayConnection {
                 Some(payload),
             )
             .await
-            .map_err(|e| GatewayPayError::GatewayInternalError {
-                error_code: None,
-                error_message: e.to_string(),
-            })?;
+            .map_err(GatewayPayError::from_server_error)?;
         let length = preimage.len();
         Ok(preimage[1..length - 1].to_string())
     }
@@ -2827,3 +2908,6 @@ impl GatewayConnection for MockGatewayConnection {
         Ok("00000000".to_string())
     }
 }
+
+#[cfg(test)]
+mod gateway_error_tests;
