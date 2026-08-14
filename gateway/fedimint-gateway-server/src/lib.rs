@@ -62,7 +62,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep, timeout};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::backoff_util::fibonacci_max_one_hour;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry};
@@ -145,6 +145,15 @@ pub const DEFAULT_NETWORK: Network = Network::Regtest;
 /// How long code that needs to talk to the lightning node backs off before
 /// re-checking whether the gateway has (re)connected to it.
 const LIGHTNING_CONTEXT_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+/// How long an LNURL-verify request that asked to wait blocks before reporting
+/// the payment as not settled yet.
+///
+/// The payment being waited for may never arrive, so the wait needs an upper
+/// bound to stop callers from parking a request handler indefinitely. Reporting
+/// "not settled" on expiry is a regular LNURL-verify response, so clients
+/// simply poll again.
+const VERIFY_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type Result<T> = std::result::Result<T, PublicGatewayError>;
 pub type AdminResult<T> = std::result::Result<T, AdminGatewayError>;
@@ -3418,11 +3427,17 @@ impl Gateway {
             });
         }
 
-        let state = client
+        let module = client
             .get_first_module::<GatewayClientModuleV2>()
-            .expect("Must have client module")
-            .await_receive(operation_id)
-            .await;
+            .expect("Must have client module");
+
+        let Ok(state) = timeout(VERIFY_WAIT_TIMEOUT, module.await_receive(operation_id)).await
+        else {
+            return Ok(VerifyResponse {
+                settled: false,
+                preimage: None,
+            });
+        };
 
         let preimage = match state {
             FinalReceiveState::Success(preimage) => Ok(preimage),
