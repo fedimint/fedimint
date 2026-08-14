@@ -3,11 +3,13 @@ use std::time::{Duration, UNIX_EPOCH};
 use axum::extract::{Query, RawQuery, State};
 use axum::response::Html;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::module::serde_json;
 use fedimint_core::time::now;
 use fedimint_eventlog::{Event, EventKind, EventLogId};
 use fedimint_gateway_common::{
-    FederationInfo, PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    FederationInfo, OperationLogPaginationKey, OperationLogPayload, OperationLogResponse,
+    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse,
 };
 use fedimint_gwv2_client::events::{
@@ -22,7 +24,7 @@ use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
 use maud::{Markup, PreEscaped, html};
 use serde::Deserialize;
 
-use crate::{DynGatewayApi, PAYMENT_LOG_ROUTE};
+use crate::{DynGatewayApi, OPERATION_LOG_ROUTE, PAYMENT_LOG_ROUTE};
 
 /// Event categories for UI display - Lightning events
 const LIGHTNING_EVENTS: &[(&str, EventKind)] = &[
@@ -57,6 +59,13 @@ const ECASH_EVENTS: &[(&str, EventKind)] = &[
 pub struct PaymentLogQueryParams {
     pub federation_id: Option<String>,
     pub end_position: Option<EventLogId>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OperationLogQueryParams {
+    pub federation_id: Option<String>,
+    pub last_seen_operation_id: Option<OperationId>,
+    pub last_seen_creation_time_secs: Option<u64>,
 }
 
 pub async fn render<E>(api: &DynGatewayApi<E>, federations: &[FederationInfo]) -> Markup
@@ -116,6 +125,16 @@ fn render_tabs(
                             "Payment Events"
                         }
                     }
+                    li class="nav-item flex-fill text-center" {
+                        button
+                            class="nav-link w-100"
+                            data-bs-toggle="tab"
+                            data-bs-target="#operation-log"
+                            type="button"
+                        {
+                            "Operations"
+                        }
+                    }
                 }
             }
 
@@ -132,6 +151,13 @@ fn render_tabs(
                     id="payment-log"
                 {
                     (render_payment_log_tab_initial(federations))
+                }
+
+                div
+                    class="tab-pane fade"
+                    id="operation-log"
+                {
+                    (render_operation_log_tab_initial(federations))
                 }
             }
         }
@@ -312,6 +338,58 @@ fn render_payment_log_tab_initial(federations: &[FederationInfo]) -> Markup {
                     });
                 }
                 "#))
+            }
+        }
+    }
+}
+
+fn render_operation_log_tab_initial(federations: &[FederationInfo]) -> Markup {
+    html! {
+        div {
+            form id="operation-log-form" class="mb-3" {
+                div class="d-flex gap-2 align-items-end mb-2" {
+                    div class="flex-grow-1" {
+                        label class="form-label fw-bold" {
+                            "Federation"
+                        }
+
+                        select
+                            class="form-select form-select-sm"
+                            name="federation_id"
+                            hx-get=(OPERATION_LOG_ROUTE)
+                            hx-trigger="change"
+                            hx-target="#operation-log-content"
+                            hx-include="#operation-log-form"
+                        {
+                            option value="" selected disabled {
+                                "Select a federation…"
+                            }
+
+                            @for fed in federations {
+                                option value=(fed.federation_id.to_string()) {
+                                    (fed.federation_name.clone().unwrap_or_default())
+                                }
+                            }
+                        }
+                    }
+
+                    button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        title="Refresh operations"
+                        hx-get=(OPERATION_LOG_ROUTE)
+                        hx-target="#operation-log-content"
+                        hx-include="#operation-log-form"
+                    {
+                        "↻ Refresh"
+                    }
+                }
+            }
+
+            div id="operation-log-content" {
+                div class="text-muted" {
+                    "Select a federation to view operations."
+                }
             }
         }
     }
@@ -515,6 +593,167 @@ where
     }
 }
 
+pub async fn operation_log_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Query(params): Query<OperationLogQueryParams>,
+) -> Html<String>
+where
+    E: std::fmt::Display + std::fmt::Debug,
+{
+    let federation_id = match &params.federation_id {
+        Some(v) => match v.parse::<FederationId>() {
+            Ok(id) => id,
+            Err(_) => {
+                return Html(
+                    html! {
+                        div class="alert alert-danger mb-0" { "Invalid federation ID." }
+                    }
+                    .into_string(),
+                );
+            }
+        },
+        None => {
+            return Html(
+                html! {
+                    div class="alert alert-warning mb-0" { "No federation selected." }
+                }
+                .into_string(),
+            );
+        }
+    };
+
+    let last_seen = match (
+        params.last_seen_operation_id,
+        params.last_seen_creation_time_secs,
+    ) {
+        (Some(operation_id), Some(creation_time_secs)) => Some(OperationLogPaginationKey {
+            creation_time: UNIX_EPOCH + Duration::from_secs(creation_time_secs),
+            operation_id,
+        }),
+        (None, None) => None,
+        _ => {
+            return Html(
+                html! {
+                    div class="alert alert-danger mb-0" {
+                        "Invalid operation log pagination cursor."
+                    }
+                }
+                .into_string(),
+            );
+        }
+    };
+
+    let result = state
+        .api
+        .handle_operation_log_msg(OperationLogPayload {
+            federation_id,
+            pagination_size: 10,
+            last_seen,
+        })
+        .await;
+
+    Html(render_operation_log_result(&result, federation_id).into_string())
+}
+
+fn render_operation_log_result<E>(
+    result: &Result<OperationLogResponse, E>,
+    federation_id: FederationId,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    match result {
+        Ok(OperationLogResponse(entries)) if !entries.is_empty() => {
+            let next_cursor = entries.last().expect("Cannot be empty").pagination_key;
+
+            html! {
+                div {
+                    table class="table table-sm table-hover mb-2" {
+                        thead {
+                            tr {
+                                th { "Operation ID" }
+                                th { "Created" }
+                                th { "Module" }
+                                th { "Outcome" }
+                                th { "Details" }
+                            }
+                        }
+                        tbody {
+                            @for (idx, entry) in entries.iter().enumerate() {
+                                tr {
+                                    td { code { (entry.pagination_key.operation_id.fmt_short()) } }
+                                    td { (format_system_time(entry.pagination_key.creation_time)) }
+                                    td { code { (entry.operation.operation_module_kind()) } }
+                                    td {
+                                        @if let Some(outcome_time) = entry.operation.outcome_time() {
+                                            span class="badge bg-success" title=(format_system_time(outcome_time)) {
+                                                "complete"
+                                            }
+                                        } @else {
+                                            span class="badge bg-secondary" {
+                                                "pending"
+                                            }
+                                        }
+                                    }
+                                    td {
+                                        button
+                                            class="btn btn-sm btn-outline-secondary"
+                                            type="button"
+                                            onclick=(format!(
+                                                "document.getElementById('operation-details-{}').classList.toggle('d-none');",
+                                                idx
+                                            ))
+                                        {
+                                            "Details"
+                                        }
+                                    }
+                                }
+
+                                tr id=(format!("operation-details-{}", idx)) class="d-none" {
+                                    td colspan="5" {
+                                        pre class="bg-dark text-light p-3 rounded small mb-0" {
+                                            (serde_json::to_string_pretty(entry).unwrap_or_else(|_| "<invalid json>".to_string()))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    @if let Ok(creation_time_secs) = next_cursor.creation_time.duration_since(UNIX_EPOCH) {
+                        div class="d-flex justify-content-end" {
+                            button
+                                class="btn btn-sm btn-outline-primary"
+                                type="button"
+                                hx-get=(OPERATION_LOG_ROUTE)
+                                hx-target="#operation-log-content"
+                                hx-include="closest form"
+                                hx-vals=(serde_json::json!({
+                                    "federation_id": federation_id.to_string(),
+                                    "last_seen_operation_id": next_cursor.operation_id.fmt_full().to_string(),
+                                    "last_seen_creation_time_secs": creation_time_secs.as_secs()
+                                }))
+                            {
+                                "Next"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(_) => html! {
+            div class="text-muted" { "No operations found for this federation." }
+        },
+        Err(e) => html! {
+            div class="alert alert-danger mb-0" {
+                strong { "Failed to load operation log: " }
+                (e.to_string())
+            }
+        },
+    }
+}
+
 fn format_timestamp(ts_usecs: u64) -> String {
     let secs = ts_usecs / 1_000_000;
     let nanos = (ts_usecs % 1_000_000) * 1_000;
@@ -522,6 +761,11 @@ fn format_timestamp(ts_usecs: u64) -> String {
     let ts = UNIX_EPOCH + Duration::new(secs, nanos as u32);
     let dt: chrono::DateTime<chrono::Utc> = ts.into();
 
+    dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+}
+
+fn format_system_time(ts: std::time::SystemTime) -> String {
+    let dt: chrono::DateTime<chrono::Utc> = ts.into();
     dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 

@@ -9,10 +9,11 @@ use fedimint_core::util::SafeUrl;
 use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_gateway_client::{
     connect_federation, get_balances, get_info, get_invite_codes, get_mnemonic, leave_federation,
-    payment_log, payment_summary, stop,
+    operation_log, payment_log, payment_summary, stop,
 };
 use fedimint_gateway_common::{
-    ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
+    ConnectFedPayload, LeaveFedPayload, OperationLogPaginationKey, OperationLogPayload,
+    PaymentLogPayload, PaymentSummaryPayload,
 };
 use fedimint_ln_common::client::GatewayApi;
 
@@ -62,6 +63,20 @@ pub enum GeneralCommands {
 
         #[clap(long)]
         event_kinds: Vec<EventKind>,
+    },
+    /// List the Fedimint client operations that the gateway has processed
+    OperationLog {
+        #[clap(long)]
+        federation_id: FederationId,
+
+        #[clap(long, default_value_t = 25)]
+        pagination_size: usize,
+
+        #[clap(long)]
+        last_seen_operation_id: Option<fedimint_core::core::OperationId>,
+
+        #[clap(long)]
+        last_seen_creation_time_secs: Option<u64>,
     },
     /// Create a bcrypt hash of a password, for use in gateway deployment
     CreatePasswordHash {
@@ -153,6 +168,39 @@ impl GeneralCommands {
                 )
                 .await?;
                 Ok(CliOutput::PaymentLog(payment_log))
+            }
+            Self::OperationLog {
+                federation_id,
+                pagination_size,
+                last_seen_operation_id,
+                last_seen_creation_time_secs,
+            } => {
+                let last_seen = match (last_seen_operation_id, last_seen_creation_time_secs) {
+                    (Some(operation_id), Some(creation_time_secs)) => {
+                        Some(OperationLogPaginationKey {
+                            creation_time: UNIX_EPOCH + Duration::from_secs(creation_time_secs),
+                            operation_id,
+                        })
+                    }
+                    (None, None) => None,
+                    _ => {
+                        return Err(ServerError::InternalClientError(anyhow::anyhow!(
+                            "last_seen_operation_id and last_seen_creation_time_secs must be provided together"
+                        )));
+                    }
+                };
+
+                let operation_log = operation_log(
+                    client,
+                    base_url,
+                    OperationLogPayload {
+                        federation_id,
+                        pagination_size,
+                        last_seen,
+                    },
+                )
+                .await?;
+                Ok(CliOutput::OperationLog(operation_log))
             }
             Self::CreatePasswordHash { password, cost } => {
                 let hash = bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))

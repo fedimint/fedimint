@@ -3679,6 +3679,7 @@ dependencies = [
  "bitcoin",
  "clap",
  "fedimint-api-client",
+ "fedimint-client-module",
  "fedimint-core",
  "fedimint-eventlog",
  "fedimint-lnv2-common",

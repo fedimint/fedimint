@@ -22,14 +22,15 @@ use fedimint_gateway_common::{
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
     LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
-    PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload, PeginFromOnchainPayload,
-    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
+    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OPERATION_LOG_ENDPOINT,
+    OpenChannelRequest, OperationLogPayload, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
+    PaymentSummaryPayload, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
+    SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
+    STOP_ENDPOINT, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
+    WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -498,6 +499,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        OPERATION_LOG_ENDPOINT,
+        operation_log,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         PAYMENT_SUMMARY_ENDPOINT,
         payment_summary,
         is_authenticated,
@@ -870,6 +878,16 @@ async fn payment_log(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let payment_log = gateway.handle_payment_log_msg(payload).await?;
     Ok(Json(json!(payment_log)))
+}
+
+/// `POST /operation_log` — returns a paginated list of federation operations.
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn operation_log(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<OperationLogPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let operation_log = gateway.handle_operation_log_msg(payload).await?;
+    Ok(Json(json!(operation_log)))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
