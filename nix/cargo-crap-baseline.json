@@ -23,7 +23,7 @@
     {
       "file": "/build/source/devimint/src/tests.rs",
       "function": "handle_command",
-      "line": 2824,
+      "line": 2875,
       "cyclomatic": 71.0,
       "coverage": null,
       "crap": 5112.0,
@@ -32,10 +32,10 @@
     {
       "file": "/build/source/devimint/src/tests.rs",
       "function": "cli_tests",
-      "line": 840,
-      "cyclomatic": 62.0,
+      "line": 846,
+      "cyclomatic": 69.0,
       "coverage": null,
-      "crap": 3906.0,
+      "crap": 4830.0,
       "crate": "devimint"
     },
     {
@@ -59,10 +59,10 @@
     {
       "file": "/build/source/modules/fedimint-ln-client/src/cli.rs",
       "function": "handle_cli_command",
-      "line": 105,
-      "cyclomatic": 36.0,
+      "line": 111,
+      "cyclomatic": 42.0,
       "coverage": null,
-      "crap": 1332.0,
+      "crap": 1806.0,
       "crate": "fedimint-ln-client"
     },
     {

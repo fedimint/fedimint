@@ -98,14 +98,20 @@ job, so the gate uses cargo-crap's pessimistic missing-coverage behavior.
 Existing high-CRAP functions are kept in the generated baseline while
 high-CRAP regressions are rejected.
 
-When intentionally accepting a CRAP-score regression, regenerate the baseline
-from Nix in the same change rather than editing it by hand:
+When intentionally accepting CRAP-score regressions, generate a fresh baseline
+from Nix in the same change:
 
 ```bash
 nix build -L .#ci.crapBaseline
 cp result/cargo-crap-baseline.json nix/cargo-crap-baseline.json
 nix build -L .#ci.crap
 ```
+
+Use the full generated file when every changed entry belongs to that change.
+If it also contains unrelated drift, compare it with the committed baseline and
+copy only the generated records caused by the intentional change; do not type
+values by hand or accept unrelated records. Always run `.#ci.crap` after either
+kind of update.
 
 ### Source file filtering
 
