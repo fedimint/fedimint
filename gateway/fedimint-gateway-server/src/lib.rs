@@ -20,8 +20,10 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
+mod federation_status;
 mod iroh_server;
 mod metrics;
+mod registration_health;
 pub mod rpc_server;
 mod types;
 
@@ -129,6 +131,7 @@ use tracing::{debug, info, info_span, warn};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
+use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -377,6 +380,9 @@ pub struct Gateway {
     /// A map of the network protocols the gateway supports to the data needed
     /// for registering with a federation.
     registrations: BTreeMap<RegisteredProtocol, Registration>,
+
+    /// Detail-free retained results of LNv1 federation registration attempts.
+    registration_health: RegistrationHealthTracker,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -760,6 +766,7 @@ impl Gateway {
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
             registrations,
+            registration_health: RegistrationHealthTracker::default(),
         })
     }
 
@@ -1801,11 +1808,21 @@ impl Gateway {
 
                 let fed_manager = self.federation_manager.read().await;
                 if let Some(client) = fed_manager.client(federation_id) {
+                    let federation_id = *federation_id;
                     let client_arc = client.clone().into_value();
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
-                    let registrations =
-                        self.registrations.clone().into_values().collect::<Vec<_>>();
+                    let registration_health = self.registration_health.clone();
+                    let registrations = self
+                        .registrations
+                        .clone()
+                        .into_iter()
+                        .map(|(protocol, registration)| {
+                            let attempt =
+                                registration_health.begin_lnv1_attempt(federation_id, protocol);
+                            (registration, attempt)
+                        })
+                        .collect::<Vec<_>>();
 
                     register_task_group.spawn_cancellable_silent(
                         "register federation",
@@ -1816,8 +1833,8 @@ impl Gateway {
                                 return;
                             };
 
-                            for registration in registrations {
-                                gateway_client
+                            for (registration, attempt) in registrations {
+                                let succeeded = gateway_client
                                     .try_register_with_federation(
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
@@ -1825,6 +1842,14 @@ impl Gateway {
                                         lightning_context.clone(),
                                         registration.endpoint_url,
                                         registration.keypair,
+                                    )
+                                    .await;
+                                registration_health
+                                    .complete_attempt(
+                                        attempt,
+                                        succeeded,
+                                        fedimint_core::time::now(),
+                                        fedimint_core::runtime::Instant::now(),
                                     )
                                     .await;
                             }
@@ -2277,6 +2302,9 @@ impl IAdminGateway for Gateway {
 
         dbtx.remove_federation_config(payload.federation_id).await;
         dbtx.commit_tx().await;
+        self.registration_health
+            .clear_federation(payload.federation_id)
+            .await;
         Ok(federation_info)
     }
 
@@ -2371,17 +2399,29 @@ impl IAdminGateway for Gateway {
         if matches!(self.lightning_mode, LightningMode::Lnd { .. })
             && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
         {
-            for registration in self.registrations.values() {
-                lnv1.try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    routing_fees,
-                    lightning_context.clone(),
-                    registration.endpoint_url.clone(),
-                    registration.keypair,
-                )
-                .await;
+            for (protocol, registration) in &self.registrations {
+                let attempt = self
+                    .registration_health
+                    .begin_lnv1_attempt(federation_id, protocol.clone());
+                let succeeded = lnv1
+                    .try_register_with_federation(
+                        // Route hints will be updated in the background
+                        Vec::new(),
+                        GW_ANNOUNCEMENT_TTL,
+                        routing_fees,
+                        lightning_context.clone(),
+                        registration.endpoint_url.clone(),
+                        registration.keypair,
+                    )
+                    .await;
+                self.registration_health
+                    .complete_attempt(
+                        attempt,
+                        succeeded,
+                        fedimint_core::time::now(),
+                        fedimint_core::runtime::Instant::now(),
+                    )
+                    .await;
             }
         }
 

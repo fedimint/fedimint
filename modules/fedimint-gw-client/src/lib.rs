@@ -424,7 +424,11 @@ impl GatewayClientModule {
         Ok((operation_id, client_output, client_output_sm))
     }
 
-    /// Register gateway with federation
+    /// Registers the gateway with a federation and reports whether it
+    /// succeeded.
+    ///
+    /// Detailed errors remain in gateway logs; callers can retain the boolean
+    /// result without exposing federation internals.
     pub async fn try_register_with_federation(
         &self,
         route_hints: Vec<RouteHint>,
@@ -433,7 +437,7 @@ impl GatewayClientModule {
         lightning_context: LightningContext,
         api: SafeUrl,
         gateway_keypair: Keypair,
-    ) {
+    ) -> bool {
         let registration_info = self.to_gateway_registration_info(
             route_hints,
             time_to_live,
@@ -456,11 +460,13 @@ impl GatewayClientModule {
                     e = %e.fmt_compact(),
                     "Failed to register gateway {gateway_id} with federation {federation_id}"
                 );
+                false
             }
             _ => {
                 info!(
                     "Successfully registered gateway {gateway_id} with federation {federation_id}"
                 );
+                true
             }
         }
     }
