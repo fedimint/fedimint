@@ -39,7 +39,9 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA};
+use crate::version_constants::{
+    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
+};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
@@ -1188,6 +1190,51 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         4_000,
     )
     .unwrap();
+
+    // ## Withdraw everything
+    //
+    // `module wallet withdraw --amount all` was added in 0.13.0-alpha; before
+    // that the module CLI rejected "all" outright.
+    if fedimint_cli_version >= *VERSION_0_13_0_ALPHA {
+        info!("Testing client withdraw all");
+
+        let pre_sweep_balance = client.balance().await?;
+        let address = bitcoind.get_new_address().await?;
+
+        // Sweeping the whole balance has to leave room for the mint's per-note
+        // fees on top of the on-chain fee. With base fees enabled (the default)
+        // a naive `balance - onchain_fee` is underfunded and note selection
+        // rejects the peg-out.
+        let sweep_res = cmd!(
+            client,
+            "module",
+            "wallet",
+            "withdraw",
+            "--amount",
+            "all",
+            "--address",
+            &address
+        )
+        .out_json()
+        .await?;
+
+        let txid: Txid = sweep_res["txid"]
+            .as_str()
+            .expect("sweep should return a txid")
+            .parse()?;
+
+        bitcoind.poll_get_transaction(txid).await?;
+
+        // A sweep cannot always drain to exactly zero — the fee is stepwise in
+        // the amount, so a sub-denomination remainder can be left behind — but
+        // it must move all but a negligible part of the balance.
+        let post_sweep_balance = client.balance().await?;
+
+        assert!(
+            post_sweep_balance < pre_sweep_balance / 100,
+            "Sweep left {post_sweep_balance} msats of {pre_sweep_balance} msats behind",
+        );
+    }
 
     // # peer-version command
     let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")

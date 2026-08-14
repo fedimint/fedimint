@@ -101,16 +101,19 @@ async fn withdraw(
     address: bitcoin::Address<NetworkUnchecked>,
 ) -> anyhow::Result<serde_json::Value> {
     let address = address.require_network(module.get_network())?;
-    let amount = match amount {
+    let (amount, fees) = match amount {
+        // The on-chain fee is only part of the cost of withdrawing everything:
+        // funding the peg-out output also incurs the federation's per-note
+        // fees. The returned fees are quoted at the returned amount, so they
+        // must be used together.
         BitcoinAmountOrAll::All => {
-            bail!(
-                "The 'all' option is not supported in the module CLI. \
-                Use `fedimint-cli withdraw --amount all` instead."
-            );
+            let balance = module.client_ctx.get_balance_for_btc().await?;
+            module.max_withdrawable_amount(&address, balance).await?
         }
-        BitcoinAmountOrAll::Amount(amount) => amount,
+        BitcoinAmountOrAll::Amount(amount) => {
+            (amount, module.get_withdraw_fees(&address, amount).await?)
+        }
     };
-    let fees = module.get_withdraw_fees(&address, amount).await?;
     let absolute_fees = fees.amount();
 
     info!("Attempting withdraw with fees: {fees:?}");

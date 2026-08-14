@@ -415,23 +415,25 @@ async fn withdraw_v2(
 
     let withdraw_amount = match amount {
         BitcoinAmountOrAll::All => {
-            let balance = bitcoin::Amount::from_sat(
-                client
-                    .get_balance_for_btc()
-                    .await
-                    .map_err(|err| {
-                        AdminGatewayError::Unexpected(anyhow!(
-                            "Balance not available: {}",
-                            err.fmt_compact_anyhow()
-                        ))
-                    })?
-                    .msats
-                    / 1000,
-            );
-            balance
-                .checked_sub(fee)
-                .ok_or_else(|| AdminGatewayError::WithdrawError {
-                    failure_reason: format!("Insufficient funds. Balance: {balance} Fee: {fee}"),
+            let balance = client.get_balance_for_btc().await.map_err(|err| {
+                AdminGatewayError::Unexpected(anyhow!(
+                    "Balance not available: {}",
+                    err.fmt_compact_anyhow()
+                ))
+            })?;
+
+            // The on-chain fee is only part of the cost: funding the wallet
+            // output also incurs the federation's per-note fees. `fee` is
+            // passed on to `send` below so both are computed against the same
+            // on-chain fee.
+            wallet_module
+                .max_sendable_amount(balance, fee)
+                .await
+                .map_err(|err| AdminGatewayError::WithdrawError {
+                    failure_reason: format!(
+                        "Insufficient funds. Balance: {balance} Fee: {fee}: {}",
+                        err.fmt_compact_anyhow()
+                    ),
                 })?
         }
         BitcoinAmountOrAll::Amount(a) => a,
@@ -488,14 +490,7 @@ async fn calculate_max_withdrawable(
         ))
     })?;
 
-    let peg_out_fees = if let Ok(wallet_module) = client.get_first_module::<WalletClientModule>() {
-        wallet_module
-            .get_withdraw_fees(
-                address,
-                bitcoin::Amount::from_sat(balance.sats_round_down()),
-            )
-            .await?
-    } else if let Ok(wallet_module) =
+    if let Ok(wallet_module) =
         client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
     {
         let fee = wallet_module
@@ -504,31 +499,53 @@ async fn calculate_max_withdrawable(
             .map_err(|e| AdminGatewayError::WithdrawError {
                 failure_reason: e.to_string(),
             })?;
-        PegOutFees::from_amount(fee)
-    } else {
+
+        let max_withdrawable = wallet_module
+            .max_sendable_amount(balance, fee)
+            .await
+            .map_err(|err| AdminGatewayError::WithdrawError {
+                failure_reason: err.fmt_compact_anyhow().to_string(),
+            })?;
+
+        // Everything the balance does not become an on-chain payment or miner
+        // fee is the federation fee: the wallet output fee, the mint input
+        // fees on the funding notes, any change output fees and dust. This is
+        // exact by construction, so it needs no separate estimate.
+        let federation_fees = balance
+            .saturating_sub(Amount::from_sats(max_withdrawable.to_sat()))
+            .saturating_sub(Amount::from_sats(fee.to_sat()));
+
+        return Ok(WithdrawDetails {
+            amount: Amount::from_sats(max_withdrawable.to_sat()),
+            mint_fees: Some(federation_fees),
+            peg_out_fees: PegOutFees::from_amount(fee),
+        });
+    }
+
+    let Ok(wallet_module) = client.get_first_module::<WalletClientModule>() else {
         return Err(AdminGatewayError::Unexpected(anyhow!(
             "No wallet module found"
         )));
     };
 
-    let max_withdrawable_before_mint_fees = balance
-        .checked_sub(peg_out_fees.amount().into())
-        .ok_or_else(|| AdminGatewayError::WithdrawError {
-            failure_reason: "Insufficient balance to cover peg-out fees".to_string(),
+    let (max_withdrawable, peg_out_fees) = wallet_module
+        .max_withdrawable_amount(address, balance)
+        .await
+        .map_err(|err| AdminGatewayError::WithdrawError {
+            failure_reason: err.fmt_compact_anyhow().to_string(),
         })?;
 
-    // MintV2 doesn't have fee estimation - only compute fees for MintV1
-    let mint_fees = if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
-        mint_module.estimate_spend_all_fees().await
-    } else {
-        Amount::ZERO
-    };
-
-    let max_withdrawable = max_withdrawable_before_mint_fees.saturating_sub(mint_fees);
+    // Everything the balance does not become an on-chain payment or miner fee
+    // is the federation fee: the peg-out output fee, the mint input fees on the
+    // funding notes, any change output fees and dust. This is exact by
+    // construction, so it needs no separate estimate.
+    let federation_fees = balance
+        .saturating_sub(Amount::from_sats(max_withdrawable.to_sat()))
+        .saturating_sub(Amount::from_sats(peg_out_fees.amount().to_sat()));
 
     Ok(WithdrawDetails {
-        amount: max_withdrawable,
-        mint_fees: Some(mint_fees),
+        amount: Amount::from_sats(max_withdrawable.to_sat()),
+        mint_fees: Some(federation_fees),
         peg_out_fees,
     })
 }
@@ -2860,33 +2877,27 @@ impl IAdminGateway for Gateway {
             }
             // CLI flow: fetch fees (existing behavior for backwards compatibility)
             None => match amount {
-                // If the amount is "all", then we need to subtract the fees from
-                // the amount we are withdrawing
+                // The on-chain fee is only part of the cost of withdrawing
+                // everything: funding the peg-out output also incurs the
+                // federation's per-note fees. The returned fees are quoted at
+                // the returned amount, so they must be used together.
                 BitcoinAmountOrAll::All => {
-                    let balance = bitcoin::Amount::from_sat(
-                        client
-                            .value()
-                            .get_balance_for_btc()
-                            .await
-                            .map_err(|err| {
-                                AdminGatewayError::Unexpected(anyhow!(
-                                    "Balance not available: {}",
-                                    err.fmt_compact_anyhow()
-                                ))
-                            })?
-                            .msats
-                            / 1000,
-                    );
-                    let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
-                    let withdraw_amount = balance.checked_sub(fees.amount());
-                    if withdraw_amount.is_none() {
-                        return Err(AdminGatewayError::WithdrawError {
+                    let balance = client.value().get_balance_for_btc().await.map_err(|err| {
+                        AdminGatewayError::Unexpected(anyhow!(
+                            "Balance not available: {}",
+                            err.fmt_compact_anyhow()
+                        ))
+                    })?;
+
+                    wallet_module
+                        .max_withdrawable_amount(&address, balance)
+                        .await
+                        .map_err(|err| AdminGatewayError::WithdrawError {
                             failure_reason: format!(
-                                "Insufficient funds. Balance: {balance} Fees: {fees:?}"
+                                "Insufficient funds. Balance: {balance}: {}",
+                                err.fmt_compact_anyhow()
                             ),
-                        });
-                    }
-                    (withdraw_amount.expect("checked above"), fees)
+                        })?
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
