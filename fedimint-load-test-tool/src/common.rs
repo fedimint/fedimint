@@ -288,6 +288,19 @@ pub async fn gateway_pay_invoice(
                 })?;
                 break;
             }
+            LnPayState::FederationUnreachable => {
+                let elapsed: Duration = m.elapsed()?;
+                warn!(
+                    prefix,
+                    elapsed_ms = elapsed.as_millis(),
+                    "Invoice refunded because the gateway could not reach the federation"
+                );
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_refunded".into(),
+                    duration: elapsed,
+                })?;
+                break;
+            }
             LnPayState::WaitingForRefund { error_reason } => {
                 warn!("{prefix} Waiting for refund: {error_reason:?}");
             }
