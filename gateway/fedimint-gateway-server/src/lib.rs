@@ -3749,6 +3749,19 @@ impl IGatewayClientV1 for Gateway {
         Ok(())
     }
 
+    async fn matches_preimage_authentication(
+        &self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+    ) -> bool {
+        self.gateway_db
+            .begin_transaction_nc()
+            .await
+            .load_preimage_authentication(payment_hash)
+            .await
+            == Some(preimage_auth)
+    }
+
     async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()> {
         if matches!(payment_data, PaymentData::PrunedInvoice { .. }) {
             let lightning_context = self.get_lightning_context().await?;

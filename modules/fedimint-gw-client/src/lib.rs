@@ -888,6 +888,24 @@ impl GatewayClientModule {
                             .await
                             .is_some()
                         {
+                            // This operation id yields the preimage, so only the
+                            // caller that started the payment may have it. The
+                            // state machine's own check comes too late for a
+                            // request that never reaches one.
+                            if !self
+                                .lightning_manager
+                                .matches_preimage_authentication(
+                                    payload.payment_data.payment_hash(),
+                                    payload.preimage_auth,
+                                )
+                                .await
+                            {
+                                anyhow::bail!(
+                                    "Not authorized to receive the preimage for contract {}, or its payment has not established an authentication yet",
+                                    payload.contract_id
+                                );
+                            }
+
                             debug!(
                                 operation_id = %operation_id.fmt_short(),
                                 contract_id = %payload.contract_id,
@@ -1220,6 +1238,18 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError>;
+
+    /// Returns whether `preimage_auth` matches the one pinned for
+    /// `payment_hash`, and `false` if nothing is pinned yet.
+    ///
+    /// Unlike [`Self::verify_preimage_authentication`] this never pins, so it
+    /// is safe to call before the contract is validated -- pinning there
+    /// would let anyone lock out an arbitrary payment hash.
+    async fn matches_preimage_authentication(
+        &self,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+    ) -> bool;
 
     /// Verify that the lightning node supports private payments if a pruned
     /// invoice is supplied.
