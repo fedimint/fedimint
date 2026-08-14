@@ -62,8 +62,14 @@ plugin_types_trait_impl_config!(
     MintClientConfig
 );
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Encodable)]
 pub struct FeeConsensus {
+    base: Amount,
+    parts_per_million: u64,
+}
+
+#[derive(Deserialize)]
+struct UnvalidatedFeeConsensus {
     base: Amount,
     parts_per_million: u64,
 }
@@ -127,6 +133,45 @@ impl FeeConsensus {
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
     }
+
+    fn from_unvalidated(base: Amount, parts_per_million: u64) -> anyhow::Result<FeeConsensus> {
+        // Preserve the legacy static-config invariant. The dynamic-fee design in
+        // #8758 moves broader policy to separate FeeConsensus/FeeRate types.
+        anyhow::ensure!(
+            (base == Amount::ZERO && parts_per_million == 0)
+                || (base == Amount::from_msats(100) && parts_per_million <= 1_000),
+            "Mint fees must be zero or use the 100 msat base fee and at most one thousand parts per million"
+        );
+
+        Ok(Self {
+            base,
+            parts_per_million,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for FeeConsensus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let unvalidated = UnvalidatedFeeConsensus::deserialize(deserializer)?;
+        Self::from_unvalidated(unvalidated.base, unvalidated.parts_per_million)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl Decodable for FeeConsensus {
+    fn consensus_decode_partial<R: std::io::Read>(
+        reader: &mut R,
+        modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
+    ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+        let base = Amount::consensus_decode_partial(reader, modules)?;
+        let parts_per_million = u64::consensus_decode_partial(reader, modules)?;
+
+        Self::from_unvalidated(base, parts_per_million)
+            .map_err(fedimint_core::encoding::DecodeError::new_custom)
+    }
 }
 
 #[test]
@@ -157,4 +202,46 @@ fn test_fee_consensus() {
         fee_consensus.fee(Amount::from_bitcoins(100_000)),
         Amount::from_bitcoins(100) + Amount::from_msats(100)
     );
+}
+
+#[test]
+fn decoded_fee_consensus_is_validated() {
+    use fedimint_core::encoding::Encodable as _;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+
+    let modules = ModuleDecoderRegistry::default();
+    for fee in [
+        FeeConsensus::zero(),
+        FeeConsensus::new(0).expect("zero ppm is valid"),
+        FeeConsensus::new(1_000).expect("maximum ppm is valid"),
+    ] {
+        assert_eq!(
+            serde_json::from_str::<FeeConsensus>(
+                &serde_json::to_string(&fee).expect("fee consensus can be encoded")
+            )
+            .expect("valid JSON fee consensus can be decoded"),
+            fee
+        );
+        assert_eq!(
+            FeeConsensus::consensus_decode_whole(&fee.consensus_encode_to_vec(), &modules)
+                .expect("valid consensus fee can be decoded"),
+            fee
+        );
+    }
+
+    for malformed in [
+        (Amount::ZERO, 1),
+        (Amount::from_msats(99), 0),
+        (Amount::from_msats(100), 1_001),
+        (Amount::from_msats(u64::MAX), u64::MAX),
+    ] {
+        let json = serde_json::json!({
+            "base": malformed.0,
+            "parts_per_million": malformed.1,
+        });
+        assert!(serde_json::from_value::<FeeConsensus>(json).is_err());
+
+        let encoded = malformed.consensus_encode_to_vec();
+        assert!(FeeConsensus::consensus_decode_whole(&encoded, &modules).is_err());
+    }
 }
