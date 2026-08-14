@@ -2,7 +2,9 @@ use fedimint_core::OutPoint;
 use fedimint_core::encoding::{Decodable, Encodable};
 
 use super::{
-    LightningPayCreatedOutgoingLnContract, LightningPayFunded, LightningPayRefund,
+    LightningPayCreatedOutgoingLnContract, LightningPayFederationUnreachable,
+    LightningPayFederationUnreachableRefundFailed,
+    LightningPayFederationUnreachableRefundSubmitted, LightningPayFunded, LightningPayRefund,
     LightningPayRefundable,
 };
 
@@ -20,6 +22,12 @@ use super::{
 ///  Funded -- await gateway cancel payment --> Refund
 ///  Funded -- await payment timeout --> Refund
 ///  Funded -- unrecoverable payment error --> Failure
+///  Funded -- federation unreachable --> FederationUnreachablePendingRefund
+///  FederationUnreachablePendingRefund -- contract cancelled --> FederationUnreachableRefundSubmitted
+///  FederationUnreachablePendingRefund -- contract timeout --> FederationUnreachableRefundSubmitted
+///  FederationUnreachableRefundSubmitted -- refund rejected --> FederationUnreachablePendingRefund
+///  FederationUnreachableRefundSubmitted -- accepted and outputs finalized --> FederationUnreachable
+///  FederationUnreachableRefundSubmitted -- refund output failed --> FederationUnreachableRefundFailed
 ///  Refundable -- gateway issued refunded --> Refund
 ///  Refundable -- transaction timeout --> Refund
 /// ```
@@ -42,4 +50,15 @@ pub enum LightningPayStates {
     )]
     Refunded(Vec<OutPoint>),
     Failure(String),
+    /// The gateway reported a sanitized gateway-to-federation connectivity
+    /// failure; the client is waiting until it can reclaim the contract.
+    FederationUnreachablePendingRefund(LightningPayRefundable),
+    /// The client submitted the reclaim transaction and is waiting for its
+    /// acceptance and primary-module output finalization.
+    FederationUnreachableRefundSubmitted(LightningPayFederationUnreachableRefundSubmitted),
+    /// The reclaim transaction and its primary-module outputs finalized.
+    FederationUnreachable(LightningPayFederationUnreachable),
+    /// The reclaim transaction was accepted, but a primary-module output
+    /// failed terminally and requires operator recovery.
+    FederationUnreachableRefundFailed(LightningPayFederationUnreachableRefundFailed),
 }

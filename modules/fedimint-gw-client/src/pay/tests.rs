@@ -1,14 +1,146 @@
 use bitcoin::hashes::{Hash as _, sha256};
 use bitcoin::key::Keypair;
-use fedimint_core::Amount;
+use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{self, SecretKey};
-use fedimint_ln_client::pay::PaymentData;
+use fedimint_core::{Amount, TransactionId};
+use fedimint_lightning::LightningRpcError;
+use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::PrunedInvoice;
-use fedimint_ln_common::contracts::IdentifiableContract as _;
 use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
+use fedimint_ln_common::contracts::{ContractId, IdentifiableContract as _, Preimage};
 use lightning_invoice::RoutingFees;
 
-use super::{GatewayPayInvoice, OutgoingContractError, TIMELOCK_DELTA};
+use super::{
+    GatewayPayCancelContract, GatewayPayClaimOutgoingContract, GatewayPayInvoice, GatewayPayStates,
+    GatewayPayWaitForSwapPreimage, OutgoingContractError, OutgoingPaymentError,
+    OutgoingPaymentErrorType, TIMELOCK_DELTA,
+};
+
+#[test]
+fn gateway_unreachable_terminal_state_round_trips() {
+    let state = GatewayPayStates::FederationUnreachable;
+    let encoded = state.consensus_encode_to_vec();
+    assert_eq!(encoded, [8, 0]);
+    let decoded = GatewayPayStates::consensus_decode_whole(
+        &encoded,
+        &fedimint_core::module::registry::ModuleDecoderRegistry::default(),
+    )
+    .expect("new terminal state decodes after restart");
+
+    assert_eq!(decoded, state);
+}
+
+#[test]
+fn pre_change_gateway_state_variant_keeps_its_encoding() {
+    let contract_id = ContractId::from(sha256::Hash::all_zeros());
+    let mut fixture = vec![3, 32];
+    fixture.extend([0; 32]);
+
+    assert_eq!(
+        GatewayPayStates::OfferDoesNotExist(contract_id).consensus_encode_to_vec(),
+        fixture
+    );
+    assert_eq!(
+        GatewayPayStates::consensus_decode_whole(
+            &fixture,
+            &fedimint_core::module::registry::ModuleDecoderRegistry::default(),
+        )
+        .expect("pre-change gateway state decodes"),
+        GatewayPayStates::OfferDoesNotExist(contract_id)
+    );
+}
+
+fn assert_discriminant(value: &impl Encodable, expected: u8) {
+    assert_eq!(
+        value.consensus_encode_to_vec()[0],
+        expected,
+        "persisted enum discriminant changed"
+    );
+}
+
+#[test]
+fn outgoing_payment_error_discriminants_are_stable() {
+    let contract_id = ContractId::from(sha256::Hash::all_zeros());
+    let errors = [
+        OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
+        OutgoingPaymentErrorType::LightningPayError {
+            lightning_error: LightningRpcError::FailedToConnect,
+        },
+        OutgoingPaymentErrorType::InvalidOutgoingContract {
+            error: OutgoingContractError::CancelledContract,
+        },
+        OutgoingPaymentErrorType::SwapFailed {
+            swap_error: String::new(),
+        },
+        OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+        OutgoingPaymentErrorType::InvalidFederationConfiguration,
+        OutgoingPaymentErrorType::InvalidInvoicePreimage,
+        OutgoingPaymentErrorType::FederationUnreachable,
+    ];
+
+    for (expected, error) in errors.iter().enumerate() {
+        assert_discriminant(error, expected as u8);
+    }
+    assert_eq!(
+        OutgoingPaymentErrorType::FederationUnreachable.consensus_encode_to_vec(),
+        [7, 0]
+    );
+}
+
+#[test]
+fn every_gateway_payment_state_discriminant_is_stable() {
+    let hash = sha256::Hash::all_zeros();
+    let contract = contract_account(hash);
+    let contract_id = contract.contract.contract_id();
+    let error = OutgoingPaymentError {
+        error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+        contract_id,
+        contract: Some(contract.clone()),
+    };
+    let payload = PayInvoicePayload {
+        federation_id: FederationId::dummy(),
+        contract_id,
+        payment_data: payment_data(hash),
+        preimage_auth: hash,
+    };
+    let preimage = Preimage([0; 32]);
+    let states = [
+        GatewayPayStates::PayInvoice(GatewayPayInvoice {
+            pay_invoice_payload: payload,
+        }),
+        GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+            contract: contract.clone(),
+            error: error.clone(),
+        })),
+        GatewayPayStates::Preimage(vec![], preimage.clone()),
+        GatewayPayStates::OfferDoesNotExist(contract_id),
+        GatewayPayStates::Canceled {
+            txid: TransactionId::all_zeros(),
+            contract_id,
+            error: error.clone(),
+        },
+        GatewayPayStates::WaitForSwapPreimage(Box::new(GatewayPayWaitForSwapPreimage {
+            contract: contract.clone(),
+            federation_id: FederationId::dummy(),
+            operation_id: OperationId([0; 32]),
+        })),
+        GatewayPayStates::ClaimOutgoingContract(Box::new(GatewayPayClaimOutgoingContract {
+            contract,
+            preimage,
+        })),
+        GatewayPayStates::Failed {
+            error,
+            error_message: String::new(),
+        },
+        GatewayPayStates::FederationUnreachable,
+    ];
+
+    for (expected, state) in states.iter().enumerate() {
+        assert_discriminant(state, expected as u8);
+    }
+}
 
 const CONSENSUS_BLOCK_COUNT: u64 = 1;
 const INVOICE_AMOUNT: Amount = Amount::from_msats(1000);
