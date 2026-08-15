@@ -1933,6 +1933,23 @@ impl Client {
             .all(RecoveryStatus::is_successfully_done)
     }
 
+    /// Whether every module of this client can be used right now.
+    ///
+    /// A module that cannot be used while it recovers is left out of the module
+    /// registry, and only becomes available once the client is reopened with
+    /// its recovery complete. This reports whether any module is currently held
+    /// back that way, so an application can tell whether it has to wait for
+    /// [`Self::wait_for_all_recoveries`] and reopen before it can do anything,
+    /// or can go ahead right away with a recovery still running.
+    ///
+    /// Always `true` for a client that is not recovering.
+    pub fn all_modules_usable(&self) -> bool {
+        self.client_recovery_status_receiver
+            .borrow()
+            .keys()
+            .all(|module_instance_id| self.modules.get(*module_instance_id).is_some())
+    }
+
     /// Wait for all module recoveries to finish
     ///
     /// Returns `Ok(())` once every module recovery completed, or an error as

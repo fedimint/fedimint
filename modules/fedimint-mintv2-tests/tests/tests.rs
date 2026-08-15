@@ -364,10 +364,16 @@ async fn test_client_recovery(
         .recover_client_with_db(MemDatabase::new().into(), root_secret.clone())
         .await;
 
-    // The dummy module implements no recovery, so it is not held back for one:
-    // it is usable on the recovering client right away, rather than only after
-    // the mint has finished recovering and the client has been reopened.
+    // Neither module is held back by the recovery: the dummy module implements
+    // none, and the mint fixed the extent of its own before it was initialized.
+    // So both are usable while the recovery is still running, rather than only
+    // once it has finished and the client has been reopened.
+    ensure!(
+        recovering_client.all_modules_usable(),
+        "A module was held back by the recovery"
+    );
     recovering_client.get_first_module::<DummyClientModule>()?;
+    recovering_client.get_first_module::<MintClientModule>()?;
 
     recovering_client.wait_for_all_recoveries().await?;
 
@@ -379,22 +385,32 @@ async fn test_client_recovery(
         "recovery-completed event amount mismatch: expected {expected_balance}, got {event_amount:?}"
     );
 
-    // A module that did recover is only registered on the next client open, so
-    // the mint is available only after reopening. This is documented behavior -
-    // see gateway's client.rs:94-97
-    let recovered_client = fed
-        .open_client_with_db(recovering_client.db().clone(), root_secret)
-        .await;
-
-    recovered_client
+    // The recovered notes are signed and land in the very client that ran the
+    // recovery, without it having to be reopened first.
+    recovering_client
         .wait_for_all_active_state_machines()
         .await?;
 
-    let recovered_balance = recovered_client.get_balance_for_btc().await?;
+    let recovered_balance = recovering_client.get_balance_for_btc().await?;
 
     ensure!(
         recovered_balance == expected_balance,
         "Recovery balance mismatch: expected {expected_balance}, got {recovered_balance}"
+    );
+
+    // Reopening must neither restart the recovery nor duplicate what it
+    // recovered.
+    let reopened_client = fed
+        .open_client_with_db(recovering_client.db().clone(), root_secret)
+        .await;
+
+    reopened_client.wait_for_all_active_state_machines().await?;
+
+    let reopened_balance = reopened_client.get_balance_for_btc().await?;
+
+    ensure!(
+        reopened_balance == expected_balance,
+        "Balance changed on reopen: expected {expected_balance}, got {reopened_balance}"
     );
 
     Ok(())

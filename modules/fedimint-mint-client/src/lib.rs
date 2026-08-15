@@ -58,7 +58,7 @@ use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, Se
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
-    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -836,8 +836,8 @@ impl ClientModuleInit for MintClientInit {
         })
     }
 
-    fn supports_recovery(&self) -> bool {
-        true
+    fn recovery_mode(&self) -> RecoveryMode {
+        RecoveryMode::Unusable
     }
 
     async fn recover(

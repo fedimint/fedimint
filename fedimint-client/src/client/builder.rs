@@ -3,7 +3,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, ensure};
+use anyhow::{Context as _, bail, ensure};
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
@@ -15,7 +15,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::{
-    BitcoindRpcFactory, BitcoindRpcNoChainIdFactory, ClientModuleInit,
+    BitcoindRpcFactory, BitcoindRpcNoChainIdFactory, ClientModuleInit, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -868,9 +868,24 @@ impl ClientBuilder {
                 // recover, so holding it back for one would only keep it out of
                 // the registry — and therefore unusable — until the client is
                 // reopened, in exchange for a recovery that does nothing.
+                let recovery_mode = module_init.recovery_mode();
+
                 let requires_recovery = init_state
                     .does_require_recovery()
-                    .filter(|_| module_init.supports_recovery());
+                    .filter(|_| recovery_mode != RecoveryMode::None);
+
+                // A module that may be used while it recovers has to commit
+                // the boundary between its recovery and live operation before
+                // either exists, so the recovery below never runs without the
+                // boundary it assumes.
+                if requires_recovery.is_some() && recovery_mode == RecoveryMode::Usable {
+                    module_init
+                        .prepare_recovery(db.clone(), module_instance_id, api.clone())
+                        .await
+                        .with_context(|| {
+                            format!("Failed to prepare recovery of module {module_instance_id}")
+                        })?;
+                }
 
                 let recovery = match requires_recovery {
                     Some(snapshot) => {
@@ -928,43 +943,49 @@ impl ClientBuilder {
                     _ => None,
                 };
 
-                match recovery {
-                    Some((recovery, recovery_progress_rx)) => {
-                        module_recoveries.insert(module_instance_id, recovery);
-                        module_recovery_progress_receivers
-                            .insert(module_instance_id, recovery_progress_rx);
-                    }
-                    _ => {
-                        let module = module_init
-                            .init(
-                                final_client.clone(),
-                                fed_id,
-                                config.global.api_endpoints.len(),
-                                module_config,
-                                db.clone(),
-                                module_instance_id,
-                                common_api_versions.core,
-                                api_version,
-                                // This is a divergence from the legacy client, where the child
-                                // secret keys were derived using
-                                // *module kind*-specific derivation paths.
-                                // Since the new client has to support multiple, segregated modules
-                                // of the same kind we have to use
-                                // the instance id instead.
-                                root_secret.derive_module_secret(module_instance_id),
-                                notifier.clone(),
-                                api.clone(),
-                                self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
-                                task_group.clone(),
-                                client_span.clone(),
-                                connectors.clone(),
-                                user_bitcoind_rpc.clone(),
-                                self.bitcoind_rpc_no_chain_id_factory.clone(),
-                            )
-                            .await?;
+                // A module that is not recovering is always initialized, a
+                // recovering one only if it may be used while its recovery
+                // runs. The rest stay out of the module registry, and so
+                // unusable, until the client is reopened with their recovery
+                // complete.
+                let initialize_module = recovery.is_none() || recovery_mode == RecoveryMode::Usable;
 
-                        modules.register_module(module_instance_id, kind, module);
-                    }
+                if let Some((recovery, recovery_progress_rx)) = recovery {
+                    module_recoveries.insert(module_instance_id, recovery);
+                    module_recovery_progress_receivers
+                        .insert(module_instance_id, recovery_progress_rx);
+                }
+
+                if initialize_module {
+                    let module = module_init
+                        .init(
+                            final_client.clone(),
+                            fed_id,
+                            config.global.api_endpoints.len(),
+                            module_config,
+                            db.clone(),
+                            module_instance_id,
+                            common_api_versions.core,
+                            api_version,
+                            // This is a divergence from the legacy client, where the child
+                            // secret keys were derived using
+                            // *module kind*-specific derivation paths.
+                            // Since the new client has to support multiple, segregated modules
+                            // of the same kind we have to use
+                            // the instance id instead.
+                            root_secret.derive_module_secret(module_instance_id),
+                            notifier.clone(),
+                            api.clone(),
+                            self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                            task_group.clone(),
+                            client_span.clone(),
+                            connectors.clone(),
+                            user_bitcoind_rpc.clone(),
+                            self.bitcoind_rpc_no_chain_id_factory.clone(),
+                        )
+                        .await?;
+
+                    modules.register_module(module_instance_id, kind, module);
                 }
             }
             modules
