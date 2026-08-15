@@ -5,6 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow::bail;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
@@ -379,8 +380,24 @@ pub trait ClientModuleInit: ModuleInit + Sized {
         <Self::Module as ClientModule>::kind()
     }
 
+    /// Whether this module implements [`Self::recover`].
+    ///
+    /// A module that leaves this at `false` is left out of a recovering
+    /// client's recovery entirely: no recovery is started for it and it is
+    /// initialized as it would be on any other client open, rather than being
+    /// held back for a recovery that would do nothing.
+    ///
+    /// Must be overridden together with [`Self::recover`]: overriding only the
+    /// recovery leaves it unreachable, and overriding only this makes the
+    /// module's recovery fail.
+    fn supports_recovery(&self) -> bool {
+        false
+    }
+
     /// Recover the state of the client module, optionally from an existing
     /// snapshot.
+    ///
+    /// Only called for modules whose [`Self::supports_recovery`] is `true`.
     ///
     /// On success, returns the total amount recovered from this module, if the
     /// module tracks it (`None` for modules that can't determine the amount at
@@ -394,12 +411,10 @@ pub trait ClientModuleInit: ModuleInit + Sized {
         _args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<Option<Amount>> {
-        warn!(
-            target: LOG_CLIENT,
-            kind = %<Self::Module as ClientModule>::kind(),
-            "Module does not support recovery, completing without doing anything"
-        );
-        Ok(None)
+        bail!(
+            "Module kind {} claims to support recovery without implementing it",
+            <Self::Module as ClientModule>::kind()
+        )
     }
 
     /// Initialize a [`ClientModule`] instance from its config

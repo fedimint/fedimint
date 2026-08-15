@@ -864,7 +864,15 @@ impl ClientBuilder {
                         )
                     };
 
-                let recovery = match init_state.does_require_recovery() {
+                // A module that does not implement recovery has nothing to
+                // recover, so holding it back for one would only keep it out of
+                // the registry — and therefore unusable — until the client is
+                // reopened, in exchange for a recovery that does nothing.
+                let requires_recovery = init_state
+                    .does_require_recovery()
+                    .filter(|_| module_init.supports_recovery());
+
+                let recovery = match requires_recovery {
                     Some(snapshot) => {
                         match db
                             .begin_transaction_nc()

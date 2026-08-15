@@ -414,6 +414,10 @@ impl ClientModuleInit for WalletClientInit {
         })
     }
 
+    fn supports_recovery(&self) -> bool {
+        true
+    }
+
     /// Wallet recovery
     ///
     /// Uses slice-based recovery if supported by the federation, otherwise

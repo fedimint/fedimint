@@ -364,6 +364,11 @@ async fn test_client_recovery(
         .recover_client_with_db(MemDatabase::new().into(), root_secret.clone())
         .await;
 
+    // The dummy module implements no recovery, so it is not held back for one:
+    // it is usable on the recovering client right away, rather than only after
+    // the mint has finished recovering and the client has been reopened.
+    recovering_client.get_first_module::<DummyClientModule>()?;
+
     recovering_client.wait_for_all_recoveries().await?;
 
     // The mintv2 module's recovery-completed event reports the total value of
@@ -374,8 +379,9 @@ async fn test_client_recovery(
         "recovery-completed event amount mismatch: expected {expected_balance}, got {event_amount:?}"
     );
 
-    // After recovery completes, we need to reopen the client for modules to be
-    // available. This is documented behavior - see gateway's client.rs:94-97
+    // A module that did recover is only registered on the next client open, so
+    // the mint is available only after reopening. This is documented behavior -
+    // see gateway's client.rs:94-97
     let recovered_client = fed
         .open_client_with_db(recovering_client.db().clone(), root_secret)
         .await;

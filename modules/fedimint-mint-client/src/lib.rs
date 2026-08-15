@@ -836,6 +836,10 @@ impl ClientModuleInit for MintClientInit {
         })
     }
 
+    fn supports_recovery(&self) -> bool {
+        true
+    }
+
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,

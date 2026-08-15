@@ -152,6 +152,10 @@ impl ClientModuleInit for MintClientInit {
             .expect("no version conflicts")
     }
 
+    fn supports_recovery(&self) -> bool {
+        true
+    }
+
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,

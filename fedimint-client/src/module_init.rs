@@ -39,6 +39,9 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
     /// See [`ClientModuleInit::supported_api_versions`]
     fn supported_api_versions(&self) -> MultiApiVersion;
 
+    /// See [`ClientModuleInit::supports_recovery`]
+    fn supports_recovery(&self) -> bool;
+
     #[allow(clippy::too_many_arguments)]
     async fn recover(
         &self,
@@ -109,6 +112,10 @@ where
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         <Self as ClientModuleInit>::supported_api_versions(self)
+    }
+
+    fn supports_recovery(&self) -> bool {
+        <Self as ClientModuleInit>::supports_recovery(self)
     }
 
     async fn recover(
