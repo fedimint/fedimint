@@ -204,6 +204,26 @@ where
     }
 }
 
+/// Arguments to [`ClientModuleInit::prepare_recovery`], which runs before the
+/// module exists and so gets only what it takes to record where the recovery
+/// ends and live operation begins.
+pub struct ClientModuleRecoveryPrepareArgs {
+    pub db: Database,
+    pub module_api: DynModuleApi,
+}
+
+impl ClientModuleRecoveryPrepareArgs {
+    /// Database isolated for this module instance
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+
+    /// Api of this module instance
+    pub fn module_api(&self) -> &DynModuleApi {
+        &self.module_api
+    }
+}
+
 pub struct ClientModuleRecoverArgs<C>
 where
     C: ClientModuleInit,
@@ -392,6 +412,31 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// module's recovery fail.
     fn supports_recovery(&self) -> bool {
         false
+    }
+
+    /// Prepare a recovery, reporting whether the module may be used while that
+    /// recovery runs.
+    ///
+    /// Called on every client open that starts or resumes a recovery, before
+    /// [`Self::init`] and before the module joins the module registry. A module
+    /// that returns `true` is initialized and usable straight away, with its
+    /// recovery running in the background, instead of only becoming available
+    /// once the client is reopened with the recovery complete.
+    ///
+    /// Returning `true` is a claim that the recovery and the live module cannot
+    /// interfere: the recovery must not rewrite state the module also writes,
+    /// and must not rediscover what the live module is about to do. Whatever
+    /// separates the two has to be recorded durably *here*, because everything
+    /// after this point can run concurrently with the module. If this fails the
+    /// module is held back as if it had returned `false`, so the boundary is
+    /// never assumed to exist without having been committed.
+    ///
+    /// Only called for modules whose [`Self::supports_recovery`] is `true`.
+    async fn prepare_recovery(
+        &self,
+        _args: &ClientModuleRecoveryPrepareArgs,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
     }
 
     /// Recover the state of the client module, optionally from an existing

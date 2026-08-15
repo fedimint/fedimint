@@ -928,43 +928,62 @@ impl ClientBuilder {
                     _ => None,
                 };
 
-                match recovery {
-                    Some((recovery, recovery_progress_rx)) => {
-                        module_recoveries.insert(module_instance_id, recovery);
-                        module_recovery_progress_receivers
-                            .insert(module_instance_id, recovery_progress_rx);
-                    }
-                    _ => {
-                        let module = module_init
-                            .init(
-                                final_client.clone(),
-                                fed_id,
-                                config.global.api_endpoints.len(),
-                                module_config,
-                                db.clone(),
-                                module_instance_id,
-                                common_api_versions.core,
-                                api_version,
-                                // This is a divergence from the legacy client, where the child
-                                // secret keys were derived using
-                                // *module kind*-specific derivation paths.
-                                // Since the new client has to support multiple, segregated modules
-                                // of the same kind we have to use
-                                // the instance id instead.
-                                root_secret.derive_module_secret(module_instance_id),
-                                notifier.clone(),
-                                api.clone(),
-                                self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
-                                task_group.clone(),
-                                client_span.clone(),
-                                connectors.clone(),
-                                user_bitcoind_rpc.clone(),
-                                self.bitcoind_rpc_no_chain_id_factory.clone(),
-                            )
-                            .await?;
+                // A module that is not recovering is always initialized, a
+                // recovering one only if it can be used while its recovery
+                // runs. The rest stay out of the module registry, and so
+                // unusable, until the client is reopened with their recovery
+                // complete.
+                let initialize_module = match &recovery {
+                    Some(_) => module_init
+                        .prepare_recovery(db.clone(), module_instance_id, api.clone())
+                        .await
+                        .unwrap_or_else(|err| {
+                            warn!(
+                                target: LOG_CLIENT,
+                                module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(),
+                                "Failed to prepare module recovery, holding the module back until the client is reopened"
+                            );
+                            false
+                        }),
+                    _ => true,
+                };
 
-                        modules.register_module(module_instance_id, kind, module);
-                    }
+                if let Some((recovery, recovery_progress_rx)) = recovery {
+                    module_recoveries.insert(module_instance_id, recovery);
+                    module_recovery_progress_receivers
+                        .insert(module_instance_id, recovery_progress_rx);
+                }
+
+                if initialize_module {
+                    let module = module_init
+                        .init(
+                            final_client.clone(),
+                            fed_id,
+                            config.global.api_endpoints.len(),
+                            module_config,
+                            db.clone(),
+                            module_instance_id,
+                            common_api_versions.core,
+                            api_version,
+                            // This is a divergence from the legacy client, where the child
+                            // secret keys were derived using
+                            // *module kind*-specific derivation paths.
+                            // Since the new client has to support multiple, segregated modules
+                            // of the same kind we have to use
+                            // the instance id instead.
+                            root_secret.derive_module_secret(module_instance_id),
+                            notifier.clone(),
+                            api.clone(),
+                            self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                            task_group.clone(),
+                            client_span.clone(),
+                            connectors.clone(),
+                            user_bitcoind_rpc.clone(),
+                            self.bitcoind_rpc_no_chain_id_factory.clone(),
+                        )
+                        .await?;
+
+                    modules.register_module(module_instance_id, kind, module);
                 }
             }
             modules

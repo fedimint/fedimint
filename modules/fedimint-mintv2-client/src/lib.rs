@@ -38,6 +38,7 @@ use fedimint_client::transaction::{
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleRecoveryPrepareArgs,
 };
 use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{
@@ -48,7 +49,9 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -156,27 +159,21 @@ impl ClientModuleInit for MintClientInit {
         true
     }
 
+    async fn prepare_recovery(
+        &self,
+        args: &ClientModuleRecoveryPrepareArgs,
+    ) -> anyhow::Result<bool> {
+        load_or_init_recovery_state(args.db(), args.module_api()).await?;
+
+        Ok(true)
+    }
+
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
     ) -> anyhow::Result<Option<Amount>> {
-        let mut state = if let Some(state) = args
-            .db()
-            .begin_transaction_nc()
-            .await
-            .get_value(&RecoveryStateKey)
-            .await
-        {
-            state
-        } else {
-            RecoveryState {
-                next_index: 0,
-                total_items: args.module_api().fetch_recovery_count().await?,
-                requests: BTreeMap::new(),
-                nonces: BTreeSet::new(),
-            }
-        };
+        let mut state = load_or_init_recovery_state(args.db(), args.module_api()).await?;
 
         if state.next_index == state.total_items {
             return Ok(None);
@@ -1145,6 +1142,42 @@ impl MintClientModule {
             .await
             .expect("Must delete existing spendable note");
     }
+}
+
+/// Load the recovery state, fixing the extent of the recovery on first call.
+///
+/// The total is the number of items the federation had processed when the
+/// recovery began, so every note this client issues from here on lands beyond
+/// it and is never rediscovered by the scan. Committing that bound before the
+/// module is initialized is what lets the module be used while its own recovery
+/// is still running: the two cannot arrive at the same note.
+async fn load_or_init_recovery_state(
+    db: &Database,
+    module_api: &DynModuleApi,
+) -> anyhow::Result<RecoveryState> {
+    if let Some(state) = db
+        .begin_transaction_nc()
+        .await
+        .get_value(&RecoveryStateKey)
+        .await
+    {
+        return Ok(state);
+    }
+
+    let state = RecoveryState {
+        next_index: 0,
+        total_items: module_api.fetch_recovery_count().await?,
+        requests: BTreeMap::new(),
+        nonces: BTreeSet::new(),
+    };
+
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.insert_entry(&RecoveryStateKey, &state).await;
+
+    dbtx.commit_tx().await;
+
+    Ok(state)
 }
 
 #[derive(Clone)]
