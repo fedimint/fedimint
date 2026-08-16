@@ -1,7 +1,7 @@
 //! Implements a connection manager for communication with other federation
 //! members
 //!
-//! The main interface is [`fedimint_core::net::peers::IP2PConnections`] and
+//! The main interface is [`fedimint_core::net::IP2PConnections`] and
 //! its main implementation is [`ReconnectP2PConnections`], see these for
 //! details.
 
@@ -15,7 +15,7 @@ use anyhow::anyhow;
 use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use fedimint_core::net::peers::{IP2PConnections, Recipient};
+use fedimint_core::net::{IP2PConnections, Recipient};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};

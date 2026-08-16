@@ -21117,7 +21117,7 @@
       "crate": "fedimint-core"
     },
     {
-      "file": "/build/source/fedimint-core/src/net/peers/fake.rs",
+      "file": "/build/source/fedimint-core/src/net/fake.rs",
       "function": "FakePeerConnections::send",
       "line": 18,
       "cyclomatic": 1.0,
@@ -21126,7 +21126,7 @@
       "crate": "fedimint-core"
     },
     {
-      "file": "/build/source/fedimint-core/src/net/peers/fake.rs",
+      "file": "/build/source/fedimint-core/src/net/fake.rs",
       "function": "FakePeerConnections::receive",
       "line": 26,
       "cyclomatic": 1.0,
@@ -21135,7 +21135,7 @@
       "crate": "fedimint-core"
     },
     {
-      "file": "/build/source/fedimint-core/src/net/peers/fake.rs",
+      "file": "/build/source/fedimint-core/src/net/fake.rs",
       "function": "FakePeerConnections::receive_from_peer",
       "line": 30,
       "cyclomatic": 1.0,
@@ -21144,7 +21144,7 @@
       "crate": "fedimint-core"
     },
     {
-      "file": "/build/source/fedimint-core/src/net/peers/fake.rs",
+      "file": "/build/source/fedimint-core/src/net/fake.rs",
       "function": "make_fake_peer_connection",
       "line": 39,
       "cyclomatic": 1.0,
