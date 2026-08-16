@@ -26,7 +26,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, FEDIMINT_API_ALPN};
 use fedimint_core::net::iroh::build_iroh_endpoint;
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};

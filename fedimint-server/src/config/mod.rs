@@ -16,7 +16,7 @@ use fedimint_core::module::{
     ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
