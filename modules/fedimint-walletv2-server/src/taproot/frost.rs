@@ -139,6 +139,9 @@ impl Wallet {
         let prevouts = self.build_prevouts(unsigned_tx);
         let mut sighash_cache = SighashCache::new(unsigned_tx.tx.clone());
 
+        // Invariant: `FederationTx` is only ever built locally (`process_input`
+        // / `process_output`) with one `spent_tx_out` per input, never decoded
+        // from the wire — so the index is in range and `Prevouts::All` matches.
         (0..unsigned_tx.tx.input.len())
             .map(|input_index| {
                 sighash_cache
@@ -366,6 +369,8 @@ impl Wallet {
         // Inline 1:1 replacement: keep our local nonce buffer at
         // `frost_nonce_buffer_target()` invariantly. Local-only state, no
         // consensus implications.
+        // Invariant: `Wallet::new` fails fast at startup if a FROST federation
+        // is missing its key package, and this path is FROST-only.
         let key_package = self
             .cfg
             .private
@@ -828,7 +833,7 @@ impl Wallet {
             .consensus
             .frost_pubkey_package
             .as_ref()
-            .expect("FROST federation must have a frost_pubkey_package")
+            .ok_or_else(|| anyhow!("FROST federation must have a frost_pubkey_package"))?
             .0
             .clone();
         ensure!(
@@ -1183,6 +1188,9 @@ impl Wallet {
             return Ok(());
         }
 
+        // Invariant: the `ensure!` above requires an attempt record for this
+        // tx, and finalization removes the attempt records and `UnsignedTxKey`
+        // in the same dbtx — so an attempt record implies the tx is unsigned.
         let unsigned_tx = dbtx
             .get_value(&UnsignedTxKey(txid))
             .await
@@ -1372,7 +1380,9 @@ pub(crate) fn spawn_initial_nonce_backfill(
 
 /// Convert a `PeerId` into a FROST `Identifier`.
 ///
-/// FROST identifiers must be non-zero, so we offset by 1.
+/// FROST identifiers must be non-zero, so we offset by 1. `PeerId` wraps a
+/// `u16`, so the cast is lossless; the offset only overflows at `PeerId`
+/// `u16::MAX`, which config gen never assigns (ids are `0..n`).
 pub(crate) fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
     Identifier::try_from(peer_id.to_usize() as u16 + 1)
         .expect("Could not convert PeerId to Identifier")
@@ -1557,6 +1567,9 @@ pub(crate) async fn dkg(
 /// Homomorphically add `tweak·G` to a compressed-serialized secp256k1 point
 /// and return the tweaked point's compressed serialization. Common step of
 /// the per-UTXO tweak applied to FROST verifying keys and shares below.
+///
+/// Invariants: `bytes` is always a FROST-serialized group element, and the sum
+/// is only the identity if `tweak == -dlog(point)` — i.e. the secret is known.
 fn add_tweak_to_point(bytes: &[u8], tweak: &Scalar) -> [u8; 33] {
     PublicKey::from_slice(bytes)
         .expect("FROST element is a valid secp256k1 point")
@@ -1597,6 +1610,8 @@ pub(crate) fn apply_utxo_tweak_to_key_package(
 ) -> KeyPackage {
     let key_package = key_package.clone().into_even_y(None);
 
+    // See `tweak_xonly_public_key` for why the hash-to-scalar load is an
+    // invariant. `add_tweak` likewise only fails if the sum is zero.
     let tweak_scalar =
         Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
 
@@ -1628,6 +1643,7 @@ pub(crate) fn apply_utxo_tweak_to_pubkey_package(
 ) -> PublicKeyPackage {
     let pubkey_package = pubkey_package.clone().into_even_y(None);
 
+    // See `tweak_xonly_public_key` for why this load is an invariant.
     let tweak_scalar =
         Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
 
