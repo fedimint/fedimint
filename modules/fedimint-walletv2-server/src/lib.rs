@@ -1123,11 +1123,19 @@ impl Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
         if let WalletDescriptor::Frost(_) = cfg.consensus.descriptor {
+            // Both FROST config fields are written together by config gen, but
+            // they are `#[serde(default)]` — validate here so a truncated or
+            // hand-edited config fails at startup instead of at the first
+            // signing round.
             let key_package = cfg
                 .private
                 .frost_key_package
                 .clone()
                 .expect("Frost key not generated");
+            assert!(
+                cfg.consensus.frost_pubkey_package.is_some(),
+                "Frost federation is missing its public key package"
+            );
             spawn_initial_nonce_backfill(db.clone(), task_group, key_package);
         }
 
