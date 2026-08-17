@@ -477,7 +477,7 @@ impl ServerConfig {
     /// [`Self::distributed_gen`], including for a federation of a single
     /// guardian.
     #[doc(hidden)]
-    pub fn trusted_dealer_gen(
+    pub fn insecure_test_dealer_gen(
         params: &BTreeMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
@@ -512,7 +512,7 @@ impl ServerConfig {
             .map(|(module_id, (_kind, module_init))| {
                 (
                     module_id as ModuleInstanceId,
-                    module_init.trusted_dealer_gen(&peer0.peer_ids(), &args),
+                    module_init.insecure_test_dealer_gen(&peer0.peer_ids(), &args),
                 )
             })
             .collect();

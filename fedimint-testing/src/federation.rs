@@ -330,7 +330,7 @@ impl FederationTestBuilder {
         .expect("Generates local config");
 
         let configs =
-            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
+            ServerConfig::insecure_test_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {

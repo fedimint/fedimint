@@ -1918,8 +1918,11 @@ fn build_wallet_server_configs() -> anyhow::Result<(
         network: bitcoin::Network::Regtest,
         disable_base_fees: false,
     };
-    let wallet_cfg =
-        fedimint_server::core::ServerModuleInit::trusted_dealer_gen(&WalletInit, &peers, &args);
+    let wallet_cfg = fedimint_server::core::ServerModuleInit::insecure_test_dealer_gen(
+        &WalletInit,
+        &peers,
+        &args,
+    );
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,
         <WalletInit as fedimint_server::core::ServerModuleInit>::kind(),

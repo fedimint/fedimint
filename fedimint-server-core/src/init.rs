@@ -80,9 +80,9 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     ) -> anyhow::Result<DynServerModule>;
 
     /// **Insecure, for tests only** - see
-    /// [`ServerModuleInit::trusted_dealer_gen`].
+    /// [`ServerModuleInit::insecure_test_dealer_gen`].
     #[doc(hidden)]
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
@@ -215,7 +215,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// [`ServerModuleInit::distributed_gen`], including for a federation of a
     /// single guardian - implement your key generation there.
     #[doc(hidden)]
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
@@ -312,12 +312,12 @@ where
         Ok(DynServerModule::from(module))
     }
 
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, args)
+        <Self as ServerModuleInit>::insecure_test_dealer_gen(self, peers, args)
     }
 
     async fn distributed_gen(

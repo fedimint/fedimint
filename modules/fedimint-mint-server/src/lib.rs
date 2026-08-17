@@ -193,7 +193,7 @@ impl ServerModuleInit for MintInit {
         Ok(Mint::new(args.cfg().to_typed()?))
     }
 
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,

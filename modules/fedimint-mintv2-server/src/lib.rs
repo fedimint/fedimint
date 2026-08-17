@@ -169,7 +169,7 @@ impl ServerModuleInit for MintInit {
         })
     }
 
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
@@ -316,7 +316,7 @@ type DealerKeys = (
 /// Samples a random polynomial and hands out a share of it to every peer.
 ///
 /// This puts the aggregate secret key into a single process and is therefore
-/// only used by [`MintInit::trusted_dealer_gen`]. The polynomial is still
+/// only used by [`MintInit::insecure_test_dealer_gen`]. The polynomial is still
 /// sampled from the OS RNG - a test helper that silently produces publicly
 /// known keys is exactly the trap we are fixing here.
 fn dealer_keygen(num_peers: NumPeers) -> DealerKeys {
@@ -736,7 +736,7 @@ mod tests {
         for size in [1_u16, 4] {
             let peers = (0..size).map(PeerId::from).collect::<Vec<PeerId>>();
 
-            for (identity, config) in MintInit.trusted_dealer_gen(&peers, &args()) {
+            for (identity, config) in MintInit.insecure_test_dealer_gen(&peers, &args()) {
                 MintInit
                     .validate_config(&identity, config)
                     .expect("Freshly generated config is valid");
