@@ -83,6 +83,8 @@ impl Wallet {
                     )
                     .expect("Failed to compute taproot key spend sighash");
 
+                // See `tweak_xonly_public_key` for why the hash-to-scalar load
+                // and the keypair tweak below are invariants.
                 let scalar = &Scalar::from_be_bytes(utxo.tweak.to_byte_array())
                     .expect("Hash is within field order");
 

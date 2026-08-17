@@ -61,6 +61,10 @@ pub fn nums_point() -> XOnlyPublicKey {
 /// see signing call sites in `taproot/{multisig,frost,single_peer}.rs`.
 pub fn tweak_xonly_public_key(pk: &XOnlyPublicKey, tweak: &sha256::Hash) -> XOnlyPublicKey {
     let full_pk = PublicKey::from_x_only_public_key(*pk, secp256k1::Parity::Even);
+    // Cryptographic invariants: `tweak` is a sha256 output, so `>= n` has
+    // probability ~2^-128 and is not grindable (BIP-341 fails the same way);
+    // the sum is only the identity if `tweak == -dlog(pk)`. Consensus-critical
+    // and mirrored by the signing-side tweaks in `taproot/*` — change together.
     let tweaked = full_pk
         .add_exp_tweak(
             secp256k1::SECP256K1,
