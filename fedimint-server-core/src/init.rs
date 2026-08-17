@@ -79,12 +79,16 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     ) -> anyhow::Result<DynServerModule>;
 
+    /// **Insecure, for tests only** - see
+    /// [`ServerModuleInit::trusted_dealer_gen`].
+    #[doc(hidden)]
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
+    /// See [`ServerModuleInit::distributed_gen`].
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
@@ -199,12 +203,27 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// Initialize the module instance from its config
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
 
+    /// Generates the configs of all peers from a single process, bypassing the
+    /// distributed key generation.
+    ///
+    /// This is **insecure and must never be reachable from production code**:
+    /// it derives the secret key material of every peer in one place, so no
+    /// peer's key is private from the others. It exists so that tests can spin
+    /// up a federation without running a DKG over the network.
+    ///
+    /// Production config generation always runs
+    /// [`ServerModuleInit::distributed_gen`], including for a federation of a
+    /// single guardian - implement your key generation there.
+    #[doc(hidden)]
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
+    /// Generates our config via distributed key generation. This is the only
+    /// key generation reachable in production, so all key material intended to
+    /// stay secret has to be sampled here, from a cryptographically secure RNG.
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),

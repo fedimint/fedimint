@@ -231,6 +231,14 @@ fn setup_form_content(
                     display: none;
                 }
 
+                #solo-warning {
+                    display: none;
+                }
+
+                .form-group:has(#federation_size option[value="1"]:checked) #solo-warning {
+                    display: block;
+                }
+
                 .accordion-button {
                     background-color: #f8f9fa;
                 }
@@ -278,7 +286,7 @@ fn setup_form_content(
                         }
                         select class="form-select" id="federation_size" name="federation_size" {
                             option value="" selected disabled { "Federation Size" }
-                            option value="1" { "1 — Testing" }
+                            option value="1" { "1 — Solo, no fault tolerance" }
                             option value="4" { "4 — Recommended" }
                             option value="5" { "5" }
                             option value="6" { "6" }
@@ -296,6 +304,14 @@ fn setup_form_content(
                             option value="18" { "18" }
                             option value="19" { "19 — Recommended" }
                             option value="20" { "20" }
+                        }
+
+                        div id="solo-warning" class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
+                            strong { "Warning: " }
+                            "A federation of a single guardian is not recommended. It has no redundancy — if your \
+                             server is lost, so are the funds, and there is nobody to help you recover — and it is \
+                             far less tested than a federation of several guardians. The number of guardians cannot \
+                             be changed later."
                         }
                     }
 

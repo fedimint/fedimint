@@ -22,8 +22,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_MINTV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
+    AmountUnit, Amounts, ApiEndpoint, ApiError, ApiVersion, CommonModuleInit, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::{
     Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
@@ -42,13 +42,17 @@ use fedimint_mintv2_common::{
     MintInputError, MintModuleTypes, MintOutput, MintOutputError, MintOutputOutcome, RecoveryItem,
     verify_note,
 };
-use fedimint_server_core::config::{PeerHandleOps, eval_poly_g2};
+use fedimint_server_core::config::{
+    FM_ALLOW_COMPROMISED_MODULE_KEYS_ENV, PeerHandleOps, ensure_uncompromised_key, eval_poly_g2,
+    eval_poly_scalar, scalar,
+};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 use futures::StreamExt;
 use rand::SeedableRng;
+use rand::rngs::OsRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
 use tbs::{
@@ -144,10 +148,18 @@ impl ServerModuleInit for MintInit {
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
-        vec![EnvVarDoc {
-            name: FM_ENABLE_MODULE_MINTV2_ENV,
-            description: "Set to 0/false to disable the MintV2 module. Enabled by default.",
-        }]
+        vec![
+            EnvVarDoc {
+                name: FM_ENABLE_MODULE_MINTV2_ENV,
+                description: "Set to 0/false to disable the MintV2 module. Enabled by default.",
+            },
+            EnvVarDoc {
+                name: FM_ALLOW_COMPROMISED_MODULE_KEYS_ENV,
+                description: "Set to 1/true to start up even though our key material is publicly \
+                              known. Only ever set this to recover the funds of an affected \
+                              federation.",
+            },
+        ]
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
@@ -168,24 +180,18 @@ impl ServerModuleInit for MintInit {
             FeeConsensus::new(0).expect("Relative fee is within range")
         };
 
-        let tbs_agg_pks = consensus_denominations()
-            .map(|denomination| (denomination, dealer_agg_pk(denomination.amount())))
+        let keys = consensus_denominations()
+            .map(|denomination| (denomination, dealer_keygen(peers.to_num_peers())))
+            .collect::<BTreeMap<Denomination, DealerKeys>>();
+
+        let tbs_agg_pks = keys
+            .iter()
+            .map(|(denomination, (agg_pk, ..))| (*denomination, *agg_pk))
             .collect::<BTreeMap<Denomination, AggregatePublicKey>>();
 
-        let tbs_pks = consensus_denominations()
-            .map(|denomination| {
-                let pks = peers
-                    .iter()
-                    .map(|peer| {
-                        (
-                            *peer,
-                            dealer_pk(denomination.amount(), peers.to_num_peers(), *peer),
-                        )
-                    })
-                    .collect();
-
-                (denomination, pks)
-            })
+        let tbs_pks = keys
+            .iter()
+            .map(|(denomination, (_, pks, _))| (*denomination, pks.clone()))
             .collect::<BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>>();
 
         peers
@@ -199,13 +205,9 @@ impl ServerModuleInit for MintInit {
                         amount_unit: AmountUnit::BITCOIN,
                     },
                     private: MintConfigPrivate {
-                        tbs_sks: consensus_denominations()
-                            .map(|denomination| {
-                                (
-                                    denomination,
-                                    dealer_sk(denomination.amount(), peers.to_num_peers(), *peer),
-                                )
-                            })
+                        tbs_sks: keys
+                            .iter()
+                            .map(|(denomination, (_, _, sks))| (*denomination, sks[peer]))
                             .collect(),
                     },
                 };
@@ -269,6 +271,16 @@ impl ServerModuleInit for MintInit {
                 pk == config.consensus.tbs_pks[&denomination][identity],
                 "Mint private key doesn't match pubkey share"
             );
+
+            ensure_uncompromised_key(
+                config.private.tbs_sks[&denomination]
+                    == compromised_dealer_sk(
+                        denomination.amount(),
+                        config.consensus.tbs_pks[&denomination].to_num_peers(),
+                        *identity,
+                    ),
+                MintCommonInit::KIND.as_str(),
+            )?;
         }
 
         Ok(())
@@ -295,22 +307,62 @@ impl ServerModuleInit for MintInit {
     }
 }
 
-fn dealer_agg_pk(amount: Amount) -> AggregatePublicKey {
-    AggregatePublicKey((G2Projective::generator() * coefficient(amount, 0)).to_affine())
+type DealerKeys = (
+    AggregatePublicKey,
+    BTreeMap<PeerId, PublicKeyShare>,
+    BTreeMap<PeerId, SecretKeyShare>,
+);
+
+/// Samples a random polynomial and hands out a share of it to every peer.
+///
+/// This puts the aggregate secret key into a single process and is therefore
+/// only used by [`MintInit::trusted_dealer_gen`]. The polynomial is still
+/// sampled from the OS RNG - a test helper that silently produces publicly
+/// known keys is exactly the trap we are fixing here.
+fn dealer_keygen(num_peers: NumPeers) -> DealerKeys {
+    let polynomial = (0..num_peers.threshold())
+        .map(|_| Scalar::random(&mut OsRng))
+        .collect::<Vec<Scalar>>();
+
+    let constant_term = *polynomial
+        .first()
+        .expect("We have at least one coefficient");
+
+    let agg_pk = AggregatePublicKey((G2Projective::generator() * constant_term).to_affine());
+
+    let sks = num_peers
+        .peer_ids()
+        .map(|peer| {
+            (
+                peer,
+                SecretKeyShare(eval_poly_scalar(&polynomial, &scalar(&peer))),
+            )
+        })
+        .collect::<BTreeMap<PeerId, SecretKeyShare>>();
+
+    let pks = sks
+        .iter()
+        .map(|(peer, sk)| (*peer, derive_pk_share(sk)))
+        .collect();
+
+    (agg_pk, pks, sks)
 }
 
-fn dealer_pk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
-    derive_pk_share(&dealer_sk(amount, num_peers, peer))
-}
-
-fn dealer_sk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
+/// Recomputes the secret key share that the deterministic dealer key generation
+/// used up to and including v0.12 would have produced for `peer`.
+///
+/// This is derived from nothing but the denomination and the peer index, so
+/// anyone can recompute it. It is kept solely so that
+/// [`MintInit::validate_config`] can recognise an affected federation and
+/// refuse to start.
+fn compromised_dealer_sk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
     let x = Scalar::from(peer.to_usize() as u64 + 1);
 
     // We evaluate the scalar polynomial of degree threshold - 1 at the point x
     // using the Horner schema.
 
     let y = (0..num_peers.threshold())
-        .map(|index| coefficient(amount, index as u64))
+        .map(|index| compromised_coefficient(amount, index as u64))
         .rev()
         .reduce(|accumulator, c| accumulator * x + c)
         .expect("We have at least one coefficient");
@@ -318,7 +370,7 @@ fn dealer_sk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> SecretKeyShar
     SecretKeyShare(y)
 }
 
-fn coefficient(amount: Amount, index: u64) -> Scalar {
+fn compromised_coefficient(amount: Amount, index: u64) -> Scalar {
     Scalar::random(&mut ChaChaRng::from_seed(
         *(amount, index)
             .consensus_hash::<sha256::Hash>()
@@ -604,4 +656,106 @@ async fn get_recovery_slice(
         .map(|entry| entry.1)
         .collect()
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::config::TypedServerModuleConfig;
+    use fedimint_core::module::AmountUnit;
+    use fedimint_core::{NumPeersExt, PeerId};
+    use fedimint_mintv2_common::config::{
+        FeeConsensus, MintConfig, MintConfigConsensus, MintConfigPrivate, consensus_denominations,
+    };
+    use fedimint_server_core::{ConfigGenModuleArgs, ServerModuleInit};
+    use tbs::derive_pk_share;
+
+    use super::{MintInit, compromised_dealer_sk, dealer_keygen};
+
+    fn args() -> ConfigGenModuleArgs {
+        ConfigGenModuleArgs {
+            network: bitcoin::Network::Regtest,
+            disable_base_fees: false,
+        }
+    }
+
+    /// Builds the config that the deterministic dealer key generation used up
+    /// to and including v0.12 would have produced. It is internally consistent,
+    /// so only the compromised key check can reject it.
+    fn compromised_config(peers: &[PeerId], identity: PeerId) -> MintConfig {
+        let num_peers = peers.to_num_peers();
+
+        MintConfig {
+            consensus: MintConfigConsensus {
+                tbs_agg_pks: consensus_denominations()
+                    .map(|denomination| (denomination, dealer_keygen(num_peers).0))
+                    .collect(),
+                tbs_pks: consensus_denominations()
+                    .map(|denomination| {
+                        let pks = peers
+                            .iter()
+                            .map(|peer| {
+                                (
+                                    *peer,
+                                    derive_pk_share(&compromised_dealer_sk(
+                                        denomination.amount(),
+                                        num_peers,
+                                        *peer,
+                                    )),
+                                )
+                            })
+                            .collect();
+
+                        (denomination, pks)
+                    })
+                    .collect(),
+                fee_consensus: FeeConsensus::new(0).expect("Relative fee is within range"),
+                amount_unit: AmountUnit::BITCOIN,
+            },
+            private: MintConfigPrivate {
+                tbs_sks: consensus_denominations()
+                    .map(|denomination| {
+                        (
+                            denomination,
+                            compromised_dealer_sk(denomination.amount(), num_peers, identity),
+                        )
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    #[test]
+    fn dealer_keygen_is_not_deterministic() {
+        let num_peers = vec![PeerId::from(0)].to_num_peers();
+
+        assert_ne!(dealer_keygen(num_peers).2, dealer_keygen(num_peers).2);
+    }
+
+    #[test]
+    fn validate_config_accepts_freshly_generated_configs() {
+        for size in [1_u16, 4] {
+            let peers = (0..size).map(PeerId::from).collect::<Vec<PeerId>>();
+
+            for (identity, config) in MintInit.trusted_dealer_gen(&peers, &args()) {
+                MintInit
+                    .validate_config(&identity, config)
+                    .expect("Freshly generated config is valid");
+            }
+        }
+    }
+
+    #[test]
+    fn validate_config_rejects_deterministic_dealer_keys() {
+        for size in [1_u16, 4] {
+            let peers = (0..size).map(PeerId::from).collect::<Vec<PeerId>>();
+
+            for identity in peers.clone() {
+                let error = MintInit
+                    .validate_config(&identity, compromised_config(&peers, identity).to_erased())
+                    .expect_err("Deterministic dealer keys have to be rejected");
+
+                assert!(error.to_string().contains("publicly known key material"));
+            }
+        }
+    }
 }

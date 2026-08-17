@@ -8,7 +8,7 @@ use fedimint_core::config::{DkgMessageG1, P2PMessage};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
-use fedimint_server_core::config::{g1, scalar};
+use fedimint_server_core::config::{eval_poly_scalar, g1, scalar};
 use group::ff::Field;
 use rand::rngs::OsRng;
 use tracing::trace;
@@ -22,6 +22,9 @@ struct DkgG1 {
     hash_commitments: BTreeMap<PeerId, sha256::Hash>,
     commitments: BTreeMap<PeerId, Vec<G1Projective>>,
     sk_shares: BTreeMap<PeerId, Scalar>,
+    commitment_sent: bool,
+    shares_sent: bool,
+    finished: bool,
 }
 
 impl DkgG1 {
@@ -39,6 +42,9 @@ impl DkgG1 {
             hash_commitments: once((identity, commitment.consensus_hash_sha256())).collect(),
             commitments: once((identity, commitment)).collect(),
             sk_shares: BTreeMap::new(),
+            commitment_sent: false,
+            shares_sent: false,
+            finished: false,
         }
     }
 
@@ -50,8 +56,9 @@ impl DkgG1 {
         DkgMessageG1::Hash(self.commitment().consensus_hash_sha256())
     }
 
-    /// Runs a single step of the DKG algorithm
-    fn step(&mut self, peer: PeerId, msg: DkgMessageG1) -> anyhow::Result<DkgStepG1> {
+    /// Records a message received from `peer`. Any resulting protocol
+    /// transitions are produced by [`DkgG1::advance`].
+    fn step(&mut self, peer: PeerId, msg: DkgMessageG1) -> anyhow::Result<()> {
         trace!(?peer, ?msg, "Running DKG G1 step");
         match msg {
             DkgMessageG1::Hash(hash) => {
@@ -59,12 +66,6 @@ impl DkgG1 {
                     self.hash_commitments.insert(peer, hash).is_none(),
                     "DKG G1: peer {peer} sent us two hash commitments."
                 );
-
-                if self.hash_commitments.len() == self.num_peers.total() {
-                    return Ok(DkgStepG1::Broadcast(DkgMessageG1::Commitment(
-                        self.commitment(),
-                    )));
-                }
             }
             DkgMessageG1::Commitment(polynomial) => {
                 ensure!(
@@ -83,24 +84,6 @@ impl DkgG1 {
                     self.commitments.insert(peer, polynomial).is_none(),
                     "DKG G1: peer {peer} sent us two commitments."
                 );
-
-                // Once everyone has send their commitments, send out the key shares...
-
-                if self.commitments.len() == self.num_peers.total() {
-                    let mut messages = vec![];
-
-                    for peer in self.num_peers.peer_ids() {
-                        let s = eval_poly_scalar(&self.polynomial, &scalar(&peer));
-
-                        if peer == self.identity {
-                            self.sk_shares.insert(self.identity, s);
-                        } else {
-                            messages.push((peer, DkgMessageG1::Share(s)));
-                        }
-                    }
-
-                    return Ok(DkgStepG1::Messages(messages));
-                }
             }
             DkgMessageG1::Share(s) => {
                 let polynomial = self.commitments.get(&peer).with_context(|| {
@@ -120,26 +103,71 @@ impl DkgG1 {
                     self.sk_shares.insert(peer, s).is_none(),
                     "Peer {peer} sent us two sk shares."
                 );
-
-                if self.sk_shares.len() == self.num_peers.total() {
-                    let sks = self.sk_shares.values().sum();
-
-                    let pks = (0..self.num_peers.threshold())
-                        .map(|i| {
-                            self.commitments
-                                .values()
-                                .map(|coefficients| coefficients[i])
-                                .reduce(|a, b| a + b)
-                                .expect("DKG G1: polynomial commitments are empty.")
-                        })
-                        .collect();
-
-                    return Ok(DkgStepG1::Result((pks, sks)));
-                }
             }
         }
 
-        Ok(DkgStepG1::Messages(vec![]))
+        Ok(())
+    }
+
+    /// Returns the next protocol transition that our current state enables, or
+    /// `None` if we have to wait for further messages from our peers.
+    ///
+    /// The transitions are checked against the state we have accumulated so far
+    /// rather than against the message that just arrived, so a federation of a
+    /// single guardian - which never receives any message - runs the protocol
+    /// to completion by repeatedly calling this method.
+    fn advance(&mut self) -> Option<DkgStepG1> {
+        if self.finished {
+            return None;
+        }
+
+        if self.sk_shares.len() == self.num_peers.total() {
+            self.finished = true;
+
+            let sks = self.sk_shares.values().sum();
+
+            let pks = (0..self.num_peers.threshold())
+                .map(|i| {
+                    self.commitments
+                        .values()
+                        .map(|coefficients| coefficients[i])
+                        .reduce(|a, b| a + b)
+                        .expect("DKG G1: polynomial commitments are empty.")
+                })
+                .collect();
+
+            return Some(DkgStepG1::Result((pks, sks)));
+        }
+
+        // Once everyone has sent their commitments, send out the key shares...
+
+        if !self.shares_sent && self.commitments.len() == self.num_peers.total() {
+            self.shares_sent = true;
+
+            let mut messages = vec![];
+
+            for peer in self.num_peers.peer_ids() {
+                let s = eval_poly_scalar(&self.polynomial, &scalar(&peer));
+
+                if peer == self.identity {
+                    self.sk_shares.insert(self.identity, s);
+                } else {
+                    messages.push((peer, DkgMessageG1::Share(s)));
+                }
+            }
+
+            return Some(DkgStepG1::Messages(messages));
+        }
+
+        if !self.commitment_sent && self.hash_commitments.len() == self.num_peers.total() {
+            self.commitment_sent = true;
+
+            return Some(DkgStepG1::Broadcast(DkgMessageG1::Commitment(
+                self.commitment(),
+            )));
+        }
+
+        None
     }
 }
 
@@ -157,6 +185,12 @@ pub async fn run_dkg_g1(
         P2PMessage::DkgG1(dkg.initial_message()),
     );
 
+    // A federation of a single guardian has nobody to hear from, so the
+    // protocol runs to completion right here.
+    if let Some(result) = drive(&mut dkg, connections) {
+        return Ok(result);
+    }
+
     loop {
         for peer in num_peers.peer_ids().filter(|p| *p != identity) {
             let message = connections
@@ -169,30 +203,38 @@ pub async fn run_dkg_g1(
                 _ => bail!("Received unexpected message during DKG G1: {message:?}"),
             };
 
-            match dkg.step(peer, message)? {
-                DkgStepG1::Broadcast(message) => {
-                    connections.send(Recipient::Everyone, P2PMessage::DkgG1(message));
-                }
-                DkgStepG1::Messages(messages) => {
-                    for (peer, message) in messages {
-                        connections.send(Recipient::Peer(peer), P2PMessage::DkgG1(message));
-                    }
-                }
-                DkgStepG1::Result(result) => {
-                    return Ok(result);
-                }
+            dkg.step(peer, message)?;
+
+            if let Some(result) = drive(&mut dkg, connections) {
+                return Ok(result);
             }
         }
     }
 }
 
-fn eval_poly_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
-    coefficients
-        .iter()
-        .copied()
-        .rev()
-        .reduce(|acc, coefficient| acc * x + coefficient)
-        .expect("We have at least one coefficient")
+/// Runs every protocol transition our current state enables, sending the
+/// resulting messages to our peers. Returns the DKG result once we reach it.
+fn drive(
+    dkg: &mut DkgG1,
+    connections: &DynP2PConnections<P2PMessage>,
+) -> Option<(Vec<G1Projective>, Scalar)> {
+    while let Some(step) = dkg.advance() {
+        match step {
+            DkgStepG1::Broadcast(message) => {
+                connections.send(Recipient::Everyone, P2PMessage::DkgG1(message));
+            }
+            DkgStepG1::Messages(messages) => {
+                for (peer, message) in messages {
+                    connections.send(Recipient::Peer(peer), P2PMessage::DkgG1(message));
+                }
+            }
+            DkgStepG1::Result(result) => {
+                return Some(result);
+            }
+        }
+    }
+
+    None
 }
 
 enum DkgStepG1 {
@@ -210,6 +252,24 @@ mod tests {
     use group::Curve;
 
     use super::{DkgG1, DkgStepG1};
+
+    /// Delivers `message` from `send_peer` to `receive_peer` and queues up
+    /// every transition that unlocks as a result.
+    fn deliver(
+        dkgs: &mut BTreeMap<PeerId, DkgG1>,
+        steps: &mut VecDeque<(PeerId, DkgStepG1)>,
+        send_peer: PeerId,
+        receive_peer: PeerId,
+        message: fedimint_core::config::DkgMessageG1,
+    ) {
+        let dkg = dkgs.get_mut(&receive_peer).unwrap();
+
+        dkg.step(send_peer, message).unwrap();
+
+        while let Some(step) = dkg.advance() {
+            steps.push_back((receive_peer, step));
+        }
+    }
 
     #[test_log::test]
     fn test_dkg_g1() {
@@ -231,22 +291,18 @@ mod tests {
             match steps.pop_front().unwrap() {
                 (send_peer, DkgStepG1::Broadcast(message)) => {
                     for receive_peer in peers.iter().filter(|p| **p != send_peer) {
-                        let step = dkgs
-                            .get_mut(receive_peer)
-                            .unwrap()
-                            .step(send_peer, message.clone());
-
-                        steps.push_back((*receive_peer, step.unwrap()));
+                        deliver(
+                            &mut dkgs,
+                            &mut steps,
+                            send_peer,
+                            *receive_peer,
+                            message.clone(),
+                        );
                     }
                 }
                 (send_peer, DkgStepG1::Messages(messages)) => {
                     for (receive_peer, message) in messages {
-                        let step = dkgs
-                            .get_mut(&receive_peer)
-                            .unwrap()
-                            .step(send_peer, message);
-
-                        steps.push_back((receive_peer, step.unwrap()));
+                        deliver(&mut dkgs, &mut steps, send_peer, receive_peer, message);
                     }
                 }
                 (send_peer, DkgStepG1::Result(step_keys)) => {
@@ -261,5 +317,37 @@ mod tests {
             assert_eq!(poly_g1.len(), 5);
             assert_eq!(eval_poly_g1(&poly_g1, &peer), g1(&sks).to_affine());
         }
+    }
+
+    /// A single guardian receives no messages at all, so the protocol has to
+    /// complete purely by advancing our own state. Before this was possible the
+    /// production config generation fell back to a trusted dealer, which is how
+    /// deterministic key material ended up in solo federations.
+    #[test_log::test]
+    fn test_dkg_g1_single_guardian() {
+        let peers = vec![PeerId::from(0)];
+
+        let run = || {
+            let mut dkg = DkgG1::new(peers.to_num_peers(), PeerId::from(0));
+
+            loop {
+                match dkg.advance().expect("DKG stalled without any peers") {
+                    DkgStepG1::Result(result) => return result,
+                    DkgStepG1::Broadcast(_) | DkgStepG1::Messages(_) => {}
+                }
+            }
+        };
+
+        let (poly_g1, sks) = run();
+
+        assert_eq!(poly_g1.len(), 1);
+        assert_eq!(
+            eval_poly_g1(&poly_g1, &PeerId::from(0)),
+            g1(&sks).to_affine()
+        );
+
+        // The key must come from the OS RNG rather than being derived
+        // deterministically.
+        assert_ne!(sks, run().1);
     }
 }

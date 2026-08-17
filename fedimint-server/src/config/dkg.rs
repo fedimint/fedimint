@@ -71,3 +71,80 @@ impl PeerHandleOps for PeerHandle<'_> {
         Ok(peer_data)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections, Recipient};
+    use fedimint_core::{NumPeersExt, PeerId};
+    use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt as _, eval_poly_g1, g1};
+    use group::Curve;
+
+    use super::{P2PMessage, PeerHandle};
+
+    /// The p2p connections of a federation of a single guardian: there is
+    /// nobody to send to and nothing will ever arrive.
+    struct NoPeers;
+
+    #[async_trait::async_trait]
+    impl IP2PConnections<P2PMessage> for NoPeers {
+        fn send(&self, _recipient: Recipient, _msg: P2PMessage) {}
+
+        async fn receive(&self) -> Option<(PeerId, P2PMessage)> {
+            std::future::pending().await
+        }
+
+        async fn receive_from_peer(&self, _peer: PeerId) -> Option<P2PMessage> {
+            std::future::pending().await
+        }
+    }
+
+    fn connections() -> DynP2PConnections<P2PMessage> {
+        NoPeers.into_dyn()
+    }
+
+    /// Key generation for a federation of a single guardian has to terminate
+    /// without ever receiving a message. It used to hang here, which is why
+    /// production config generation fell back to a trusted dealer - the source
+    /// of the deterministic key material in solo federations.
+    #[tokio::test]
+    async fn dkg_terminates_for_a_single_guardian() {
+        let connections = connections();
+        let identity = PeerId::from(0);
+        let num_peers = vec![identity].to_num_peers();
+
+        let handle = PeerHandle::new(num_peers, identity, &connections);
+
+        let (polynomial, sks) = handle.run_dkg_g1().await.expect("DKG G1 terminates");
+
+        assert_eq!(polynomial.len(), 1);
+        assert_eq!(eval_poly_g1(&polynomial, &identity), g1(&sks).to_affine());
+
+        handle.run_dkg_g2().await.expect("DKG G2 terminates");
+
+        let exchanged = handle
+            .exchange_encodable(42_u64)
+            .await
+            .expect("Exchange terminates");
+
+        assert_eq!(exchanged, [(identity, 42_u64)].into_iter().collect());
+    }
+
+    /// The single guardian's key has to come from the OS RNG, not be derived
+    /// deterministically.
+    #[tokio::test]
+    async fn dkg_is_not_deterministic_for_a_single_guardian() {
+        let connections = connections();
+        let identity = PeerId::from(0);
+        let num_peers = vec![identity].to_num_peers();
+
+        let run = || async {
+            PeerHandle::new(num_peers, identity, &connections)
+                .run_dkg_g1()
+                .await
+                .expect("DKG G1 terminates")
+                .1
+        };
+
+        assert_ne!(run().await, run().await);
+    }
+}
