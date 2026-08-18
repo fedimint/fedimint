@@ -7,6 +7,7 @@
 pub use fedimint_lnv2_common as common;
 
 mod api;
+pub use fedimint_lnv2_common::gateway_registry::Lnv2RegistryEvidenceCompatibility;
 #[cfg(feature = "cli")]
 mod cli;
 pub mod db;
@@ -505,6 +506,22 @@ impl LightningClientModule {
                 .await
                 .map_err(|_| ListGatewaysError::FailedToListGateways)
         }
+    }
+
+    /// Reads a fresh versioned `LNv2` registry snapshot without changing list
+    /// or selection behavior.
+    pub async fn gateway_registry_evidence(
+        &self,
+    ) -> anyhow::Result<Lnv2RegistryEvidenceCompatibility> {
+        self.module_api
+            .gateway_registry_evidence()
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Returns the federation identity to which registry evidence is scoped.
+    pub fn federation_id(&self) -> FederationId {
+        self.federation_id
     }
 
     /// Requests the `RoutingInfo`, including fee information, from the gateway

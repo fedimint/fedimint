@@ -13,6 +13,7 @@ pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
 pub mod gateway_api;
+pub mod gateway_registry;
 pub mod lnurl;
 pub mod tweak;
 

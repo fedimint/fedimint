@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
+    FederationApiExt, FederationResult, IModuleFederationApi, ServerError, ServerResult,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -12,8 +12,12 @@ use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
-    AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAY_REGISTRY_EVIDENCE_ENDPOINT,
+    GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+};
+use fedimint_lnv2_common::gateway_registry::{
+    LNV2_REGISTRY_EVIDENCE_PROTOCOL_VERSION, Lnv2RegistryEvidenceCompatibility,
+    Lnv2RegistryEvidenceV1,
 };
 use rand::seq::SliceRandom;
 
@@ -32,6 +36,14 @@ pub trait LightningFederationApi {
     async fn await_incoming_contracts(&self, start: u64, n: usize) -> (Vec<IncomingContract>, u64);
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
+
+    /// Reads coherent versioned `LNv2` evidence from every configured peer.
+    ///
+    /// URLs are unioned and deduplicated using existing registry semantics.
+    /// Missing, malformed, legacy, or unsupported peer evidence fails closed.
+    async fn gateway_registry_evidence(
+        &self,
+    ) -> FederationResult<Lnv2RegistryEvidenceCompatibility>;
 
     async fn gateways_from_peer(&self, peer: PeerId) -> ServerResult<Vec<SafeUrl>>;
 
@@ -115,6 +127,36 @@ where
         Ok(union)
     }
 
+    async fn gateway_registry_evidence(
+        &self,
+    ) -> FederationResult<Lnv2RegistryEvidenceCompatibility> {
+        let mut responses = Vec::new();
+        for peer in self.all_peers() {
+            match self
+                .request_single_peer::<serde_json::Value>(
+                    GATEWAY_REGISTRY_EVIDENCE_ENDPOINT.to_string(),
+                    ApiRequestErased::default(),
+                    *peer,
+                )
+                .await
+            {
+                Ok(response) => responses.push(response),
+                Err(ServerError::InvalidRpcId(_)) => {
+                    return Ok(Lnv2RegistryEvidenceCompatibility::UnknownLegacy);
+                }
+                Err(error) => {
+                    return Err(fedimint_api_client::api::FederationError::general(
+                        GATEWAY_REGISTRY_EVIDENCE_ENDPOINT,
+                        (),
+                        error,
+                    ));
+                }
+            }
+        }
+
+        parse_lnv2_registry_responses(responses)
+    }
+
     async fn gateways_from_peer(&self, peer: PeerId) -> ServerResult<Vec<SafeUrl>> {
         let gateways = self
             .request_single_peer::<Vec<SafeUrl>>(
@@ -147,3 +189,40 @@ where
         Ok(entry_existed)
     }
 }
+
+fn parse_lnv2_registry_responses(
+    responses: Vec<serde_json::Value>,
+) -> FederationResult<Lnv2RegistryEvidenceCompatibility> {
+    let mut registrations = BTreeSet::new();
+    for response in responses {
+        let Some(protocol_version) = response
+            .get("protocol_version")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|version| u32::try_from(version).ok())
+        else {
+            return Err(fedimint_api_client::api::FederationError::general(
+                GATEWAY_REGISTRY_EVIDENCE_ENDPOINT,
+                (),
+                anyhow::anyhow!("LNv2 registry evidence has no valid protocol version"),
+            ));
+        };
+        if protocol_version != LNV2_REGISTRY_EVIDENCE_PROTOCOL_VERSION {
+            return Ok(Lnv2RegistryEvidenceCompatibility::Incompatible { protocol_version });
+        }
+        let snapshot =
+            serde_json::from_value::<Lnv2RegistryEvidenceV1>(response).map_err(|error| {
+                fedimint_api_client::api::FederationError::general(
+                    GATEWAY_REGISTRY_EVIDENCE_ENDPOINT,
+                    (),
+                    anyhow::anyhow!("Invalid LNv2 registry evidence: {error}"),
+                )
+            })?;
+        registrations.extend(snapshot.into_registrations());
+    }
+    Ok(Lnv2RegistryEvidenceCompatibility::Compatible(
+        Lnv2RegistryEvidenceV1::new(registrations.into_iter().collect()),
+    ))
+}
+
+#[cfg(test)]
+mod tests;

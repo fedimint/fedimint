@@ -76,3 +76,22 @@ cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
 elapsed time. Status assembly holds the federation-manager read lock only while
 capturing one coherent snapshot; do not clone the client solely for this public
 query because that would interfere with concurrent leave.
+
+Federation Lightning modules expose additive, versioned registry-evidence
+endpoints. LNv1 snapshots distinguish an empty registry from records whose TTLs
+have all expired and return only the same current announcements as the existing
+list endpoint. LNv2 snapshots return the same registered URLs as its existing
+registry endpoint and deliberately have no TTL or expiry field. Every configured
+peer must supply coherent current-version evidence. A missing peer, a legacy or
+unknown version, a malformed response, or disagreement between empty and
+expired LNv1 state remains indeterminate; callers must not turn any of them into
+an empty-registry diagnosis.
+
+Public aggregate gateway health contains no gateway URL, announcement,
+guardian identity, peer topology, or raw transport error. Aggregation probes
+each distinct registration from the exact coherent snapshot once. One
+explicitly healthy registered gateway is sufficient for `Healthy`; otherwise
+unreachable, incompatible, or legacy diagnoses require uniform probe outcomes.
+Mixed, missing, malformed, or legacy registry evidence remains indeterminate.
+Gateway transport failure is distinct from a reached gateway whose federation
+connection pool is disconnected.
