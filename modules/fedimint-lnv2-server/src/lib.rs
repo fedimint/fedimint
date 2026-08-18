@@ -41,8 +41,10 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
     AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT,
-    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT,
 };
+use fedimint_lnv2_common::gateway_registry::Lnv2RegistrySnapshotV1;
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
@@ -729,6 +731,14 @@ impl ServerModule for Lightning {
                     let db = context.db();
 
                     Ok(Lightning::gateways(db).await)
+                }
+            },
+            public_api_endpoint! {
+                GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Lightning, context, _params : () | -> Lnv2RegistrySnapshotV1 {
+                    let db = context.db();
+                    Ok(Lnv2RegistrySnapshotV1::new(Lightning::gateways(db).await))
                 }
             },
         ]

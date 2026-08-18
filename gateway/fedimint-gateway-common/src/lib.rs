@@ -27,8 +27,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod envs;
 pub mod federation_status;
+pub mod gateway_health;
 
 pub use federation_status::*;
+pub use gateway_health::*;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 

@@ -17,9 +17,13 @@ use fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus, Preimag
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT, GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT,
+    MODULE_CONSENSUS_VERSION_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+};
+use fedimint_ln_common::gateway_registry::{
+    LNV1_REGISTRY_SNAPSHOT_VERSION, Lnv1RegistrySnapshotResult, Lnv1RegistrySnapshotV1,
+    Lnv1RegistryState,
 };
 use fedimint_ln_common::{
     ContractAccount, FederationPublicKey, LightningGateway, LightningGatewayAnnouncement,
@@ -79,6 +83,17 @@ pub trait LnFederationApi {
         &self,
         federation_public_key: FederationPublicKey,
     ) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+
+    /// Reads the `LNv1` gateway registry from every configured guardian.
+    ///
+    /// Current registrations are unioned and deduplicated using the existing
+    /// registry behavior. The query returns no snapshot if a guardian is
+    /// missing, malformed, uses an unsupported version, or disagrees about
+    /// whether an empty registry has no records or only expired records.
+    async fn gateway_registry_snapshot(
+        &self,
+        federation_public_key: FederationPublicKey,
+    ) -> FederationResult<Lnv1RegistrySnapshotResult>;
 
     async fn register_gateway(
         &self,
@@ -228,6 +243,104 @@ where
         ))
     }
 
+    async fn gateway_registry_snapshot(
+        &self,
+        federation_public_key: FederationPublicKey,
+    ) -> FederationResult<Lnv1RegistrySnapshotResult> {
+        let mut responses = BTreeMap::new();
+        for peer in self.all_peers() {
+            match self
+                .request_single_peer::<serde_json::Value>(
+                    GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT.to_string(),
+                    ApiRequestErased::default(),
+                    *peer,
+                )
+                .await
+            {
+                Ok(response) => {
+                    responses.insert(*peer, response);
+                }
+                Err(ServerError::InvalidRpcId(_)) => {
+                    return Ok(Lnv1RegistrySnapshotResult::EndpointUnavailable);
+                }
+                Err(error) => {
+                    return Err(fedimint_api_client::api::FederationError::general(
+                        GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                        (),
+                        error,
+                    ));
+                }
+            }
+        }
+
+        let mut snapshots = BTreeMap::new();
+        for (peer, response) in responses {
+            let Some(protocol_version) = response
+                .get("protocol_version")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|version| u32::try_from(version).ok())
+            else {
+                return Err(fedimint_api_client::api::FederationError::general(
+                    GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                    (),
+                    anyhow!("LNv1 registry snapshot has no valid format version"),
+                ));
+            };
+            if protocol_version != LNV1_REGISTRY_SNAPSHOT_VERSION {
+                return Ok(Lnv1RegistrySnapshotResult::UnsupportedVersion { protocol_version });
+            }
+            snapshots.insert(
+                peer,
+                serde_json::from_value::<Lnv1RegistrySnapshotV1>(response).map_err(|error| {
+                    fedimint_api_client::api::FederationError::general(
+                        GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                        (),
+                        anyhow!("Invalid LNv1 registry snapshot: {error}"),
+                    )
+                })?,
+            );
+        }
+        let states = snapshots
+            .values()
+            .map(Lnv1RegistrySnapshotV1::state)
+            .collect::<Vec<_>>();
+        if snapshots
+            .values()
+            .flat_map(Lnv1RegistrySnapshotV1::registrations)
+            .any(|registration| !registration.registration_proof_is_valid(federation_public_key))
+        {
+            return Err(fedimint_api_client::api::FederationError::general(
+                GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                (),
+                anyhow!("LNv1 registry snapshot contains an invalid gateway registration"),
+            ));
+        }
+        let registrations = snapshots
+            .into_iter()
+            .map(|(peer, snapshot)| (peer, snapshot.into_registrations()))
+            .collect();
+        let registrations = filter_duplicate_gateways(&registrations, federation_public_key);
+        let snapshot = if registrations.is_empty() {
+            match classify_empty_lnv1_states(&states)? {
+                Lnv1RegistryState::NoRegistrations => Lnv1RegistrySnapshotV1::no_registrations(),
+                Lnv1RegistryState::RegistrationsExpired => {
+                    Lnv1RegistrySnapshotV1::registrations_expired()
+                }
+                Lnv1RegistryState::RegistrationsCurrent => {
+                    return Err(fedimint_api_client::api::FederationError::general(
+                        GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                        (),
+                        anyhow!("LNv1 peers reported current state without registrations"),
+                    ));
+                }
+            }
+        } else {
+            Lnv1RegistrySnapshotV1::registrations_current(registrations)
+                .expect("registrations were checked as nonempty")
+        };
+        Ok(Lnv1RegistrySnapshotResult::Snapshot(snapshot))
+    }
+
     async fn register_gateway(
         &self,
         gateway: &LightningGatewayAnnouncement,
@@ -302,6 +415,29 @@ where
             .is_some())
     }
 }
+
+fn classify_empty_lnv1_states(states: &[Lnv1RegistryState]) -> FederationResult<Lnv1RegistryState> {
+    let Some(first) = states.first().copied() else {
+        return Err(fedimint_api_client::api::FederationError::general(
+            GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+            (),
+            anyhow!("LNv1 registry snapshot has no guardian responses"),
+        ));
+    };
+    if first == Lnv1RegistryState::RegistrationsCurrent
+        || states.iter().any(|state| *state != first)
+    {
+        return Err(fedimint_api_client::api::FederationError::general(
+            GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+            (),
+            anyhow!("LNv1 peers disagree whether empty registrations expired"),
+        ));
+    }
+    Ok(first)
+}
+
+#[cfg(test)]
+mod tests;
 
 /// Filter out duplicate gateways. This is necessary because different guardians
 /// may have different TTLs for the same gateway, so two

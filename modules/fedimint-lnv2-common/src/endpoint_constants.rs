@@ -6,6 +6,8 @@ pub const AWAIT_INCOMING_CONTRACTS_ENDPOINT: &str = "await_incoming_contracts";
 pub const DECRYPTION_KEY_SHARE_ENDPOINT: &str = "decryption_key_share";
 pub const CONSENSUS_BLOCK_COUNT_ENDPOINT: &str = "consensus_block_count";
 pub const GATEWAYS_ENDPOINT: &str = "gateways";
+/// Versioned `LNv2` gateway registry snapshot.
+pub const GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT: &str = "gateway_registry_snapshot";
 pub const OUTGOING_CONTRACT_EXPIRATION_ENDPOINT: &str = "outgoing_contract_expiration";
 pub const REMOVE_GATEWAY_ENDPOINT: &str = "remove_gateway";
 

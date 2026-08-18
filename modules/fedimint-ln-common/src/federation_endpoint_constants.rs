@@ -7,6 +7,8 @@ pub const AWAIT_PREIMAGE_DECRYPTION: &str = "await_preimage_decryption";
 pub const BLOCK_COUNT_ENDPOINT: &str = "block_count";
 pub const GET_DECRYPTED_PREIMAGE_STATUS: &str = "get_decrypted_preimage_status";
 pub const LIST_GATEWAYS_ENDPOINT: &str = "list_gateways";
+/// Versioned `LNv1` gateway registry snapshot.
+pub const GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT: &str = "gateway_registry_snapshot";
 pub const MODULE_CONSENSUS_VERSION_ENDPOINT: &str = "module_consensus_version";
 pub const OFFER_ENDPOINT: &str = "offer";
 pub const REGISTER_GATEWAY_ENDPOINT: &str = "register_gateway";

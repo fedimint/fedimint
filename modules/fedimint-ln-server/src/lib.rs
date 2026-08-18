@@ -47,10 +47,12 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
+    GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT, GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT,
+    MODULE_CONSENSUS_VERSION_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
 };
+use fedimint_ln_common::gateway_registry::Lnv1RegistrySnapshotV1;
 use fedimint_ln_common::{
     CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION, ContractAccount, LightningCommonInit,
     LightningConsensusItem, LightningGatewayAnnouncement, LightningGatewayRegistration,
@@ -1137,6 +1139,15 @@ impl ServerModule for Lightning {
                 }
             },
             public_api_endpoint! {
+                GATEWAY_REGISTRY_SNAPSHOT_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Lightning, context, _v: ()| -> Lnv1RegistrySnapshotV1 {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.gateway_registry_snapshot(&mut dbtx, fedimint_core::time::now()).await)
+                }
+            },
+            public_api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
@@ -1472,6 +1483,44 @@ impl Lightning {
             .collect::<Vec<LightningGatewayAnnouncement>>()
     }
 
+    async fn gateway_registry_snapshot(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        now: std::time::SystemTime,
+    ) -> Lnv1RegistrySnapshotV1 {
+        let registrations = dbtx
+            .find_by_prefix(&LightningGatewayKeyPrefix)
+            .await
+            .map(|(_, registration)| registration)
+            .collect::<Vec<_>>()
+            .await;
+        Self::assemble_gateway_registry_snapshot(registrations, now)
+    }
+
+    fn assemble_gateway_registry_snapshot(
+        registrations: Vec<LightningGatewayRegistration>,
+        now: std::time::SystemTime,
+    ) -> Lnv1RegistrySnapshotV1 {
+        let had_expired = registrations
+            .iter()
+            .any(|registration| registration.is_expired_at(now));
+        let current: Vec<_> = registrations
+            .into_iter()
+            .filter(|registration| !registration.is_expired_at(now))
+            .map(LightningGatewayRegistration::unanchor)
+            .collect();
+        if current.is_empty() {
+            if had_expired {
+                Lnv1RegistrySnapshotV1::registrations_expired()
+            } else {
+                Lnv1RegistrySnapshotV1::no_registrations()
+            }
+        } else {
+            Lnv1RegistrySnapshotV1::registrations_current(current)
+                .expect("current registrations were checked as nonempty")
+        }
+    }
+
     /// Stores a gateway registration, rejecting announcements that are not
     /// entitled to overwrite the record currently held for their `gateway_id`.
     ///
@@ -1655,7 +1704,7 @@ fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
@@ -1697,6 +1746,49 @@ mod tests {
         ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey,
     };
     use crate::{Lightning, LightningInit, create_gateway_registration_message};
+
+    #[test]
+    fn registry_expiry_boundary_matches_existing_list_semantics() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let (_, gateway_id) = generate_keypair(&mut OsRng);
+        let mut registration = announcement(gateway_id, "https://gateway.example/v1").anchor();
+        registration.valid_until = now;
+        assert!(!registration.is_expired_at(now));
+        registration.valid_until = now - Duration::from_nanos(1);
+        assert!(registration.is_expired_at(now));
+        registration.valid_until = now + Duration::from_nanos(1);
+        assert!(!registration.is_expired_at(now));
+
+        let no = Lightning::assemble_gateway_registry_snapshot(vec![], now);
+        assert_eq!(
+            no.state(),
+            fedimint_ln_common::gateway_registry::Lnv1RegistryState::NoRegistrations
+        );
+        registration.valid_until = now - Duration::from_nanos(1);
+        let expired =
+            Lightning::assemble_gateway_registry_snapshot(vec![registration.clone()], now);
+        assert_eq!(
+            expired.state(),
+            fedimint_ln_common::gateway_registry::Lnv1RegistryState::RegistrationsExpired
+        );
+        registration.valid_until = now;
+        let boundary =
+            Lightning::assemble_gateway_registry_snapshot(vec![registration.clone()], now);
+        assert_eq!(
+            boundary.state(),
+            fedimint_ln_common::gateway_registry::Lnv1RegistryState::RegistrationsCurrent
+        );
+        let mut expired_registration = registration.clone();
+        expired_registration.valid_until = now - Duration::from_nanos(1);
+        let mixed = Lightning::assemble_gateway_registry_snapshot(
+            vec![registration, expired_registration],
+            now,
+        );
+        assert_eq!(
+            mixed.state(),
+            fedimint_ln_common::gateway_registry::Lnv1RegistryState::RegistrationsCurrent
+        );
+    }
 
     #[derive(Debug)]
     struct MockBitcoinServerRpc;

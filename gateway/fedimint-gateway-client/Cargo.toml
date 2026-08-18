@@ -35,8 +35,12 @@ fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
+fedimint-lnv2-client = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
+futures = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -76,3 +76,21 @@ cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
 elapsed time. Status assembly holds the federation-manager read lock only while
 capturing one coherent snapshot; do not clone the client solely for this public
 query because that would interfere with concurrent leave.
+
+Each Lightning module exposes a versioned gateway registry snapshot endpoint.
+An LNv1 snapshot distinguishes a registry with no records from one where every
+record has expired, and returns the same current announcements as the existing
+list endpoint. An LNv2 snapshot returns the same registered URLs as its existing
+registry endpoint; LNv2 has no registration TTL, so its snapshot has no expiry
+field. The client accepts a snapshot only when every configured guardian
+responds, uses the current format, returns valid fields, and agrees on an empty
+LNv1 registry's state.
+
+The public gateway health result contains no gateway URL, announcement,
+guardian identity, peer topology, or raw transport error. The client checks
+each distinct current registration once. One healthy gateway makes the result
+`Healthy`. The client reports that all gateways are unreachable or missing the
+status endpoint only when every check returns the same result;
+mixed or incomplete results become `Unknown`. A gateway transport failure
+remains distinct from a reached gateway whose federation connection pool is
+disconnected.

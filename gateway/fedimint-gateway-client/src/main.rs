@@ -200,6 +200,7 @@ impl CliError {
 
             // Internal errors (response parsing, server errors, client errors)
             ServerError::InvalidRequest(_)
+            | ServerError::GatewayStatus { .. }
             | ServerError::ResponseDeserialization(_)
             | ServerError::InvalidResponse(_)
             | ServerError::ServerError(_)

@@ -4,6 +4,38 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use thiserror::Error;
 use tracing::{trace, warn};
 
+/// A validated HTTP-style status returned by a gateway transport.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct GatewayStatusCode(reqwest::StatusCode);
+
+impl GatewayStatusCode {
+    /// The requested gateway endpoint does not exist.
+    pub const NOT_FOUND: Self = Self(reqwest::StatusCode::NOT_FOUND);
+
+    /// Constructs a validated gateway status from its wire representation.
+    pub fn from_u16(status: u16) -> anyhow::Result<Self> {
+        reqwest::StatusCode::from_u16(status)
+            .map(Self)
+            .map_err(anyhow::Error::from)
+    }
+
+    /// Constructs a gateway status already validated by HTTP.
+    pub(crate) fn from_http(status: reqwest::StatusCode) -> Self {
+        Self(status)
+    }
+
+    /// Returns the numeric HTTP wire representation.
+    pub fn as_u16(self) -> u16 {
+        self.0.as_u16()
+    }
+}
+
+impl std::fmt::Display for GatewayStatusCode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -46,6 +78,17 @@ pub enum ServerError {
     #[error("Invalid request")]
     InvalidRequest(anyhow::Error),
 
+    /// A gateway returned an unrecognized non-success HTTP-style status.
+    ///
+    /// The response body is deliberately discarded so endpoint availability
+    /// checks can inspect status codes without carrying raw server response
+    /// details.
+    #[error("Gateway returned HTTP-style status {status}")]
+    GatewayStatus {
+        /// Numeric HTTP-style response status.
+        status: GatewayStatusCode,
+    },
+
     /// Something about the response was wrong, should not typically happen
     #[error("Invalid response: {0}")]
     InvalidResponse(anyhow::Error),
@@ -78,6 +121,7 @@ impl ServerError {
             | ServerError::InvalidResponse(_)
             | ServerError::InvalidRpcId(_)
             | ServerError::InvalidRequest(_)
+            | ServerError::GatewayStatus { .. }
             | ServerError::InternalClientError(_)
             | ServerError::InvalidEndpoint(_)
             | ServerError::ServerError(_) => true,

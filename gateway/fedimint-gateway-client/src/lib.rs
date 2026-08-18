@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
+use std::future::Future;
+use std::time::Duration;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_connectors::ServerResult;
-use fedimint_connectors::error::ServerError;
+use fedimint_connectors::error::{GatewayStatusCode, ServerError};
 use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
@@ -18,23 +20,36 @@ use fedimint_gateway_common::{
     DepositAddressPayload, DepositAddressRecheckPayload, FEDERATION_STATUS_ENDPOINT,
     FederationInfo, FederationStatusRequest, FederationStatusResponse, GATEWAY_INFO_ENDPOINT,
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
-    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
-    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
-    PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
-    SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    GatewayCheckResult, GatewayFedConfig, GatewayHealth, GatewayInfo, GetInvoiceRequest,
+    GetInvoiceResponse, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
+    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, ListTransactionsResponse,
+    MNEMONIC_ENDPOINT, MnemonicResponse, OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT,
+    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
+    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload,
+    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT,
+    SET_CHANNEL_FEES_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT,
+    WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
+use fedimint_ln_common::gateway_registry::{Lnv1RegistrySnapshotResult, Lnv1RegistryState};
+use fedimint_lnv2_common::gateway_registry::{Lnv2RegistrySnapshotResult, Lnv2RegistryState};
+use futures::stream::{FuturesUnordered, StreamExt as _};
 use lightning_invoice::Bolt11Invoice;
+
+/// Whether a Lightning module is configured and ready to query.
+pub enum ConfiguredModule<'a, T> {
+    /// The federation does not configure this module.
+    Absent,
+    /// The configured module initialized and can be queried.
+    Present(&'a T),
+    /// The module is configured but no usable typed client exists.
+    PresentUnusable,
+}
 
 pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<GatewayInfo> {
     client
@@ -42,8 +57,7 @@ pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<G
         .await
 }
 
-/// Queries one federation's public, sanitized gateway capability and
-/// registration status.
+/// Queries one gateway's public status for a specific federation.
 ///
 /// Gateway UI, CLI, and server use one release, so the request does not
 /// negotiate endpoint versions. Transport failures, malformed responses, and
@@ -74,6 +88,196 @@ fn validate_federation_status(
         )));
     }
     Ok(status)
+}
+
+/// Checks one gateway's `LNv1` status without returning raw transport errors.
+pub async fn check_lnv1_gateway(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+) -> GatewayCheckResult {
+    classify_gateway_check(
+        get_federation_status(client, base_url, federation_id).await,
+        fedimint_gateway_common::lnv1_gateway_check_result,
+    )
+}
+
+/// Checks one gateway's `LNv2` status without returning raw transport errors.
+pub async fn check_lnv2_gateway(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+) -> GatewayCheckResult {
+    classify_gateway_check(
+        get_federation_status(client, base_url, federation_id).await,
+        fedimint_gateway_common::lnv2_gateway_check_result,
+    )
+}
+
+/// Reads the `LNv1` registry and checks every distinct current registration.
+///
+/// Returns `Unknown` when a guardian is missing or malformed, guardians run
+/// different endpoint versions, the snapshot version is unsupported, or the
+/// registry contains duplicate gateway identities.
+pub async fn check_lnv1_gateways(
+    client: &GatewayApi,
+    module: ConfiguredModule<'_, fedimint_ln_client::LightningClientModule>,
+) -> GatewayHealth {
+    let module = match module {
+        ConfiguredModule::Absent => return GatewayHealth::ModuleAbsent,
+        ConfiguredModule::Present(module) => module,
+        ConfiguredModule::PresentUnusable => return GatewayHealth::Unknown,
+    };
+    let federation_id = module.federation_id();
+    let snapshot_result = module.gateway_registry_snapshot().await;
+    gateway_health_from_lnv1_snapshot(client, federation_id, snapshot_result).await
+}
+
+async fn gateway_health_from_lnv1_snapshot<E>(
+    client: &GatewayApi,
+    federation_id: FederationId,
+    snapshot_result: Result<Lnv1RegistrySnapshotResult, E>,
+) -> GatewayHealth {
+    let Ok(Lnv1RegistrySnapshotResult::Snapshot(snapshot)) = snapshot_result else {
+        return GatewayHealth::Unknown;
+    };
+    match snapshot.state() {
+        Lnv1RegistryState::NoRegistrations => GatewayHealth::NoRegistrations,
+        Lnv1RegistryState::RegistrationsExpired => GatewayHealth::RegistrationsExpired,
+        Lnv1RegistryState::RegistrationsCurrent => {
+            let mut identities = std::collections::BTreeSet::new();
+            let mut registrations = Vec::with_capacity(snapshot.registrations().len());
+            for registration in snapshot.registrations() {
+                if !identities.insert(registration.info.gateway_id) {
+                    return GatewayHealth::Unknown;
+                }
+                registrations.push(registration.info.api.clone());
+            }
+            check_registered_gateways(
+                client,
+                federation_id,
+                registrations,
+                |client, url, id| async move { check_lnv1_gateway(client, &url, id).await },
+            )
+            .await
+        }
+    }
+}
+
+/// Reads the `LNv2` registry and checks every distinct current registration.
+///
+/// Returns `Unknown` when a guardian is missing or malformed, guardians run
+/// different endpoint versions, the snapshot version is unsupported, or the
+/// registry contains duplicate URLs. `LNv2` registrations do not expire.
+pub async fn check_lnv2_gateways(
+    client: &GatewayApi,
+    module: ConfiguredModule<'_, fedimint_lnv2_client::LightningClientModule>,
+) -> GatewayHealth {
+    let module = match module {
+        ConfiguredModule::Absent => return GatewayHealth::ModuleAbsent,
+        ConfiguredModule::Present(module) => module,
+        ConfiguredModule::PresentUnusable => return GatewayHealth::Unknown,
+    };
+    let federation_id = module.federation_id();
+    let snapshot_result = module.gateway_registry_snapshot().await;
+    gateway_health_from_lnv2_snapshot(client, federation_id, snapshot_result).await
+}
+
+async fn gateway_health_from_lnv2_snapshot<E>(
+    client: &GatewayApi,
+    federation_id: FederationId,
+    snapshot_result: Result<Lnv2RegistrySnapshotResult, E>,
+) -> GatewayHealth {
+    let Ok(Lnv2RegistrySnapshotResult::Snapshot(snapshot)) = snapshot_result else {
+        return GatewayHealth::Unknown;
+    };
+    match snapshot.state() {
+        Lnv2RegistryState::NoRegistrations => GatewayHealth::NoRegistrations,
+        Lnv2RegistryState::RegistrationsCurrent => {
+            let mut registrations = std::collections::BTreeSet::new();
+            for registration in snapshot.registrations() {
+                if !registrations.insert(registration.clone()) {
+                    return GatewayHealth::Unknown;
+                }
+            }
+            check_registered_gateways(
+                client,
+                federation_id,
+                registrations,
+                |client, url, id| async move { check_lnv2_gateway(client, &url, id).await },
+            )
+            .await
+        }
+    }
+}
+
+async fn check_registered_gateways<'a, I, F, Fut>(
+    client: &'a GatewayApi,
+    federation_id: FederationId,
+    registrations: I,
+    check: F,
+) -> GatewayHealth
+where
+    I: IntoIterator<Item = SafeUrl>,
+    F: Fn(&'a GatewayApi, SafeUrl, FederationId) -> Fut + Copy + 'a,
+    Fut: Future<Output = GatewayCheckResult> + 'a,
+{
+    const GATEWAY_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+    let mut pending = FuturesUnordered::new();
+    for registration in registrations {
+        pending.push(async move {
+            fedimint_core::task::timeout(
+                GATEWAY_CHECK_TIMEOUT,
+                check(client, registration, federation_id),
+            )
+            .await
+            .unwrap_or(GatewayCheckResult::Unknown)
+        });
+    }
+    let mut outcomes = Vec::new();
+    while let Some(outcome) = pending.next().await {
+        if outcome == GatewayCheckResult::Healthy {
+            return GatewayHealth::Healthy;
+        }
+        outcomes.push(outcome);
+    }
+    summarize_gateway_checks(&outcomes)
+}
+
+fn summarize_gateway_checks(checks: &[GatewayCheckResult]) -> GatewayHealth {
+    if checks.is_empty() {
+        GatewayHealth::Unknown
+    } else if checks.contains(&GatewayCheckResult::Healthy) {
+        GatewayHealth::Healthy
+    } else if checks
+        .iter()
+        .all(|result| *result == GatewayCheckResult::Unreachable)
+    {
+        GatewayHealth::GatewayUnreachable
+    } else if checks
+        .iter()
+        .all(|result| *result == GatewayCheckResult::EndpointUnavailable)
+    {
+        GatewayHealth::GatewayStatusUnavailable
+    } else {
+        GatewayHealth::Unknown
+    }
+}
+
+fn classify_gateway_check(
+    result: ServerResult<FederationStatusResponse>,
+    reduce: impl FnOnce(&FederationStatusResponse) -> GatewayCheckResult,
+) -> GatewayCheckResult {
+    match result {
+        Ok(status) => reduce(&status),
+        Err(ServerError::GatewayStatus {
+            status: GatewayStatusCode::NOT_FOUND,
+        }) => GatewayCheckResult::EndpointUnavailable,
+        Err(ServerError::Connection(_) | ServerError::Transport(_)) => {
+            GatewayCheckResult::Unreachable
+        }
+        Err(_) => GatewayCheckResult::Unknown,
+    }
 }
 
 pub async fn get_config(
