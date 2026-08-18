@@ -1,4 +1,5 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow, ensure};
+use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::{BlockHash, Transaction};
 use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -89,6 +90,42 @@ impl IServerBitcoinRpc for BitcoindClient {
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
+    }
+
+    async fn submit_package(&self, transactions: Vec<Transaction>) -> anyhow::Result<()> {
+        let raw_txs = serde_json::Value::Array(
+            transactions
+                .iter()
+                .map(|tx| serde_json::Value::String(serialize_hex(tx)))
+                .collect(),
+        );
+
+        // `bitcoincore-rpc` 0.19 has no typed `submitpackage`, so we issue the
+        // call directly. The response is an object whose `package_msg` is
+        // "success" only when every transaction was accepted into, or was
+        // already in, the mempool.
+        let response = match block_in_place(|| {
+            self.client
+                .call::<serde_json::Value>("submitpackage", &[raw_txs])
+        }) {
+            // Bitcoin core's RPC will return error code -27 if a transaction is already in a
+            // block. As in `submit_transaction`, this is a success case for our purposes.
+            Err(JsonRpc(Rpc(e))) if e.code == -27 => return Ok(()),
+            Err(e) => return Err(e.into()),
+            Ok(response) => response,
+        };
+
+        let package_msg = response
+            .get("package_msg")
+            .and_then(serde_json::Value::as_str)
+            .context("submitpackage response is missing package_msg")?;
+
+        ensure!(
+            package_msg == "success",
+            "Package was rejected: {package_msg} ({response})"
+        );
+
+        Ok(())
     }
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {

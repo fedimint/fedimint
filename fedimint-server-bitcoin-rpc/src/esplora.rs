@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
@@ -89,6 +89,23 @@ impl IServerBitcoinRpc for EsploraClient {
         // updated
         // https://github.com/fedimint/fedimint/issues/3732
         self.client.broadcast(&transaction).await?;
+        Ok(())
+    }
+
+    async fn submit_package(&self, transactions: Vec<Transaction>) -> anyhow::Result<()> {
+        // `package_msg` is "success" only when every transaction was accepted
+        // into, or was already in, the mempool.
+        let result = self
+            .client
+            .submit_package(&transactions, None, None)
+            .await?;
+
+        ensure!(
+            result.package_msg == "success",
+            "Package was rejected: {}",
+            result.package_msg
+        );
+
         Ok(())
     }
 
