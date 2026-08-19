@@ -22,6 +22,7 @@ use bitcoincore_rpc::json::SignRawTransactionInput;
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use fedimint_core::util::SafeUrl;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
+use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 
 /// Mirrors `fedimint_testing_core::envs::FM_TEST_USE_REAL_DAEMONS_ENV`, which
@@ -30,6 +31,9 @@ const FM_TEST_USE_REAL_DAEMONS: &str = "FM_TEST_USE_REAL_DAEMONS";
 
 /// Mirrors `fedimint_testing_core::envs::FM_TEST_BITCOIND_RPC_ENV`.
 const FM_TEST_BITCOIND_RPC: &str = "FM_TEST_BITCOIND_RPC";
+
+/// Mirrors `fedimint_testing_core::envs::FM_PORT_ESPLORA_ENV`.
+const FM_PORT_ESPLORA: &str = "FM_PORT_ESPLORA";
 
 /// Fee paid by the child. It covers both transactions, since the parent pays
 /// nothing.
@@ -87,6 +91,136 @@ fn sign(
     result
         .transaction()
         .context("Failed to decode the signed transaction")
+}
+
+/// Builds a zero-fee parent and a child that pays for both, funded from the
+/// test wallet. The parent is deliberately unbroadcastable on its own, which is
+/// the shape `walletv2` batches use.
+fn build_zero_fee_package(wallet: &Client) -> Result<(Transaction, Transaction)> {
+    let funding_address = wallet.get_new_address(None, None)?.assume_checked();
+
+    if wallet.get_balance(None, None)? < Amount::from_sat(MIN_FUNDING_SAT) {
+        wallet.generate_to_address(101, &funding_address)?;
+    }
+
+    let utxo = wallet
+        .list_unspent(Some(1), None, None, None, None)?
+        .into_iter()
+        .find(|utxo| utxo.spendable && utxo.amount >= Amount::from_sat(MIN_FUNDING_SAT))
+        .context("No mature UTXO large enough to fund the package")?;
+
+    let parent_output = wallet.get_new_address(None, None)?.assume_checked();
+
+    let parent = sign(
+        wallet,
+        &Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![unsigned_txin(OutPoint {
+                txid: utxo.txid,
+                vout: utxo.vout,
+            })],
+            output: vec![TxOut {
+                value: utxo.amount,
+                script_pubkey: parent_output.script_pubkey(),
+            }],
+        },
+        &[SignRawTransactionInput {
+            txid: utxo.txid,
+            vout: utxo.vout,
+            script_pub_key: utxo.script_pub_key.clone(),
+            redeem_script: None,
+            amount: Some(utxo.amount),
+        }],
+    )?;
+
+    let parent_txid = parent.compute_txid();
+
+    let child_output = wallet.get_new_address(None, None)?.assume_checked();
+
+    let child = sign(
+        wallet,
+        &Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![unsigned_txin(OutPoint {
+                txid: parent_txid,
+                vout: 0,
+            })],
+            output: vec![TxOut {
+                value: utxo.amount - Amount::from_sat(CHILD_FEE_SAT),
+                script_pubkey: child_output.script_pubkey(),
+            }],
+        },
+        &[SignRawTransactionInput {
+            txid: parent_txid,
+            vout: 0,
+            script_pub_key: parent.output[0].script_pubkey.clone(),
+            redeem_script: None,
+            amount: Some(parent.output[0].value),
+        }],
+    )?;
+
+    Ok((parent, child))
+}
+
+/// The esplora backend can submit a package too.
+///
+/// `walletv2` batches pay nothing on the parent, so package submission is not
+/// an optimisation for them — it is the only way they reach the network at all.
+/// A guardian running esplora therefore needs an instance exposing
+/// `POST /txs/package`, which is why the pinned esplora build was moved off a
+/// fork and onto current upstream.
+#[tokio::test(flavor = "multi_thread")]
+async fn esplora_package_submission_accepts_a_zero_fee_parent() -> Result<()> {
+    let Some(url) = bitcoind_url() else {
+        return Ok(());
+    };
+
+    let esplora_port =
+        std::env::var(FM_PORT_ESPLORA).expect("Must have the esplora port defined for real tests");
+
+    let esplora = EsploraClient::new(
+        &format!("http://127.0.0.1:{esplora_port}")
+            .parse::<SafeUrl>()
+            .expect("Failed to parse the esplora url"),
+    )?;
+
+    let wallet = Client::new(
+        url.without_auth()
+            .map_err(|()| anyhow!("Failed to strip auth from the bitcoind url"))?
+            .as_str(),
+        Auth::UserPass(
+            url.username().to_owned(),
+            url.password()
+                .context("Bitcoind url has no password")?
+                .to_owned(),
+        ),
+    )?;
+
+    let (parent, child) = build_zero_fee_package(&wallet)?;
+
+    let parent_txid = parent.compute_txid();
+    let child_txid = child.compute_txid();
+
+    assert!(
+        esplora.submit_transaction(parent.clone()).await.is_err(),
+        "The zero-fee parent was accepted on its own through esplora, so this test would pass \
+         even if package submission did nothing"
+    );
+
+    esplora.submit_package(vec![parent, child]).await.context(
+        "Esplora package submission failed. Does the pinned esplora expose /txs/package?",
+    )?;
+
+    let mempool = wallet.get_raw_mempool()?;
+
+    assert!(
+        mempool.contains(&parent_txid) && mempool.contains(&child_txid),
+        "Package submitted through esplora did not reach the mempool"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
