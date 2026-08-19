@@ -108,7 +108,10 @@ pub async fn spawn<T>(
     ServerBuilder::new()
         .max_connections(max_connections)
         .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
-        .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
+        .set_rpc_middleware(
+            RpcServiceBuilder::new()
+                .layer(metrics::jsonrpsee::MetricsLayer::new(module.method_names())),
+        )
         .set_http_middleware(builder)
         .build(&api_bind.to_string())
         .await
