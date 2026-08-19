@@ -43,6 +43,14 @@ ignore = [
   "RUSTSEC-2026-0118",
   # hickory-proto O(n²) name compression on message encoding; only affects encoding large DNS messages, which we do not do (we are a resolver consumer). Fix is in 0.26.1; transitive via iroh, can't update yet.
   "RUSTSEC-2026-0119",
+  # h2 unbounded empty DATA frames. Fixed in 0.4.16, and h2 0.4 has been
+  # updated to 0.4.17. The remaining hit is h2 0.3.26, which has no patched
+  # release at all (the advisory is fixed only in >=0.4.16 and 0.3.27 is the
+  # last 0.3.x). It is pinned via reqwest 0.11 through the ldk-node chain,
+  # reaching us from lightning-transaction-sync and vss-client, and is used
+  # only for outbound client requests to the operator's own esplora and VSS
+  # endpoints rather than to serve untrusted inbound traffic.
+  "RUSTSEC-2026-0258",
   # quick-xml duplicate-attribute and namespace DoS; transitive through
   # netdev -> plist. Updated plist to the newest compatible release, but plist
   # still pins quick-xml to ^0.39 and the advisory requires >=0.41.0.
