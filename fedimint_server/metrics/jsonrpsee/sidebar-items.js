@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["MetricsLayer","MetricsService","ResponseFuture"]};
+window.SIDEBAR_ITEMS = {"constant":["UNKNOWN_METHOD"],"struct":["MetricsLayer","MetricsService","ResponseFuture"]};
