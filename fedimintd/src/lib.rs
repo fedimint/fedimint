@@ -418,6 +418,7 @@ pub async fn run(
 
     let db = Database::new(
         RocksDb::build(server_opts.data_dir.join(DB_FILE))
+            .task_group(root_task_group.clone())
             .open()
             .await
             .unwrap(),
