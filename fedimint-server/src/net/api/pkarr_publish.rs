@@ -165,7 +165,9 @@ fn build_signed_packet(
 ) -> Result<SignedPacket, pkarr::errors::SignedPacketBuildError> {
     SignedPacket::builder()
         .txt(
-            pkarr::dns::Name::new_unchecked("fedimint_api"),
+            pkarr::dns::Name::new_unchecked(
+                fedimint_core::net::guardian_metadata::PKARR_API_RECORD_NAME,
+            ),
             url.try_into().expect("API URL should be valid TXT data"),
             TXT_RECORD_TTL,
         )
