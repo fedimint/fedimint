@@ -99,6 +99,59 @@ pub(crate) static CONSENSUS_ORDERING_LATENCY_SECONDS: LazyLock<Histogram> = Lazy
     .unwrap()
 });
 
+pub(crate) static ALEPH_IDLE_GATE_OPEN: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "aleph_idle_gate_open",
+            "Whether the experimental local Aleph unit creation gate is open",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static ALEPH_IDLE_CAPABLE_PEERS: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "aleph_idle_capable_peers",
+            "Number of peers with a current experimental idle-gate capability lease",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static ALEPH_IDLE_OUTSTANDING_BATCHES: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "aleph_idle_outstanding_batches",
+            "Number of unfinalized local batches keeping idle activation active",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static ALEPH_IDLE_CONTROL_MESSAGES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec_with_registry!(
+        opts!(
+            "aleph_idle_control_messages_total",
+            "Experimental Aleph idle control messages by direction, kind, and result",
+        ),
+        &["direction", "kind", "result"],
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static ALEPH_IDLE_GATE_TRANSITIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    register_int_counter_vec_with_registry!(
+        opts!(
+            "aleph_idle_gate_transitions_total",
+            "Experimental Aleph unit creation gate transitions",
+        ),
+        &["state", "reason"],
+        REGISTRY
+    )
+    .unwrap()
+});
+
 pub(crate) static IROH_API_CONNECTIONS_ACTIVE: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge_with_registry!(
         opts!(

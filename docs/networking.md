@@ -26,6 +26,33 @@ transport boundary is unsupported.
 unset, guardian P2P uses Iroh's default 1.x-compatible relays. Do not configure a
 0.35-only relay as an Iroh 1.x P2P relay.
 
+## Experimental Aleph idle gate
+
+Aleph normally creates and broadcasts units continuously, including while the
+federation has no consensus work. Setting `FM_EXPERIMENTAL_ALEPH_IDLE_GATE`
+opts one guardian into an experimental protocol that can stop this cover
+traffic. The gate closes only after every configured guardian advertises a
+renewable, current-session capability lease. A mixed-version federation
+therefore keeps the normal creator running.
+
+When a guardian receives its first local consensus item after an idle period,
+it sends authenticated `Work` messages to every other guardian. These messages
+identify that guardian as the item's ingress point and their one-second
+renewals expose the duration of its local work episode. Quiescing Aleph also
+lets network observers correlate the absence and resumption of guardian
+traffic with federation activity. Gate-transition logs and metrics retain
+related timing locally. Do not enable the gate if continuous unit traffic is
+part of the deployment's privacy model.
+
+The experiment deliberately fails open: local work, any current-session peer
+`Work` lease, capability expiry, recovery, signature collection, scheduled
+shutdown, and a one-minute probe restore normal unit creation. A Byzantine
+guardian can also keep creation active by renewing `Work`; this only restores
+the default traffic and resource rate. These mechanisms reduce the chance of
+a stall but do not prove liveness. A protocol or implementation fault can stop
+consensus, so operators must coordinate the opt-in and explicitly accept that
+risk.
+
 Guardian P2P publishes only its relay address through Pkarr when one is
 available. Without a relay address, it publishes its direct IP addresses instead
 so other guardians can discover it by endpoint ID. This fallback is required for

@@ -9,6 +9,7 @@ use fedimint_core::secp256k1::schnorr;
 use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;
+use crate::consensus::aleph_bft::idle::IdleCoordinator;
 
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
@@ -36,6 +37,7 @@ pub struct DataProvider {
     leftover_item: Option<ConsensusItem>,
     timestamp_sender: async_channel::Sender<Instant>,
     is_recovery: bool,
+    idle: IdleCoordinator,
 }
 
 impl DataProvider {
@@ -44,6 +46,7 @@ impl DataProvider {
         signature_receiver: watch::Receiver<Option<schnorr::Signature>>,
         timestamp_sender: async_channel::Sender<Instant>,
         is_recovery: bool,
+        idle: IdleCoordinator,
     ) -> Self {
         Self {
             mempool_item_receiver,
@@ -52,6 +55,7 @@ impl DataProvider {
             leftover_item: None,
             timestamp_sender,
             is_recovery,
+            idle,
         }
     }
 }
@@ -76,15 +80,20 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 items.push(item);
             } else {
                 tracing::warn!(target: LOG_CONSENSUS, ?item, "Consensus item length is over BYTE_LIMIT");
+                self.idle.release_item(&item);
             }
         }
 
         // if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
+            if !self.idle.admit_item(&item) {
+                continue;
+            }
             if let ConsensusItem::Transaction(transaction) = &item
                 && !self.submitted_transactions.insert(transaction.tx_hash())
             {
+                self.idle.release_item(&item);
                 continue;
             }
 
@@ -100,6 +109,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         }
 
         if items.is_empty() {
+            self.idle.consider_idle();
             return None;
         }
 
@@ -111,6 +121,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
         assert!(bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
-        Some(UnitData::Batch(bytes))
+        let data = UnitData::Batch(bytes);
+        self.idle.batch_created(&data, &items);
+        Some(data)
     }
 }

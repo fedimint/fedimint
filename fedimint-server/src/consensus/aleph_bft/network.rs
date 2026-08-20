@@ -16,6 +16,7 @@ use tracing::{error, trace};
 
 use super::super::db::SignedSessionOutcomeKey;
 use super::data_provider::UnitData;
+use super::idle::{ALEPH_IDLE_CONTROL_V1, IdleCoordinator};
 use super::keychain::Keychain;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -41,6 +42,7 @@ pub struct Network {
     signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
     signatures_sender: Sender<(PeerId, schnorr::Signature)>,
     db: Database,
+    idle: IdleCoordinator,
 }
 
 impl Network {
@@ -49,12 +51,14 @@ impl Network {
         signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
         signatures_sender: Sender<(PeerId, schnorr::Signature)>,
         db: Database,
+        idle: IdleCoordinator,
     ) -> Self {
         Self {
             connections,
             signed_outcomes_sender,
             signatures_sender,
             db,
+            idle,
         }
     }
 }
@@ -148,6 +152,22 @@ impl aleph_bft::Network<NetworkData> for Network {
                                 "Failed to decode SignedSessionOutcome"
                             );
                         }
+                    }
+                }
+                P2PMessage::Default {
+                    variant: ALEPH_IDLE_CONTROL_V1,
+                    bytes,
+                } => {
+                    if let Some(message) = IdleCoordinator::decode(&bytes)
+                        && let Some(ack) = self.idle.receive(peer_id, message)
+                    {
+                        self.connections.send(
+                            Recipient::Peer(peer_id),
+                            P2PMessage::Default {
+                                variant: ALEPH_IDLE_CONTROL_V1,
+                                bytes: IdleCoordinator::encode(&ack),
+                            },
+                        );
                     }
                 }
                 message => {
