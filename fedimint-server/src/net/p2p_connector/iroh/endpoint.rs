@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::net::SocketAddr;
 
 use anyhow::Context as _;
+use fedimint_connectors::iroh::default_iroh_v1_relay_mode;
 use fedimint_core::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
     FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
@@ -34,7 +35,7 @@ pub(super) async fn build_iroh_endpoint(
         warn!(target: LOG_NET_IROH, "Iroh relays are disabled");
         RelayMode::Disabled
     } else if iroh_relays.is_empty() {
-        RelayMode::Default
+        default_iroh_v1_relay_mode()
     } else {
         RelayMode::Custom(
             iroh_relays
