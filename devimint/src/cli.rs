@@ -135,6 +135,11 @@ pub enum Cmd {
 pub enum RpcCmd {
     Wait,
     Env,
+    /// Send SIGTERM to a named daemon using its PID file.
+    Kill {
+        /// Process name, e.g. "fedimintd-default-0", "bitcoind", "gatewayd-lnd"
+        name: String,
+    },
 }
 
 pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
@@ -480,6 +485,71 @@ fn devimint_static_data_dir() -> ffi::OsString {
     )
 }
 
+/// Whether the process currently running as `pid` still matches the given
+/// expected basename and start time recorded when it was spawned.
+///
+/// A basename match alone isn't enough to tell apart different instances of
+/// the same binary (e.g. several `fedimintd`s in one federation), so this
+/// also compares start time — a PID recycled from a dead instance onto a
+/// live one of the same binary would fail this check. `Ok(false)` covers
+/// both "no such process" and "a different process reused this pid".
+///
+/// `Err` means the check itself failed (e.g. `ps` could not be run) —
+/// callers must not treat that as "gone", or a tooling hiccup would orphan
+/// a live daemon.
+async fn pid_identity_matches(
+    pid: i32,
+    expected_basename: &str,
+    expected_start_time: &str,
+) -> Result<bool> {
+    let Some(running_basename) = crate::util::running_program_basename(pid as u32).await? else {
+        return Ok(false);
+    };
+    let Some(running_start_time) = crate::util::process_start_time(pid as u32).await? else {
+        return Ok(false);
+    };
+    Ok(running_basename == expected_basename && running_start_time == expected_start_time)
+}
+
+/// Whether the process is a zombie: already dead, just not yet reaped by
+/// its parent (the long-running devimint that spawned it).
+async fn is_zombie(pid: i32) -> bool {
+    let Ok(output) = tokio::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .await
+    else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .starts_with('Z')
+}
+
+/// Polls `pid` until it's gone — or is a zombie, which signals can never
+/// change from here — or `timeout` elapses. Returns whether it exited.
+///
+/// Uses a flat interval rather than the shared `backoff_util::custom_backoff`
+/// helper: that's built for retrying operations of unknown duration where
+/// growing the delay avoids hammering a remote service, but here exit is
+/// usually near-instant and we want fast, consistent detection of it, not an
+/// escalating delay before the next check.
+async fn wait_for_pid_exit(pid_t: nix::unistd::Pid, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while nix::sys::signal::kill(pid_t, None).is_ok() {
+        // `kill(pid, 0)` succeeds for zombies: the daemon is dead, its
+        // parent just hasn't reaped it yet, so don't keep waiting on it.
+        if is_zombie(pid_t.as_raw()).await {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+    }
+    true
+}
+
 pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
     match rpc {
@@ -533,6 +603,116 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 write_overwrite_async(env_file, env_string).await?;
             }
 
+            Ok(())
+        }
+        RpcCmd::Kill { name } => {
+            let pid_file = common.test_dir().join("logs").join(format!("{name}.pid"));
+            let pid_file_contents = fs::read_to_string(&pid_file)
+                .await
+                .with_context(|| format!("No PID file for '{name}' — is it running?"))?;
+            let mut lines = pid_file_contents.lines();
+            let pid: i32 = lines
+                .next()
+                .with_context(|| format!("Empty PID file for '{name}'"))?
+                .trim()
+                .parse()
+                .with_context(|| format!("Invalid PID in file for '{name}'"))?;
+            let expected_program = lines.next().unwrap_or_default();
+            let expected_start_time = lines.next().unwrap_or_default();
+            ensure!(
+                !expected_program.is_empty() && !expected_start_time.is_empty(),
+                "PID file for '{name}' doesn't record enough identity info to \
+                 safely verify (stale or old-format file?) — refusing to guess. \
+                 Remove it manually if you're sure it's safe."
+            );
+            let expected_basename = Path::new(expected_program).file_name().map_or_else(
+                || expected_program.to_owned(),
+                |s| s.to_string_lossy().into_owned(),
+            );
+
+            // A stale PID file (daemon already exited, PID recycled by the OS)
+            // could otherwise cause us to signal an unrelated process, so
+            // confirm the running process is still the very same instance we
+            // spawned (basename + start time) before signaling it. If it's
+            // gone (or the pid now belongs to something else), the daemon is
+            // already dead: clean up the stale PID file and succeed, so
+            // `kill` is idempotent.
+            if !pid_identity_matches(pid, &expected_basename, expected_start_time).await? {
+                let _ = fs::remove_file(&pid_file).await;
+                println!("'{name}' (pid {pid}) is not running anymore; removed stale PID file");
+                return Ok(());
+            }
+
+            let pid_t = nix::unistd::Pid::from_raw(pid);
+            nix::sys::signal::kill(pid_t, nix::sys::signal::Signal::SIGTERM)
+                .with_context(|| format!("Failed to send SIGTERM to '{name}' (pid {pid})"))?;
+
+            // Wait for the process to actually exit, escalating to SIGKILL if
+            // it doesn't within a grace period. Re-verify identity right
+            // before the SIGKILL too: the original process may have already
+            // exited during the wait, letting the OS hand `pid` to an
+            // unrelated process in the meantime. Only remove the PID file
+            // once exit is actually confirmed (or the pid is confirmed to no
+            // longer be ours anyway) — otherwise a still-running daemon
+            // (e.g. one stuck in uninterruptible I/O, immune to SIGKILL until
+            // it unblocks) would silently become untracked.
+            let mut exited = wait_for_pid_exit(pid_t, Duration::from_secs(5)).await;
+            let mut sigkilled = false;
+            if !exited {
+                match pid_identity_matches(pid, &expected_basename, expected_start_time).await {
+                    Ok(true) => {
+                        sigkilled = true;
+                        let _ = nix::sys::signal::kill(pid_t, nix::sys::signal::Signal::SIGKILL);
+                        exited = wait_for_pid_exit(pid_t, Duration::from_secs(5)).await;
+                    }
+                    Ok(false) => {
+                        warn!(
+                            target: LOG_DEVIMINT,
+                            %name, pid,
+                            "pid no longer matches the expected process after the \
+                             SIGTERM wait; not escalating to SIGKILL (likely \
+                             already exited and the pid was reused)"
+                        );
+                        // Not our process either way, so the PID file is stale
+                        // regardless of whether *something* is still running.
+                        exited = true;
+                    }
+                    Err(err) => {
+                        // Couldn't verify: don't SIGKILL what we can't
+                        // identify, and keep the PID file so a live daemon
+                        // isn't orphaned by a tooling failure.
+                        warn!(
+                            target: LOG_DEVIMINT,
+                            %name, pid, err = %err.fmt_compact_anyhow(),
+                            "could not re-verify process identity after the \
+                             SIGTERM wait; not escalating to SIGKILL"
+                        );
+                    }
+                }
+            }
+
+            if exited {
+                let _ = fs::remove_file(&pid_file).await;
+                if sigkilled {
+                    println!(
+                        "'{name}' (pid {pid}) didn't respond to SIGTERM within 5s; \
+                         sent SIGKILL"
+                    );
+                } else {
+                    println!("Sent SIGTERM to '{name}' (pid {pid})");
+                }
+            } else {
+                let signals_sent = if sigkilled {
+                    "SIGTERM and SIGKILL"
+                } else {
+                    "SIGTERM"
+                };
+                println!(
+                    "Sent {signals_sent} to '{name}' (pid {pid}), but it still \
+                     appears to be running — leaving its PID file in place so \
+                     it isn't lost track of."
+                );
+            }
             Ok(())
         }
     }
