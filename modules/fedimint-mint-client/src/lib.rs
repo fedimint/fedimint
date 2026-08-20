@@ -86,7 +86,7 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
-use fedimint_core::secp256k1::rand::thread_rng;
+use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
@@ -692,14 +692,11 @@ impl MintClientInit {
                     .collect();
 
                 // Fetch outpoints for all blind nonces
-                let outpoints = if blind_nonces.is_empty() {
-                    vec![]
-                } else {
-                    args.module_api()
-                        .fetch_blind_nonce_outpoints(blind_nonces)
-                        .await
-                        .context("Failed to fetch blind nonce outpoints")?
-                };
+                let outpoints = args
+                    .module_api()
+                    .fetch_blind_nonce_outpoints(blind_nonces)
+                    .await
+                    .context("Failed to fetch blind nonce outpoints")?;
 
                 // Create state machines for pending notes
                 let state_machines: Vec<MintClientStateMachines> = finalized
@@ -1097,7 +1094,7 @@ impl ClientModule for MintClientModule {
             .create_output(
                 dbtx,
                 operation_id,
-                2,
+                jittered_target_notes_per_denomination(TARGET_NOTES_PER_DENOMINATION),
                 input_amount.saturating_sub(output_amount),
             )
             .await;
@@ -1203,7 +1200,10 @@ impl ClientModule for MintClientModule {
                 }
                 "try_cancel_spend_notes" => {
                     let req: TryCancelSpendNotesRequest = serde_json::from_value(request)?;
-                    let result = self.try_cancel_spend_notes(req.operation_id).await;
+                    let result = self
+                        .try_cancel_spend_notes(req.operation_id)
+                        .await
+                        .map_err(|err: anyhow::Error| err.to_string());
                     yield serde_json::to_value(result)?;
                 }
                 "subscribe_spend_notes" => {
@@ -1215,7 +1215,9 @@ impl ClientModule for MintClientModule {
                 }
                 "await_spend_oob_refund" => {
                     let req: AwaitSpendOobRefundRequest = serde_json::from_value(request)?;
-                    let value = self.await_spend_oob_refund(req.operation_id).await;
+                    let value = self
+                        .await_spend_oob_refund(req.operation_id)
+                        .await;
                     yield serde_json::to_value(value)?;
                 }
                 "note_counts_by_denomination" => {
@@ -1356,7 +1358,9 @@ impl MintClientModule {
             .await
     }
 
-    // TODO: put "notes per denomination" default into cfg
+    // TODO: put "notes per denomination" default into cfg (currently
+    // hardcoded as `TARGET_NOTES_PER_DENOMINATION`, jittered per mint by
+    // `jittered_target_notes_per_denomination`)
     /// Creates a mint output close to the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
@@ -1586,7 +1590,12 @@ impl MintClientModule {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
-        /// Number of notes per tier to leave after threshold was crossed
+        /// Number of notes per tier to leave after threshold was crossed.
+        ///
+        /// Kept in step with `TARGET_NOTES_PER_DENOMINATION`: this is the
+        /// floor minting fills back up to, so a target above this floor
+        /// fights consolidation on every mint (fill above floor, trim back
+        /// to floor, refill on the next spend).
         const MIN_NOTES_PER_TIER: usize = 4;
         /// Maximum number of notes to consolidate per one tx,
         /// to limit the size of a transaction produced.
@@ -1711,16 +1720,17 @@ impl MintClientModule {
         dbtx.on_commit(move || sender.send_replace(()));
 
         let try_cancel_after = try_cancel_after.unwrap_or(OOB_SPEND_NO_TIMEOUT);
-        let state_machines = if try_cancel_after == OOB_SPEND_NO_TIMEOUT {
-            vec![]
-        } else {
-            vec![MintClientStateMachines::OOB(MintOOBStateMachine {
+        let state_machines: Vec<MintClientStateMachines> = match
+            try_cancel_after == OOB_SPEND_NO_TIMEOUT
+        {
+            true => vec![],
+            false => vec![MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id,
                 state: MintOOBStates::CreatedMulti(MintOOBStatesCreatedMulti {
                     spendable_notes: selected_notes.clone().into_iter_items().collect(),
                     timeout: fedimint_core::time::now() + try_cancel_after,
                 }),
-            })]
+            })],
         };
 
         Ok((operation_id, state_machines, selected_notes))
@@ -2549,13 +2559,15 @@ impl MintClientModule {
     /// [`MintClientModule::spend_notes_with_selector`]. If the e-cash notes
     /// have already been spent this operation will fail which can be
     /// observed using [`MintClientModule::subscribe_spend_notes`].
-    pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
+    pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) -> anyhow::Result<()> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         dbtx.insert_entry(&CancelledOOBSpendKey(operation_id), &())
             .await;
         if let Err(e) = dbtx.commit_tx_result().await {
             warn!("We tried to cancel the same OOB spend multiple times concurrently: {e}");
         }
+
+        Ok(())
     }
 
     /// Subscribe to updates on the progress of a raw e-cash spend operation
@@ -2767,7 +2779,9 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
     ) -> anyhow::Result<TieredMulti<Note>> {
-        Ok(select_notes_from_stream(stream, requested_amount, fee_consensus).await?)
+        select_notes_from_stream(stream, requested_amount, fee_consensus)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -2912,7 +2926,9 @@ impl std::fmt::Display for InsufficientBalanceError {
             f,
             "Insufficient balance: requested {} but only {} available",
             self.requested_amount, self.total_amount
-        )
+        )?;
+
+        Ok(())
     }
 }
 
@@ -2975,7 +2991,7 @@ impl State for MintClientStateMachines {
                 )
             }
             MintClientStateMachines::Restore(_) => {
-                sm_enum_variant_translation!(vec![], MintClientStateMachines::Restore)
+                Vec::new()
             }
         }
     }
@@ -3018,7 +3034,8 @@ impl fmt::Debug for SpendableNote {
 }
 impl fmt::Display for SpendableNote {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.nonce().fmt_short())
+        write!(f, "{}", self.nonce().fmt_short())?;
+          Ok(())
     }
 }
 
@@ -3068,7 +3085,8 @@ pub struct SpendableNoteUndecoded {
 
 impl fmt::Display for SpendableNoteUndecoded {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.nonce().fmt_short())
+        write!(f, "{}", self.nonce().fmt_short())?;
+        Ok(())
     }
 }
 
@@ -3078,7 +3096,8 @@ impl fmt::Debug for SpendableNoteUndecoded {
             .field("nonce", &self.nonce())
             .field("signature", &"[raw]")
             .field("spend_key", &self.spend_key)
-            .finish()
+            .finish()?;
+        Ok(())
     }
 }
 
@@ -3088,11 +3107,14 @@ impl SpendableNoteUndecoded {
     }
 
     pub fn decode(self) -> anyhow::Result<SpendableNote> {
-        Ok(SpendableNote {
-            signature: Decodable::consensus_decode_partial_from_finite_reader(
+        let signature =
+            tbs::Signature::consensus_decode_partial_from_finite_reader(
                 &mut self.signature.as_slice(),
                 &ModuleRegistry::default(),
-            )?,
+            )?;
+
+        Ok(SpendableNote {
+            signature,
             spend_key: self.spend_key,
         })
     }
@@ -3169,6 +3191,30 @@ impl sha256t::Tag for OOBReissueTag {
         engine.input(b"oob-reissue");
         engine
     }
+}
+
+/// Default target number of notes per denomination tier the client aims to
+/// hold after minting change or a fresh reissue (the `denomination_sets`
+/// argument to [`represent_amount`]).
+///
+/// This is coordinated with the consolidation floor `MIN_NOTES_PER_TIER` in
+/// [`MintClientModule::consolidate_notes`], which currently also sits at 4:
+/// raising this target without raising the floor to match makes note churn
+/// explode, since minting fills a tier past the floor and consolidation
+/// immediately trims it back down, forcing a re-mint on the next spend.
+const TARGET_NOTES_PER_DENOMINATION: u16 = 4;
+
+/// Jitters [`TARGET_NOTES_PER_DENOMINATION`] (or any other target) by ±1,
+/// once per mint.
+///
+/// Without this, a wallet's change/reissue breakdown deterministically
+/// encodes which tiers it was short on, i.e. it leaks a fingerprint of the
+/// wallet's note holdings to anyone who observes more than one of its
+/// transactions. The jitter trades a small amount of extra consolidation
+/// churn for that unpredictability.
+fn jittered_target_notes_per_denomination(target: u16) -> u16 {
+    let jitter: i16 = thread_rng().gen_range(-1..=1);
+    target.saturating_add_signed(jitter).max(1)
 }
 
 /// Determines the denominations to use when representing an amount
@@ -3272,7 +3318,8 @@ mod tests {
 
     use crate::{
         MintOperationMetaVariant, OOBNotes, OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
-        represent_amount, select_notes_from_stream,
+        TARGET_NOTES_PER_DENOMINATION, jittered_target_notes_per_denomination, represent_amount,
+        select_notes_from_stream,
     };
 
     #[test]
@@ -3319,6 +3366,37 @@ mod tests {
             ),
             denominations(vec![(Amount::from_sats(1), 2), (Amount::from_sats(4), 1)])
         );
+    }
+
+    #[test]
+    fn jittered_target_notes_per_denomination_stays_within_plus_minus_one() {
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..1_000 {
+            let jittered = jittered_target_notes_per_denomination(TARGET_NOTES_PER_DENOMINATION);
+            assert!(
+                jittered.abs_diff(TARGET_NOTES_PER_DENOMINATION) <= 1,
+                "jittered target {jittered} strayed more than ±1 from \
+                 {TARGET_NOTES_PER_DENOMINATION}"
+            );
+            seen.insert(jittered);
+        }
+        // Over 1000 draws all three of target-1, target, target+1 should show up.
+        assert_eq!(
+            seen,
+            std::collections::BTreeSet::from([
+                TARGET_NOTES_PER_DENOMINATION - 1,
+                TARGET_NOTES_PER_DENOMINATION,
+                TARGET_NOTES_PER_DENOMINATION + 1,
+            ])
+        );
+    }
+
+    #[test]
+    fn jittered_target_notes_per_denomination_never_goes_to_zero() {
+        for _ in 0..1_000 {
+            assert!(jittered_target_notes_per_denomination(1) >= 1);
+        }
+        assert_eq!(jittered_target_notes_per_denomination(0), 1);
     }
 
     #[test_log::test(tokio::test)]
