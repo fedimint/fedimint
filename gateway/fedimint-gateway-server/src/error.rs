@@ -42,6 +42,8 @@ impl IntoResponse for GatewayError {
 /// client.
 #[derive(Debug, Error)]
 pub enum PublicGatewayError {
+    #[error("Gateway invariant violation: {}", OptStacktrace(.0))]
+    Internal(anyhow::Error),
     #[error("Lightning rpc error: {}", .0)]
     Lightning(#[from] LightningRpcError),
     #[error("LNv1 error: {:?}", .0)]
@@ -63,6 +65,10 @@ impl IntoResponse for PublicGatewayError {
         // deducing state about the gateway/lightning node.
         crit!(target: LOG_GATEWAY, "{self}");
         let (error_message, status_code) = match &self {
+            PublicGatewayError::Internal(_) => (
+                "Gateway internal error".to_owned(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
             PublicGatewayError::FederationNotConnected(e) => {
                 (e.to_string(), StatusCode::BAD_REQUEST)
             }
@@ -85,11 +91,8 @@ impl IntoResponse for PublicGatewayError {
             PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
         };
 
-        let error_message = if is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
-            self.to_string()
-        } else {
-            error_message
-        };
+        let error_message =
+            self.response_message(error_message, is_env_var_set(FM_DEBUG_GATEWAY_ENV));
 
         Response::builder()
             .status(status_code)
@@ -97,6 +100,20 @@ impl IntoResponse for PublicGatewayError {
             .expect("Failed to create Response")
     }
 }
+
+impl PublicGatewayError {
+    fn response_message(&self, sanitized: String, expose_debug_details: bool) -> String {
+        if expose_debug_details && !matches!(self, PublicGatewayError::Internal(_)) {
+            self.to_string()
+        } else {
+            sanitized
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "error/tests.rs"]
+mod tests;
 
 /// Errors that authenticated endpoints can encounter. Full error message and
 /// error details are returned to the admin client for debugging purposes.

@@ -8,6 +8,9 @@ Additional agent-specific instructions (e.g. for CI-driven code review) can be f
 
 Fedimint is a modular framework for building federated financial applications. It provides a trust-minimized, censorship-resistant, and private alternative to centralized applications. The core implementation focuses on a federated Chaumian e-cash mint that's natively compatible with Bitcoin and the Lightning Network.
 
+Read `SECURITY.md` before changing network APIs, authentication boundaries,
+credential handling, or privacy-sensitive public responses.
+
 ## Essential Commands
 
 ### Build and Development

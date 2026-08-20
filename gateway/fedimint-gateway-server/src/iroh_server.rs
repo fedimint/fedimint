@@ -21,9 +21,9 @@ use serde_json::json;
 use tracing::{error, info, warn};
 use url::Url;
 
-use crate::Gateway;
 use crate::error::{GatewayError, PublicGatewayError};
 use crate::rpc_server::verify_bolt11_preimage_v2_get;
+use crate::{Gateway, GatewayState};
 
 /// Handler for a GET request, which must contain no parameters and return
 /// `serde_json::Value`
@@ -273,12 +273,22 @@ async fn run_handler(
 /// if the authentication is incorrect. Then it will lookup the specific handler
 /// in `Handlers`, execute it, and return the function's JSON along with an HTTP
 /// status code.
-async fn handle_request(
+pub(crate) async fn handle_request(
     request: &IrohGatewayRequest,
     gateway: Arc<Gateway>,
     handlers: Arc<Handlers>,
     task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
+    if matches!(
+        gateway.get_state().await,
+        GatewayState::NotConfigured { .. }
+    ) && !crate::rpc_server::is_allowed_not_configured_api(
+        &axum::http::Method::POST,
+        &request.route,
+    ) {
+        return Ok(unknown_route(&request.route));
+    }
+
     if handlers.is_authenticated(&request.route) && iroh_verify_password(&gateway, request).is_err()
     {
         return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
