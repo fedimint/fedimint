@@ -2,6 +2,7 @@ use aleph_bft::{NodeIndex, Round};
 use fedimint_core::PeerId;
 
 use super::data_provider::UnitData;
+use super::idle::IdleCoordinator;
 
 pub struct OrderedUnit {
     pub creator: PeerId,
@@ -11,11 +12,12 @@ pub struct OrderedUnit {
 
 pub struct FinalizationHandler {
     sender: async_channel::Sender<OrderedUnit>,
+    idle: IdleCoordinator,
 }
 
 impl FinalizationHandler {
-    pub fn new(sender: async_channel::Sender<OrderedUnit>) -> Self {
-        Self { sender }
+    pub fn new(sender: async_channel::Sender<OrderedUnit>, idle: IdleCoordinator) -> Self {
+        Self { sender, idle }
     }
 }
 
@@ -25,6 +27,11 @@ impl aleph_bft::FinalizationHandler<UnitData> for FinalizationHandler {
     }
 
     fn unit_finalized(&mut self, creator: NodeIndex, round: Round, data: Option<UnitData>) {
+        if super::to_peer_id(creator) == Some(self.idle.identity())
+            && let Some(data) = &data
+        {
+            self.idle.batch_finalized(data);
+        }
         // the channel is unbounded
         self.sender
             .try_send(OrderedUnit {

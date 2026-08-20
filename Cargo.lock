@@ -3090,8 +3090,7 @@ dependencies = [
 [[package]]
 name = "fedimint-aleph-bft"
 version = "0.36.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b21015ab681cdddedd866fe4af9169901012e9a8bd4745da8423131cccae025"
+source = "git+https://github.com/fedimint/AlephBFT.git?rev=320a66f54bd69743a19f443f3564cb13b90e7dfc#320a66f54bd69743a19f443f3564cb13b90e7dfc"
 dependencies = [
  "aleph-bft-rmc",
  "aleph-bft-types 0.13.0",
