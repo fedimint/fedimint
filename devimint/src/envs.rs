@@ -41,6 +41,9 @@ pub const FM_FEDERATIONS_BASE_PORT_ENV: &str = "FM_FEDERATIONS_BASE_PORT";
 // Fix base port for gateway (gatewayd) port range
 pub const FM_GATEWAY_BASE_PORT_ENV: &str = "FM_GATEWAY_BASE_PORT";
 
+// Fix the port of the faucet spawned by `wasm-test-setup`
+pub const FM_FAUCET_PORT_ENV: &str = "FM_FAUCET_PORT";
+
 // Env variable to set a federation's invite code
 pub const FM_INVITE_CODE_ENV: &str = "FM_INVITE_CODE";
 

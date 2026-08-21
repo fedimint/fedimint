@@ -3,6 +3,8 @@
 mod net_overrides;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
+
+use anyhow::Context as _;
 pub trait ToEnvVar {
     fn to_env_value(&self) -> Option<String> {
         panic!("Must implement one of the two ToEnvVar methods");
@@ -108,6 +110,7 @@ use fedimintd_envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
+use crate::envs::FM_FAUCET_PORT_ENV;
 use crate::federation::{
     FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
 };
@@ -183,7 +186,10 @@ declare_vars! {
             Some(b) => b + GATEWAY_PORT_OFFSET_LDK2_METRICS,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK2_METRICS";
-        FM_PORT_FAUCET: u16 = port_alloc(1)?; env: "FM_PORT_FAUCET";
+        FM_PORT_FAUCET: u16 = match std::env::var(FM_FAUCET_PORT_ENV) {
+            Ok(port) => port.parse().with_context(|| f!("parsing {FM_FAUCET_PORT_ENV}={port}"))?,
+            Err(_) => port_alloc(1)?,
+        }; env: "FM_PORT_FAUCET";
         FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
         FM_PORT_RECURRINGDV2: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGDV2";
 
