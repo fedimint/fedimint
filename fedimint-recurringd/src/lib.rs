@@ -845,7 +845,7 @@ fn select_preferred_gateway(
 /// the fee the payment is later funded with. `to_amount` saturates, so a
 /// gateway announcing a fee too large to represent simply ranks last.
 fn gateway_fee_msat(gateway: &LightningGateway, amount: Amount) -> u64 {
-    gateway.fees.to_amount(&amount).msats
+    gateway.fees.to_amount_legacy(&amount).msats
 }
 
 fn sort_gateways_by_preference(

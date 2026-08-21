@@ -863,7 +863,7 @@ impl LightningClientModule {
                 .context("MissingInvoiceAmount")?,
         );
 
-        let gateway_fee = gateway.fees.to_amount(&invoice_amount);
+        let gateway_fee = gateway.fees.to_amount_legacy(&invoice_amount);
         // A gateway announcement carries an unvalidated fee rate, and clients
         // union the announcements they receive from each guardian, so one
         // guardian that has not upgraded still serves a rate large enough to
@@ -1205,7 +1205,7 @@ impl LightningClientModule {
                 // large to represent simply ranks last.
                 let total_fee = amount_msat.map_or_else(
                     || msats(u64::from(ann.info.fees.base_msat)),
-                    |amt| ann.info.fees.to_amount(&msats(amt)),
+                    |amt| ann.info.fees.to_amount_legacy(&msats(amt)),
                 );
                 (status.clone(), total_fee)
             })
@@ -1941,7 +1941,7 @@ impl LightningClientModule {
             // Saturating: an unfundable fee has to read as unaffordable to the
             // binary search, not panic it.
             |invoice_amount: Amount| {
-                invoice_amount.saturating_add(gateway.fees.to_amount(&invoice_amount))
+                invoice_amount.saturating_add(gateway.fees.to_amount_legacy(&invoice_amount))
             },
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
