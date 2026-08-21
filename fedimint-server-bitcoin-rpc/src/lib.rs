@@ -130,12 +130,8 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         }
     }
 
-    async fn submit_package(&self, transactions: Vec<Transaction>) -> Result<()> {
-        match self
-            .bitcoind_client
-            .submit_package(transactions.clone())
-            .await
-        {
+    async fn submit_package(&self, transactions: &[Transaction]) -> Result<()> {
+        match self.bitcoind_client.submit_package(transactions).await {
             Ok(()) => Ok(()),
             Err(e) => {
                 warn!(

@@ -92,18 +92,19 @@ impl IServerBitcoinRpc for EsploraClient {
         Ok(())
     }
 
-    async fn submit_package(&self, transactions: Vec<Transaction>) -> anyhow::Result<()> {
+    async fn submit_package(&self, transactions: &[Transaction]) -> anyhow::Result<()> {
         // `package_msg` is "success" only when every transaction was accepted
         // into, or was already in, the mempool.
-        let result = self
-            .client
-            .submit_package(&transactions, None, None)
-            .await?;
+        let result = self.client.submit_package(transactions, None, None).await?;
 
+        // `package_msg` alone only says the package failed. The reason each
+        // individual transaction was rejected lives in `tx_results`, so it is
+        // included here as well.
         ensure!(
             result.package_msg == "success",
-            "Package was rejected: {}",
-            result.package_msg
+            "Package was rejected: {} ({:?})",
+            result.package_msg,
+            result.tx_results
         );
 
         Ok(())

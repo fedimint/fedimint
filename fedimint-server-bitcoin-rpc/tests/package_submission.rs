@@ -1,18 +1,24 @@
 //! Integration test for 1p1c package submission against a real bitcoind.
 //!
-//! The `walletv2` pinning fix broadcasts a zero-fee parent together with a
-//! child that carries the whole fee (see `PINNING.md`). That parent is below
-//! the minimum relay fee and can never reach the network on its own, so the
-//! design rests on a property that plain transaction submission does not have:
-//! a package is accepted where its parent alone is rejected.
+//! [`IServerBitcoinRpc::submit_package`] exists so that a parent paying no fee
+//! at all can still reach the network, carried by a child that pays for both.
+//! Such a parent sits below the minimum relay fee and can never be broadcast on
+//! its own, so this rests on a property plain transaction submission does not
+//! have: a package is accepted where its parent alone is rejected.
 //!
-//! This test pins that property down, and additionally checks the two things
-//! the broadcast loop will depend on — that resubmitting a package already in
-//! the mempool succeeds, and that parent and child are mined together.
+//! Nothing in the tree calls `submit_package` yet. It is groundwork for a
+//! future wallet module that batches its transactions this way, so these tests
+//! stand in as the specification of the RPC contract rather than as coverage of
+//! an existing caller. They pin down the three parts of it that a periodic
+//! broadcast loop would depend on: that the package is accepted at all, that
+//! resubmitting one already in the mempool succeeds, and that resubmitting one
+//! that has already been mined does *not*.
 //!
-//! Requires a real bitcoind. The mock backend has no mempool policy and no
-//! block assembler, so it cannot express any of this. Run with
-//! `./scripts/tests/package-submission-test.sh`.
+//! Requires real daemons. The mock backend has no mempool policy and no block
+//! assembler, so it cannot express any of this. Both tests drive the same
+//! bitcoind wallet and mine blocks, so they must not run concurrently;
+//! `./scripts/tests/package-submission-test.sh` runs them with
+//! `--test-threads=1`.
 
 use anyhow::{Context, Result, anyhow};
 use bitcoin::absolute::LockTime;
@@ -66,6 +72,24 @@ fn bitcoind_url() -> Option<SafeUrl> {
     )
 }
 
+/// Connects to the bitcoind wallet directly, which the tests use to fund
+/// packages, mine blocks and inspect the mempool.
+fn wallet_client(url: &SafeUrl) -> Result<Client> {
+    let host = url
+        .without_auth()
+        .map_err(|()| anyhow!("Failed to strip auth from the bitcoind url"))?;
+
+    Ok(Client::new(
+        host.as_str(),
+        Auth::UserPass(
+            url.username().to_owned(),
+            url.password()
+                .context("Bitcoind url has no password")?
+                .to_owned(),
+        ),
+    )?)
+}
+
 fn unsigned_txin(previous_output: OutPoint) -> TxIn {
     TxIn {
         previous_output,
@@ -95,7 +119,7 @@ fn sign(
 
 /// Builds a zero-fee parent and a child that pays for both, funded from the
 /// test wallet. The parent is deliberately unbroadcastable on its own, which is
-/// the shape `walletv2` batches use.
+/// the shape a batching wallet module would produce.
 fn build_zero_fee_package(wallet: &Client) -> Result<(Transaction, Transaction)> {
     let funding_address = wallet.get_new_address(None, None)?.assume_checked();
 
@@ -109,6 +133,8 @@ fn build_zero_fee_package(wallet: &Client) -> Result<(Transaction, Transaction)>
         .find(|utxo| utxo.spendable && utxo.amount >= Amount::from_sat(MIN_FUNDING_SAT))
         .context("No mature UTXO large enough to fund the package")?;
 
+    // The parent spends its input entirely into a single output, so it pays no
+    // fee at all.
     let parent_output = wallet.get_new_address(None, None)?.assume_checked();
 
     let parent = sign(
@@ -136,6 +162,7 @@ fn build_zero_fee_package(wallet: &Client) -> Result<(Transaction, Transaction)>
 
     let parent_txid = parent.compute_txid();
 
+    // The child spends the parent's only output and pays for both.
     let child_output = wallet.get_new_address(None, None)?.assume_checked();
 
     let child = sign(
@@ -164,156 +191,19 @@ fn build_zero_fee_package(wallet: &Client) -> Result<(Transaction, Transaction)>
     Ok((parent, child))
 }
 
-/// The esplora backend can submit a package too.
+/// Asserts the whole [`IServerBitcoinRpc::submit_package`] contract against
+/// whichever backend is passed in, so that both are held to the same standard.
 ///
-/// `walletv2` batches pay nothing on the parent, so package submission is not
-/// an optimisation for them — it is the only way they reach the network at all.
-/// A guardian running esplora therefore needs an instance exposing
-/// `POST /txs/package`, which is why the pinned esplora build was moved off a
-/// fork and onto current upstream.
-#[tokio::test(flavor = "multi_thread")]
-async fn esplora_package_submission_accepts_a_zero_fee_parent() -> Result<()> {
-    let Some(url) = bitcoind_url() else {
-        return Ok(());
-    };
-
-    let esplora_port =
-        std::env::var(FM_PORT_ESPLORA).expect("Must have the esplora port defined for real tests");
-
-    let esplora = EsploraClient::new(
-        &format!("http://127.0.0.1:{esplora_port}")
-            .parse::<SafeUrl>()
-            .expect("Failed to parse the esplora url"),
-    )?;
-
-    let wallet = Client::new(
-        url.without_auth()
-            .map_err(|()| anyhow!("Failed to strip auth from the bitcoind url"))?
-            .as_str(),
-        Auth::UserPass(
-            url.username().to_owned(),
-            url.password()
-                .context("Bitcoind url has no password")?
-                .to_owned(),
-        ),
-    )?;
-
-    let (parent, child) = build_zero_fee_package(&wallet)?;
+/// `wallet` talks to bitcoind directly and is only used to observe the results,
+/// which keeps the assertions independent of how quickly a backend's own view
+/// of the chain catches up.
+async fn assert_package_submission_contract(
+    rpc: &impl IServerBitcoinRpc,
+    wallet: &Client,
+) -> Result<()> {
+    let (parent, child) = build_zero_fee_package(wallet)?;
 
     let parent_txid = parent.compute_txid();
-    let child_txid = child.compute_txid();
-
-    assert!(
-        esplora.submit_transaction(parent.clone()).await.is_err(),
-        "The zero-fee parent was accepted on its own through esplora, so this test would pass \
-         even if package submission did nothing"
-    );
-
-    esplora.submit_package(vec![parent, child]).await.context(
-        "Esplora package submission failed. Does the pinned esplora expose /txs/package?",
-    )?;
-
-    let mempool = wallet.get_raw_mempool()?;
-
-    assert!(
-        mempool.contains(&parent_txid) && mempool.contains(&child_txid),
-        "Package submitted through esplora did not reach the mempool"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
-    let Some(url) = bitcoind_url() else {
-        // Skipped unless running against real daemons.
-        return Ok(());
-    };
-
-    let username = url.username().to_owned();
-    let password = url
-        .password()
-        .context("Bitcoind url has no password")?
-        .to_owned();
-    let host = url
-        .without_auth()
-        .map_err(|()| anyhow!("Failed to strip auth from the bitcoind url"))?;
-
-    let wallet = Client::new(
-        host.as_str(),
-        Auth::UserPass(username.clone(), password.clone()),
-    )?;
-
-    let rpc = BitcoindClient::new(username, password, &url)?;
-
-    // Make sure the wallet holds a mature, spendable coin.
-    let funding_address = wallet.get_new_address(None, None)?.assume_checked();
-
-    if wallet.get_balance(None, None)? < Amount::from_sat(MIN_FUNDING_SAT) {
-        wallet.generate_to_address(101, &funding_address)?;
-    }
-
-    let utxo = wallet
-        .list_unspent(Some(1), None, None, None, None)?
-        .into_iter()
-        .find(|utxo| utxo.spendable && utxo.amount >= Amount::from_sat(MIN_FUNDING_SAT))
-        .context("No mature UTXO large enough to fund the package")?;
-
-    // The parent spends its input entirely into a single output, so it pays no
-    // fee at all — exactly the shape walletv2's batch parent will have.
-    let parent_output = wallet.get_new_address(None, None)?.assume_checked();
-
-    let parent = sign(
-        &wallet,
-        &Transaction {
-            version: Version::TWO,
-            lock_time: LockTime::ZERO,
-            input: vec![unsigned_txin(OutPoint {
-                txid: utxo.txid,
-                vout: utxo.vout,
-            })],
-            output: vec![TxOut {
-                value: utxo.amount,
-                script_pubkey: parent_output.script_pubkey(),
-            }],
-        },
-        &[SignRawTransactionInput {
-            txid: utxo.txid,
-            vout: utxo.vout,
-            script_pub_key: utxo.script_pub_key.clone(),
-            redeem_script: None,
-            amount: Some(utxo.amount),
-        }],
-    )?;
-
-    let parent_txid = parent.compute_txid();
-
-    // The child spends the parent's only output and pays for both.
-    let child_output = wallet.get_new_address(None, None)?.assume_checked();
-
-    let child = sign(
-        &wallet,
-        &Transaction {
-            version: Version::TWO,
-            lock_time: LockTime::ZERO,
-            input: vec![unsigned_txin(OutPoint {
-                txid: parent_txid,
-                vout: 0,
-            })],
-            output: vec![TxOut {
-                value: utxo.amount - Amount::from_sat(CHILD_FEE_SAT),
-                script_pubkey: child_output.script_pubkey(),
-            }],
-        },
-        &[SignRawTransactionInput {
-            txid: parent_txid,
-            vout: 0,
-            script_pub_key: parent.output[0].script_pubkey.clone(),
-            redeem_script: None,
-            amount: Some(parent.output[0].value),
-        }],
-    )?;
-
     let child_txid = child.compute_txid();
 
     // Ablation: without this, the test could pass simply because both
@@ -330,7 +220,9 @@ async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
         "The rejected parent still entered the mempool"
     );
 
-    rpc.submit_package(vec![parent.clone(), child.clone()])
+    let package = [parent, child];
+
+    rpc.submit_package(&package)
         .await
         .context("Package submission failed")?;
 
@@ -346,9 +238,9 @@ async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
         "Child is missing from the mempool after package submission"
     );
 
-    // The broadcast loop resubmits on a timer, so submitting a package whose
+    // A broadcast loop resubmits on a timer, so submitting a package whose
     // transactions are already in the mempool must not be an error.
-    rpc.submit_package(vec![parent.clone(), child.clone()])
+    rpc.submit_package(&package)
         .await
         .context("Resubmitting a package already in the mempool must succeed")?;
 
@@ -378,11 +270,11 @@ async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
     //
     // This is deliberately not smoothed over into a success:
     // `bad-txns-inputs-missingorspent` is also how a genuinely invalidated
-    // child reports itself, which is precisely the signal the batch fallback
-    // needs to see. The broadcast loop logs and ignores, as documented on
+    // child reports itself, which is precisely the signal a batch fallback
+    // would need to see. A broadcast loop logs and ignores, as documented on
     // `IServerBitcoinRpc::submit_package`.
     let error = rpc
-        .submit_package(vec![parent, child])
+        .submit_package(&package)
         .await
         .expect_err("Resubmitting a confirmed package is expected to fail");
 
@@ -392,4 +284,53 @@ async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn package_submission_accepts_a_zero_fee_parent() -> Result<()> {
+    let Some(url) = bitcoind_url() else {
+        // Skipped unless running against real daemons.
+        return Ok(());
+    };
+
+    let wallet = wallet_client(&url)?;
+
+    let rpc = BitcoindClient::new(
+        url.username().to_owned(),
+        url.password()
+            .context("Bitcoind url has no password")?
+            .to_owned(),
+        &url,
+    )?;
+
+    assert_package_submission_contract(&rpc, &wallet).await
+}
+
+/// The esplora backend must honour the same contract.
+///
+/// A batching wallet module pays nothing on the parent, so package submission
+/// is not an optimisation for it — it is the only way its transactions reach
+/// the network at all. A guardian running esplora therefore needs an instance
+/// exposing `POST /txs/package`, which is why the pinned esplora build was
+/// moved off a fork and onto current upstream.
+#[tokio::test(flavor = "multi_thread")]
+async fn esplora_package_submission_accepts_a_zero_fee_parent() -> Result<()> {
+    let Some(url) = bitcoind_url() else {
+        return Ok(());
+    };
+
+    let wallet = wallet_client(&url)?;
+
+    let esplora_port =
+        std::env::var(FM_PORT_ESPLORA).expect("Must have the esplora port defined for real tests");
+
+    let esplora = EsploraClient::new(
+        &format!("http://127.0.0.1:{esplora_port}")
+            .parse::<SafeUrl>()
+            .expect("Failed to parse the esplora url"),
+    )?;
+
+    assert_package_submission_contract(&esplora, &wallet)
+        .await
+        .context("Does the pinned esplora expose /txs/package?")
 }

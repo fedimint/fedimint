@@ -155,7 +155,13 @@ impl ServerBitcoinRpcMonitor {
         self.rpc.submit_transaction(tx).await
     }
 
-    pub async fn submit_package(&self, transactions: Vec<Transaction>) -> Result<()> {
+    /// Submits a package of related transactions, which must be topologically
+    /// sorted with parents before children.
+    ///
+    /// See [`IServerBitcoinRpc::submit_package`] for the acceptance and
+    /// resubmission contract, which this method does not alter beyond
+    /// requiring a connected backend.
+    pub async fn submit_package(&self, transactions: &[Transaction]) -> Result<()> {
         ensure!(
             self.status_receiver.borrow().is_some(),
             "Not connected to bitcoin backend"
@@ -272,7 +278,14 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// for the child, whose input the parent's confirmation consumed. That is
     /// deliberately not smoothed over, since the latter is also how a genuinely
     /// invalidated child reports itself.
-    async fn submit_package(&self, transactions: Vec<Transaction>) -> Result<()>;
+    ///
+    /// Note that a parent paying *no* fee at all is a stronger requirement than
+    /// package fee-bumping in general. Package validation still applies the
+    /// minimum relay feerate to each transaction individually, so a zero-fee
+    /// parent is only accepted by recent Bitcoin Core versions, or when the
+    /// package uses TRUC (version 3) transactions. Backends are not probed for
+    /// this, so callers relying on it should expect an error from older nodes.
+    async fn submit_package(&self, transactions: &[Transaction]) -> Result<()>;
 
     /// Returns the node's estimated chain sync percentage as a float between
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.

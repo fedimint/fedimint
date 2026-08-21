@@ -92,7 +92,7 @@ impl IServerBitcoinRpc for BitcoindClient {
         }
     }
 
-    async fn submit_package(&self, transactions: Vec<Transaction>) -> anyhow::Result<()> {
+    async fn submit_package(&self, transactions: &[Transaction]) -> anyhow::Result<()> {
         let raw_txs = serde_json::Value::Array(
             transactions
                 .iter()
@@ -104,16 +104,16 @@ impl IServerBitcoinRpc for BitcoindClient {
         // call directly. The response is an object whose `package_msg` is
         // "success" only when every transaction was accepted into, or was
         // already in, the mempool.
-        let response = match block_in_place(|| {
+        //
+        // Note there is no counterpart to the error code -27 that
+        // `submit_transaction` treats as success: `submitpackage` reports an
+        // already-mined transaction as a per-transaction entry in `tx-results`,
+        // not as an RPC error, and that entry is deliberately surfaced as a
+        // failure. See `IServerBitcoinRpc::submit_package`.
+        let response = block_in_place(|| {
             self.client
                 .call::<serde_json::Value>("submitpackage", &[raw_txs])
-        }) {
-            // Bitcoin core's RPC will return error code -27 if a transaction is already in a
-            // block. As in `submit_transaction`, this is a success case for our purposes.
-            Err(JsonRpc(Rpc(e))) if e.code == -27 => return Ok(()),
-            Err(e) => return Err(e.into()),
-            Ok(response) => response,
-        };
+        })?;
 
         let package_msg = response
             .get("package_msg")

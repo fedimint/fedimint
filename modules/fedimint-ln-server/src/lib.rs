@@ -1734,7 +1734,7 @@ mod tests {
 
         async fn submit_package(
             &self,
-            _transactions: Vec<fedimint_core::bitcoin::Transaction>,
+            _transactions: &[fedimint_core::bitcoin::Transaction],
         ) -> anyhow::Result<()> {
             // No-op for mock
             Ok(())

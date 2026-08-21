@@ -108,7 +108,7 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
         )
     }
 
-    async fn submit_package(&self, transactions: Vec<Transaction>) -> Result<()> {
+    async fn submit_package(&self, transactions: &[Transaction]) -> Result<()> {
         tracked_call!(
             self,
             "submit_package",

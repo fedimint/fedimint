@@ -2,9 +2,12 @@
 # Runs the 1p1c package submission test against a real bitcoind.
 #
 # The test submits a zero-fee parent together with a fee-paying child and
-# asserts the package is accepted where the parent alone is rejected. This is
-# the property walletv2's pinning fix depends on (see PINNING.md). The mock
-# bitcoin backend has no mempool policy, so this only works against a real node.
+# asserts the package is accepted where the parent alone is rejected, which is
+# the property a future batching wallet module would depend on. The mock bitcoin
+# backend has no mempool policy, so this only works against a real node.
+#
+# Both tests share one bitcoind wallet and mine blocks, so --test-threads=1 below
+# is load bearing rather than a performance choice.
 #
 # Any extra arguments are forwarded to `cargo nextest run`.
 

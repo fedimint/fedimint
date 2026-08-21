@@ -407,11 +407,11 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         Ok(())
     }
 
-    async fn submit_package(&self, transactions: Vec<bitcoin::Transaction>) -> anyhow::Result<()> {
+    async fn submit_package(&self, transactions: &[bitcoin::Transaction]) -> anyhow::Result<()> {
         // The mock backend enforces no mempool policy, so submitting a package
         // is equivalent to submitting its transactions in topological order.
         for transaction in transactions {
-            self.submit_transaction(transaction).await?;
+            self.submit_transaction(transaction.clone()).await?;
         }
 
         Ok(())
