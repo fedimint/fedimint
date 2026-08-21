@@ -82,6 +82,12 @@ impl Amount {
         Ok(Self::from(btc_amt))
     }
 
+    pub fn saturating_add(self, other: Self) -> Self {
+        Self {
+            msats: self.msats.saturating_add(other.msats),
+        }
+    }
+
     pub fn saturating_sub(self, other: Self) -> Self {
         Self {
             msats: self.msats.saturating_sub(other.msats),

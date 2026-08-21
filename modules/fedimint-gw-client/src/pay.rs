@@ -650,7 +650,10 @@ impl GatewayPayInvoice {
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
         let gateway_fee = routing_fees.to_amount(&payment_amount);
-        let necessary_contract_amount = payment_amount + gateway_fee;
+        // Saturating: our own configured fee is bounded, but this rate is read
+        // back from a federation-served announcement, so a fee that overflows
+        // the sum must fail the funding check below rather than panic us.
+        let necessary_contract_amount = payment_amount.saturating_add(gateway_fee);
         if account.amount < necessary_contract_amount {
             return Err(OutgoingContractError::Underfunded(
                 necessary_contract_amount,
