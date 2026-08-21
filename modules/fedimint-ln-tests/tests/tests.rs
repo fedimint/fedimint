@@ -82,13 +82,19 @@ fn fixtures() -> Fixtures {
 /// activates — hence the non-degraded fixture.
 #[tokio::test(flavor = "multi_thread")]
 async fn consensus_version_voting_activates() -> anyhow::Result<()> {
-    let fed = fixtures().new_fed_not_degraded().await;
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
     let client = fed.new_client().await;
 
     retry(
         "waiting for lnv1 consensus version activation",
         aggressive_backoff_long(),
         || async {
+            // The guardians only create units while they have items to order, so we
+            // mine for as long as we wait: a block is a block count vote, hence every
+            // peer produces an item and the votes we wait on get ordered.
+            fixtures.bitcoin().mine_blocks(1).await;
+
             let active_version = client
                 .get_first_module::<LightningClientModule>()?
                 .api

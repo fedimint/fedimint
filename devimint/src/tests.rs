@@ -708,13 +708,19 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
-            try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
+            try_join!(
+                stress_test_fed(&dev_fed, None),
+                client.wait_session(&dev_fed.bitcoind)
+            )?;
 
             for path in paths.iter().skip(1) {
                 dev_fed.fed.restart_all_with_bin(process_mgr, path).await?;
 
                 // stress test with all peers online
-                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
+                try_join!(
+                    stress_test_fed(&dev_fed, None),
+                    client.wait_session(&dev_fed.bitcoind)
+                )?;
 
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 info!(
@@ -761,7 +767,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             try_join!(
                 stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
-                wait_session_client.wait_session()
+                wait_session_client.wait_session(&dev_fed.bitcoind)
             )?;
 
             for path in paths.iter().skip(1) {
@@ -770,7 +776,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 info!("upgraded fedimint-cli to version: {}", fedimint_cli_version);
                 try_join!(
                     stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
-                    wait_session_client.wait_session()
+                    wait_session_client.wait_session(&dev_fed.bitcoind)
                 )?;
                 info!(
                     "### fedimint-cli passed stress test for version {}",
@@ -807,7 +813,10 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
-            try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
+            try_join!(
+                stress_test_fed(&dev_fed, None),
+                client.wait_session(&dev_fed.bitcoind)
+            )?;
 
             for i in 1..gatewayd_paths.len() {
                 info!(
@@ -827,7 +836,10 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 .await?;
 
                 dev_fed.fed.await_gateways_registered().await?;
-                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
+                try_join!(
+                    stress_test_fed(&dev_fed, None),
+                    client.wait_session(&dev_fed.bitcoind)
+                )?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
                 info!(
@@ -2156,7 +2168,9 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // session outcome in our DB. If there ever is another problem here: wait for
     // fedimintd-0 specifically to acknowledge the session switch. In practice this
     // should be sufficiently synchronous though.
-    client.wait_session_outcome(last_tx_session).await?;
+    client
+        .wait_session_outcome(&bitcoind, last_tx_session)
+        .await?;
 
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);

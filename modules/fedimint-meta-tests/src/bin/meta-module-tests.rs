@@ -3,6 +3,7 @@ use std::future::Future;
 use anyhow::{Result, bail};
 use clap::Parser;
 use devimint::cmd;
+use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use devimint::util::{FedimintdCmd, poll_simple};
 use devimint::version_constants::VERSION_0_13_0_ALPHA;
@@ -32,6 +33,8 @@ async fn sanity_tests() -> anyhow::Result<()> {
                 .await?
                 .new_joined_client("meta-module-client")
                 .await?;
+
+            let bitcoind = &dev_fed.bitcoind().await?;
 
             async fn get_consensus(client: &Client) -> anyhow::Result<serde_json::Value> {
                 cmd!(client, "module", "meta", "get").out_json().await
@@ -110,6 +113,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
 
             pub async fn poll_value<Fut>(
                 name: &str,
+                bitcoind: &Bitcoind,
                 f: impl Fn() -> Fut,
                 expected_value: serde_json::Value,
             ) -> Result<serde_json::Value>
@@ -117,6 +121,13 @@ async fn sanity_tests() -> anyhow::Result<()> {
                 Fut: Future<Output = Result<serde_json::Value, anyhow::Error>>,
             {
                 poll_simple(name, || async {
+                    // A submission only ever reaches the peer it is submitted to, and
+                    // the guardians only create units while they have items to order,
+                    // so the other peers have no reason to grow the dag far enough to
+                    // order it. We mine for as long as we wait to give every peer a
+                    // block count vote to propose.
+                    bitcoind.mine_blocks_no_wait(1).await?;
+
                     let value = f().await?;
                     if value == expected_value {
                         Ok(value)
@@ -153,6 +164,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
             info!("Checking submission");
             poll_value(
                 "submission visible on same peer",
+                bitcoind,
                 || async { get_submissions(&client, PeerId::from(1)).await },
                 json! {
                     {  "1": submission_value }
@@ -161,6 +173,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
             .await?;
             poll_value(
                 "submission visible on a different peer",
+                bitcoind,
                 || async { get_submissions(&client, PeerId::from(3)).await },
                 json! {
                     {  "1": submission_value }
@@ -179,6 +192,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
             info!(expected = %submission_value, "Checking consensus");
             if let Err(e) = poll_value(
                 "consensus set",
+                bitcoind,
                 || async { get_consensus(&client).await },
                 json! {
                     {
@@ -197,6 +211,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
             // minority vote should be still visible
             poll_value(
                 "minor submission visible",
+                bitcoind,
                 || async { get_submissions(&client, PeerId::from(0)).await },
                 json! {
                     {  "0": minority_submission_value}
@@ -209,6 +224,7 @@ async fn sanity_tests() -> anyhow::Result<()> {
             submit(&client, PeerId::from(0), &submission_value).await?;
             poll_value(
                 "submission cleared",
+                bitcoind,
                 || async { get_submissions(&client, PeerId::from(1)).await },
                 json! { {} },
             )
