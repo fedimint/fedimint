@@ -849,14 +849,25 @@ impl IGatewayConnection for Connection {
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
             .map_err(|e| ServerError::InvalidResponse(e.into()))?;
-        match StatusCode::from_u16(response.status).map_err(|e| {
-            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
-        })? {
-            StatusCode::OK => Ok(response.body),
-            status => Err(ServerError::ServerError(anyhow::anyhow!(
+        parse_gateway_response(response)
+    }
+}
+
+fn parse_gateway_response(response: IrohGatewayResponse) -> ServerResult<Value> {
+    match StatusCode::from_u16(response.status)
+        .map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e)))?
+    {
+        StatusCode::OK => Ok(response.body),
+        status => {
+            if let Some(error) = ServerError::from_gateway_response(status.as_u16(), response.body)
+            {
+                return Err(error);
+            }
+
+            Err(ServerError::ServerError(anyhow::anyhow!(
                 "Server returned status code: {}",
                 status
-            ))),
+            )))
         }
     }
 }
@@ -868,12 +879,41 @@ mod tests {
     use fedimint_core::PeerId;
     use fedimint_core::config::FederationId;
     use fedimint_core::invite_code::InviteCode;
-    use fedimint_core::module::ApiMethod;
+    use fedimint_core::module::{ApiMethod, GatewayErrorCode, IrohGatewayResponse};
     use fedimint_core::util::SafeUrl;
 
     use super::{
-        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
+        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, parse_gateway_response,
+        request_timeout_for_method,
     };
+    use crate::error::ServerError;
+
+    #[test]
+    fn iroh_gateway_response_preserves_only_recognized_structured_errors() {
+        let response = |body| IrohGatewayResponse { status: 503, body };
+
+        assert!(matches!(
+            parse_gateway_response(response(serde_json::json!({
+                "version": 1,
+                "error": "federation_unreachable"
+            }))),
+            Err(ServerError::GatewayResponse {
+                status: 503,
+                response
+            }) if response.error == GatewayErrorCode::FederationUnreachable
+        ));
+        for body in [
+            serde_json::json!({"version": 2, "error": "federation_unreachable"}),
+            serde_json::json!({"version": 1, "error": "future_error"}),
+            serde_json::json!({"version": 1}),
+            serde_json::Value::Null,
+        ] {
+            assert!(matches!(
+                parse_gateway_response(response(body)),
+                Err(ServerError::ServerError(_))
+            ));
+        }
+    }
     use crate::{iroh_next_endpoint_url, is_iroh_next_endpoint_url, preserve_iroh_next_marker};
 
     const TEST_ENDPOINT_ID: &str =

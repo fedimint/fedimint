@@ -55,5 +55,9 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
+[dev-dependencies]
+fedimint-client = { workspace = true }
+fedimint-connectors = { workspace = true }
+
 [lints]
 workspace = true
