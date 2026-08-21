@@ -385,11 +385,7 @@ impl GatewayClientModuleV2 {
         // prevent replay attacks with a previously cancelled outgoing contract
         let operation_id = OperationId::from_encodable(&payload.contract.clone());
 
-        if self.client_ctx.operation_exists(operation_id).await {
-            return Ok(self.subscribe_send(operation_id).await);
-        }
-
-        // Since the following four checks may only fail due to client side
+        // Since the following checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         ensure!(
@@ -410,6 +406,13 @@ impl GatewayClientModuleV2 {
                 .is_ok(),
             "Invalid auth signature for the invoice data"
         );
+
+        // The operation id is derived from the contract, which is public in the
+        // funding transaction, and joining the operation yields its preimage. So
+        // the join belongs behind the signature above.
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Ok(self.subscribe_send(operation_id).await);
+        }
 
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
