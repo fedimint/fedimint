@@ -3,14 +3,14 @@ use maud::{Markup, PreEscaped, html};
 use qrcode::QrCode;
 
 // Card with invite code text and copy button
-pub fn render(invite_code: &str, session_count: u64) -> Markup {
+pub fn render(invite_code: &str, ready_for_onchain_receive: bool) -> Markup {
     html! {
         div class="card h-100" {
             div class="card-header dashboard-header" { "Invite Code" }
             div class="card-body" {
-                @if session_count == 0 {
+                @if !ready_for_onchain_receive {
                     div class="alert alert-warning" {
-                        "The invite code will be available once the federation has completed its first consensus session."
+                        "The invite code will be available once the federation is ready to receive on-chain deposits."
                     }
                 } @else {
                     @let observer_link = format!("https://observer.fedimint.org/nostr?check={invite_code}");
