@@ -39,7 +39,7 @@ use tracing::{Level, debug, error, info, instrument, trace, warn};
 use crate::LOG_CONSENSUS;
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData, UnorderedBatches};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
@@ -220,6 +220,11 @@ impl ConsensusEngine {
         connections: DynP2PConnections<P2PMessage>,
         session_index: u64,
     ) -> Option<()> {
+        // A peer only creates units while it either has items to order itself or a
+        // batch of its own still awaits ordering, hence the broadcast is quiescent
+        // on an idle federation and a session can take arbitrarily long in wall
+        // clock time to reach its round limit.
+        //
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a naive secp256k1 threshold signature for the header of session
@@ -287,6 +292,8 @@ impl ConsensusEngine {
         let (timestamp_sender, timestamp_receiver) = async_channel::unbounded();
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
+        let unordered_batches = UnorderedBatches::default();
+
         // Create channels for P2P session sync
         let (signed_outcomes_sender, signed_outcomes_receiver) = async_channel::unbounded();
         let (signatures_sender, signatures_receiver) = async_channel::unbounded();
@@ -301,8 +308,9 @@ impl ConsensusEngine {
                         signature_receiver,
                         timestamp_sender,
                         self.is_recovery().await,
+                        unordered_batches.clone(),
                     ),
-                    FinalizationHandler::new(unit_data_sender),
+                    FinalizationHandler::new(unit_data_sender, self.identity(), unordered_batches),
                     BackupWriter::new(self.db.clone()).await,
                     BackupReader::new(self.db.clone()),
                 ),
