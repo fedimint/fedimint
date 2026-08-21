@@ -1,7 +1,5 @@
 use anyhow::ensure;
-use devimint::version_constants::{
-    VERSION_0_11_0_ALPHA, VERSION_0_13_0_ALPHA,
-};
+use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_13_0_ALPHA};
 use devimint::{cmd, util};
 use fedimint_walletv2_tests::{
     FinalSendState, await_consensus_block_count, await_deposits, await_no_pending_txs,
