@@ -383,7 +383,17 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        if let Ok(block_count_vote) = self.get_block_count() {
+        // We only propose a vote that our peers accept, mirroring the checks in
+        // process_consensus_item. Proposing a redundant vote every second would
+        // keep the atomic broadcast creating units on an idle federation.
+        let our_block_count_vote = dbtx
+            .get_value(&BlockCountVoteKey(self.our_peer_id))
+            .await
+            .unwrap_or(0);
+
+        if let Ok(block_count_vote) = self.get_block_count()
+            && block_count_vote > our_block_count_vote
+        {
             trace!(target: LOG_MODULE_LN, ?block_count_vote, "Proposing block count");
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
@@ -395,10 +405,17 @@ impl ServerModule for Lightning {
         // before we ever propose the item is what keeps that from happening.
         let active_consensus_version = self.consensus_module_consensus_version(dbtx).await;
 
+        let our_consensus_version_vote = dbtx
+            .get_value(&ConsensusVersionVoteKey(self.our_peer_id))
+            .await
+            .unwrap_or(ModuleConsensusVersion::new(2, 0));
+
         if let Some(supported_consensus_version) = *self.peer_supported_consensus_version.borrow()
             // Only vote if the commonly supported version is higher than the
             // currently active one
             && active_consensus_version < supported_consensus_version
+            // and higher than the vote our peers have already recorded for us
+            && our_consensus_version_vote < supported_consensus_version
         {
             items.push(LightningConsensusItem::ModuleConsensusVersion(
                 supported_consensus_version,
