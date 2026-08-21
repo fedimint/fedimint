@@ -133,7 +133,16 @@ pub enum GatewayExtReceiveStates {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GatewayMeta {
-    Pay,
+    /// Carries the `preimage_auth` of the request that started the payment.
+    ///
+    /// The operation id of a payment is its contract id, which is public in the
+    /// funding transaction, and joining the operation yields the preimage. So
+    /// the operation has to record who is allowed to join it. Entries written
+    /// before this field existed decode as an error and are treated as
+    /// unauthorized, which only affects payments in flight across an upgrade.
+    Pay {
+        preimage_auth: sha256::Hash,
+    },
     Receive,
 }
 
@@ -882,26 +891,23 @@ impl GatewayClientModule {
                         // and would have us buy the preimage a second time, spending the
                         // gateway's funds twice against a contract that only pays out once.
                         // Hand back the operation already under way instead.
-                        if self
-                            .client_ctx
-                            .get_operation_dbtx(dbtx, operation_id)
-                            .await
-                            .is_some()
+                        if let Some(entry) =
+                            self.client_ctx.get_operation_dbtx(dbtx, operation_id).await
                         {
                             // This operation id yields the preimage, so only the
-                            // caller that started the payment may have it. The
+                            // caller that started the payment may join it. The
                             // state machine's own check comes too late for a
-                            // request that never reaches one.
-                            if !self
-                                .lightning_manager
-                                .matches_preimage_authentication(
-                                    payload.payment_data.payment_hash(),
-                                    payload.preimage_auth,
-                                )
-                                .await
-                            {
+                            // request that never reaches one, and it is keyed on
+                            // `payment_data`, which the caller supplies
+                            // independently of `contract_id` -- so it would answer
+                            // for the wrong payment here.
+                            if !matches!(
+                                entry.try_meta::<GatewayMeta>(),
+                                Ok(GatewayMeta::Pay { preimage_auth })
+                                    if preimage_auth == payload.preimage_auth
+                            ) {
                                 anyhow::bail!(
-                                    "Not authorized to receive the preimage for contract {}, or its payment has not established an authentication yet",
+                                    "Not authorized to receive the preimage for contract {}",
                                     payload.contract_id
                                 );
                             }
@@ -941,7 +947,9 @@ impl GatewayClientModule {
                                             dbtx,
                                             operation_id,
                                             KIND.as_str(),
-                                            GatewayMeta::Pay,
+                                            GatewayMeta::Pay {
+                                                preimage_auth: payload.preimage_auth,
+                                            },
                                         )
                                         .await;
                                 }
@@ -1238,18 +1246,6 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError>;
-
-    /// Returns whether `preimage_auth` matches the one pinned for
-    /// `payment_hash`, and `false` if nothing is pinned yet.
-    ///
-    /// Unlike [`Self::verify_preimage_authentication`] this never pins, so it
-    /// is safe to call before the contract is validated -- pinning there
-    /// would let anyone lock out an arbitrary payment hash.
-    async fn matches_preimage_authentication(
-        &self,
-        payment_hash: sha256::Hash,
-        preimage_auth: sha256::Hash,
-    ) -> bool;
 
     /// Verify that the lightning node supports private payments if a pruned
     /// invoice is supplied.

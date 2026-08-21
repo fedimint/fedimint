@@ -426,7 +426,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let tx = TransactionBuilder::new().with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
             );
-            let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {};
+            let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {
+                preimage_auth: sha256::Hash::hash(&[]),
+            };
             let operation_id = OperationId(*invoice.payment_hash().as_ref());
             let txid = gateway_client
                 .finalize_and_submit_transaction(
@@ -2161,8 +2163,8 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
 ///
 /// Recognising it is only correct for the caller the payment belongs to, since
 /// the returned operation yields the preimage and contract ids are visible to
-/// every member of the federation. The duplicate is joined only on a matching
-/// `preimage_auth`.
+/// every member of the federation. The operation records the `preimage_auth`
+/// that started it, and only a request carrying that same one may join it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow::Result<()> {
     single_federation_test(
@@ -2217,6 +2219,35 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
                     .is_err(),
                 "a duplicate request must not be answered with someone else's operation"
             );
+
+            // The join is keyed on the authentication the operation recorded,
+            // not on the `payment_data` the caller hands us alongside a
+            // `contract_id`. Those two are independent fields of the payload, so
+            // an authentication the caller holds for some other invoice must not
+            // buy them a join here.
+            let theirs_invoice = other_lightning_client.invoice(sats(250), None)?;
+            assert!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                        payment_data: get_payment_data(selected_gateway.clone(), theirs_invoice),
+                        ..payload(theirs)
+                    })
+                    .await
+                    .is_err(),
+                "an authentication for a different invoice must not join this contract"
+            );
+
+            // The authentication is recorded when the operation is created, so
+            // our own retry joins right away instead of having to wait for the
+            // payment to get far enough along to establish one.
+            assert_eq!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(payload(ours))
+                    .await?,
+                first,
+                "our own retry joins the payment already in flight"
+            );
+
             assert_eq!(
                 gateway_client
                     .operation_log()
@@ -2235,8 +2266,8 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
 
-            // The state machine pins the authentication, so only now is it
-            // certainly on record and the rejection certainly a mismatch.
+            // Still gated once the payment has completed and the operation has
+            // the preimage sitting on it for the taking.
             assert!(
                 gateway_module
                     .gateway_pay_bolt11_invoice(payload(theirs))
@@ -2249,7 +2280,7 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
                     .gateway_pay_bolt11_invoice(payload(ours))
                     .await?,
                 first,
-                "our own retry still joins the payment already in flight"
+                "our own retry still joins the completed payment"
             );
 
             // One purchase of the preimage, so exactly one claim of the contract.
