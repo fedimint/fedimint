@@ -10,14 +10,14 @@ use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, TransactionId};
 use fedimint_escrow_common::config::{EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate};
 use fedimint_escrow_common::{
     ContractHash, EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowMessage,
-    EscrowOutput, EscrowOutputError, EscrowStatus, Outcome, PendingArbiterFee, Resolution,
+    EscrowOutput, EscrowOutputError, EscrowStatus, Outcome, PendingArbiterFeePool, Resolution,
     compute_contract_hash, compute_escrow_message,
 };
 use fedimint_server_core::ServerModule;
 use rand::rngs::OsRng;
 
 use crate::Escrow;
-use crate::db::{EscrowContractKey, EscrowOutputOutcomeKey, PendingArbiterFeeKey};
+use crate::db::{EscrowContractKey, EscrowOutputOutcomeKey, PendingArbiterFeePoolKey};
 
 fn make_escrow() -> Escrow {
     Escrow::new(EscrowConfig {
@@ -528,10 +528,10 @@ async fn test_arbiter_release_after_timeout_valid() {
     );
 
     let pending = module_dbtx
-        .get_value(&PendingArbiterFeeKey(contract.escrow_id))
+        .get_value(&PendingArbiterFeePoolKey(contract.escrow_id))
         .await;
     assert!(pending.is_some());
-    assert_eq!(pending.unwrap().fee_amount, contract.arbiter_fee);
+    assert_eq!(pending.unwrap().remaining_amount, contract.arbiter_fee);
 
     // Contract status updated
     let stored = module_dbtx
@@ -686,11 +686,11 @@ async fn test_fee_claim_valid() {
 
     module_dbtx
         .insert_entry(
-            &PendingArbiterFeeKey(contract.escrow_id),
-            &PendingArbiterFee {
+            &PendingArbiterFeePoolKey(contract.escrow_id),
+            &PendingArbiterFeePool {
                 escrow_id: contract.escrow_id,
-                arbiter_key: arbiter_kp.public_key(),
-                fee_amount: contract.arbiter_fee,
+                remaining_arbiters: vec![arbiter_kp.public_key()],
+                remaining_amount: contract.arbiter_fee,
             },
         )
         .await;
@@ -699,6 +699,7 @@ async fn test_fee_claim_valid() {
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
         resolution: Resolution::ArbiterFeeClaim {
+            arbiter_claim_pubkey: arbiter_kp.public_key(),
             arbiter_signature: sig,
         },
     };
@@ -716,7 +717,7 @@ async fn test_fee_claim_valid() {
     );
 
     let pending = module_dbtx
-        .get_value(&PendingArbiterFeeKey(contract.escrow_id))
+        .get_value(&PendingArbiterFeePoolKey(contract.escrow_id))
         .await;
 
     assert!(pending.is_none());
@@ -742,11 +743,11 @@ async fn test_fee_claim_wrong_signature_rejected() {
     let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
     module_dbtx
         .insert_entry(
-            &PendingArbiterFeeKey(contract.escrow_id),
-            &PendingArbiterFee {
+            &PendingArbiterFeePoolKey(contract.escrow_id),
+            &PendingArbiterFeePool {
                 escrow_id: contract.escrow_id,
-                arbiter_key: arbiter_kp.public_key(),
-                fee_amount: contract.arbiter_fee,
+                remaining_arbiters: vec![arbiter_kp.public_key()],
+                remaining_amount: contract.arbiter_fee,
             },
         )
         .await;
@@ -756,6 +757,7 @@ async fn test_fee_claim_wrong_signature_rejected() {
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
         resolution: Resolution::ArbiterFeeClaim {
+            arbiter_claim_pubkey: arbiter_kp.public_key(),
             arbiter_signature: sig,
         },
     };
@@ -787,11 +789,11 @@ async fn test_fee_claim_wrong_amount_signature_rejected() {
     let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
     module_dbtx
         .insert_entry(
-            &PendingArbiterFeeKey(contract.escrow_id),
-            &PendingArbiterFee {
+            &PendingArbiterFeePoolKey(contract.escrow_id),
+            &PendingArbiterFeePool {
                 escrow_id: contract.escrow_id,
-                arbiter_key: arbiter_kp.public_key(),
-                fee_amount: contract.arbiter_fee,
+                remaining_arbiters: vec![arbiter_kp.public_key()],
+                remaining_amount: contract.arbiter_fee,
             },
         )
         .await;
@@ -800,6 +802,7 @@ async fn test_fee_claim_wrong_amount_signature_rejected() {
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
         resolution: Resolution::ArbiterFeeClaim {
+            arbiter_claim_pubkey: arbiter_kp.public_key(),
             arbiter_signature: sig,
         },
     };

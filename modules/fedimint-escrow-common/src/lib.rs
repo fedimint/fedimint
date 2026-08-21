@@ -164,6 +164,7 @@ pub enum Resolution {
         outcome: Outcome,
     },
     ArbiterFeeClaim {
+        arbiter_claim_pubkey: PublicKey,
         arbiter_signature: Signature,
     },
 }
@@ -184,10 +185,10 @@ pub enum EscrowMessage {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct PendingArbiterFee {
+pub struct PendingArbiterFeePool {
     pub escrow_id: EscrowId,
-    pub arbiter_key: PublicKey,
-    pub fee_amount: Amount,
+    pub remaining_arbiters: Vec<PublicKey>,
+    pub remaining_amount: Amount,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

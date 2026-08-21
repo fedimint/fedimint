@@ -27,7 +27,7 @@ use fedimint_escrow_common::{
     EscrowOutputOutcome, EscrowStatus, GET_CONTRACT_DOMAIN, GET_CONTRACT_ENDPOINT,
     GET_PENDING_ARBITER_FEE_ENDPOINT, GET_PENDING_FEE_DOMAIN, GetContractParams,
     GetPendinFeeParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT, LIST_CONTRACT_DOMAIN,
-    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFee, Resolution,
+    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFeePool, Resolution,
     compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
@@ -43,7 +43,7 @@ use tracing::{debug, info};
 mod db;
 use crate::db::{
     DbKeyPrefix, EscrowContractKey, EscrowContractPrefix, EscrowOutputOutcomeKey,
-    EscrowOutputOutcomePrefix, PendingArbiterFeeKey, PendingArbiterFeePrefix,
+    EscrowOutputOutcomePrefix, PendingArbiterFeePoolKey, PendingArbiterFeePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -75,12 +75,12 @@ impl ModuleInit for EscrowInit {
                         "Escrow Contracts"
                     );
                 }
-                DbKeyPrefix::PendingArbiterFee => {
+                DbKeyPrefix::PendingArbiterFeePool => {
                     push_db_pair_items!(
                         dbtx,
                         PendingArbiterFeePrefix,
                         PendingArbiterFeeKey,
-                        PendingArbiterFee,
+                        PendingArbiterFeePool,
                         contracts,
                         "Pending Arbiter Fee Claim"
                     );
@@ -232,8 +232,12 @@ impl ServerModule for Escrow {
                 self.handle_arbiter_decision(input, dbtx, arbiter_signature, outcome)
                     .await
             }
-            Resolution::ArbiterFeeClaim { arbiter_signature } => {
-                self.handle_fee_claim(dbtx, input, arbiter_signature).await
+            Resolution::ArbiterFeeClaim {
+                arbiter_claim_pubkey,
+                arbiter_signature,
+            } => {
+                self.handle_fee_claim(dbtx, input, arbiter_claim_pubkey, arbiter_signature)
+                    .await
             }
         }
     }
@@ -336,26 +340,31 @@ impl ServerModule for Escrow {
                 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
+
                     let Some(contract) = dbtx
-                        .get_value(&EscrowContractKey(params.escrow_id)).await
-                    else { return Ok(None) };
+                        .get_value(&EscrowContractKey(params.escrow_id))
+                        .await
+                    else {
+                        return Ok(None);
+                    };
 
                     let msg = compute_proof_message(
                         GET_CONTRACT_DOMAIN.as_bytes(),
                         &params.escrow_id.0,
                         &params.pubkey,
-                        Some(&contract.federation_id)
+                        Some(&contract.federation_id),
                     );
 
-                    let participant = params.pubkey == contract.buyer_key ||
-                        params.pubkey == contract.seller_key ||
-                        params.pubkey == contract.arbiter_key;
+                    let participant = params.pubkey == contract.buyer_key
+                        || params.pubkey == contract.seller_key
+                        || params.pubkey == contract.arbiter_key;
 
                     if !participant {
                         return Ok(None);
                     }
 
-                    let authorized = verify_signature(&params.pubkey, msg, &params.sign);
+                    let authorized =
+                        verify_signature(&params.pubkey, msg, &params.sign);
 
                     if authorized {
                         Ok(Some(contract))
@@ -368,28 +377,39 @@ impl ServerModule for Escrow {
                 GET_PENDING_ARBITER_FEE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Escrow, context, params: GetPendinFeeParams|
-                    -> Option<PendingArbiterFee>
+                    -> Option<(PublicKey, Amount)>
                 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
 
-                    let pending_fee = match dbtx.get_value(&PendingArbiterFeeKey(params.escrow_id)).await{
-                        Some(fee) => fee,
-                        None => return Ok(None),
+                    let Some(pool) = dbtx
+                        .get_value(&PendingArbiterFeePoolKey(params.escrow_id))
+                        .await
+                    else {
+                        return Ok(None);
                     };
+
+                    let (arbiter_pubkey, share) =
+                        match get_pending_arbiter_fee(&params.pubkey, &pool) {
+                            Ok(result) => result,
+                            Err(_) => return Ok(None),
+                        };
 
                     let msg = compute_proof_message(
                         GET_PENDING_FEE_DOMAIN.as_bytes(),
                         &params.escrow_id.0,
                         &params.pubkey,
-                        None
+                        None,
                     );
-                    let authorized = verify_signature(&pending_fee.arbiter_key, msg, &params.sign);
+
+                    let authorized =
+                        verify_signature(&arbiter_pubkey, msg, &params.sign);
+
                     if !authorized {
                         return Ok(None);
                     }
 
-                    Ok(Some(pending_fee))
+                    Ok(Some((arbiter_pubkey, share)))
                 }
             },
             api_endpoint! {
@@ -413,6 +433,7 @@ impl ServerModule for Escrow {
                     }
 
                     let pubkey = params.pubkey;
+
                     let contracts: Vec<EscrowContract> = dbtx
                         .find_by_prefix(&EscrowContractPrefix)
                         .await
@@ -461,6 +482,28 @@ fn verify_signature(
     secp256k1::global::SECP256K1
         .verify_schnorr(sig, &msg, &pubkey.x_only_public_key().0)
         .is_ok()
+}
+
+fn get_pending_arbiter_fee(
+    claimer_pubkey: &PublicKey,
+    pool: &PendingArbiterFeePool,
+) -> Result<(PublicKey, Amount), EscrowInputError> {
+    let arbiter_pubkey = pool
+        .remaining_arbiters
+        .contains(claimer_pubkey)
+        .then_some(claimer_pubkey)
+        .ok_or(EscrowInputError::InvalidArbiterSignature)?;
+
+    let share = Amount::from_msats(
+        pool.remaining_amount
+            .msats
+            .checked_div(pool.remaining_arbiters.len().try_into().unwrap())
+            .ok_or(EscrowInputError::InternalError(
+                "Invalid amount share".into(),
+            ))?,
+    );
+
+    Ok((*arbiter_pubkey, share))
 }
 
 impl Escrow {
@@ -552,11 +595,11 @@ impl Escrow {
         };
 
         dbtx.insert_entry(
-            &PendingArbiterFeeKey(input.escrow_id),
-            &PendingArbiterFee {
+            &PendingArbiterFeePoolKey(input.escrow_id),
+            &PendingArbiterFeePool {
                 escrow_id: input.escrow_id,
-                arbiter_key: contract.arbiter_key,
-                fee_amount: contract.arbiter_fee,
+                remaining_arbiters: vec![contract.arbiter_key],
+                remaining_amount: contract.arbiter_fee,
             },
         )
         .await;
@@ -583,30 +626,46 @@ impl Escrow {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         input: &EscrowInput,
+        claimer_pubkey: &PublicKey,
         arbiter_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
-        let pending = dbtx
-            .get_value(&PendingArbiterFeeKey(input.escrow_id))
+        let mut pool = dbtx
+            .get_value(&PendingArbiterFeePoolKey(input.escrow_id))
             .await
             .ok_or(EscrowInputError::ContractNotFound)?;
 
+        let (arbiter_pubkey, arbiter_fee) = get_pending_arbiter_fee(claimer_pubkey, &pool)?;
+
         let arbiter_message = EscrowMessage::ArbiterFeeClaim {
             escrow_id: input.escrow_id,
-            fee_amount: pending.fee_amount,
+            fee_amount: arbiter_fee,
         };
         let msg_bytes = compute_escrow_message(&arbiter_message);
-        if !verify_signature(&pending.arbiter_key, msg_bytes, arbiter_signature) {
+        if !verify_signature(&arbiter_pubkey, msg_bytes, arbiter_signature) {
             return Err(EscrowInputError::InvalidArbiterSignature);
         }
-        dbtx.remove_entry(&PendingArbiterFeeKey(input.escrow_id))
-            .await;
+
+        pool.remaining_amount = pool
+            .remaining_amount
+            .checked_sub(arbiter_fee)
+            .ok_or(EscrowInputError::InternalError("pool underflow".into()))?;
+
+        pool.remaining_arbiters.retain(|k| *k != *claimer_pubkey);
+
+        if pool.remaining_arbiters.is_empty() {
+            dbtx.remove_entry(&PendingArbiterFeePoolKey(input.escrow_id))
+                .await;
+        } else {
+            dbtx.insert_entry(&PendingArbiterFeePoolKey(input.escrow_id), &pool)
+                .await;
+        }
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
-                amounts: Amounts::new_bitcoin(pending.fee_amount),
+                amounts: Amounts::new_bitcoin(arbiter_fee),
                 fees: Amounts::ZERO,
             },
-            pub_key: pending.arbiter_key,
+            pub_key: arbiter_pubkey,
         })
     }
 }

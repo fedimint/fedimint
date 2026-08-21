@@ -1,6 +1,8 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{OutPoint, impl_db_lookup, impl_db_record};
-use fedimint_escrow_common::{EscrowContract, EscrowId, EscrowOutputOutcome, PendingArbiterFee};
+use fedimint_escrow_common::{
+    EscrowContract, EscrowId, EscrowOutputOutcome, PendingArbiterFeePool,
+};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -8,7 +10,7 @@ use strum_macros::EnumIter;
 #[derive(Clone, EnumIter, Debug, strum_macros::Display)]
 pub enum DbKeyPrefix {
     EscrowContract = 0x01,
-    PendingArbiterFee = 0x02,
+    PendingArbiterFeePool = 0x02,
     OutputOutcome = 0x04,
 }
 
@@ -43,18 +45,18 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct PendingArbiterFeeKey(pub EscrowId);
+pub struct PendingArbiterFeePoolKey(pub EscrowId);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct PendingArbiterFeePrefix;
 
 impl_db_lookup!(
-    key = PendingArbiterFeeKey,
+    key = PendingArbiterFeePoolKey,
     query_prefix = PendingArbiterFeePrefix
 );
 
 impl_db_record!(
-    key = PendingArbiterFeeKey,
-    value = PendingArbiterFee,
-    db_prefix = DbKeyPrefix::PendingArbiterFee
+    key = PendingArbiterFeePoolKey,
+    value = PendingArbiterFeePool,
+    db_prefix = DbKeyPrefix::PendingArbiterFeePool
 );
