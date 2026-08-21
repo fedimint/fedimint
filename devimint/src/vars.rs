@@ -183,7 +183,7 @@ declare_vars! {
             Some(b) => b + GATEWAY_PORT_OFFSET_LDK2_METRICS,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK2_METRICS";
-        FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
+        FM_PORT_FAUCET: u16 = port_alloc(1)?; env: "FM_PORT_FAUCET";
         FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
         FM_PORT_RECURRINGDV2: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGDV2";
 
