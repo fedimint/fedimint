@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
 async fn wallet_recovery_test_1() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
-            let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
+            let (fed, bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
             let peg_in_amount_sats = 100_000;
 
@@ -131,6 +131,12 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     "wait for next session",
                     backoff_util::aggressive_backoff(),
                     || async {
+                        // The guardians only create units while they have items to
+                        // order, so we mine for as long as we wait: a block is a block
+                        // count vote, and ordering those votes advances the rounds
+                        // that end a session.
+                        bitcoind.mine_blocks_no_wait(1).await?;
+
                         if client_slow_pegin_session_count < client.get_session_count().await? {
                             return Ok(());
                         }

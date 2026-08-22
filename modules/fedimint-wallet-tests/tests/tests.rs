@@ -89,7 +89,7 @@ async fn peg_in<'a>(
     let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
     let initial_balance = balance_sub.ok().await?;
 
-    await_consensus_upgrade(client, fed).await?;
+    await_consensus_upgrade(client, bitcoin, fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let deposit_address = wallet_module
@@ -175,6 +175,7 @@ async fn activate_manual_voting_for_online_peers(
 
 async fn await_consensus_upgrade(
     client: &ClientHandleArc,
+    bitcoin: &dyn BitcoinTest,
     fed: &FederationTest,
 ) -> anyhow::Result<()> {
     // we need all peers to be online for automatic consensus version voting, so we
@@ -187,6 +188,12 @@ async fn await_consensus_upgrade(
         "waiting for consensus upgrade",
         fedimint_core::util::backoff_util::aggressive_backoff(),
         || async {
+            // The guardians only create units while they have items to order, and a
+            // version vote is proposed by each peer on its own schedule. We mine for
+            // as long as we wait so every peer keeps producing a block count vote,
+            // which is what carries the dag far enough to order those votes.
+            bitcoin.mine_blocks(1).await;
+
             let is_upgraded = client
                 .get_first_module::<WalletClientModule>()?
                 .btc_tx_has_no_size_limit()
@@ -259,7 +266,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
     let deposit_address = wallet_module
@@ -418,7 +425,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let starting_balance = client.get_balance_for_btc().await?;
     info!(?starting_balance, "Starting balance");
 
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let deposit_address = wallet_module
@@ -1231,7 +1238,7 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     assert_eq!(client.get_balance_for_btc().await?, sats(0));
     let deposit_address = wallet_module
@@ -1306,7 +1313,7 @@ async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow:
     let bitcoin = bitcoin.lock_exclusive().await;
     bitcoin.mine_blocks(10).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
 
@@ -1354,7 +1361,7 @@ async fn allocate_deposit_address_pooled_caps_and_reuses_round_robin() -> anyhow
     let bitcoin = bitcoin.lock_exclusive().await;
     bitcoin.mine_blocks(10).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
 
@@ -1417,7 +1424,7 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
     let bitcoin = bitcoin.lock_exclusive().await;
     bitcoin.mine_blocks(10).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
 
@@ -1474,7 +1481,7 @@ async fn allocate_deposit_address_pooled_used_address_shrinks_gap() -> anyhow::R
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client, &fed).await?;
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
 
@@ -1728,7 +1735,8 @@ async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_not_degraded().await;
     let client = fed.new_client().await;
-    await_consensus_upgrade(&client, &fed).await?;
+    let bitcoin = fixtures.bitcoin();
+    await_consensus_upgrade(&client, &*bitcoin, &fed).await?;
 
     Ok(())
 }

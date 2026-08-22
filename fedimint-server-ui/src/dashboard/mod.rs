@@ -107,6 +107,27 @@ async fn metrics_handler(_user_auth: UserAuth) -> impl IntoResponse {
     }
 }
 
+/// Whether the federation can receive on-chain, which gates handing out its
+/// invite code.
+///
+/// The atomic broadcast only creates units while there are items to order, so
+/// an idle federation may never complete a session and its session count is no
+/// longer a signal that consensus is running. We use the consensus block count
+/// of whichever wallet module is present instead, which is non zero only once a
+/// threshold of peers has voted on it and hence exactly the point from which
+/// the wallet can process a deposit.
+async fn ready_for_onchain_receive(api: &DynDashboardApi) -> bool {
+    if let Some(wallet) = api.get_module::<fedimint_walletv2_server::Wallet>() {
+        return wallet.consensus_block_count_ui().await > 0;
+    }
+
+    if let Some(wallet) = api.get_module::<fedimint_wallet_server::Wallet>() {
+        return wallet.consensus_block_count_ui().await > 0;
+    }
+
+    false
+}
+
 // Main dashboard view
 async fn dashboard_view(
     State(state): State<UiState<DynDashboardApi>>,
@@ -123,6 +144,7 @@ async fn dashboard_view(
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
+    let ready_for_onchain_receive = ready_for_onchain_receive(&state.api).await;
 
     let content = html! {
         div class="row gy-4" {
@@ -131,7 +153,7 @@ async fn dashboard_view(
             }
 
             div class="col-md-6" {
-                (invite::render(&invite_code, session_count))
+                (invite::render(&invite_code, ready_for_onchain_receive))
             }
         }
 
