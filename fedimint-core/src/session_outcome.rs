@@ -2,11 +2,25 @@ use std::collections::BTreeMap;
 use std::io::Write as _;
 
 use bitcoin::hashes::{Hash, sha256};
+use fedimint_core::core::DynModuleConsensusItem as ModuleConsensusItem;
 use secp256k1::{Message, PublicKey, SECP256K1};
 
 use crate::encoding::{Decodable, Encodable};
-use crate::epoch::ConsensusItem;
+use crate::transaction::Transaction;
 use crate::{NumPeersExt as _, PeerId, secp256k1};
+
+/// All the items that may be produced during a consensus epoch
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum ConsensusItem {
+    /// Threshold sign the epoch history for verification via the API
+    Transaction(Transaction),
+    /// Any data that modules require consensus on
+    Module(ModuleConsensusItem),
+    /// Allows us to add new items in the future without crashing old clients
+    /// that try to interpret the session log.
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
 
 /// A consensus item accepted in the consensus
 ///
