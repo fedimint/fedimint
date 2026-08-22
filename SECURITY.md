@@ -76,3 +76,20 @@ cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
 elapsed time. Status assembly holds the federation-manager read lock only while
 capturing one coherent snapshot; do not clone the client solely for this public
 query because that would interfere with concurrent leave.
+
+## Experimental Aleph idle gate
+
+`FM_EXPERIMENTAL_ALEPH_IDLE_GATE` is not covered by the normal availability or
+traffic-privacy expectations. Enabling it accepts two explicit risks:
+
+- A gate fault can stall consensus. Capability leases, lifecycle fail-open
+  paths, and periodic probes are defenses in depth, not a liveness guarantee.
+- Removing continuous Aleph cover traffic exposes work timing. Authenticated
+  guardians learn which guardian first received local work and how long it
+  remains active; transport observers can correlate traffic resumption with
+  federation activity. Logs and gate metrics can preserve the same timing.
+
+The gate activates only when all guardians advertise current-session support.
+Capability expiry, mixed support, recovery, lifecycle transitions, and probes
+restore the normal full-speed creator. A faulty guardian can force that
+fail-open state but cannot increase creation beyond the normal rate.

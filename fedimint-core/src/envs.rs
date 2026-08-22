@@ -21,6 +21,11 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 pub const FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING_ENV: &str =
     "FM_WALLET_DISABLE_AUTOMATIC_CONSENSUS_VERSION_VOTING";
 
+/// Enable the experimental Aleph idle gate, accepting liveness risk and loss
+/// of continuous cover traffic that exposes local-work timing to guardians and
+/// transport observers.
+pub const FM_EXPERIMENTAL_ALEPH_IDLE_GATE_ENV: &str = "FM_EXPERIMENTAL_ALEPH_IDLE_GATE";
+
 pub const FM_ENABLE_MODULE_LNV1_ENV: &str = "FM_ENABLE_MODULE_LNV1";
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
 pub const FM_ENABLE_MODULE_MINT_ENV: &str = "FM_ENABLE_MODULE_MINT";

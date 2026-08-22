@@ -21,7 +21,7 @@ use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, FEDIMINT_API_ALPN};
@@ -42,6 +42,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
+use crate::consensus::aleph_bft::idle::{SubmissionActivity, forward_notified_submissions};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::consensus::iroh_api::{IrohApiState, run_iroh_api, run_iroh_api_next};
@@ -336,7 +337,32 @@ pub async fn run(
 
     let client_cfg = cfg.consensus.to_client_config(&module_init_registry)?;
 
-    let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+    let idle_gate_requested =
+        is_env_var_set(fedimint_core::envs::FM_EXPERIMENTAL_ALEPH_IDLE_GATE_ENV);
+    let (submission_sender, submission_receiver, submission_wake_receiver, submission_activity) =
+        if idle_gate_requested {
+            let (submission_sender, source) = async_channel::bounded(TRANSACTION_BUFFER);
+            let (forwarded, submission_receiver) = async_channel::bounded(1);
+            let (notification, receiver) = watch::channel(0);
+            let activity = Arc::new(SubmissionActivity::default());
+            let forward_activity = activity.clone();
+            task_group.spawn(
+                "aleph idle submission notifier",
+                move |_handle| async move {
+                    forward_notified_submissions(source, forwarded, notification, forward_activity)
+                        .await;
+                },
+            );
+            (
+                submission_sender,
+                submission_receiver,
+                Some(receiver),
+                Some(activity),
+            )
+        } else {
+            let (sender, receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+            (sender, receiver, None, None)
+        };
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
     let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
 
@@ -486,6 +512,8 @@ pub async fn run(
         ord_latency_sender,
         ci_status_senders,
         submission_receiver,
+        submission_wake_receiver,
+        submission_activity,
         shutdown_receiver,
         modules: module_registry,
         task_group: task_group.clone(),

@@ -16,7 +16,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{
+    FM_EXPERIMENTAL_ALEPH_IDLE_GATE_ENV, is_env_var_set, is_running_in_test_env,
+};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -41,6 +43,7 @@ use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
 use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
+use crate::consensus::aleph_bft::idle::{IdleCoordinator, IdleSessionTasks, SubmissionActivity};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
 use crate::consensus::aleph_bft::spawner::Spawner;
@@ -58,6 +61,16 @@ use crate::metrics::{
     CONSENSUS_SESSION_COUNT,
 };
 
+pub(crate) async fn terminate_aleph_session(
+    terminator: futures::channel::oneshot::Sender<()>,
+    aleph_handle: fedimint_core::runtime::JoinHandle<()>,
+    idle_tasks: &mut IdleSessionTasks,
+) {
+    terminator.send(()).ok();
+    aleph_handle.await.ok();
+    idle_tasks.stop().await;
+}
+
 // The name of the directory where the database checkpoints are stored.
 const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
 
@@ -74,6 +87,8 @@ pub struct ConsensusEngine {
     pub federation_api: DynGlobalApi,
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
+    pub submission_wake_receiver: Option<watch::Receiver<u64>>,
+    pub submission_activity: Option<Arc<SubmissionActivity>>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
@@ -280,6 +295,24 @@ impl ConsensusEngine {
         )
         .expect("The exponential slowdown exceeds 10 years");
 
+        let is_recovery = self.is_recovery().await;
+        let idle = IdleCoordinator::new(
+            is_env_var_set(FM_EXPERIMENTAL_ALEPH_IDLE_GATE_ENV),
+            is_recovery,
+            session_index,
+            self.identity(),
+            self.num_peers(),
+            self.submission_activity.clone(),
+        );
+        // The fork's `None` path deliberately preserves the released 0.36.0
+        // creator callpath. Do not install an always-open gate when disabled:
+        // even that would select the experimental scheduling implementation.
+        let config = if idle.enabled() {
+            config.with_unit_creation_gate(idle.gate())
+        } else {
+            config
+        };
+
         // we can use an unbounded channel here since the number and size of units
         // ordered in a single aleph session is bounded as described above
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
@@ -291,6 +324,18 @@ impl ConsensusEngine {
         let (signed_outcomes_sender, signed_outcomes_receiver) = async_channel::unbounded();
         let (signatures_sender, signatures_receiver) = async_channel::unbounded();
 
+        // The upstream gate prevents `DataProvider::get_data` from being polled while
+        // closed. The producer notification wakes a non-consuming observer without
+        // adding idle polling or changing ownership of the shared queue.
+        let mut idle_tasks = IdleSessionTasks::start(
+            idle.clone(),
+            self.submission_receiver.clone(),
+            self.submission_wake_receiver.clone(),
+            connections.clone(),
+            self.shutdown_receiver.clone(),
+            signature_receiver.clone(),
+        );
+
         let aleph_handle = spawn(
             "aleph run session",
             aleph_bft::run_session(
@@ -300,9 +345,10 @@ impl ConsensusEngine {
                         self.submission_receiver.clone(),
                         signature_receiver,
                         timestamp_sender,
-                        self.is_recovery().await,
+                        is_recovery,
+                        idle.clone(),
                     ),
-                    FinalizationHandler::new(unit_data_sender),
+                    FinalizationHandler::new(unit_data_sender, idle.clone()),
                     BackupWriter::new(self.db.clone()).await,
                     BackupReader::new(self.db.clone()),
                 ),
@@ -311,6 +357,7 @@ impl ConsensusEngine {
                     signed_outcomes_sender,
                     signatures_sender,
                     self.db.clone(),
+                    idle,
                 ),
                 Keychain::new(&self.cfg),
                 Spawner::new(self.task_group.make_subgroup()),
@@ -331,7 +378,6 @@ impl ConsensusEngine {
                 connections,
             )
             .await?;
-
         assert!(
             self.validate_signed_session_outcome(&signed_session_outcome, session_index),
             "Our created signed session outcome fails validation"
@@ -341,8 +387,10 @@ impl ConsensusEngine {
 
         // We can terminate the session instead of waiting for other peers to complete
         // it since they can always download the signed session outcome from us
-        terminator_sender.send(()).ok();
-        aleph_handle.await.ok();
+        // Aleph and its data provider must stop before the session observers.
+        // Otherwise awaiting observer teardown gives the still-live data provider
+        // a window to consume work that cannot enter this completed outcome.
+        terminate_aleph_session(terminator_sender, aleph_handle, &mut idle_tasks).await;
 
         // This method removes the backup of the current session from the database
         // and therefore has to be called after we have waited for the session to
