@@ -93,7 +93,7 @@ impl ServerModuleInit for EmptyInit {
     }
 
     /// Generates configs for all peers in a trusted manner for testing
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         _args: &ConfigGenModuleArgs,

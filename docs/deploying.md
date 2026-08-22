@@ -7,7 +7,14 @@ Specifically, a federation with `3m + 1` guardians can tolerate up to m maliciou
 	•	A federation with 7 guardians can handle 2 malicious guardians.
 
 You can also run Fedimint in **solo mode** with just one guardian. While this is useful for testing or development, it
-is not recommended for real-world use since it lacks the resilience of a federation with multiple guardians.
+is not recommended for real-world use since it lacks the resilience of a federation with multiple guardians: a single
+guardian is a single point of both failure and trust.
+
+> [!WARNING]
+> Solo federations set up with **v0.12 or earlier** generated the key material of their `lnv2` and `mintv2` modules
+> deterministically, so those keys can be recomputed by anyone from the source code. Such a federation must be
+> considered compromised — its ecash can be forged and its Lightning preimages decrypted. Newer versions detect this on
+> startup and refuse to run; set up a new federation and move the funds over.
 
 To support **Lightning payments**, Fedimint requires a **Lightning Gateway**. This is a participant in the federation
 that swaps ecash for sending and receiving Lightning payments. Note that the Lightning Gateway is not a guardian—it's an

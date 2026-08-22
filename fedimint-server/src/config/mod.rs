@@ -468,7 +468,16 @@ impl ServerConfig {
         Ok(())
     }
 
-    pub fn trusted_dealer_gen(
+    /// Generates the configs of all peers from a single process, bypassing the
+    /// distributed key generation.
+    ///
+    /// This is **insecure** and exists for tests only: it derives the secret
+    /// key material of every peer in one process, so no peer's key is private
+    /// from the others. Production config generation always runs
+    /// [`Self::distributed_gen`], including for a federation of a single
+    /// guardian.
+    #[doc(hidden)]
+    pub fn insecure_test_dealer_gen(
         params: &BTreeMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
@@ -503,7 +512,7 @@ impl ServerConfig {
             .map(|(module_id, (_kind, module_init))| {
                 (
                     module_id as ModuleInstanceId,
-                    module_init.trusted_dealer_gen(&peer0.peer_ids(), &args),
+                    module_init.insecure_test_dealer_gen(&peer0.peer_ids(), &args),
                 )
             })
             .collect();
@@ -540,16 +549,10 @@ impl ServerConfig {
     ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
-        // in case we are running by ourselves, avoid DKG
-        if params.peer_ids().len() == 1 {
-            let server = Self::trusted_dealer_gen(
-                &BTreeMap::from([(params.identity, params.clone())]),
-                &registry,
-                &code_version_str,
-            );
-
-            return Ok(server[&params.identity].clone());
-        }
+        // A federation of a single guardian runs the very same key generation as
+        // any other federation, it just has nobody to exchange messages with. It
+        // used to fall back to a trusted dealer here, which is how deterministic
+        // module key material ended up in solo federations.
 
         info!(
             target: LOG_NET_PEER_DKG,

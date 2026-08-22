@@ -252,7 +252,7 @@ impl ServerModuleInit for LightningInit {
         })
     }
 
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
@@ -1750,7 +1750,7 @@ mod tests {
             network: Network::Regtest,
             disable_base_fees: false,
         };
-        let server_cfg = ServerModuleInit::trusted_dealer_gen(&LightningInit, &peers, &args);
+        let server_cfg = ServerModuleInit::insecure_test_dealer_gen(&LightningInit, &peers, &args);
 
         let client_cfg = ServerModuleInit::get_client_config(
             &LightningInit,

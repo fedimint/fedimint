@@ -24,7 +24,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    Amounts, ApiEndpoint, ApiError, ApiVersion, CommonModuleInit, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, admin_api_endpoint,
     public_api_endpoint,
 };
@@ -52,7 +52,10 @@ use fedimint_lnv2_common::{
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
-use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
+use fedimint_server_core::config::{
+    FM_ALLOW_COMPROMISED_MODULE_KEYS_ENV, PeerHandleOps, ensure_uncompromised_key, eval_poly_g1,
+    eval_poly_scalar, scalar,
+};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
@@ -61,6 +64,7 @@ use futures::StreamExt;
 use group::Curve;
 use group::ff::Field;
 use rand::SeedableRng;
+use rand::rngs::OsRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
 use tpe::{
@@ -236,10 +240,18 @@ impl ServerModuleInit for LightningInit {
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
-        vec![EnvVarDoc {
-            name: FM_ENABLE_MODULE_LNV2_ENV,
-            description: "Set to 0/false to disable the LNv2 Lightning module. Enabled by default.",
-        }]
+        vec![
+            EnvVarDoc {
+                name: FM_ENABLE_MODULE_LNV2_ENV,
+                description: "Set to 0/false to disable the LNv2 Lightning module. Enabled by default.",
+            },
+            EnvVarDoc {
+                name: FM_ALLOW_COMPROMISED_MODULE_KEYS_ENV,
+                description: "Set to 1/true to start up even though our key material is publicly \
+                              known. Only ever set this to recover the funds of an affected \
+                              federation.",
+            },
+        ]
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
@@ -250,23 +262,20 @@ impl ServerModuleInit for LightningInit {
         })
     }
 
-    fn trusted_dealer_gen(
+    fn insecure_test_dealer_gen(
         &self,
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let tpe_pks = peers
-            .iter()
-            .map(|peer| (*peer, dealer_pk(peers.to_num_peers(), *peer)))
-            .collect::<BTreeMap<PeerId, PublicKeyShare>>();
+        let (tpe_agg_pk, public_shares, secret_shares) = dealer_keygen(peers.to_num_peers());
 
         peers
             .iter()
             .map(|peer| {
                 let cfg = LightningConfig {
                     consensus: LightningConfigConsensus {
-                        tpe_agg_pk: dealer_agg_pk(),
-                        tpe_pks: tpe_pks.clone(),
+                        tpe_agg_pk,
+                        tpe_pks: public_shares.clone(),
                         fee_consensus: if args.disable_base_fees {
                             FeeConsensus::zero()
                         } else {
@@ -275,7 +284,7 @@ impl ServerModuleInit for LightningInit {
                         network: args.network,
                     },
                     private: LightningConfigPrivate {
-                        sk: dealer_sk(peers.to_num_peers(), *peer),
+                        sk: secret_shares[peer],
                     },
                 };
 
@@ -327,6 +336,12 @@ impl ServerModuleInit for LightningInit {
             "Preimge encryption secret key share does not match our public key share"
         );
 
+        ensure_uncompromised_key(
+            config.private.sk
+                == compromised_dealer_sk(config.consensus.tpe_pks.to_num_peers(), *identity),
+            LightningCommonInit::KIND.as_str(),
+        )?;
+
         Ok(())
     }
 
@@ -362,22 +377,61 @@ impl ServerModuleInit for LightningInit {
     }
 }
 
-fn dealer_agg_pk() -> AggregatePublicKey {
-    AggregatePublicKey((G1Projective::generator() * coefficient(0)).to_affine())
+type DealerKeys = (
+    AggregatePublicKey,
+    BTreeMap<PeerId, PublicKeyShare>,
+    BTreeMap<PeerId, SecretKeyShare>,
+);
+
+/// Samples a random polynomial and hands out a share of it to every peer.
+///
+/// This puts the aggregate secret key into a single process and is therefore
+/// only used by [`LightningInit::insecure_test_dealer_gen`]. The polynomial is
+/// still sampled from the OS RNG - a test helper that silently produces
+/// publicly known keys is exactly the trap we are fixing here.
+fn dealer_keygen(num_peers: NumPeers) -> DealerKeys {
+    let polynomial = (0..num_peers.threshold())
+        .map(|_| Scalar::random(&mut OsRng))
+        .collect::<Vec<Scalar>>();
+
+    let constant_term = *polynomial
+        .first()
+        .expect("We have at least one coefficient");
+
+    let agg_pk = AggregatePublicKey((G1Projective::generator() * constant_term).to_affine());
+
+    let sks = num_peers
+        .peer_ids()
+        .map(|peer| {
+            (
+                peer,
+                SecretKeyShare(eval_poly_scalar(&polynomial, &scalar(&peer))),
+            )
+        })
+        .collect::<BTreeMap<PeerId, SecretKeyShare>>();
+
+    let pks = sks
+        .iter()
+        .map(|(peer, sk)| (*peer, derive_pk_share(sk)))
+        .collect();
+
+    (agg_pk, pks, sks)
 }
 
-fn dealer_pk(num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
-    derive_pk_share(&dealer_sk(num_peers, peer))
-}
-
-fn dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
+/// Recomputes the secret key share that the deterministic dealer key generation
+/// used up to and including v0.12 would have produced for `peer`.
+///
+/// This is derived from nothing but the peer index, so anyone can recompute it.
+/// It is kept solely so that [`LightningInit::validate_config`] can recognise
+/// an affected federation and refuse to start.
+fn compromised_dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
     let x = Scalar::from(peer.to_usize() as u64 + 1);
 
     // We evaluate the scalar polynomial of degree threshold - 1 at the point x
     // using the Horner schema.
 
     let y = (0..num_peers.threshold())
-        .map(|index| coefficient(index as u64))
+        .map(|index| compromised_coefficient(index as u64))
         .rev()
         .reduce(|accumulator, c| accumulator * x + c)
         .expect("We have at least one coefficient");
@@ -385,7 +439,7 @@ fn dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
     SecretKeyShare(y)
 }
 
-fn coefficient(index: u64) -> Scalar {
+fn compromised_coefficient(index: u64) -> Scalar {
     Scalar::random(&mut ChaChaRng::from_seed(
         *index.consensus_hash::<sha256::Hash>().as_byte_array(),
     ))
@@ -947,5 +1001,89 @@ impl Lightning {
 
     pub async fn gateways_ui(&self) -> Vec<SafeUrl> {
         Self::gateways(self.db.clone()).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::config::TypedServerModuleConfig;
+    use fedimint_core::{NumPeersExt, PeerId};
+    use fedimint_lnv2_common::config::{
+        FeeConsensus, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
+    };
+    use fedimint_server_core::{ConfigGenModuleArgs, ServerModuleInit};
+    use tpe::derive_pk_share;
+
+    use super::{LightningInit, compromised_dealer_sk, dealer_keygen};
+
+    const NETWORK: fedimint_core::bitcoin::Network = fedimint_core::bitcoin::Network::Regtest;
+
+    fn args() -> ConfigGenModuleArgs {
+        ConfigGenModuleArgs {
+            network: NETWORK,
+            disable_base_fees: false,
+        }
+    }
+
+    /// Builds the config that the deterministic dealer key generation used up
+    /// to and including v0.12 would have produced. It is internally consistent,
+    /// so only the compromised key check can reject it.
+    fn compromised_config(peers: &[PeerId], identity: PeerId) -> LightningConfig {
+        let num_peers = peers.to_num_peers();
+
+        LightningConfig {
+            consensus: LightningConfigConsensus {
+                tpe_agg_pk: dealer_keygen(num_peers).0,
+                tpe_pks: peers
+                    .iter()
+                    .map(|peer| {
+                        (
+                            *peer,
+                            derive_pk_share(&compromised_dealer_sk(num_peers, *peer)),
+                        )
+                    })
+                    .collect(),
+                fee_consensus: FeeConsensus::new(0).expect("Relative fee is within range"),
+                network: NETWORK,
+            },
+            private: LightningConfigPrivate {
+                sk: compromised_dealer_sk(num_peers, identity),
+            },
+        }
+    }
+
+    #[test]
+    fn dealer_keygen_is_not_deterministic() {
+        let num_peers = vec![PeerId::from(0)].to_num_peers();
+
+        assert_ne!(dealer_keygen(num_peers).2, dealer_keygen(num_peers).2);
+    }
+
+    #[test]
+    fn validate_config_accepts_freshly_generated_configs() {
+        for size in [1_u16, 4] {
+            let peers = (0..size).map(PeerId::from).collect::<Vec<PeerId>>();
+
+            for (identity, config) in LightningInit.insecure_test_dealer_gen(&peers, &args()) {
+                LightningInit
+                    .validate_config(&identity, config)
+                    .expect("Freshly generated config is valid");
+            }
+        }
+    }
+
+    #[test]
+    fn validate_config_rejects_deterministic_dealer_keys() {
+        for size in [1_u16, 4] {
+            let peers = (0..size).map(PeerId::from).collect::<Vec<PeerId>>();
+
+            for identity in peers.clone() {
+                let error = LightningInit
+                    .validate_config(&identity, compromised_config(&peers, identity).to_erased())
+                    .expect_err("Deterministic dealer keys have to be rejected");
+
+                assert!(error.to_string().contains("publicly known key material"));
+            }
+        }
     }
 }
