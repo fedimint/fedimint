@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CreateBolt11InvoicePayload","FeeOutOfRangeError","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_INVOICE_EXPIRY_SECS"],"struct":["CreateBolt11InvoicePayload","FeeOutOfRangeError","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
