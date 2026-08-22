@@ -6,7 +6,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::util::FmtCompact as _;

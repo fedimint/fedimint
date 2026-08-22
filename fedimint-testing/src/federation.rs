@@ -16,7 +16,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::net::peers::IP2PConnections;
+use fedimint_core::net::IP2PConnections;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::{TaskGroup, block_in_place, sleep_in_test};
 use fedimint_gateway_common::ConnectFedPayload;

@@ -21,7 +21,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
