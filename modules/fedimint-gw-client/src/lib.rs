@@ -878,6 +878,22 @@ impl GatewayClientModule {
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await?;
 
+        // We need to check that the contract has been confirmed by the
+        // federation before we start the state machine to prevent DOS
+        // attacks. LNv1 clients retry rejected payments, so failing fast on
+        // a contract the federation cannot see yet is safe for legitimate
+        // requests that race federation confirmation.
+        self.module_api
+            .fetch_contract(pay_invoice_payload.contract_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("The gateway can not reach the federation: {e}"))?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "The outgoing contract {} has not yet been confirmed",
+                    pay_invoice_payload.contract_id
+                )
+            })?;
+
         self.client_ctx.module_db()
             .autocommit(
                 |dbtx, _| {

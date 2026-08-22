@@ -2151,6 +2151,48 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
     .await
 }
 
+/// `pay_invoice` is unauthenticated and takes a caller-supplied contract id.
+/// The gateway checks with the federation that the contract exists before
+/// persisting anything, so a fabricated id is rejected instead of parking a
+/// state machine that can never resolve.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_rejects_unknown_outgoing_contract() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+
+            let invoice = other_lightning_client.invoice(sats(1), None)?;
+            let error = gateway_client
+                .get_first_module::<GatewayClientModule>()?
+                .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                    federation_id: user_client.federation_id(),
+                    contract_id: sha256(&[42; 32]).into(),
+                    payment_data: PaymentData::Invoice(invoice),
+                    preimage_auth: Hash::hash(&[42; 32]),
+                })
+                .await
+                .expect_err("a contract the federation has never seen is rejected");
+
+            assert!(
+                error.to_string().contains("has not yet been confirmed"),
+                "unexpected error: {error}"
+            );
+
+            assert!(
+                gateway_client
+                    .operation_log()
+                    .paginate_operations_rev(10, None)
+                    .await
+                    .is_empty(),
+                "a rejected contract must not persist an operation"
+            );
+
+            Ok(())
+        },
+    )
+    .await
+}
+
 /// `pay_invoice` is unauthenticated and keys its operation on the contract id,
 /// but the state machine's dedupe key covers the whole payload, so a second
 /// request that differs only in `preimage_auth` slips past it. That used to
