@@ -9,6 +9,9 @@ use std::fmt;
 use std::ops::Range;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 use anyhow::{Context as _, bail};
 use async_trait::async_trait;
@@ -16,16 +19,20 @@ use fedimint_core::db::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
     IRawDatabase, IRawDatabaseTransaction, PrefixStream,
 };
-use fedimint_core::task::block_in_place;
+use fedimint_core::task::{TaskGroup, block_in_place};
+use fedimint_core::util::FmtCompact as _;
 use fedimint_db_locked::{Locked, LockedBuilder};
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{
     DBRecoveryMode, OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions,
 };
-use tracing::debug;
+use tracing::{debug, error, warn};
 
-use crate::envs::{FM_ROCKSDB_BLOCK_CACHE_SIZE_ENV, FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV};
+use crate::envs::{
+    FM_ROCKSDB_BLOCK_CACHE_SIZE_ENV, FM_ROCKSDB_WAL_SYNC_INTERVAL_MS,
+    FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV,
+};
 
 // turn an `iter` into a `Stream` where every `next` is ran inside
 // `block_in_place` to offload the blocking calls
@@ -43,9 +50,42 @@ where
 }
 
 #[derive(Debug)]
-pub struct RocksDb(rocksdb::OptimisticTransactionDB);
+pub struct RocksDb(Arc<RocksDbInner>, bool);
 
-pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
+#[derive(Debug)]
+struct RocksDbInner {
+    db: Option<rocksdb::OptimisticTransactionDB>,
+    pending_wal_sync: AtomicBool,
+}
+
+impl RocksDbInner {
+    fn db(&self) -> &rocksdb::OptimisticTransactionDB {
+        self.db
+            .as_ref()
+            .expect("RocksDB is present while its wrapper is alive")
+    }
+
+    fn flush_pending_wal(&self) {
+        if self.pending_wal_sync.swap(false, Ordering::AcqRel)
+            && let Err(error) = self.db().flush_wal(true)
+        {
+            self.pending_wal_sync.store(true, Ordering::Release);
+            error!(err = %error.fmt_compact(), "Failed to sync the RocksDB WAL");
+        }
+    }
+}
+
+impl Drop for RocksDbInner {
+    fn drop(&mut self) {
+        self.flush_pending_wal();
+    }
+}
+
+pub struct RocksDbTransaction<'a>(
+    rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>,
+    Option<&'a AtomicBool>,
+    bool,
+);
 
 #[bon::bon]
 impl RocksDb {
@@ -54,8 +94,15 @@ impl RocksDb {
     #[builder(finish_fn = open_blocking)]
     pub fn open_blocking(
         #[builder(start_fn)] db_path: impl AsRef<Path>,
+        task_group: Option<TaskGroup>,
+        wal_sync_interval: Option<Duration>,
     ) -> anyhow::Result<Locked<RocksDb>> {
         let db_path = db_path.as_ref();
+        let wal_sync_interval = match wal_sync_interval {
+            Some(interval) => Some(interval),
+            None => wal_sync_interval_from_env()?,
+        };
+        let wal_sync_interval = validate_wal_sync_interval(wal_sync_interval)?;
 
         block_in_place(|| {
             std::fs::create_dir_all(
@@ -63,7 +110,8 @@ impl RocksDb {
                     .parent()
                     .ok_or_else(|| anyhow::anyhow!("db path must have a base dir"))?,
             )?;
-            LockedBuilder::new(db_path)?.with_db(|| Self::open_blocking_unlocked(db_path))
+            LockedBuilder::new(db_path)?
+                .with_db(|| Self::open_blocking_unlocked(db_path, task_group, wal_sync_interval))
         })
     }
 }
@@ -81,23 +129,68 @@ where
 }
 
 impl RocksDb {
-    fn open_blocking_unlocked(db_path: &Path) -> anyhow::Result<RocksDb> {
+    fn open_blocking_unlocked(
+        db_path: &Path,
+        task_group: Option<TaskGroup>,
+        wal_sync_interval: Option<Duration>,
+    ) -> anyhow::Result<RocksDb> {
         let mut opts = get_default_options()?;
-        // Synchronous writes (set_sync(true)) ensure completed writes are
-        // durable, but a SIGKILL mid-write can still leave a truncated WAL tail
-        // record. TolerateCorruptedTailRecords (RocksDB's own default) discards
-        // only incomplete tail records — no committed data is lost.
-        // AbsoluteConsistency was used previously but made the database
-        // permanently unrecoverable after any unclean shutdown.
-        // See: https://github.com/fedimint/fedimint/issues/8072
-        opts.set_wal_recovery_mode(DBRecoveryMode::TolerateCorruptedTailRecords);
+        if let Some(interval) = wal_sync_interval {
+            opts.set_manual_wal_flush(true);
+            opts.set_wal_recovery_mode(DBRecoveryMode::PointInTime);
+            warn!(
+                interval_ms = interval.as_millis(),
+                "RocksDB is using manual periodic WAL syncing; SIGKILL can lose recent committed \
+                 writes. Do not use this for a guardian consensus database."
+            );
+        } else {
+            // Synchronous writes (set_sync(true)) ensure completed writes are
+            // durable, but a SIGKILL mid-write can still leave a truncated WAL tail
+            // record. TolerateCorruptedTailRecords (RocksDB's own default) discards
+            // only incomplete tail records — no committed data is lost.
+            // AbsoluteConsistency was used previously but made the database
+            // permanently unrecoverable after any unclean shutdown.
+            // See: https://github.com/fedimint/fedimint/issues/8072
+            opts.set_wal_recovery_mode(DBRecoveryMode::TolerateCorruptedTailRecords);
+        }
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, db_path)?;
-        Ok(RocksDb(db))
+        let inner = Arc::new(RocksDbInner {
+            db: Some(db),
+            pending_wal_sync: AtomicBool::new(false),
+        });
+
+        if let Some(interval) = wal_sync_interval {
+            let task_group = task_group.context(
+                "A task group is required when FM_ROCKSDB_WAL_SYNC_INTERVAL_MS is enabled",
+            )?;
+            let weak_inner = Arc::downgrade(&inner);
+            task_group.spawn_cancellable(
+                "rocksdb-wal-sync",
+                sync_wal_periodically(weak_inner, interval),
+            );
+        }
+
+        Ok(RocksDb(inner, wal_sync_interval.is_some()))
     }
 
     pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
-        &self.0
+        self.0.db()
+    }
+
+    #[cfg(test)]
+    fn has_pending_wal_sync(&self) -> bool {
+        self.0.pending_wal_sync.load(Ordering::Acquire)
+    }
+}
+
+async fn sync_wal_periodically(inner: Weak<RocksDbInner>, interval: Duration) {
+    loop {
+        fedimint_core::runtime::sleep(interval).await;
+        let Some(inner) = inner.upgrade() else {
+            return;
+        };
+        block_in_place(|| inner.flush_pending_wal());
     }
 }
 
@@ -130,6 +223,24 @@ fn is_power_of_two_sanity() {
     assert!(!is_power_of_two((2 << 10) + 1));
 }
 
+#[test]
+fn parse_wal_sync_interval_values() {
+    assert_eq!(parse_wal_sync_interval(None).unwrap(), None);
+    assert_eq!(parse_wal_sync_interval(Some("0")).unwrap(), None);
+    assert_eq!(
+        parse_wal_sync_interval(Some("250")).unwrap(),
+        Some(Duration::from_millis(250))
+    );
+    assert!(parse_wal_sync_interval(Some("invalid")).is_err());
+    assert!(parse_wal_sync_interval(Some("60001")).is_err());
+    assert_eq!(
+        validate_wal_sync_interval(Some(Duration::ZERO)).unwrap(),
+        None
+    );
+    assert!(validate_wal_sync_interval(Some(Duration::from_nanos(1))).is_err());
+    assert!(validate_wal_sync_interval(Some(Duration::from_millis(60_001))).is_err());
+}
+
 /// Default write buffer size: 2 MiB (`RocksDB` default is 64 MiB)
 const DEFAULT_WRITE_BUFFER_SIZE: usize = 2 * 1024 * 1024;
 
@@ -153,6 +264,56 @@ fn parse_env_size(env_name: &str) -> anyhow::Result<Option<usize>> {
         bail!("{env_name} is not a power of 2");
     }
     Ok(Some(size))
+}
+
+const MAX_WAL_SYNC_INTERVAL_MS: u64 = 60_000;
+
+fn parse_wal_sync_interval(value: Option<&str>) -> anyhow::Result<Option<Duration>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let milliseconds: u64 = value
+        .parse()
+        .with_context(|| format!("Could not parse {FM_ROCKSDB_WAL_SYNC_INTERVAL_MS}"))?;
+    if milliseconds == 0 {
+        return Ok(None);
+    }
+    if milliseconds > MAX_WAL_SYNC_INTERVAL_MS {
+        bail!(
+            "{FM_ROCKSDB_WAL_SYNC_INTERVAL_MS} must not exceed \
+             {MAX_WAL_SYNC_INTERVAL_MS} milliseconds"
+        );
+    }
+    Ok(Some(Duration::from_millis(milliseconds)))
+}
+
+fn validate_wal_sync_interval(interval: Option<Duration>) -> anyhow::Result<Option<Duration>> {
+    let Some(interval) = interval else {
+        return Ok(None);
+    };
+    if interval.is_zero() {
+        return Ok(None);
+    }
+    if interval < Duration::from_millis(1) {
+        bail!("{FM_ROCKSDB_WAL_SYNC_INTERVAL_MS} must be at least 1 millisecond");
+    }
+    if interval > Duration::from_millis(MAX_WAL_SYNC_INTERVAL_MS) {
+        bail!(
+            "{FM_ROCKSDB_WAL_SYNC_INTERVAL_MS} must not exceed \
+             {MAX_WAL_SYNC_INTERVAL_MS} milliseconds"
+        );
+    }
+    Ok(Some(interval))
+}
+
+fn wal_sync_interval_from_env() -> anyhow::Result<Option<Duration>> {
+    match std::env::var(FM_ROCKSDB_WAL_SYNC_INTERVAL_MS) {
+        Ok(value) => parse_wal_sync_interval(Some(&value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(error) => {
+            Err(error).context(format!("Could not read {FM_ROCKSDB_WAL_SYNC_INTERVAL_MS}"))
+        }
+    }
 }
 
 fn get_default_options() -> anyhow::Result<rocksdb::Options> {
@@ -210,13 +371,23 @@ impl RocksDbReadOnly {
 
 impl From<rocksdb::OptimisticTransactionDB> for RocksDb {
     fn from(db: OptimisticTransactionDB) -> Self {
-        RocksDb(db)
+        RocksDb(
+            Arc::new(RocksDbInner {
+                db: Some(db),
+                pending_wal_sync: AtomicBool::new(false),
+            }),
+            false,
+        )
     }
 }
 
 impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
     fn from(db: RocksDb) -> Self {
-        db.0
+        Arc::try_unwrap(db.0)
+            .expect("RocksDb must not have outstanding references")
+            .db
+            .take()
+            .expect("RocksDB is present while its wrapper is alive")
     }
 }
 
@@ -252,15 +423,22 @@ impl IRawDatabase for RocksDb {
         optimistic_options.set_snapshot(true);
 
         let mut write_options = WriteOptions::default();
-        // Make sure we never lose data on unclean shutdown
-        write_options.set_sync(true);
+        // Make sure we never lose data on unclean shutdown unless the caller explicitly
+        // opted into periodic WAL syncing.
+        write_options.set_sync(!self.1);
 
-        RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options))
+        RocksDbTransaction(
+            self.0
+                .db()
+                .transaction_opt(&write_options, &optimistic_options),
+            self.1.then_some(&self.0.pending_wal_sync),
+            false,
+        )
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         let checkpoint =
-            rocksdb::checkpoint::Checkpoint::new(&self.0).map_err(DatabaseError::backend)?;
+            rocksdb::checkpoint::Checkpoint::new(self.inner()).map_err(DatabaseError::backend)?;
         checkpoint
             .create_checkpoint(backup_path)
             .map_err(DatabaseError::backend)?;
@@ -292,11 +470,15 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
         key: &[u8],
         value: &[u8],
     ) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
+        let result = fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
             self.0.put(key, value).map_err(DatabaseError::backend)?;
             Ok(val)
-        })
+        });
+        if result.is_ok() {
+            self.2 = true;
+        }
+        result
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
@@ -306,11 +488,15 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
+        let result = fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
             self.0.delete(key).map_err(DatabaseError::backend)?;
             Ok(val)
-        })
+        });
+        if result.is_ok() {
+            self.2 = true;
+        }
+        result
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -377,6 +563,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             for item in iter {
                 let key = item.map_err(DatabaseError::backend)?;
                 self.0.delete(key).map_err(DatabaseError::backend)?;
+                self.2 = true;
             }
 
             Ok(())
@@ -416,7 +603,14 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
     async fn commit_tx(self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
             match self.0.commit() {
-                Ok(()) => Ok(()),
+                Ok(()) => {
+                    if self.2
+                        && let Some(pending_wal_sync) = self.1
+                    {
+                        pending_wal_sync.store(true, Ordering::Release);
+                    }
+                    Ok(())
+                }
                 Err(err) => {
                     // `Busy` means another transaction wrote a key this one also wrote,
                     // after our snapshot was taken. `TryAgain` means RocksDB could not
@@ -782,6 +976,81 @@ mod fedimint_rocksdb_tests {
         notify_on_modify = true,
     );
     impl_db_lookup!(key = TestKey2, query_prefix = DbPrefixTestPrefixMax);
+
+    async fn open_relaxed_db(path: &Path, task_group: TaskGroup) -> Database {
+        Database::new(
+            RocksDb::build(path)
+                .task_group(task_group)
+                .wal_sync_interval(Duration::from_secs(60))
+                .open()
+                .await
+                .unwrap(),
+            ModuleDecoderRegistry::default(),
+        )
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_periodic_wal_sync_write_then_read() {
+        let path = tempfile::tempdir().unwrap();
+        let task_group = TaskGroup::new();
+        let db = open_relaxed_db(path.path(), task_group.clone()).await;
+
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&TestKey(vec![1]), &TestVal(vec![2]))
+            .await;
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction_nc().await;
+        assert_eq!(
+            dbtx.get_value(&TestKey(vec![1])).await,
+            Some(TestVal(vec![2]))
+        );
+
+        task_group.shutdown_join_all(None).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_periodic_wal_sync_ignores_no_write_commit() {
+        let path = tempfile::tempdir().unwrap();
+        let task_group = TaskGroup::new();
+        let db = RocksDb::open_blocking_unlocked(
+            path.path(),
+            Some(task_group.clone()),
+            Some(Duration::from_secs(60)),
+        )
+        .unwrap();
+
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.raw_remove_by_prefix(b"empty-prefix").await.unwrap();
+        dbtx.commit_tx().await.unwrap();
+
+        assert!(!db.has_pending_wal_sync());
+        task_group.shutdown_join_all(None).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_periodic_wal_sync_flushes_on_drop() {
+        let path = tempfile::tempdir().unwrap();
+        let task_group = TaskGroup::new();
+        let db = open_relaxed_db(path.path(), task_group.clone()).await;
+
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&TestKey(vec![1]), &TestVal(vec![2]))
+            .await;
+        dbtx.commit_tx().await;
+        task_group.shutdown_join_all(None).await.unwrap();
+        drop(db);
+
+        let db = Database::new(
+            RocksDb::build(path.path()).open().await.unwrap(),
+            ModuleDecoderRegistry::default(),
+        );
+        let mut dbtx = db.begin_transaction_nc().await;
+        assert_eq!(
+            dbtx.get_value(&TestKey(vec![1])).await,
+            Some(TestVal(vec![2]))
+        );
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_retrieve_descending_order() {
