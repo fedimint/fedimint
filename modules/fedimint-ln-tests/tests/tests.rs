@@ -3,6 +3,9 @@ use std::time::Duration;
 
 use anyhow::bail;
 use assert_matches::assert_matches;
+use axum::extract::{Path, State};
+use axum::routing::{get, put};
+use axum::{Json, Router};
 use bitcoin_hashes::{Hash, sha256};
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder, TxSubmissionStates,
@@ -13,7 +16,7 @@ use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
-use fedimint_core::util::{BoxStream, NextOrPending, retry};
+use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -23,11 +26,12 @@ use fedimint_ln_client::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer,
 };
+use fedimint_ln_client::recurring::RecurringPaymentProtocol;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
     MockGatewayConnection, OutgoingLightningPayment, PayType, ReceivingKey,
-    create_incoming_contract_output,
+    create_incoming_contract_output, tweak_user_key,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -43,6 +47,7 @@ use lightning_invoice::{
 };
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
+use tokio::sync::watch;
 
 pub async fn ln_operation(
     client: &ClientHandleArc,
@@ -145,6 +150,112 @@ async fn await_client_tx_accepted(
         .next()
         .await
         .expect("tx either accepted or rejected")
+}
+
+async fn await_mock_recurring_invoice(
+    Path((_, invoice_index)): Path<(String, u64)>,
+    State(mut invoice_rx): State<watch::Receiver<Option<Bolt11Invoice>>>,
+) -> Json<Bolt11Invoice> {
+    if invoice_index != 1 {
+        return std::future::pending().await;
+    }
+
+    loop {
+        if let Some(invoice) = invoice_rx.borrow().clone() {
+            return Json(invoice);
+        }
+        invoice_rx
+            .changed()
+            .await
+            .expect("test keeps the invoice sender alive");
+    }
+}
+
+#[allow(clippy::literal_string_with_formatting_args)]
+#[tokio::test(flavor = "multi_thread")]
+async fn recurring_receive_registers_missing_offer() -> anyhow::Result<()> {
+    let (invoice_tx, invoice_rx) = watch::channel(None);
+    let recurringd = Router::new()
+        .route(
+            "/lnv1/paycodes",
+            put(|| async {
+                Json(serde_json::json!({
+                    "recurring_payment_code": "LNURL test payment code"
+                }))
+            }),
+        )
+        .route(
+            "/lnv1/paycodes/recipient/{root_key}/generated/{invoice_index}",
+            get(await_mock_recurring_invoice),
+        )
+        .with_state(invoice_rx);
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;
+    let recurringd_api = SafeUrl::parse(&format!("http://{}/", listener.local_addr()?))?;
+    let recurringd_task = tokio::spawn(async move {
+        axum::serve(listener, recurringd)
+            .await
+            .expect("mock recurringd server failed");
+    });
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+    let payment_code = ln_module
+        .register_recurring_payment_code(
+            RecurringPaymentProtocol::LNURL,
+            recurringd_api,
+            "[[\"text/plain\", \"test\"]]",
+        )
+        .await?;
+
+    let invoice_index = 1;
+    let invoice_key = tweak_user_key(
+        &secp256k1::Secp256k1::new(),
+        payment_code.root_keypair.public_key(),
+        invoice_index,
+    );
+    let preimage = sha256::Hash::hash(&invoice_key.serialize());
+    let payment_hash = sha256::Hash::hash(&preimage.to_byte_array());
+    let secp = secp256k1::Secp256k1::new();
+    let (node_secret_key, node_public_key) = secp.generate_keypair(&mut OsRng);
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .amount_milli_satoshis(100_000)
+        .description("missing recurring offer".to_owned())
+        .payment_hash(payment_hash)
+        .payment_secret(PaymentSecret([0; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(18)
+        .payee_pub_key(node_public_key)
+        .expiry_time(Duration::from_secs(60))
+        .build_signed(|message| secp.sign_ecdsa_recoverable(message, &node_secret_key))?;
+
+    assert!(!ln_module.api.offer_exists(payment_hash).await?);
+    invoice_tx.send_replace(Some(invoice));
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if matches!(ln_module.api.offer_exists(payment_hash).await, Ok(true)) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await?;
+
+    let operation_id = OperationId(*payment_hash.as_ref());
+    let mut receive_updates = ln_module
+        .subscribe_ln_recurring_receive(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(receive_updates.ok().await?, LnReceiveState::Created);
+    assert_matches!(
+        receive_updates.ok().await?,
+        LnReceiveState::WaitingForPayment { .. }
+    );
+
+    recurringd_task.abort();
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

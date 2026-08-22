@@ -1093,6 +1093,35 @@ impl LightningClientModule {
         let invoice = invoice_builder
             .build_signed(|msg| self.secp.sign_ecdsa_recoverable(msg, &node_secret_key))?;
 
+        let (operation_id, output, output_preimage) = self.create_lightning_receive_offer_output(
+            amount,
+            &invoice,
+            receiving_key,
+            expiry_time,
+        )?;
+
+        Ok((operation_id, invoice, output, *output_preimage.as_ref()))
+    }
+
+    fn create_lightning_receive_offer_output(
+        &self,
+        amount: Amount,
+        invoice: &Bolt11Invoice,
+        receiving_key: ReceivingKey,
+        expiry_time: Option<u64>,
+    ) -> anyhow::Result<(
+        OperationId,
+        ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
+        sha256::Hash,
+    )> {
+        let preimage_key = receiving_key.public_key().serialize();
+        let preimage = sha256::Hash::hash(&preimage_key);
+        let payment_hash = sha256::Hash::hash(&preimage.to_byte_array());
+        ensure!(
+            invoice.payment_hash() == &payment_hash,
+            "Invoice payment hash does not match the receiving key"
+        );
+
         let operation_id = OperationId(*invoice.payment_hash().as_ref());
 
         let sm_invoice = invoice.clone();
@@ -1121,7 +1150,6 @@ impl LightningClientModule {
 
         Ok((
             operation_id,
-            invoice,
             ClientOutputBundle::new(
                 vec![ClientOutput {
                     output: ln_output,
@@ -1131,7 +1159,7 @@ impl LightningClientModule {
                     state_machines: sm_gen,
                 }],
             ),
-            *preimage.as_ref(),
+            preimage,
         ))
     }
 
@@ -1809,7 +1837,8 @@ impl LightningClientModule {
             self.client_ctx
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
-        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        let extra_meta =
+            serde_json::to_value(extra_meta).context("Failed to serialize invoice metadata")?;
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim {
                 out_points: change_range.into_iter().collect(),

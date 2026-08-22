@@ -15,6 +15,7 @@ use bitcoin::secp256k1::SECP256K1;
 use fedimint_client_module::OperationId;
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::transaction::TransactionBuilder;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
@@ -38,6 +39,7 @@ use tokio::select;
 use tokio::sync::Notify;
 use tracing::{debug, trace, warn};
 
+use crate::api::LnFederationApi;
 use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
 use crate::{
@@ -234,7 +236,26 @@ impl LightningClientModule {
         invoice_idx: u64,
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
-        // TODO: validate invoice hash etc.
+        let operation_id = OperationId(*invoice.payment_hash().as_ref());
+        let offer_was_found = match client
+            .self_ref()
+            .module_api
+            .offer_exists(*invoice.payment_hash())
+            .await
+        {
+            Ok(exists) => exists,
+            Err(error) => {
+                warn!(
+                    target: LOG_CLIENT_RECURRING,
+                    ?operation_id,
+                    invoice_index=%invoice_idx,
+                    err = %error.fmt_compact(),
+                    "Could not query incoming contract offer, will retry"
+                );
+                return;
+            }
+        };
+
         let mut dbtx = client.module_db().begin_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
@@ -255,34 +276,39 @@ impl LightningClientModule {
         )
         .await;
 
-        // We want to increment the invoice counter even if the operation creation
-        // fails. This should never happen and if it does, we'd rather miss an invoice
-        // than get stuck in an infinite loop.
+        // An invalid invoice must not block every later index for this payment code.
         let mut dbtx_nc = dbtx.to_ref_nc();
-        if let Ok(operation_id) = Self::create_recurring_receive_operation(
+        match Self::create_recurring_receive_operation(
             client,
             &mut dbtx_nc,
             &old_payment_code_entry,
             invoice_idx,
             invoice,
+            offer_was_found,
         )
         .await
         {
-            client
-                .log_event(
-                    &mut dbtx_nc,
-                    RecurringInvoiceCreatedEvent {
-                        payment_code_idx,
-                        invoice_idx,
-                        operation_id,
-                    },
-                )
-                .await;
-        } else {
-            debug_assert!(
-                false,
-                "Recurring invoice operation creation failed, this should never happen"
-            );
+            Ok(operation_id) => {
+                client
+                    .log_event(
+                        &mut dbtx_nc,
+                        RecurringInvoiceCreatedEvent {
+                            payment_code_idx,
+                            invoice_idx,
+                            operation_id,
+                        },
+                    )
+                    .await;
+            }
+            Err(error) => {
+                warn!(
+                    target: LOG_CLIENT_RECURRING,
+                    payment_code_key=?old_payment_code_entry.root_keypair.public_key(),
+                    invoice_index=%invoice_idx,
+                    err = %error.fmt_compact_anyhow(),
+                    "Failed to create recurring receive operation"
+                );
+            }
         }
         drop(dbtx_nc);
 
@@ -296,6 +322,7 @@ impl LightningClientModule {
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
+        offer_was_found: bool,
     ) -> anyhow::Result<OperationId> {
         // TODO: pipe secure secp context to here
         let invoice_key =
@@ -309,52 +336,78 @@ impl LightningClientModule {
             invoice_index=%invoice_index,
             "Creating recurring receive operation"
         );
-        let ln_state =
-            LightningClientStateMachines::Receive(crate::receive::LightningReceiveStateMachine {
-                operation_id,
-                // TODO: technically we want a state that doesn't assume the offer was accepted
-                // since we haven't checked, but for an MVP this is good enough
-                state: crate::receive::LightningReceiveStates::ConfirmedInvoice(
-                    crate::receive::LightningReceiveConfirmedInvoice {
-                        invoice: invoice.clone(),
-                        receiving_key: crate::ReceivingKey::Personal(invoice_key),
-                    },
-                ),
-            });
+        let operation_meta = LightningOperationMeta {
+            variant: LightningOperationMetaVariant::RecurringPaymentReceive(
+                ReurringPaymentReceiveMeta {
+                    payment_code_id: PaymentCodeRootKey(payment_code.root_keypair.public_key())
+                        .to_payment_code_id(),
+                    invoice: invoice.clone(),
+                },
+            ),
+            extra_meta: serde_json::Value::Null,
+        };
+        let receiving_key = crate::ReceivingKey::Personal(invoice_key);
 
-        if let Err(e) = client
-            .manual_operation_start_dbtx(
+        if offer_was_found {
+            let ln_state = LightningClientStateMachines::Receive(
+                crate::receive::LightningReceiveStateMachine {
+                    operation_id,
+                    state: crate::receive::LightningReceiveStates::ConfirmedInvoice(
+                        crate::receive::LightningReceiveConfirmedInvoice {
+                            invoice,
+                            receiving_key,
+                        },
+                    ),
+                },
+            );
+
+            client
+                .manual_operation_start_dbtx(
+                    dbtx,
+                    operation_id,
+                    "ln",
+                    operation_meta,
+                    vec![client.make_dyn_state(ln_state)],
+                )
+                .await?;
+            return Ok(operation_id);
+        }
+
+        warn!(
+            target: LOG_CLIENT_RECURRING,
+            ?operation_id,
+            payment_code_key=?payment_code.root_keypair.public_key(),
+            invoice_index=%invoice_index,
+            "Incoming contract offer missing from federation; registering it from the recipient client"
+        );
+
+        let amount = fedimint_core::Amount::from_msats(
+            invoice.amount_milli_satoshis().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Recurring invoice for operation {operation_id:?} has no amount, cannot register offer"
+                )
+            })?,
+        );
+        let expiry_time = Some(invoice.expiry_time().as_secs());
+        let (_, output, _) = client.self_ref().create_lightning_receive_offer_output(
+            amount,
+            &invoice,
+            receiving_key,
+            expiry_time,
+        )?;
+        let output = client.make_client_outputs(output);
+        let tx = TransactionBuilder::new().with_outputs(output);
+        client
+            .finalize_and_submit_transaction_dbtx(
                 dbtx,
                 operation_id,
                 "ln",
-                LightningOperationMeta {
-                    variant: LightningOperationMetaVariant::RecurringPaymentReceive(
-                        ReurringPaymentReceiveMeta {
-                            payment_code_id: PaymentCodeRootKey(
-                                payment_code.root_keypair.public_key(),
-                            )
-                            .to_payment_code_id(),
-                            invoice,
-                        },
-                    ),
-                    extra_meta: serde_json::Value::Null,
-                },
-                vec![client.make_dyn_state(ln_state)],
+                move |_| operation_meta.clone(),
+                tx,
             )
-            .await
-        {
-            warn!(
-                target: LOG_CLIENT_RECURRING,
-                ?operation_id,
-                payment_code_key=?payment_code.root_keypair.public_key(),
-                invoice_index=%invoice_index,
-                err = %e.fmt_compact_anyhow(),
-                "Failed to create recurring receive operation"
-            );
-            Err(e)
-        } else {
-            Ok(operation_id)
-        }
+            .await?;
+
+        Ok(operation_id)
     }
 
     pub async fn subscribe_ln_recurring_receive(
