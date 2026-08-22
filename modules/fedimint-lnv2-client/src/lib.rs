@@ -11,6 +11,7 @@ mod api;
 mod cli;
 pub mod db;
 pub mod events;
+pub mod htlc;
 mod receive_sm;
 mod send_sm;
 
@@ -67,6 +68,7 @@ use tracing::warn;
 
 use crate::api::LightningFederationApi;
 use crate::events::SendPaymentEvent;
+use crate::htlc::{CreateHtlcOperationMeta, SpendHtlcOperationMeta};
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -83,6 +85,10 @@ pub enum LightningOperationMeta {
     Send(SendOperationMeta),
     Receive(ReceiveOperationMeta),
     LnurlReceive(LnurlReceiveOperationMeta),
+    CreateHtlc(CreateHtlcOperationMeta),
+    ClaimHtlc(SpendHtlcOperationMeta),
+    RefundHtlc(SpendHtlcOperationMeta),
+    CancelHtlc(SpendHtlcOperationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
