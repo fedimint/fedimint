@@ -148,7 +148,6 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
         .into_stream();
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
-    assert_eq!(sub.ok().await?, SendOperationState::Funded);
     assert_eq!(
         sub.ok().await?,
         SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
@@ -215,7 +214,6 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
         .into_stream();
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
-    assert_eq!(sub.ok().await?, SendOperationState::Funded);
     assert_eq!(sub.ok().await?, SendOperationState::Refunding);
     assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
@@ -277,7 +275,6 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
         .into_stream();
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
-    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
     fixtures.bitcoin().mine_blocks(1440 + 12).await;
 
@@ -339,7 +336,6 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .into_stream();
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
-    assert_eq!(sub.ok().await?, SendOperationState::Funded);
 
     let operation = client
         .operation_log()
@@ -354,6 +350,16 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             panic!("Operation Meta is a LnurlReceive variant")
         }
     };
+
+    // Wait for the funding transaction to be accepted so the outgoing contract
+    // exists before we claim it. The send now goes straight from Funding to a
+    // final state, so there is no intermediate Funded update to synchronize on.
+    client
+        .transaction_updates(operation_id)
+        .await
+        .await_tx_accepted(txid)
+        .await
+        .expect("Funding transaction was not accepted");
 
     let client_input = ClientInput::<LightningInput> {
         input: LightningInput::V0(LightningInputV0::Outgoing(
