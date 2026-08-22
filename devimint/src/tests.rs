@@ -20,7 +20,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{retry, write_overwrite_async};
+use fedimint_core::util::{FmtCompactAnyhow, retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -31,7 +31,7 @@ use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
 use substring::Substring;
-use tokio::net::TcpStream;
+use tokio::net::TcpListener;
 use tokio::{fs, try_join};
 use tracing::{debug, error, info};
 
@@ -2879,6 +2879,15 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let main = {
                 let task_group = task_group.clone();
                 async move {
+                    // Bind before bringing up the federation, and outside the
+                    // faucet task, so that a port clash fails the setup right
+                    // away instead of leaving the test suite talking to whatever
+                    // else is listening on that port. Holding the socket from here
+                    // on also keeps other port allocators off it.
+                    let faucet_bind_addr = &process_mgr.globals.FM_FAUCET_BIND_ADDR;
+                    let faucet_listener = TcpListener::bind(faucet_bind_addr)
+                        .await
+                        .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
                     let dev_fed = dev_fed(&process_mgr).await?;
                     let gw_lnd = dev_fed.gw_lnd.clone();
                     let fed = dev_fed.fed.clone();
@@ -2886,30 +2895,16 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         .client()
                         .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
                         .await?;
+                    info!(addr = %faucet_bind_addr, "Faucet listening");
+                    let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
                     task_group.spawn_cancellable("faucet", async move {
-                        if let Err(err) = crate::faucet::run(
-                            &dev_fed,
-                            format!("0.0.0.0:{}", process_mgr.globals.FM_PORT_FAUCET),
-                            process_mgr.globals.FM_PORT_GW_LND,
-                        )
-                        .await
+                        if let Err(err) =
+                            crate::faucet::run(&dev_fed, faucet_listener, gw_lnd_port).await
                         {
-                            error!("Error spawning faucet: {err}");
+                            error!(err = %err.fmt_compact_anyhow(), "Faucet failed");
                         }
                     });
-                    try_join!(fed.pegin_gateways(30_000, vec![&gw_lnd]), async {
-                        poll("waiting for faucet startup", || async {
-                            TcpStream::connect(format!(
-                                "127.0.0.1:{}",
-                                process_mgr.globals.FM_PORT_FAUCET
-                            ))
-                            .await
-                            .context("connect to faucet")
-                            .map_err(ControlFlow::Continue)
-                        })
-                        .await?;
-                        Ok(())
-                    },)?;
+                    fed.pegin_gateways(30_000, vec![&gw_lnd]).await?;
                     if let Some(exec) = exec {
                         exec_user_command(exec).await?;
                         task_group.shutdown();
