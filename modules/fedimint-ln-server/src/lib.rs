@@ -1732,6 +1732,14 @@ mod tests {
             Ok(())
         }
 
+        async fn submit_package(
+            &self,
+            _transactions: &[fedimint_core::bitcoin::Transaction],
+        ) -> anyhow::Result<()> {
+            // No-op for mock
+            Ok(())
+        }
+
         async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
             Err(anyhow::anyhow!("Mock sync percentage error"))
         }

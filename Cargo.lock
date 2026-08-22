@@ -4754,6 +4754,8 @@ dependencies = [
  "fedimint-logging",
  "fedimint-metrics",
  "fedimint-server-core",
+ "serde_json",
+ "tokio",
  "tracing",
 ]
 

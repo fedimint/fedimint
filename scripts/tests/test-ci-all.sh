@@ -191,6 +191,15 @@ function walletv2_module() {
 }
 export -f walletv2_module
 
+function package_submission_test() {
+  # This only exercises the server bitcoin RPC layer against real daemons, so
+  # running it once per fedimint version combination adds nothing
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/package-submission-test.sh
+  fi
+}
+export -f package_submission_test
+
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -489,6 +498,7 @@ tests_to_run_in_parallel+=(
   "lnv1_lnv2_swap"
   "walletv2_module"
   "mintv2_module_test"
+  "package_submission_test"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "guardian_metadata_test"
