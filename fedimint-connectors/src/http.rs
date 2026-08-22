@@ -6,7 +6,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
-use crate::error::ServerError;
+use crate::error::{GatewayStatusCode, ServerError};
 use crate::{
     Connectivity, DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection,
     ServerResult,
@@ -90,16 +90,19 @@ impl IGatewayConnection for HttpConnection {
         let response = builder
             .send()
             .await
-            .map_err(|e| ServerError::ServerError(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         match response.status() {
             StatusCode::OK => Ok(response
                 .json::<Value>()
                 .await
                 .map_err(|e| ServerError::InvalidResponse(e.into()))?),
-            status => Err(ServerError::InvalidRequest(anyhow::anyhow!(
-                "HTTP request returned unexpected status: {status}"
-            ))),
+            status => Err(ServerError::GatewayStatus {
+                status: GatewayStatusCode::from_http(status),
+            }),
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -89,6 +89,7 @@ use tokio::sync::watch;
 use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+use crate::error::GatewayStatusCode;
 use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
 
 #[derive(Clone)]
@@ -377,7 +378,7 @@ impl crate::Connector for IrohConnector {
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            ServerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+            ServerError::Transport(anyhow::anyhow!("Both iroh connection attempts failed"))
         }))
     }
 
@@ -849,15 +850,18 @@ impl IGatewayConnection for Connection {
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
             .map_err(|e| ServerError::InvalidResponse(e.into()))?;
-        match StatusCode::from_u16(response.status).map_err(|e| {
-            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
-        })? {
-            StatusCode::OK => Ok(response.body),
-            status => Err(ServerError::ServerError(anyhow::anyhow!(
-                "Server returned status code: {}",
-                status
-            ))),
-        }
+        gateway_response_result(response)
+    }
+}
+
+fn gateway_response_result(response: IrohGatewayResponse) -> ServerResult<Value> {
+    let status = GatewayStatusCode::from_u16(response.status).map_err(|error| {
+        ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {error}"))
+    })?;
+    if response.status == StatusCode::OK.as_u16() {
+        Ok(response.body)
+    } else {
+        Err(ServerError::GatewayStatus { status })
     }
 }
 
@@ -868,7 +872,7 @@ mod tests {
     use fedimint_core::PeerId;
     use fedimint_core::config::FederationId;
     use fedimint_core::invite_code::InviteCode;
-    use fedimint_core::module::ApiMethod;
+    use fedimint_core::module::{ApiMethod, IrohGatewayResponse};
     use fedimint_core::util::SafeUrl;
 
     use super::{
@@ -995,5 +999,24 @@ mod tests {
             request_timeout_for_method(&ApiMethod::Core("submit_await_thing".to_owned())),
             IROH_REQUEST_TIMEOUT_DEFAULT,
         );
+    }
+
+    #[test]
+    fn gateway_response_retains_non_success_status_without_retaining_body() {
+        for status in [400, 404, 429, 500, 503] {
+            let error = super::gateway_response_result(IrohGatewayResponse {
+                status,
+                body: serde_json::json!({"secret": "details"}),
+            })
+            .expect_err("non-success is rejected");
+
+            assert!(matches!(
+                error,
+                crate::error::ServerError::GatewayStatus {
+                    status: actual_status
+                } if actual_status.as_u16() == status
+            ));
+            assert!(!error.to_string().contains("details"));
+        }
     }
 }

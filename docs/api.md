@@ -338,6 +338,13 @@ Use [GitHub search to find more details about every API](https://github.com/sear
 - **Returns**: `Vec<`[`SafeUrl`](https://docs.fedimint.org/?search=SafeUrl)`>` - List of registered gateways
 - **Purpose**: Returns the list of Lightning gateways registered with the federation.
 
+### Gateway Registry Evidence Endpoint
+- **Endpoint**: `gateway_registry_evidence`
+- **Introduced in module API version**: `0.1`
+- **Arguments**: None
+- **Returns**: [`Lnv2RegistryEvidenceV1`](https://docs.fedimint.org/?search=Lnv2RegistryEvidenceV1) - Versioned snapshot of registered gateway URLs and `no_registrations` or `registrations_current`
+- **Purpose**: Supplies additive registry-health evidence without changing the existing list or selection path. LNv2 registrations have no TTL, so the response has no expiration field or expired state.
+
 ## Lightning (LN) Module API Endpoints
 
 ### Block Count Endpoint
@@ -399,6 +406,13 @@ Use [GitHub search to find more details about every API](https://github.com/sear
 - **Arguments**: None
 - **Returns**: `Vec<`[`LightningGatewayAnnouncement`](https://docs.fedimint.org/?search=LightningGatewayAnnouncement)`>` - List of registered gateways
 - **Purpose**: Returns the list of Lightning gateways registered with the federation.
+
+### Gateway Registry Evidence Endpoint
+- **Endpoint**: `gateway_registry_evidence`
+- **Introduced in module API version**: `0.2`
+- **Arguments**: None
+- **Returns**: [`Lnv1RegistryEvidenceV1`](https://docs.fedimint.org/?search=Lnv1RegistryEvidenceV1) - Versioned snapshot of current announcements and `no_registrations`, `registrations_expired`, or `registrations_current`
+- **Purpose**: Distinguishes a registry with no records from one whose TTL-bound records have all expired while returning only the current announcements exposed by the existing list endpoint.
 
 ### Register Gateway Endpoint
 - **Endpoint**: `register_gateway`

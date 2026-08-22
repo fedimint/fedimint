@@ -458,6 +458,7 @@ impl ClientModuleInit for LightningClientInit {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug)]
 pub struct LightningClientModule {
+    federation_id: FederationId,
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: Keypair,
@@ -757,6 +758,7 @@ impl LightningClientModule {
         );
 
         Self {
+            federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -1331,6 +1333,23 @@ impl LightningClientModule {
             .map(|(_, gw)| gw.unanchor())
             .collect::<Vec<_>>()
             .await
+    }
+
+    /// Reads a fresh versioned `LNv1` registry snapshot without mutating the
+    /// gateway cache or changing selection behavior.
+    pub async fn gateway_registry_evidence(
+        &self,
+    ) -> anyhow::Result<fedimint_ln_common::gateway_registry::Lnv1RegistryEvidenceCompatibility>
+    {
+        self.module_api
+            .gateway_registry_evidence(self.cfg.threshold_pub_key)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Returns the federation identity to which registry evidence is scoped.
+    pub fn federation_id(&self) -> FederationId {
+        self.federation_id
     }
 
     /// Pays a LN invoice with our available funds using the supplied `gateway`

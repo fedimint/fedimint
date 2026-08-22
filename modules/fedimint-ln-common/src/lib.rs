@@ -22,6 +22,7 @@ pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
+pub mod gateway_registry;
 
 /// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
 ///
@@ -369,7 +370,12 @@ impl LightningGatewayRegistration {
     }
 
     pub fn is_expired(&self) -> bool {
-        self.valid_until < fedimint_core::time::now()
+        self.is_expired_at(fedimint_core::time::now())
+    }
+
+    /// Returns whether this registration is expired at the supplied time.
+    pub fn is_expired_at(&self, now: SystemTime) -> bool {
+        self.valid_until < now
     }
 }
 
