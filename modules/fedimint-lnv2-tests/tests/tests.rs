@@ -4,13 +4,23 @@ use std::pin::pin;
 use std::sync::Arc;
 
 use async_stream::stream;
+use bitcoin::hashes::sha256;
 use fedimint_client::ClientHandleArc;
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::sm::executor::InactiveStateKeyDb;
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_client_module::module::ClientModule;
+use fedimint_client_module::sm::InactiveStateMeta;
+use fedimint_client_module::sm::executor::InactiveStateKey;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::{Keypair, SECP256K1, SecretKey};
 use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, OutPoint, sats};
+use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
@@ -18,11 +28,15 @@ use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveOperationState, SendOperationState, SendPaymentError,
+    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
+    LightningOperationMeta, LnurlReceiveOperationMeta, ReceiveOperationState, ReceiveSMCommon,
+    ReceiveSMState, ReceiveStateMachine, SendOperationState, SendPaymentError,
 };
+use fedimint_lnv2_common::config::LightningClientConfig;
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
+    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, LightningOutput,
+    LightningOutputV0, OutgoingWitness,
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
@@ -423,6 +437,461 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
     assert_eq!(sub.ok().await?, ReceiveOperationState::Expired);
+
+    Ok(())
+}
+
+/// Funds an incoming contract like a gateway would, waits for the funding
+/// transaction to be accepted and returns the contract's funding outpoint.
+async fn fund_incoming_contract(
+    client: &ClientHandleArc,
+    contract: IncomingContract,
+) -> anyhow::Result<OutPoint> {
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let funding_operation_id = OperationId::new_random();
+
+    let funding_range = client
+        .finalize_and_submit_transaction(
+            funding_operation_id,
+            "Funding Incoming Contract",
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    client
+        .transaction_updates(funding_operation_id)
+        .await
+        .await_tx_accepted(funding_range.txid())
+        .await
+        .map_err(|e| anyhow::anyhow!("Funding transaction was rejected: {e}"))?;
+
+    // The lightning output is the first output of the funding transaction;
+    // the primary module's change outputs follow it.
+    Ok(OutPoint {
+        txid: funding_range.txid(),
+        out_idx: 0,
+    })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn funded_receive_is_claimed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    // Give the client an initial balance to fund the incoming contract with.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let mut events = pin!(ln_event_stream(&client));
+
+    let operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .receive(
+            Amount::from_sats(1000),
+            3600,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?
+        .1;
+
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()?
+        .subscribe_receive_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
+
+    let operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    let contract = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Receive(meta) => meta.contract,
+        _ => panic!("Operation meta is not a receive variant"),
+    };
+
+    fund_incoming_contract(&client, contract).await?;
+
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Claiming);
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Claimed);
+
+    let Some(LnEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+    assert_eq!(receive.operation_id, operation_id);
+
+    Ok(())
+}
+
+/// Crafts a claimable incoming contract with keys known to the test instead
+/// of keys derived from a client's seed, so no live state machine races the
+/// test for the claim.
+fn craft_incoming_contract(
+    tpe_agg_pk: tpe::AggregatePublicKey,
+) -> (IncomingContract, Keypair, tpe::AggregateDecryptionKey) {
+    let claim_keypair = SecretKey::new(&mut OsRng).keypair(SECP256K1);
+    let encryption_seed = [42; 32];
+    let preimage = encryption_seed
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let contract = IncomingContract::new(
+        tpe_agg_pk,
+        encryption_seed,
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        Amount::from_sats(1000),
+        u64::MAX,
+        claim_keypair.public_key(),
+        claim_keypair.public_key(),
+        claim_keypair.public_key(),
+    );
+
+    let agg_decryption_key = tpe::derive_agg_dk(&tpe_agg_pk, &encryption_seed);
+
+    (contract, claim_keypair, agg_decryption_key)
+}
+
+async fn lnv2_tpe_agg_pk(client: &ClientHandleArc) -> anyhow::Result<tpe::AggregatePublicKey> {
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    Ok(client
+        .config()
+        .await
+        .modules
+        .get(&lnv2_module_id)
+        .expect("lnv2 module config exists")
+        .cast::<LightningClientConfig>()?
+        .tpe_agg_pk)
+}
+
+/// Records a rejected claim transaction and parks a legacy claiming record
+/// referencing it under `operation_id`, exactly as the executor archived it
+/// for clients from before the claim transaction was watched for rejection:
+/// as a row in the inactive states table, which is not reachable via public
+/// state machine APIs since the state is terminal.
+async fn park_legacy_claim(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+    contract: &IncomingContract,
+    claim_keypair: Keypair,
+    agg_decryption_key: tpe::AggregateDecryptionKey,
+    operation_meta: LightningOperationMeta,
+) -> anyhow::Result<()> {
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    // Record a rejected claim transaction under the operation id by claiming
+    // an outpoint that holds no contract.
+    let rejected_range = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            KIND.as_str(),
+            move |_| operation_meta.clone(),
+            TransactionBuilder::new().with_inputs(
+                ClientInputBundle::new_no_sm(vec![ClientInput::<LightningInput> {
+                    input: LightningInput::V0(LightningInputV0::Incoming(
+                        OutPoint {
+                            txid: TransactionId::from_byte_array([21; 32]),
+                            out_idx: 0,
+                        },
+                        agg_decryption_key,
+                    )),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                    keys: vec![claim_keypair],
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    anyhow::ensure!(
+        client
+            .transaction_updates(operation_id)
+            .await
+            .await_tx_accepted(rejected_range.txid())
+            .await
+            .is_err(),
+        "The claim of a non-existent contract should be rejected"
+    );
+
+    park_legacy_record(
+        client,
+        operation_id,
+        contract,
+        claim_keypair,
+        agg_decryption_key,
+        rejected_range.txid(),
+    )
+    .await
+}
+
+/// Writes a legacy claiming record referencing `claim_txid` under
+/// `operation_id` into the inactive states table, exactly as the executor
+/// archived it for clients from before the claim transaction was watched for
+/// rejection. The table is not reachable via public state machine APIs since
+/// the state is terminal.
+async fn park_legacy_record(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+    contract: &IncomingContract,
+    claim_keypair: Keypair,
+    agg_decryption_key: tpe::AggregateDecryptionKey,
+    claim_txid: TransactionId,
+) -> anyhow::Result<()> {
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let parked_receive_sm = ReceiveStateMachine {
+        common: ReceiveSMCommon {
+            operation_id,
+            contract: contract.clone(),
+            claim_keypair,
+            agg_decryption_key,
+        },
+        state: ReceiveSMState::ClaimingLegacy(vec![OutPoint {
+            txid: claim_txid,
+            out_idx: 0,
+        }]),
+    };
+
+    let parked_state =
+        fedimint_lnv2_client::LightningClientStateMachines::Receive(parked_receive_sm)
+            .into_dyn(lnv2_module_id);
+
+    let parked_state_meta = InactiveStateMeta {
+        created_at: fedimint_core::time::now(),
+        exited_at: fedimint_core::time::now(),
+    };
+
+    let mut dbtx = client.db().begin_transaction().await;
+
+    dbtx.insert_entry(
+        &InactiveStateKeyDb(InactiveStateKey::from_state(parked_state)),
+        &parked_state_meta,
+    )
+    .await;
+
+    dbtx.commit_tx().await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reclaim_receive_recovers_parked_claim() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    // Give the client an initial balance to fund the incoming contract with.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let (contract, claim_keypair, agg_decryption_key) =
+        craft_incoming_contract(lnv2_tpe_agg_pk(&client).await?);
+
+    fund_incoming_contract(&client, contract.clone()).await?;
+
+    let original_operation_id = OperationId::new_random();
+
+    park_legacy_claim(
+        &client,
+        original_operation_id,
+        &contract,
+        claim_keypair,
+        agg_decryption_key,
+        LightningOperationMeta::LnurlReceive(LnurlReceiveOperationMeta {
+            contract: contract.clone(),
+            custom_meta: Value::Null,
+        }),
+    )
+    .await?;
+
+    let reclaim_operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .reclaim_receive(original_operation_id)
+        .await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(reclaim_operation_id)
+            .await?,
+        FinalReceiveOperationState::Claimed
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reclaim_receive_fails_when_contract_already_claimed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    // Give the client an initial balance to fund the incoming contract with.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module is registered");
+
+    let (contract, claim_keypair, agg_decryption_key) =
+        craft_incoming_contract(lnv2_tpe_agg_pk(&client).await?);
+
+    let funding_outpoint = fund_incoming_contract(&client, contract.clone()).await?;
+
+    // Claim the contract directly, as another client derived from the same
+    // seed would have, leaving nothing behind to reclaim. The operation is
+    // recorded like an lnv2 receive so the accepted-claim guard below can be
+    // exercised against it.
+    let claim_operation_id = OperationId::new_random();
+
+    let claim_meta_contract = contract.clone();
+
+    let claim_range = client
+        .finalize_and_submit_transaction(
+            claim_operation_id,
+            KIND.as_str(),
+            move |_| {
+                LightningOperationMeta::LnurlReceive(LnurlReceiveOperationMeta {
+                    contract: claim_meta_contract.clone(),
+                    custom_meta: Value::Null,
+                })
+            },
+            TransactionBuilder::new().with_inputs(
+                ClientInputBundle::new_no_sm(vec![ClientInput::<LightningInput> {
+                    input: LightningInput::V0(LightningInputV0::Incoming(
+                        funding_outpoint,
+                        agg_decryption_key,
+                    )),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                    keys: vec![claim_keypair],
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    client
+        .transaction_updates(claim_operation_id)
+        .await
+        .await_tx_accepted(claim_range.txid())
+        .await
+        .map_err(|e| anyhow::anyhow!("Claim of the funded contract was rejected: {e}"))?;
+
+    let original_operation_id = OperationId::new_random();
+
+    park_legacy_claim(
+        &client,
+        original_operation_id,
+        &contract,
+        claim_keypair,
+        agg_decryption_key,
+        LightningOperationMeta::LnurlReceive(LnurlReceiveOperationMeta {
+            contract: contract.clone(),
+            custom_meta: Value::Null,
+        }),
+    )
+    .await?;
+
+    // The reclaim rebuilds a fresh claim, which the federation rejects since
+    // the contract is already spent. A rejected claim is not retried, so the
+    // operation fails terminally.
+    let reclaim_event_log_start = client.get_next_event_log_id().await;
+
+    let reclaim_operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .reclaim_receive(original_operation_id)
+        .await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(reclaim_operation_id)
+            .await?,
+        FinalReceiveOperationState::Failure
+    );
+
+    assert!(
+        !client
+            .get_event_log(Some(reclaim_event_log_start), 100)
+            .await
+            .iter()
+            .any(|entry| matches!(
+                try_parse_ln_event(entry.as_raw()),
+                Some(LnEvent::Receive(event)) if event.operation_id == reclaim_operation_id
+            )),
+        "A rejected claim must not log a received payment"
+    );
+
+    // The failed reclaim itself parked in the new-style `Failed` state and
+    // can be reclaimed again, which fails the same way since the contract
+    // remains spent.
+    let second_reclaim_operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .reclaim_receive(reclaim_operation_id)
+        .await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(second_reclaim_operation_id)
+            .await?,
+        FinalReceiveOperationState::Failure
+    );
+
+    // A legacy record whose recorded claim transaction was accepted must be
+    // refused: reclaiming it would double count a settled receive.
+    park_legacy_record(
+        &client,
+        claim_operation_id,
+        &contract,
+        claim_keypair,
+        agg_decryption_key,
+        claim_range.txid(),
+    )
+    .await?;
+
+    let accepted_reclaim_error = client
+        .get_first_module::<LightningClientModule>()?
+        .reclaim_receive(claim_operation_id)
+        .await
+        .expect_err("Reclaiming an accepted legacy claim should be refused");
+
+    assert!(
+        accepted_reclaim_error
+            .to_string()
+            .contains("there is nothing to reclaim"),
+        "Unexpected error: {accepted_reclaim_error}"
+    );
 
     Ok(())
 }
