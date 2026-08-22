@@ -5,6 +5,7 @@
 pub use fedimint_lnv2_common as common;
 
 pub mod db;
+mod metrics;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -32,8 +33,8 @@ use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
-    push_db_pair_items,
+    Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
+    async_trait_maybe_send, push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
@@ -76,6 +77,7 @@ use crate::db::{
     IncomingContractStreamKey, IncomingContractStreamPrefix, OutgoingContractKey,
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
+use crate::metrics::{LN_FUNDED_CONTRACT_SATS, LN_OUTGOING_CONTRACT_SETTLED};
 
 /// Maximum number of incoming contracts a single `await_incoming_contracts`
 /// request may ask for. The endpoint is public and unauthenticated, so the
@@ -243,6 +245,18 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        // Eagerly register metrics so the series exist before the first transaction
+        for direction in ["incoming", "outgoing"] {
+            LN_FUNDED_CONTRACT_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+        }
+        for outcome in ["claim", "refund", "cancel"] {
+            LN_OUTGOING_CONTRACT_SETTLED
+                .with_label_values(&[outcome])
+                .get();
+        }
+
         Ok(Lightning {
             cfg: args.cfg().to_typed()?,
             db: args.db().clone(),
@@ -499,6 +513,18 @@ impl ServerModule for Lightning {
                     }
                 };
 
+                let outcome = match outgoing_witness {
+                    OutgoingWitness::Claim(..) => "claim",
+                    OutgoingWitness::Refund => "refund",
+                    OutgoingWitness::Cancel(..) => "cancel",
+                };
+
+                dbtx.on_commit(move || {
+                    LN_OUTGOING_CONTRACT_SETTLED
+                        .with_label_values(&[outcome])
+                        .inc();
+                });
+
                 (pub_key, contract.amount)
             }
             LightningInputV0::Incoming(outpoint, agg_decryption_key) => {
@@ -549,6 +575,8 @@ impl ServerModule for Lightning {
                 dbtx.insert_new_entry(&OutgoingContractKey(outpoint), contract)
                     .await;
 
+                observe_funded_contract(dbtx, "outgoing", contract.amount);
+
                 contract.amount
             }
             LightningOutputV0::Incoming(contract) => {
@@ -587,6 +615,8 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_entry(&DecryptionKeyShareKey(outpoint), &dk_share)
                     .await;
+
+                observe_funded_contract(dbtx, "incoming", contract.commitment.amount);
 
                 contract.commitment.amount
             }
@@ -948,4 +978,16 @@ impl Lightning {
     pub async fn gateways_ui(&self) -> Vec<SafeUrl> {
         Self::gateways(self.db.clone()).await
     }
+}
+
+fn observe_funded_contract(
+    dbtx: &mut DatabaseTransaction<'_>,
+    direction: &'static str,
+    amount: Amount,
+) {
+    dbtx.on_commit(move || {
+        LN_FUNDED_CONTRACT_SATS
+            .with_label_values(&[direction])
+            .observe(amount.sats_f64());
+    });
 }
