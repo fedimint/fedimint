@@ -3,7 +3,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -108,6 +108,16 @@ pub(crate) struct IrohConnector {
     /// direct). Consumers of [`crate::ConnectorRegistry`] subscribe via
     /// [`crate::ConnectorRegistry::connectivity_change_notifier`].
     path_change: Arc<watch::Sender<u64>>,
+
+    /// Live connections dialed over the next stack, kept so
+    /// [`crate::Connector::connectivity`] can read their paths back.
+    ///
+    /// Iroh 1.0 exposes path state per connection rather than per endpoint,
+    /// so unlike the stable stack there is no `endpoint.conn_type(node_id)`
+    /// to consult after the fact. Entries are keyed by the stable [`NodeId`]
+    /// because that is what callers derive from a peer url, and are replaced
+    /// on redial, so the map stays bounded by the number of distinct peers.
+    next_connections: Arc<Mutex<BTreeMap<NodeId, iroh_next::endpoint::Connection>>>,
 }
 
 impl fmt::Debug for IrohConnector {
@@ -262,6 +272,7 @@ impl IrohConnector {
             next: endpoint_next,
             connection_overrides: BTreeMap::new(),
             path_change,
+            next_connections: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
 
@@ -407,6 +418,16 @@ impl crate::Connector for IrohConnector {
         let Ok(node_id) = Self::node_id_from_url(url) else {
             return Connectivity::Unknown;
         };
+
+        // The next stack is consulted first: a peer reached over an advertised
+        // Iroh 1.0 endpoint never has a stable connection to report, and when
+        // both stacks were raced the next connection is the live one. Falling
+        // through to the stable endpoint in that case would report
+        // `Unknown`, which callers render as a disconnected peer.
+        if let Some(connectivity) = self.connectivity_next(node_id) {
+            return connectivity;
+        }
+
         let Ok(watcher) = self.stable.conn_type(node_id) else {
             return Connectivity::Unknown;
         };
@@ -467,6 +488,39 @@ impl crate::Connector for IrohConnector {
 }
 
 impl IrohConnector {
+    /// Report how a retained next-stack connection is reaching `node_id`.
+    ///
+    /// Returns `None` when we hold no live next connection for the peer, so
+    /// the caller can fall back to the stable stack. A connection that has
+    /// since closed counts as absent rather than as `Unknown`, so a peer that
+    /// was redialed over the stable stack is still reported correctly.
+    fn connectivity_next(&self, node_id: NodeId) -> Option<Connectivity> {
+        let connections = self
+            .next_connections
+            .lock()
+            .expect("Next connection mutex is never held across a panic");
+
+        let connection = connections.get(&node_id)?;
+
+        if connection.close_reason().is_some() {
+            return None;
+        }
+
+        // A path carries application data over either an IP or a relay
+        // address, so holding one of each is the next-stack spelling of the
+        // stable stack's `Mixed`.
+        let paths = connection.paths();
+        let direct = paths.iter().any(|path| path.is_ip());
+        let relay = paths.iter().any(|path| path.is_relay());
+
+        Some(match (direct, relay) {
+            (true, true) => Connectivity::Mixed,
+            (true, false) => Connectivity::Direct,
+            (false, true) => Connectivity::Relay,
+            (false, false) => Connectivity::Unknown,
+        })
+    }
+
     fn iroh_peer_info_from_conn_type(
         &self,
         node_id: NodeId,
@@ -617,6 +671,13 @@ impl IrohConnector {
         }
         .map_err(Into::into)
         .map_err(ServerError::Connection)?;
+
+        // Retain the connection so `connectivity` can read its paths back;
+        // iroh 1.0 offers no endpoint-level lookup to recover it from.
+        self.next_connections
+            .lock()
+            .expect("Next connection mutex is never held across a panic")
+            .insert(node_id, conn.clone());
 
         Ok(conn)
     }
