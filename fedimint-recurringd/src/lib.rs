@@ -21,6 +21,7 @@ use fedimint_core::task::timeout;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{Amount, BitcoinHash, runtime};
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_ln_client::common::config::FeeToAmount as _;
 use fedimint_ln_client::common::{LightningGateway, LightningGatewayAnnouncement};
 use fedimint_ln_client::recurring::{
     PaymentCodeId, PaymentCodeRootKey, RecurringPaymentError, RecurringPaymentProtocol,
@@ -840,12 +841,11 @@ fn select_preferred_gateway(
         .map(|gateway| gateway.gateway.clone())
 }
 
+/// Ranks gateways by what they would actually charge, so selection agrees with
+/// the fee the payment is later funded with. `to_amount` saturates, so a
+/// gateway announcing a fee too large to represent simply ranks last.
 fn gateway_fee_msat(gateway: &LightningGateway, amount: Amount) -> u64 {
-    let proportional_fee =
-        (u128::from(amount.msats) * u128::from(gateway.fees.proportional_millionths)) / 1_000_000;
-
-    u64::from(gateway.fees.base_msat)
-        .saturating_add(u64::try_from(proportional_fee).unwrap_or(u64::MAX))
+    gateway.fees.to_amount_legacy(&amount).msats
 }
 
 fn sort_gateways_by_preference(

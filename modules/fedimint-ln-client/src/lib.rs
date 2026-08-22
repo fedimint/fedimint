@@ -65,7 +65,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{BoxStream, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
-    Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
+    Amount, OutPoint, apply, async_trait_maybe_send, msats, push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_common::client::GatewayApi;
@@ -863,8 +863,15 @@ impl LightningClientModule {
                 .context("MissingInvoiceAmount")?,
         );
 
-        let gateway_fee = gateway.fees.to_amount(&invoice_amount);
-        let contract_amount = invoice_amount + gateway_fee;
+        let gateway_fee = gateway.fees.to_amount_legacy(&invoice_amount);
+        // A gateway announcement carries an unvalidated fee rate, and clients
+        // union the announcements they receive from each guardian, so one
+        // guardian that has not upgraded still serves a rate large enough to
+        // overflow the contract amount. Refuse the payment instead of panicking
+        // the state machine that funds it.
+        let contract_amount = invoice_amount
+            .checked_add(gateway_fee)
+            .context("Gateway fee is too large to fund an outgoing contract for this invoice")?;
 
         let user_sk = Keypair::new(&self.secp, &mut rng);
 
@@ -1194,14 +1201,13 @@ impl LightningClientModule {
         let sorted_gateways = sorted_gateways
             .into_iter()
             .sorted_by_key(|(ann, status)| {
-                let total_fee_msat: u64 =
-                    amount_msat.map_or(u64::from(ann.info.fees.base_msat), |amt| {
-                        u64::from(ann.info.fees.base_msat)
-                            + ((u128::from(amt)
-                                * u128::from(ann.info.fees.proportional_millionths))
-                                / 1_000_000) as u64
-                    });
-                (status.clone(), total_fee_msat)
+                // `to_amount` saturates, so a gateway announcing a fee too
+                // large to represent simply ranks last.
+                let total_fee = amount_msat.map_or_else(
+                    || msats(u64::from(ann.info.fees.base_msat)),
+                    |amt| ann.info.fees.to_amount_legacy(&msats(amt)),
+                );
+                (status.clone(), total_fee)
             })
             .collect::<Vec<_>>();
 
@@ -1932,7 +1938,11 @@ impl LightningClientModule {
             balance,
             Amount::from_msats(1),
             balance,
-            |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
+            // Saturating: an unfundable fee has to read as unaffordable to the
+            // binary search, not panic it.
+            |invoice_amount: Amount| {
+                invoice_amount.saturating_add(gateway.fees.to_amount_legacy(&invoice_amount))
+            },
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
         .await

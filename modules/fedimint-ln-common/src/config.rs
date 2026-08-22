@@ -89,20 +89,56 @@ impl Default for FeeConsensus {
 /// Trait for converting a fee type to specific `Amount`,
 /// relative to a given payment `Amount`
 pub trait FeeToAmount {
-    /// Calculates fee `Amount` given a payment `Amount`
+    /// The fee the rate names: `base_msat + floor(payment * ppm / 1_000_000)`.
+    ///
+    /// Never larger than [`FeeToAmount::to_amount_legacy`], which is why a
+    /// gateway validates outgoing contracts against this one: it accepts both
+    /// what deployed clients fund today and what they will fund once they move
+    /// off the legacy calculation.
     fn to_amount(&self, payment: &Amount) -> Amount;
+
+    /// The fee deployed LNv1 clients fund an outgoing contract with:
+    /// `base_msat + floor(payment / floor(1_000_000 / ppm))`.
+    ///
+    /// Truncating the divisor before dividing over-charges every rate that does
+    /// not divide `1_000_000` exactly — the default 3_000 ppm bills 0.3003% —
+    /// and bills a flat 100% above 500_000 ppm. Wrong, but a client that funds
+    /// less than this is rejected as `Underfunded` by every gateway still
+    /// validating with it, so clients keep funding it until the fleet has
+    /// rolled over. New callers want [`FeeToAmount::to_amount`].
+    fn to_amount_legacy(&self, payment: &Amount) -> Amount;
 }
 
 impl FeeToAmount for RoutingFees {
     fn to_amount(&self, payment: &Amount) -> Amount {
-        let base_fee = u64::from(self.base_msat);
-        let margin_fee: u64 = if self.proportional_millionths > 0 {
-            let fee_percent = 1_000_000 / u64::from(self.proportional_millionths);
-            payment.msats / fee_percent
-        } else {
-            0
+        // Widened to `u128`: the rate arrives unvalidated in a gateway
+        // registration, and clients union the announcements they get from each
+        // guardian, so it is not bounded by what `register_gateway` accepts.
+        // An absurd fee has to surface as an absurd `Amount` the caller
+        // rejects, never as an overflow.
+        let margin_fee =
+            u128::from(payment.msats) * u128::from(self.proportional_millionths) / 1_000_000;
+
+        msats(
+            u64::try_from(margin_fee)
+                .unwrap_or(u64::MAX)
+                .saturating_add(u64::from(self.base_msat)),
+        )
+    }
+
+    fn to_amount_legacy(&self, payment: &Amount) -> Amount {
+        let margin_fee = match 1_000_000_u64.checked_div(u64::from(self.proportional_millionths)) {
+            // A zero rate has no margin at all.
+            None => 0,
+            // Above one million ppm the divisor truncates to zero, which used to
+            // panic. There is no representable divisor, so price it out of range.
+            Some(0) => u64::MAX,
+            Some(divisor) => payment.msats / divisor,
         };
 
-        msats(base_fee + margin_fee)
+        msats(margin_fee.saturating_add(u64::from(self.base_msat)))
     }
 }
+
+#[cfg(test)]
+mod tests;

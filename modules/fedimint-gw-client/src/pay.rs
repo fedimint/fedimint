@@ -649,8 +649,18 @@ impl GatewayPayInvoice {
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
+        // Require only the fee the rate names, not the larger amount today's
+        // clients compute with `to_amount_legacy`. Overfunding is already
+        // accepted, so this keeps working with deployed clients while no longer
+        // rejecting a client that has moved to the corrected calculation. The
+        // contract is claimed at its full funded amount either way, so this
+        // gives up no revenue.
         let gateway_fee = routing_fees.to_amount(&payment_amount);
-        let necessary_contract_amount = payment_amount + gateway_fee;
+
+        // Saturating: our own configured fee is bounded, but this rate is read
+        // back from a federation-served announcement, so a fee that overflows
+        // the sum must fail the funding check below rather than panic us.
+        let necessary_contract_amount = payment_amount.saturating_add(gateway_fee);
         if account.amount < necessary_contract_amount {
             return Err(OutgoingContractError::Underfunded(
                 necessary_contract_amount,
@@ -994,6 +1004,7 @@ mod tests {
     use fedimint_core::secp256k1::{self, SecretKey};
     use fedimint_ln_client::pay::PaymentData;
     use fedimint_ln_common::PrunedInvoice;
+    use fedimint_ln_common::config::FeeToAmount as _;
     use fedimint_ln_common::contracts::IdentifiableContract as _;
     use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
     use lightning_invoice::RoutingFees;
@@ -1029,8 +1040,12 @@ mod tests {
     }
 
     fn payment_data(payment_hash: sha256::Hash) -> PaymentData {
+        payment_data_of(payment_hash, INVOICE_AMOUNT)
+    }
+
+    fn payment_data_of(payment_hash: sha256::Hash, amount: Amount) -> PaymentData {
         PaymentData::PrunedInvoice(PrunedInvoice {
-            amount: INVOICE_AMOUNT,
+            amount,
             destination: secp256k1::PublicKey::from_keypair(&gateway_keypair()),
             destination_features: vec![],
             payment_hash,
@@ -1058,6 +1073,27 @@ mod tests {
         .map(|_| ())
     }
 
+    /// Validates a contract funded with `funded` against an invoice for
+    /// `invoice_amount` at `routing_fees`.
+    fn validate_funding(
+        invoice_amount: Amount,
+        funded: Amount,
+        routing_fees: RoutingFees,
+    ) -> Result<(), OutgoingContractError> {
+        let hash = sha256::Hash::hash(b"preimage");
+        let mut account = contract_account(hash);
+        account.amount = funded;
+
+        GatewayPayInvoice::validate_outgoing_account(
+            &account,
+            gateway_keypair(),
+            CONSENSUS_BLOCK_COUNT,
+            &payment_data_of(hash, invoice_amount),
+            routing_fees,
+        )
+        .map(|_| ())
+    }
+
     /// Guards against the fixture being invalid for some unrelated reason,
     /// which would make the rejection test below pass vacuously.
     #[test]
@@ -1065,6 +1101,47 @@ mod tests {
         let hash = sha256::Hash::hash(b"preimage");
 
         assert_eq!(validate(hash, hash), Ok(()));
+    }
+
+    /// At the gateway default of 3_000 ppm the two fee calculations disagree,
+    /// and a client funding either amount must be paid. Requiring only the
+    /// corrected fee accepts a client that has moved off `to_amount_legacy`
+    /// without rejecting the deployed ones that still overfund.
+    #[test]
+    fn accepts_both_the_corrected_and_the_legacy_fee() {
+        let invoice_amount = Amount::from_msats(1_000_000);
+        let fees = RoutingFees {
+            base_msat: 0,
+            proportional_millionths: 3_000,
+        };
+
+        let corrected = fees.to_amount(&invoice_amount);
+        let legacy = fees.to_amount_legacy(&invoice_amount);
+        assert!(corrected < legacy, "the fixture must exercise the gap");
+
+        for fee in [corrected, legacy] {
+            assert_eq!(
+                validate_funding(invoice_amount, invoice_amount + fee, fees),
+                Ok(())
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_a_contract_below_the_corrected_fee() {
+        let invoice_amount = Amount::from_msats(1_000_000);
+        let fees = RoutingFees {
+            base_msat: 0,
+            proportional_millionths: 3_000,
+        };
+
+        let necessary = invoice_amount + fees.to_amount(&invoice_amount);
+        let funded = necessary - Amount::from_msats(1);
+
+        assert_eq!(
+            validate_funding(invoice_amount, funded, fees),
+            Err(OutgoingContractError::Underfunded(necessary, funded))
+        );
     }
 
     #[test]
