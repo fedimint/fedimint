@@ -854,6 +854,7 @@ pub enum P2PMessage {
     Checksum(sha256::Hash),
     DkgG1(DkgMessageG1),
     DkgG2(DkgMessageG2),
+    DkgSecp(DkgMessageSecp),
     Encodable(Vec<u8>),
     #[encodable_default]
     Default {
@@ -874,6 +875,13 @@ pub enum DkgMessageG2 {
     Hash(sha256::Hash),
     Commitment(Vec<G2Projective>),
     Share(Scalar),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
+pub enum DkgMessageSecp {
+    Hash(sha256::Hash),
+    Commitment(Vec<secp256k1::PublicKey>),
+    Share(secp256k1::SecretKey),
 }
 
 // TODO: Remove the Serde encoding as soon as the p2p layer drops it as
@@ -912,6 +920,30 @@ impl Serialize for DkgMessageG2 {
 }
 
 impl<'de> Deserialize<'de> for DkgMessageG2 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::consensus_decode_hex(
+            &String::deserialize(deserializer)?,
+            &ModuleDecoderRegistry::default(),
+        )
+        .map_err(serde::de::Error::custom)
+    }
+}
+
+// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
+// requirement
+impl Serialize for DkgMessageSecp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.consensus_encode_to_hex().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for DkgMessageSecp {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
