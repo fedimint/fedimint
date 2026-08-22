@@ -5,6 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use anyhow::bail;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
@@ -203,6 +204,26 @@ where
     }
 }
 
+/// Arguments to [`ClientModuleInit::prepare_recovery`], which runs before the
+/// module exists and so gets only what it takes to record where the recovery
+/// ends and live operation begins.
+pub struct ClientModuleRecoveryPrepareArgs {
+    pub db: Database,
+    pub module_api: DynModuleApi,
+}
+
+impl ClientModuleRecoveryPrepareArgs {
+    /// Database isolated for this module instance
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+
+    /// Api of this module instance
+    pub fn module_api(&self) -> &DynModuleApi {
+        &self.module_api
+    }
+}
+
 pub struct ClientModuleRecoverArgs<C>
 where
     C: ClientModuleInit,
@@ -379,8 +400,49 @@ pub trait ClientModuleInit: ModuleInit + Sized {
         <Self::Module as ClientModule>::kind()
     }
 
+    /// Whether this module implements [`Self::recover`].
+    ///
+    /// A module that leaves this at `false` is left out of a recovering
+    /// client's recovery entirely: no recovery is started for it and it is
+    /// initialized as it would be on any other client open, rather than being
+    /// held back for a recovery that would do nothing.
+    ///
+    /// Must be overridden together with [`Self::recover`]: overriding only the
+    /// recovery leaves it unreachable, and overriding only this makes the
+    /// module's recovery fail.
+    fn supports_recovery(&self) -> bool {
+        false
+    }
+
+    /// Prepare a recovery, reporting whether the module may be used while that
+    /// recovery runs.
+    ///
+    /// Called on every client open that starts or resumes a recovery, before
+    /// [`Self::init`] and before the module joins the module registry. A module
+    /// that returns `true` is initialized and usable straight away, with its
+    /// recovery running in the background, instead of only becoming available
+    /// once the client is reopened with the recovery complete.
+    ///
+    /// Returning `true` is a claim that the recovery and the live module cannot
+    /// interfere: the recovery must not rewrite state the module also writes,
+    /// and must not rediscover what the live module is about to do. Whatever
+    /// separates the two has to be recorded durably *here*, because everything
+    /// after this point can run concurrently with the module. If this fails the
+    /// module is held back as if it had returned `false`, so the boundary is
+    /// never assumed to exist without having been committed.
+    ///
+    /// Only called for modules whose [`Self::supports_recovery`] is `true`.
+    async fn prepare_recovery(
+        &self,
+        _args: &ClientModuleRecoveryPrepareArgs,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     /// Recover the state of the client module, optionally from an existing
     /// snapshot.
+    ///
+    /// Only called for modules whose [`Self::supports_recovery`] is `true`.
     ///
     /// On success, returns the total amount recovered from this module, if the
     /// module tracks it (`None` for modules that can't determine the amount at
@@ -394,12 +456,10 @@ pub trait ClientModuleInit: ModuleInit + Sized {
         _args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<Option<Amount>> {
-        warn!(
-            target: LOG_CLIENT,
-            kind = %<Self::Module as ClientModule>::kind(),
-            "Module does not support recovery, completing without doing anything"
-        );
-        Ok(None)
+        bail!(
+            "Module kind {} claims to support recovery without implementing it",
+            <Self::Module as ClientModule>::kind()
+        )
     }
 
     /// Initialize a [`ClientModule`] instance from its config
