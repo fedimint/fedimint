@@ -3,32 +3,45 @@ mod mock;
 use std::pin::pin;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use async_stream::stream;
+use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_client_module::module::ClientModule;
+use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::encoding::Encodable as _;
 use fedimint_core::module::{AmountUnit, Amounts};
-use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, OutPoint, sats};
+use fedimint_core::secp256k1::{PublicKey, Scalar};
+use fedimint_core::time::duration_since_epoch;
+use fedimint_core::util::{NextOrPending as _, SafeUrl, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
+use fedimint_lnurl::parse_lnurl;
 use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveOperationState, SendOperationState, SendPaymentError,
+    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
+    LightningOperationMeta, ReceiveOperationState, SendOperationState, SendPaymentError,
 };
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::lnurl::LnurlRequest;
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
+    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, LightningOutput,
+    LightningOutputV0, OutgoingWitness, tweak,
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
+use tpe::AggregatePublicKey;
 use tracing::warn;
 
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
@@ -423,6 +436,158 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
     assert_eq!(sub.ok().await?, ReceiveOperationState::Expired);
+
+    Ok(())
+}
+
+/// Builds an incoming contract addressed to `recipient_pk`, the way a sender
+/// does: the claim key is derived from the recipient's published static key and
+/// a fresh ephemeral key, so anyone who knows that static key can address one.
+fn incoming_contract_for(
+    recipient_pk: PublicKey,
+    aggregate_pk: AggregatePublicKey,
+    amount: Amount,
+) -> IncomingContract {
+    let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_pk);
+
+    let encryption_seed = ephemeral_tweak
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let preimage = encryption_seed
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let claim_pk = recipient_pk
+        .mul_tweak(
+            secp256k1::SECP256K1,
+            &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
+        )
+        .expect("Tweak is valid");
+
+    IncomingContract::new(
+        aggregate_pk,
+        encryption_seed,
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        amount,
+        duration_since_epoch().as_secs().saturating_add(3600),
+        claim_pk,
+        mock::gateway_keypair().public_key(),
+        ephemeral_pk,
+    )
+}
+
+/// Funds `contract` straight from `funder`'s balance. No gateway is involved:
+/// consensus funds an incoming contract of any amount, so this is what an
+/// attacker with a little ecash can do to anyone whose static key they know.
+async fn fund_incoming_contract(
+    funder: &ClientHandleArc,
+    contract: &IncomingContract,
+) -> anyhow::Result<()> {
+    let lnv2_module_id = funder
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module not found");
+
+    funder
+        .finalize_and_submit_transaction(
+            OperationId::new_random(),
+            "Funding an incoming contract",
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+/// A contract worth less than the fee to claim it must be left alone rather
+/// than driven into a claim that cannot be funded.
+///
+/// Anyone can address an incoming contract to a published lnurl key, and
+/// consensus funds one of any amount, so the amount is entirely the sender's
+/// choice. The client used to start a claim for it regardless; with nothing in
+/// the wallet to cover the shortfall the claim panicked inside the state
+/// machine executor, and since nothing commits it panicked again on every
+/// restart — a wallet bricked for the price of a few sats.
+///
+/// The victim here holds no balance at all, which is the state a fresh wallet
+/// publishing an address is in.
+#[tokio::test(flavor = "multi_thread")]
+async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let victim = fed.new_client().await;
+    let attacker = fed.new_client().await;
+
+    attacker
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Everything the attacker needs is in what the victim publishes.
+    let lnurl = victim
+        .get_first_module::<LightningClientModule>()?
+        .generate_lnurl(
+            SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
+            Some(mock::gateway()),
+        )
+        .await?;
+    let url = parse_lnurl(&lnurl).expect("Generated lnurl decodes");
+    let payload = url.rsplit("pay/").next().expect("Url carries a payload");
+    let request = decode_prefixed::<LnurlRequest>(FEDIMINT_PREFIX, payload)?;
+
+    let dust = incoming_contract_for(request.recipient_pk, request.aggregate_pk, msats(1));
+    fund_incoming_contract(&attacker, &dust).await?;
+
+    // A second, claimable contract behind the dust one. Waiting for its operation
+    // proves the victim processed past the dust rather than dying on it: the
+    // lnurl task handles the stream in order.
+    let claimable = incoming_contract_for(
+        request.recipient_pk,
+        request.aggregate_pk,
+        Amount::from_sats(100),
+    );
+    fund_incoming_contract(&attacker, &claimable).await?;
+
+    let claimable_operation = OperationId::from_encodable(&claimable);
+    retry(
+        "waiting for the claimable contract to be picked up",
+        backoff_util::aggressive_backoff(),
+        || async {
+            victim
+                .operation_log()
+                .get_operation(claimable_operation)
+                .await
+                .context("Claimable contract was not picked up")
+        },
+    )
+    .await?;
+
+    // The dust never became an operation at all.
+    assert!(
+        victim
+            .operation_log()
+            .get_operation(OperationId::from_encodable(&dust))
+            .await
+            .is_none(),
+        "Dust contract should have been ignored"
+    );
+
+    // And the client is still running: it claimed the contract that was worth it.
+    assert_eq!(
+        victim
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(claimable_operation)
+            .await?,
+        FinalReceiveOperationState::Claimed
+    );
 
     Ok(())
 }
