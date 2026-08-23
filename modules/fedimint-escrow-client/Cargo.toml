@@ -28,6 +28,7 @@ fedimint-derive-secret = { workspace = true }
 fedimint-escrow-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
+frost-secp256k1 = { version = "3.0.0", features = ["serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
 ring = { workspace = true }
