@@ -42,18 +42,21 @@ struct RpcHandler {
 #[wasm_bindgen]
 impl RpcHandler {
     #[wasm_bindgen(constructor)]
-    pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
-        // Create the database directly
-        let cursed_db = MemAndRedb::new(sync_handle).unwrap();
+    pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Result<RpcHandler, JsError> {
+        // Return errors instead of panicking: a panic in an async export
+        // leaves the returned `Promise` unsettled forever, so the caller
+        // would hang instead of getting a rejection it can catch.
+        let cursed_db = MemAndRedb::new(sync_handle)
+            .map_err(|err| JsError::new(&format!("Failed to open client database: {err:#}")))?;
         let database = Database::new(cursed_db, Default::default());
         let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()
             .await
-            .unwrap();
+            .map_err(|err| JsError::new(&format!("Failed to bind client connectors: {err:#}")))?;
 
         let state = Arc::new(RpcGlobalState::new(connectors, database));
 
-        Self { state }
+        Ok(Self { state })
     }
 
     #[wasm_bindgen]
