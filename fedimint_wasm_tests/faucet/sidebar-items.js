@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["gateway_api","generate_invoice","invite_code","pay_invoice"]};
+window.SIDEBAR_ITEMS = {"constant":["PORT"],"fn":["gateway_api","generate_invoice","invite_code","pay_invoice","url"]};
