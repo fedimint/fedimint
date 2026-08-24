@@ -490,10 +490,11 @@ impl crate::Connector for IrohConnector {
 impl IrohConnector {
     /// Report how a retained next-stack connection is reaching `node_id`.
     ///
-    /// Returns `None` when we hold no live next connection for the peer, so
-    /// the caller can fall back to the stable stack. A connection that has
-    /// since closed counts as absent rather than as `Unknown`, so a peer that
-    /// was redialed over the stable stack is still reported correctly.
+    /// Returns `None` when the next stack has nothing to say about the peer,
+    /// so the caller can fall back to the stable stack: no connection held,
+    /// one that has since closed, or one whose paths cannot be classified.
+    /// None of those mean "disconnected", which is what answering
+    /// [`Connectivity::Unknown`] would tell callers.
     fn connectivity_next(&self, node_id: NodeId) -> Option<Connectivity> {
         let connections = self
             .next_connections
@@ -517,7 +518,10 @@ impl IrohConnector {
             (true, true) => Connectivity::Mixed,
             (true, false) => Connectivity::Direct,
             (false, true) => Connectivity::Relay,
-            (false, false) => Connectivity::Unknown,
+            // Nothing to classify. Fall back to the stable stack rather than
+            // answering `Unknown`, which callers render as a disconnected
+            // peer — the very thing this lookup exists to avoid.
+            (false, false) => return None,
         })
     }
 
