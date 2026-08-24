@@ -2,7 +2,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
@@ -88,6 +88,18 @@ use crate::net::p2p::P2PStatusReceivers;
 /// Real transactions have a handful of outputs; a client that somehow needs
 /// more can still ask for them one outpoint at a time.
 const MAX_OUTPUTS_OUTCOMES_BATCH: usize = 1024;
+
+/// Maximum clock lead accepted for a signed client backup request.
+///
+/// This matches the one-hour limit used for signed guardian metadata
+/// timestamps.
+const MAX_BACKUP_FUTURE_TIMESTAMP_SECS: u64 = 60 * 60;
+
+fn backup_timestamp_is_too_far_in_future(timestamp: SystemTime, now: SystemTime) -> bool {
+    timestamp
+        .duration_since(now)
+        .is_ok_and(|lead| lead > Duration::from_secs(MAX_BACKUP_FUTURE_TIMESTAMP_SECS))
+}
 
 /// Number of output outcomes `outpoint_range` asks for, if it is a range we are
 /// willing to serve.
@@ -482,6 +494,12 @@ impl ConsensusApi {
         let request = request
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        if backup_timestamp_is_too_far_in_future(request.timestamp, fedimint_core::time::now()) {
+            return Err(ApiError::bad_request(
+                "timestamp too far in the future".into(),
+            ));
+        }
 
         if request.payload.len() > BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES {
             return Err(ApiError::bad_request("snapshot too large".into()));
@@ -1236,6 +1254,25 @@ mod tests {
                 "{rejected:?} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn backup_timestamp_future_limit_is_strict() {
+        let now = SystemTime::UNIX_EPOCH;
+        let at_limit = now
+            .checked_add(Duration::from_secs(MAX_BACKUP_FUTURE_TIMESTAMP_SECS))
+            .expect("UNIX epoch plus one hour is representable");
+        let beyond_limit = at_limit
+            .checked_add(Duration::from_nanos(1))
+            .expect("one nanosecond past the limit is representable");
+        let past = now
+            .checked_sub(Duration::from_nanos(1))
+            .expect("one nanosecond before the UNIX epoch is representable");
+
+        assert!(!backup_timestamp_is_too_far_in_future(now, now));
+        assert!(!backup_timestamp_is_too_far_in_future(past, now));
+        assert!(!backup_timestamp_is_too_far_in_future(at_limit, now));
+        assert!(backup_timestamp_is_too_far_in_future(beyond_limit, now));
     }
 
     #[tokio::test]
