@@ -8,6 +8,21 @@ use fedimint_cursed_redb::MemAndRedb;
 use wasm_bindgen::prelude::{JsError, JsValue, wasm_bindgen};
 use web_sys::FileSystemSyncAccessHandle;
 
+/// Runs automatically when the wasm module is instantiated, before any
+/// exported function can be called; calling it again is harmless.
+///
+/// Without a hook, a panic anywhere in the module (including the RPC tasks
+/// spawned via `wasm_bindgen_futures::spawn_local`) traps with a message-less
+/// `RuntimeError: unreachable executed` and the panic message and Rust
+/// location are lost. Log them to the console instead.
+///
+/// When triaging, trust the first logged panic: after it, the executor's
+/// poisoned state may log an unrelated `BorrowMutError` panic as well.
+#[wasm_bindgen(start)]
+fn install_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
 struct JsFunctionWrapper(js_sys::Function);
 
 impl RpcResponseHandler for JsFunctionWrapper {
