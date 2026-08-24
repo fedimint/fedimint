@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_OUTPUTS_OUTCOMES_BATCH"],"fn":["backup_statistics_static","checked_outputs_outcomes_count","server_endpoints","sign_guardian_metadata_preserving_iroh_endpoint"],"struct":["ConsensusApi"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_BACKUP_FUTURE_TIMESTAMP_SECS","MAX_OUTPUTS_OUTCOMES_BATCH"],"fn":["backup_statistics_static","backup_timestamp_is_too_far_in_future","checked_outputs_outcomes_count","server_endpoints","sign_guardian_metadata_preserving_iroh_endpoint"],"struct":["ConsensusApi"]};
