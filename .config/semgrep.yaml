@@ -72,6 +72,17 @@ rules:
   pattern: tokio::time::sleep
   severity: ERROR
 
+- id: ban-tokio-timeout
+  languages:
+    - rust
+  message: "`tokio::time::timeout` doesn't work in WASM. Use `fedimint_core::runtime::timeout` instead."
+  pattern: tokio::time::timeout
+  paths:
+    include:
+      - modules/fedimint-*-client/
+      - modules/fedimint-*-common/
+  severity: ERROR
+
 - id: ban-raw-block-on
   languages:
     - rust
@@ -212,4 +223,3 @@ rules:
 #   pattern: "error!(...)"
 #   message: "Don't use error logging level, use `crit!` wrapper to avoid conflating any `error` with `error logging level`"
 #   severity: WARNING
-
