@@ -55,6 +55,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -84,8 +85,14 @@ const PEER_READMISSION: Duration = Duration::from_secs(60);
 /// How long a single peer is given to answer a slice request.
 ///
 /// A slice takes a second or two from a healthy guardian, so waiting half a
-/// minute only delays noticing that one is not going to answer.
+/// minute only delays noticing that one is not going to answer. The timeout
+/// grows on every failed attempt up to [`MAX_SLICE_TIMEOUT`], so a client
+/// on a slow connection where every guardian exceeds the initial timeout
+/// still makes progress instead of retrying forever.
 const SLICE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for the per-retry growth of [`SLICE_TIMEOUT`]; the flat
+/// timeout used before the growth was introduced.
+const MAX_SLICE_TIMEOUT: Duration = Duration::from_secs(30);
 const PARALLEL_HASH_REQUESTS: usize = 10;
 const PARALLEL_SLICE_REQUESTS: usize = 10;
 
@@ -1236,11 +1243,15 @@ async fn download_slice(
     end: u64,
     expected_hash: sha256::Hash,
 ) -> Vec<RecoveryItem> {
+    let mut timeouts = custom_backoff(SLICE_TIMEOUT, MAX_SLICE_TIMEOUT, None);
+
     loop {
         let peer = peers.acquire().await;
 
+        let timeout = timeouts.next().expect("The backoff never gives up");
+
         let result = module_api
-            .fetch_recovery_slice(peer, SLICE_TIMEOUT, start, end)
+            .fetch_recovery_slice(peer, timeout, start, end)
             .await;
 
         match result {
@@ -1251,9 +1262,10 @@ async fn download_slice(
             }
             // Either served something the other guardians disagree with, or
             // did not answer at all. Either way it sits out for a while: a
-            // request that reaches SLICE_TIMEOUT took many times longer than a
+            // request that reaches the timeout took many times longer than a
             // healthy guardian needs, so asking it again mostly buys another
-            // timeout.
+            // timeout. The timeout grows in case it is the client's own
+            // connection that is too slow for the initial one.
             Ok(_) | Err(_) => peers.retire(peer),
         }
     }
