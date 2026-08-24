@@ -54,7 +54,8 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Committable, Database, DatabaseError, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -64,7 +65,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
-use fedimint_core::util::{BoxStream, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompact as _, backoff_util, retry};
 use fedimint_core::{
     BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items,
     runtime, secp256k1,
@@ -81,7 +82,7 @@ use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::api::WalletFederationApi;
 use crate::backup::{FEDERATION_RECOVER_MAX_GAP, RecoveryStateV2, WalletRecovery};
@@ -1098,27 +1099,13 @@ impl WalletClientModule {
     /// verified the version, it must be online to fetch the latest wallet
     /// module consensus version.
     pub async fn supports_safe_deposit(&self) -> bool {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let already_verified_supports_safe_deposit =
-            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
-
-        already_verified_supports_safe_deposit || {
-            match self.module_api.module_consensus_version().await {
-                Ok(module_consensus_version) => {
-                    let supported_version =
-                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
-
-                    if supported_version {
-                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                        dbtx.commit_tx().await;
-                    }
-
-                    supported_version
-                }
-                Err(_) => false,
-            }
+        if supports_safe_deposit_verified(&self.db).await {
+            return true;
         }
+
+        verify_supports_safe_deposit(&self.db, &self.module_api)
+            .await
+            .unwrap_or(false)
     }
 
     /// Allocates a deposit address controlled by the federation, guaranteeing
@@ -1137,7 +1124,7 @@ impl WalletClientModule {
     {
         ensure!(
             self.supports_safe_deposit().await,
-            "Wallet module consensus version doesn't support safe deposits",
+            "Could not verify that the wallet module consensus version supports safe deposits",
         );
 
         self.allocate_deposit_address_expert_only(extra_meta).await
@@ -2042,29 +2029,91 @@ impl WalletClientModule {
 /// supports safe deposits, saving the result in the db once it does.
 async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
     loop {
-        let mut dbtx = db.begin_transaction().await;
-
-        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        if supports_safe_deposit_verified(&db).await {
             break;
         }
 
         module_api.wait_for_initialized_connections().await;
 
-        if let Ok(module_consensus_version) = module_api.module_consensus_version().await
-            && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
-        {
-            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-            dbtx.commit_tx().await;
+        if verify_supports_safe_deposit(&db, &module_api).await == Some(true) {
             break;
         }
-
-        drop(dbtx);
 
         if is_running_in_test_env() {
             // Even in tests we don't want to spam the federation with requests about it
             sleep(Duration::from_secs(10)).await;
         } else {
             sleep(Duration::from_hours(1)).await;
+        }
+    }
+}
+
+/// Whether the federation's wallet module consensus version was already
+/// verified to support safe deposits.
+async fn supports_safe_deposit_verified(db: &Database) -> bool {
+    db.begin_transaction_nc()
+        .await
+        .get_value(&SupportsSafeDepositKey)
+        .await
+        .is_some()
+}
+
+/// Fetches the federation's wallet module consensus version and records the
+/// marker if it supports safe deposits.
+///
+/// Returns `None` if the version could not be fetched, e.g. while offline.
+async fn verify_supports_safe_deposit(db: &Database, module_api: &DynModuleApi) -> Option<bool> {
+    let module_consensus_version = match module_api.module_consensus_version().await {
+        Ok(module_consensus_version) => module_consensus_version,
+        Err(err) => {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                err = %err.fmt_compact(),
+                "Could not fetch the wallet module consensus version"
+            );
+            return None;
+        }
+    };
+
+    let supported_version = SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+    if supported_version {
+        store_supports_safe_deposit(db.begin_transaction().await).await;
+    }
+
+    Some(supported_version)
+}
+
+/// Records in `dbtx` that the federation's wallet module consensus version
+/// was verified to support safe deposits, and commits it.
+///
+/// The marker is written by both the background version poller and
+/// [`WalletClientModule::supports_safe_deposit`], which race right after
+/// joining a federation. The loser's commit fails with a write conflict, but
+/// the winner stored the very same marker and nothing ever removes it, so the
+/// conflict is treated as success. That is only sound for a fresh `dbtx` whose
+/// sole write is the marker: any other write in it would be lost as well.
+///
+/// Any other commit error is logged rather than escalated: the marker only
+/// lets future checks skip re-verifying the version, callers already have
+/// their answer, and the next verification simply writes it again — an
+/// optional write is not worth crashing over.
+async fn store_supports_safe_deposit(mut dbtx: DatabaseTransaction<'_, Committable>) {
+    if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        // The other writer won before this transaction started.
+        return;
+    }
+
+    dbtx.insert_entry(&SupportsSafeDepositKey, &()).await;
+
+    match dbtx.commit_tx_result().await {
+        Ok(()) | Err(DatabaseError::WriteConflict) => {}
+        Err(err) => {
+            warn!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                err = %err.fmt_compact(),
+                "Failed to store the safe-deposit marker"
+            );
         }
     }
 }
@@ -2130,6 +2179,9 @@ impl State for WalletClientStates {
 mod tests {
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
 
     use super::*;
     use crate::backup::{
@@ -2286,5 +2338,34 @@ mod tests {
                 tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(15)])
             }
         );
+    }
+
+    #[tokio::test]
+    async fn store_supports_safe_deposit_tolerates_a_lost_race() {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        // Both opened before the competing write below, so committing either
+        // of them must run into a write conflict.
+        let racing_dbtx = db.begin_transaction().await;
+        let mut sibling_dbtx = db.begin_transaction().await;
+
+        let mut competing_dbtx = db.begin_transaction().await;
+        competing_dbtx
+            .insert_entry(&SupportsSafeDepositKey, &())
+            .await;
+        competing_dbtx.commit_tx().await;
+
+        // Proves the setup: a plain commit of the stale sibling is rejected.
+        sibling_dbtx
+            .insert_entry(&SupportsSafeDepositKey, &())
+            .await;
+        assert!(matches!(
+            sibling_dbtx.commit_tx_result().await,
+            Err(DatabaseError::WriteConflict)
+        ));
+
+        store_supports_safe_deposit(racing_dbtx).await;
+
+        assert!(supports_safe_deposit_verified(&db).await);
     }
 }
