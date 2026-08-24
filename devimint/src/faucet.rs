@@ -47,11 +47,9 @@ impl Faucet {
     }
 }
 
-pub async fn run(
-    dev_fed: &DevFed,
-    fauct_bind_addr: String,
-    gw_lnd_port: u16,
-) -> anyhow::Result<()> {
+/// Serves the faucet API on the already bound `listener` until the task is
+/// cancelled.
+pub async fn run(dev_fed: &DevFed, listener: TcpListener, gw_lnd_port: u16) -> anyhow::Result<()> {
     let faucet = Faucet::new(dev_fed);
     let router = Router::new()
         .route(
@@ -90,7 +88,6 @@ pub async fn run(
         .layer(CorsLayer::permissive())
         .with_state(faucet);
 
-    let listener = TcpListener::bind(fauct_bind_addr).await?;
     axum::serve(listener, router.into_make_service()).await?;
     Ok(())
 }
