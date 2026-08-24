@@ -33,6 +33,7 @@ wasm-bindgen-futures = { workspace = true }
 web-sys = { version = "0.3", features = [
     "FileSystemSyncAccessHandle",
     "FileSystemReadWriteOptions",
+    "console",
 ] }
 
 [lints]

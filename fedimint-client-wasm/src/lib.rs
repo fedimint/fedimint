@@ -27,10 +27,18 @@ struct JsFunctionWrapper(js_sys::Function);
 
 impl RpcResponseHandler for JsFunctionWrapper {
     fn handle_response(&self, response: RpcResponse) {
-        let _ = self.0.call1(
-            &JsValue::null(),
-            &JsValue::from_str(&serde_json::to_string(&response).unwrap()),
+        let response = serde_json::to_string(&response).expect(
+            "RpcResponse is numbers, strings and serde_json::Value; serialization cannot fail",
         );
+        if let Err(err) = self
+            .0
+            .call1(&JsValue::null(), &JsValue::from_str(&response))
+        {
+            // There is no tracing subscriber in the wasm client, so log
+            // straight to the console; swallowing this leaves the request
+            // hanging with zero diagnostics.
+            web_sys::console::error_2(&JsValue::from_str("RPC response callback threw"), &err);
+        }
     }
 }
 
