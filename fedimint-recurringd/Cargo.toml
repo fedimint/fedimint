@@ -9,6 +9,10 @@ readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 
+[features]
+default = ["jemalloc"]
+jemalloc = ["dep:tikv-jemallocator", "fedimint-rocksdb/jemalloc"]
+
 [[bin]]
 name = "fedimint-recurringd"
 path = "src/main.rs"
@@ -36,6 +40,7 @@ lightning-invoice = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tikv-jemallocator = { workspace = true, optional = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

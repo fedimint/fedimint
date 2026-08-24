@@ -25,10 +25,17 @@ use fedimint_recurringd::{LNURLPayInvoice, PaymentCodeInvoice, RecurringInvoiceS
 use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
 use serde_json::json;
+#[cfg(feature = "jemalloc")]
+use tikv_jemallocator::Jemalloc;
 use tokio::net::TcpListener;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
+
+#[cfg(feature = "jemalloc")]
+#[global_allocator]
+// rocksdb suffers from memory fragmentation when using standard allocator
+static GLOBAL: Jemalloc = Jemalloc;
 
 #[derive(Debug, Parser)]
 struct CliOpts {
