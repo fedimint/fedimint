@@ -41,7 +41,7 @@ use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakId
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
-    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -413,6 +413,10 @@ impl ClientModuleInit for WalletClientInit {
             client_span: args.client_span().clone(),
             admin_auth: args.admin_auth().cloned(),
         })
+    }
+
+    fn recovery_mode(&self) -> RecoveryMode {
+        RecoveryMode::Unusable
     }
 
     /// Wallet recovery

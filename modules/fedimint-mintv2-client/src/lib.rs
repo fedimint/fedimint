@@ -38,6 +38,7 @@ use fedimint_client::transaction::{
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleRecoveryPrepareArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{
@@ -165,27 +166,56 @@ impl ClientModuleInit for MintClientInit {
             .expect("no version conflicts")
     }
 
-    async fn recover(
-        &self,
-        args: &ClientModuleRecoverArgs<Self>,
-        _snapshot: Option<&NoModuleBackup>,
-    ) -> anyhow::Result<Option<Amount>> {
-        let mut state = if let Some(state) = args
+    fn recovery_mode(&self) -> RecoveryMode {
+        RecoveryMode::Usable
+    }
+
+    async fn prepare_recovery(&self, args: &ClientModuleRecoveryPrepareArgs) -> anyhow::Result<()> {
+        if args
             .db()
             .begin_transaction_nc()
             .await
             .get_value(&RecoveryStateKey)
             .await
+            .is_some()
         {
-            state
-        } else {
-            RecoveryState {
-                next_index: 0,
-                total_items: args.module_api().fetch_recovery_count().await?,
-                requests: BTreeMap::new(),
-                nonces: BTreeSet::new(),
-            }
+            return Ok(());
+        }
+
+        // The total is the number of items the federation had processed when
+        // the recovery began, so every note this client issues from here on
+        // lands beyond it and is never rediscovered by the scan. Committing
+        // that bound before the module is initialized is what lets the module
+        // be used while its own recovery is still running: the two cannot
+        // arrive at the same note.
+        let state = RecoveryState {
+            next_index: 0,
+            total_items: args.module_api().fetch_recovery_count().await?,
+            requests: BTreeMap::new(),
+            nonces: BTreeSet::new(),
         };
+
+        let mut dbtx = args.db().begin_transaction().await;
+
+        dbtx.insert_entry(&RecoveryStateKey, &state).await;
+
+        dbtx.commit_tx().await;
+
+        Ok(())
+    }
+
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        _snapshot: Option<&NoModuleBackup>,
+    ) -> anyhow::Result<Option<Amount>> {
+        let mut state = args
+            .db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecoveryStateKey)
+            .await
+            .expect("Prepare recovery commits the state before the recovery is started");
 
         if state.next_index == state.total_items {
             return Ok(None);
