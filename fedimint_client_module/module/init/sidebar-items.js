@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["recovery"],"struct":["ClientModuleInitArgs","ClientModuleRecoverArgs"],"trait":["ClientModuleInit"],"type":["BitcoindRpcFactory","BitcoindRpcNoChainIdFactory"]};
+window.SIDEBAR_ITEMS = {"enum":["RecoveryMode"],"mod":["recovery"],"struct":["ClientModuleInitArgs","ClientModuleRecoverArgs","ClientModuleRecoveryPrepareArgs"],"trait":["ClientModuleInit"],"type":["BitcoindRpcFactory","BitcoindRpcNoChainIdFactory"]};
