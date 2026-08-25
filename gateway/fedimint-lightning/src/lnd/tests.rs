@@ -1,8 +1,11 @@
 use fedimint_core::encode_bolt11_invoice_features_without_length;
 use hex::FromHex;
 use lightning::types::features::Bolt11InvoiceFeatures;
+use tonic_lnd::lnrpc::invoice::InvoiceState;
 
-use super::wire_features_to_lnd_feature_vec;
+use super::{
+    HoldInvoiceAction, PaymentActionKind, hold_invoice_action, wire_features_to_lnd_feature_vec,
+};
 
 #[test]
 fn features_to_lnd() {
@@ -27,4 +30,42 @@ fn features_to_lnd() {
         wire_features_to_lnd_feature_vec(&features_payment_secret).unwrap(),
         vec![8, 14, 17, 49, 149]
     );
+}
+
+#[test]
+fn settle_only_succeeds_for_requested_terminal_outcome() {
+    assert_eq!(
+        hold_invoice_action(PaymentActionKind::Settle, Some(InvoiceState::Accepted)),
+        Ok(HoldInvoiceAction::Complete)
+    );
+    assert_eq!(
+        hold_invoice_action(PaymentActionKind::Settle, Some(InvoiceState::Settled)),
+        Ok(HoldInvoiceAction::AlreadyComplete)
+    );
+
+    for state in [None, Some(InvoiceState::Open), Some(InvoiceState::Canceled)] {
+        let error = hold_invoice_action(PaymentActionKind::Settle, state)
+            .expect_err("state must not report settlement");
+        assert_eq!(error.permanent, state != Some(InvoiceState::Open));
+    }
+}
+
+#[test]
+fn cancel_only_succeeds_for_requested_terminal_outcome() {
+    for state in [InvoiceState::Open, InvoiceState::Accepted] {
+        assert_eq!(
+            hold_invoice_action(PaymentActionKind::Cancel, Some(state)),
+            Ok(HoldInvoiceAction::Complete)
+        );
+    }
+    assert_eq!(
+        hold_invoice_action(PaymentActionKind::Cancel, Some(InvoiceState::Canceled)),
+        Ok(HoldInvoiceAction::AlreadyComplete)
+    );
+
+    for state in [None, Some(InvoiceState::Settled)] {
+        let error = hold_invoice_action(PaymentActionKind::Cancel, state)
+            .expect_err("state must not report cancellation");
+        assert!(error.permanent);
+    }
 }

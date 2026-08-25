@@ -16,12 +16,13 @@ use fedimint_core::encoding::{
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
 use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
 use fedimint_gateway_common::{ConnectorType, FederationConfig, RegisteredProtocol};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
-use fedimint_lnv2_common::gateway_api::PaymentFee;
+use fedimint_lnv2_common::gateway_api::{MAX_INVOICE_EXPIRY_SECS, PaymentFee};
 use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::Rng;
@@ -76,6 +77,7 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         federation_id: FederationId,
         incoming_amount: Amount,
+        invoice_expires_at_secs: u64,
         contract: IncomingContract,
     ) -> Option<RegisteredIncomingContract>;
 
@@ -83,6 +85,17 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract>;
+
+    /// Deletes a registered incoming contract, returning the contract if it
+    /// existed.
+    async fn delete_registered_incoming_contract(
+        &mut self,
+        payment_image: PaymentImage,
+    ) -> Option<RegisteredIncomingContract>;
+
+    /// Deletes all registered incoming contracts whose invoice expired before
+    /// `expired_before_secs`, returning the number of deleted records.
+    async fn prune_registered_incoming_contracts(&mut self, expired_before_secs: u64) -> usize;
 
     /// Records `operation_id` as the claimer of `payment_image`, unless another
     /// operation already claimed it, and returns the operation id that holds
@@ -198,6 +211,7 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         &mut self,
         federation_id: FederationId,
         incoming_amount: Amount,
+        invoice_expires_at_secs: u64,
         contract: IncomingContract,
     ) -> Option<RegisteredIncomingContract> {
         self.insert_entry(
@@ -205,6 +219,7 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             &RegisteredIncomingContract {
                 federation_id,
                 incoming_amount_msats: incoming_amount.msats,
+                invoice_expires_at_secs,
                 contract,
             },
         )
@@ -217,6 +232,36 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
     ) -> Option<RegisteredIncomingContract> {
         self.get_value(&RegisteredIncomingContractKey(payment_image))
             .await
+    }
+
+    async fn delete_registered_incoming_contract(
+        &mut self,
+        payment_image: PaymentImage,
+    ) -> Option<RegisteredIncomingContract> {
+        self.remove_entry(&RegisteredIncomingContractKey(payment_image))
+            .await
+    }
+
+    async fn prune_registered_incoming_contracts(&mut self, expired_before_secs: u64) -> usize {
+        let expired_payment_images = self
+            .find_by_prefix(&RegisteredIncomingContractKeyPrefix)
+            .await
+            .filter_map(
+                |(key, record): (RegisteredIncomingContractKey, RegisteredIncomingContract)| async move {
+                    (record.invoice_expires_at_secs < expired_before_secs).then_some(key.0)
+                },
+            )
+            .collect::<Vec<_>>()
+            .await;
+
+        let num_expired = expired_payment_images.len();
+
+        for payment_image in expired_payment_images {
+            self.remove_entry(&RegisteredIncomingContractKey(payment_image))
+                .await;
+        }
+
+        num_expired
     }
 
     async fn claim_outgoing_payment_image(
@@ -603,6 +648,10 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDb
         DatabaseVersion(6),
         Box::new(|ctx| migrate_to_v7(ctx).boxed()),
     );
+    migrations.insert(
+        DatabaseVersion(7),
+        Box::new(|ctx| migrate_to_v8(ctx).boxed()),
+    );
     migrations
 }
 
@@ -816,14 +865,61 @@ async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Resu
     Ok(())
 }
 
+/// Adds the invoice expiry to registered incoming contract records so stale
+/// records can be pruned.
+async fn migrate_to_v8(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Result<()> {
+    let mut dbtx = ctx.dbtx();
+    migrate_registered_incoming_contracts(&mut dbtx).await
+}
+
+async fn migrate_registered_incoming_contracts(
+    dbtx: &mut DatabaseTransaction<'_>,
+) -> anyhow::Result<()> {
+    // Existing records predate the invoice expiry, so backfill it as if their
+    // invoice had just been created with the maximum allowed expiry; they are
+    // retained conservatively and eventually pruned.
+    let backfilled_expiry = duration_since_epoch()
+        .as_secs()
+        .saturating_add(u64::from(MAX_INVOICE_EXPIRY_SECS));
+
+    let contracts = dbtx
+        .find_by_prefix(&RegisteredIncomingContractKeyPrefixV0)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    for (key, record) in contracts {
+        dbtx.remove_entry(&key).await;
+        dbtx.insert_new_entry(
+            &RegisteredIncomingContractKey(key.0),
+            &RegisteredIncomingContract {
+                federation_id: record.federation_id,
+                incoming_amount_msats: record.incoming_amount_msats,
+                invoice_expires_at_secs: backfilled_expiry,
+                contract: record.contract,
+            },
+        )
+        .await;
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Encodable, Decodable)]
 struct RegisteredIncomingContractKey(pub PaymentImage);
+
+#[derive(Debug, Encodable, Decodable)]
+struct RegisteredIncomingContractKeyPrefix;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct RegisteredIncomingContract {
     pub federation_id: FederationId,
     /// The amount of the incoming contract, in msats.
     pub incoming_amount_msats: u64,
+    /// Unix timestamp in seconds after which the bolt11 invoice created for
+    /// this contract can no longer be paid; records are pruned once it has
+    /// long passed.
+    pub invoice_expires_at_secs: u64,
     pub contract: IncomingContract,
 }
 
@@ -831,6 +927,35 @@ impl_db_record!(
     key = RegisteredIncomingContractKey,
     value = RegisteredIncomingContract,
     db_prefix = DbKeyPrefix::RegisteredIncomingContract,
+);
+
+impl_db_lookup!(
+    key = RegisteredIncomingContractKey,
+    query_prefix = RegisteredIncomingContractKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+struct RegisteredIncomingContractKeyV0(pub PaymentImage);
+
+#[derive(Debug, Encodable, Decodable)]
+struct RegisteredIncomingContractKeyPrefixV0;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RegisteredIncomingContractV0 {
+    pub federation_id: FederationId,
+    pub incoming_amount_msats: u64,
+    pub contract: IncomingContract,
+}
+
+impl_db_record!(
+    key = RegisteredIncomingContractKeyV0,
+    value = RegisteredIncomingContractV0,
+    db_prefix = DbKeyPrefix::RegisteredIncomingContract,
+);
+
+impl_db_lookup!(
+    key = RegisteredIncomingContractKeyV0,
+    query_prefix = RegisteredIncomingContractKeyPrefixV0
 );
 
 /// Records which send operation claimed an outgoing contract for a given

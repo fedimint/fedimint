@@ -13,6 +13,7 @@ use fedimint_lightning::LightningRpcError;
 use fedimint_logging::LOG_GATEWAY;
 use reqwest::StatusCode;
 use thiserror::Error;
+use tracing::debug;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
 
@@ -42,6 +43,8 @@ impl IntoResponse for GatewayError {
 /// client.
 #[derive(Debug, Error)]
 pub enum PublicGatewayError {
+    #[error("Gateway invariant violation: {}", OptStacktrace(.0))]
+    Internal(anyhow::Error),
     #[error("Lightning rpc error: {}", .0)]
     Lightning(#[from] LightningRpcError),
     #[error("LNv1 error: {:?}", .0)]
@@ -52,6 +55,8 @@ pub enum PublicGatewayError {
     FederationNotConnected(#[from] FederationNotConnected),
     #[error("Failed to receive ecash: {failure_reason}")]
     ReceiveEcashError { failure_reason: String },
+    #[error("Too many requests")]
+    RateLimited,
     #[error("Unexpected Error: {}", OptStacktrace(.0))]
     Unexpected(#[from] anyhow::Error),
 }
@@ -61,8 +66,20 @@ impl IntoResponse for PublicGatewayError {
         // For privacy reasons, we do not return too many details about the failure of
         // the request back to the client to prevent malicious clients from
         // deducing state about the gateway/lightning node.
-        crit!(target: LOG_GATEWAY, "{self}");
+        //
+        // Rate limit rejections are the one error a flood of requests emits at
+        // volume, so they are logged at debug level to keep them from spamming
+        // the log.
+        if matches!(self, PublicGatewayError::RateLimited) {
+            debug!(target: LOG_GATEWAY, "{self}");
+        } else {
+            crit!(target: LOG_GATEWAY, "{self}");
+        }
         let (error_message, status_code) = match &self {
+            PublicGatewayError::Internal(_) => (
+                "Gateway internal error".to_owned(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
             PublicGatewayError::FederationNotConnected(e) => {
                 (e.to_string(), StatusCode::BAD_REQUEST)
             }
@@ -82,14 +99,15 @@ impl IntoResponse for PublicGatewayError {
                 "LNv2 operation failed, please contact gateway operator".to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+            PublicGatewayError::RateLimited => (
+                "Too many requests, please try again later".to_string(),
+                StatusCode::TOO_MANY_REQUESTS,
+            ),
             PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
         };
 
-        let error_message = if is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
-            self.to_string()
-        } else {
-            error_message
-        };
+        let error_message =
+            self.response_message(error_message, is_env_var_set(FM_DEBUG_GATEWAY_ENV));
 
         Response::builder()
             .status(status_code)
@@ -97,6 +115,20 @@ impl IntoResponse for PublicGatewayError {
             .expect("Failed to create Response")
     }
 }
+
+impl PublicGatewayError {
+    fn response_message(&self, sanitized: String, expose_debug_details: bool) -> String {
+        if expose_debug_details && !matches!(self, PublicGatewayError::Internal(_)) {
+            self.to_string()
+        } else {
+            sanitized
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "error/tests.rs"]
+mod tests;
 
 /// Errors that authenticated endpoints can encounter. Full error message and
 /// error details are returned to the admin client for debugging purposes.

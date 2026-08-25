@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use anyhow::{Context, anyhow, ensure};
 use bls12_381::{G1Projective, Scalar};
-use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -21,7 +20,6 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -33,8 +31,8 @@ use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
-    async_trait_maybe_send, push_db_pair_items,
+    Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
@@ -61,8 +59,7 @@ use fedimint_server_core::{
 use futures::StreamExt;
 use group::Curve;
 use group::ff::Field;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
+use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use tpe::{
     AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare, derive_pk_share,
@@ -78,6 +75,14 @@ use crate::db::{
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 use crate::metrics::{LN_FUNDED_CONTRACT_SATS, LN_OUTGOING_CONTRACT_SETTLED};
+
+/// Maximum number of incoming contracts a single `await_incoming_contracts`
+/// request may ask for. The endpoint is public and unauthenticated, so the
+/// batch size is untrusted input; without a cap it flows straight into
+/// `Vec::with_capacity`, letting one request trigger an arbitrarily large
+/// allocation and abort the guardian process. The legitimate client requests
+/// 128 at a time, so this leaves ample headroom.
+const MAX_INCOMING_CONTRACTS_BATCH: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub struct LightningInit;
@@ -261,9 +266,11 @@ impl ServerModuleInit for LightningInit {
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
+        let polynomial = dealer_polynomial(peers.to_num_peers());
+
         let tpe_pks = peers
             .iter()
-            .map(|peer| (*peer, dealer_pk(peers.to_num_peers(), *peer)))
+            .map(|peer| (*peer, dealer_pk(&polynomial, *peer)))
             .collect::<BTreeMap<PeerId, PublicKeyShare>>();
 
         peers
@@ -271,7 +278,7 @@ impl ServerModuleInit for LightningInit {
             .map(|peer| {
                 let cfg = LightningConfig {
                     consensus: LightningConfigConsensus {
-                        tpe_agg_pk: dealer_agg_pk(),
+                        tpe_agg_pk: dealer_agg_pk(&polynomial),
                         tpe_pks: tpe_pks.clone(),
                         fee_consensus: if args.disable_base_fees {
                             FeeConsensus::zero()
@@ -281,7 +288,7 @@ impl ServerModuleInit for LightningInit {
                         network: args.network,
                     },
                     private: LightningConfigPrivate {
-                        sk: dealer_sk(peers.to_num_peers(), *peer),
+                        sk: dealer_sk(&polynomial, *peer),
                     },
                 };
 
@@ -368,33 +375,34 @@ impl ServerModuleInit for LightningInit {
     }
 }
 
-fn dealer_agg_pk() -> AggregatePublicKey {
-    AggregatePublicKey((G1Projective::generator() * coefficient(0)).to_affine())
+fn dealer_polynomial(num_peers: NumPeers) -> Vec<Scalar> {
+    (0..num_peers.threshold())
+        .map(|_| Scalar::random(&mut OsRng))
+        .collect()
 }
 
-fn dealer_pk(num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
-    derive_pk_share(&dealer_sk(num_peers, peer))
+fn dealer_agg_pk(polynomial: &[Scalar]) -> AggregatePublicKey {
+    AggregatePublicKey((G1Projective::generator() * polynomial[0]).to_affine())
 }
 
-fn dealer_sk(num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
+fn dealer_pk(polynomial: &[Scalar], peer: PeerId) -> PublicKeyShare {
+    derive_pk_share(&dealer_sk(polynomial, peer))
+}
+
+fn dealer_sk(polynomial: &[Scalar], peer: PeerId) -> SecretKeyShare {
     let x = Scalar::from(peer.to_usize() as u64 + 1);
 
     // We evaluate the scalar polynomial of degree threshold - 1 at the point x
     // using the Horner schema.
 
-    let y = (0..num_peers.threshold())
-        .map(|index| coefficient(index as u64))
+    let y = polynomial
+        .iter()
+        .copied()
         .rev()
         .reduce(|accumulator, c| accumulator * x + c)
         .expect("We have at least one coefficient");
 
     SecretKeyShare(y)
-}
-
-fn coefficient(index: u64) -> Scalar {
-    Scalar::random(&mut ChaChaRng::from_seed(
-        *index.consensus_hash::<sha256::Hash>().as_byte_array(),
-    ))
 }
 
 #[derive(Debug)]
@@ -715,8 +723,10 @@ impl ServerModule for Lightning {
                 async |module: &Lightning, context, params: (u64, usize)| -> (Vec<IncomingContract>, u64) {
                     let db = context.db();
 
-                    if params.1 == 0 {
-                        return Err(ApiError::bad_request("Batch size must be greater than 0".to_string()));
+                    if params.1 == 0 || params.1 > MAX_INCOMING_CONTRACTS_BATCH {
+                        return Err(ApiError::bad_request(format!(
+                            "Batch size must be in 1..={MAX_INCOMING_CONTRACTS_BATCH}"
+                        )));
                     }
 
                     Ok(module.await_incoming_contracts(db, params.0, params.1).await)
@@ -896,7 +906,10 @@ impl Lightning {
             .wait_key_check(&IncomingContractStreamIndexKey, filter)
             .await;
 
-        let mut contracts = Vec::with_capacity(n);
+        // Never pre-allocate from untrusted `n`: even though the endpoint bounds
+        // it, clamping here keeps the allocation safe for any caller. The `.take(n)`
+        // loop below grows the vec as needed anyway.
+        let mut contracts = Vec::with_capacity(n.min(MAX_INCOMING_CONTRACTS_BATCH));
 
         let range = IncomingContractStreamKey(start)..IncomingContractStreamKey(u64::MAX);
 

@@ -12,10 +12,13 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::backoff_util::aggressive_backoff_long;
+use fedimint_core::util::{BoxStream, NextOrPending, retry};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::api::LnFederationApi;
+use fedimint_ln_client::incoming::IncomingSmError;
 use fedimint_ln_client::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer,
@@ -28,7 +31,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
-use fedimint_ln_common::{LightningCommonInit, LightningOutput};
+use fedimint_ln_common::{LightningCommonInit, LightningOutput, MODULE_CONSENSUS_VERSION};
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::Gateway;
 use fedimint_testing::federation::FederationTest;
@@ -66,6 +69,44 @@ fn fixtures() -> Fixtures {
         },
         LightningInit,
     )
+}
+
+/// Consensus version voting must actually reach activation: peers fetch each
+/// other's supported version over the API, propose it as a consensus item, and
+/// the active version rises to what their binaries support. Without this the
+/// whole mechanism could silently never fire and every other test would still
+/// pass, leaving the consensus rules it gates permanently inactive.
+///
+/// Automatic voting requires *every* peer to answer, and unlike walletv1 LNv1
+/// has no manual activation override, so a degraded federation never
+/// activates — hence the non-degraded fixture.
+#[tokio::test(flavor = "multi_thread")]
+async fn consensus_version_voting_activates() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    retry(
+        "waiting for lnv1 consensus version activation",
+        aggressive_backoff_long(),
+        || async {
+            let active_version = client
+                .get_first_module::<LightningClientModule>()?
+                .api
+                .module_consensus_version()
+                .await?;
+
+            anyhow::ensure!(
+                active_version == MODULE_CONSENSUS_VERSION,
+                "active consensus version is {active_version}, waiting for {MODULE_CONSENSUS_VERSION}"
+            );
+
+            Ok(())
+        },
+    )
+    .await
+    .expect("LNv1 consensus version voting did not activate in time");
+
+    Ok(())
 }
 
 /// Setup a gateway connected to the fed and client
@@ -1004,6 +1045,118 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
     Ok(())
 }
 
+/// A funder must refuse to fund a payment hash that already has a contract
+/// account. An incoming contract's id is only its payment hash, so a second
+/// funding is credited to the account the *first* funder created, under their
+/// gateway key — an attacker can plant such an account cheaply and then publish
+/// a fresh offer to bait a gateway into topping it up.
+#[tokio::test(flavor = "multi_thread")]
+async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    client2
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
+    let threshold_pub_key = ln_module.cfg.threshold_pub_key;
+    let amount = sats(250);
+
+    let receiving_keypair = Keypair::new_global(&mut OsRng);
+    let preimage_key: [u8; 33] = receiving_keypair.public_key().serialize();
+    let payment_hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage_key).to_byte_array());
+
+    let submit_offer = async |client: &ClientHandleArc| -> anyhow::Result<()> {
+        let offer_output = LightningOutput::new_v0_offer(IncomingContractOffer {
+            amount,
+            hash: payment_hash,
+            encrypted_preimage: EncryptedPreimage::new(
+                &PreimageKey(preimage_key),
+                &threshold_pub_key,
+            ),
+            expiry_time: None,
+        });
+        let operation_id = OperationId::new_random();
+        client
+            .finalize_and_submit_transaction(
+                operation_id,
+                "",
+                |_| (),
+                TransactionBuilder::new().with_outputs(
+                    ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                        output: offer_output,
+                        amounts: Amounts::ZERO,
+                    }])
+                    .into_dyn(ln_module.id),
+                ),
+            )
+            .await?;
+        await_client_tx_accepted(client.transaction_updates(operation_id).await.update_stream)
+            .await
+            .map_err(|err| anyhow::anyhow!(err))
+    };
+
+    submit_offer(&client1).await.expect("first offer accepted");
+
+    // first funding succeeds and consumes the offer
+    let funder_key = Keypair::new_global(&mut OsRng);
+    let (incoming_output, funded_amount, _) = create_incoming_contract_output(
+        &client2.get_first_module::<LightningClientModule>()?.api,
+        payment_hash,
+        amount,
+        &funder_key,
+    )
+    .await?;
+    let operation_id = OperationId::new_random();
+    client2
+        .finalize_and_submit_transaction(
+            operation_id,
+            LightningCommonInit::KIND.as_str(),
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(incoming_output),
+                    amounts: Amounts::new_bitcoin(funded_amount),
+                }])
+                .into_dyn(ln_module.id),
+            ),
+        )
+        .await?;
+    await_client_tx_accepted(
+        client2
+            .transaction_updates(operation_id)
+            .await
+            .update_stream,
+    )
+    .await
+    .expect("first funding accepted");
+
+    // the offer was consumed, and since an incoming contract account exists
+    // for the hash now, a fresh offer for it is rejected at submission time
+    submit_offer(&client1)
+        .await
+        .expect_err("an offer for an already funded payment hash is rejected");
+
+    // ... so a funder cannot even fetch an offer to fund the hash a second
+    // time. The client-side `ContractAlreadyExists` guard in
+    // `create_incoming_contract_output` remains as defense in depth for
+    // federations whose guardians do not enforce the offer policy yet.
+    assert_matches!(
+        create_incoming_contract_output(
+            &client2.get_first_module::<LightningClientModule>()?.api,
+            payment_hash,
+            amount,
+            &funder_key,
+        )
+        .await,
+        Err(IncomingSmError::TimeoutFetchingOffer { .. })
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -1109,6 +1262,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::module::ModuleConsensusVersion;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId, secp256k1};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
@@ -1137,11 +1291,11 @@ mod fedimint_migration_tests {
     };
     use fedimint_ln_server::db::{
         AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
-        BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
-        ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
-        EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
-        LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
-        ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+        BlockCountVotePrefix, ConsensusVersionVoteKey, ConsensusVersionVotePrefix, ContractKey,
+        ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+        EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
+        LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
+        OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_server::core::DynServerModuleInit;
@@ -1266,12 +1420,19 @@ mod fedimint_migration_tests {
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,
+            auth: None,
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;
 
         dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
+
+        dbtx.insert_new_entry(
+            &ConsensusVersionVoteKey(PeerId::from(0)),
+            &ModuleConsensusVersion::new(2, 0),
+        )
+        .await;
 
         dbtx.insert_new_entry(&EncryptedPreimageIndexKey("foobar".consensus_hash()), &())
             .await;
@@ -1331,6 +1492,7 @@ mod fedimint_migration_tests {
             info: gateway_info,
             vetted: false,
             valid_until: fedimint_core::time::now(),
+            auth: None,
         };
 
         dbtx.insert_new_entry(
@@ -1724,6 +1886,17 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read both LightningAuditItemKeys"
                             );
                             info!("Validated LightningAuditItem");
+                        }
+                        DbKeyPrefix::ConsensusVersionVote => {
+                            let votes = dbtx
+                                .find_by_prefix(&ConsensusVersionVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            // The committed v0 snapshot predates this prefix, and
+                            // `create_server_db_with_v0_data` cannot currently be re-run
+                            // to regenerate it, so only assert that the prefix decodes.
+                            info!(?votes, "Validated ConsensusVersionVote");
                         }
                     }
                 }

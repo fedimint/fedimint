@@ -20,6 +20,7 @@ path = "src/lib.rs"
 [target.'cfg(target_family = "wasm")'.dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+console_error_panic_hook = { workspace = true }
 fedimint-client-rpc = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
@@ -32,6 +33,7 @@ wasm-bindgen-futures = { workspace = true }
 web-sys = { version = "0.3", features = [
     "FileSystemSyncAccessHandle",
     "FileSystemReadWriteOptions",
+    "console",
 ] }
 
 [lints]

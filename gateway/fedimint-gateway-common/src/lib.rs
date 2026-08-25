@@ -26,6 +26,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod envs;
+pub mod federation_status;
+
+pub use federation_status::*;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -36,6 +39,7 @@ pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_invoice_for_operator";
 pub const CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt12_offer_for_operator";
+pub const FEDERATION_STATUS_ENDPOINT: &str = "/federation_status";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const INVITE_CODES_ENDPOINT: &str = "/invite_codes";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";

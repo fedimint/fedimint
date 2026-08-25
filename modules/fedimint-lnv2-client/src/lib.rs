@@ -48,7 +48,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
+    GatewayConnection, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
@@ -1002,6 +1002,10 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong);
+        }
+
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -1289,11 +1293,13 @@ impl LightningClientModule {
         // Read the stream cursor with a short-lived transaction. It must NOT stay open
         // across the long-poll below: RocksDB's optimistic transactions validate a
         // commit against bounded memtable history, so a transaction held open
-        // for minutes fails with a spurious `WriteConflict` once enough
-        // concurrent writes flush that history — and the panicking
+        // for minutes fails with `DatabaseError::SnapshotTooOld` once enough
+        // concurrent writes flush that history — not because anything conflicted,
+        // but because the backend can no longer tell — and the panicking
         // `commit_tx()` then killed this task permanently, silently
         // stalling every future receive for the lifetime of the process. Long-lived
         // clients (daemons) hit this reproducibly under concurrent lnv2 activity.
+        // See <https://github.com/fedimint/fedimint/issues/8872>.
         let stream_index = self
             .client_ctx
             .module_db()
@@ -1329,11 +1335,11 @@ impl LightningClientModule {
         // Advance the cursor in its own short transaction. This is the only writer of
         // this key and it runs in a single sequential loop, so there is no concurrent
         // writer to guard against; and because this transaction is short-lived — opened
-        // after the long-poll and committed immediately — it cannot hit the spurious
-        // `WriteConflict` that a transaction held open across the long-poll would, so a
-        // plain `commit_tx()` is safe. Ordering is unchanged: the cursor only moves
-        // after the batch above was processed, and a crash in between re-fetches the
-        // same batch on the next iteration.
+        // after the long-poll and committed immediately — it cannot hit the
+        // `SnapshotTooOld` failure that a transaction held open across the long-poll
+        // would, so a plain `commit_tx()` is safe. Ordering is unchanged: the cursor
+        // only moves after the batch above was processed, and a crash in between
+        // re-fetches the same batch on the next iteration.
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
         dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
@@ -1413,6 +1419,8 @@ pub enum ReceiveError {
     InvalidInvoice,
     #[error("Gateway returned an invoice with incorrect amount")]
     IncorrectInvoiceAmount,
+    #[error("Requested invoice expiry exceeds the maximum of one day")]
+    InvoiceExpiryTooLong,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

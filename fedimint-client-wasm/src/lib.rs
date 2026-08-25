@@ -8,14 +8,37 @@ use fedimint_cursed_redb::MemAndRedb;
 use wasm_bindgen::prelude::{JsError, JsValue, wasm_bindgen};
 use web_sys::FileSystemSyncAccessHandle;
 
+/// Runs automatically when the wasm module is instantiated, before any
+/// exported function can be called; calling it again is harmless.
+///
+/// Without a hook, a panic anywhere in the module (including the RPC tasks
+/// spawned via `wasm_bindgen_futures::spawn_local`) traps with a message-less
+/// `RuntimeError: unreachable executed` and the panic message and Rust
+/// location are lost. Log them to the console instead.
+///
+/// When triaging, trust the first logged panic: after it, the executor's
+/// poisoned state may log an unrelated `BorrowMutError` panic as well.
+#[wasm_bindgen(start)]
+fn install_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
 struct JsFunctionWrapper(js_sys::Function);
 
 impl RpcResponseHandler for JsFunctionWrapper {
     fn handle_response(&self, response: RpcResponse) {
-        let _ = self.0.call1(
-            &JsValue::null(),
-            &JsValue::from_str(&serde_json::to_string(&response).unwrap()),
+        let response = serde_json::to_string(&response).expect(
+            "RpcResponse is numbers, strings and serde_json::Value; serialization cannot fail",
         );
+        if let Err(err) = self
+            .0
+            .call1(&JsValue::null(), &JsValue::from_str(&response))
+        {
+            // There is no tracing subscriber in the wasm client, so log
+            // straight to the console; swallowing this leaves the request
+            // hanging with zero diagnostics.
+            web_sys::console::error_2(&JsValue::from_str("RPC response callback threw"), &err);
+        }
     }
 }
 
@@ -27,18 +50,21 @@ struct RpcHandler {
 #[wasm_bindgen]
 impl RpcHandler {
     #[wasm_bindgen(constructor)]
-    pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
-        // Create the database directly
-        let cursed_db = MemAndRedb::new(sync_handle).unwrap();
+    pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Result<RpcHandler, JsError> {
+        // Return errors instead of panicking: a panic in an async export
+        // leaves the returned `Promise` unsettled forever, so the caller
+        // would hang instead of getting a rejection it can catch.
+        let cursed_db = MemAndRedb::new(sync_handle)
+            .map_err(|err| JsError::new(&format!("Failed to open client database: {err:#}")))?;
         let database = Database::new(cursed_db, Default::default());
         let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()
             .await
-            .unwrap();
+            .map_err(|err| JsError::new(&format!("Failed to bind client connectors: {err:#}")))?;
 
         let state = Arc::new(RpcGlobalState::new(connectors, database));
 
-        Self { state }
+        Ok(Self { state })
     }
 
     #[wasm_bindgen]

@@ -20,8 +20,11 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
+mod federation_status;
 mod iroh_server;
 mod metrics;
+mod rate_limit;
+mod registration_health;
 pub mod rpc_server;
 mod types;
 
@@ -62,7 +65,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep, timeout};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::backoff_util::fibonacci_max_one_hour;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry};
@@ -112,7 +115,8 @@ use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RoutingInfo,
+    SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState};
@@ -129,6 +133,8 @@ use tracing::{debug, info, info_span, warn};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
+use crate::rate_limit::TokenBucketRateLimiter;
+use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -139,8 +145,28 @@ const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_mins(10);
 /// invoice creation.
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 
+/// Default maximum burst of requests to the public invoice creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_BURST: u32 = 50;
+
+/// Default sustained number of requests per second to the public invoice
+/// creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND: u32 = 5;
+
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
+
+/// How long code that needs to talk to the lightning node backs off before
+/// re-checking whether the gateway has (re)connected to it.
+const LIGHTNING_CONTEXT_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+/// How long an LNURL-verify request that asked to wait blocks before reporting
+/// the payment as not settled yet.
+///
+/// The payment being waited for may never arrive, so the wait needs an upper
+/// bound to stop callers from parking a request handler indefinitely. Reporting
+/// "not settled" on expiry is a regular LNURL-verify response, so clients
+/// simply poll again.
+const VERIFY_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type Result<T> = std::result::Result<T, PublicGatewayError>;
 pub type AdminResult<T> = std::result::Result<T, AdminGatewayError>;
@@ -283,6 +309,8 @@ impl Gateway {
                 iroh_relays,
                 skip_setup: true,
                 metrics_listen,
+                invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
+                invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
             },
             gateway_db,
             client_builder,
@@ -364,6 +392,12 @@ pub struct Gateway {
     /// A map of the network protocols the gateway supports to the data needed
     /// for registering with a federation.
     registrations: BTreeMap<RegisteredProtocol, Registration>,
+
+    /// Detail-free retained results of LNv1 federation registration attempts.
+    registration_health: RegistrationHealthTracker,
+
+    /// Rate limiter for the public invoice creation endpoint.
+    invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -402,23 +436,25 @@ async fn withdraw_v2(
 
     let withdraw_amount = match amount {
         BitcoinAmountOrAll::All => {
-            let balance = bitcoin::Amount::from_sat(
-                client
-                    .get_balance_for_btc()
-                    .await
-                    .map_err(|err| {
-                        AdminGatewayError::Unexpected(anyhow!(
-                            "Balance not available: {}",
-                            err.fmt_compact_anyhow()
-                        ))
-                    })?
-                    .msats
-                    / 1000,
-            );
-            balance
-                .checked_sub(fee)
-                .ok_or_else(|| AdminGatewayError::WithdrawError {
-                    failure_reason: format!("Insufficient funds. Balance: {balance} Fee: {fee}"),
+            let balance = client.get_balance_for_btc().await.map_err(|err| {
+                AdminGatewayError::Unexpected(anyhow!(
+                    "Balance not available: {}",
+                    err.fmt_compact_anyhow()
+                ))
+            })?;
+
+            // The on-chain fee is only part of the cost: funding the wallet
+            // output also incurs the federation's per-note fees. `fee` is
+            // passed on to `send` below so both are computed against the same
+            // on-chain fee.
+            wallet_module
+                .max_sendable_amount(balance, fee)
+                .await
+                .map_err(|err| AdminGatewayError::WithdrawError {
+                    failure_reason: format!(
+                        "Insufficient funds. Balance: {balance} Fee: {fee}: {}",
+                        err.fmt_compact_anyhow()
+                    ),
                 })?
         }
         BitcoinAmountOrAll::Amount(a) => a,
@@ -475,14 +511,7 @@ async fn calculate_max_withdrawable(
         ))
     })?;
 
-    let peg_out_fees = if let Ok(wallet_module) = client.get_first_module::<WalletClientModule>() {
-        wallet_module
-            .get_withdraw_fees(
-                address,
-                bitcoin::Amount::from_sat(balance.sats_round_down()),
-            )
-            .await?
-    } else if let Ok(wallet_module) =
+    if let Ok(wallet_module) =
         client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
     {
         let fee = wallet_module
@@ -491,31 +520,53 @@ async fn calculate_max_withdrawable(
             .map_err(|e| AdminGatewayError::WithdrawError {
                 failure_reason: e.to_string(),
             })?;
-        PegOutFees::from_amount(fee)
-    } else {
+
+        let max_withdrawable = wallet_module
+            .max_sendable_amount(balance, fee)
+            .await
+            .map_err(|err| AdminGatewayError::WithdrawError {
+                failure_reason: err.fmt_compact_anyhow().to_string(),
+            })?;
+
+        // Everything the balance does not become an on-chain payment or miner
+        // fee is the federation fee: the wallet output fee, the mint input
+        // fees on the funding notes, any change output fees and dust. This is
+        // exact by construction, so it needs no separate estimate.
+        let federation_fees = balance
+            .saturating_sub(Amount::from_sats(max_withdrawable.to_sat()))
+            .saturating_sub(Amount::from_sats(fee.to_sat()));
+
+        return Ok(WithdrawDetails {
+            amount: Amount::from_sats(max_withdrawable.to_sat()),
+            mint_fees: Some(federation_fees),
+            peg_out_fees: PegOutFees::from_amount(fee),
+        });
+    }
+
+    let Ok(wallet_module) = client.get_first_module::<WalletClientModule>() else {
         return Err(AdminGatewayError::Unexpected(anyhow!(
             "No wallet module found"
         )));
     };
 
-    let max_withdrawable_before_mint_fees = balance
-        .checked_sub(peg_out_fees.amount().into())
-        .ok_or_else(|| AdminGatewayError::WithdrawError {
-            failure_reason: "Insufficient balance to cover peg-out fees".to_string(),
+    let (max_withdrawable, peg_out_fees) = wallet_module
+        .max_withdrawable_amount(address, balance)
+        .await
+        .map_err(|err| AdminGatewayError::WithdrawError {
+            failure_reason: err.fmt_compact_anyhow().to_string(),
         })?;
 
-    // MintV2 doesn't have fee estimation - only compute fees for MintV1
-    let mint_fees = if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
-        mint_module.estimate_spend_all_fees().await
-    } else {
-        Amount::ZERO
-    };
-
-    let max_withdrawable = max_withdrawable_before_mint_fees.saturating_sub(mint_fees);
+    // Everything the balance does not become an on-chain payment or miner fee
+    // is the federation fee: the peg-out output fee, the mint input fees on the
+    // funding notes, any change output fees and dust. This is exact by
+    // construction, so it needs no separate estimate.
+    let federation_fees = balance
+        .saturating_sub(Amount::from_sats(max_withdrawable.to_sat()))
+        .saturating_sub(Amount::from_sats(peg_out_fees.amount().to_sat()));
 
     Ok(WithdrawDetails {
-        amount: max_withdrawable,
-        mint_fees: Some(mint_fees),
+        amount: Amount::from_sats(max_withdrawable.to_sat()),
+        mint_fees: Some(federation_fees),
         peg_out_fees,
     })
 }
@@ -730,6 +781,11 @@ impl Gateway {
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
             registrations,
+            registration_health: RegistrationHealthTracker::default(),
+            invoice_rate_limiter: Arc::new(TokenBucketRateLimiter::new(
+                gateway_parameters.invoice_rate_limit_burst,
+                gateway_parameters.invoice_rate_limit_per_second,
+            )),
         })
     }
 
@@ -785,6 +841,7 @@ impl Gateway {
         self.load_clients().await?;
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
+        self.spawn_prune_registered_contracts_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -812,6 +869,53 @@ impl Gateway {
                     }
                 }
             });
+    }
+
+    /// Spawns a background task that periodically deletes registered incoming
+    /// contract records whose invoice has long expired, so unpaid invoice
+    /// registrations cannot grow the database without bound.
+    fn spawn_prune_registered_contracts_task(&self) {
+        let self_copy = self.clone();
+        self.task_group.spawn_cancellable_silent(
+            "prune registered incoming contracts",
+            async move {
+                const PRUNE_INTERVAL: Duration = Duration::from_hours(1);
+                // Records are kept for a day past invoice expiry so payments
+                // settled shortly before expiry can still complete and be
+                // verified via the preimage verification endpoint.
+                const RETENTION_AFTER_EXPIRY: Duration = Duration::from_hours(24);
+
+                let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+                loop {
+                    interval.tick().await;
+
+                    let cutoff_secs = duration_since_epoch()
+                        .saturating_sub(RETENTION_AFTER_EXPIRY)
+                        .as_secs();
+
+                    let mut dbtx = self_copy.gateway_db.begin_transaction().await;
+                    let num_pruned = dbtx.prune_registered_incoming_contracts(cutoff_secs).await;
+                    match dbtx.commit_tx_result().await {
+                        Ok(()) => {
+                            if num_pruned > 0 {
+                                info!(
+                                    target: LOG_GATEWAY,
+                                    num_pruned,
+                                    "Pruned expired incoming contract records"
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_GATEWAY,
+                                err = %err.fmt_compact(),
+                                "Failed to prune expired incoming contract records"
+                            );
+                        }
+                    }
+                }
+            },
+        );
     }
 
     /// Loops through all federations and checks their last save backup time. If
@@ -1116,7 +1220,7 @@ impl Gateway {
 
         let lnv1_start = fedimint_core::time::now();
         let lnv1_result = self
-            .try_handle_lightning_payment_ln_legacy(&payment_request)
+            .try_handle_lightning_payment_ln_legacy(&payment_request, lightning_context)
             .await;
         let lnv1_outcome = if lnv1_result.is_ok() {
             "success"
@@ -1232,6 +1336,7 @@ impl Gateway {
     async fn try_handle_lightning_payment_ln_legacy(
         &self,
         htlc_request: &InterceptPaymentRequest,
+        lightning_context: &LightningContext,
     ) -> Result<()> {
         // Check if the payment corresponds to a federation supporting legacy Lightning.
         let Some(federation_index) = htlc_request.short_channel_id else {
@@ -1249,6 +1354,10 @@ impl Gateway {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
 
+        // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
+        // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
+        // no federation short-channel id), but using the backend's own best
+        // height keeps the unit and chain view consistent for every backend.
         client
             .borrow()
             .with(|client| async {
@@ -1263,7 +1372,12 @@ impl Gateway {
                                         "Federation does not have LNv1 module".to_string(),
                                     ))
                                 })?;
-                        match lnv1.gateway_handle_intercepted_htlc(htlc).await {
+                        match lnv1
+                            .gateway_handle_intercepted_htlc(htlc, async {
+                                Ok(lightning_context.lnrpc.info().await?.block_height)
+                            })
+                            .await
+                        {
                             Ok(_) => Ok(()),
                             Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                                 format!("Error intercepting lightning payment {e:?}"),
@@ -1358,6 +1472,18 @@ impl Gateway {
         }
 
         lock.clone()
+    }
+
+    /// Drives the gateway's state directly, bypassing the lightning connection
+    /// loop in [`Self::start_gateway`] that owns every real transition.
+    ///
+    /// Tests need to observe behaviour in states the builder cannot start them
+    /// in -- notably "connected later than the federation clients" -- and have
+    /// no lightning node to get there with. Nothing in production should call
+    /// this.
+    #[doc(hidden)]
+    pub async fn set_gateway_state_out_of_band(&self, state: GatewayState) {
+        self.set_gateway_state(state).await;
     }
 
     /// If the Gateway is connected to the Lightning node, returns the
@@ -1749,11 +1875,21 @@ impl Gateway {
 
                 let fed_manager = self.federation_manager.read().await;
                 if let Some(client) = fed_manager.client(federation_id) {
+                    let federation_id = *federation_id;
                     let client_arc = client.clone().into_value();
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
-                    let registrations =
-                        self.registrations.clone().into_values().collect::<Vec<_>>();
+                    let registration_health = self.registration_health.clone();
+                    let registrations = self
+                        .registrations
+                        .clone()
+                        .into_iter()
+                        .map(|(protocol, registration)| {
+                            let attempt =
+                                registration_health.begin_lnv1_attempt(federation_id, protocol);
+                            (registration, attempt)
+                        })
+                        .collect::<Vec<_>>();
 
                     register_task_group.spawn_cancellable_silent(
                         "register federation",
@@ -1764,15 +1900,23 @@ impl Gateway {
                                 return;
                             };
 
-                            for registration in registrations {
-                                gateway_client
+                            for (registration, attempt) in registrations {
+                                let succeeded = gateway_client
                                     .try_register_with_federation(
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
                                         routing_fees,
                                         lightning_context.clone(),
                                         registration.endpoint_url,
-                                        registration.keypair.public_key(),
+                                        registration.keypair,
+                                    )
+                                    .await;
+                                registration_health
+                                    .complete_attempt(
+                                        attempt,
+                                        succeeded,
+                                        fedimint_core::time::now(),
+                                        fedimint_core::runtime::Instant::now(),
                                     )
                                     .await;
                             }
@@ -1951,8 +2095,14 @@ impl Gateway {
     }
 
     /// Checks the Gateway's current state and returns the proper
-    /// `LightningContext` if it is available. Sometimes the lightning node
-    /// will not be connected and this will return an error.
+    /// `LightningContext` if it is available.
+    ///
+    /// The error is synthesised from the gateway's own state: no RPC is
+    /// attempted, so `Err` means "this process does not currently hold a
+    /// session with the lightning node", never "the lightning node was asked
+    /// and answered no". Callers that would turn a failure here into a
+    /// decision about a payment must use `await_lightning_context`
+    /// instead.
     pub async fn get_lightning_context(
         &self,
     ) -> std::result::Result<LightningContext, LightningRpcError> {
@@ -1960,6 +2110,47 @@ impl Gateway {
             GatewayState::Running { lightning_context }
             | GatewayState::ShuttingDown { lightning_context } => Ok(lightning_context),
             _ => Err(LightningRpcError::FailedToConnect),
+        }
+    }
+
+    /// Waits until the gateway holds a `LightningContext` and returns it.
+    ///
+    /// The lightning node is the only oracle for whether an HTLC of ours is in
+    /// flight, so code deciding the fate of a payment must actually ask it.
+    /// [`Self::get_lightning_context`] cannot stand in for that: its `Err` is
+    /// produced locally, and the gateway spends part of every startup without
+    /// a context. [`Self::run`] awaits `load_clients` before `start_gateway`,
+    /// and building a client starts its executor, so payment state machines
+    /// persisted across a restart re-enter while the state is still
+    /// `Disconnected`. Reading that as a payment failure cancels an outgoing
+    /// contract whose HTLC the previous process may already have settled,
+    /// leaving the gateway out of pocket for a payment it did make.
+    ///
+    /// Waiting is the conservative side of that trade. It ends when the
+    /// gateway connects, or when the caller is dropped: every caller runs
+    /// inside a client state machine transition or a webserver request, both
+    /// of which are cancelled when the gateway shuts down. It does not strand
+    /// the payer either, since the outgoing contract's timelock refunds them
+    /// without the gateway's cooperation, whereas a cancellation is final (see
+    /// `LightningInput` processing in `fedimint-ln-server`).
+    async fn await_lightning_context(&self) -> LightningContext {
+        loop {
+            match self.get_lightning_context().await {
+                Ok(lightning_context) => return lightning_context,
+                Err(err) => {
+                    let state = self.get_state().await;
+
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        %state,
+                        retry_interval_secs = LIGHTNING_CONTEXT_RETRY_INTERVAL.as_secs(),
+                        "Not connected to the lightning node, waiting before asking it again",
+                    );
+
+                    sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+                }
+            }
         }
     }
 
@@ -2178,6 +2369,9 @@ impl IAdminGateway for Gateway {
 
         dbtx.remove_federation_config(payload.federation_id).await;
         dbtx.commit_tx().await;
+        self.registration_health
+            .clear_federation(payload.federation_id)
+            .await;
         Ok(federation_info)
     }
 
@@ -2272,17 +2466,29 @@ impl IAdminGateway for Gateway {
         if matches!(self.lightning_mode, LightningMode::Lnd { .. })
             && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
         {
-            for registration in self.registrations.values() {
-                lnv1.try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    routing_fees,
-                    lightning_context.clone(),
-                    registration.endpoint_url.clone(),
-                    registration.keypair.public_key(),
-                )
-                .await;
+            for (protocol, registration) in &self.registrations {
+                let attempt = self
+                    .registration_health
+                    .begin_lnv1_attempt(federation_id, protocol.clone());
+                let succeeded = lnv1
+                    .try_register_with_federation(
+                        // Route hints will be updated in the background
+                        Vec::new(),
+                        GW_ANNOUNCEMENT_TTL,
+                        routing_fees,
+                        lightning_context.clone(),
+                        registration.endpoint_url.clone(),
+                        registration.keypair,
+                    )
+                    .await;
+                self.registration_health
+                    .complete_attempt(
+                        attempt,
+                        succeeded,
+                        fedimint_core::time::now(),
+                        fedimint_core::runtime::Instant::now(),
+                    )
+                    .await;
             }
         }
 
@@ -2778,33 +2984,27 @@ impl IAdminGateway for Gateway {
             }
             // CLI flow: fetch fees (existing behavior for backwards compatibility)
             None => match amount {
-                // If the amount is "all", then we need to subtract the fees from
-                // the amount we are withdrawing
+                // The on-chain fee is only part of the cost of withdrawing
+                // everything: funding the peg-out output also incurs the
+                // federation's per-note fees. The returned fees are quoted at
+                // the returned amount, so they must be used together.
                 BitcoinAmountOrAll::All => {
-                    let balance = bitcoin::Amount::from_sat(
-                        client
-                            .value()
-                            .get_balance_for_btc()
-                            .await
-                            .map_err(|err| {
-                                AdminGatewayError::Unexpected(anyhow!(
-                                    "Balance not available: {}",
-                                    err.fmt_compact_anyhow()
-                                ))
-                            })?
-                            .msats
-                            / 1000,
-                    );
-                    let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
-                    let withdraw_amount = balance.checked_sub(fees.amount());
-                    if withdraw_amount.is_none() {
-                        return Err(AdminGatewayError::WithdrawError {
+                    let balance = client.value().get_balance_for_btc().await.map_err(|err| {
+                        AdminGatewayError::Unexpected(anyhow!(
+                            "Balance not available: {}",
+                            err.fmt_compact_anyhow()
+                        ))
+                    })?;
+
+                    wallet_module
+                        .max_withdrawable_amount(&address, balance)
+                        .await
+                        .map_err(|err| AdminGatewayError::WithdrawError {
                             failure_reason: format!(
-                                "Insufficient funds. Balance: {balance} Fees: {fees:?}"
+                                "Insufficient funds. Balance: {balance}: {}",
+                                err.fmt_compact_anyhow()
                             ),
-                        });
-                    }
-                    (withdraw_amount.expect("checked above"), fees)
+                        })?
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
@@ -3108,13 +3308,14 @@ impl Gateway {
             .read()
             .await
             .client(federation_id)
-            .map(|client| {
+            .and_then(|client| {
+                // A federation only has to offer one of the two lightning modules, so a
+                // client we serve over LNv1 may well have no LNv2 module at all.
                 client
                     .value()
                     .get_first_module::<GatewayClientModuleV2>()
-                    .expect("Must have client module")
-                    .keypair
-                    .public_key()
+                    .ok()
+                    .map(|module| module.keypair.public_key())
             })
     }
 
@@ -3166,15 +3367,19 @@ impl Gateway {
 
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    async fn send_payment_v2(
+    pub async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
     ) -> Result<std::result::Result<[u8; 32], Signature>> {
-        self.select_client(payload.federation_id)
-            .await?
+        let client = self.select_client(payload.federation_id).await?;
+        // A federation only has to offer one of the two lightning modules, so a
+        // client we serve over LNv1 may well have no LNv2 module at all.
+        let module = client
             .value()
             .get_first_module::<GatewayClientModuleV2>()
-            .expect("Must have client module")
+            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err)))?;
+
+        module
             .send_payment(payload)
             .await
             .map_err(LNv2Error::OutgoingPayment)
@@ -3189,6 +3394,13 @@ impl Gateway {
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
+        // Unauthenticated invoice creation consumes resources on the Lightning
+        // node and burns CPU on contract verification, so the request rate is
+        // limited before any other work is done.
+        if !self.invoice_rate_limiter.try_acquire() {
+            return Err(PublicGatewayError::RateLimited);
+        }
+
         if !payload.contract.verify() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
@@ -3228,6 +3440,12 @@ impl Gateway {
             )));
         }
 
+        if payload.expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                "The invoice expiry exceeds the maximum of one day".to_string(),
+            )));
+        }
+
         let payment_hash = match payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => {
@@ -3237,21 +3455,21 @@ impl Gateway {
             }
         };
 
-        let invoice = self
-            .create_invoice_via_lnrpc_v2(
-                payment_hash,
-                payload.amount,
-                payload.description.clone(),
-                payload.expiry_secs,
-            )
-            .await?;
-
+        // Reserve the payment hash in the database before requesting the
+        // invoice so a replayed payment hash is rejected without creating any
+        // state on the Lightning node, and so the contract is guaranteed to be
+        // registered by the time the invoice is payable.
         let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let invoice_expires_at_secs = duration_since_epoch()
+            .as_secs()
+            .saturating_add(u64::from(payload.expiry_secs));
 
         if dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
                 payload.amount,
+                invoice_expires_at_secs,
                 payload.contract,
             )
             .await
@@ -3268,7 +3486,34 @@ impl Gateway {
             ))
         })?;
 
-        Ok(invoice)
+        match self
+            .create_invoice_via_lnrpc_v2(
+                payment_hash,
+                payload.amount,
+                payload.description.clone(),
+                payload.expiry_secs,
+            )
+            .await
+        {
+            Ok(invoice) => Ok(invoice),
+            Err(err) => {
+                // Release the reservation so the payment hash is not burned by
+                // a transient Lightning node failure.
+                let mut dbtx = self.gateway_db.begin_transaction().await;
+                dbtx.delete_registered_incoming_contract(PaymentImage::Hash(payment_hash))
+                    .await;
+                if let Err(db_err) = dbtx.commit_tx_result().await {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %db_err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to release incoming contract reservation after Lightning error"
+                    );
+                }
+
+                Err(err.into())
+            }
+        }
     }
 
     /// Retrieves a BOLT11 invoice from the connected Lightning node with a
@@ -3340,11 +3585,17 @@ impl Gateway {
             });
         }
 
-        let state = client
+        let module = client
             .get_first_module::<GatewayClientModuleV2>()
-            .expect("Must have client module")
-            .await_receive(operation_id)
-            .await;
+            .expect("Must have client module");
+
+        let Ok(state) = timeout(VERIFY_WAIT_TIMEOUT, module.await_receive(operation_id)).await
+        else {
+            return Ok(VerifyResponse {
+                settled: false,
+                preimage: None,
+            });
+        };
 
         let preimage = match state {
             FinalReceiveState::Success(preimage) => Ok(preimage),
@@ -3395,27 +3646,33 @@ impl Gateway {
 
 #[async_trait]
 impl IGatewayClientV2 for Gateway {
-    async fn complete_htlc(&self, htlc_response: InterceptPaymentResponse) {
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
         loop {
-            match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    match lightning_context
-                        .lnrpc
-                        .complete_htlc(htlc_response.clone())
-                        .await
-                    {
-                        Ok(..) => return,
-                        Err(err) => {
-                            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
-                        }
-                    }
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context
+                .lnrpc
+                .complete_htlc(htlc_response.clone())
+                .await
+            {
+                Ok(..) => return Ok(()),
+                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Lightning cannot reach the requested terminal HTLC outcome",
+                    );
+                    return Err(err);
                 }
                 Err(err) => {
                     warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                 }
             }
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
         }
     }
 
@@ -3423,7 +3680,11 @@ impl IGatewayClientV2 for Gateway {
         &self,
         invoice: &Bolt11Invoice,
     ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>> {
-        let lightning_context = self.get_lightning_context().await?;
+        // Deciding this from a locally synthesised "not connected" would route a
+        // direct swap onto the lightning network, or -- once the send state
+        // machine turns the error into a cancellation -- forfeit a contract we
+        // may already be committed to. Ask once we can actually answer.
+        let lightning_context = self.await_lightning_context().await;
         if lightning_context.lightning_public_key == invoice.get_payee_pub_key() {
             let (contract, client) = self
                 .get_registered_incoming_contract_and_client_v2(
@@ -3445,7 +3706,9 @@ impl IGatewayClientV2 for Gateway {
         max_delay: u64,
         max_fee: Amount,
     ) -> std::result::Result<[u8; 32], LightningRpcError> {
-        let lightning_context = self.get_lightning_context().await?;
+        // The send state machine forfeits the outgoing contract on any error from
+        // here, so only the lightning node gets to say this payment failed.
+        let lightning_context = self.await_lightning_context().await;
         lightning_context
             .lnrpc
             .pay(invoice, max_delay, max_fee)
@@ -3468,22 +3731,19 @@ impl IGatewayClientV2 for Gateway {
 
     async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>> {
         let rhints = invoice.route_hints();
-        match rhints.first().and_then(|rh| rh.0.last()) {
-            None => None,
-            Some(hop) => match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
-                        return None;
-                    }
+        let hop = rhints.first().and_then(|rh| rh.0.last())?;
 
-                    self.federation_manager
-                        .read()
-                        .await
-                        .get_client_for_index(hop.short_channel_id)
-                }
-                Err(_) => None,
-            },
+        // Answering `None` because we happen to be between lightning connections
+        // sends a swap that never needed the lightning network out over it.
+        let lightning_context = self.await_lightning_context().await;
+        if hop.src_node_id != lightning_context.lightning_public_key {
+            return None;
         }
+
+        self.federation_manager
+            .read()
+            .await
+            .get_client_for_index(hop.short_channel_id)
     }
 
     async fn relay_lnv1_swap(
@@ -3597,9 +3857,9 @@ impl IGatewayClientV1 for Gateway {
     }
 
     async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()> {
-        let lightning_context = self.get_lightning_context().await?;
-
         if matches!(payment_data, PaymentData::PrunedInvoice { .. }) {
+            let lightning_context = self.get_lightning_context().await?;
+
             ensure!(
                 lightning_context.lnrpc.supports_private_payments(),
                 "Private payments are not supported by the lightning node"
@@ -3644,22 +3904,19 @@ impl IGatewayClientV1 for Gateway {
         payment_data: PaymentData,
     ) -> Option<Spanned<ClientHandleArc>> {
         let rhints = payment_data.route_hints();
-        match rhints.first().and_then(|rh| rh.0.last()) {
-            None => None,
-            Some(hop) => match self.get_lightning_context().await {
-                Ok(lightning_context) => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
-                        return None;
-                    }
+        let hop = rhints.first().and_then(|rh| rh.0.last())?;
 
-                    self.federation_manager
-                        .read()
-                        .await
-                        .get_client_for_index(hop.short_channel_id)
-                }
-                Err(_) => None,
-            },
+        // Answering `None` because we happen to be between lightning connections
+        // sends a swap that never needed the lightning network out over it.
+        let lightning_context = self.await_lightning_context().await;
+        if hop.src_node_id != lightning_context.lightning_public_key {
+            return None;
         }
+
+        self.federation_manager
+            .read()
+            .await
+            .get_client_for_index(hop.short_channel_id)
     }
 
     async fn pay(
@@ -3668,7 +3925,9 @@ impl IGatewayClientV1 for Gateway {
         max_delay: u64,
         max_fee: Amount,
     ) -> std::result::Result<PayInvoiceResponse, LightningRpcError> {
-        let lightning_context = self.get_lightning_context().await?;
+        // `GatewayPayInvoice` cancels the outgoing contract on any error from
+        // here, so only the lightning node gets to say this payment failed.
+        let lightning_context = self.await_lightning_context().await;
 
         match payment_data {
             PaymentData::Invoice(invoice) => {
@@ -3691,15 +3950,7 @@ impl IGatewayClientV1 for Gateway {
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
         // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = loop {
-            match self.get_lightning_context().await {
-                Ok(lightning_context) => break lightning_context,
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
-                    sleep(Duration::from_secs(5)).await;
-                }
-            }
-        };
+        let lightning_context = self.await_lightning_context().await;
 
         lightning_context.lnrpc.complete_htlc(htlc).await
     }

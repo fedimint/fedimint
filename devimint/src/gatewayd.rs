@@ -781,6 +781,25 @@ impl<'a> GatewayClient {
         .await?;
         Ok(serde_json::from_value(value)?)
     }
+
+    /// Sweeps the gateway's entire ecash balance for a federation on chain via
+    /// `--amount all`.
+    pub async fn pegout_all(&self, fed_id: String, address: Address) -> Result<WithdrawResponse> {
+        let value = cmd!(
+            self,
+            "ecash",
+            "pegout",
+            "--federation-id",
+            fed_id,
+            "--amount",
+            "all",
+            "--address",
+            address
+        )
+        .out_json()
+        .await?;
+        Ok(serde_json::from_value(value)?)
+    }
 }
 
 #[derive(Clone)]

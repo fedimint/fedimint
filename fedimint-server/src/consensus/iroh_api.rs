@@ -1,4 +1,7 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +17,7 @@ use iroh::Endpoint;
 use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
 use serde_json::Value;
 use tokio::sync::Semaphore;
-use tracing::warn;
+use tracing::{error, warn};
 
 use super::api::{ConsensusApi, server_endpoints};
 use crate::connection_limits::ConnectionLimits;
@@ -33,6 +36,10 @@ const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE: u32 = 0;
 
 /// Application-level QUIC close reason for idle Iroh API connection reaping.
 const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON: &[u8] = b"idle timeout";
+
+/// Metric label used for every request that does not resolve to a registered
+/// endpoint.
+const UNKNOWN_METHOD: &str = "unknown";
 
 pub(super) async fn run_iroh_api(
     api: Arc<IrohApiState>,
@@ -352,48 +359,133 @@ async fn handle_iroh_api_request(
     version_label: &'static str,
 ) -> anyhow::Result<Vec<u8>> {
     let request = serde_json::from_slice::<IrohApiRequest>(request)?;
-    let method = request.method.to_string();
+    let request_method = request.method.clone();
+    let response = record_request_metrics(
+        &api.core,
+        &api.modules,
+        &request_method,
+        version_label,
+        await_response(api, request),
+    )
+    .await;
+
+    Ok(serde_json::to_vec(&response)?)
+}
+
+fn metric_method<'a, C, M>(
+    core: &'a BTreeMap<String, C>,
+    modules: &'a BTreeMap<ModuleInstanceId, BTreeMap<String, M>>,
+    method: &ApiMethod,
+) -> Cow<'a, str> {
+    match method {
+        ApiMethod::Core(method) => core
+            .get_key_value(method)
+            .map_or(Cow::Borrowed(UNKNOWN_METHOD), |(method, _)| {
+                Cow::Borrowed(method)
+            }),
+        ApiMethod::Module(module_id, method) => modules
+            .get_key_value(module_id)
+            .and_then(|(module_id, endpoints)| {
+                endpoints
+                    .get_key_value(method)
+                    .map(|(method, _)| Cow::Owned(format!("{module_id}-{method}")))
+            })
+            .unwrap_or(Cow::Borrowed(UNKNOWN_METHOD)),
+    }
+}
+
+async fn record_request_metrics<T, C, M>(
+    core: &BTreeMap<String, C>,
+    modules: &BTreeMap<ModuleInstanceId, BTreeMap<String, M>>,
+    request_method: &ApiMethod,
+    version_label: &'static str,
+    response: impl Future<Output = Result<T, ApiError>>,
+) -> Result<T, ApiError> {
+    let method = metric_method(core, modules, request_method);
     let timer = IROH_API_REQUEST_DURATION_SECONDS
-        .with_label_values(&[&method])
+        .with_label_values(&[method.as_ref()])
         .start_timer();
-    let response = await_response(api, request).await;
+    let response = response.await;
     timer.observe_duration();
 
     let response_code = response
         .as_ref()
         .map_or_else(|err| err.code.to_string(), |_| "0".to_string());
     IROH_API_REQUEST_RESPONSE_CODE
-        .with_label_values(&[method.as_str(), response_code.as_str(), version_label])
+        .with_label_values(&[method.as_ref(), response_code.as_str(), version_label])
         .inc();
 
-    Ok(serde_json::to_vec(&response)?)
+    response
 }
 
 async fn await_response(api: &IrohApiState, request: IrohApiRequest) -> Result<Value, ApiError> {
     match request.method {
         ApiMethod::Core(method) => {
-            let endpoint = api.core.get(&method).ok_or(ApiError::not_found(method))?;
+            let endpoint = api
+                .core
+                .get(&method)
+                .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
             let (state, context) = api.consensus.context(&request.request, None).await;
 
-            (endpoint.handler)(state, context, request.request).await
+            run_handler(
+                None,
+                &method,
+                (endpoint.handler)(state, context, request.request),
+            )
+            .await
         }
         ApiMethod::Module(module_id, method) => {
             let endpoint = api
                 .modules
                 .get(&module_id)
-                .ok_or(ApiError::not_found(module_id.to_string()))?
+                .ok_or_else(|| ApiError::not_found(module_id.to_string()))?
                 .get(&method)
-                .ok_or(ApiError::not_found(method))?;
+                .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
             let (state, context) = api
                 .consensus
                 .context(&request.request, Some(module_id))
                 .await;
 
-            (endpoint.handler)(state, context, request.request).await
+            run_handler(
+                Some(module_id),
+                &method,
+                (endpoint.handler)(state, context, request.request),
+            )
+            .await
         }
     }
+}
+
+/// Runs an API endpoint handler, turning a panic into an error response for the
+/// caller that triggered it.
+///
+/// Iroh API requests run on the root task group, so an escaping panic would
+/// trip the task group's panic guard and shut the whole guardian down. The
+/// jsonrpsee path contains handler panics the same way.
+async fn run_handler(
+    module_id: Option<ModuleInstanceId>,
+    method: &str,
+    handler: impl Future<Output = Result<Value, ApiError>>,
+) -> Result<Value, ApiError> {
+    // Using `AssertUnwindSafe` here is far from ideal. In theory this means we
+    // could end up with an inconsistent state. In practice most API functions are
+    // only reading and the few that do write anything are atomic. Lastly, this is
+    // only the last line of defense.
+    AssertUnwindSafe(handler)
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|_| {
+            error!(
+                target: LOG_NET_API,
+                module_id = ?module_id,
+                method,
+                "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+            );
+
+            Err(ApiError::server_error("API handler panicked".to_string()))
+        })
 }
 
 // --- iroh-next API endpoint functions ---
@@ -455,15 +547,241 @@ async fn handle_incoming_next(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::net::SocketAddr;
 
     use anyhow::Context as _;
+    use fedimint_metrics::prometheus::core::Collector;
+    use fedimint_metrics::prometheus::proto::Metric;
+    use futures::future::pending;
+    use futures::{pin_mut, poll};
     use iroh_next::endpoint::presets::Minimal;
     use iroh_next::{EndpointAddr, RelayMode, SecretKey, TransportAddr};
 
     use super::*;
 
     const TEST_ALPN: &[u8] = b"fedimint-iroh-api-adapter-test";
+
+    fn has_method_label(metric: &Metric, method: &str) -> bool {
+        metric
+            .get_label()
+            .iter()
+            .any(|label| label.name() == "method" && label.value() == method)
+    }
+
+    fn duration_count(method: &str) -> u64 {
+        IROH_API_REQUEST_DURATION_SECONDS
+            .collect()
+            .into_iter()
+            .flat_map(|family| family.metric)
+            .filter(|metric| has_method_label(metric, method))
+            .map(|metric| metric.histogram.sample_count())
+            .sum()
+    }
+
+    fn response_count(method: &str) -> u64 {
+        IROH_API_REQUEST_RESPONSE_CODE
+            .collect()
+            .into_iter()
+            .flat_map(|family| family.metric)
+            .filter(|metric| has_method_label(metric, method))
+            .map(|metric| metric.counter.value() as u64)
+            .sum()
+    }
+
+    fn method_series(metrics: Vec<Metric>, method: &str) -> BTreeSet<Vec<(String, String)>> {
+        metrics
+            .into_iter()
+            .filter(|metric| has_method_label(metric, method))
+            .map(|metric| {
+                metric
+                    .label
+                    .into_iter()
+                    .map(|label| (label.name().to_owned(), label.value().to_owned()))
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn duration_series(method: &str) -> BTreeSet<Vec<(String, String)>> {
+        method_series(
+            IROH_API_REQUEST_DURATION_SECONDS
+                .collect()
+                .into_iter()
+                .flat_map(|family| family.metric)
+                .collect(),
+            method,
+        )
+    }
+
+    fn response_series(method: &str) -> BTreeSet<Vec<(String, String)>> {
+        method_series(
+            IROH_API_REQUEST_RESPONSE_CODE
+                .collect()
+                .into_iter()
+                .flat_map(|family| family.metric)
+                .collect(),
+            method,
+        )
+    }
+
+    #[tokio::test]
+    async fn bounds_method_labels_for_all_iroh_request_metrics() {
+        const CORE_METHOD: &str = "metrics_test_core";
+        const MODULE_ID: ModuleInstanceId = 42;
+        const MODULE_METHOD: &str = "metrics_test_module";
+        const MODULE_LABEL: &str = "42-metrics_test_module";
+
+        let core = BTreeMap::from([(CORE_METHOD.to_owned(), true)]);
+        let modules = BTreeMap::from([(
+            MODULE_ID,
+            BTreeMap::from([(MODULE_METHOD.to_owned(), true)]),
+        )]);
+        let hostile_methods = [
+            ApiMethod::Core("metrics_test_unknown_core".to_owned()),
+            ApiMethod::Core("metrics_test_unknown_core_!@#$%^&*()".to_owned()),
+            ApiMethod::Module(MODULE_ID, "metrics_test_unknown_module_method".to_owned()),
+            ApiMethod::Module(
+                MODULE_ID,
+                "metrics_test_unknown_module_method_with_a_long_suffix".to_owned(),
+            ),
+            ApiMethod::Module(43, "metrics_test_unknown_module".to_owned()),
+            ApiMethod::Module(44, "metrics_test_unknown_module_!@#$%^&*()".to_owned()),
+        ];
+
+        assert_eq!(
+            metric_method(&core, &modules, &ApiMethod::Core(CORE_METHOD.to_owned())),
+            CORE_METHOD
+        );
+        assert_eq!(
+            metric_method(
+                &core,
+                &modules,
+                &ApiMethod::Module(MODULE_ID, MODULE_METHOD.to_owned())
+            ),
+            MODULE_LABEL
+        );
+        for method in &hostile_methods {
+            assert_eq!(metric_method(&core, &modules, method), UNKNOWN_METHOD);
+        }
+
+        let duration_before = [
+            duration_count(CORE_METHOD),
+            duration_count(MODULE_LABEL),
+            duration_count(UNKNOWN_METHOD),
+        ];
+        let response_before = [
+            response_count(CORE_METHOD),
+            response_count(MODULE_LABEL),
+            response_count(UNKNOWN_METHOD),
+        ];
+
+        record_request_metrics(
+            &core,
+            &modules,
+            &ApiMethod::Core(CORE_METHOD.to_owned()),
+            "default",
+            async { Ok::<_, ApiError>(()) },
+        )
+        .await
+        .expect("registered core request succeeds");
+        record_request_metrics(
+            &core,
+            &modules,
+            &ApiMethod::Module(MODULE_ID, MODULE_METHOD.to_owned()),
+            "next",
+            async { Ok::<_, ApiError>(()) },
+        )
+        .await
+        .expect("registered module request succeeds");
+        for method in &hostile_methods {
+            record_request_metrics(&core, &modules, method, "default", async {
+                Err::<(), _>(ApiError::not_found("test rejection".to_owned()))
+            })
+            .await
+            .expect_err("unregistered request is rejected");
+        }
+
+        {
+            let cancelled_method =
+                ApiMethod::Core("metrics_test_cancelled_attacker_input".to_owned());
+            let cancelled = record_request_metrics(
+                &core,
+                &modules,
+                &cancelled_method,
+                "default",
+                pending::<Result<(), ApiError>>(),
+            );
+            pin_mut!(cancelled);
+            assert!(poll!(cancelled.as_mut()).is_pending());
+        }
+
+        assert_eq!(duration_count(CORE_METHOD) - duration_before[0], 1);
+        assert_eq!(duration_count(MODULE_LABEL) - duration_before[1], 1);
+        assert_eq!(
+            duration_count(UNKNOWN_METHOD) - duration_before[2],
+            hostile_methods.len() as u64 + 1
+        );
+        assert_eq!(response_count(CORE_METHOD) - response_before[0], 1);
+        assert_eq!(response_count(MODULE_LABEL) - response_before[1], 1);
+        assert_eq!(
+            response_count(UNKNOWN_METHOD) - response_before[2],
+            hostile_methods.len() as u64
+        );
+        assert_eq!(duration_series(UNKNOWN_METHOD).len(), 1);
+        let unknown_response_series = response_series(UNKNOWN_METHOD);
+        assert_eq!(unknown_response_series.len(), 1);
+        assert!(unknown_response_series.iter().any(|labels| {
+            labels
+                .iter()
+                .any(|(name, value)| name == "code" && value == "404")
+                && labels
+                    .iter()
+                    .any(|(name, value)| name == "type" && value == "default")
+        }));
+        assert!(response_series(CORE_METHOD).iter().any(|labels| {
+            labels
+                .iter()
+                .any(|(name, value)| name == "code" && value == "0")
+                && labels
+                    .iter()
+                    .any(|(name, value)| name == "type" && value == "default")
+        }));
+        assert!(response_series(MODULE_LABEL).iter().any(|labels| {
+            labels
+                .iter()
+                .any(|(name, value)| name == "code" && value == "0")
+                && labels
+                    .iter()
+                    .any(|(name, value)| name == "type" && value == "next")
+        }));
+
+        for method in hostile_methods
+            .iter()
+            .map(ToString::to_string)
+            .chain(["metrics_test_cancelled_attacker_input".to_owned()])
+        {
+            assert!(duration_series(&method).is_empty());
+            assert!(response_series(&method).is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn panicking_handler_returns_an_error_instead_of_unwinding() {
+        let error = run_handler(None, "test_endpoint", async { panic!("handler panic") })
+            .await
+            .expect_err("a panicking handler is reported as a server error");
+
+        assert_eq!(error.code, 500);
+
+        let error = run_handler(Some(3), "test_endpoint", async {
+            panic!("module handler panic")
+        })
+        .await
+        .expect_err("a panicking module handler is reported as a server error");
+
+        assert_eq!(error.code, 500);
+    }
 
     #[tokio::test]
     async fn shared_connection_limit_applies_across_versions() {

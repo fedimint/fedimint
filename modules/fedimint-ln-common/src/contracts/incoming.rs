@@ -23,6 +23,14 @@ impl IncomingContractOffer {
     pub fn id(&self) -> OfferId {
         OfferId::from_raw_hash(self.hash)
     }
+
+    /// Id of the incoming contract that funding this offer creates.
+    ///
+    /// An incoming contract's id commits to the payment hash alone, so it is
+    /// fully determined by the offer.
+    pub fn contract_id(&self) -> ContractId {
+        ContractId::from_raw_hash(self.hash)
+    }
 }
 
 // FIXME: the protocol currently envisions the use of a pub key as preimage.

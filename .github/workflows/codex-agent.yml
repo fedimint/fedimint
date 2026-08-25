@@ -243,28 +243,28 @@ jobs:
             exit 0
           fi
 
-          reviewer_membership=$(
+          bot_access_membership=$(
             curl --silent --show-error \
               --write-out '%{http_code}' \
-              --output /tmp/fedimint-bot-reviewer-membership.json \
+              --output /tmp/fedimint-bot-access-membership.json \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "${api_url}/orgs/fedimint/teams/reviewers/memberships/${comment_user}"
+              "${api_url}/orgs/fedimint/teams/bot-access/memberships/${comment_user}"
           )
 
-          if [ "${reviewer_membership}" = "200" ]; then
-            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-reviewer-membership.json)
+          if [ "${bot_access_membership}" = "200" ]; then
+            membership_state=$(jq -r '.state // ""' /tmp/fedimint-bot-access-membership.json)
           else
             membership_state=""
           fi
 
-          echo "reviewer_membership_status=${reviewer_membership}"
-          echo "reviewer_membership_state=${membership_state:-<missing>}"
+          echo "bot_access_membership_status=${bot_access_membership}"
+          echo "bot_access_membership_state=${membership_state:-<missing>}"
 
           if [ "${membership_state}" != "active" ]; then
             echo "run=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping: requester is not an active fedimint/reviewers team member"
+            echo "Skipping: requester is not an active fedimint/bot-access team member"
             exit 0
           fi
 

@@ -48,7 +48,8 @@ use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule,
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
-    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
+    ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
+    TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -896,6 +897,84 @@ impl WalletClientModule {
                 },
             )
             .await
+    }
+
+    /// Finds the largest amount that can be withdrawn in full out of
+    /// `balance` — the amount a "withdraw everything" sweep should use —
+    /// together with the peg-out fees to submit it with.
+    ///
+    /// Withdrawing `amount` submits a peg-out output worth `amount +
+    /// peg_out_fees` (the on-chain miner fee is carried inside the output, see
+    /// [`WalletOutputV0::amount`]) and funding that output costs an additional
+    /// federation fee — the peg-out output fee, the mint input fees on the
+    /// funding notes, any mint change output fees and sub-denomination dust —
+    /// as quoted by [`Self::send_fee_quote`].
+    ///
+    /// Both returned values must be passed to [`Self::withdraw`] together. The
+    /// federation rebuilds the peg-out for the exact amount submitted and
+    /// rejects it unless the declared `total_weight` matches what it computed
+    /// (`WalletOutputError::TxWeightIncorrect`), so the fees are re-quoted here
+    /// at the amount being returned rather than at the balance.
+    ///
+    /// This costs exactly two [`Self::get_withdraw_fees`] round trips. The
+    /// first, at the full balance, is an upper bound on the miner fee — the
+    /// federation selects UTXOs until they cover the amount, so the weight is
+    /// monotone in it — and sizing the withdrawal against that upper bound can
+    /// only leave the result more affordable once the true, smaller fee
+    /// replaces it. The maximum itself is then found by binary search over the
+    /// real fee quote (see [`max_affordable_send_amount`]), which needs no
+    /// further round trips because [`Self::send_fee_quote`] is a local dry-run.
+    ///
+    /// Sizing against the upper bound means a sweep may leave a small
+    /// remainder behind. The quote is point-in-time: if the federation's UTXO
+    /// set or feerate moves before the peg-out is processed it is rejected, and
+    /// the caller should retry with a fresh quote.
+    ///
+    /// Returns an error if the balance cannot cover the destination's dust
+    /// limit plus fees.
+    pub async fn max_withdrawable_amount(
+        &self,
+        address: &bitcoin::Address,
+        balance: fedimint_core::Amount,
+    ) -> anyhow::Result<(bitcoin::Amount, PegOutFees)> {
+        // Upper bound on the miner fee: the weight only grows as the federation
+        // has to reach for more UTXOs, so no smaller withdrawal costs more.
+        let max_fees = self
+            .get_withdraw_fees(
+                address,
+                bitcoin::Amount::from_sat(balance.sats_round_down()),
+            )
+            .await?;
+        let max_fee_msats = fedimint_core::Amount::from_sats(max_fees.amount().to_sat());
+
+        let max = max_affordable_send_amount(
+            balance,
+            fedimint_core::Amount::from_sats(address.script_pubkey().minimal_non_dust().to_sat()),
+            balance,
+            // A peg-out funds a whole number of sats, so round the probe up to
+            // the next sat before adding the miner fee; the solver searches
+            // millisatoshis.
+            |amount: fedimint_core::Amount| {
+                fedimint_core::Amount::from_sats(amount.msats.div_ceil(1000)) + max_fee_msats
+            },
+            |funded: fedimint_core::Amount| {
+                self.send_fee_quote(bitcoin::Amount::from_sat(funded.msats / 1000))
+            },
+        )
+        .await
+        .ok_or_else(|| anyhow!("Balance is too low to withdraw any amount after fees"))?;
+
+        // `gross_up` rounded up to whole satoshis, so the largest affordable
+        // amount already sits on a satoshi boundary; no value is lost here.
+        let amount = bitcoin::Amount::from_sat(max.msats.div_ceil(1000));
+
+        // Re-quote at the amount actually being withdrawn. This is the fee the
+        // federation recomputes for that amount, so the declared weight
+        // matches; it is at most `max_fees`, which is what keeps `amount`
+        // affordable.
+        let fees = self.get_withdraw_fees(address, amount).await?;
+
+        Ok((amount, fees))
     }
 
     /// Returns a summary of the wallet's coins
