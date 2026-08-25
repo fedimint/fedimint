@@ -164,34 +164,45 @@
 <a href=#164 id=164 data-nosnippet>164</a>            <span class="kw">return</span>;
 <a href=#165 id=165 data-nosnippet>165</a>        }
 <a href=#166 id=166 data-nosnippet>166</a>
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="comment">// We can't use block_on in single-threaded mode or wasm
-<a href=#168 id=168 data-nosnippet>168</a>        </span><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
-<a href=#169 id=169 data-nosnippet>169</a>        </span><span class="kw">let </span>can_block = <span class="bool-val">false</span>;
-<a href=#170 id=170 data-nosnippet>170</a>        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-<a href=#171 id=171 data-nosnippet>171</a>        </span><span class="comment">// nosemgrep: ban-raw-block-on
-<a href=#172 id=172 data-nosnippet>172</a>        </span><span class="kw">let </span>can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
-<a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">if </span>!can_block {
-<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
-<a href=#175 id=175 data-nosnippet>175</a>            inner.executor.stop_executor();
-<a href=#176 id=176 data-nosnippet>176</a>            <span class="kw">if </span><span class="macro">cfg!</span>(target_family = <span class="string">"wasm"</span>) {
-<a href=#177 id=177 data-nosnippet>177</a>                <span class="macro">error!</span>(target: LOG_CLIENT, <span class="string">"Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually."</span>);
-<a href=#178 id=178 data-nosnippet>178</a>            } <span class="kw">else </span>{
-<a href=#179 id=179 data-nosnippet>179</a>                <span class="macro">error!</span>(target: LOG_CLIENT, <span class="string">"Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually."</span>);
-<a href=#180 id=180 data-nosnippet>180</a>            }
-<a href=#181 id=181 data-nosnippet>181</a>            <span class="kw">return</span>;
-<a href=#182 id=182 data-nosnippet>182</a>        }
-<a href=#183 id=183 data-nosnippet>183</a>
-<a href=#184 id=184 data-nosnippet>184</a>        <span class="self">self</span>.inner
-<a href=#185 id=185 data-nosnippet>185</a>            .as_ref()
-<a href=#186 id=186 data-nosnippet>186</a>            .expect(<span class="string">"Must have inner client set"</span>)
-<a href=#187 id=187 data-nosnippet>187</a>            .client_span
-<a href=#188 id=188 data-nosnippet>188</a>            .in_scope(|| {
-<a href=#189 id=189 data-nosnippet>189</a>                <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
-<a href=#190 id=190 data-nosnippet>190</a>            });
-<a href=#191 id=191 data-nosnippet>191</a>        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-<a href=#192 id=192 data-nosnippet>192</a>        </span>runtime::block_in_place(|| {
-<a href=#193 id=193 data-nosnippet>193</a>            runtime::block_on(<span class="self">self</span>.shutdown_inner());
-<a href=#194 id=194 data-nosnippet>194</a>        });
-<a href=#195 id=195 data-nosnippet>195</a>    }
-<a href=#196 id=196 data-nosnippet>196</a>}
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="comment">// We can't use block_on in single-threaded mode, on wasm, or on a thread
+<a href=#168 id=168 data-nosnippet>168</a>        // without a runtime context, e.g. when the last handle is dropped while
+<a href=#169 id=169 data-nosnippet>169</a>        // unwinding from a panic. Destructors must never panic, so all these
+<a href=#170 id=170 data-nosnippet>170</a>        // cases fall back to a non-blocking partial shutdown.
+<a href=#171 id=171 data-nosnippet>171</a>        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#172 id=172 data-nosnippet>172</a>        </span><span class="kw">let </span>runtime_handle = RuntimeHandle::try_current();
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+<a href=#174 id=174 data-nosnippet>174</a>        </span><span class="kw">let </span>can_block = <span class="bool-val">false</span>;
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#176 id=176 data-nosnippet>176</a>        </span><span class="kw">let </span>can_block = runtime_handle
+<a href=#177 id=177 data-nosnippet>177</a>            .as_ref()
+<a href=#178 id=178 data-nosnippet>178</a>            .is_ok_and(|handle| handle.runtime_flavor() != RuntimeFlavor::CurrentThread);
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">if </span>!can_block {
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
+<a href=#181 id=181 data-nosnippet>181</a>            inner.executor.stop_executor();
+<a href=#182 id=182 data-nosnippet>182</a>            <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+<a href=#183 id=183 data-nosnippet>183</a>            </span><span class="kw">let </span>reason = <span class="string">"on wasm"</span>;
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#185 id=185 data-nosnippet>185</a>            </span><span class="comment">// `can_block` is false, so an existing runtime must be current-thread flavored.
+<a href=#186 id=186 data-nosnippet>186</a>            </span><span class="kw">let </span>reason = <span class="kw">if </span>runtime_handle.is_ok() {
+<a href=#187 id=187 data-nosnippet>187</a>                <span class="string">"on current thread runtime"
+<a href=#188 id=188 data-nosnippet>188</a>            </span>} <span class="kw">else </span>{
+<a href=#189 id=189 data-nosnippet>189</a>                <span class="string">"without a runtime"
+<a href=#190 id=190 data-nosnippet>190</a>            </span>};
+<a href=#191 id=191 data-nosnippet>191</a>            <span class="macro">error!</span>(target: LOG_CLIENT, <span class="string">"Automatic client shutdown is not possible {reason}, call ClientHandle::shutdown manually."</span>);
+<a href=#192 id=192 data-nosnippet>192</a>            <span class="kw">return</span>;
+<a href=#193 id=193 data-nosnippet>193</a>        }
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">self</span>.inner
+<a href=#196 id=196 data-nosnippet>196</a>            .as_ref()
+<a href=#197 id=197 data-nosnippet>197</a>            .expect(<span class="string">"Must have inner client set"</span>)
+<a href=#198 id=198 data-nosnippet>198</a>            .client_span
+<a href=#199 id=199 data-nosnippet>199</a>            .in_scope(|| {
+<a href=#200 id=200 data-nosnippet>200</a>                <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
+<a href=#201 id=201 data-nosnippet>201</a>            });
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#203 id=203 data-nosnippet>203</a>        </span>runtime::block_in_place(|| {
+<a href=#204 id=204 data-nosnippet>204</a>            runtime::block_on(<span class="self">self</span>.shutdown_inner());
+<a href=#205 id=205 data-nosnippet>205</a>        });
+<a href=#206 id=206 data-nosnippet>206</a>    }
+<a href=#207 id=207 data-nosnippet>207</a>}
 </code></pre></div></section></main></body></html>
