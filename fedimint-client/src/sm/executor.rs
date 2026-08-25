@@ -913,7 +913,13 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let mut state = self.state.write().expect("Locking can't fail");
+        // This runs from destructors, which must never panic, so recover from a lock
+        // poisoned by a panic elsewhere. `ExecutorState` is always left in a coherent
+        // variant, so the poison can be ignored safely.
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         state.stop()
     }
