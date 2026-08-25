@@ -207,3 +207,26 @@ async fn test_executor() {
         "State was written to DB and waits for broadcast"
     );
 }
+
+/// A panic while the executor state write lock is held, e.g. from a panicking
+/// tracing subscriber, poisons the lock. `stop_executor` runs from destructors,
+/// which must never panic, so it has to tolerate the poison instead of
+/// panicking on it.
+#[tokio::test]
+async fn stop_executor_tolerates_poisoned_state_lock() {
+    let (executor, _sender, _db) = get_executor();
+
+    let executor_clone = executor.clone();
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let _guard = executor_clone
+            .inner
+            .state
+            .write()
+            .expect("Not poisoned yet");
+        panic!("Poison the executor state lock");
+    }))
+    .expect_err("Must have panicked to poison the lock");
+
+    assert!(executor.inner.state.is_poisoned());
+    executor.stop_executor();
+}

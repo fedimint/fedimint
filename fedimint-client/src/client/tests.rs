@@ -30,6 +30,7 @@ use tokio::sync::{broadcast, oneshot, watch};
 use tokio::task::yield_now;
 
 use super::{Client, ModuleRecoveryFuture, RecoveryStatus};
+use crate::ClientHandle;
 use crate::db::ClientModuleRecovery;
 use crate::meta::MetaService;
 use crate::oplog::OperationLog;
@@ -826,4 +827,21 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
         error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
         "{error}"
     );
+}
+
+/// The last [`ClientHandle`] may get dropped on a thread without a tokio
+/// runtime context, e.g. while unwinding from a panic on a plain thread. The
+/// drop impl must fall back to a non-blocking shutdown instead of panicking,
+/// which during unwind would abort the process.
+///
+/// <https://github.com/fedimint/fedimint/issues/9053>
+#[tokio::test]
+async fn client_handle_drop_outside_runtime_does_not_panic() {
+    let (_status_sender, status_receiver) = watch::channel(BTreeMap::new());
+    let client = client_for_recovery_test(status_receiver, BTreeMap::new()).await;
+    let handle = ClientHandle::new(Arc::new(client));
+
+    std::thread::spawn(move || drop(handle))
+        .join()
+        .expect("Dropping a ClientHandle outside a runtime must not panic");
 }
