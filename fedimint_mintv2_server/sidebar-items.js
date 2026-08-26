@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dealer_agg_pk","dealer_pk","dealer_polynomial","dealer_sk","get_recovery_count","get_recovery_slice","get_signature_shares","get_signature_shares_recovery"],"mod":["db"],"struct":["Mint","MintInit"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_mint_issued_ecash_metrics","calculate_mint_redeemed_ecash_metrics","dealer_agg_pk","dealer_pk","dealer_polynomial","dealer_sk","get_recovery_count","get_recovery_slice","get_signature_shares","get_signature_shares_recovery"],"mod":["db","metrics"],"struct":["Mint","MintInit"]};

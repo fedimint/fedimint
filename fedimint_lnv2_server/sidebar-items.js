@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_INCOMING_CONTRACTS_BATCH"],"fn":["dealer_agg_pk","dealer_pk","dealer_polynomial","dealer_sk"],"mod":["db"],"struct":["Lightning","LightningInit"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_INCOMING_CONTRACTS_BATCH"],"fn":["dealer_agg_pk","dealer_pk","dealer_polynomial","dealer_sk","observe_funded_contract"],"mod":["db","metrics"],"struct":["Lightning","LightningInit"]};
