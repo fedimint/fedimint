@@ -6,7 +6,7 @@ use bls12_381::{G2Projective, Scalar};
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{DkgMessageG2, P2PMessage};
 use fedimint_core::encoding::Encodable as _;
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_server_core::config::{g2, scalar};
 use group::ff::Field;
