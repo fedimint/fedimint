@@ -21,9 +21,7 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::lnurl::LnurlRequest;
-use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayApi, MINIMUM_INCOMING_CONTRACT_AMOUNT, tweak,
-};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, GatewayApi, tweak};
 use fedimint_logging::TracingSetup;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -215,12 +213,10 @@ async fn create_contract_and_fetch_invoice(
         "Payment fee exceeds limit"
     );
 
+    // `amount` is at least `MIN_SENDABLE_MSAT` and the fee just cleared
+    // `RECEIVE_FEE_LIMIT`, so this cannot produce a contract below 49.5 sats - far
+    // above any federation's claim fee. The recipient prices its own claim.
     let contract_amount = routing_info.receive_fee.subtract_from(amount);
-
-    ensure!(
-        contract_amount >= MINIMUM_INCOMING_CONTRACT_AMOUNT,
-        "Amount too small"
-    );
 
     // Encode the gateway fee in the contract expiration so the receiving client
     // can recover it and report the invoice amount in its payment events. These

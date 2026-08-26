@@ -52,9 +52,9 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
-    lnurl, tweak,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
@@ -203,6 +203,10 @@ pub enum ReceiveOperationState {
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
+    /// The contract is worth less than the federation charges to claim it, so
+    /// it was left unclaimed. Reachable without any payment request of ours:
+    /// anyone can address an incoming contract to a published lnurl key.
+    Uneconomical,
 }
 
 /// The final state of an operation receiving a payment over lightning.
@@ -214,6 +218,9 @@ pub enum FinalReceiveOperationState {
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
+    /// The contract is worth less than the federation charges to claim it, so
+    /// it was left unclaimed.
+    Uneconomical,
 }
 
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
@@ -895,6 +902,23 @@ impl LightningClientModule {
             .await
     }
 
+    /// Whether an incoming contract worth `amount` is worth claiming, i.e.
+    /// whether claiming it would leave the wallet better off than leaving it.
+    ///
+    /// This is the computed counterpart of a fixed dust limit: it prices the
+    /// actual claim - the lightning input fee at this federation's fee
+    /// consensus, the change the primary module has to mint, and the
+    /// sub-denomination remainder that cannot be minted at all - rather than
+    /// assuming a floor. A quote that fails outright is the same verdict: the
+    /// claim spends the contract as the transaction's only input, so a fee
+    /// larger than the contract leaves a transaction that cannot be balanced.
+    async fn is_worth_claiming(&self, amount: Amount) -> bool {
+        match self.receive_fee_quote(amount).await {
+            Ok(quote) => quote.total().get_bitcoin() < amount,
+            Err(_) => false,
+        }
+    }
+
     /// Computes the federation fee a `send` funding an outgoing contract worth
     /// `amount` would incur, without submitting anything.
     ///
@@ -1039,7 +1063,10 @@ impl LightningClientModule {
 
         let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
 
-        if contract_amount < MINIMUM_INCOMING_CONTRACT_AMOUNT {
+        // Quoting the claim against this federation's fee consensus is exact, where a
+        // fixed floor is either too permissive or too strict depending on how the
+        // federation is configured.
+        if !self.is_worth_claiming(contract_amount).await {
             return Err(ReceiveError::AmountTooSmall);
         }
 
@@ -1172,7 +1199,8 @@ impl LightningClientModule {
                 ReceiveOperationState::Pending | ReceiveOperationState::Claiming => false,
                 ReceiveOperationState::Expired
                 | ReceiveOperationState::Claimed
-                | ReceiveOperationState::Failure => true,
+                | ReceiveOperationState::Failure
+                | ReceiveOperationState::Uneconomical => true,
             }, move || {
             stream! {
                 loop {
@@ -1191,6 +1219,10 @@ impl LightningClientModule {
                             },
                             ReceiveSMState::Expired => {
                                 yield ReceiveOperationState::Expired;
+                                return;
+                            }
+                            ReceiveSMState::Uneconomical => {
+                                yield ReceiveOperationState::Uneconomical;
                                 return;
                             }
                         }
@@ -1222,6 +1254,9 @@ impl LightningClientModule {
                 }
                 ReceiveOperationState::Failure => {
                     final_state = Some(FinalReceiveOperationState::Failure);
+                }
+                ReceiveOperationState::Uneconomical => {
+                    final_state = Some(FinalReceiveOperationState::Uneconomical);
                 }
                 _ => {}
             }
@@ -1315,6 +1350,28 @@ impl LightningClientModule {
             .await;
 
         for contract in &contracts {
+            // The stream carries every incoming contract the federation funded, and
+            // anyone can address one to a published lnurl key. Check that it is ours
+            // before quoting - recovering the keys is local arithmetic, the quote
+            // reads the wallet - and skip the contracts the claim fee would swallow,
+            // so that unsolicited dust never becomes an operation in the first place.
+            if self
+                .recover_contract_keys(self.lnurl_keypair.secret_key(), contract)
+                .is_none()
+            {
+                continue;
+            }
+
+            if !self.is_worth_claiming(contract.commitment.amount).await {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LNV2,
+                    amount = %contract.commitment.amount,
+                    "Ignoring incoming contract, its amount does not cover the claim fee"
+                );
+
+                continue;
+            }
+
             if let Some(operation_id) = self
                 .receive_incoming_contract(
                     self.lnurl_keypair.secret_key(),
