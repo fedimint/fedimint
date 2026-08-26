@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::time::SystemTime;
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
@@ -25,7 +26,8 @@ use fedimint_core::{
     maybe_add_send_sync,
 };
 use fedimint_eventlog::{
-    DBTransactionEventLogExt, Event, EventKind, EventLogId, EventPersistence, PersistedLogEntry,
+    DBTransactionEventLogExt as _, Event, EventKind, EventLogId, EventPersistence,
+    PersistedLogEntry,
 };
 use fedimint_logging::LOG_CLIENT;
 use futures::{Stream, StreamExt};
@@ -192,6 +194,24 @@ pub struct ClientContext<M> {
     global_dbtx_access_token: GlobalDBTxAccessToken,
     module_db: Database,
     _marker: marker::PhantomData<M>,
+}
+
+/// Explicit capabilities available to client modules during pre-start
+/// migrations.
+///
+/// This context intentionally exposes only migration-safe global services, so
+/// modules can backfill global client state before the final client interface
+/// is available and before module background work starts.
+pub struct ClientModulePreStartMigrationContext<'a> {
+    /// Operation log used for migration-time global operation log access.
+    operation_log: &'a maybe_add_send_sync!(dyn IOperationLog),
+}
+
+impl<'a> ClientModulePreStartMigrationContext<'a> {
+    /// Create a pre-start migration context around the client's operation log.
+    pub fn new(operation_log: &'a maybe_add_send_sync!(dyn IOperationLog)) -> Self {
+        Self { operation_log }
+    }
 }
 
 impl<M> Clone for ClientContext<M> {
@@ -517,12 +537,62 @@ where
             .await
     }
 
+    pub async fn get_event_log_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry> {
+        dbtx.global_dbtx(self.global_dbtx_access_token)
+            .get_event_log(pos, limit)
+            .await
+    }
+
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
     }
 
     pub async fn operation_exists(&self, op_id: OperationId) -> bool {
         self.client.get().operation_exists(op_id).await
+    }
+
+    pub async fn operation_log_entry_exists(&self, op_id: OperationId) -> bool {
+        self.client
+            .get()
+            .operation_log()
+            .operation_log_entry_exists(op_id)
+            .await
+    }
+
+    pub async fn operation_log_entry_exists_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        op_id: OperationId,
+    ) -> bool {
+        self.client
+            .get()
+            .operation_log()
+            .operation_log_entry_exists_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                op_id,
+            )
+            .await
+    }
+
+    /// Check operation-log entry existence during pre-start migration.
+    pub async fn pre_start_operation_log_entry_exists_dbtx(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        op_id: OperationId,
+    ) -> bool {
+        pre_start_ctx
+            .operation_log
+            .operation_log_entry_exists_dbtx(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                op_id,
+            )
+            .await
     }
 
     pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {
@@ -881,6 +951,56 @@ where
             .await;
     }
 
+    /// Add an operation-log entry with a historical creation time.
+    ///
+    /// Startup migrations and backfills use this to preserve original operation
+    /// chronology. Inserting an older entry also refreshes an initialized
+    /// oldest-entry cache. Runtime operation creation should use
+    /// [`Self::add_operation_log_entry_dbtx`].
+    pub async fn add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
+    ) {
+        self.client
+            .get()
+            .operation_log()
+            .add_operation_log_entry_dbtx_with_creation_time(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+                operation_type,
+                serde_json::to_value(operation_meta).expect("Can't fail"),
+                creation_time,
+            )
+            .await;
+    }
+
+    /// Add an operation-log entry with a historical creation time during
+    /// pre-start migration.
+    pub async fn pre_start_add_operation_log_entry_dbtx_with_creation_time(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+        creation_time: SystemTime,
+    ) {
+        pre_start_ctx
+            .operation_log
+            .add_operation_log_entry_dbtx_with_creation_time(
+                &mut dbtx.global_dbtx(self.global_dbtx_access_token),
+                operation_id,
+                operation_type,
+                serde_json::to_value(operation_meta).expect("Can't fail"),
+                creation_time,
+            )
+            .await;
+    }
+
     pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
     where
         E: Event + Send,
@@ -978,12 +1098,29 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     fn context(&self) -> Self::ModuleStateMachineContext;
 
-    /// Initialize client.
+    /// Start module-local background work.
     ///
-    /// Called by the core client code on start, after [`ClientContext`] is
-    /// fully initialized, so unlike during [`ClientModuleInit::init`],
-    /// access to global client is allowed.
+    /// Called after pre-start migrations but before the final global client is
+    /// published. Implementations must not wait for final-client access: the
+    /// core publishes it only after every module's `start` call completes,
+    /// ensuring that any module that observes it can rely on all modules
+    /// being started.
     async fn start(&self) {}
+
+    /// Run module-specific migrations/backfills before module background work.
+    ///
+    /// Called before module startup and before the final client interface is
+    /// installed in [`ClientContext`]. Implementations can use `pre_start_ctx`
+    /// for explicitly provided migration-safe global services, but must not
+    /// access the final global client or start background runtime work. Errors
+    /// abort client startup, and implementations must be retry-safe/idempotent
+    /// because the hook runs again on the next startup.
+    async fn pre_start_migration(
+        &self,
+        _pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     async fn handle_cli_command(
         &self,
@@ -1186,6 +1323,11 @@ pub trait IClientModule: Debug {
 
     async fn start(&self);
 
+    async fn pre_start_migration(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+    ) -> anyhow::Result<()>;
+
     async fn handle_cli_command(&self, args: &[ffi::OsString])
     -> anyhow::Result<serde_json::Value>;
 
@@ -1255,6 +1397,13 @@ where
 
     async fn start(&self) {
         <T as ClientModule>::start(self).await;
+    }
+
+    async fn pre_start_migration(
+        &self,
+        pre_start_ctx: &ClientModulePreStartMigrationContext<'_>,
+    ) -> anyhow::Result<()> {
+        <T as ClientModule>::pre_start_migration(self, pre_start_ctx).await
     }
 
     async fn handle_cli_command(

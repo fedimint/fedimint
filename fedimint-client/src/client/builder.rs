@@ -19,7 +19,8 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
-    ClientModuleRegistry, FinalClientIface, PrimaryModulePriority, PrimaryModuleSupport,
+    ClientModulePreStartMigrationContext, ClientModuleRegistry, FinalClientIface,
+    PrimaryModulePriority, PrimaryModuleSupport,
 };
 use fedimint_client_module::secret::{DeriveableSecretClientExt as _, get_default_client_secret};
 use fedimint_client_module::transaction::{
@@ -1088,6 +1089,13 @@ impl ClientBuilder {
             user_bitcoind_rpc,
             user_bitcoind_rpc_no_chain_id: self.bitcoind_rpc_no_chain_id_factory,
         });
+
+        let pre_start_migration_ctx =
+            ClientModulePreStartMigrationContext::new(client_inner.operation_log());
+
+        for (_, _, module) in client_inner.modules.iter_modules() {
+            module.pre_start_migration(&pre_start_migration_ctx).await?;
+        }
         client_inner.spawn_cancellable("MetaService::update_continuously", {
             let client_inner = client_inner.clone();
             async move {
@@ -1176,6 +1184,8 @@ impl ClientBuilder {
             module.start().await;
         }
 
+        // Publish the final client only after every module has finished starting,
+        // so any module that observes it can rely on all peers being started.
         final_client.set(client_iface.clone());
 
         if !module_recoveries.is_empty() {
