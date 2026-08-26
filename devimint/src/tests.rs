@@ -2897,9 +2897,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         .await?;
                     info!(addr = %faucet_bind_addr, "Faucet listening");
                     let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
+                    let faucet = crate::faucet::Faucet::new(&dev_fed)?;
                     task_group.spawn_cancellable("faucet", async move {
                         if let Err(err) =
-                            crate::faucet::run(&dev_fed, faucet_listener, gw_lnd_port).await
+                            crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await
                         {
                             error!(err = %err.fmt_compact_anyhow(), "Faucet failed");
                         }

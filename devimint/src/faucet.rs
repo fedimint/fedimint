@@ -9,56 +9,48 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 
-use crate::federation::Federation;
-use crate::{DevFed, Gatewayd};
+use crate::DevFed;
+use crate::gatewayd::GatewayClient;
 
 #[derive(Clone)]
 pub struct Faucet {
-    gw_ldk: Gatewayd,
-    fed: Federation,
+    gw_ldk: GatewayClient,
+    invite_code: String,
 }
 
 impl Faucet {
-    pub fn new(dev_fed: &DevFed) -> Self {
-        let gw_ldk = dev_fed.gw_ldk.clone();
-        let fed = dev_fed.fed.clone();
-        Faucet { gw_ldk, fed }
+    /// Captures what the faucet serves, so that it does not have to hold on
+    /// to the daemons themselves.
+    pub fn new(dev_fed: &DevFed) -> anyhow::Result<Self> {
+        Ok(Faucet {
+            gw_ldk: dev_fed.gw_ldk.client(),
+            invite_code: dev_fed.fed.invite_code()?,
+        })
     }
 
     async fn pay_invoice(&self, invoice: String) -> anyhow::Result<()> {
         self.gw_ldk
-            .client()
             .pay_invoice(Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"))
             .await?;
         Ok(())
     }
 
     async fn generate_invoice(&self, amount: u64) -> anyhow::Result<String> {
-        Ok(self
-            .gw_ldk
-            .client()
-            .create_invoice(amount)
-            .await?
-            .to_string())
+        Ok(self.gw_ldk.create_invoice(amount).await?.to_string())
     }
 
-    fn get_invite_code(&self) -> anyhow::Result<String> {
-        self.fed.invite_code()
+    fn invite_code(&self) -> String {
+        self.invite_code.clone()
     }
 }
 
 /// Serves the faucet API on the already bound `listener` until the task is
 /// cancelled.
-pub async fn run(dev_fed: &DevFed, listener: TcpListener, gw_lnd_port: u16) -> anyhow::Result<()> {
-    let faucet = Faucet::new(dev_fed);
+pub async fn run(faucet: Faucet, listener: TcpListener, gw_lnd_port: u16) -> anyhow::Result<()> {
     let router = Router::new()
         .route(
             "/connect-string",
-            get(|State(faucet): State<Faucet>| async move {
-                faucet
-                    .get_invite_code()
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
-            }),
+            get(|State(faucet): State<Faucet>| async move { faucet.invite_code() }),
         )
         .route(
             "/pay",
