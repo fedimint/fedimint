@@ -220,28 +220,50 @@ pub async fn cleanup_on_exit<T>(
     main_process: impl futures::Future<Output = Result<T>>,
     task_group: TaskGroup,
 ) -> Result<Option<T>> {
-    match task_group
+    let result = task_group
         .make_handle()
         .cancel_on_shutdown(main_process)
-        .await
-    {
+        .await;
+
+    match &result {
         Err(_) => {
-            info!("Received shutdown signal before finishing main process, exiting early");
+            info!(target: LOG_DEVIMINT, "Received shutdown signal before finishing main process, exiting early");
+        }
+        Ok(Ok(_)) => {
+            debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
+        }
+        Ok(Err(err)) => {
+            warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Main process failed, will shutdown");
+        }
+    }
+
+    // Join the task group on every exit path, so that tasks still holding
+    // daemons finish inside the runtime instead of being dropped by its
+    // shutdown, and the caller's teardown owns the last references.
+    let joined = task_group.shutdown_join_all(Duration::from_secs(30)).await;
+
+    match result {
+        Err(_) => {
+            warn_on_join_error(joined);
             Ok(None)
         }
         Ok(Ok(v)) => {
-            debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
-            task_group
-                .shutdown_join_all(Duration::from_secs(30))
-                .await?;
+            joined?;
 
             // the caller can drop the v after shutdown
             Ok(Some(v))
         }
         Ok(Err(err)) => {
-            warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Main process failed, will shutdown");
+            // The main process error is the one worth reporting.
+            warn_on_join_error(joined);
             Err(err)
         }
+    }
+}
+
+fn warn_on_join_error(joined: Result<()>) {
+    if let Err(err) = joined {
+        warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Task group did not shut down cleanly");
     }
 }
 
@@ -288,12 +310,11 @@ async fn handle_dev_fed_command(
         "dev-fed-pre-restore cannot be combined with skip-setup or pre-dkg"
     );
     let (process_mgr, task_group) = setup(common_args).await?;
+    let dev_fed = DevJitFed::new_with_pre_restore(&process_mgr, skip_setup, pre_dkg, pre_restore)?;
     let main = {
         let task_group = task_group.clone();
+        let dev_fed = dev_fed.clone();
         async move {
-            let dev_fed =
-                DevJitFed::new_with_pre_restore(&process_mgr, skip_setup, pre_dkg, pre_restore)?;
-
             let pegin_start_time = Instant::now();
             debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
@@ -410,7 +431,7 @@ async fn handle_dev_fed_command(
                 dev_fed.finalize(&process_mgr).await?;
             }
 
-            let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+            write_ready_file(&process_mgr.globals, Ok(())).await?;
 
             info!(
                 target: LOG_DEVIMINT,
@@ -421,18 +442,19 @@ async fn handle_dev_fed_command(
             if let Some(exec) = exec {
                 debug!(target: LOG_DEVIMINT, "Starting exec command");
                 exec_user_command(exec).await?;
-                task_group.shutdown();
+            } else {
+                debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+                task_group.make_handle().make_shutdown_rx().await;
             }
 
-            debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
-            task_group.make_handle().make_shutdown_rx().await;
-
-            Ok::<_, anyhow::Error>(daemons)
+            Ok::<_, anyhow::Error>(())
         }
     };
-    if let Some(fed) = cleanup_on_exit(main, task_group).await? {
-        fed.fast_terminate().await;
-    }
+    let result = cleanup_on_exit(main, task_group).await;
+    // Explicit teardown in async context on every exit path, cancellation
+    // included; `cleanup_on_exit` has joined the task group by now.
+    dev_fed.fast_terminate().await;
+    result?;
 
     Ok(())
 }

@@ -2876,28 +2876,28 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
             let (process_mgr, task_group) = setup(common_args).await?;
+            // Bind before bringing up the federation, and outside the faucet
+            // task, so that a port clash fails the setup right away instead of
+            // leaving the test suite talking to whatever else is listening on
+            // that port. Holding the socket from here on also keeps other port
+            // allocators off it.
+            let faucet_bind_addr = process_mgr.globals.FM_FAUCET_BIND_ADDR.clone();
+            let faucet_listener = TcpListener::bind(&faucet_bind_addr)
+                .await
+                .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
+            let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
+            let dev_fed = dev_fed(&process_mgr).await?;
             let main = {
                 let task_group = task_group.clone();
+                let dev_fed = dev_fed.clone();
                 async move {
-                    // Bind before bringing up the federation, and outside the
-                    // faucet task, so that a port clash fails the setup right
-                    // away instead of leaving the test suite talking to whatever
-                    // else is listening on that port. Holding the socket from here
-                    // on also keeps other port allocators off it.
-                    let faucet_bind_addr = &process_mgr.globals.FM_FAUCET_BIND_ADDR;
-                    let faucet_listener = TcpListener::bind(faucet_bind_addr)
-                        .await
-                        .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
-                    let dev_fed = dev_fed(&process_mgr).await?;
-                    let gw_lnd = dev_fed.gw_lnd.clone();
-                    let fed = dev_fed.fed.clone();
-                    gw_lnd
+                    dev_fed
+                        .gw_lnd
                         .client()
                         .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
                         .await?;
-                    info!(addr = %faucet_bind_addr, "Faucet listening");
-                    let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
                     let faucet = crate::faucet::Faucet::new(&dev_fed)?;
+                    info!(addr = %faucet_bind_addr, "Faucet listening");
                     task_group.spawn_cancellable("faucet", async move {
                         if let Err(err) =
                             crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await
@@ -2905,15 +2905,24 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                             error!(err = %err.fmt_compact_anyhow(), "Faucet failed");
                         }
                     });
-                    fed.pegin_gateways(30_000, vec![&gw_lnd]).await?;
+                    dev_fed
+                        .fed
+                        .pegin_gateways(30_000, vec![&dev_fed.gw_lnd])
+                        .await?;
                     if let Some(exec) = exec {
                         exec_user_command(exec).await?;
-                        task_group.shutdown();
+                    } else {
+                        task_group.make_handle().make_shutdown_rx().await;
                     }
                     Ok::<_, anyhow::Error>(())
                 }
             };
-            cleanup_on_exit(main, task_group).await?;
+            let result = cleanup_on_exit(main, task_group).await;
+            // Explicit teardown in async context on every exit path,
+            // cancellation included; `cleanup_on_exit` has joined the task
+            // group by now.
+            dev_fed.fast_terminate().await;
+            result?;
         }
         TestCmd::LatencyTests { r#type, iterations } => {
             let (process_mgr, _) = setup(common_args).await?;
