@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["STANDARD_FEDIMINT_P2P_PORT"],"mod":["api_announcement","auth","guardian_metadata","iroh","peers"]};
+window.SIDEBAR_ITEMS = {"constant":["STANDARD_FEDIMINT_P2P_PORT"],"enum":["Recipient"],"mod":["api_announcement","auth","fake","guardian_metadata","iroh"],"trait":["IP2PConnections"],"type":["DynP2PConnections"]};

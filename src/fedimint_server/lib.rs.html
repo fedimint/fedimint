@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>fedimint_core::module::ApiAuth;
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::net::peers::DynP2PConnections;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::net::DynP2PConnections;
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>fedimint_core::task::{TaskGroup, sleep};
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
@@ -59,7 +59,7 @@
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span><span class="kw">crate</span>::config::io::write_server_config;
 <a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span><span class="kw">crate</span>::config::setup::{ConfigGenOutcome, SetupApi};
 <a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span><span class="kw">crate</span>::db::{ServerInfo, ServerInfoKey};
-<a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IP2PConnections;
+<a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::IP2PConnections;
 <a href=#63 id=63 data-nosnippet>63</a><span class="kw">use </span><span class="kw">crate</span>::metrics::initialize_gauge_metrics;
 <a href=#64 id=64 data-nosnippet>64</a><span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::start_api_announcement_service;
 <a href=#65 id=65 data-nosnippet>65</a><span class="kw">use </span><span class="kw">crate</span>::net::api::pkarr_publish::start_pkarr_publish_service;

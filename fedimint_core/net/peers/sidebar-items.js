@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Recipient"],"mod":["fake"],"trait":["IP2PConnections"],"type":["DynP2PConnections"]};
