@@ -11,6 +11,7 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+mod metrics;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -87,6 +88,10 @@ use tracing::{debug, info};
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
     TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+};
+use crate::metrics::{
+    WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
+    WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
 
 /// Number of confirmations required for a transaction to be considered as
@@ -284,6 +289,20 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        // Eagerly register metrics so the series exist before the first transaction
+        for direction in ["incoming", "outgoing"] {
+            WALLET_INOUT_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+            WALLET_INOUT_FEES_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+        }
+        WALLET_PEGIN_SATS.get_sample_count();
+        WALLET_PEGIN_FEES_SATS.get_sample_count();
+        WALLET_PEGOUT_SATS.get_sample_count();
+        WALLET_PEGOUT_FEES_SATS.get_sample_count();
+
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db(),
@@ -440,6 +459,8 @@ impl ServerModule for Wallet {
                 0 => block_count_vote,
                 _ => block_count_vote.min(consensus_block_count + max_block_count_increment),
             };
+
+            WALLET_BLOCK_COUNT.set(i64::try_from(block_count_vote).unwrap_or(i64::MAX));
 
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
 
@@ -630,10 +651,14 @@ impl ServerModule for Wallet {
             .map(fedimint_core::Amount::from_msats)
             .ok_or(WalletInputError::ArithmeticOverflow)?;
 
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        calculate_pegin_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+                fees: Amounts::new_bitcoin(fee),
             },
             pub_key: input.tweak,
         })
@@ -763,9 +788,13 @@ impl ServerModule for Wallet {
             .map(fedimint_core::Amount::from_msats)
             .ok_or(WalletOutputError::ArithmeticOverflow)?;
 
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        calculate_pegout_metrics(dbtx, amount, fee);
+
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+            fees: Amounts::new_bitcoin(fee),
         })
     }
 
@@ -1475,4 +1504,38 @@ impl Wallet {
 
         Some((pks, sk))
     }
+}
+
+fn calculate_pegin_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: fedimint_core::Amount,
+    fee: fedimint_core::Amount,
+) {
+    dbtx.on_commit(move || {
+        WALLET_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
+        WALLET_PEGIN_SATS.observe(amount.sats_f64());
+        WALLET_PEGIN_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+fn calculate_pegout_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: fedimint_core::Amount,
+    fee: fedimint_core::Amount,
+) {
+    dbtx.on_commit(move || {
+        WALLET_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
+        WALLET_PEGOUT_SATS.observe(amount.sats_f64());
+        WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
+    });
 }

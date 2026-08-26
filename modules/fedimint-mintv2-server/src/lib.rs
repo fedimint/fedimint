@@ -5,6 +5,7 @@
 #![allow(clippy::similar_names)]
 
 pub mod db;
+mod metrics;
 
 use std::collections::BTreeMap;
 
@@ -25,7 +26,7 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::{
-    InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     push_db_key_items, push_db_pair_items,
 };
 use fedimint_mintv2_common::config::{
@@ -60,6 +61,10 @@ use crate::db::{
     BlindedSignatureShareKey, BlindedSignatureSharePrefix, BlindedSignatureShareRecoveryKey,
     BlindedSignatureShareRecoveryPrefix, DbKeyPrefix, IssuanceCounterKey, IssuanceCounterPrefix,
     NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
+};
+use crate::metrics::{
+    MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
+    MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 
 #[derive(Debug, Clone)]
@@ -149,6 +154,20 @@ impl ServerModuleInit for MintInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        // Eagerly register metrics so the series exist before the first transaction
+        for direction in ["incoming", "outgoing"] {
+            MINT_INOUT_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+            MINT_INOUT_FEES_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+        }
+        MINT_ISSUED_ECASH_SATS.get_sample_count();
+        MINT_ISSUED_ECASH_FEES_SATS.get_sample_count();
+        MINT_REDEEMED_ECASH_SATS.get_sample_count();
+        MINT_REDEEMED_ECASH_FEES_SATS.get_sample_count();
+
         args.cfg().to_typed().map(|cfg| Mint {
             cfg,
             db: args.db().clone(),
@@ -409,11 +428,16 @@ impl ServerModule for Mint {
 
         let amount = input.note.amount();
         let unit = self.cfg.consensus.amount_unit;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        if unit.is_bitcoin() {
+            calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
+        }
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_custom(unit, amount),
-                fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
+                fees: Amounts::new_custom(unit, fee),
             },
             pub_key: input.note.nonce,
         })
@@ -467,10 +491,15 @@ impl ServerModule for Mint {
 
         let amount = output.amount();
         let unit = self.cfg.consensus.amount_unit;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        if unit.is_bitcoin() {
+            calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
+        }
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_custom(unit, amount),
-            fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
+            fees: Amounts::new_custom(unit, fee),
         })
     }
 
@@ -597,4 +626,38 @@ async fn get_recovery_slice(
         .map(|entry| entry.1)
         .collect()
         .await
+}
+
+fn calculate_mint_issued_ecash_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
+        MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+fn calculate_mint_redeemed_ecash_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
+        MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
 }
