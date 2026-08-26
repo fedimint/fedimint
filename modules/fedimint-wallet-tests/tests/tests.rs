@@ -11,7 +11,9 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
+use fedimint_core::db::{
+    DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
+};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
@@ -26,6 +28,7 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
+use fedimint_wallet_client::client_db::SupportsSafeDepositKey;
 use fedimint_wallet_client::{
     AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
     WithdrawState,
@@ -1512,6 +1515,53 @@ async fn allocate_deposit_address_pooled_used_address_shrinks_gap() -> anyhow::R
     assert_ne!(
         deposit_address.address, used_addr,
         "fresh allocation must not collide with the used address"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_supports_safe_deposit_checks_succeed() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("2");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    // The module's background version poller may have stored the marker while
+    // the upgrade was in flight; drop it so both checks below have to store it.
+    // If the poller is storing it right now instead, this removal loses a write
+    // conflict and the checks below simply find the marker in place.
+    let mut dbtx = wallet_module.db.begin_transaction().await;
+    dbtx.remove_entry(&SupportsSafeDepositKey).await;
+    if let Err(err) = dbtx.commit_tx_result().await {
+        assert!(matches!(err, DatabaseError::WriteConflict), "{err}");
+    }
+
+    // Two checks in one task: each queries the federation before storing the
+    // marker, so neither may keep a write transaction open across that round
+    // trip. The old code did and panicked on the second commit; this is the
+    // race a peg-in issued right after joining has with the background poller.
+    let (first, second) = tokio::join!(
+        wallet_module.supports_safe_deposit(),
+        wallet_module.supports_safe_deposit()
+    );
+    assert!(
+        first && second,
+        "safe deposits must be reported as supported"
+    );
+
+    let marker = wallet_module
+        .db
+        .begin_transaction_nc()
+        .await
+        .get_value(&SupportsSafeDepositKey)
+        .await;
+    assert!(
+        marker.is_some(),
+        "the verified consensus version must be recorded"
     );
 
     Ok(())
