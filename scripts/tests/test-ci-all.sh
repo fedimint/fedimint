@@ -408,6 +408,11 @@ function large_setup_test() {
 }
 export -f large_setup_test
 
+function devimint_exec_failure_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-exec-failure-test.sh
+}
+export -f devimint_exec_failure_test
+
 # allows versions to be passed in as either a single string or multiple params
 # e.g. `"v0.3.0 v0.4.0"` is the same as `v0.3.0 v0.4.0`
 if [ "$#" -eq 1 ]; then
@@ -508,6 +513,7 @@ tests_to_run_in_parallel+=(
   "mint_recovery_v1"
   "mint_recovery_v2"
   "recurringd_test"
+  "devimint_exec_failure_test"
   "large_setup_test"
 )
 done
