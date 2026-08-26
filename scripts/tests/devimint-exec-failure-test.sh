@@ -11,34 +11,38 @@ build_workspace
 add_target_dir_to_path
 make_fm_test_marker
 
-test_dir="$(mktemp -d)"
-
-# Daemons started by a run carry its FM_TEST_DIR in their environment.
-function orphans() {
-  local name pid
-  for name in fedimintd gatewayd bitcoind lnd esplora; do
-    for pid in $(pgrep -x "$name" || true); do
-      if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx "FM_TEST_DIR=$FM_TEST_DIR"; then
-        echo "$name ($pid)"
-      fi
-    done
+# Processes started by a run carry its FM_TEST_DIR in their environment.
+function leaked_processes() {
+  local pid
+  for pid in $(pgrep -u "$(id -u)"); do
+    if [ "$pid" != "$$" ] && grep -qzxF "FM_TEST_DIR=$FM_TEST_DIR" "/proc/$pid/environ" 2>/dev/null; then
+      echo "$pid $(cat "/proc/$pid/comm" 2>/dev/null)"
+    fi
   done
 }
 
 for cmd in dev-fed wasm-test-setup; do
   >&2 echo "Testing that $cmd tears down after a failed user command"
-  export FM_TEST_DIR="$test_dir/$cmd"
-  mkdir -p "$FM_TEST_DIR"
+  # Under the per-test TMPDIR and named like devimint's own directories, so
+  # that fm-run-test finds the daemon logs on failure.
+  FM_TEST_DIR="$(mktemp -d --tmpdir "devimint-$cmd-XXXXXX")"
+  export FM_TEST_DIR
+  marker="$FM_TEST_DIR/user-command-ran"
 
-  if devimint "$@" "$cmd" --exec false; then
-    >&2 echo "devimint $cmd --exec false succeeded, expected it to fail"
+  if devimint "$@" "$cmd" --exec sh -c "touch '$marker' && exit 1"; then
+    >&2 echo "devimint $cmd with a failing user command succeeded, expected it to fail"
+    exit 1
+  fi
+  if [ ! -e "$marker" ]; then
+    >&2 echo "devimint $cmd failed before running the user command"
     exit 1
   fi
 
-  leftovers="$(orphans)"
-  if [ -n "$leftovers" ]; then
-    >&2 echo "devimint $cmd --exec false left daemons running:"
-    >&2 echo "$leftovers"
+  leaked="$(leaked_processes)"
+  if [ -n "$leaked" ]; then
+    >&2 echo "devimint $cmd left processes running, killing them:"
+    >&2 echo "$leaked"
+    echo "$leaked" | awk '{ print $1 }' | xargs -r kill
     exit 1
   fi
 done

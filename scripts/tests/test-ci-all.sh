@@ -409,7 +409,10 @@ function large_setup_test() {
 export -f large_setup_test
 
 function devimint_exec_failure_test() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-exec-failure-test.sh
+  # only devimint's own code is under test, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-exec-failure-test.sh
+  fi
 }
 export -f devimint_exec_failure_test
 
