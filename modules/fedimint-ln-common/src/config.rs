@@ -96,13 +96,15 @@ pub trait FeeToAmount {
 impl FeeToAmount for RoutingFees {
     fn to_amount(&self, payment: &Amount) -> Amount {
         let base_fee = u64::from(self.base_msat);
-        let margin_fee: u64 = if self.proportional_millionths > 0 {
-            let fee_percent = 1_000_000 / u64::from(self.proportional_millionths);
-            payment.msats / fee_percent
-        } else {
-            0
+        let margin_fee = match 1_000_000_u64.checked_div(u64::from(self.proportional_millionths)) {
+            None => 0,
+            Some(0) => u64::MAX,
+            Some(fee_percent) => payment.msats / fee_percent,
         };
 
-        msats(base_fee + margin_fee)
+        msats(base_fee.saturating_add(margin_fee))
     }
 }
+
+#[cfg(test)]
+mod tests;
