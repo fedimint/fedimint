@@ -35,7 +35,6 @@ use fedimint_core::endpoint_constants::{
     SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
@@ -49,7 +48,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
-    SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+    ConsensusItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
