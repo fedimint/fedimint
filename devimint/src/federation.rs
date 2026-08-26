@@ -311,15 +311,24 @@ impl Client {
     }
 
     /// Returns once the current session completes
-    pub async fn wait_session(&self) -> anyhow::Result<()> {
+    pub async fn wait_session(&self, bitcoind: &Bitcoind) -> anyhow::Result<()> {
         info!("Waiting for a new session");
         let session_count = self.get_session_count().await?;
-        self.wait_session_outcome(session_count).await?;
+        self.wait_session_outcome(bitcoind, session_count).await?;
         Ok(())
     }
 
     /// Returns once the provided session count completes
-    pub async fn wait_session_outcome(&self, session_count: u64) -> anyhow::Result<()> {
+    ///
+    /// The guardians only create units while they have items to order, so an
+    /// idle federation never reaches the round limit that ends a session.
+    /// We mine for as long as we wait since every block is a block count
+    /// vote, and ordering those votes is what advances the rounds.
+    pub async fn wait_session_outcome(
+        &self,
+        bitcoind: &Bitcoind,
+        session_count: u64,
+    ) -> anyhow::Result<()> {
         let timeout = {
             let current_session_count = self.get_session_count().await?;
             let sessions_to_wait = session_count.saturating_sub(current_session_count) + 1;
@@ -330,12 +339,23 @@ impl Client {
         let start = Instant::now();
         poll_with_timeout("Waiting for a new session", timeout, || async {
             info!("Awaiting session outcome {session_count}");
-            match cmd!(self, "dev", "api", "await_session_outcome", session_count)
-                .run()
-                .await
-            {
-                Err(e) => Err(ControlFlow::Continue(e)),
-                Ok(()) => Ok(()),
+
+            let mut command = cmd!(self, "dev", "api", "await_session_outcome", session_count);
+
+            let await_outcome = command.run();
+
+            tokio::pin!(await_outcome);
+
+            loop {
+                tokio::select! {
+                    result = &mut await_outcome => return result.map_err(ControlFlow::Continue),
+                    () = fedimint_core::runtime::sleep(Duration::from_millis(200)) => {
+                        bitcoind
+                            .mine_blocks_no_wait(1)
+                            .await
+                            .map_err(ControlFlow::Continue)?;
+                    }
+                }
             }
         })
         .await?;

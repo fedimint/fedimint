@@ -286,6 +286,7 @@ impl ServerModuleInit for WalletInit {
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(Wallet::new(
             args.cfg().to_typed()?,
+            args.our_peer_id(),
             args.db(),
             args.task_group(),
             args.server_bitcoin_rpc_monitor(),
@@ -441,15 +442,22 @@ impl ServerModule for Wallet {
                 _ => block_count_vote.min(consensus_block_count + max_block_count_increment),
             };
 
-            items.push(WalletConsensusItem::BlockCount(block_count_vote));
+            // We only propose a vote that our peers accept, mirroring the checks in
+            // process_consensus_item. Proposing a redundant vote every second would
+            // keep the atomic broadcast creating units on an idle federation.
+            if block_count_vote > self.our_block_count_vote(dbtx).await {
+                items.push(WalletConsensusItem::BlockCount(block_count_vote));
+            }
 
             let feerate_vote = status
                 .fee_rate
                 .sats_per_kvb
                 .max(MIN_FEERATE_VOTE_SATS_PER_KVB);
 
-            items.push(WalletConsensusItem::Feerate(Some(feerate_vote)));
-        } else {
+            if self.our_feerate_vote(dbtx).await != Some(Some(feerate_vote)) {
+                items.push(WalletConsensusItem::Feerate(Some(feerate_vote)));
+            }
+        } else if self.our_feerate_vote(dbtx).await != Some(None) {
             // Bitcoin backend not connected, retract fee rate vote
             items.push(WalletConsensusItem::Feerate(None));
         }
@@ -888,6 +896,7 @@ impl ServerModule for Wallet {
 #[derive(Debug)]
 pub struct Wallet {
     cfg: WalletConfig,
+    our_peer_id: PeerId,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
 }
@@ -895,6 +904,7 @@ pub struct Wallet {
 impl Wallet {
     fn new(
         cfg: WalletConfig,
+        our_peer_id: PeerId,
         db: &Database,
         task_group: &TaskGroup,
         btc_rpc: ServerBitcoinRpcMonitor,
@@ -903,6 +913,7 @@ impl Wallet {
 
         Wallet {
             cfg,
+            our_peer_id,
             btc_rpc,
             db: db.clone(),
         }
@@ -937,6 +948,16 @@ impl Wallet {
                 sleep(common::sleep_duration()).await;
             }
         });
+    }
+
+    async fn our_block_count_vote(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+        dbtx.get_value(&BlockCountVoteKey(self.our_peer_id))
+            .await
+            .unwrap_or(0)
+    }
+
+    async fn our_feerate_vote(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Option<u64>> {
+        dbtx.get_value(&FeeRateVoteKey(self.our_peer_id)).await
     }
 
     async fn process_block_count(
