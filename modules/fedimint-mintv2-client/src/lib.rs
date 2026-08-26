@@ -689,7 +689,8 @@ impl MintClientModule {
     /// Cancel safe: this only reads pre-ground blinding tweaks from an
     /// in-memory channel and constructs values, it performs no database
     /// writes. Dropping the future merely discards the tweaks it had taken,
-    /// which are unbounded and regenerated in the background.
+    /// which are random (so nothing is lost) and replenished by the
+    /// background grinder task.
     async fn create_output_bundle(
         &self,
         operation_id: OperationId,
