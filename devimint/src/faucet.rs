@@ -28,10 +28,8 @@ impl Faucet {
         })
     }
 
-    async fn pay_invoice(&self, invoice: String) -> anyhow::Result<()> {
-        self.gw_ldk
-            .pay_invoice(Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"))
-            .await?;
+    async fn pay_invoice(&self, invoice: Bolt11Invoice) -> anyhow::Result<()> {
+        self.gw_ldk.pay_invoice(invoice).await?;
         Ok(())
     }
 
@@ -55,6 +53,8 @@ pub async fn run(faucet: Faucet, listener: TcpListener, gw_lnd_port: u16) -> any
         .route(
             "/pay",
             post(|State(faucet): State<Faucet>, invoice: String| async move {
+                let invoice = Bolt11Invoice::from_str(&invoice)
+                    .map_err(|e| (StatusCode::BAD_REQUEST, format!("{e:?}")))?;
                 faucet
                     .pay_invoice(invoice)
                     .await

@@ -216,54 +216,74 @@ pub async fn update_test_dir_link(
     Ok(())
 }
 
-pub async fn cleanup_on_exit<T>(
-    main_process: impl futures::Future<Output = Result<T>>,
+/// Runs `main_process` until it finishes or the task group is told to shut
+/// down, then shuts the task group down and joins it on every exit path, so
+/// that tasks still holding daemons finish inside the runtime instead of
+/// being dropped by its shutdown. Callers tear their daemons down explicitly
+/// afterwards.
+pub async fn cleanup_on_exit(
+    main_process: impl futures::Future<Output = Result<()>>,
     task_group: TaskGroup,
-) -> Result<Option<T>> {
-    let result = task_group
+) -> Result<()> {
+    let result = match task_group
         .make_handle()
         .cancel_on_shutdown(main_process)
-        .await;
-
-    match &result {
+        .await
+    {
         Err(_) => {
-            info!(target: LOG_DEVIMINT, "Received shutdown signal before finishing main process, exiting early");
+            info!(
+                target: LOG_DEVIMINT,
+                "Received shutdown signal before finishing main process, exiting early"
+            );
+            Ok(())
         }
-        Ok(Ok(_)) => {
-            debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
+        Ok(Ok(())) => {
+            debug!(
+                target: LOG_DEVIMINT,
+                "Main process finished successfully, shutting down task group"
+            );
+            Ok(())
         }
         Ok(Err(err)) => {
-            warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Main process failed, will shutdown");
+            warn!(
+                target: LOG_DEVIMINT,
+                err = %err.fmt_compact_anyhow(),
+                "Main process failed, will shutdown"
+            );
+            Err(err)
         }
-    }
+    };
 
-    // Join the task group on every exit path, so that tasks still holding
-    // daemons finish inside the runtime instead of being dropped by its
-    // shutdown, and the caller's teardown owns the last references.
     let joined = task_group.shutdown_join_all(Duration::from_secs(30)).await;
 
-    match result {
-        Err(_) => {
-            warn_on_join_error(joined);
-            Ok(None)
-        }
-        Ok(Ok(v)) => {
-            joined?;
-
-            // the caller can drop the v after shutdown
-            Ok(Some(v))
-        }
-        Ok(Err(err)) => {
+    match (result, joined) {
+        (Ok(()), joined) => joined,
+        (Err(err), Ok(())) => Err(err),
+        (Err(err), Err(join_err)) => {
             // The main process error is the one worth reporting.
-            warn_on_join_error(joined);
+            warn!(
+                target: LOG_DEVIMINT,
+                err = %join_err.fmt_compact_anyhow(),
+                "Task group did not shut down cleanly"
+            );
             Err(err)
         }
     }
 }
 
-fn warn_on_join_error(joined: Result<()>) {
-    if let Err(err) = joined {
-        warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Task group did not shut down cleanly");
+/// Runs the user command if there is one, otherwise waits for the task group
+/// to be told to shut down, e.g. by a signal.
+pub async fn exec_or_wait_for_shutdown(
+    exec: Option<Vec<ffi::OsString>>,
+    task_group: &TaskGroup,
+) -> Result<()> {
+    if let Some(exec) = exec {
+        debug!(target: LOG_DEVIMINT, "Starting exec command");
+        exec_user_command(exec).await
+    } else {
+        debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+        task_group.make_handle().make_shutdown_rx().await;
+        Ok(())
     }
 }
 
@@ -439,24 +459,14 @@ async fn handle_dev_fed_command(
                 path = %process_mgr.globals.FM_DATA_DIR.display(),
                 "Devfed ready"
             );
-            if let Some(exec) = exec {
-                debug!(target: LOG_DEVIMINT, "Starting exec command");
-                exec_user_command(exec).await?;
-            } else {
-                debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
-                task_group.make_handle().make_shutdown_rx().await;
-            }
-
-            Ok::<_, anyhow::Error>(())
+            exec_or_wait_for_shutdown(exec, &task_group).await
         }
     };
     let result = cleanup_on_exit(main, task_group).await;
-    // Explicit teardown in async context on every exit path, cancellation
-    // included; `cleanup_on_exit` has joined the task group by now.
+    // Explicit teardown in async context; `cleanup_on_exit` has joined the
+    // task group by now.
     dev_fed.fast_terminate().await;
-    result?;
-
-    Ok(())
+    result
 }
 
 pub async fn exec_user_command(path: Vec<ffi::OsString>) -> Result<(), anyhow::Error> {

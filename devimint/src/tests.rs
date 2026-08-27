@@ -35,7 +35,8 @@ use tokio::net::TcpListener;
 use tokio::{fs, try_join};
 use tracing::{debug, error, info};
 
-use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
+use crate::cli::{CommonArgs, cleanup_on_exit, exec_or_wait_for_shutdown, setup};
+use crate::devfed::DevJitFed;
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
@@ -2886,11 +2887,12 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 .await
                 .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
             let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let dev_fed = DevJitFed::new(&process_mgr, false, false)?;
             let main = {
                 let task_group = task_group.clone();
                 let dev_fed = dev_fed.clone();
                 async move {
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
                     dev_fed
                         .gw_lnd
                         .client()
@@ -2909,18 +2911,12 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         .fed
                         .pegin_gateways(30_000, vec![&dev_fed.gw_lnd])
                         .await?;
-                    if let Some(exec) = exec {
-                        exec_user_command(exec).await?;
-                    } else {
-                        task_group.make_handle().make_shutdown_rx().await;
-                    }
-                    Ok::<_, anyhow::Error>(())
+                    exec_or_wait_for_shutdown(exec, &task_group).await
                 }
             };
             let result = cleanup_on_exit(main, task_group).await;
-            // Explicit teardown in async context on every exit path,
-            // cancellation included; `cleanup_on_exit` has joined the task
-            // group by now.
+            // Explicit teardown in async context; `cleanup_on_exit` has joined
+            // the task group by now.
             dev_fed.fast_terminate().await;
             result?;
         }
