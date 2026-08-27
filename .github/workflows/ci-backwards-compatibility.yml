@@ -53,14 +53,14 @@ jobs:
           # run a slimmed down back-compat test for PR push or each major version for merge queue
           if [[ "${{ github.event_name }}" == "merge_group" ]]; then
             PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
-            VERSIONS_TO_TEST="v0.9.1 v0.10.1 v0.11.2"
+            VERSIONS_TO_TEST="v0.10.1 v0.11.2 v0.12.0"
             # Run only a random sample of tests to keep merge queue fast.
             # With multiple versions x multiple test combos, 25% still
             # gives good coverage for catching version-specific regressions.
             export FM_BACKCOMPAT_TEST_SAMPLE_PERCENT=25
           else
             PERFIT_METRIC="aPuCAjrFT7uE5Oax_T4sMw"
-            VERSIONS_TO_TEST="v0.10.1"
+            VERSIONS_TO_TEST="v0.11.2"
             # PRs only test one version (vs three in merge queue), but the
             # full test matrix is still ~37 combos and takes ~23 min.
             # Since the merge queue will re-run these tests anyway, sample
