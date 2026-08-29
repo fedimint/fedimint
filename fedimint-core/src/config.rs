@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -952,9 +952,16 @@ impl<'de> Deserialize<'de> for DkgMessageG2 {
 /// of the config
 pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
 
-pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
-    let file = std::fs::File::open(path)?;
-    Ok(serde_json::from_reader(file)?)
+pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, ConfigFileError> {
+    let contents = std::fs::read(path).map_err(|source| ConfigFileError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+
+    serde_json::from_slice(&contents).map_err(|source| ConfigFileError::Json {
+        path: path.to_owned(),
+        source,
+    })
 }
 
 /// Failure to look up or cast a module configuration.
@@ -1000,6 +1007,26 @@ pub enum ModuleConfigError {
     /// A consensus-encoded part of the config failed to decode.
     #[error("Invalid consensus encoding in module config")]
     Decode(#[from] DecodeError),
+}
+
+/// Failure to load a JSON config file.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ConfigFileError {
+    /// The file could not be opened or read.
+    #[error("Failed to read config file {}", path.display())]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    /// The file is not valid JSON for the requested type.
+    #[error("Invalid JSON in config file {}", path.display())]
+    Json {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 #[cfg(test)]

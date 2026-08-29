@@ -188,3 +188,49 @@ fn cast_to_the_wrong_type_names_kind_and_type() {
         "Client module config of kind test is not a u64"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn load_from_file_reports_a_read_failure_as_io() {
+    use crate::config::{ConfigFileError, load_from_file};
+
+    // A directory opens successfully but fails to read with `EISDIR`.
+    let dir = tempfile::tempdir().expect("creating a temporary directory failed");
+
+    assert!(matches!(
+        load_from_file::<serde_json::Value>(dir.path()),
+        Err(ConfigFileError::Io { path, .. }) if path == dir.path()
+    ));
+}
+
+#[test]
+fn load_from_file_reports_invalid_json() {
+    use std::io::Write;
+
+    use crate::config::{ConfigFileError, load_from_file};
+
+    let mut file = tempfile::NamedTempFile::new().expect("creating a temporary file failed");
+    file.write_all(b"{ not json")
+        .expect("writing the temporary file failed");
+
+    assert!(matches!(
+        load_from_file::<serde_json::Value>(file.path()),
+        Err(ConfigFileError::Json { path, .. }) if path == file.path()
+    ));
+}
+
+#[test]
+fn load_from_file_reads_valid_json() {
+    use std::io::Write;
+
+    use crate::config::load_from_file;
+
+    let mut file = tempfile::NamedTempFile::new().expect("creating a temporary file failed");
+    file.write_all(br#"{"answer": 42}"#)
+        .expect("writing the temporary file failed");
+
+    assert_eq!(
+        load_from_file::<serde_json::Value>(file.path()).expect("the file holds valid JSON"),
+        serde_json::json!({ "answer": 42 })
+    );
+}

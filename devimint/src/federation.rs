@@ -567,7 +567,7 @@ impl Federation {
 
     pub fn client_config(&self) -> Result<ClientConfig> {
         let cfg_path = self.vars[&0].FM_DATA_DIR.join("client.json");
-        load_from_file(&cfg_path)
+        Ok(load_from_file(&cfg_path)?)
     }
 
     /// Get the module instance ID for a given module kind
