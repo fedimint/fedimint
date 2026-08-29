@@ -6,7 +6,7 @@ use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
+    Database, DatabaseTransaction, DatabaseVersion, DbMigrationError, GeneralDbMigrationFn,
     GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
@@ -655,7 +655,7 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDb
     migrations
 }
 
-async fn migrate_to_v1(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v1(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     /// Creates a password hash by appending a 4 byte salt to the plaintext
     /// password.
     fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
@@ -685,7 +685,7 @@ async fn migrate_to_v1(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
     Ok(())
 }
 
-async fn migrate_to_v2(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v2(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     // If there is no old federation configuration, there is nothing to do.
@@ -712,7 +712,7 @@ async fn migrate_to_v2(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
     Ok(())
 }
 
-async fn migrate_to_v3(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v3(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     // If there is no old gateway configuration, there is nothing to do.
@@ -729,7 +729,7 @@ async fn migrate_to_v3(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
     Ok(())
 }
 
-async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     dbtx.remove_entry(&GatewayConfigurationKeyV2).await;
@@ -760,14 +760,14 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
 /// record and the isolated databases used for each client. We must migrate the
 /// isolated databases to be behind the `ClientDatabase` prefix to allow the
 /// gateway to properly read the federation configs.
-async fn migrate_to_v5(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v5(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
     migrate_federation_configs(&mut dbtx).await
 }
 
 async fn migrate_federation_configs(
     dbtx: &mut DatabaseTransaction<'_>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     // We need to migrate all isolated database entries to be behind the 0x10
     // prefix. The problem is, if there is a `FederationId` that starts with
     // 0x04, we cannot read the `FederationId` because the database will be confused
@@ -828,7 +828,7 @@ async fn migrate_federation_configs(
     Ok(())
 }
 
-async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     let configs = dbtx
@@ -848,7 +848,7 @@ async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
     Ok(())
 }
 
-async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Result<()> {
+async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     let gateway_keypair = dbtx.remove_entry(&GatewayPublicKeyV0).await;
@@ -867,14 +867,14 @@ async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Resu
 
 /// Adds the invoice expiry to registered incoming contract records so stale
 /// records can be pruned.
-async fn migrate_to_v8(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Result<()> {
+async fn migrate_to_v8(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
     migrate_registered_incoming_contracts(&mut dbtx).await
 }
 
 async fn migrate_registered_incoming_contracts(
     dbtx: &mut DatabaseTransaction<'_>,
-) -> anyhow::Result<()> {
+) -> Result<(), DbMigrationError> {
     // Existing records predate the invoice expiry, so backfill it as if their
     // invoice had just been created with the maximum allowed expiry; they are
     // retained conservatively and eventually pruned.

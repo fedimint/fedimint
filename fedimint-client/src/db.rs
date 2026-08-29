@@ -11,7 +11,7 @@ use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, DbMigrationError,
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
@@ -772,7 +772,7 @@ pub fn get_core_client_database_migrations()
 pub async fn apply_migrations_core_client_dbtx(
     dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     apply_migrations_dbtx(
         dbtx,
         (),
@@ -798,7 +798,7 @@ pub async fn apply_migrations_client_module(
     kind: String,
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut dbtx = db.begin_transaction().await;
     apply_migrations_client_module_dbtx(
         &mut dbtx.to_ref_nc(),
@@ -807,9 +807,7 @@ pub async fn apply_migrations_client_module(
         module_instance_id,
     )
     .await?;
-    dbtx.commit_tx_result()
-        .await
-        .map_err(|e| anyhow::Error::msg(e.to_string()))
+    Ok(dbtx.commit_tx_result().await?)
 }
 
 pub async fn apply_migrations_client_module_dbtx(
@@ -817,7 +815,7 @@ pub async fn apply_migrations_client_module_dbtx(
     kind: String,
     migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     // Newly created databases will not have any data underneath the
     // `MODULE_GLOBAL_PREFIX` since they have just been instantiated.
     let is_new_db = dbtx
@@ -837,7 +835,7 @@ pub async fn apply_migrations_client_module_dbtx(
         kind.clone(),
         is_new_db,
     )
-    .await?;
+    .await;
 
     let current_version = dbtx
         .get_value(&DatabaseVersionKey(module_instance_id))
@@ -857,10 +855,11 @@ pub async fn apply_migrations_client_module_dbtx(
         }
 
         if target_version < current_version {
-            return Err(anyhow!(format!(
-                "On disk database version for module {kind} was higher ({}) than the target database version ({}).",
-                current_version, target_version,
-            )));
+            return Err(DbMigrationError::VersionTooHigh {
+                kind,
+                on_disk: current_version,
+                target: target_version,
+            });
         }
 
         info!(
