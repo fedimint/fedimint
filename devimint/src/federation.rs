@@ -18,7 +18,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
-use fedimint_core::task::jit::JitTryAnyhow;
+use fedimint_core::task::jit::JitTry;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
@@ -62,7 +62,7 @@ pub struct Federation {
     pub bitcoind: Bitcoind,
 
     /// Built in [`Client`], already joined
-    client: JitTryAnyhow<Client>,
+    client: JitTry<Client, anyhow::Error>,
     #[allow(dead_code)] // Will need it later, maybe
     connectors: ConnectorRegistry,
 }
@@ -467,7 +467,7 @@ impl Federation {
             }
         }
 
-        let client = JitTryAnyhow::new_try({
+        let client = JitTry::<_, anyhow::Error>::new_try({
             move || async move {
                 let client = Client::open_or_create(federation_name.as_str())?;
                 let invite_code = Self::invite_code_static()?;

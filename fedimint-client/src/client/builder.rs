@@ -38,7 +38,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
+use fedimint_core::task::jit::{Jit, JitTry};
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env};
 use fedimint_derive_secret::DerivableSecret;
@@ -337,9 +337,9 @@ impl ClientBuilder {
         init_mode: InitMode,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
+            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
+        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&db_no_decoders).await {
             bail!("Client database already initialized")
@@ -559,9 +559,9 @@ impl ClientBuilder {
         stopped: bool,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
+            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
+        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -604,9 +604,9 @@ impl ClientBuilder {
         request_hook: ApiRequestHook,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
+            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
-        prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
+        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> anyhow::Result<ClientHandle> {
         debug!(
             target: LOG_CLIENT,
@@ -1392,8 +1392,8 @@ pub struct ClientPreview {
     api_secret: Option<String>,
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set:
-        Option<JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
-    prefetch_chain_id: Option<JitTryAnyhow<ChainId>>,
+        Option<JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>>,
+    prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
 }
 
 impl ClientPreview {
