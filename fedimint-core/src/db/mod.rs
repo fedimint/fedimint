@@ -487,9 +487,7 @@ impl Database {
     /// `Err` if [`Self::is_global`] is not true
     pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not global"
-            )));
+            return Err(DatabaseError::NotGlobal);
         }
 
         Ok(())
@@ -498,9 +496,7 @@ impl Database {
     /// `Err` if [`Self::is_global`] is true
     pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not isolated"
-            )));
+            return Err(DatabaseError::NotIsolated);
         }
 
         Ok(())
@@ -1746,9 +1742,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     /// `Err` if [`Self::is_global`] is not true
     pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not global"
-            )));
+            return Err(DatabaseError::NotGlobal);
         }
 
         Ok(())
@@ -1757,9 +1751,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     /// `Err` if [`Self::is_global`] is true
     pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not isolated"
-            )));
+            return Err(DatabaseError::NotIsolated);
         }
 
         Ok(())
@@ -2134,6 +2126,7 @@ impl DecodingError {
 
 /// Error type for database operations
 #[derive(Debug, Error)]
+#[non_exhaustive]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
 #[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 pub enum DatabaseError {
@@ -2165,17 +2158,16 @@ pub enum DatabaseError {
     #[error("Database backend error: {0}")]
     DatabaseBackend(#[from] Box<dyn Error + Send + Sync>),
 
-    /// Other database error
-    #[error("Database error: {0:#}")]
-    Other(anyhow::Error),
+    /// The operation requires a global (non module-isolated) database instance.
+    #[error("Database instance is not global")]
+    NotGlobal,
+
+    /// The operation requires a module-isolated database instance.
+    #[error("Database instance is not isolated")]
+    NotIsolated,
 }
 
 impl DatabaseError {
-    /// Create a DatabaseError from any error type
-    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
-        Self::Other(anyhow::Error::from(error))
-    }
-
     /// Create a DatabaseBackend error from any error type
     pub fn backend<E: Error + Send + Sync + 'static>(error: E) -> Self {
         Self::DatabaseBackend(Box::new(error))
@@ -2184,12 +2176,6 @@ impl DatabaseError {
     /// Create a `SnapshotTooOld` error, preserving the backend's own error
     pub fn snapshot_too_old<E: Error + Send + Sync + 'static>(error: E) -> Self {
         Self::SnapshotTooOld(Box::new(error))
-    }
-}
-
-impl From<anyhow::Error> for DatabaseError {
-    fn from(error: anyhow::Error) -> Self {
-        Self::Other(error)
     }
 }
 
@@ -3440,7 +3426,6 @@ mod test_utils {
         use std::ops::Range;
         use std::path::Path;
 
-        use anyhow::anyhow;
         use async_trait::async_trait;
 
         use crate::ModuleDecoderRegistry;
@@ -3519,7 +3504,9 @@ mod test_utils {
             async fn commit_tx(self) -> DatabaseResult<()> {
                 use crate::db::DatabaseError;
 
-                Err(DatabaseError::Other(anyhow::anyhow!("Can't commit!")))
+                Err(DatabaseError::backend(std::io::Error::other(
+                    "Can't commit!",
+                )))
             }
         }
 
