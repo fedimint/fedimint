@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use clap::builder::BoolishValueParser;
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
@@ -257,13 +257,13 @@ pub async fn cleanup_on_exit(
     let joined = task_group.shutdown_join_all(Duration::from_secs(30)).await;
 
     match (result, joined) {
-        (Ok(()), joined) => joined,
+        (Ok(()), joined) => joined.map_err(anyhow::Error::from),
         (Err(err), Ok(())) => Err(err),
         (Err(err), Err(join_err)) => {
             // The main process error is the one worth reporting.
             warn!(
                 target: LOG_DEVIMINT,
-                err = %join_err.fmt_compact_anyhow(),
+                err = %join_err.fmt_compact(),
                 "Task group did not shut down cleanly"
             );
             Err(err)
