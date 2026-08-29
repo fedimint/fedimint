@@ -16,7 +16,6 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use std::{fs, io};
 
-use anyhow::format_err;
 use fedimint_logging::LOG_CORE;
 pub use fedimint_util_error::*;
 use futures::StreamExt;
@@ -35,13 +34,18 @@ pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)
 /// Stream that is `Send` unless targeting WASM
 pub type BoxStream<'a, T> = Pin<Box<maybe_add_send!(dyn futures::Stream<Item = T> + 'a)>>;
 
+/// The stream ended while an item was still expected.
+#[derive(Debug, thiserror::Error, Clone, Copy, Eq, PartialEq)]
+#[error("Stream was unexpectedly closed")]
+pub struct StreamEndedError;
+
 #[apply(async_trait_maybe_send!)]
 pub trait NextOrPending {
     type Output;
 
     async fn next_or_pending(&mut self) -> Self::Output;
 
-    async fn ok(&mut self) -> anyhow::Result<Self::Output>;
+    async fn ok(&mut self) -> Result<Self::Output, StreamEndedError>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -54,10 +58,8 @@ where
 
     /// Waits for the next item in a stream. If the stream is closed while
     /// waiting, returns an error.  Useful when expecting a stream to progress.
-    async fn ok(&mut self) -> anyhow::Result<Self::Output> {
-        self.next()
-            .await
-            .map_or_else(|| Err(format_err!("Stream was unexpectedly closed")), Ok)
+    async fn ok(&mut self) -> Result<Self::Output, StreamEndedError> {
+        self.next().await.ok_or(StreamEndedError)
     }
 
     /// Waits for the next item in a stream. If the stream is closed while

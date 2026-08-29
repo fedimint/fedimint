@@ -122,6 +122,13 @@ async fn retry_fail_with_three_attempts() {
 }
 
 #[tokio::test]
+async fn ok_reports_closed_stream_with_typed_error() {
+    let mut stream = futures::stream::iter(vec![1]);
+    assert_eq!(stream.ok().await, Ok(1));
+    assert_eq!(stream.ok().await, Err(super::StreamEndedError));
+}
+
+#[tokio::test]
 async fn retry_keeps_the_closure_error_type() {
     #[derive(Debug, PartialEq, thiserror::Error)]
     #[error("Nope")]
