@@ -239,7 +239,7 @@ impl EncryptedClientBackup {
         Ok(client_backup)
     }
 
-    pub fn into_backup_request(self, keypair: &Keypair) -> Result<SignedBackupRequest> {
+    pub fn into_backup_request(self, keypair: &Keypair) -> SignedBackupRequest {
         let request = BackupRequest {
             id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
@@ -361,7 +361,7 @@ impl Client {
         );
         let backup_request = backup
             .clone()
-            .into_backup_request(&self.get_derived_backup_signing_key())?;
+            .into_backup_request(&self.get_derived_backup_signing_key());
         self.api.upload_backup(&backup_request).await?;
         info!(
             target: LOG_CLIENT_BACKUP,
