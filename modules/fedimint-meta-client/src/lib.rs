@@ -325,7 +325,7 @@ async fn get_meta_module_value(
             let meta_api = api.with_module(instance_id);
 
             let overrides_res = retry("fetch_meta_values", backoff, || async {
-                Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
+                anyhow::Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
             })
             .await;
 

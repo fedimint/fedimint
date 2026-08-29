@@ -2453,13 +2453,14 @@ impl Client {
             "Fetching guardian public keys",
             backoff_util::background_backoff(),
             || async {
-                Ok(self
-                    .api
-                    .request_current_consensus::<ClientConfig>(
-                        CLIENT_CONFIG_ENDPOINT.to_owned(),
-                        ApiRequestErased::default(),
-                    )
-                    .await?)
+                anyhow::Ok(
+                    self.api
+                        .request_current_consensus::<ClientConfig>(
+                            CLIENT_CONFIG_ENDPOINT.to_owned(),
+                            ApiRequestErased::default(),
+                        )
+                        .await?,
+                )
             },
         )
         .await

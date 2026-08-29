@@ -120,7 +120,7 @@ impl MintClientModule {
                 let module_api_inner = module_api.clone();
                 async move {
                     let spent = retry("fetch e-cash spentness", aggressive_backoff(), || async {
-                        Ok(module_api_inner.check_note_spent(key.nonce).await?)
+                        anyhow::Ok(module_api_inner.check_note_spent(key.nonce).await?)
                     })
                     .await?;
                     anyhow::Ok(if spent { Some(key) } else { None })
@@ -195,7 +195,7 @@ impl MintClientModule {
             let nonce_used = retry(
                 "checking if blind nonce was already used",
                 aggressive_backoff(),
-                || async { Ok(module_api.check_blind_nonce_used(blind_nonce).await?) },
+                || async { anyhow::Ok(module_api.check_blind_nonce_used(blind_nonce).await?) },
             )
             .await?;
             if nonce_used {

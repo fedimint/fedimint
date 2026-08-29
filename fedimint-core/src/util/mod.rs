@@ -413,7 +413,7 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///     backoff_util::background_backoff(),
 ///     || async {
 ///         // Fallible network calls …
-///         Ok(())
+///         anyhow::Ok(())
 ///     },
 /// )
 /// .await
@@ -425,15 +425,16 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///
 /// - If the closure runs successfully, the result is immediately returned
 /// - If the closure did not run successfully for `max_attempts` times, the
-///   error of the closure is returned
-pub async fn retry<F, Fut, T>(
+///   closure's error is returned
+pub async fn retry<F, Fut, T, E>(
     op_name: impl Into<String>,
     strategy: impl backoff_util::Backoff,
     op_fn: F,
-) -> Result<T, anyhow::Error>
+) -> Result<T, E>
 where
     F: Fn() -> Fut,
-    Fut: Future<Output = Result<T, anyhow::Error>>,
+    Fut: Future<Output = Result<T, E>>,
+    E: Display,
 {
     let mut strategy = strategy;
     let op_name = op_name.into();
@@ -447,7 +448,7 @@ where
                     // run closure op_fn again
                     debug!(
                         target: LOG_CORE,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %format_args!("{err:#}"),
                         %attempts,
                         interval = interval.as_secs(),
                         "{} failed, retrying",
@@ -457,7 +458,7 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %format_args!("{err:#}"),
                         %attempts,
                         "{} failed",
                         op_name,
