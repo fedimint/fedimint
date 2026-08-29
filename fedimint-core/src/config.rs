@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{Context, format_err};
+use anyhow::Context;
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
@@ -21,11 +21,12 @@ use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
+use thiserror::Error;
 use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::Decodable;
+use crate::encoding::{Decodable, DecodeError};
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
     SerdeModuleEncoding,
@@ -310,13 +311,17 @@ impl ClientConfig {
     pub fn meta<V: serde::de::DeserializeOwned + 'static>(
         &self,
         key: &str,
-    ) -> Result<Option<V>, anyhow::Error> {
+    ) -> Result<Option<V>, ModuleConfigError> {
         let Some(str_value) = self.global.meta.get(key) else {
             return Ok(None);
         };
-        let res = serde_json::from_str(str_value)
-            .map(Some)
-            .context(format!("Decoding meta field '{key}' failed"));
+        let res =
+            serde_json::from_str(str_value)
+                .map(Some)
+                .map_err(|source| ModuleConfigError::Meta {
+                    key: key.to_owned(),
+                    source,
+                });
 
         // In the past we encoded some string fields as "just a string" without quotes,
         // this code ensures that old meta values still parse since config is hard to
@@ -489,17 +494,23 @@ impl ClientConfig {
         sha256::Hash::from_engine(engine)
     }
 
-    pub fn get_module<T: Decodable + 'static>(&self, id: ModuleInstanceId) -> anyhow::Result<&T> {
+    pub fn get_module<T: Decodable + 'static>(
+        &self,
+        id: ModuleInstanceId,
+    ) -> Result<&T, ModuleConfigError> {
         self.modules.get(&id).map_or_else(
-            || Err(format_err!("Client config for module id {id} not found")),
+            || Err(ModuleConfigError::ModuleNotFound { id }),
             |client_cfg| client_cfg.cast(),
         )
     }
 
     // TODO: rename this and one above
-    pub fn get_module_cfg(&self, id: ModuleInstanceId) -> anyhow::Result<ClientModuleConfig> {
+    pub fn get_module_cfg(
+        &self,
+        id: ModuleInstanceId,
+    ) -> Result<ClientModuleConfig, ModuleConfigError> {
         self.modules.get(&id).map_or_else(
-            || Err(format_err!("Client config for module id {id} not found")),
+            || Err(ModuleConfigError::ModuleNotFound { id }),
             |client_cfg| Ok(client_cfg.clone()),
         )
     }
@@ -514,10 +525,10 @@ impl ClientConfig {
     pub fn get_first_module_by_kind<T: Decodable + 'static>(
         &self,
         kind: impl Into<ModuleKind>,
-    ) -> anyhow::Result<(ModuleInstanceId, &T)> {
+    ) -> Result<(ModuleInstanceId, &T), ModuleConfigError> {
         let kind: ModuleKind = kind.into();
         let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
-            anyhow::bail!("Module kind {kind} not found")
+            return Err(ModuleConfigError::KindNotFound { kind });
         };
         Ok((*id, module_cfg.cast()?))
     }
@@ -526,13 +537,13 @@ impl ClientConfig {
     pub fn get_first_module_by_kind_cfg(
         &self,
         kind: impl Into<ModuleKind>,
-    ) -> anyhow::Result<(ModuleInstanceId, ClientModuleConfig)> {
+    ) -> Result<(ModuleInstanceId, ClientModuleConfig), ModuleConfigError> {
         let kind: ModuleKind = kind.into();
         self.modules
             .iter()
             .find(|(_, v)| v.is_kind(&kind))
             .map(|(id, v)| (*id, v.clone()))
-            .ok_or_else(|| anyhow::format_err!("Module kind {kind} not found"))
+            .ok_or(ModuleConfigError::KindNotFound { kind })
     }
 }
 
@@ -645,7 +656,7 @@ where
     pub fn decoders<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> Result<ModuleDecoderRegistry, ModuleConfigError> {
         self.decoders_strict(modules)
     }
 
@@ -653,13 +664,14 @@ where
     pub fn decoders_strict<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> Result<ModuleDecoderRegistry, ModuleConfigError> {
         let mut decoders = BTreeMap::new();
         for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!(
-                    "Detected configuration for unsupported module id: {id}, kind: {kind}"
-                )
+                return Err(ModuleConfigError::UnsupportedModule {
+                    id,
+                    kind: kind.clone(),
+                });
             };
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
@@ -760,15 +772,27 @@ impl ClientModuleConfig {
 }
 
 impl ClientModuleConfig {
-    pub fn cast<T>(&self) -> anyhow::Result<&T>
+    pub fn cast<T>(&self) -> Result<&T, ModuleConfigError>
     where
         T: 'static,
     {
-        self.config
-            .expect_decoded_ref()
-            .as_any()
-            .downcast_ref::<T>()
-            .context("can't convert client module config to desired type")
+        match &self.config {
+            DynRawFallback::Decoded(config) => {
+                config
+                    .as_any()
+                    .downcast_ref::<T>()
+                    .ok_or_else(|| ModuleConfigError::WrongType {
+                        kind: self.kind.clone(),
+                        expected: std::any::type_name::<T>(),
+                    })
+            }
+            DynRawFallback::Raw {
+                module_instance_id, ..
+            } => Err(ModuleConfigError::NotDecoded {
+                id: *module_instance_id,
+                kind: self.kind.clone(),
+            }),
+        }
     }
 }
 
@@ -786,7 +810,7 @@ impl ServerModuleConfig {
         Self { private, consensus }
     }
 
-    pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
+    pub fn to_typed<T: TypedServerModuleConfig>(&self) -> Result<T, ModuleConfigError> {
         let private = serde_json::from_value(self.private.value().clone())?;
         let consensus = <T::Consensus>::consensus_decode_whole(
             &self.consensus.config[..],
@@ -805,7 +829,7 @@ pub trait TypedServerModuleConsensusConfig:
 
     fn version(&self) -> ModuleConsensusVersion;
 
-    fn from_erased(erased: &ServerModuleConsensusConfig) -> anyhow::Result<Self> {
+    fn from_erased(erased: &ServerModuleConsensusConfig) -> Result<Self, ModuleConfigError> {
         Ok(Self::consensus_decode_whole(
             &erased.config[..],
             &ModuleRegistry::default(),
@@ -931,6 +955,51 @@ pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
     let file = std::fs::File::open(path)?;
     Ok(serde_json::from_reader(file)?)
+}
+
+/// Failure to look up or cast a module configuration.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ModuleConfigError {
+    /// No module with this instance id exists in the config.
+    #[error("Client config for module id {id} not found")]
+    ModuleNotFound { id: ModuleInstanceId },
+    /// No module of this kind exists in the config.
+    #[error("Module kind {kind} not found")]
+    KindNotFound { kind: ModuleKind },
+    /// The decoded module config is not of the requested type.
+    #[error("Client module config of kind {kind} is not a {expected}")]
+    WrongType {
+        kind: ModuleKind,
+        expected: &'static str,
+    },
+    /// The module config is still in its raw, undecoded form because no
+    /// decoder for its kind was available; see
+    /// [`ClientModuleConfig::redecode_raw`].
+    #[error("Client module config for module id {id} of kind {kind} has not been decoded")]
+    NotDecoded {
+        id: ModuleInstanceId,
+        kind: ModuleKind,
+    },
+    /// The config references a module kind this build has no support for.
+    #[error("Detected configuration for unsupported module id: {id}, kind: {kind}")]
+    UnsupportedModule {
+        id: ModuleInstanceId,
+        kind: ModuleKind,
+    },
+    /// A meta field exists but does not deserialize to the requested type.
+    #[error("Decoding meta field '{key}' failed")]
+    Meta {
+        key: String,
+        #[source]
+        source: serde_json::Error,
+    },
+    /// A JSON part of the config failed to (de)serialize.
+    #[error("Invalid JSON in module config")]
+    Json(#[from] serde_json::Error),
+    /// A consensus-encoded part of the config failed to decode.
+    #[error("Invalid consensus encoding in module config")]
+    Decode(#[from] DecodeError),
 }
 
 #[cfg(test)]

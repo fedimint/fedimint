@@ -168,10 +168,10 @@ impl ServerModuleInit for MintInit {
         MINT_REDEEMED_ECASH_SATS.get_sample_count();
         MINT_REDEEMED_ECASH_FEES_SATS.get_sample_count();
 
-        args.cfg().to_typed().map(|cfg| Mint {
+        Ok(args.cfg().to_typed().map(|cfg| Mint {
             cfg,
             db: args.db().clone(),
-        })
+        })?)
     }
 
     fn trusted_dealer_gen(

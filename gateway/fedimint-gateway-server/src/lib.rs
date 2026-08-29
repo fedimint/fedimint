@@ -2057,7 +2057,7 @@ impl Gateway {
 
         // Verify the LNv1 network if present
         if let Some(cfg) = lnv1_cfg {
-            let ln_cfg: &LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &LightningClientConfig = cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network.0 != network {
                 crit!(
@@ -2075,7 +2075,8 @@ impl Gateway {
 
         // Verify the LNv2 network if present
         if let Some(cfg) = lnv2_cfg {
-            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig =
+                cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network != network {
                 crit!(
