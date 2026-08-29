@@ -426,7 +426,7 @@ impl Display for FederationId {
 }
 
 impl FromStr for FederationIdPrefix {
-    type Err = anyhow::Error;
+    type Err = hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(<[u8; 4]>::from_hex(s)?))
@@ -466,14 +466,14 @@ impl FederationId {
     pub fn to_fake_ln_pub_key(
         &self,
         secp: &bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>,
-    ) -> anyhow::Result<bitcoin::secp256k1::PublicKey> {
+    ) -> Result<bitcoin::secp256k1::PublicKey, bitcoin::secp256k1::Error> {
         let sk = bitcoin::secp256k1::SecretKey::from_slice(&self.0.to_byte_array())?;
         Ok(bitcoin::secp256k1::PublicKey::from_secret_key(secp, &sk))
     }
 }
 
 impl FromStr for FederationId {
-    type Err = anyhow::Error;
+    type Err = hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::from_byte_array(<[u8; 32]>::from_hex(s)?))

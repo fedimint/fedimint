@@ -272,7 +272,7 @@ impl std::fmt::Display for BitcoinAmountOrAll {
 }
 
 impl FromStr for BitcoinAmountOrAll {
-    type Err = anyhow::Error;
+    type Err = ParseBitcoinAmountOrAllError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case("all") {
@@ -282,6 +282,18 @@ impl FromStr for BitcoinAmountOrAll {
             Ok(Self::Amount(amount.try_into()?))
         }
     }
+}
+
+/// Failure to parse a [`BitcoinAmountOrAll`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ParseBitcoinAmountOrAllError {
+    /// The string is neither `all` nor a valid amount.
+    #[error("Invalid amount: {0}")]
+    Amount(#[from] ParseAmountError),
+    /// The amount is valid but has sub-satoshi precision.
+    #[error("Amount cannot be expressed in satoshis: {0}")]
+    Precision(#[from] AmountConversionError),
 }
 
 // Custom serde to handle both "all" and numbers/strings
