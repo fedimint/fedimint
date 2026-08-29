@@ -683,7 +683,7 @@ where
     pub fn available_decoders<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> ModuleDecoderRegistry {
         let mut decoders = BTreeMap::new();
         for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
@@ -693,7 +693,7 @@ where
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        Ok(ModuleDecoderRegistry::from(decoders))
+        ModuleDecoderRegistry::from(decoders)
     }
 }
 
@@ -743,13 +743,13 @@ impl ClientModuleConfig {
         kind: ModuleKind,
         version: ModuleConsensusVersion,
         value: T,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             kind,
             version,
             config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
                 .into(),
-        })
+        }
     }
 
     pub fn redecode_raw(

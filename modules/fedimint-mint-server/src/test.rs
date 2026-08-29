@@ -29,8 +29,7 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
         MintInit
             .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
             .unwrap(),
-    )
-    .unwrap();
+    );
 
     (mint_cfg.into_values().collect(), client_cfg)
 }

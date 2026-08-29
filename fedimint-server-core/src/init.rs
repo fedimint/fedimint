@@ -318,12 +318,12 @@ where
         module_instance_id: ModuleInstanceId,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        ClientModuleConfig::from_typed(
+        Ok(ClientModuleConfig::from_typed(
             module_instance_id,
             <Self as ServerModuleInit>::kind(),
             config.version,
             <Self as ServerModuleInit>::get_client_config(self, config)?,
-        )
+        ))
     }
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
         <Self as ServerModuleInit>::get_database_migrations(self)

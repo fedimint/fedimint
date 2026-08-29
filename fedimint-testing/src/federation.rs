@@ -345,7 +345,7 @@ impl FederationTestBuilder {
             }
 
             let instances = cfg.consensus.iter_module_instances();
-            let decoders = self.server_init.available_decoders(instances).unwrap();
+            let decoders = self.server_init.available_decoders(instances);
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
