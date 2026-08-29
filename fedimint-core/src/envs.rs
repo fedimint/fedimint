@@ -349,7 +349,7 @@ pub enum EnvParseError {
     },
 }
 
-pub fn parse_kv_list_from_env<K, V>(env: &str) -> anyhow::Result<BTreeMap<K, V>>
+pub fn parse_kv_list_from_env<K, V>(env: &str) -> BTreeMap<K, V>
 where
     K: FromStr + cmp::Ord,
     <K as FromStr>::Err: std::error::Error,
@@ -358,7 +358,7 @@ where
 {
     let mut map = BTreeMap::new();
     let Ok(env_value) = std::env::var(env) else {
-        return Ok(BTreeMap::new());
+        return BTreeMap::new();
     };
     for kv in env_value.split(',') {
         let kv = kv.trim();
@@ -397,7 +397,7 @@ where
         }
     }
 
-    Ok(map)
+    map
 }
 
 #[cfg(test)]

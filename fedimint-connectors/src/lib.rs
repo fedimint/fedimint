@@ -256,7 +256,7 @@ impl ConnectorRegistryBuilder {
     /// Apply overrides from env variables
     pub fn with_env_var_overrides(mut self) -> anyhow::Result<Self> {
         // TODO: read rest of the env
-        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
+        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV) {
             self = self.with_connection_override(k, v);
         }
 

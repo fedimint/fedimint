@@ -72,7 +72,7 @@ impl IrohConnector {
         // read the `NodeTicket`-format
         // `FM_IROH_CONNECT_OVERRIDES` instead; devimint emits both side by side.
         for (k, v) in
-            parse_kv_list_from_env::<EndpointId, SocketAddr>(FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV)?
+            parse_kv_list_from_env::<EndpointId, SocketAddr>(FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV)
         {
             s.connection_overrides
                 .insert(k, EndpointAddr::from_parts(k, [TransportAddr::Ip(v)]));
