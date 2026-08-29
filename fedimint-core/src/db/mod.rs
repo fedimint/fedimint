@@ -1572,7 +1572,7 @@ fn decode_value_expect<V: DatabaseValue>(
         panic!(
             "Unrecoverable decoding DatabaseValue as {}; err={}, key_bytes={}, val_bytes={}",
             any::type_name::<V>(),
-            err,
+            err.fmt_compact(),
             AbbreviateHexBytes(key_bytes),
             AbbreviateHexBytes(value_bytes),
         )
@@ -1589,7 +1589,7 @@ fn decode_key_expect<K: DatabaseKey>(key_bytes: &[u8], decoders: &ModuleDecoderR
         panic!(
             "Unrecoverable decoding DatabaseKey as {}; err={}; bytes={}",
             any::type_name::<K>(),
-            err,
+            err.fmt_compact(),
             AbbreviateHexBytes(key_bytes)
         )
     })
@@ -1946,7 +1946,7 @@ where
         }
 
         <Self as crate::encoding::Decodable>::consensus_decode_whole(&data[1..], modules)
-            .map_err(|decode_error| DecodingError::Other(decode_error.0))
+            .map_err(|decode_error| DecodingError::Other(decode_error.0.into()))
     }
 }
 
@@ -1958,7 +1958,7 @@ where
         data: &[u8],
         modules: &ModuleDecoderRegistry,
     ) -> std::result::Result<Self, DecodingError> {
-        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0))
+        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0.into()))
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -2108,18 +2108,19 @@ pub enum DbKeyPrefix {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum DecodingError {
     #[error("Key had a wrong prefix, expected {expected} but got {found}")]
     WrongPrefix { expected: u8, found: u8 },
     #[error("Key had a wrong length, expected {expected} but got {found}")]
     WrongLength { expected: usize, found: usize },
-    #[error("Other decoding error: {0:#}")]
-    Other(anyhow::Error),
+    #[error("Other decoding error")]
+    Other(#[source] Box<dyn Error + Send + Sync>),
 }
 
 impl DecodingError {
     pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
-        Self::Other(anyhow::Error::from(error))
+        Self::Other(Box::new(error))
     }
 
     pub fn wrong_prefix(expected: u8, found: u8) -> Self {
