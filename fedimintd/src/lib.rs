@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::Context as _;
+use anyhow::{Context as _, bail};
 use bitcoin::Network;
 use clap::builder::BoolishValueParser;
 use clap::{ArgGroup, CommandFactory, FromArgMatches, Parser};
@@ -52,8 +52,8 @@ use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_NEXT_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV, FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV,
+    FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV,
     FM_IROH_NEXT_ENABLE_ENV, FM_IROH_P2P_RELAY_ENV, FM_P2P_MAX_CONNECTION_AGE_SECS_ENV,
     FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
@@ -97,12 +97,25 @@ struct ServerOpts {
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
     data_dir: PathBuf,
 
-    /// Password gating the guardian admin UI on bind-ui. Optional: falls
-    /// back to reading password.private from data-dir, and if neither is
-    /// present the UI is served without a login form. Only safe when
-    /// bind-ui stays on a trusted interface (the default 127.0.0.1).
+    /// Password gating the guardian admin UI on bind-ui. Falls back to
+    /// reading password.private from data-dir. One of the two must be
+    /// present, unless passwordless mode is explicitly enabled via
+    /// dangerous-no-admin-ui-password, otherwise fedimintd refuses to start.
     #[arg(long, env = FM_PASSWORD_UI_ENV)]
     password_ui: Option<String>,
+
+    /// DANGER: serve the guardian admin UI without any authentication.
+    ///
+    /// Anyone who can reach bind-ui gets full guardian admin access. This is
+    /// meant ONLY for local deployments where the web UI is guaranteed to
+    /// never be exposed on a network, e.g. bound to 127.0.0.1 on a
+    /// single-user machine. Never enable it when bind-ui is reachable from
+    /// other machines (LAN, Tor, reverse proxies, container port mappings).
+    ///
+    /// Ignored if a password.private file exists in data-dir: the password
+    /// from the file keeps gating the UI in that case.
+    #[arg(long, env = FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV, conflicts_with = "password_ui")]
+    dangerous_no_admin_ui_password: bool,
 
     /// Password gating admin RPCs on the public API (WebSocket on bind-api
     /// and iroh). Optional and never falls back to disk: when unset, admin
@@ -299,6 +312,32 @@ impl ServerOpts {
     }
 }
 
+/// Resolve the authentication setting for the guardian admin web UI.
+///
+/// An explicit password (`--password-ui` / `FM_PASSWORD_UI`) wins, then the
+/// legacy `password.private` file from the data dir. If neither is available
+/// the operator must have explicitly opted into serving the UI without
+/// authentication via `--dangerous-no-admin-ui-password`, otherwise startup is
+/// aborted with an error.
+fn resolve_ui_auth(
+    password_ui: Option<String>,
+    password_file: Option<String>,
+    dangerous_no_admin_ui_password: bool,
+) -> anyhow::Result<Option<ApiAuth>> {
+    match password_ui.or(password_file) {
+        Some(password) => Ok(Some(ApiAuth::new(password))),
+        None if dangerous_no_admin_ui_password => Ok(None),
+        None => bail!(
+            "No admin UI password configured. Set FM_PASSWORD_UI (or pass --password-ui) \
+             to protect the admin UI with a password, or set \
+             FM_DANGEROUS_NO_ADMIN_UI_PASSWORD=true (or pass --dangerous-no-admin-ui-password) \
+             to explicitly serve the admin UI without any authentication. Only do the latter \
+             on local deployments where the UI bind address (FM_BIND_UI) is guaranteed to \
+             never be reachable over a network."
+        ),
+    }
+}
+
 /// Block the thread and run a Fedimintd server
 ///
 /// # Arguments
@@ -470,16 +509,21 @@ pub async fn run(
     install_crypto_provider().await;
 
     // The UI password falls back to the legacy password.private file on disk
-    // if its env var is not set, since the UI defaults to a loopback bind.
+    // if its env var is not set. If neither is available, fedimintd refuses to
+    // start unless the operator explicitly opted into serving the UI without
+    // authentication via `--dangerous-no-admin-ui-password`.
     // The API password never falls back: the public admin API is always
     // network-reachable, so it must be enabled explicitly via its env var or
-    // else admin RPCs return 401. Absence of a password for a given plane opts
-    // that plane into passwordless mode (UI) or disabled admin RPCs (API).
+    // else admin RPCs return 401.
     let password_file = std::fs::read_to_string(server_opts.data_dir.join(PLAINTEXT_PASSWORD))
         .ok()
         .map(|s| s.trim().to_owned());
 
-    let auth_ui = server_opts.password_ui.or(password_file).map(ApiAuth::new);
+    let auth_ui = resolve_ui_auth(
+        server_opts.password_ui,
+        password_file,
+        server_opts.dangerous_no_admin_ui_password,
+    )?;
     let auth_api = server_opts.password_api.map(ApiAuth::new);
 
     let task_group = root_task_group.clone();
@@ -605,6 +649,101 @@ mod tests {
         }
 
         opts
+    }
+
+    #[test]
+    fn dangerous_no_admin_ui_password_flag_parses() {
+        let mut args = server_opts_args();
+        args.push("--dangerous-no-admin-ui-password");
+        let opts = ServerOpts::try_parse_from(&args).expect("flag alone should parse");
+        assert!(opts.dangerous_no_admin_ui_password);
+    }
+
+    #[test]
+    fn dangerous_no_admin_ui_password_env_enables_flag() {
+        let previous = std::env::var_os(FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV);
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            std::env::remove_var(FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV);
+        }
+        assert!(
+            !parse_server_opts().dangerous_no_admin_ui_password,
+            "flag must default to off"
+        );
+
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            std::env::set_var(FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV, "true");
+        }
+
+        let opts = parse_server_opts();
+
+        // This test does not spawn threads while mutating the process
+        // environment.
+        unsafe {
+            if let Some(previous) = previous {
+                std::env::set_var(FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV, previous);
+            } else {
+                std::env::remove_var(FM_DANGEROUS_NO_ADMIN_UI_PASSWORD_ENV);
+            }
+        }
+
+        assert!(opts.dangerous_no_admin_ui_password);
+    }
+
+    #[test]
+    fn dangerous_no_admin_ui_password_flag_conflicts_with_password_ui() {
+        let mut args = server_opts_args();
+        args.push("--dangerous-no-admin-ui-password");
+        args.push("--password-ui");
+        args.push("hunter2");
+        assert!(ServerOpts::try_parse_from(&args).is_err());
+    }
+
+    #[test]
+    fn ui_auth_prefers_explicit_password() {
+        let auth = resolve_ui_auth(
+            Some("explicit".to_owned()),
+            Some("from-file".to_owned()),
+            false,
+        )
+        .expect("explicit password must resolve")
+        .expect("auth must be present");
+        assert_eq!(auth.as_str(), "explicit");
+    }
+
+    #[test]
+    fn ui_auth_falls_back_to_password_file() {
+        let auth = resolve_ui_auth(None, Some("from-file".to_owned()), false)
+            .expect("password file must resolve")
+            .expect("auth must be present");
+        assert_eq!(auth.as_str(), "from-file");
+    }
+
+    #[test]
+    fn ui_auth_password_file_wins_over_dangerous_flag() {
+        let auth = resolve_ui_auth(None, Some("from-file".to_owned()), true)
+            .expect("password file must resolve")
+            .expect("auth must be present");
+        assert_eq!(auth.as_str(), "from-file");
+    }
+
+    #[test]
+    fn ui_auth_without_password_requires_dangerous_opt_in() {
+        let err = resolve_ui_auth(None, None, false).expect_err("missing password must error");
+        assert!(err.to_string().contains("FM_PASSWORD_UI"));
+        assert!(
+            err.to_string()
+                .contains("FM_DANGEROUS_NO_ADMIN_UI_PASSWORD")
+        );
+    }
+
+    #[test]
+    fn ui_auth_passwordless_with_dangerous_opt_in() {
+        let auth = resolve_ui_auth(None, None, true).expect("explicit opt-in must resolve");
+        assert!(auth.is_none());
     }
 
     #[test]
