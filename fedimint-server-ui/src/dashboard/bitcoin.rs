@@ -22,9 +22,11 @@ pub fn render(url: SafeUrl, status: &Option<ServerBitcoinRpcStatus>) -> Markup {
                                 th { "Block Count" }
                                 td { (status.block_count) }
                             }
-                            tr {
-                                th { "Fee Rate" }
-                                td { (format!("{} sats/vB", status.fee_rate.sats_per_kvb / 1000)) }
+                            @if let Some(fee_rate) = status.fee_rate {
+                                tr {
+                                    th { "Fee Rate" }
+                                    td { (format!("{} sats/vB", fee_rate.sats_per_kvb / 1000)) }
+                                }
                             }
                             @if let Some(sync) = status.sync_progress {
                                 tr {
