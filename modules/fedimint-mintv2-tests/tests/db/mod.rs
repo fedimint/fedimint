@@ -4,15 +4,15 @@ use anyhow::{Context, ensure};
 use bitcoin_hashes::{Hash as _, hash160};
 use bls12_381::G1Affine;
 use fedimint_client::module_init::DynClientModuleInit;
+use fedimint_core::core::Account;
 use fedimint_core::db::{
     Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, SECP256K1};
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{OutPoint, TransactionId, impl_db_record};
 use fedimint_logging::TracingSetup;
-use fedimint_mintv2_client::client_db::{
-    self, RecoveryState, RecoveryStateKey, SpendableNoteKey, SpendableNotePrefix,
-};
+use fedimint_mintv2_client::client_db::{self, RecoveryStateKey, SpendableNotePrefix};
 use fedimint_mintv2_client::issuance::NoteIssuanceRequest;
 use fedimint_mintv2_common::{MintCommonInit, RecoveryItem};
 use fedimint_mintv2_server::db::{
@@ -274,12 +274,12 @@ async fn create_client_db_with_v0_data(db: Database) {
     dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
         .await;
 
-    dbtx.insert_new_entry(&SpendableNoteKey(spendable_note(1).into()), &())
+    dbtx.insert_new_entry(&SpendableNoteKeyV0(spendable_note(1)), &())
         .await;
 
     dbtx.insert_new_entry(
-        &RecoveryStateKey,
-        &RecoveryState {
+        &RecoveryStateKeyV0,
+        &RecoveryStateV0 {
             next_index: 3,
             total_items: 10,
             requests: BTreeMap::from([(nonce_hash(1), issuance_request(1))]),
@@ -290,6 +290,35 @@ async fn create_client_db_with_v0_data(db: Database) {
 
     dbtx.commit_tx().await;
 }
+
+/// The v0 shapes of the two client records, before accounts split the note
+/// table and tagged each recovered request. Spelt out here so the snapshot
+/// keeps producing v0 bytes now that the live types carry an account.
+#[derive(Debug, Clone, Encodable, Decodable)]
+struct SpendableNoteKeyV0(SpendableNote);
+
+impl_db_record!(
+    key = SpendableNoteKeyV0,
+    value = (),
+    db_prefix = client_db::DbKeyPrefix::Note,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+struct RecoveryStateV0 {
+    next_index: u64,
+    total_items: u64,
+    requests: BTreeMap<hash160::Hash, NoteIssuanceRequest>,
+    nonces: BTreeSet<hash160::Hash>,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+struct RecoveryStateKeyV0;
+
+impl_db_record!(
+    key = RecoveryStateKeyV0,
+    value = RecoveryStateV0,
+    db_prefix = client_db::DbKeyPrefix::RecoveryState,
+);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
@@ -314,9 +343,12 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
 
             for prefix in client_db::DbKeyPrefix::iter() {
                 match prefix {
+                    // The accounts migration re-keys every pre-accounts
+                    // note as primary's — the only account it could have
+                    // meant — and the note itself is untouched.
                     client_db::DbKeyPrefix::Note => {
                         let notes = dbtx
-                            .find_by_prefix(&SpendableNotePrefix)
+                            .find_by_prefix(&SpendableNotePrefix(Account::Primary))
                             .await
                             .collect::<Vec<_>>()
                             .await;
@@ -327,10 +359,28 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                             notes.len()
                         );
                         ensure!(
-                            notes[0].0.0.decode().ok() == Some(spendable_note(1)),
+                            notes[0].0.1.decode().ok() == Some(spendable_note(1)),
                             "the spendable note must round-trip unchanged"
                         );
+
+                        for account in Account::ALL.into_iter().skip(1) {
+                            let notes = dbtx
+                                .find_by_prefix(&SpendableNotePrefix(account))
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+
+                            ensure!(
+                                notes.is_empty(),
+                                "{account} must hold nothing after the migration, got {} \
+                                 entries",
+                                notes.len()
+                            );
+                        }
                     }
+                    // The accounts migration carries an in-progress
+                    // checkpoint over with its progress intact, tagging
+                    // every request as primary's.
                     client_db::DbKeyPrefix::RecoveryState => {
                         let state = dbtx
                             .get_value(&RecoveryStateKey)
@@ -345,8 +395,11 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                         );
                         ensure!(
                             state.requests
-                                == BTreeMap::from([(nonce_hash(1), issuance_request(1))]),
-                            "the pending issuance requests must round-trip unchanged"
+                                == BTreeMap::from([(
+                                    nonce_hash(1),
+                                    (Account::Primary, issuance_request(1))
+                                )]),
+                            "the pending issuance requests must be re-tagged as primary's"
                         );
                         ensure!(
                             state.nonces == BTreeSet::from([nonce_hash(2)]),

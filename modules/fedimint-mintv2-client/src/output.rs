@@ -56,6 +56,7 @@ impl State for MintOutputStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let context = context.clone();
+        let global_context = global_context.clone();
 
         match &self.state {
             OutputSMState::Pending => {
@@ -73,7 +74,12 @@ impl State for MintOutputStateMachine {
                         dbtx.module_tx()
                             .on_commit(move || balance_update_sender.send_replace(()));
 
-                        Box::pin(Self::transition_issuance(dbtx, outcome, old_state))
+                        Box::pin(Self::transition_issuance(
+                            global_context.clone(),
+                            dbtx,
+                            outcome,
+                            old_state,
+                        ))
                     },
                 )]
             }
@@ -167,6 +173,7 @@ impl MintOutputStateMachine {
     }
 
     async fn transition_issuance(
+        global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outcome: IssuanceOutcome,
         old_state: MintOutputStateMachine,
@@ -184,9 +191,15 @@ impl MintOutputStateMachine {
             } => (signatures, invalid),
         };
 
+        // The notes land in the operation's account, whichever that is.
+        let account = global_context.account(dbtx).await;
+
         for (request, signature) in old_state.common.issuance_requests.iter().zip(signatures) {
             dbtx.module_tx()
-                .insert_new_entry(&SpendableNoteKey(request.finalize(signature).into()), &())
+                .insert_new_entry(
+                    &SpendableNoteKey(account, request.finalize(signature).into()),
+                    &(),
+                )
                 .await;
         }
 
