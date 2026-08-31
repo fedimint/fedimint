@@ -175,9 +175,17 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
         "An address with nothing sent to it is not awaiting confirmations"
     );
 
-    bitcoin
-        .send_and_mine_block(&address, Amount::from_int_btc(1))
+    info!("Broadcast the deposit without mining it...");
+
+    let tx = bitcoin
+        .send_without_mining(&address, Amount::from_int_btc(1))
         .await;
+
+    // Guardians report the unmined deposit straight out of their mempools,
+    // which is the whole point: the user gets feedback before the first block.
+    await_receive_mempool(&client, &address, tx.compute_txid()).await?;
+
+    bitcoin.mine_blocks(1).await;
 
     // The deposit is now mined but still short of the finality delay, so the
     // federation has not recorded it and only the advisory view can see it.
@@ -204,6 +212,39 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Polls receive progress until the unmined peg-in is visible in the
+/// guardians' mempools, asserting it is reported against the expected
+/// transaction and value.
+async fn await_receive_mempool(
+    client: &ClientHandleArc,
+    address: &bitcoin::Address,
+    txid: bitcoin::Txid,
+) -> anyhow::Result<()> {
+    loop {
+        let progress = client
+            .get_first_module::<WalletClientModule>()?
+            .receive_progress(address)
+            .await?;
+
+        match progress {
+            ReceiveProgress::Mempool { value, outpoint } => {
+                assert_eq!(value, Amount::from_int_btc(1));
+                assert_eq!(outpoint.txid, txid);
+
+                return Ok(());
+            }
+            ReceiveProgress::AwaitingTransaction => {}
+            state => panic!("Peg-in reached {state:?} while still unmined"),
+        }
+
+        sleep_in_test(
+            "Waiting for the peg-in to appear in the mempool",
+            Duration::from_secs(1),
+        )
+        .await;
+    }
 }
 
 /// Polls receive progress until the peg-in is at least `min` confirmations
@@ -235,7 +276,9 @@ async fn await_receive_confirmations(
                     return Ok(required);
                 }
             }
-            ReceiveProgress::AwaitingTransaction => {}
+            // Still legitimate here: the scanner may not have observed the new
+            // block yet, so the peg-in can briefly read as unmined.
+            ReceiveProgress::AwaitingTransaction | ReceiveProgress::Mempool { .. } => {}
             state => panic!("Peg-in reached {state:?} before the finality delay elapsed"),
         }
 

@@ -176,6 +176,26 @@ impl BitcoinTest for FakeBitcoinTest {
         }
     }
 
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction {
+        let mut inner = self.inner.write().unwrap();
+
+        let transaction = FakeBitcoinTest::new_transaction(
+            vec![TxOut {
+                value: amount,
+                script_pubkey: address.script_pubkey(),
+            }],
+            inner.blocks.len() as u32,
+        );
+
+        inner
+            .addresses
+            .insert(transaction.compute_txid(), amount.into());
+
+        inner.pending.push(transaction.clone());
+
+        transaction
+    }
+
     async fn send_and_mine_block(
         &self,
         address: &Address,
@@ -381,6 +401,33 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_feerate(&self) -> Result<Option<Feerate>> {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
+    }
+
+    /// Models a backend that can enumerate its mempool, as bitcoind can.
+    ///
+    /// Esplora-backed guardians return `None` here instead, so tests that need
+    /// to cover the no-visibility path cannot use this fixture.
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<bitcoin::Txid>>> {
+        Ok(Some(
+            self.inner
+                .read()
+                .unwrap()
+                .pending
+                .iter()
+                .map(bitcoin::Transaction::compute_txid)
+                .collect(),
+        ))
+    }
+
+    async fn get_mempool_tx(&self, txid: &bitcoin::Txid) -> Result<Option<bitcoin::Transaction>> {
+        Ok(self
+            .inner
+            .read()
+            .unwrap()
+            .pending
+            .iter()
+            .find(|tx| tx.compute_txid() == *txid)
+            .cloned())
     }
 
     async fn submit_transaction(&self, transaction: bitcoin::Transaction) -> anyhow::Result<()> {

@@ -129,11 +129,24 @@ pub enum FinalReceiveOperationState {
 /// treat anything before that as money received.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReceiveProgress {
-    /// No transaction paying the address has been mined yet.
+    /// No guardian has seen a transaction paying the address.
     ///
-    /// Note this does not distinguish "nothing sent" from "sent but still in
-    /// the mempool"; guardians only report mined outputs.
+    /// This does not always mean nothing was sent. A federation whose guardians
+    /// all run a bitcoin backend that cannot enumerate a mempool stays here
+    /// until the peg-in is mined, so it also covers "sent, but nobody can see
+    /// it yet".
     AwaitingTransaction,
+    /// A transaction paying the address is in a guardian's mempool but is not
+    /// mined.
+    ///
+    /// The weakest signal there is: an unmined transaction can be replaced or
+    /// evicted, and this state can revert to
+    /// [`ReceiveProgress::AwaitingTransaction`]. Treat it as "we have seen your
+    /// payment", never as money received.
+    Mempool {
+        value: bitcoin::Amount,
+        outpoint: bitcoin::OutPoint,
+    },
     /// A transaction paying the address has been mined but is not yet deep
     /// enough for the federation to act on it.
     Confirming {
@@ -643,18 +656,25 @@ impl WalletClientModule {
         // than the delay itself.
         let required = CONFIRMATION_FINALITY_DELAY + 1;
 
-        match dbtx.get_value(&PendingReceiveKey(address_index)).await {
-            Some(pending) => ReceiveProgress::Confirming {
+        let Some(pending) = dbtx.get_value(&PendingReceiveKey(address_index)).await else {
+            return ReceiveProgress::AwaitingTransaction;
+        };
+
+        match pending.confirmations() {
+            Some(confirmations) => ReceiveProgress::Confirming {
                 value: pending.value,
                 outpoint: pending.outpoint,
                 // Guardians keep reporting an output for a while after it turns
                 // final, so that progress does not blank out before the claim
                 // begins. Clamp so a progress display cannot run past its own
                 // target during that overlap.
-                confirmations: pending.confirmations().min(required),
+                confirmations: confirmations.min(required),
                 required,
             },
-            None => ReceiveProgress::AwaitingTransaction,
+            None => ReceiveProgress::Mempool {
+                value: pending.value,
+                outpoint: pending.outpoint,
+            },
         }
     }
 

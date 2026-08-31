@@ -213,6 +213,18 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         }
     }
 
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction {
+        let id = self
+            .client
+            .send_to_address(address, amount)
+            .expect(Self::ERROR);
+
+        // No block is mined, so this resolves out of the mempool.
+        self.client
+            .get_raw_transaction(&id, None)
+            .expect(Self::ERROR)
+    }
+
     async fn send_and_mine_block(
         &self,
         address: &Address,
@@ -377,6 +389,11 @@ impl BitcoinTest for RealBitcoinTest {
         self.inner.prepare_funding_wallet().await;
     }
 
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction {
+        let _lock = self.lock_exclusive().await;
+        self.inner.send_without_mining(address, amount).await
+    }
+
     async fn send_and_mine_block(
         &self,
         address: &Address,
@@ -433,6 +450,10 @@ impl BitcoinTest for RealBitcoinTestLocked {
 
     async fn prepare_funding_wallet(&self) {
         self.inner.prepare_funding_wallet().await;
+    }
+
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction {
+        self.inner.send_without_mining(address, amount).await
     }
 
     async fn send_and_mine_block(

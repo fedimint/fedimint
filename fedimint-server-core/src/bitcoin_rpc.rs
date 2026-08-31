@@ -3,7 +3,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
-use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
+use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
@@ -151,6 +151,27 @@ impl ServerBitcoinRpcMonitor {
         self.rpc.get_block(hash).await
     }
 
+    /// See [`IServerBitcoinRpc::get_mempool_txids`]; `None` means the backend
+    /// has no mempool visibility, not that the mempool is empty.
+    pub async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        ensure!(
+            self.status_receiver.borrow().is_some(),
+            "Not connected to bitcoin backend"
+        );
+
+        self.rpc.get_mempool_txids().await
+    }
+
+    /// See [`IServerBitcoinRpc::get_mempool_tx`].
+    pub async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        ensure!(
+            self.status_receiver.borrow().is_some(),
+            "Not connected to bitcoin backend"
+        );
+
+        self.rpc.get_mempool_tx(txid).await
+    }
+
     pub async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         ensure!(
             self.status_receiver.borrow().is_some(),
@@ -261,6 +282,31 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// Returns the node's estimated chain sync percentage as a float between
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
     async fn get_sync_progress(&self) -> Result<Option<f64>>;
+
+    /// Returns the ids of every transaction in the node's mempool, or `None`
+    /// if the backend cannot enumerate it.
+    ///
+    /// Enumerating the mempool is only possible on backends that expose the
+    /// whole of it. Esplora deliberately returns `None`: its mempool APIs are
+    /// per-address, and resolving a full mempool through them would take one
+    /// request per transaction.
+    ///
+    /// Callers must treat `None` as "this backend has no mempool visibility",
+    /// never as "the mempool is empty".
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        Ok(None)
+    }
+
+    /// Returns a transaction from the node's mempool.
+    ///
+    /// `None` means either that the backend cannot serve mempool transactions
+    /// or that this transaction is no longer in the mempool, which is expected
+    /// when it is mined or evicted between listing and fetching it.
+    async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        let _ = txid;
+
+        Ok(None)
+    }
 
     /// Returns the chain ID (block hash at height 1)
     ///

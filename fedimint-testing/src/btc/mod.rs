@@ -32,6 +32,14 @@ pub trait BitcoinTest {
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction);
 
+    /// Send some bitcoin to an address and leave the transaction unconfirmed in
+    /// the mempool.
+    ///
+    /// The counterpart to [`BitcoinTest::send_and_mine_block`], for exercising
+    /// behaviour that depends on a transaction being seen before it is mined.
+    /// Mine a block afterwards to confirm it.
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction;
+
     /// Returns a new address.
     async fn get_new_address(&self) -> Address;
 

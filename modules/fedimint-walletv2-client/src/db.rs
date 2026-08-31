@@ -45,13 +45,13 @@ impl_db_lookup!(
     query_prefix = ValidAddressIndexPrefix
 );
 
-/// A peg-in to one of our addresses that has been mined but is not yet deep
-/// enough for the federation to have recorded it in its consensus output log.
+/// A peg-in to one of our addresses that the federation can see but has not yet
+/// recorded in its consensus output log.
 ///
 /// This table is rebuilt wholesale on every scan rather than appended to. The
 /// underlying data is advisory and revocable: an entry must disappear if a
-/// reorg unmines it, or once the output graduates into the consensus output log
-/// and the real receive operation takes over.
+/// reorg unmines it or the mempool drops it, and once the output graduates into
+/// the consensus output log the real receive operation takes over.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PendingReceiveKey(pub u64);
 
@@ -59,8 +59,9 @@ pub struct PendingReceiveKey(pub u64);
 pub struct PendingReceive {
     pub outpoint: bitcoin::OutPoint,
     pub value: bitcoin::Amount,
-    /// Height of the block that mined the peg-in.
-    pub height: u64,
+    /// Height of the block that mined the peg-in, or `None` while it is only
+    /// in a guardian's mempool.
+    pub height: Option<u64>,
     /// Chain tip the confirmation count is relative to, as reported by the
     /// federation when this entry was written.
     pub block_count: u64,
@@ -69,8 +70,10 @@ pub struct PendingReceive {
 impl PendingReceive {
     /// Confirmations using the standard Bitcoin convention, where the block
     /// that mines a transaction counts as the first confirmation.
-    pub fn confirmations(&self) -> u64 {
-        self.block_count.saturating_sub(self.height)
+    ///
+    /// `None` for a peg-in that is still unmined.
+    pub fn confirmations(&self) -> Option<u64> {
+        Some(self.block_count.saturating_sub(self.height?))
     }
 }
 

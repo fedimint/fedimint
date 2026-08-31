@@ -206,6 +206,7 @@ where
         .await;
 
         let mut block_count = 0;
+        let mut mempool_visibility = false;
         let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
 
         for response in responses.into_iter().flatten() {
@@ -214,16 +215,25 @@ where
             // showed the user.
             block_count = block_count.max(response.block_count);
 
+            // One guardian that can see a mempool is enough to report unmined
+            // peg-ins for the whole federation.
+            mempool_visibility |= response.mempool_visibility;
+
             for output in response.outputs {
-                // Guardians can disagree on the height of an outpoint across a
-                // reorg. Keep the deepest height, which yields the lower
-                // confirmation count, so progress is never overstated.
                 outputs
                     .entry(output.outpoint)
                     .and_modify(|existing| {
-                        if output.height > existing.height {
-                            existing.height = output.height;
-                        }
+                        existing.height = match (existing.height, output.height) {
+                            // A guardian that has seen the transaction mined is
+                            // ahead of one that still has it in its mempool, so
+                            // a known height always wins over none.
+                            (None, height) | (height, None) => height,
+                            // Guardians can disagree on the height of an
+                            // outpoint across a reorg. Keep the deepest, which
+                            // yields the lower confirmation count, so progress
+                            // is never overstated.
+                            (Some(existing), Some(new)) => Some(existing.max(new)),
+                        };
                     })
                     .or_insert(output);
             }
@@ -232,6 +242,7 @@ where
         PendingOutputs {
             block_count,
             outputs: outputs.into_values().collect(),
+            mempool_visibility,
         }
     }
 }

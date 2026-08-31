@@ -157,6 +157,46 @@ async fn pending_txs_unordered(dbtx: &mut DatabaseTransaction<'_>) -> Vec<Federa
 /// height and tagged with the hash they were derived from.
 type BlockCache = BTreeMap<u64, (bitcoin::BlockHash, Vec<PendingOutput>)>;
 
+/// Filtered receive outputs of the transactions currently in the mempool.
+///
+/// Every transaction is kept, including those with no matching outputs, so that
+/// a scan only fetches transactions it has never seen. On a busy mainnet node
+/// this holds on the order of tens of thousands of empty entries, which is a
+/// few megabytes and far cheaper than refetching the mempool each scan.
+type MempoolCache = BTreeMap<Txid, Vec<PendingOutput>>;
+
+/// State the pending receive scanner carries between runs.
+#[derive(Default)]
+struct PendingCache {
+    blocks: BlockCache,
+    mempool: MempoolCache,
+}
+
+/// Returns the receive outputs of `tx` that pass the probabilistic filter.
+fn filtered_receive_outputs(
+    tx: &Transaction,
+    pks_hash: &sha256::Hash,
+    height: Option<u64>,
+) -> Vec<PendingOutput> {
+    let txid = tx.compute_txid();
+
+    tx.output
+        .iter()
+        .enumerate()
+        .filter(|(_, tx_out)| is_potential_receive(&tx_out.script_pubkey, pks_hash))
+        .map(|(vout, tx_out)| PendingOutput {
+            script: tx_out.script_pubkey.clone(),
+            outpoint: bitcoin::OutPoint {
+                txid,
+                vout: u32::try_from(vout)
+                    .expect("Bitcoin transaction has more than u32::MAX outputs"),
+            },
+            value: tx_out.value,
+            height,
+        })
+        .collect()
+}
+
 /// Collects the receive outputs of the most recently mined blocks.
 ///
 /// Scans the last [`MAX_PENDING_DEPTH`] blocks below the guardian's local chain
@@ -168,21 +208,18 @@ type BlockCache = BTreeMap<u64, (bitcoin::BlockHash, Vec<PendingOutput>)>;
 /// Blocks are only fetched when the hash at a height is absent from `cache` or
 /// differs from the cached one, which keeps the steady state cost at one block
 /// fetch per new block and makes reorgs within the window self-repairing.
-async fn scan_pending_receives(
+async fn scan_pending_blocks(
     btc_rpc: &ServerBitcoinRpcMonitor,
     pks_hash: &sha256::Hash,
+    block_count: u64,
     cache: &mut BlockCache,
-) -> anyhow::Result<PendingOutputs> {
-    let status = btc_rpc
-        .status()
-        .context("Bitcoin backend is not connected")?;
-
-    let start = status.block_count.saturating_sub(MAX_PENDING_DEPTH);
+) -> anyhow::Result<()> {
+    let start = block_count.saturating_sub(MAX_PENDING_DEPTH);
 
     // Drop the blocks that have fallen out of the window as the chain advanced.
-    cache.retain(|height, _| (start..status.block_count).contains(height));
+    cache.retain(|height, _| (start..block_count).contains(height));
 
-    for height in start..status.block_count {
+    for height in start..block_count {
         let block_hash = btc_rpc.get_block_hash(height).await?;
 
         if cache
@@ -197,39 +234,87 @@ async fn scan_pending_receives(
         let outputs = block
             .txdata
             .iter()
-            .flat_map(|tx| {
-                let txid = tx.compute_txid();
-
-                tx.output
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, tx_out)| is_potential_receive(&tx_out.script_pubkey, pks_hash))
-                    .map(move |(vout, tx_out)| PendingOutput {
-                        script: tx_out.script_pubkey.clone(),
-                        outpoint: bitcoin::OutPoint {
-                            txid,
-                            vout: u32::try_from(vout)
-                                .expect("Bitcoin transaction has more than u32::MAX outputs"),
-                        },
-                        value: tx_out.value,
-                        height,
-                    })
-                    .collect::<Vec<PendingOutput>>()
-            })
+            .flat_map(|tx| filtered_receive_outputs(tx, pks_hash, Some(height)))
             .collect::<Vec<PendingOutput>>();
 
         cache.insert(height, (block_hash, outputs));
     }
 
-    let outputs = cache
+    Ok(())
+}
+
+/// Collects the receive outputs of the transactions in the node's mempool.
+///
+/// Returns whether the backend has mempool visibility at all. Esplora cannot
+/// enumerate a mempool, so its guardians report `false` and simply never
+/// surface unmined peg-ins.
+///
+/// Only transactions absent from `cache` are fetched, and entries that have
+/// left the mempool are dropped, so eviction and replacement are handled by
+/// rebuilding the retained set rather than by tracking them explicitly. A
+/// transaction that disappears between being listed and being fetched is
+/// skipped rather than treated as an error, since that is the ordinary outcome
+/// of it being mined mid-scan.
+async fn scan_pending_mempool(
+    btc_rpc: &ServerBitcoinRpcMonitor,
+    pks_hash: &sha256::Hash,
+    cache: &mut MempoolCache,
+) -> anyhow::Result<bool> {
+    let Some(txids) = btc_rpc.get_mempool_txids().await? else {
+        cache.clear();
+
+        return Ok(false);
+    };
+
+    let txids: BTreeSet<Txid> = txids.into_iter().collect();
+
+    cache.retain(|txid, _| txids.contains(txid));
+
+    for txid in txids {
+        if cache.contains_key(&txid) {
+            continue;
+        }
+
+        if let Some(tx) = btc_rpc.get_mempool_tx(&txid).await? {
+            cache.insert(txid, filtered_receive_outputs(&tx, pks_hash, None));
+        }
+    }
+
+    Ok(true)
+}
+
+/// Collects every receive output a guardian can see but the federation has not
+/// yet recorded, from both the recent blocks and the mempool.
+async fn scan_pending_receives(
+    btc_rpc: &ServerBitcoinRpcMonitor,
+    pks_hash: &sha256::Hash,
+    cache: &mut PendingCache,
+) -> anyhow::Result<PendingOutputs> {
+    let status = btc_rpc
+        .status()
+        .context("Bitcoin backend is not connected")?;
+
+    scan_pending_blocks(btc_rpc, pks_hash, status.block_count, &mut cache.blocks).await?;
+
+    let mempool_visibility = scan_pending_mempool(btc_rpc, pks_hash, &mut cache.mempool).await?;
+
+    let mined = cache
+        .blocks
         .values()
-        .flat_map(|(_, outputs)| outputs.iter().cloned())
+        .flat_map(|(_, outputs)| outputs.iter().cloned());
+
+    // A transaction mined between the two scans appears in both; the mined
+    // entry is the stronger signal, so it wins on the client side by way of the
+    // per-outpoint merge preferring a known height.
+    let outputs = mined
+        .chain(cache.mempool.values().flatten().cloned())
         .collect::<Vec<PendingOutput>>();
 
     debug!(
         target: LOG_MODULE_WALLETV2,
         block_count = status.block_count,
-        window = status.block_count.saturating_sub(start),
+        mempool_visibility,
+        mempool_txs_num = cache.mempool.len(),
         pending_outputs_num = outputs.len(),
         "Scanned for pending receives"
     );
@@ -237,6 +322,7 @@ async fn scan_pending_receives(
     Ok(PendingOutputs {
         block_count: status.block_count,
         outputs,
+        mempool_visibility,
     })
 }
 
@@ -1079,11 +1165,9 @@ impl Wallet {
         task_group: &TaskGroup,
     ) {
         task_group.spawn_cancellable("scan_pending_receives", async move {
-            // Filtered outputs of every block in the pending window, keyed by
-            // height. Re-fetching a block is only necessary when the hash at a
-            // height changes, which is also how a reorg within the window
-            // repairs itself.
-            let mut cache: BlockCache = BTreeMap::new();
+            // Carried across scans so that each one only fetches blocks and
+            // mempool transactions it has not already seen.
+            let mut cache = PendingCache::default();
 
             // Follow the monitor's own refresh cadence rather than an
             // independent timer, so we never scan a chain tip that is already

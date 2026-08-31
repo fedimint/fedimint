@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bitcoin::{Block, BlockHash, Transaction};
+use bitcoin::{Block, BlockHash, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::time::now;
 use fedimint_core::util::{FmtCompactResultAnyhow as _, SafeUrl};
@@ -113,6 +113,22 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
             self,
             "get_sync_progress",
             self.inner.get_sync_progress().await
+        )
+    }
+
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        tracked_call!(
+            self,
+            "get_mempool_txids",
+            self.inner.get_mempool_txids().await
+        )
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        tracked_call!(
+            self,
+            "get_mempool_tx",
+            self.inner.get_mempool_tx(txid).await
         )
     }
 
