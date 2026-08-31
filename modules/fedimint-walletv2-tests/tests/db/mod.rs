@@ -15,7 +15,8 @@ use fedimint_testing::db::{
 };
 use fedimint_walletv2_client::WalletClientModule;
 use fedimint_walletv2_client::db::{
-    self, NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
+    self, NextOutputIndexKey, PendingReceivePrefix, ReceiveOperationPrefix, ValidAddressIndexKey,
+    ValidAddressIndexPrefix,
 };
 use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
 use fedimint_walletv2_server::db::{
@@ -449,6 +450,34 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                             indices == vec![0, 1],
                             "both seeded valid address indices must round-trip unchanged, \
                              got {indices:?}"
+                        );
+                    }
+                    // Both tables below track peg-in progress and are
+                    // rebuilt at runtime, so a migrated database must not
+                    // carry any entries over.
+                    db::DbKeyPrefix::PendingReceive => {
+                        let pending = dbtx
+                            .find_by_prefix(&PendingReceivePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            pending.is_empty(),
+                            "no pending receives must be present, got {pending:?}"
+                        );
+                    }
+                    db::DbKeyPrefix::ReceiveOperation => {
+                        let operations = dbtx
+                            .find_by_prefix(&ReceiveOperationPrefix)
+                            .await
+                            .map(|(key, _)| key.0)
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            operations.is_empty(),
+                            "no receive operations must be present, got {operations:?}"
                         );
                     }
                 }

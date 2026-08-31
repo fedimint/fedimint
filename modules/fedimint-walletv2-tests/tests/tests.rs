@@ -23,7 +23,7 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
+    FinalSendOperationState, ReceiveProgress, SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -155,6 +155,99 @@ async fn await_federation_total_value(
 
         sleep_in_test(
             format!("Waiting for federation total value of {current_value} to reach {min_value}"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
+/// A peg-in should report confirmation progress while it waits out the
+/// finality delay, rather than leaving the user with no feedback at all
+/// between broadcasting and the ecash being issued.
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    let module = client.get_first_module::<WalletClientModule>()?;
+    let address = module.receive().await;
+
+    assert_eq!(
+        module.receive_progress(&address).await?,
+        ReceiveProgress::AwaitingTransaction,
+        "An address with nothing sent to it is not awaiting confirmations"
+    );
+
+    bitcoin
+        .send_and_mine_block(&address, Amount::from_int_btc(1))
+        .await;
+
+    // The deposit is now mined but still short of the finality delay, so the
+    // federation has not recorded it and only the advisory view can see it.
+    let confirmations = await_receive_confirmations(&client, &address, 1).await?;
+
+    assert_eq!(
+        confirmations,
+        CONFIRMATION_FINALITY_DELAY + 1,
+        "Progress should count up to the depth at which the federation claims"
+    );
+
+    info!("Mine the deposit to finality and confirm the claim takes over...");
+
+    await_finality_delay(&client, &bitcoin).await?;
+
+    let mut progress = pin!(module.subscribe_receive_progress(&address).await?);
+
+    loop {
+        match progress.next().await {
+            Some(ReceiveProgress::Claimed) => break,
+            Some(state) => info!("Receive progress: {state:?}"),
+            None => panic!("Progress stream ended before the peg-in was claimed"),
+        }
+    }
+
+    Ok(())
+}
+
+/// Polls receive progress until the peg-in is at least `min` confirmations
+/// deep, returning the `required` depth it is counting towards.
+///
+/// Asserts along the way that a mined-but-not-final peg-in is never reported as
+/// claimable, and that its reported value matches what was sent.
+async fn await_receive_confirmations(
+    client: &ClientHandleArc,
+    address: &bitcoin::Address,
+    min: u64,
+) -> anyhow::Result<u64> {
+    loop {
+        let progress = client
+            .get_first_module::<WalletClientModule>()?
+            .receive_progress(address)
+            .await?;
+
+        match progress {
+            ReceiveProgress::Confirming {
+                value,
+                confirmations,
+                required,
+                ..
+            } => {
+                assert_eq!(value, Amount::from_int_btc(1));
+
+                if confirmations >= min {
+                    return Ok(required);
+                }
+            }
+            ReceiveProgress::AwaitingTransaction => {}
+            state => panic!("Peg-in reached {state:?} before the finality delay elapsed"),
+        }
+
+        sleep_in_test(
+            format!("Waiting for the peg-in to reach {min} confirmations"),
             Duration::from_secs(1),
         )
         .await;
