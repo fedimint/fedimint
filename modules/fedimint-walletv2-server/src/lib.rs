@@ -64,17 +64,20 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 pub use fedimint_walletv2_common as common;
+/// Re-exported for existing callers; the constant lives in the common crate so
+/// that the client can render peg-in confirmation progress against it.
+pub use fedimint_walletv2_common::CONFIRMATION_FINALITY_DELAY;
 use fedimint_walletv2_common::config::{
     FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{
-    FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    FederationWallet, MODULE_CONSENSUS_VERSION, PendingOutput, PendingOutputs, TxInfo,
+    WalletInputError, WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -83,6 +86,7 @@ use secp256k1::ecdsa::Signature;
 use secp256k1::{PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
+use tokio::sync::watch;
 use tracing::{debug, info};
 
 use crate::db::{
@@ -93,11 +97,6 @@ use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
-
-/// Number of confirmations required for a transaction to be considered as
-/// final by the federation. The block that mines the transaction does
-/// not count towards the number of confirmations.
-pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 
 /// Maximum number of blocks the consensus block count can advance in a single
 /// consensus item to limit the work done in one `process_consensus_item` step.
@@ -110,6 +109,17 @@ const TEST_MAX_BLOCK_COUNT_INCREMENT: u64 = 100;
 /// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
 /// below what Bitcoin Core will relay.
 const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
+
+/// Number of blocks below the local chain tip that the pending receive scanner
+/// reports on.
+///
+/// Only the first [`CONFIRMATION_FINALITY_DELAY`] blocks of this window are
+/// strictly necessary, since deeper outputs are already in the consensus output
+/// log. The window deliberately extends past that so a peg-in keeps being
+/// reported for a while after it becomes final: a client needs a moment to
+/// notice the consensus entry and start its claim, and without the overlap its
+/// progress display would briefly fall back to reporting nothing at all.
+const MAX_PENDING_DEPTH: u64 = 2 * CONFIRMATION_FINALITY_DELAY;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
@@ -141,6 +151,93 @@ async fn pending_txs_unordered(dbtx: &mut DatabaseTransaction<'_>) -> Vec<Federa
         .await;
 
     unsigned.into_iter().chain(unconfirmed).collect()
+}
+
+/// Filtered receive outputs of the blocks in the pending window, keyed by
+/// height and tagged with the hash they were derived from.
+type BlockCache = BTreeMap<u64, (bitcoin::BlockHash, Vec<PendingOutput>)>;
+
+/// Collects the receive outputs of the most recently mined blocks.
+///
+/// Scans the last [`MAX_PENDING_DEPTH`] blocks below the guardian's local chain
+/// tip. The window is relative to the tip rather than to the consensus block
+/// count, so the work stays bounded even if the federation's consensus block
+/// count is lagging badly, and so a peg-in keeps being reported for a while
+/// after it becomes final.
+///
+/// Blocks are only fetched when the hash at a height is absent from `cache` or
+/// differs from the cached one, which keeps the steady state cost at one block
+/// fetch per new block and makes reorgs within the window self-repairing.
+async fn scan_pending_receives(
+    btc_rpc: &ServerBitcoinRpcMonitor,
+    pks_hash: &sha256::Hash,
+    cache: &mut BlockCache,
+) -> anyhow::Result<PendingOutputs> {
+    let status = btc_rpc
+        .status()
+        .context("Bitcoin backend is not connected")?;
+
+    let start = status.block_count.saturating_sub(MAX_PENDING_DEPTH);
+
+    // Drop the blocks that have fallen out of the window as the chain advanced.
+    cache.retain(|height, _| (start..status.block_count).contains(height));
+
+    for height in start..status.block_count {
+        let block_hash = btc_rpc.get_block_hash(height).await?;
+
+        if cache
+            .get(&height)
+            .is_some_and(|(cached_hash, _)| *cached_hash == block_hash)
+        {
+            continue;
+        }
+
+        let block = btc_rpc.get_block(&block_hash).await?;
+
+        let outputs = block
+            .txdata
+            .iter()
+            .flat_map(|tx| {
+                let txid = tx.compute_txid();
+
+                tx.output
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, tx_out)| is_potential_receive(&tx_out.script_pubkey, pks_hash))
+                    .map(move |(vout, tx_out)| PendingOutput {
+                        script: tx_out.script_pubkey.clone(),
+                        outpoint: bitcoin::OutPoint {
+                            txid,
+                            vout: u32::try_from(vout)
+                                .expect("Bitcoin transaction has more than u32::MAX outputs"),
+                        },
+                        value: tx_out.value,
+                        height,
+                    })
+                    .collect::<Vec<PendingOutput>>()
+            })
+            .collect::<Vec<PendingOutput>>();
+
+        cache.insert(height, (block_hash, outputs));
+    }
+
+    let outputs = cache
+        .values()
+        .flat_map(|(_, outputs)| outputs.iter().cloned())
+        .collect::<Vec<PendingOutput>>();
+
+    debug!(
+        target: LOG_MODULE_WALLETV2,
+        block_count = status.block_count,
+        window = status.block_count.saturating_sub(start),
+        pending_outputs_num = outputs.len(),
+        "Scanned for pending receives"
+    );
+
+    Ok(PendingOutputs {
+        block_count: status.block_count,
+        outputs,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -905,11 +1002,21 @@ impl ServerModule for Wallet {
                     Ok(module.tx_chain(&mut dbtx).await)
                 }
             },
+            public_api_endpoint! {
+                PENDING_OUTPUTS_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, _context, _params: ()| -> PendingOutputs {
+                    // Deliberately reads local, non-consensus state rather than
+                    // the database. Clients must not request this via threshold
+                    // consensus; see the client side api for details.
+                    Ok(module.pending_outputs.borrow().clone())
+                }
+            },
         ]
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion::new(0, 1)])
+        MultiApiVersion::try_from_iter([ApiVersion::new(0, 2)])
             .expect("walletv2 declares one API version per major version")
     }
 }
@@ -919,6 +1026,15 @@ pub struct Wallet {
     cfg: WalletConfig,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
+    /// Local, non-consensus view of receive outputs that have been mined but
+    /// are not yet deep enough to enter the consensus output log.
+    ///
+    /// Maintained by the `scan_pending_receives` background task and read by
+    /// the pending outputs endpoint. This is intentionally in-memory only: it
+    /// is per-guardian divergent data that has no business in the consensus
+    /// database, and it is cheap to rebuild from a handful of blocks on
+    /// restart.
+    pending_outputs: watch::Receiver<PendingOutputs>,
 }
 
 impl Wallet {
@@ -930,11 +1046,74 @@ impl Wallet {
     ) -> Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
+        let (pending_sender, pending_outputs) = watch::channel(PendingOutputs::default());
+
+        Self::spawn_pending_receive_scanner(
+            btc_rpc.clone(),
+            cfg.consensus.bitcoin_pks.consensus_hash(),
+            pending_sender,
+            task_group,
+        );
+
         Wallet {
             cfg,
             btc_rpc,
             db: db.clone(),
+            pending_outputs,
         }
+    }
+
+    /// Maintains [`Wallet::pending_outputs`] by scanning the blocks just below
+    /// the guardian's local chain tip.
+    ///
+    /// This deliberately runs outside of consensus. Most of this window sits
+    /// above the consensus block count precisely because the federation does
+    /// not consider those blocks final yet, and each guardian sees a slightly
+    /// different tip, so nothing derived here may ever influence consensus
+    /// state. It exists only so clients can render peg-in progress rather than
+    /// showing nothing for the hour it takes a deposit to become claimable.
+    fn spawn_pending_receive_scanner(
+        btc_rpc: ServerBitcoinRpcMonitor,
+        pks_hash: sha256::Hash,
+        sender: watch::Sender<PendingOutputs>,
+        task_group: &TaskGroup,
+    ) {
+        task_group.spawn_cancellable("scan_pending_receives", async move {
+            // Filtered outputs of every block in the pending window, keyed by
+            // height. Re-fetching a block is only necessary when the hash at a
+            // height changes, which is also how a reorg within the window
+            // repairs itself.
+            let mut cache: BlockCache = BTreeMap::new();
+
+            // Follow the monitor's own refresh cadence rather than an
+            // independent timer, so we never scan a chain tip that is already
+            // stale by up to a full update interval.
+            let mut status = btc_rpc.subscribe_status();
+
+            loop {
+                match scan_pending_receives(&btc_rpc, &pks_hash, &mut cache).await {
+                    Ok(pending) => {
+                        sender.send_replace(pending);
+                    }
+                    Err(err) => {
+                        // This view is advisory, so a guardian that cannot
+                        // reach its bitcoin backend degrades to reporting
+                        // nothing pending rather than failing.
+                        debug!(
+                            target: LOG_MODULE_WALLETV2,
+                            err = %err.fmt_compact_anyhow(),
+                            "Error scanning for pending receives"
+                        );
+
+                        sender.send_replace(PendingOutputs::default());
+                    }
+                }
+
+                if status.changed().await.is_err() {
+                    break;
+                }
+            }
+        });
     }
 
     fn spawn_broadcast_unconfirmed_txs_task(

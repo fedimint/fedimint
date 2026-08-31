@@ -31,6 +31,11 @@ pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
 
+/// Number of confirmations required for a transaction to be considered as
+/// final by the federation. The block that mines the transaction does
+/// not count towards the number of confirmations.
+pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
+
 /// Returns a sleep duration of 1 second in test environments or 60 seconds in
 /// production. Used for polling intervals where faster feedback is needed
 /// during testing.
@@ -102,6 +107,43 @@ pub struct OutputInfo {
     pub value: bitcoin::Amount,
     pub spent: bool,
     pub outpoint: Option<bitcoin::OutPoint>,
+}
+
+/// An output passing the probabilistic receive filter that has been mined, but
+/// is not yet deep enough to have entered the federation's consensus output
+/// log.
+///
+/// This is advisory, non-consensus data: it is derived from a single guardian's
+/// local view of the chain tip and may be revoked by a reorg. It exists purely
+/// so a client can show a peg-in's confirmation progress instead of nothing at
+/// all while it waits out the module's confirmation finality delay.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingOutput {
+    pub script: ScriptBuf,
+    pub outpoint: bitcoin::OutPoint,
+    pub value: bitcoin::Amount,
+    /// Height of the block that mined this output.
+    pub height: u64,
+}
+
+/// A guardian's local view of the mined-but-not-yet-final receive outputs,
+/// together with the block count that view was derived from.
+///
+/// The block count is returned alongside the outputs so that a client computes
+/// confirmations against a single consistent view rather than mixing a height
+/// from one guardian with a chain tip from another.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingOutputs {
+    /// The responding guardian's local block count, or `0` if its bitcoin
+    /// backend is unavailable.
+    ///
+    /// An output's confirmations are `block_count - height`, which counts the
+    /// block that mined it as the first confirmation. Note this is offset by
+    /// one from [`CONFIRMATION_FINALITY_DELAY`], which does not count the
+    /// mining block, so a peg-in becomes claimable at
+    /// `CONFIRMATION_FINALITY_DELAY + 1` confirmations.
+    pub block_count: u64,
+    pub outputs: Vec<PendingOutput>,
 }
 
 #[derive(Debug)]

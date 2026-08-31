@@ -10,10 +10,12 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
-use fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
+use fedimint_walletv2_common::{
+    FederationWallet, OutputInfo, PendingOutput, PendingOutputs, TxInfo,
+};
 
 /// Renders each peer's fee answer so a divergence error names the odd one out.
 fn describe_fee_quotes(quotes: &BTreeMap<PeerId, Option<bitcoin::Amount>>) -> String {
@@ -50,6 +52,16 @@ pub trait WalletFederationApi {
     ) -> FederationResult<Vec<OutputInfo>>;
 
     async fn tx_id(&self, outpoint: OutPoint) -> Option<bitcoin::Txid>;
+
+    /// Fetches the guardians' local views of mined but not yet final receive
+    /// outputs, merged into a single view.
+    ///
+    /// This is advisory data used to display peg-in progress. It is
+    /// deliberately not requested via threshold consensus: guardians observe
+    /// the chain tip independently and will legitimately disagree by a block,
+    /// so a consensus request would simply never resolve. Peers that error,
+    /// including guardians too old to know the endpoint, are skipped.
+    async fn pending_outputs(&self) -> PendingOutputs;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -180,5 +192,46 @@ where
             ApiRequestErased::new(outpoint),
         )
         .await
+    }
+
+    async fn pending_outputs(&self) -> PendingOutputs {
+        let responses = futures::future::join_all(self.all_peers().iter().map(|peer| async move {
+            self.request_single_peer::<PendingOutputs>(
+                PENDING_OUTPUTS_ENDPOINT.to_string(),
+                ApiRequestErased::new(()),
+                *peer,
+            )
+            .await
+        }))
+        .await;
+
+        let mut block_count = 0;
+        let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
+
+        for response in responses.into_iter().flatten() {
+            // Take the highest tip any guardian reports so that a peer lagging
+            // by a block does not walk back a confirmation count we already
+            // showed the user.
+            block_count = block_count.max(response.block_count);
+
+            for output in response.outputs {
+                // Guardians can disagree on the height of an outpoint across a
+                // reorg. Keep the deepest height, which yields the lower
+                // confirmation count, so progress is never overstated.
+                outputs
+                    .entry(output.outpoint)
+                    .and_modify(|existing| {
+                        if output.height > existing.height {
+                            existing.height = output.height;
+                        }
+                    })
+                    .or_insert(output);
+            }
+        }
+
+        PendingOutputs {
+            block_count,
+            outputs: outputs.into_values().collect(),
+        }
     }
 }
