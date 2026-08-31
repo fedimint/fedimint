@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use anyhow::Context;
-use bitcoin::{BlockHash, Transaction};
+use bitcoin::{BlockHash, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{ChainId, Feerate};
@@ -93,6 +93,20 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
+        Ok(None)
+    }
+
+    /// Esplora has no API for reading the mempool as a whole.
+    ///
+    /// It exposes the full list of mempool txids, but nothing that returns
+    /// their outputs in bulk, so filtering the mempool by script would take one
+    /// request per transaction on every scan. Its other mempool endpoints are
+    /// per-address, which is of no use to a guardian that deliberately does not
+    /// know which addresses belong to which client.
+    ///
+    /// Reporting no visibility is the honest answer; callers degrade to
+    /// confirmation-only progress.
+    async fn get_mempool_txids(&self) -> anyhow::Result<Option<Vec<Txid>>> {
         Ok(None)
     }
 
