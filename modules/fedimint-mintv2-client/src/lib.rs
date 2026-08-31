@@ -745,6 +745,16 @@ impl MintClientModule {
         ClientInputBundle::new(inputs, input_sms)
     }
 
+    /// Build the blinded outputs and their output state machines for a
+    /// reissue transaction.
+    ///
+    /// # Cancel safety
+    ///
+    /// Cancel safe: this only reads pre-ground blinding tweaks from an
+    /// in-memory channel and constructs values, it performs no database
+    /// writes. Dropping the future merely discards the tweaks it had taken,
+    /// which are random (so nothing is lost) and replenished by the
+    /// background grinder task.
     async fn create_output_bundle(
         &self,
         operation_id: OperationId,
@@ -781,6 +791,15 @@ impl MintClientModule {
         ClientOutputBundle::new(outputs, output_sms)
     }
 
+    /// Wait for the output state machine of the given outpoint to reach a
+    /// terminal state.
+    ///
+    /// # Cancel safety
+    ///
+    /// Cancel safe: this only subscribes to the operation's state
+    /// notifications and waits, it performs no database writes. Dropping the
+    /// future stops the wait; the underlying state machine keeps running in
+    /// the executor.
     async fn await_output_sm_success(
         &self,
         operation_id: OperationId,
@@ -841,14 +860,26 @@ impl MintClientModule {
     /// smallest denomination used throughout the client. If the rounded
     /// amount cannot be covered with the ecash notes in the client's
     /// database the client will create a transaction to reissue the
-    /// required denominations. It is safe to cancel the send method call
-    /// before the reissue is complete in which case the reissued notes are
-    /// returned to the regular balance. To cancel a successful ecash send
-    /// simply receive it yourself.
+    /// required denominations. To cancel a successful ecash send simply
+    /// receive it yourself.
     ///
     /// If `include_invite` is set, the federation's invite code is embedded in
     /// the returned ecash so a recipient that has not joined the federation can
     /// do so directly from the received ecash.
+    ///
+    /// # Cancel safety
+    ///
+    /// This method is cancel safe. Every database mutation it makes happens
+    /// inside a single
+    /// [`autocommit`](fedimint_core::db::Database::autocommit) transaction
+    /// (spending the notes for the fast path, and creating the change-making
+    /// reissue transaction otherwise), so dropping the future either commits
+    /// a unit of work in full or leaves the database untouched: notes are
+    /// never removed without a persisted operation that produces the ecash or
+    /// returns the change. Federation submission is driven by a state machine
+    /// in the executor rather than awaited here, so a cancelled call cannot
+    /// abort an in-flight reissue; if change-making had already been
+    /// submitted it completes on its own and the notes return to the balance.
     pub async fn send(
         &self,
         amount: Amount,
@@ -915,6 +946,16 @@ impl MintClientModule {
         Box::pin(self.send(amount, custom_meta, include_invite)).await
     }
 
+    /// Fast path for [`Self::send`]: if exact change is already held, spend
+    /// those notes and record the send operation. Returns `None` when exact
+    /// change is not available, leaving the caller to make change.
+    ///
+    /// # Cancel safety
+    ///
+    /// All writes go to the passed `dbtx`, so this inherits the cancel safety
+    /// of that transaction: it must be run inside an `autocommit` (as `send`
+    /// does) for the note spend and the operation log entry to commit or roll
+    /// back together.
     async fn send_ecash_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
