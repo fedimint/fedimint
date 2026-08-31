@@ -128,6 +128,20 @@ impl ServerBitcoinRpcMonitor {
         self.status_receiver.borrow().clone()
     }
 
+    /// Returns a receiver that can be awaited to be notified whenever the
+    /// status is refreshed.
+    ///
+    /// This lets a consumer react to the monitor's own polling cadence instead
+    /// of running an independent timer, which would otherwise read a status
+    /// that is already up to one update interval stale before sleeping again.
+    ///
+    /// Note the monitor republishes on every update interval regardless of
+    /// whether the status actually changed, so the receiver fires once per
+    /// interval rather than only on a real change.
+    pub fn subscribe_status(&self) -> watch::Receiver<Option<ServerBitcoinRpcStatus>> {
+        self.status_receiver.clone()
+    }
+
     pub async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
         ensure!(
             self.status_receiver.borrow().is_some(),
