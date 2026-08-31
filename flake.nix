@@ -17,6 +17,11 @@
       inputs.nixpkgs.follows = "nixpkgs-unstable";
       inputs.fenix.follows = "fenix";
     };
+    linked-specs-skills = {
+      url = "git+https://radicle.dpc.pw/z2HR882B4c4mTdAgdt4SozpdeTuMf.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flakebox.follows = "flakebox";
+    };
     wild = {
       url = "github:davidlattimore/wild/0.9.0";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
@@ -41,6 +46,7 @@
       nixpkgs-unstable,
       flake-utils,
       flakebox,
+      linked-specs-skills,
       cargo-deluxe,
       advisory-db,
       bundlers,
@@ -107,6 +113,48 @@
         stdenv = pkgs.stdenv;
 
         cargoCrap = flakebox.packages.${system}.cargo-crap;
+
+        projectSkillNames = [
+          "linked-specs"
+          "linked-specs-updating"
+          "linked-specs-review"
+        ];
+
+        linkProjectSkills = pkgs.writeShellScriptBin "link-project-skills" ''
+          set -eu
+
+          root=$1
+          skills_dir="$root/.agents/skills"
+          source_dir="${linked-specs-skills.packages.${system}.skills}/share/agents/skills"
+          ${pkgs.coreutils}/bin/mkdir -p "$skills_dir"
+
+          for name in ${pkgs.lib.escapeShellArgs projectSkillNames}; do
+            target="$skills_dir/$name"
+            if [ -e "$target" ] && [ ! -L "$target" ]; then
+              printf 'refusing to replace non-symlink: %s\n' "$target" >&2
+              exit 1
+            fi
+
+            tmp="$(${pkgs.coreutils}/bin/mktemp "$skills_dir/.link-project-skill.XXXXXX")"
+            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT HUP INT TERM
+            ${pkgs.coreutils}/bin/rm -f "$tmp"
+            ${pkgs.coreutils}/bin/ln -s "$source_dir/$name" "$tmp"
+            ${pkgs.coreutils}/bin/mv -Tf "$tmp" "$target"
+            trap - EXIT HUP INT TERM
+          done
+
+          if exclude_file="$(${pkgs.git}/bin/git -C "$root" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null)"; then
+            ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$exclude_file")"
+            ${pkgs.coreutils}/bin/touch "$exclude_file"
+
+            for name in ${pkgs.lib.escapeShellArgs projectSkillNames}; do
+              pattern="/.agents/skills/$name"
+              if ! ${pkgs.gnugrep}/bin/grep -Fxq "$pattern" "$exclude_file"; then
+                printf '%s\n' "$pattern" >>"$exclude_file"
+              fi
+            done
+          fi
+        '';
 
         flakeboxLib = flakebox.lib.mkLib pkgs {
           # customizations will go here in the future
@@ -365,6 +413,8 @@
                 shellHook = ''
                   export REPO_ROOT="$(git rev-parse --show-toplevel)"
                   export PATH="$REPO_ROOT/bin:$PATH"
+
+                  ${linkProjectSkills}/bin/link-project-skills "$REPO_ROOT" || exit $?
 
                   # workaround https://github.com/rust-lang/cargo/issues/11020
                   cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
