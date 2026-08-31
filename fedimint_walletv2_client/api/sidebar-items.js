@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["WalletFederationApi"]};
+window.SIDEBAR_ITEMS = {"fn":["describe_fee_quotes"],"trait":["WalletFederationApi"]};

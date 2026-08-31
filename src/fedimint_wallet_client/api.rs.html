@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>fedimint_api_client::api::{
 <a href=#4 id=4 data-nosnippet>4</a>    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerResult,
 <a href=#5 id=5 data-nosnippet>5</a>};
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -132,68 +132,103 @@
 <a href=#132 id=132 data-nosnippet>132</a>        address: <span class="kw-2">&amp;</span>Address,
 <a href=#133 id=133 data-nosnippet>133</a>        amount: Amount,
 <a href=#134 id=134 data-nosnippet>134</a>    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-<a href=#135 id=135 data-nosnippet>135</a>        <span class="self">self</span>.request_current_consensus(
-<a href=#136 id=136 data-nosnippet>136</a>            PEG_OUT_FEES_ENDPOINT.to_string(),
-<a href=#137 id=137 data-nosnippet>137</a>            ApiRequestErased::new((address, amount.to_sat())),
-<a href=#138 id=138 data-nosnippet>138</a>        )
-<a href=#139 id=139 data-nosnippet>139</a>        .<span class="kw">await
-<a href=#140 id=140 data-nosnippet>140</a>    </span>}
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">async fn </span>fetch_bitcoin_rpc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; FederationResult&lt;String&gt; {
-<a href=#143 id=143 data-nosnippet>143</a>        <span class="self">self</span>.request_single_peer_federation(
-<a href=#144 id=144 data-nosnippet>144</a>            BITCOIN_KIND_ENDPOINT.to_string(),
-<a href=#145 id=145 data-nosnippet>145</a>            ApiRequestErased::default(),
-<a href=#146 id=146 data-nosnippet>146</a>            peer_id,
-<a href=#147 id=147 data-nosnippet>147</a>        )
-<a href=#148 id=148 data-nosnippet>148</a>        .<span class="kw">await
-<a href=#149 id=149 data-nosnippet>149</a>    </span>}
-<a href=#150 id=150 data-nosnippet>150</a>
-<a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">async fn </span>fetch_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;BitcoinRpcConfig&gt; {
-<a href=#152 id=152 data-nosnippet>152</a>        <span class="self">self</span>.request_admin(
-<a href=#153 id=153 data-nosnippet>153</a>            BITCOIN_RPC_CONFIG_ENDPOINT,
-<a href=#154 id=154 data-nosnippet>154</a>            ApiRequestErased::default(),
-<a href=#155 id=155 data-nosnippet>155</a>            auth,
-<a href=#156 id=156 data-nosnippet>156</a>        )
-<a href=#157 id=157 data-nosnippet>157</a>        .<span class="kw">await
-<a href=#158 id=158 data-nosnippet>158</a>    </span>}
-<a href=#159 id=159 data-nosnippet>159</a>
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt; {
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="self">self</span>.request_current_consensus(
-<a href=#162 id=162 data-nosnippet>162</a>            WALLET_SUMMARY_ENDPOINT.to_string(),
-<a href=#163 id=163 data-nosnippet>163</a>            ApiRequestErased::default(),
-<a href=#164 id=164 data-nosnippet>164</a>        )
-<a href=#165 id=165 data-nosnippet>165</a>        .<span class="kw">await
-<a href=#166 id=166 data-nosnippet>166</a>    </span>}
-<a href=#167 id=167 data-nosnippet>167</a>
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">async fn </span>activate_consensus_version_voting(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
-<a href=#169 id=169 data-nosnippet>169</a>        <span class="self">self</span>.request_admin(
-<a href=#170 id=170 data-nosnippet>170</a>            ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
-<a href=#171 id=171 data-nosnippet>171</a>            ApiRequestErased::default(),
-<a href=#172 id=172 data-nosnippet>172</a>            auth,
-<a href=#173 id=173 data-nosnippet>173</a>        )
-<a href=#174 id=174 data-nosnippet>174</a>        .<span class="kw">await
-<a href=#175 id=175 data-nosnippet>175</a>    </span>}
+<a href=#135 id=135 data-nosnippet>135</a>        <span class="kw">let </span>params = ApiRequestErased::new((address, amount.to_sat()));
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="comment">// Deliberately not `request_current_consensus`. The quote is a pure
+<a href=#138 id=138 data-nosnippet>138</a>        // function of the ordered consensus log, so peers in sync always agree;
+<a href=#139 id=139 data-nosnippet>139</a>        // one that has fallen behind never converges, and `ThresholdConsensus`
+<a href=#140 id=140 data-nosnippet>140</a>        // would re-request it forever while logging nothing at all.
+<a href=#141 id=141 data-nosnippet>141</a>        </span><span class="kw">let </span>quotes = <span class="kw">match </span><span class="self">self
+<a href=#142 id=142 data-nosnippet>142</a>            </span>.request_with_strategy(
+<a href=#143 id=143 data-nosnippet>143</a>                ThresholdAgreement::new(<span class="self">self</span>.all_peers().to_num_peers()),
+<a href=#144 id=144 data-nosnippet>144</a>                PEG_OUT_FEES_ENDPOINT.to_string(),
+<a href=#145 id=145 data-nosnippet>145</a>                params.clone(),
+<a href=#146 id=146 data-nosnippet>146</a>            )
+<a href=#147 id=147 data-nosnippet>147</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#148 id=148 data-nosnippet>148</a>        </span>{
+<a href=#149 id=149 data-nosnippet>149</a>            <span class="prelude-val">Ok</span>(fees) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(fees),
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="prelude-val">Err</span>(quotes) =&gt; quotes,
+<a href=#151 id=151 data-nosnippet>151</a>        };
+<a href=#152 id=152 data-nosnippet>152</a>
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">let </span>detail = quotes
+<a href=#154 id=154 data-nosnippet>154</a>            .iter()
+<a href=#155 id=155 data-nosnippet>155</a>            .map(|(peer, quote)| <span class="kw">match </span>quote {
+<a href=#156 id=156 data-nosnippet>156</a>                <span class="prelude-val">Some</span>(fees) =&gt; <span class="macro">format!</span>(
+<a href=#157 id=157 data-nosnippet>157</a>                    <span class="string">"peer {peer}: {} sats/kvb, weight {}"</span>,
+<a href=#158 id=158 data-nosnippet>158</a>                    fees.fee_rate.sats_per_kvb, fees.total_weight
+<a href=#159 id=159 data-nosnippet>159</a>                ),
+<a href=#160 id=160 data-nosnippet>160</a>                <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"peer {peer}: no quote"</span>),
+<a href=#161 id=161 data-nosnippet>161</a>            })
+<a href=#162 id=162 data-nosnippet>162</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#163 id=163 data-nosnippet>163</a>            .join(<span class="string">"; "</span>);
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="prelude-val">Err</span>(FederationError::general(
+<a href=#166 id=166 data-nosnippet>166</a>            PEG_OUT_FEES_ENDPOINT.to_string(),
+<a href=#167 id=167 data-nosnippet>167</a>            params,
+<a href=#168 id=168 data-nosnippet>168</a>            <span class="macro">anyhow!</span>(
+<a href=#169 id=169 data-nosnippet>169</a>                <span class="string">"Guardians disagree on peg-out fees ({detail}). The quote is consensus \
+<a href=#170 id=170 data-nosnippet>170</a>                 state, so a guardian returning a different value has diverged - most \
+<a href=#171 id=171 data-nosnippet>171</a>                 often because its Bitcoin backend is lagging. The same rate validates \
+<a href=#172 id=172 data-nosnippet>172</a>                 the peg-out, so it cannot be accepted until the federation agrees."
+<a href=#173 id=173 data-nosnippet>173</a>            </span>),
+<a href=#174 id=174 data-nosnippet>174</a>        ))
+<a href=#175 id=175 data-nosnippet>175</a>    }
 <a href=#176 id=176 data-nosnippet>176</a>
-<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">async fn </span>fetch_recovery_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
-<a href=#178 id=178 data-nosnippet>178</a>        <span class="self">self</span>.request_current_consensus::&lt;u64&gt;(
-<a href=#179 id=179 data-nosnippet>179</a>            RECOVERY_COUNT_ENDPOINT.to_string(),
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">async fn </span>fetch_bitcoin_rpc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; FederationResult&lt;String&gt; {
+<a href=#178 id=178 data-nosnippet>178</a>        <span class="self">self</span>.request_single_peer_federation(
+<a href=#179 id=179 data-nosnippet>179</a>            BITCOIN_KIND_ENDPOINT.to_string(),
 <a href=#180 id=180 data-nosnippet>180</a>            ApiRequestErased::default(),
-<a href=#181 id=181 data-nosnippet>181</a>        )
-<a href=#182 id=182 data-nosnippet>182</a>        .<span class="kw">await
-<a href=#183 id=183 data-nosnippet>183</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))
-<a href=#184 id=184 data-nosnippet>184</a>    }
+<a href=#181 id=181 data-nosnippet>181</a>            peer_id,
+<a href=#182 id=182 data-nosnippet>182</a>        )
+<a href=#183 id=183 data-nosnippet>183</a>        .<span class="kw">await
+<a href=#184 id=184 data-nosnippet>184</a>    </span>}
 <a href=#185 id=185 data-nosnippet>185</a>
-<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">async fn </span>fetch_recovery_slice(
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#188 id=188 data-nosnippet>188</a>        start: u64,
-<a href=#189 id=189 data-nosnippet>189</a>        end: u64,
-<a href=#190 id=190 data-nosnippet>190</a>    ) -&gt; anyhow::Result&lt;Vec&lt;RecoveryItem&gt;&gt; {
-<a href=#191 id=191 data-nosnippet>191</a>        <span class="self">self</span>.request_current_consensus::&lt;Vec&lt;RecoveryItem&gt;&gt;(
-<a href=#192 id=192 data-nosnippet>192</a>            RECOVERY_SLICE_ENDPOINT.to_string(),
-<a href=#193 id=193 data-nosnippet>193</a>            ApiRequestErased::new((start, end)),
-<a href=#194 id=194 data-nosnippet>194</a>        )
-<a href=#195 id=195 data-nosnippet>195</a>        .<span class="kw">await
-<a href=#196 id=196 data-nosnippet>196</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))
-<a href=#197 id=197 data-nosnippet>197</a>    }
-<a href=#198 id=198 data-nosnippet>198</a>}
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">async fn </span>fetch_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;BitcoinRpcConfig&gt; {
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="self">self</span>.request_admin(
+<a href=#188 id=188 data-nosnippet>188</a>            BITCOIN_RPC_CONFIG_ENDPOINT,
+<a href=#189 id=189 data-nosnippet>189</a>            ApiRequestErased::default(),
+<a href=#190 id=190 data-nosnippet>190</a>            auth,
+<a href=#191 id=191 data-nosnippet>191</a>        )
+<a href=#192 id=192 data-nosnippet>192</a>        .<span class="kw">await
+<a href=#193 id=193 data-nosnippet>193</a>    </span>}
+<a href=#194 id=194 data-nosnippet>194</a>
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt; {
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="self">self</span>.request_current_consensus(
+<a href=#197 id=197 data-nosnippet>197</a>            WALLET_SUMMARY_ENDPOINT.to_string(),
+<a href=#198 id=198 data-nosnippet>198</a>            ApiRequestErased::default(),
+<a href=#199 id=199 data-nosnippet>199</a>        )
+<a href=#200 id=200 data-nosnippet>200</a>        .<span class="kw">await
+<a href=#201 id=201 data-nosnippet>201</a>    </span>}
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">async fn </span>activate_consensus_version_voting(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="self">self</span>.request_admin(
+<a href=#205 id=205 data-nosnippet>205</a>            ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+<a href=#206 id=206 data-nosnippet>206</a>            ApiRequestErased::default(),
+<a href=#207 id=207 data-nosnippet>207</a>            auth,
+<a href=#208 id=208 data-nosnippet>208</a>        )
+<a href=#209 id=209 data-nosnippet>209</a>        .<span class="kw">await
+<a href=#210 id=210 data-nosnippet>210</a>    </span>}
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="kw">async fn </span>fetch_recovery_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="self">self</span>.request_current_consensus::&lt;u64&gt;(
+<a href=#214 id=214 data-nosnippet>214</a>            RECOVERY_COUNT_ENDPOINT.to_string(),
+<a href=#215 id=215 data-nosnippet>215</a>            ApiRequestErased::default(),
+<a href=#216 id=216 data-nosnippet>216</a>        )
+<a href=#217 id=217 data-nosnippet>217</a>        .<span class="kw">await
+<a href=#218 id=218 data-nosnippet>218</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))
+<a href=#219 id=219 data-nosnippet>219</a>    }
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a>    <span class="kw">async fn </span>fetch_recovery_slice(
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#223 id=223 data-nosnippet>223</a>        start: u64,
+<a href=#224 id=224 data-nosnippet>224</a>        end: u64,
+<a href=#225 id=225 data-nosnippet>225</a>    ) -&gt; anyhow::Result&lt;Vec&lt;RecoveryItem&gt;&gt; {
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="self">self</span>.request_current_consensus::&lt;Vec&lt;RecoveryItem&gt;&gt;(
+<a href=#227 id=227 data-nosnippet>227</a>            RECOVERY_SLICE_ENDPOINT.to_string(),
+<a href=#228 id=228 data-nosnippet>228</a>            ApiRequestErased::new((start, end)),
+<a href=#229 id=229 data-nosnippet>229</a>        )
+<a href=#230 id=230 data-nosnippet>230</a>        .<span class="kw">await
+<a href=#231 id=231 data-nosnippet>231</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>}
 </code></pre></div></section></main></body></html>
