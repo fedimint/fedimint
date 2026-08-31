@@ -235,6 +235,15 @@ pub trait FederationApiExt: IRawFederationApi {
                 },
                 Err(e) => {
                     e.report_if_unusual(peer, "RequestWithStrategy");
+
+                    // A strategy that tracks which peers are still outstanding
+                    // needs to see failures too, otherwise it cannot tell a slow
+                    // peer from one that will never answer. Defaults to
+                    // `Continue`, so other strategies are unaffected.
+                    if let QueryStep::Success(response) = strategy.process_error(peer, &e) {
+                        return Ok(response);
+                    }
+
                     peer_errors.insert(peer, e);
                 }
             }

@@ -1,13 +1,31 @@
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use std::collections::BTreeMap;
+
+use anyhow::anyhow;
+use fedimint_api_client::api::{
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+};
+use fedimint_api_client::query::ThresholdAgreement;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{OutPoint, apply, async_trait_maybe_send};
+use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
     OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
     SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
+
+/// Renders each peer's fee answer so a divergence error names the odd one out.
+fn describe_fee_quotes(quotes: &BTreeMap<PeerId, Option<bitcoin::Amount>>) -> String {
+    quotes
+        .iter()
+        .map(|(peer, fee)| match fee {
+            Some(fee) => format!("peer {peer}: {} sats", fee.to_sat()),
+            None => format!("peer {peer}: no quote"),
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
@@ -64,13 +82,68 @@ where
     }
 
     async fn send_fee(&self) -> FederationResult<Option<bitcoin::Amount>> {
-        self.request_current_consensus(SEND_FEE_ENDPOINT.to_string(), ApiRequestErased::new(()))
-            .await
+        // Deliberately not `request_current_consensus`; see the same reasoning in
+        // wallet v1's `fetch_peg_out_fees`. walletv2 is if anything more exposed:
+        // this single amount folds together the consensus feerate, a floor that
+        // doubles with every pending federation transaction, and the fees already
+        // paid by that pending stack, so any one of them diverging is enough to
+        // stop a threshold ever agreeing and hang the caller forever.
+        let quotes = match self
+            .request_with_strategy(
+                ThresholdAgreement::new(self.all_peers().to_num_peers()),
+                SEND_FEE_ENDPOINT.to_string(),
+                ApiRequestErased::new(()),
+            )
+            .await?
+        {
+            Ok(fee) => return Ok(fee),
+            Err(quotes) => quotes,
+        };
+
+        Err(FederationError::general(
+            SEND_FEE_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
+            anyhow!(
+                "Guardians disagree on the onchain send fee ({}). The fee is \
+                 consensus state, so a guardian returning a different value has \
+                 diverged - because its Bitcoin backend is lagging, or because its \
+                 view of the pending transaction stack differs. The same fee \
+                 validates the send, so it cannot be accepted until they agree.",
+                describe_fee_quotes(&quotes)
+            ),
+        ))
     }
 
     async fn receive_fee(&self) -> FederationResult<Option<bitcoin::Amount>> {
-        self.request_current_consensus(RECEIVE_FEE_ENDPOINT.to_string(), ApiRequestErased::new(()))
-            .await
+        // Same reasoning as `send_fee`. The caller here is the background
+        // output-scanner, which loops with a `warn!` and a sleep, so returning
+        // an error is how this waits for consensus *visibly*: it keeps retrying
+        // for as long as the divergence lasts and resumes on its own, instead of
+        // wedging the scanner inside a request that never returns.
+        let quotes = match self
+            .request_with_strategy(
+                ThresholdAgreement::new(self.all_peers().to_num_peers()),
+                RECEIVE_FEE_ENDPOINT.to_string(),
+                ApiRequestErased::new(()),
+            )
+            .await?
+        {
+            Ok(fee) => return Ok(fee),
+            Err(quotes) => quotes,
+        };
+
+        Err(FederationError::general(
+            RECEIVE_FEE_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
+            anyhow!(
+                "Guardians disagree on the onchain receive fee ({}). The fee is \
+                 consensus state, so a guardian returning a different value has \
+                 diverged - because its Bitcoin backend is lagging, or because its \
+                 view of the pending transaction stack differs. The same fee \
+                 validates the claim, so it cannot be accepted until they agree.",
+                describe_fee_quotes(&quotes)
+            ),
+        ))
     }
 
     async fn pending_tx_chain(&self) -> FederationResult<Vec<TxInfo>> {
