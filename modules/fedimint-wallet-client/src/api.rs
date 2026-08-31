@@ -3,7 +3,7 @@ use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerResult,
 };
-use fedimint_api_client::query::FilterMapThreshold;
+use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -132,11 +132,46 @@ where
         address: &Address,
         amount: Amount,
     ) -> FederationResult<Option<PegOutFees>> {
-        self.request_current_consensus(
+        let params = ApiRequestErased::new((address, amount.to_sat()));
+
+        // Deliberately not `request_current_consensus`. The quote is a pure
+        // function of the ordered consensus log, so peers in sync always agree;
+        // one that has fallen behind never converges, and `ThresholdConsensus`
+        // would re-request it forever while logging nothing at all.
+        let quotes = match self
+            .request_with_strategy(
+                ThresholdAgreement::new(self.all_peers().to_num_peers()),
+                PEG_OUT_FEES_ENDPOINT.to_string(),
+                params.clone(),
+            )
+            .await?
+        {
+            Ok(fees) => return Ok(fees),
+            Err(quotes) => quotes,
+        };
+
+        let detail = quotes
+            .iter()
+            .map(|(peer, quote)| match quote {
+                Some(fees) => format!(
+                    "peer {peer}: {} sats/kvb, weight {}",
+                    fees.fee_rate.sats_per_kvb, fees.total_weight
+                ),
+                None => format!("peer {peer}: no quote"),
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        Err(FederationError::general(
             PEG_OUT_FEES_ENDPOINT.to_string(),
-            ApiRequestErased::new((address, amount.to_sat())),
-        )
-        .await
+            params,
+            anyhow!(
+                "Guardians disagree on peg-out fees ({detail}). The quote is consensus \
+                 state, so a guardian returning a different value has diverged - most \
+                 often because its Bitcoin backend is lagging. The same rate validates \
+                 the peg-out, so it cannot be accepted until the federation agrees."
+            ),
+        ))
     }
 
     async fn fetch_bitcoin_rpc_kind(&self, peer_id: PeerId) -> FederationResult<String> {
