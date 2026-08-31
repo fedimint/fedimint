@@ -5,7 +5,7 @@ use std::{ffi, iter};
 use anyhow::{Context as _, bail, ensure};
 use clap::{Parser, Subcommand};
 use fedimint_core::Amount;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
 use futures::StreamExt;
@@ -164,7 +164,10 @@ pub(crate) async fn handle_cli_command(
                 let gateway = ln_gateway.clone().context(
                     "--all requires a gateway to price the payment; internal payments are not supported",
                 )?;
-                let balance = module.client_ctx.get_balance_for_btc().await?;
+                let balance = module
+                    .client_ctx
+                    .get_balance_for_btc(Account::Primary)
+                    .await?;
                 let spendable = module.spendable_amount(balance, Some(gateway)).await?;
 
                 // The endpoint only issues invoices within

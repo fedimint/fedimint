@@ -144,6 +144,89 @@ impl<'de> Deserialize<'de> for OperationId {
     }
 }
 
+/// One of a client's balances within a single federation.
+///
+/// The federation cannot tell accounts apart — an account is purely a
+/// client-side split of the derivation tree and of the few client tables that
+/// hold per-account state. It lives in core rather than in the client because
+/// module event payloads are tagged with it.
+///
+/// Used as the leading component of every account-scoped table key and as a
+/// hop in the derivation tree, so the numbering is load-bearing — changing it
+/// silently re-keys every client. The discriminants are spelt out for the same
+/// reason a db prefix enum spells its own out: they are values on disk and in
+/// the derivation tree, not an implementation detail of the declaration order.
+/// A balance added later takes the next free number and leaves every existing
+/// path where it was.
+///
+/// Deliberately has no `Default` impl: every entry point that touches
+/// account-scoped state takes one of these explicitly, so an omitted argument
+/// is a compile error rather than a silent write to the wrong balance.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+    strum_macros::Display,
+    strum_macros::EnumString,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
+#[repr(u8)]
+pub enum Account {
+    Primary = 0,
+    Secondary = 1,
+    Tertiary = 2,
+    Quaternary = 3,
+    Quinary = 4,
+}
+
+// Crosses the FFI as its name rather than as a mirrored enum, so a consumer
+// names an account the same way the CLI does and adding a variant does not
+// reshape the generated bindings.
+#[cfg(feature = "uniffi")]
+uniffi::custom_type!(Account, String, {
+    lower: |obj| obj.to_string(),
+    try_lift: |s| Account::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse Account: {e}")),
+    }
+);
+
+impl Account {
+    /// Every account, in key order — the set a scanner trials its keys against
+    /// and a recovery walks.
+    ///
+    /// The set is fixed on purpose: every account exists from the moment a
+    /// client is built, so no account ever joins a stream late and there is
+    /// nothing for a caller to create.
+    pub const ALL: [Self; 5] = [
+        Self::Primary,
+        Self::Secondary,
+        Self::Tertiary,
+        Self::Quaternary,
+        Self::Quinary,
+    ];
+
+    /// The account every wallet that predates accounts already is, and the one
+    /// a client falls back to when reading a record written before accounts
+    /// existed. Spelt as a function so it can be a `serde(default)`.
+    pub fn primary() -> Self {
+        Self::Primary
+    }
+
+    /// The account's discriminant: the hop it takes in the derivation tree.
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+}
+
 /// Module instance ID
 ///
 /// This value uniquely identifies a single instance of a module in a

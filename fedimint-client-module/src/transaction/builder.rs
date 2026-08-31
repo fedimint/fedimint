@@ -7,7 +7,7 @@ use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
 use fedimint_core::Amount;
 use fedimint_core::core::{
-    DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
+    Account, DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
@@ -434,6 +434,10 @@ pub struct FeeQuoteRequest {
     pub input_fee: Amounts,
     /// Federation fees charged on the operation's explicit outputs, per unit.
     pub output_fee: Amounts,
+    /// Balance the primary module would fund the operation from. The quote
+    /// runs the real balancing against that account's inventory, so it moves
+    /// with the account it names.
+    pub account: Account,
 }
 
 /// Breakdown of the fee finalizing a transaction would incur, as computed by
@@ -644,15 +648,32 @@ where
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionBuilder {
     inputs: Vec<ClientInputBundle>,
     outputs: Vec<ClientOutputBundle>,
+    account: Account,
 }
 
 impl TransactionBuilder {
-    pub fn new() -> Self {
-        Self::default()
+    /// A transaction acting on `account`: the primary module funds it from
+    /// that account's balance and credits its change back to the same one.
+    ///
+    /// Taken rather than defaulted, so a module that forgets to thread an
+    /// account through fails to compile instead of quietly spending the
+    /// primary balance.
+    pub fn new(account: Account) -> Self {
+        Self {
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            account,
+        }
+    }
+
+    /// The account the primary module funds this transaction from and credits
+    /// its change to.
+    pub fn account(&self) -> Account {
+        self.account
     }
 
     pub fn with_inputs(mut self, inputs: ClientInputBundle) -> Self {

@@ -277,8 +277,7 @@ impl ReceiveStateMachine {
 
         let outpoints = match global_context
             .claim_inputs(
-                dbtx,
-                // The input of the refund tx is managed by this state machine
+                dbtx, // The input of the refund tx is managed by this state machine
                 ClientInputBundle::new_no_sm(vec![client_input]),
             )
             .await

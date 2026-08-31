@@ -4,6 +4,7 @@ use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
 use clap::{Parser, Subcommand};
 use fedimint_core::BitcoinAmountOrAll;
+use fedimint_core::core::Account;
 use fedimint_eventlog::EventLogId;
 use serde::Serialize;
 use serde_json::Value;
@@ -26,13 +27,18 @@ enum Opts {
         value: BitcoinAmountOrAll,
         #[arg(long)]
         fee: Option<bitcoin::Amount>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Return the next unused receive address.
     ///
     /// To wait for a payment to this address, read the current event log
     /// position with `dev next-event-log-id` *before* running this, then pass
     /// that position to `await-receive`.
-    Receive,
+    Receive {
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
+    },
     /// Block until the next payment is received, starting from the given event
     /// log position. Returns the receive's final state and the event log
     /// position to pass to the following `await-receive`.
@@ -77,6 +83,7 @@ pub(crate) async fn handle_cli_command(
             address,
             value,
             fee,
+            account,
         } => {
             // Resolve the on-chain fee up front so the same value sizes the
             // sweep and funds the send: the required feerate rises with each
@@ -92,8 +99,8 @@ pub(crate) async fn handle_cli_command(
                 // everything: funding the wallet output also incurs the
                 // federation's per-note fees.
                 BitcoinAmountOrAll::All => {
-                    let balance = wallet.client_ctx.get_balance_for_btc().await?;
-                    wallet.max_sendable_amount(balance, fee).await?
+                    let balance = wallet.client_ctx.get_balance_for_btc(account).await?;
+                    wallet.max_sendable_amount(account, balance, fee).await?
                 }
                 BitcoinAmountOrAll::Amount(value) => value,
             };
@@ -102,13 +109,13 @@ pub(crate) async fn handle_cli_command(
                 wallet
                     .await_final_send_operation_state(
                         wallet
-                            .send(address, value, Some(fee), serde_json::Value::Null)
+                            .send(account, address, value, Some(fee), serde_json::Value::Null)
                             .await?,
                     )
                     .await?,
             )
         }
-        Opts::Receive => json(wallet.receive().await),
+        Opts::Receive { account } => json(wallet.receive(account).await?),
         Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
     };
 

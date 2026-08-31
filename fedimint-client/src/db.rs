@@ -9,7 +9,7 @@ use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::oplog::{JsonStringed, OperationLogEntry, OperationOutcome};
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
-use fedimint_core::core::{ModuleInstanceId, OperationId};
+use fedimint_core::core::{Account, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, DbMigrationError,
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
@@ -65,6 +65,7 @@ pub enum DbKeyPrefix {
     ClientModuleRecovery = 0x40,
     GuardianMetadata = 0x42,
     TransactionFees = 0x43,
+    OperationAccount = 0x44,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -94,6 +95,24 @@ pub enum DbKeyPrefix {
     /// Per-module instance data
     ModuleGlobalPrefix = 0xff,
 }
+
+/// The account an operation acts on: the balance the primary module funds it
+/// from and credits its change, claims and refunds to.
+///
+/// Written when the operation is created and only for non-primary accounts,
+/// so an absent row reads as [`Account::Primary`]. That is also the only
+/// account an operation recorded before accounts existed can have belonged
+/// to, which is what lets state machines stay unaware of accounts: they look
+/// up their operation's row instead of carrying the account themselves, and
+/// machines persisted before the row existed need no rewrite.
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct OperationAccountKey(pub OperationId);
+
+impl_db_record!(
+    key = OperationAccountKey,
+    value = Account,
+    db_prefix = DbKeyPrefix::OperationAccount,
+);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

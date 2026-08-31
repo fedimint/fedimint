@@ -11,7 +11,7 @@ use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
-    Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
+    Account, Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
@@ -97,7 +97,31 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     /// The client's balance for `unit`, held by the primary module. See
     /// `Client::get_balance_for_unit`.
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount>;
+    async fn get_balance_for_unit(
+        &self,
+        unit: AmountUnit,
+        account: Account,
+    ) -> anyhow::Result<Amount>;
+
+    /// Whether the primary module for `unit` can hold a balance for
+    /// `account`. See `Client::supports_account`.
+    fn supports_account(&self, unit: AmountUnit, account: Account) -> bool;
+
+    /// The account `operation_id` acts on. See
+    /// `Client::operation_account_dbtx`.
+    async fn operation_account_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Account;
+
+    /// See `Client::set_operation_account_dbtx`.
+    async fn set_operation_account_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        account: Account,
+    );
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
 
@@ -439,13 +463,21 @@ where
         self.client.get().fee_quote(operation_id, request).await
     }
 
-    /// The client's Bitcoin balance, held by the primary module. See
+    /// The account's Bitcoin balance, held by the primary module. See
     /// `Client::get_balance_for_btc`.
-    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_btc(&self, account: Account) -> anyhow::Result<Amount> {
         self.client
             .get()
-            .get_balance_for_unit(AmountUnit::BITCOIN)
+            .get_balance_for_unit(AmountUnit::BITCOIN, account)
             .await
+    }
+
+    /// Whether the primary module for `unit` can hold a balance for
+    /// `account`. A module handing out account-bound receive keys or addresses
+    /// checks this first, so that nothing is ever paid into an account the
+    /// primary module cannot fund a claim for.
+    pub fn supports_account(&self, unit: AmountUnit, account: Account) -> bool {
+        self.client.get().supports_account(unit, account)
     }
 
     pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
@@ -630,6 +662,7 @@ where
     pub async fn manual_operation_start(
         &self,
         operation_id: OperationId,
+        account: Account,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
@@ -642,6 +675,7 @@ where
             self.manual_operation_start_inner(
                 &mut dbtx.to_ref_nc(),
                 operation_id,
+                account,
                 op_type,
                 operation_meta,
                 sms,
@@ -663,6 +697,7 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
@@ -670,6 +705,7 @@ where
         self.manual_operation_start_inner(
             &mut dbtx.global_dbtx(self.global_dbtx_access_token),
             operation_id,
+            account,
             op_type,
             operation_meta,
             sms,
@@ -683,6 +719,7 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
@@ -710,6 +747,7 @@ where
             .add_operation_log_entry_dbtx(
                 &mut dbtx.to_ref_nc(),
                 operation_id,
+                account,
                 op_type,
                 serde_json::to_value(operation_meta).expect("Can't fail"),
             )
@@ -797,6 +835,8 @@ where
         ))
     }
 
+    /// The claim is credited to the operation's account, and any change the
+    /// primary module adds comes back to the same one.
     pub async fn claim_inputs<I, S>(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -817,17 +857,40 @@ where
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
     ) -> anyhow::Result<OutPointRange> {
+        let dbtx = &mut dbtx.global_dbtx(self.global_dbtx_access_token);
+
+        let account = self
+            .client
+            .get()
+            .operation_account_dbtx(&mut dbtx.to_ref_nc(), operation_id)
+            .await;
+
         let tx_builder =
-            TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
+            TransactionBuilder::new(account).with_inputs(inputs.into_dyn(self.module_instance_id));
 
         self.client
             .get()
-            .finalize_and_submit_transaction_inner(
+            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
+            .await
+    }
+
+    /// Records the account for an operation started without an operation log
+    /// entry, such as the state machines a recovery adds. See
+    /// `Client::set_operation_account_dbtx`.
+    pub async fn set_operation_account_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        account: Account,
+    ) {
+        self.client
+            .get()
+            .set_operation_account_dbtx(
                 &mut dbtx.global_dbtx(self.global_dbtx_access_token),
                 operation_id,
-                tx_builder,
+                account,
             )
-            .await
+            .await;
     }
 
     pub async fn add_state_machines_dbtx(
@@ -866,6 +929,7 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
@@ -875,6 +939,7 @@ where
             .add_operation_log_entry_dbtx(
                 &mut dbtx.global_dbtx(self.global_dbtx_access_token),
                 operation_id,
+                account,
                 operation_type,
                 serde_json::to_value(operation_meta).expect("Can't fail"),
             )
@@ -923,11 +988,15 @@ impl PrimaryModulePriority {
 /// Which amount units this module supports being primary for
 pub enum PrimaryModuleSupport {
     /// Potentially any unit
-    Any { priority: PrimaryModulePriority },
+    Any {
+        priority: PrimaryModulePriority,
+        accounts: AccountSupport,
+    },
     /// Some units supported by the module
     Selected {
         priority: PrimaryModulePriority,
         units: BTreeSet<AmountUnit>,
+        accounts: AccountSupport,
     },
     /// None
     None,
@@ -937,10 +1006,36 @@ impl PrimaryModuleSupport {
     pub fn selected<const N: usize>(
         priority: PrimaryModulePriority,
         units: [AmountUnit; N],
+        accounts: AccountSupport,
     ) -> Self {
         Self::Selected {
             priority,
             units: BTreeSet::from(units),
+            accounts,
+        }
+    }
+}
+
+/// Which of the client's accounts a primary module can hold a balance for.
+///
+/// Advertised rather than discovered: a module that gives out account-bound
+/// receive keys or addresses has to know before anyone pays into them whether
+/// the primary module will be able to fund the claim, since by the time
+/// balancing fails the payer's money has already moved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountSupport {
+    /// The module keeps a single balance and refuses to fund any other
+    /// account.
+    PrimaryOnly,
+    /// Every [`Account`] has its own balance in the module.
+    All,
+}
+
+impl AccountSupport {
+    pub fn supports(self, account: Account) -> bool {
+        match self {
+            Self::PrimaryOnly => account == Account::Primary,
+            Self::All => true,
         }
     }
 }
@@ -1076,6 +1171,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _unit: AmountUnit,
         _input_amount: Amount,
         _output_amount: Amount,
+        _account: Account,
     ) -> anyhow::Result<(
         ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
         ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
@@ -1097,7 +1193,12 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Returns the balance held by this module and available for funding
     /// transactions.
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _unit: AmountUnit,
+        _account: Account,
+    ) -> Amount {
         unimplemented!()
     }
 
@@ -1206,6 +1307,7 @@ pub trait IClientModule: Debug {
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport;
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_final_inputs_and_outputs(
         &self,
         module_instance: ModuleInstanceId,
@@ -1214,6 +1316,7 @@ pub trait IClientModule: Debug {
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
+        account: Account,
     ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)>;
 
     async fn await_primary_module_output(
@@ -1227,6 +1330,7 @@ pub trait IClientModule: Debug {
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         unit: AmountUnit,
+        account: Account,
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
@@ -1320,6 +1424,7 @@ where
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
+        account: Account,
     ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
@@ -1328,6 +1433,7 @@ where
             unit,
             input_amount,
             output_amount,
+            account,
         )
         .await?;
 
@@ -1351,11 +1457,13 @@ where
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         unit: AmountUnit,
+        account: Account,
     ) -> Amount {
         <T as ClientModule>::get_balance(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
             unit,
+            account,
         )
         .await
     }

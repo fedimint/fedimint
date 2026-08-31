@@ -9,7 +9,7 @@ use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArg
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client_module::sm::Context;
-use fedimint_core::core::{Decoder, ModuleKind};
+use fedimint_core::core::{Account, Decoder, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -76,7 +76,12 @@ impl ClientModule for EmptyClientModule {
         unreachable!()
     }
 
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _unit: AmountUnit,
+        _account: Account,
+    ) -> Amount {
         Amount::ZERO
     }
 }
