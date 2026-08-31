@@ -20,7 +20,7 @@ use fedimint_core::Amount;
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, GlobalClientConfig, ModuleInitRegistry,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::DynRawFallback;
@@ -899,6 +899,7 @@ async fn quoting_a_fee_without_a_primary_module_is_typed() {
                 output_amount: Amounts::new_bitcoin(fedimint_core::Amount::from_sats(1)),
                 input_fee: Amounts::ZERO,
                 output_fee: Amounts::ZERO,
+                account: Account::Primary,
             },
         )
         .await
@@ -939,7 +940,7 @@ async fn a_balance_without_a_primary_module_is_reported_as_such() {
     let client = client_for_lookup_test().await;
 
     let err = client
-        .get_balance_for_unit(AmountUnit::BITCOIN)
+        .get_balance_for_unit(AmountUnit::BITCOIN, Account::Primary)
         .await
         .expect_err("A client without a primary module has no balance");
 
@@ -986,7 +987,7 @@ async fn storing_a_second_client_secret_is_typed() {
 #[tokio::test]
 async fn transaction_builder_get_balance_empty_succeeds() {
     let client = client_for_lookup_test().await;
-    let builder = TransactionBuilder::new();
+    let builder = TransactionBuilder::new(Account::Primary);
     let (in_amounts, out_amounts) = client
         .transaction_builder_get_balance(&builder)
         .expect("Empty builder must have valid balance");

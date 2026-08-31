@@ -5,7 +5,7 @@ use fedimint_client_module::module::{ClientContext, ClientModule, FinalClientIfa
 use fedimint_client_module::sm::ModuleNotifier;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -69,6 +69,7 @@ async fn fee_quote_does_not_wait_for_change_tweaks() {
             AmountUnit::BITCOIN,
             Amount::from_sats(1_000),
             Amount::ZERO,
+            Account::Primary,
         ),
     )
     .await

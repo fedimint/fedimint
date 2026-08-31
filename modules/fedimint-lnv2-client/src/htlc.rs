@@ -32,7 +32,7 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::module::{Amounts, CommonModuleInit};
 use fedimint_core::task::sleep;
 use fedimint_core::util::FmtCompact as _;
@@ -134,6 +134,8 @@ struct HtlcSpend {
     witness: OutgoingWitness,
     keypair: Keypair,
     custom_meta: Value,
+    /// The balance the spend is credited to.
+    account: Account,
 }
 
 /// Whether a federation error is caused by connection failures only, such that
@@ -198,6 +200,7 @@ impl LightningClientModule {
     /// local state.
     pub async fn create_htlc(
         &self,
+        account: Account,
         amount: Amount,
         payment_image: PaymentImage,
         claim_pk: PublicKey,
@@ -218,7 +221,8 @@ impl LightningClientModule {
             .checked_add(expiration_delta)
             .ok_or(HtlcError::InvalidExpirationDelta)?;
 
-        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+        let (ephemeral_tweak, ephemeral_pk) =
+            tweak::generate(self.keys(account).keypair.public_key());
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
             .expect("32 bytes, within curve order")
@@ -244,7 +248,7 @@ impl LightningClientModule {
             .client_ctx
             .make_client_outputs(ClientOutputBundle::new_no_sm(vec![client_output]));
 
-        let transaction = TransactionBuilder::new().with_outputs(client_outputs);
+        let transaction = TransactionBuilder::new(account).with_outputs(client_outputs);
 
         let contract_clone = contract.clone();
 
@@ -295,6 +299,7 @@ impl LightningClientModule {
     /// transaction has been accepted yet.
     pub async fn claim_htlc(
         &self,
+        account: Account,
         outpoint: OutPoint,
         contract: OutgoingContract,
         claim_keypair: Keypair,
@@ -315,6 +320,7 @@ impl LightningClientModule {
             witness: OutgoingWitness::Claim(preimage),
             keypair: claim_keypair,
             custom_meta,
+            account,
         };
 
         if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
@@ -343,7 +349,7 @@ impl LightningClientModule {
         contract: OutgoingContract,
         custom_meta: Value,
     ) -> Result<OperationId, HtlcError> {
-        let refund_keypair = self
+        let (account, refund_keypair) = self
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
@@ -353,6 +359,7 @@ impl LightningClientModule {
             witness: OutgoingWitness::Refund,
             keypair: refund_keypair,
             custom_meta,
+            account,
         };
 
         if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
@@ -386,7 +393,7 @@ impl LightningClientModule {
             return Err(HtlcError::InvalidForfeitSignature);
         }
 
-        let refund_keypair = self
+        let (account, refund_keypair) = self
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
@@ -396,6 +403,7 @@ impl LightningClientModule {
             witness: OutgoingWitness::Cancel(forfeit_signature),
             keypair: refund_keypair,
             custom_meta,
+            account,
         };
 
         if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
@@ -623,7 +631,7 @@ impl LightningClientModule {
             .client_ctx
             .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input]));
 
-        let transaction = TransactionBuilder::new().with_inputs(client_inputs);
+        let transaction = TransactionBuilder::new(spend.account).with_inputs(client_inputs);
 
         self.client_ctx
             .finalize_and_submit_transaction(
@@ -669,15 +677,25 @@ impl LightningClientModule {
     }
 
     /// Recover the refund keypair of a direct HTLC created by this client
-    /// from the contract's ephemeral key and our static module key.
-    fn recover_htlc_refund_keypair(&self, contract: &OutgoingContract) -> Option<Keypair> {
-        let ephemeral_tweak =
-            ecdh::SharedSecret::new(&contract.ephemeral_pk, &self.keypair.secret_key());
+    /// from the contract's ephemeral key and the static module key of the
+    /// account that funded it, which is also the account the refund is
+    /// credited to. Each account's key is tried, since the contract does not
+    /// say which one it was created from.
+    fn recover_htlc_refund_keypair(
+        &self,
+        contract: &OutgoingContract,
+    ) -> Option<(Account, Keypair)> {
+        Account::ALL.into_iter().find_map(|account| {
+            let ephemeral_tweak = ecdh::SharedSecret::new(
+                &contract.ephemeral_pk,
+                &self.keys(account).keypair.secret_key(),
+            );
 
-        let refund_keypair = SecretKey::from_slice(&ephemeral_tweak.secret_bytes())
-            .expect("32 bytes, within curve order")
-            .keypair(secp256k1::SECP256K1);
+            let refund_keypair = SecretKey::from_slice(&ephemeral_tweak.secret_bytes())
+                .expect("32 bytes, within curve order")
+                .keypair(secp256k1::SECP256K1);
 
-        (refund_keypair.public_key() == contract.refund_pk).then_some(refund_keypair)
+            (refund_keypair.public_key() == contract.refund_pk).then_some((account, refund_keypair))
+        })
     }
 }

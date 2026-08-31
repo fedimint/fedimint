@@ -8,7 +8,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use fedimint_client::db::OperationLogKey;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::mem_impl::{MemDatabase, MemTransaction};
 use fedimint_core::db::{
     DatabaseError, DatabaseKeyPrefix, DatabaseResult, IDatabaseTransactionOps,
@@ -194,7 +194,12 @@ async fn receive_operation_and_event_commit_or_rollback_together() -> anyhow::Re
             .await;
         let (_, ecash) = sender
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null, false)
+            .send(
+                Account::Primary,
+                Amount::from_sats(1_000),
+                Value::Null,
+                false,
+            )
             .await?;
         let operation_id = OperationId::from_encodable(&ecash);
         *gate.operation_key.lock().unwrap() = OperationLogKey { operation_id }.to_bytes();
@@ -207,7 +212,7 @@ async fn receive_operation_and_event_commit_or_rollback_together() -> anyhow::Re
                 receiver
                     .get_first_module::<MintClientModule>()
                     .unwrap()
-                    .receive(ecash, custom_meta)
+                    .receive(Account::Primary, ecash, custom_meta)
                     .await
             }
         });
@@ -234,7 +239,8 @@ async fn receive_operation_and_event_commit_or_rollback_together() -> anyhow::Re
         let received_id = if cancel {
             task.abort();
             assert!(task.await.unwrap_err().is_cancelled());
-            mint.receive(ecash.clone(), custom_meta.clone()).await?
+            mint.receive(Account::Primary, ecash.clone(), custom_meta.clone())
+                .await?
         } else {
             gate.resume.add_permits(1);
             task.await??
@@ -269,7 +275,7 @@ async fn receive_operation_and_event_commit_or_rollback_together() -> anyhow::Re
             FinalReceiveOperationState::Success
         );
         assert_matches!(
-            mint.receive(ecash, Value::Null).await,
+            mint.receive(Account::Primary, ecash, Value::Null).await,
             Err(ReceiveECashError::AlreadyReceived)
         );
         let Some(MintEvent::ReceiveUpdate(update)) = events.next().await else {

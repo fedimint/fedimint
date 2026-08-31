@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use fedimint_api_client::api::FederationError;
 use fedimint_client_module::error::{ModuleLookupError, OperationLookupError};
 use fedimint_core::Amount;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
 use futures::StreamExt;
@@ -167,7 +167,10 @@ pub(crate) async fn handle_cli_command(
                 let gateway = ln_gateway
                     .clone()
                     .ok_or(CliCommandError::AllRequiresGateway)?;
-                let balance = module.client_ctx.get_balance_for_btc().await?;
+                let balance = module
+                    .client_ctx
+                    .get_balance_for_btc(Account::Primary)
+                    .await?;
                 let spendable = module.spendable_amount(balance, Some(gateway)).await?;
 
                 // The endpoint only issues invoices within
