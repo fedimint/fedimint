@@ -1296,23 +1296,44 @@ pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 64;
 /// Consensus-critical: every guardian must reach the same accept/reject
 /// decision for every commitment item, so this must stay a hard constant —
 /// never derive it from the per-guardian
-/// [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] setting, and nonce buffer
-/// targets must stay comfortably below it (a guardian whose target reaches
-/// the cap would have its excess commitments uniformly rejected by the
-/// whole federation, itself included).
+/// [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] setting. It is instead the
+/// upper bound that [`frost_nonce_buffer_target`] clamps that setting to.
 pub(crate) const MAX_PEER_COMMITMENT_POOL: usize = 1024;
+
+/// Smallest usable local FROST nonce buffer: a peer is only picked into a
+/// signing session if it has one commitment per input, and a peg-in spends
+/// two. Below this the guardian would never be viable — and since the buffer
+/// is only topped up at startup (`consume_our_nonce` refills 1:1
+/// thereafter), a target of `0` would leave it with no commitments forever.
+pub(crate) const MIN_FROST_NONCE_BUFFER_TARGET: usize = 2;
 
 /// Target size of the local FROST nonce buffer (see
 /// [`spawn_initial_nonce_backfill`]).
 /// Reads [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] once on first use,
 /// falling back to [`DEFAULT_FROST_NONCE_BUFFER_TARGET`] when unset or
-/// unparsable.
+/// unparsable, and clamped to
+/// `MIN_FROST_NONCE_BUFFER_TARGET..=MAX_PEER_COMMITMENT_POOL` — commitments
+/// above the cap are rejected federation-wide and re-proposed forever.
 pub(crate) fn frost_nonce_buffer_target() -> usize {
     static TARGET: LazyLock<usize> = LazyLock::new(|| {
-        std::env::var(FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV)
+        let configured = std::env::var(FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV)
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(DEFAULT_FROST_NONCE_BUFFER_TARGET)
+            .unwrap_or(DEFAULT_FROST_NONCE_BUFFER_TARGET);
+
+        let clamped = configured.clamp(MIN_FROST_NONCE_BUFFER_TARGET, MAX_PEER_COMMITMENT_POOL);
+
+        if clamped != configured {
+            tracing::warn!(
+                target: LOG_MODULE_WALLETV2,
+                configured,
+                clamped_to = clamped,
+                env = FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
+                "FROST nonce buffer target out of range; clamping"
+            );
+        }
+
+        clamped
     });
 
     *TARGET
