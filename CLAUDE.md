@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+This project uses the Linked Specs convention; consult the `linked-specs`
+skill before working with specs or governed code.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Additional agent-specific instructions (e.g. for CI-driven code review) can be found in `.github/agents/`.

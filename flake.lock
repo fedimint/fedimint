@@ -414,6 +414,29 @@
         "type": "github"
       }
     },
+    "linked-specs-skills": {
+      "inputs": {
+        "flakebox": [
+          "flakebox"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788064855,
+        "narHash": "sha256-ttHQzcWlE99gbV4Ty2S6+3uMEyghmJTKuWvqAWKO5Mw=",
+        "ref": "refs/heads/master",
+        "rev": "9292a771c1b36b78d6790ab316c61a69452fb9c9",
+        "revCount": 109,
+        "type": "git",
+        "url": "https://radicle.dpc.pw/z2HR882B4c4mTdAgdt4SozpdeTuMf.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://radicle.dpc.pw/z2HR882B4c4mTdAgdt4SozpdeTuMf.git"
+      }
+    },
     "nix-bundle": {
       "inputs": {
         "nixpkgs": [
@@ -542,6 +565,7 @@
         "fenix": "fenix_2",
         "flake-utils": "flake-utils_5",
         "flakebox": "flakebox_2",
+        "linked-specs-skills": "linked-specs-skills",
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "wild": "wild"
