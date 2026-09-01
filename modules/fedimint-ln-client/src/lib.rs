@@ -1809,7 +1809,8 @@ impl LightningClientModule {
             self.client_ctx
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
-        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        let extra_meta =
+            serde_json::to_value(extra_meta).context("Failed to serialize extra metadata")?;
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Claim {
                 out_points: change_range.into_iter().collect(),
@@ -2046,7 +2047,8 @@ impl LightningClientModule {
 
         let tx =
             TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
-        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        let extra_meta =
+            serde_json::to_value(extra_meta).context("Failed to serialize extra metadata")?;
         let operation_meta_gen = {
             let invoice = invoice.clone();
             move |change_range: OutPointRange| LightningOperationMeta {

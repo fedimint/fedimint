@@ -38,8 +38,9 @@ use tokio::select;
 use tokio::sync::Notify;
 use tracing::{debug, trace, warn};
 
+use crate::api::LnFederationApi;
 use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
-use crate::receive::LightningReceiveError;
+use crate::receive::{LightningReceiveError, has_invoice_expired};
 use crate::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
     LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
@@ -234,7 +235,82 @@ impl LightningClientModule {
         invoice_idx: u64,
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
+        const CLOCK_SKEW_TOLERANCE: Duration = Duration::from_mins(1);
+
         // TODO: validate invoice hash etc.
+        let operation_id = OperationId(*invoice.payment_hash().as_ref());
+        let offer_in_consensus = match client
+            .self_ref()
+            .module_api
+            .offer_exists(*invoice.payment_hash())
+            .await
+        {
+            Ok(exists) => exists,
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT_RECURRING,
+                    ?operation_id,
+                    invoice_index=%invoice_idx,
+                    err = %err.fmt_compact(),
+                    "Could not query incoming contract offer, will retry"
+                );
+                return;
+            }
+        };
+
+        // funding consumes the offer, so a paid invoice shows no offer, only
+        // its funded contract, and the receive still has to claim it
+        let contract_funded = if offer_in_consensus {
+            false
+        } else {
+            match client
+                .self_ref()
+                .module_api
+                .fetch_contract((*invoice.payment_hash()).into())
+                .await
+            {
+                Ok(contract) => contract.is_some(),
+                Err(err) => {
+                    warn!(
+                        target: LOG_CLIENT_RECURRING,
+                        ?operation_id,
+                        invoice_index=%invoice_idx,
+                        err = %err.fmt_compact(),
+                        "Could not query incoming contract, will retry"
+                    );
+                    return;
+                }
+            }
+        };
+        let record_receive = offer_in_consensus || contract_funded;
+
+        if !record_receive {
+            if !has_invoice_expired(
+                &invoice,
+                fedimint_core::time::duration_since_epoch(),
+                CLOCK_SKEW_TOLERANCE,
+            ) {
+                // recurringd serves new invoices before their offer transaction
+                // clears consensus, so a missing offer usually means it is in flight
+                debug!(
+                    target: LOG_CLIENT_RECURRING,
+                    ?operation_id,
+                    invoice_index=%invoice_idx,
+                    "Incoming contract offer not in consensus yet, will retry"
+                );
+                return;
+            }
+
+            // recurringd hands invoices to payers only after the offer confirms,
+            // so expired with no offer and no contract means never paid
+            warn!(
+                target: LOG_CLIENT_RECURRING,
+                ?operation_id,
+                invoice_index=%invoice_idx,
+                "Recurring invoice expired without an incoming contract offer, skipping it"
+            );
+        }
+
         let mut dbtx = client.module_db().begin_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
@@ -256,17 +332,17 @@ impl LightningClientModule {
         .await;
 
         // We want to increment the invoice counter even if the operation creation
-        // fails. This should never happen and if it does, we'd rather miss an invoice
-        // than get stuck in an infinite loop.
+        // fails. We'd rather miss an invoice than get stuck in an infinite loop.
         let mut dbtx_nc = dbtx.to_ref_nc();
-        if let Ok(operation_id) = Self::create_recurring_receive_operation(
-            client,
-            &mut dbtx_nc,
-            &old_payment_code_entry,
-            invoice_idx,
-            invoice,
-        )
-        .await
+        if record_receive
+            && let Ok(operation_id) = Self::create_recurring_receive_operation(
+                client,
+                &mut dbtx_nc,
+                &old_payment_code_entry,
+                invoice_idx,
+                invoice,
+            )
+            .await
         {
             client
                 .log_event(
@@ -278,11 +354,6 @@ impl LightningClientModule {
                     },
                 )
                 .await;
-        } else {
-            debug_assert!(
-                false,
-                "Recurring invoice operation creation failed, this should never happen"
-            );
         }
         drop(dbtx_nc);
 

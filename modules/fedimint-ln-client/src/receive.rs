@@ -326,7 +326,7 @@ impl LightningReceiveConfirmedInvoice {
     }
 }
 
-fn has_invoice_expired(
+pub(crate) fn has_invoice_expired(
     invoice: &Bolt11Invoice,
     now_epoch: Duration,
     clock_skew_tolerance: Duration,
