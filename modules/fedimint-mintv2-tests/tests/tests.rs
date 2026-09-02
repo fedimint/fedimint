@@ -10,7 +10,7 @@ use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::Amounts;
+use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::{Keypair, SECP256K1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -157,6 +157,10 @@ async fn send_and_receive() -> anyhow::Result<()> {
                 .map(|invite| invite.federation_id()),
             include_invite.then(|| client_send.federation_id()),
         );
+
+        // The sender attaches the unit its mint is configured with; the test
+        // federation's mint is denominated in Bitcoin.
+        assert_eq!(ecash.unit(), AmountUnit::BITCOIN);
 
         let operation_id = client_receive
             .get_first_module::<MintClientModule>()?

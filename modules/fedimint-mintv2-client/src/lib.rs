@@ -977,7 +977,8 @@ impl MintClientModule {
             ECash::new_with_invite(notes, &invite)
         } else {
             ECash::new(self.federation_id, notes)
-        };
+        }
+        .with_unit(self.cfg.amount_unit);
         let amount = ecash.amount();
         let operation_id = OperationId::new_random();
 
