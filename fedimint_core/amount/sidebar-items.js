@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SATS_PER_BITCOIN"],"enum":["ParseAmountError"],"fn":["msats","sats"],"struct":["Amount"]};
+window.SIDEBAR_ITEMS = {"constant":["SATS_PER_BITCOIN"],"enum":["AmountConversionError","ParseAmountError"],"fn":["msats","sats"],"struct":["Amount"]};

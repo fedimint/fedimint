@@ -256,7 +256,7 @@
 <a href=#256 id=256 data-nosnippet>256</a>    <span class="doccomment">/// Apply overrides from env variables
 <a href=#257 id=257 data-nosnippet>257</a>    </span><span class="kw">pub fn </span>with_env_var_overrides(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
 <a href=#258 id=258 data-nosnippet>258</a>        <span class="comment">// TODO: read rest of the env
-<a href=#259 id=259 data-nosnippet>259</a>        </span><span class="kw">for </span>(k, v) <span class="kw">in </span>parse_kv_list_from_env::&lt;<span class="kw">_</span>, SafeUrl&gt;(FM_WS_API_CONNECT_OVERRIDES_ENV)<span class="question-mark">? </span>{
+<a href=#259 id=259 data-nosnippet>259</a>        </span><span class="kw">for </span>(k, v) <span class="kw">in </span>parse_kv_list_from_env::&lt;<span class="kw">_</span>, SafeUrl&gt;(FM_WS_API_CONNECT_OVERRIDES_ENV) {
 <a href=#260 id=260 data-nosnippet>260</a>            <span class="self">self </span>= <span class="self">self</span>.with_connection_override(k, v);
 <a href=#261 id=261 data-nosnippet>261</a>        }
 <a href=#262 id=262 data-nosnippet>262</a>

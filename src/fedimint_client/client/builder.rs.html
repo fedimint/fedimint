@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::task::jit::{Jit, JitTry, JitTryAnyhow};
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::task::jit::{Jit, JitTry};
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, FmtCompactAnyhow <span class="kw">as _</span>, SafeUrl};
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env};
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -337,9 +337,9 @@
 <a href=#337 id=337 data-nosnippet>337</a>        init_mode: InitMode,
 <a href=#338 id=338 data-nosnippet>338</a>        preview_prefetch_api_announcements: <span class="prelude-ty">Option</span>&lt;Jit&lt;Vec&lt;PeersSignedApiAnnouncements&gt;&gt;&gt;,
 <a href=#339 id=339 data-nosnippet>339</a>        preview_prefetch_api_version_set: <span class="prelude-ty">Option</span>&lt;
-<a href=#340 id=340 data-nosnippet>340</a>            JitTryAnyhow&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;&gt;,
+<a href=#340 id=340 data-nosnippet>340</a>            JitTry&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;, anyhow::Error&gt;,
 <a href=#341 id=341 data-nosnippet>341</a>        &gt;,
-<a href=#342 id=342 data-nosnippet>342</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTryAnyhow&lt;ChainId&gt;&gt;,
+<a href=#342 id=342 data-nosnippet>342</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTry&lt;ChainId, anyhow::Error&gt;&gt;,
 <a href=#343 id=343 data-nosnippet>343</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
 <a href=#344 id=344 data-nosnippet>344</a>        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span>db_no_decoders).<span class="kw">await </span>{
 <a href=#345 id=345 data-nosnippet>345</a>            <span class="macro">bail!</span>(<span class="string">"Client database already initialized"</span>)
@@ -559,9 +559,9 @@
 <a href=#559 id=559 data-nosnippet>559</a>        stopped: bool,
 <a href=#560 id=560 data-nosnippet>560</a>        preview_prefetch_api_announcements: <span class="prelude-ty">Option</span>&lt;Jit&lt;Vec&lt;PeersSignedApiAnnouncements&gt;&gt;&gt;,
 <a href=#561 id=561 data-nosnippet>561</a>        preview_prefetch_api_version_set: <span class="prelude-ty">Option</span>&lt;
-<a href=#562 id=562 data-nosnippet>562</a>            JitTryAnyhow&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;&gt;,
+<a href=#562 id=562 data-nosnippet>562</a>            JitTry&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;, anyhow::Error&gt;,
 <a href=#563 id=563 data-nosnippet>563</a>        &gt;,
-<a href=#564 id=564 data-nosnippet>564</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTryAnyhow&lt;ChainId&gt;&gt;,
+<a href=#564 id=564 data-nosnippet>564</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTry&lt;ChainId, anyhow::Error&gt;&gt;,
 <a href=#565 id=565 data-nosnippet>565</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
 <a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
 <a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">let </span>request_hook = <span class="self">self</span>.request_hook.clone();
@@ -604,9 +604,9 @@
 <a href=#604 id=604 data-nosnippet>604</a>        request_hook: ApiRequestHook,
 <a href=#605 id=605 data-nosnippet>605</a>        preview_prefetch_api_announcements: <span class="prelude-ty">Option</span>&lt;Jit&lt;Vec&lt;PeersSignedApiAnnouncements&gt;&gt;&gt;,
 <a href=#606 id=606 data-nosnippet>606</a>        preview_prefetch_api_version_set: <span class="prelude-ty">Option</span>&lt;
-<a href=#607 id=607 data-nosnippet>607</a>            JitTryAnyhow&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;&gt;,
+<a href=#607 id=607 data-nosnippet>607</a>            JitTry&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;, anyhow::Error&gt;,
 <a href=#608 id=608 data-nosnippet>608</a>        &gt;,
-<a href=#609 id=609 data-nosnippet>609</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTryAnyhow&lt;ChainId&gt;&gt;,
+<a href=#609 id=609 data-nosnippet>609</a>        prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTry&lt;ChainId, anyhow::Error&gt;&gt;,
 <a href=#610 id=610 data-nosnippet>610</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
 <a href=#611 id=611 data-nosnippet>611</a>        <span class="macro">debug!</span>(
 <a href=#612 id=612 data-nosnippet>612</a>            target: LOG_CLIENT,
@@ -1392,8 +1392,8 @@
 <a href=#1392 id=1392 data-nosnippet>1392</a>    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
 <a href=#1393 id=1393 data-nosnippet>1393</a>    prefetch_api_announcements: <span class="prelude-ty">Option</span>&lt;Jit&lt;Vec&lt;PeersSignedApiAnnouncements&gt;&gt;&gt;,
 <a href=#1394 id=1394 data-nosnippet>1394</a>    preview_prefetch_api_version_set:
-<a href=#1395 id=1395 data-nosnippet>1395</a>        <span class="prelude-ty">Option</span>&lt;JitTryAnyhow&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;&gt;&gt;,
-<a href=#1396 id=1396 data-nosnippet>1396</a>    prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTryAnyhow&lt;ChainId&gt;&gt;,
+<a href=#1395 id=1395 data-nosnippet>1395</a>        <span class="prelude-ty">Option</span>&lt;JitTry&lt;BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;, anyhow::Error&gt;&gt;,
+<a href=#1396 id=1396 data-nosnippet>1396</a>    prefetch_chain_id: <span class="prelude-ty">Option</span>&lt;JitTry&lt;ChainId, anyhow::Error&gt;&gt;,
 <a href=#1397 id=1397 data-nosnippet>1397</a>}
 <a href=#1398 id=1398 data-nosnippet>1398</a>
 <a href=#1399 id=1399 data-nosnippet>1399</a><span class="kw">impl </span>ClientPreview {

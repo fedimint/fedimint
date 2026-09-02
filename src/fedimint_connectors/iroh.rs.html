@@ -147,7 +147,7 @@
 <a href=#147 id=147 data-nosnippet>147</a>            FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
 <a href=#148 id=148 data-nosnippet>148</a>            FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
 <a href=#149 id=149 data-nosnippet>149</a>        ] {
-<a href=#150 id=150 data-nosnippet>150</a>            <span class="kw">for </span>(k, v) <span class="kw">in </span>parse_kv_list_from_env::&lt;NodeId, SocketAddr&gt;(env_var)<span class="question-mark">? </span>{
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="kw">for </span>(k, v) <span class="kw">in </span>parse_kv_list_from_env::&lt;NodeId, SocketAddr&gt;(env_var) {
 <a href=#151 id=151 data-nosnippet>151</a>                s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
 <a href=#152 id=152 data-nosnippet>152</a>            }
 <a href=#153 id=153 data-nosnippet>153</a>        }

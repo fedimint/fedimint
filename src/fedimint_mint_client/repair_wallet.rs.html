@@ -120,7 +120,7 @@
 <a href=#120 id=120 data-nosnippet>120</a>                <span class="kw">let </span>module_api_inner = module_api.clone();
 <a href=#121 id=121 data-nosnippet>121</a>                <span class="kw">async move </span>{
 <a href=#122 id=122 data-nosnippet>122</a>                    <span class="kw">let </span>spent = retry(<span class="string">"fetch e-cash spentness"</span>, aggressive_backoff(), || <span class="kw">async </span>{
-<a href=#123 id=123 data-nosnippet>123</a>                        <span class="prelude-val">Ok</span>(module_api_inner.check_note_spent(key.nonce).<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#123 id=123 data-nosnippet>123</a>                        anyhow::Ok(module_api_inner.check_note_spent(key.nonce).<span class="kw">await</span><span class="question-mark">?</span>)
 <a href=#124 id=124 data-nosnippet>124</a>                    })
 <a href=#125 id=125 data-nosnippet>125</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#126 id=126 data-nosnippet>126</a>                    anyhow::Ok(<span class="kw">if </span>spent { <span class="prelude-val">Some</span>(key) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
@@ -195,7 +195,7 @@
 <a href=#195 id=195 data-nosnippet>195</a>            <span class="kw">let </span>nonce_used = retry(
 <a href=#196 id=196 data-nosnippet>196</a>                <span class="string">"checking if blind nonce was already used"</span>,
 <a href=#197 id=197 data-nosnippet>197</a>                aggressive_backoff(),
-<a href=#198 id=198 data-nosnippet>198</a>                || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(module_api.check_blind_nonce_used(blind_nonce).<span class="kw">await</span><span class="question-mark">?</span>) },
+<a href=#198 id=198 data-nosnippet>198</a>                || <span class="kw">async </span>{ anyhow::Ok(module_api.check_blind_nonce_used(blind_nonce).<span class="kw">await</span><span class="question-mark">?</span>) },
 <a href=#199 id=199 data-nosnippet>199</a>            )
 <a href=#200 id=200 data-nosnippet>200</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#201 id=201 data-nosnippet>201</a>            <span class="kw">if </span>nonce_used {

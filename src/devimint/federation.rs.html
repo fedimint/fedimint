@@ -18,7 +18,7 @@
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::task::block_on;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::task::jit::JitTry;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::{Amount, NumPeers, PeerId};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_gateway_common::WithdrawResponse;
@@ -62,7 +62,7 @@
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">pub </span>bitcoind: Bitcoind,
 <a href=#63 id=63 data-nosnippet>63</a>
 <a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// Built in [`Client`], already joined
-<a href=#65 id=65 data-nosnippet>65</a>    </span>client: JitTryAnyhow&lt;Client&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>    </span>client: JitTry&lt;Client, anyhow::Error&gt;,
 <a href=#66 id=66 data-nosnippet>66</a>    <span class="attr">#[allow(dead_code)] </span><span class="comment">// Will need it later, maybe
 <a href=#67 id=67 data-nosnippet>67</a>    </span>connectors: ConnectorRegistry,
 <a href=#68 id=68 data-nosnippet>68</a>}
@@ -467,7 +467,7 @@
 <a href=#467 id=467 data-nosnippet>467</a>            }
 <a href=#468 id=468 data-nosnippet>468</a>        }
 <a href=#469 id=469 data-nosnippet>469</a>
-<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>client = JitTryAnyhow::new_try({
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>client = JitTry::&lt;<span class="kw">_</span>, anyhow::Error&gt;::new_try({
 <a href=#471 id=471 data-nosnippet>471</a>            <span class="kw">move </span>|| <span class="kw">async move </span>{
 <a href=#472 id=472 data-nosnippet>472</a>                <span class="kw">let </span>client = Client::open_or_create(federation_name.as_str())<span class="question-mark">?</span>;
 <a href=#473 id=473 data-nosnippet>473</a>                <span class="kw">let </span>invite_code = <span class="self">Self</span>::invite_code_static()<span class="question-mark">?</span>;
@@ -567,7 +567,7 @@
 <a href=#567 id=567 data-nosnippet>567</a>
 <a href=#568 id=568 data-nosnippet>568</a>    <span class="kw">pub fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
 <a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">let </span>cfg_path = <span class="self">self</span>.vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR.join(<span class="string">"client.json"</span>);
-<a href=#570 id=570 data-nosnippet>570</a>        load_from_file(<span class="kw-2">&amp;</span>cfg_path)
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="prelude-val">Ok</span>(load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>)
 <a href=#571 id=571 data-nosnippet>571</a>    }
 <a href=#572 id=572 data-nosnippet>572</a>
 <a href=#573 id=573 data-nosnippet>573</a>    <span class="doccomment">/// Get the module instance ID for a given module kind

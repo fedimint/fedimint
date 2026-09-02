@@ -345,7 +345,7 @@
 <a href=#345 id=345 data-nosnippet>345</a>            }
 <a href=#346 id=346 data-nosnippet>346</a>
 <a href=#347 id=347 data-nosnippet>347</a>            <span class="kw">let </span>instances = cfg.consensus.iter_module_instances();
-<a href=#348 id=348 data-nosnippet>348</a>            <span class="kw">let </span>decoders = <span class="self">self</span>.server_init.available_decoders(instances).unwrap();
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="kw">let </span>decoders = <span class="self">self</span>.server_init.available_decoders(instances);
 <a href=#349 id=349 data-nosnippet>349</a>            <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 <a href=#350 id=350 data-nosnippet>350</a>            <span class="kw">let </span>module_init_registry = <span class="self">self</span>.server_init.clone();
 <a href=#351 id=351 data-nosnippet>351</a>            <span class="kw">let </span>subgroup = task_group.make_subgroup();
