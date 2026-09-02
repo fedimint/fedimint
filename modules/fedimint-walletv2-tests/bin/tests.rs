@@ -1,22 +1,46 @@
-use anyhow::ensure;
+use std::str::FromStr;
+
+use anyhow::{Context, ensure};
+use clap::Parser;
 use devimint::version_constants::{VERSION_0_11_0_ALPHA, VERSION_0_13_0_ALPHA};
 use devimint::{cmd, util};
+use fedimint_core::envs::FM_WALLETV2_DESCRIPTOR_ENV;
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_walletv2_tests::{
     FinalSendState, await_consensus_block_count, await_deposits, await_no_pending_txs,
-    ensure_federation_total_value, ensure_tx_chain_length, get_deposit_address, module_is_present,
-    spawn_block_miner,
+    ensure_address_matches_descriptor, ensure_federation_total_value, ensure_tx_chain_length,
+    get_deposit_address, module_is_present, spawn_block_miner,
 };
 use tokio::try_join;
 use tracing::info;
 
+#[derive(Parser)]
+struct Opts {
+    /// On-chain wallet descriptor the federation should use: `wsh` (SegWit v0
+    /// ECDSA multisig), `tr` (taproot Schnorr multisig) or `frost` (taproot
+    /// FROST threshold signing). Handed to the leader guardian at config gen
+    /// via `FM_WALLETV2_DESCRIPTOR`.
+    #[arg(long, default_value = "wsh")]
+    descriptor: String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let descriptor_arg = Opts::parse().descriptor;
+    // Parse up front so an invalid value fails immediately rather than after
+    // the federation has been spun up.
+    let descriptor = WalletDescriptorKind::from_str(&descriptor_arg)
+        .with_context(|| format!("Parsing --descriptor {descriptor_arg}"))?;
+
     // Enable walletv2 module instead of wallet v1
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
+    // Only the leader guardian reads this, and only fedimintd 0.13.0-alpha and
+    // later honours it; older guardians silently fall back to `wsh`.
+    unsafe { std::env::set_var(FM_WALLETV2_DESCRIPTOR_ENV, &descriptor_arg) };
 
     devimint::run_devfed_test()
-        .call(|dev_fed, _process_mgr| async move {
+        .call(move |dev_fed, _process_mgr| async move {
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
             let fedimintd_version = util::FedimintdCmd::version_or_default().await;
 
@@ -27,6 +51,20 @@ async fn main() -> anyhow::Result<()> {
 
             if fedimintd_version < *VERSION_0_11_0_ALPHA {
                 info!(%fedimintd_version, "Version did not support walletv2 module, skipping");
+                return Ok(());
+            }
+
+            // The taproot and FROST descriptors landed in 0.13.0-alpha. Older
+            // guardians ignore `FM_WALLETV2_DESCRIPTOR` and build a `wsh`
+            // wallet instead, so running one would silently pass without
+            // exercising the descriptor we were asked for.
+            if descriptor != WalletDescriptorKind::Wsh && fedimintd_version < *VERSION_0_13_0_ALPHA
+            {
+                info!(
+                    %fedimintd_version,
+                    ?descriptor,
+                    "Version did not support non-default wallet descriptors, skipping"
+                );
                 return Ok(());
             }
 
@@ -64,6 +102,10 @@ async fn main() -> anyhow::Result<()> {
             info!("Deposit funds into the federation...");
 
             let (federation_address_1, position) = get_deposit_address(&client).await?;
+
+            // Confirm the guardians actually built the descriptor we asked for
+            // before relying on the rest of the test to exercise it.
+            ensure_address_matches_descriptor(&federation_address_1, descriptor)?;
 
             fed.bitcoind
                 .send_to(federation_address_1.to_string(), 100_000)

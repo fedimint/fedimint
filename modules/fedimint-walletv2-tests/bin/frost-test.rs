@@ -2,13 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::{Context, ensure};
 use clap::Parser;
-use devimint::version_constants::VERSION_0_11_0_ALPHA;
+use devimint::version_constants::VERSION_0_13_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::NumPeers;
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_walletv2_tests::{
     FinalSendState, await_consensus_block_count, await_no_pending_txs, await_receive,
-    ensure_federation_total_value, get_deposit_address, module_is_present,
-    report_frost_finalization_stats, spawn_block_miner, tx_chain,
+    ensure_address_matches_descriptor, ensure_federation_total_value, get_deposit_address,
+    module_is_present, report_frost_finalization_stats, spawn_block_miner, tx_chain,
 };
 use tokio::try_join;
 use tracing::info;
@@ -153,13 +154,18 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
             let fedimintd_version = util::FedimintdCmd::version_or_default().await;
 
-            if fedimint_cli_version < *VERSION_0_11_0_ALPHA {
-                info!(%fedimint_cli_version, "Version did not support walletv2 module, skipping");
+            // The FROST wallet descriptor, the ROAST signing session and the
+            // `frost_finalization_stats` admin endpoint all landed in
+            // 0.13.0-alpha. Older binaries ignore `FM_WALLETV2_DESCRIPTOR` and
+            // silently run a non-FROST walletv2 wallet, so there is nothing
+            // meaningful to assert against them.
+            if fedimint_cli_version < *VERSION_0_13_0_ALPHA {
+                info!(%fedimint_cli_version, "Version did not support the FROST wallet, skipping");
                 return Ok(());
             }
 
-            if fedimintd_version < *VERSION_0_11_0_ALPHA {
-                info!(%fedimintd_version, "Version did not support walletv2 module, skipping");
+            if fedimintd_version < *VERSION_0_13_0_ALPHA {
+                info!(%fedimintd_version, "Version did not support the FROST wallet, skipping");
                 return Ok(());
             }
 
@@ -197,6 +203,10 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
             info!("Seed the federation wallet with an initial deposit...");
 
             let (seed_address, seed_position) = get_deposit_address(&client).await?;
+
+            // A guardian that ignored `FM_WALLETV2_DESCRIPTOR` would build a
+            // `wsh` wallet, making every FROST assertion below vacuous.
+            ensure_address_matches_descriptor(&seed_address, WalletDescriptorKind::Frost)?;
 
             bitcoind.send_to(seed_address.to_string(), 100_000).await?;
 
