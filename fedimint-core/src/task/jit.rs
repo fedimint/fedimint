@@ -15,7 +15,6 @@ use crate::util::FmtCompact;
 
 pub type Jit<T> = JitCore<T, Infallible>;
 pub type JitTry<T, E> = JitCore<T, E>;
-pub type JitTryAnyhow<T> = JitCore<T, anyhow::Error>;
 
 /// Error that could have been returned before
 ///
@@ -24,7 +23,7 @@ pub type JitTryAnyhow<T> = JitCore<T, anyhow::Error>;
 #[derive(Debug)]
 pub enum OneTimeError<E> {
     Original(E),
-    Copy(anyhow::Error),
+    Copy(String),
 }
 
 impl<E> std::error::Error for OneTimeError<E>
@@ -48,7 +47,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Original(o) => o.fmt(f),
-            Self::Copy(c) => c.fmt(f),
+            Self::Copy(c) => f.write_str(c),
         }
     }
 }
@@ -142,7 +141,7 @@ where
         }
         value
             .as_ref()
-            .map_err(|err_str| OneTimeError::Copy(anyhow::Error::msg(err_str.to_owned())))
+            .map_err(|err_str| OneTimeError::Copy(err_str.to_owned()))
     }
 }
 impl<T> JitCore<T, Infallible>

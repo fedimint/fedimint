@@ -5,11 +5,11 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 
-use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::base32::FEDIMINT_PREFIX;
+use crate::base32::{FEDIMINT_PREFIX, PrefixedDecodeError};
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -30,7 +30,7 @@ pub struct InviteCode(Vec<InviteCodePart>);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(InviteCode, String, {
     lower: |i| i.to_string(),
-    try_lift: |s| s.parse().map_err(|e: anyhow::Error| e),
+    try_lift: |s| s.parse::<InviteCode>().map_err(anyhow::Error::from),
 });
 
 impl Decodable for InviteCode {
@@ -218,21 +218,50 @@ enum InviteCodePart {
 const BECH32_HRP: Hrp = Hrp::parse_unchecked("fed1");
 
 impl FromStr for InviteCode {
-    type Err = anyhow::Error;
+    type Err = InviteCodeParseError;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        if let Ok(invite_code) = crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded) {
-            return Ok(invite_code);
+        // The prefix is ASCII, so a case-insensitive match here agrees with the
+        // lowercasing `decode_prefixed` does before comparing the prefix.
+        if encoded
+            .get(..FEDIMINT_PREFIX.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(FEDIMINT_PREFIX))
+        {
+            return Ok(crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded)?);
         }
 
         let (hrp, data) = bech32::decode(encoded)?;
 
-        ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
+        if hrp != BECH32_HRP {
+            return Err(InviteCodeParseError::InvalidHrp { hrp });
+        }
 
         let invite = Self::consensus_decode_whole(&data, &ModuleRegistry::default())?;
 
         Ok(invite)
     }
+}
+
+/// Failure to parse an [`InviteCode`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum InviteCodeParseError {
+    /// The string is not a valid bech32m encoding.
+    #[error("Invalid bech32 encoding: {0}")]
+    Bech32(#[from] bech32::DecodeError),
+    /// The bech32 human-readable part is not the invite code HRP.
+    #[error(
+        "Invalid bech32 human-readable part '{hrp}', expected '{}'",
+        BECH32_HRP
+    )]
+    InvalidHrp { hrp: bech32::Hrp },
+    /// The payload is not a valid consensus encoding of an invite code.
+    #[error("Invalid invite code payload: {0}")]
+    Decode(#[from] DecodeError),
+    /// The string carries the [`FEDIMINT_PREFIX`] but its base 32 payload does
+    /// not decode into an invite code.
+    #[error("Invalid prefixed base32 invite code: {0}")]
+    Base32(#[from] PrefixedDecodeError),
 }
 
 /// Parses the invite code from a bech32 string
@@ -270,6 +299,7 @@ mod tests {
     use fedimint_core::PeerId;
     use fedimint_core::base32::FEDIMINT_PREFIX;
 
+    use super::InviteCodeParseError;
     use crate::config::FederationId;
     use crate::invite_code::InviteCode;
 
@@ -300,5 +330,31 @@ mod tests {
                 ))
             ]
         );
+    }
+
+    #[test]
+    fn from_str_rejects_wrong_hrp() {
+        let other_hrp = bech32::Hrp::parse("abcd").expect("valid hrp");
+        let encoded = bech32::encode::<bech32::Bech32m>(other_hrp, &[0u8; 8]).expect("encodes");
+        assert!(matches!(
+            InviteCode::from_str(&encoded),
+            Err(InviteCodeParseError::InvalidHrp { hrp }) if hrp == other_hrp
+        ));
+    }
+
+    #[test]
+    fn from_str_rejects_non_bech32() {
+        assert!(matches!(
+            InviteCode::from_str("definitely not bech32"),
+            Err(InviteCodeParseError::Bech32(_))
+        ));
+    }
+
+    #[test]
+    fn from_str_reports_corrupt_prefixed_base32() {
+        assert!(matches!(
+            InviteCode::from_str(&format!("{FEDIMINT_PREFIX}not!base32")),
+            Err(InviteCodeParseError::Base32(_))
+        ));
     }
 }

@@ -1978,7 +1978,7 @@ fn build_wallet_server_configs() -> anyhow::Result<(
             &WalletInit,
             &wallet_cfg[&PeerId::from(0)].consensus,
         )?,
-    )?;
+    );
     Ok((wallet_cfg.into_values().collect(), client_cfg))
 }
 

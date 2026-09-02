@@ -126,7 +126,7 @@ use thiserror::Error;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::core::{ModuleInstanceId, ModuleKind};
-use crate::encoding::{Decodable, Encodable};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, timing};
@@ -487,9 +487,7 @@ impl Database {
     /// `Err` if [`Self::is_global`] is not true
     pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not global"
-            )));
+            return Err(DatabaseError::NotGlobal);
         }
 
         Ok(())
@@ -498,9 +496,7 @@ impl Database {
     /// `Err` if [`Self::is_global`] is true
     pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not isolated"
-            )));
+            return Err(DatabaseError::NotIsolated);
         }
 
         Ok(())
@@ -1572,7 +1568,7 @@ fn decode_value_expect<V: DatabaseValue>(
         panic!(
             "Unrecoverable decoding DatabaseValue as {}; err={}, key_bytes={}, val_bytes={}",
             any::type_name::<V>(),
-            err,
+            err.fmt_compact(),
             AbbreviateHexBytes(key_bytes),
             AbbreviateHexBytes(value_bytes),
         )
@@ -1589,7 +1585,7 @@ fn decode_key_expect<K: DatabaseKey>(key_bytes: &[u8], decoders: &ModuleDecoderR
         panic!(
             "Unrecoverable decoding DatabaseKey as {}; err={}; bytes={}",
             any::type_name::<K>(),
-            err,
+            err.fmt_compact(),
             AbbreviateHexBytes(key_bytes)
         )
     })
@@ -1746,9 +1742,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     /// `Err` if [`Self::is_global`] is not true
     pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not global"
-            )));
+            return Err(DatabaseError::NotGlobal);
         }
 
         Ok(())
@@ -1757,9 +1751,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     /// `Err` if [`Self::is_global`] is true
     pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            return Err(DatabaseError::Other(anyhow::anyhow!(
-                "Database instance not isolated"
-            )));
+            return Err(DatabaseError::NotIsolated);
         }
 
         Ok(())
@@ -1946,7 +1938,7 @@ where
         }
 
         <Self as crate::encoding::Decodable>::consensus_decode_whole(&data[1..], modules)
-            .map_err(|decode_error| DecodingError::Other(decode_error.0))
+            .map_err(|decode_error| DecodingError::Other(decode_error.0.into()))
     }
 }
 
@@ -1958,7 +1950,7 @@ where
         data: &[u8],
         modules: &ModuleDecoderRegistry,
     ) -> std::result::Result<Self, DecodingError> {
-        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0))
+        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0.into()))
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -2108,18 +2100,19 @@ pub enum DbKeyPrefix {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum DecodingError {
     #[error("Key had a wrong prefix, expected {expected} but got {found}")]
     WrongPrefix { expected: u8, found: u8 },
     #[error("Key had a wrong length, expected {expected} but got {found}")]
     WrongLength { expected: usize, found: usize },
-    #[error("Other decoding error: {0:#}")]
-    Other(anyhow::Error),
+    #[error("Other decoding error")]
+    Other(#[source] Box<dyn Error + Send + Sync>),
 }
 
 impl DecodingError {
     pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
-        Self::Other(anyhow::Error::from(error))
+        Self::Other(Box::new(error))
     }
 
     pub fn wrong_prefix(expected: u8, found: u8) -> Self {
@@ -2133,6 +2126,7 @@ impl DecodingError {
 
 /// Error type for database operations
 #[derive(Debug, Error)]
+#[non_exhaustive]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
 #[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 pub enum DatabaseError {
@@ -2164,17 +2158,16 @@ pub enum DatabaseError {
     #[error("Database backend error: {0}")]
     DatabaseBackend(#[from] Box<dyn Error + Send + Sync>),
 
-    /// Other database error
-    #[error("Database error: {0:#}")]
-    Other(anyhow::Error),
+    /// The operation requires a global (non module-isolated) database instance.
+    #[error("Database instance is not global")]
+    NotGlobal,
+
+    /// The operation requires a module-isolated database instance.
+    #[error("Database instance is not isolated")]
+    NotIsolated,
 }
 
 impl DatabaseError {
-    /// Create a DatabaseError from any error type
-    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
-        Self::Other(anyhow::Error::from(error))
-    }
-
     /// Create a DatabaseBackend error from any error type
     pub fn backend<E: Error + Send + Sync + 'static>(error: E) -> Self {
         Self::DatabaseBackend(Box::new(error))
@@ -2183,12 +2176,6 @@ impl DatabaseError {
     /// Create a `SnapshotTooOld` error, preserving the backend's own error
     pub fn snapshot_too_old<E: Error + Send + Sync + 'static>(error: E) -> Self {
         Self::SnapshotTooOld(Box::new(error))
-    }
-}
-
-impl From<anyhow::Error> for DatabaseError {
-    fn from(error: anyhow::Error) -> Self {
-        Self::Other(error)
     }
 }
 
@@ -2314,10 +2301,46 @@ pub type DbMigrationFn<C> = Box<
         dyn for<'tx> Fn(
             DbMigrationFnContext<'tx, C>,
         ) -> Pin<
-            Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'tx)>,
+            Box<maybe_add_send!(dyn futures::Future<Output = Result<(), DbMigrationError>> + 'tx)>,
         >
     ),
 >;
+
+/// Failure while applying database migrations.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DbMigrationError {
+    /// The database itself failed.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+    /// A stored value is not a valid consensus encoding.
+    #[error("Failed to consensus-decode a database entry")]
+    Decode(#[from] DecodeError),
+    /// The database was written by newer code than the one applying migrations.
+    #[error(
+        "On disk database version {on_disk} for module {kind} is higher than the code \
+         database version {target}"
+    )]
+    VersionTooHigh {
+        kind: String,
+        on_disk: DatabaseVersion,
+        target: DatabaseVersion,
+    },
+    /// A migration failed for a reason specific to it.
+    #[error("Migration failed")]
+    Other(#[source] Box<dyn Error + Send + Sync>),
+}
+
+impl DbMigrationError {
+    /// Wraps a migration-specific error; accepts anything convertible into a
+    /// boxed error, an `anyhow::Error` included.
+    pub fn other<E>(error: E) -> Self
+    where
+        E: Into<Box<dyn Error + Send + Sync>>,
+    {
+        Self::Other(error.into())
+    }
+}
 
 /// Verifies that all database migrations are defined contiguously and returns
 /// the "current" database version, which is one greater than the last key in
@@ -2350,7 +2373,7 @@ pub async fn apply_migrations<C>(
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> std::result::Result<(), anyhow::Error>
+) -> Result<(), DbMigrationError>
 where
     C: Clone,
 {
@@ -2365,9 +2388,7 @@ where
     )
     .await?;
 
-    dbtx.commit_tx_result()
-        .await
-        .map_err(|e| anyhow::Error::msg(e.to_string()))
+    Ok(dbtx.commit_tx_result().await?)
 }
 /// `apply_migrations` iterates from the on disk database version for the
 /// module.
@@ -2389,7 +2410,7 @@ pub async fn apply_migrations_dbtx<C>(
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> std::result::Result<(), anyhow::Error>
+) -> Result<(), DbMigrationError>
 where
     C: Clone,
 {
@@ -2419,7 +2440,7 @@ where
         kind.clone(),
         is_new_db,
     )
-    .await?;
+    .await;
 
     let module_instance_id_key = module_instance_id_or_global(module_instance_id);
 
@@ -2431,9 +2452,11 @@ where
         let mut current_db_version = disk_version;
 
         if current_db_version > target_db_version {
-            return Err(anyhow::anyhow!(format!(
-                "On disk database version {current_db_version} for module {kind} was higher than the code database version {target_db_version}."
-            )));
+            return Err(DbMigrationError::VersionTooHigh {
+                kind,
+                on_disk: current_db_version,
+                target: target_db_version,
+            });
         }
 
         while current_db_version < target_db_version {
@@ -2474,7 +2497,7 @@ pub async fn create_database_version(
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
     is_new_db: bool,
-) -> std::result::Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut dbtx = db.begin_transaction().await;
 
     create_database_version_dbtx(
@@ -2484,7 +2507,7 @@ pub async fn create_database_version(
         kind,
         is_new_db,
     )
-    .await?;
+    .await;
 
     dbtx.commit_tx_result().await?;
     Ok(())
@@ -2499,7 +2522,7 @@ pub async fn create_database_version_dbtx(
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
     is_new_db: bool,
-) -> std::result::Result<(), anyhow::Error> {
+) {
     let key_module_instance_id = module_instance_id_or_global(module_instance_id);
 
     // First check if the module has a `DatabaseVersion` written to
@@ -2546,8 +2569,6 @@ pub async fn create_database_version_dbtx(
             )
             .await;
     }
-
-    Ok(())
 }
 
 /// Removes `DatabaseVersion` from `DatabaseVersionKeyV0` if it exists and
@@ -2589,7 +2610,8 @@ mod test_utils {
 
     use super::{
         Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
-        DbMigrationFn, apply_migrations,
+        DbMigrationError, DbMigrationFn, apply_migrations, apply_migrations_dbtx,
+        create_database_version_dbtx,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
@@ -3329,10 +3351,60 @@ mod test_utils {
         }
     }
 
+    #[cfg(test)]
+    #[tokio::test]
+    async fn apply_migrations_rejects_newer_on_disk_version() {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let mut dbtx = db.begin_transaction().await;
+
+        // Pretend the code that wrote this database was at version 5.
+        create_database_version_dbtx(
+            &mut dbtx.to_ref_nc(),
+            DatabaseVersion(5),
+            None,
+            "test".to_owned(),
+            true,
+        )
+        .await;
+
+        // This code knows no migrations at all, i.e. it is at version 0.
+        let err = apply_migrations_dbtx(
+            &mut dbtx.to_ref_nc(),
+            (),
+            "test".to_owned(),
+            BTreeMap::new(),
+            None,
+            None,
+        )
+        .await
+        .expect_err("on-disk version 5 must not be accepted by code at version 0");
+
+        assert!(matches!(
+            err,
+            DbMigrationError::VersionTooHigh {
+                on_disk: DatabaseVersion(5),
+                target: DatabaseVersion(0),
+                ..
+            }
+        ));
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn db_migration_error_other_accepts_anyhow() {
+        let err = DbMigrationError::other(anyhow::anyhow!("legacy"));
+
+        assert!(matches!(
+            &err,
+            DbMigrationError::Other(source) if source.to_string() == "legacy"
+        ));
+        assert!(std::error::Error::source(&err).is_some());
+    }
+
     #[allow(dead_code)]
     async fn migrate_test_db_version_0(
         mut ctx: DbMigrationFnContext<'_, ()>,
-    ) -> std::result::Result<(), anyhow::Error> {
+    ) -> Result<(), DbMigrationError> {
         let mut dbtx = ctx.dbtx();
         let example_keys_v0 = dbtx
             .find_by_prefix(&DbPrefixTestPrefixV0)
@@ -3354,7 +3426,6 @@ mod test_utils {
         use std::ops::Range;
         use std::path::Path;
 
-        use anyhow::anyhow;
         use async_trait::async_trait;
 
         use crate::ModuleDecoderRegistry;
@@ -3433,7 +3504,9 @@ mod test_utils {
             async fn commit_tx(self) -> DatabaseResult<()> {
                 use crate::db::DatabaseError;
 
-                Err(DatabaseError::Other(anyhow::anyhow!("Can't commit!")))
+                Err(DatabaseError::backend(std::io::Error::other(
+                    "Can't commit!",
+                )))
             }
         }
 

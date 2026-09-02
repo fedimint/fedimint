@@ -11,7 +11,6 @@ use std::pin::{Pin, pin};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
 use futures::future::{self, Either};
@@ -84,7 +83,7 @@ impl TaskGroup {
     pub async fn shutdown_join_all(
         self,
         join_timeout: impl Into<Option<Duration>>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), JoinAllError> {
         self.shutdown();
         self.join_all(join_timeout.into()).await
     }
@@ -310,7 +309,7 @@ impl TaskGroup {
         })
     }
 
-    pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), anyhow::Error> {
+    pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), JoinAllError> {
         let deadline = timeout.map(|timeout| now() + timeout);
         let mut errors = vec![];
 
@@ -319,8 +318,7 @@ impl TaskGroup {
         if errors.is_empty() {
             Ok(())
         } else {
-            let num_errors = errors.len();
-            bail!("{num_errors} tasks did not finish cleanly: {errors:?}")
+            Err(JoinAllError { errors })
         }
     }
 
@@ -365,6 +363,17 @@ pub struct TaskHandle {
 #[error("Task group is shutting down")]
 #[non_exhaustive]
 pub struct ShuttingDownError {}
+
+/// One or more tasks of a [`TaskGroup`] did not finish cleanly.
+#[derive(Debug, Error)]
+#[error("{} tasks did not finish cleanly: {errors:?}", .errors.len())]
+#[non_exhaustive]
+pub struct JoinAllError {
+    /// The join failures collected for tasks that were still registered with
+    /// the group when joining; a task that had already finished or panicked
+    /// before the join is not included.
+    pub errors: Vec<JoinError>,
+}
 
 impl TaskHandle {
     /// Is task group shutting down?

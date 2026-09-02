@@ -147,7 +147,7 @@ impl IrohConnector {
             FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
             FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
         ] {
-            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var)? {
+            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var) {
                 s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
             }
         }

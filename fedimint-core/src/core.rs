@@ -109,7 +109,7 @@ impl Debug for OperationId {
 }
 
 impl FromStr for OperationId {
-    type Err = anyhow::Error;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes: [u8; 32] = hex::FromHex::from_hex(s)?;

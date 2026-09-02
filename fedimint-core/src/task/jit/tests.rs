@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 
-use super::{Jit, JitTry, JitTryAnyhow};
+use super::{Jit, JitTry};
 
 #[test_log::test(tokio::test)]
 async fn sanity_jit() {
@@ -18,7 +18,7 @@ async fn sanity_jit() {
 
 #[test_log::test(tokio::test)]
 async fn sanity_jit_try_ok() {
-    let v = JitTryAnyhow::new_try(|| async {
+    let v = JitTry::<_, anyhow::Error>::new_try(|| async {
         fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
         Ok(3)
     });

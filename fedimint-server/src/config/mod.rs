@@ -392,7 +392,7 @@ impl ServerConfig {
             .clone();
         let module = ServerModuleConfig::from(private, consensus);
 
-        module.to_typed()
+        Ok(module.to_typed()?)
     }
     pub fn get_module_id_by_kind(
         &self,

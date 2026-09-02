@@ -11,7 +11,7 @@ use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::rustls::install_crypto_provider;
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
+use fedimint_core::task::jit::JitTry;
 use fedimint_core::task::{block_in_place, sleep, timeout};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl, retry, write_overwrite_async};
@@ -36,7 +36,7 @@ use crate::{Gatewayd, cmd};
 #[derive(Clone)]
 pub struct Bitcoind {
     pub client: Arc<bitcoincore_rpc::Client>,
-    pub(crate) wallet_client: Arc<JitTryAnyhow<Arc<bitcoincore_rpc::Client>>>,
+    pub(crate) wallet_client: Arc<JitTry<Arc<bitcoincore_rpc::Client>, anyhow::Error>>,
     pub(crate) _process: ProcessHandle,
 }
 

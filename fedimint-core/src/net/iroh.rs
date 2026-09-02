@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::Context;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::defaults::DEFAULT_STUN_PORT;
@@ -9,6 +8,7 @@ use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::endpoint::{Builder, TransportConfig};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
+use thiserror::Error;
 use tracing::{debug, info, warn};
 use url::Url;
 
@@ -35,7 +35,7 @@ pub async fn build_iroh_endpoint(
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,
     alpn: &[u8],
-) -> Result<Endpoint, anyhow::Error> {
+) -> Result<Endpoint, IrohEndpointError> {
     let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
         warn!(
             target: LOG_NET_IROH,
@@ -127,7 +127,7 @@ pub async fn build_iroh_endpoint(
 
     let endpoint = Box::pin(builder.bind())
         .await
-        .context("Failed to bind Iroh endpoint")?;
+        .map_err(|e| IrohEndpointError::Bind(e.into()))?;
 
     info!(
         target: LOG_NET_IROH,
@@ -138,6 +138,15 @@ pub async fn build_iroh_endpoint(
     );
 
     Ok(endpoint)
+}
+
+/// Failure to set up an iroh endpoint.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum IrohEndpointError {
+    /// The endpoint could not bind its socket or reach its relays.
+    #[error("Failed to bind Iroh endpoint")]
+    Bind(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 fn relay_node_from_url(url: Url) -> RelayNode {

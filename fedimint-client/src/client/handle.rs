@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::format_err;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::runtime;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_CLIENT;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
@@ -80,7 +80,7 @@ impl ClientHandle {
             .await
         {
             client_span.in_scope(|| {
-                warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Error waiting for client task group to shut down");
+                warn!(target: LOG_CLIENT, err = %err.fmt_compact(), "Error waiting for client task group to shut down");
             });
         }
 

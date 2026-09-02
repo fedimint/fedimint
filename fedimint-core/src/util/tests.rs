@@ -88,7 +88,7 @@ async fn retry_succeed_with_one_attempt() {
     let closure = || async {
         counter.fetch_add(1, Ordering::SeqCst);
         // Always return a success.
-        Ok(42)
+        anyhow::Ok(42)
     };
 
     let _ = retry(
@@ -119,4 +119,26 @@ async fn retry_fail_with_three_attempts() {
     .await;
 
     assert_eq!(counter.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn ok_reports_closed_stream_with_typed_error() {
+    let mut stream = futures::stream::iter(vec![1]);
+    assert_eq!(stream.ok().await, Ok(1));
+    assert_eq!(stream.ok().await, Err(super::StreamEndedError));
+}
+
+#[tokio::test]
+async fn retry_keeps_the_closure_error_type() {
+    #[derive(Debug, PartialEq, thiserror::Error)]
+    #[error("Nope")]
+    struct Nope;
+
+    let result: Result<(), Nope> = retry(
+        "always fails",
+        backoff_util::immediate_backoff(Some(2)),
+        || async { Err(Nope) },
+    )
+    .await;
+    assert_eq!(result, Err(Nope));
 }

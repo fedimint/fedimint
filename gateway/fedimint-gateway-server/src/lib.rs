@@ -1000,7 +1000,7 @@ impl Gateway {
                             // could cause it to cancel real HTLCs after `gateway_receiver`
                             // is dropped.
                             if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
-                                crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
+                                crit!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Lightning payment stream task group shutdown");
                             }
                             sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                             continue
@@ -1016,7 +1016,7 @@ impl Gateway {
 
                     self_copy.set_gateway_state(GatewayState::Disconnected).await;
                     if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
-                        crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
+                        crit!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Lightning payment stream task group shutdown");
                     }
 
                     self_copy.unannounce_from_all_federations().await;
@@ -2057,7 +2057,7 @@ impl Gateway {
 
         // Verify the LNv1 network if present
         if let Some(cfg) = lnv1_cfg {
-            let ln_cfg: &LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &LightningClientConfig = cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network.0 != network {
                 crit!(
@@ -2075,7 +2075,8 @@ impl Gateway {
 
         // Verify the LNv2 network if present
         if let Some(cfg) = lnv2_cfg {
-            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig =
+                cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network != network {
                 crit!(
@@ -2923,7 +2924,7 @@ impl IAdminGateway for Gateway {
         let tg = task_group.clone();
         tg.spawn("Kill Gateway", |_task_handle| async {
             if let Err(err) = task_group.shutdown_join_all(Duration::from_mins(3)).await {
-                warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error shutting down gateway");
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error shutting down gateway");
             }
         });
         Ok(())

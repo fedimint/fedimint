@@ -29,7 +29,9 @@ use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_core::util::{
+    FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command,
+};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
@@ -527,7 +529,7 @@ pub async fn run(
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-        error!(target: LOG_CORE, err = %err.fmt_compact_anyhow(), "Error while shutting down task group");
+        error!(target: LOG_CORE, err = %err.fmt_compact(), "Error while shutting down task group");
     }
 
     debug!(target: LOG_CORE, "Shutdown complete");

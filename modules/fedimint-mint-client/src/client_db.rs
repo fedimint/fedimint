@@ -3,7 +3,9 @@ use std::io::Cursor;
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
+use fedimint_core::db::{
+    DatabaseRecord, DatabaseTransaction, DbMigrationError, IDatabaseTransactionOpsCore,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
@@ -138,7 +140,7 @@ impl_db_record!(
 
 pub async fn migrate_to_v1(
     dbtx: &mut DatabaseTransaction<'_>,
-) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
+) -> Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>, DbMigrationError> {
     dbtx.ensure_isolated().expect("Must be in our database");
     // between v0 and v1, we changed the format of `MintRecoveryState`, and instead
     // of migrating it, we can just delete it, so the recovery will just start
@@ -159,7 +161,7 @@ pub async fn migrate_to_v1(
 pub(crate) fn migrate_state_to_v2(
     operation_id: OperationId,
     cursor: &mut Cursor<&[u8]>,
-) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+) -> Result<Option<(Vec<u8>, OperationId)>, DbMigrationError> {
     let decoders = ModuleDecoderRegistry::default();
 
     let mint_client_state_machine_variant = u16::consensus_decode_partial(cursor, &decoders)?;
