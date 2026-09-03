@@ -215,7 +215,7 @@ where
             }
             let v = V::consensus_decode_partial_from_finite_reader(d, modules)?;
             if res.insert(k, v).is_some() {
-                return Err(DecodeError(anyhow::format_err!("Duplicate key")));
+                return Err(DecodeError::from_str("Duplicate key"));
             }
         }
         Ok(res)
@@ -251,7 +251,7 @@ where
                 return Err(DecodeError::from_str("Non-canonical encoding"));
             }
             if !res.insert(k) {
-                return Err(DecodeError(anyhow::format_err!("Duplicate key")));
+                return Err(DecodeError::from_str("Duplicate key"));
             }
         }
         Ok(res)

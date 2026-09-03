@@ -19,11 +19,10 @@ mod threshold_crypto;
 
 use std::borrow::Cow;
 use std::cmp;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display};
 use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::Context;
 use bitcoin::hashes::sha256;
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
@@ -362,7 +361,7 @@ pub fn with_decoding_context<T>(
     result: Result<T, DecodeError>,
     context: &'static str,
 ) -> Result<T, DecodeError> {
-    result.map_err(|error| DecodeError::new_custom(anyhow::Error::new(error).context(context)))
+    DecodeContext::context(result, context)
 }
 
 impl Encodable for SafeUrl {
@@ -382,18 +381,132 @@ impl Decodable for SafeUrl {
     }
 }
 
+/// Failure to consensus-decode a value.
+///
+/// `Display` prints only the outermost layer: the context of the decoding step
+/// that failed, or the leaf cause when there is no context. The full chain is
+/// reachable through [`std::error::Error::source`] and printed flat by
+/// [`FmtCompact::fmt_compact`](crate::util::FmtCompact).
 #[derive(Debug, Error)]
-pub struct DecodeError(pub(crate) anyhow::Error);
+#[non_exhaustive]
+pub enum DecodeError {
+    /// The reader failed or ran out of input.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    /// The input names an enum variant the type does not have.
+    #[error("Invalid enum variant {variant} while decoding {type_name}")]
+    InvalidVariant {
+        /// The variant index found in the input.
+        variant: u64,
+        /// The name of the type being decoded.
+        type_name: &'static str,
+    },
+    /// A decoding step failed; `context` names the step and `source` says why.
+    #[error("{context}")]
+    Context {
+        /// The decoding step that failed.
+        context: String,
+        /// Why it failed.
+        #[source]
+        source: Box<Self>,
+    },
+    /// The input decoded but is not a valid value of the type; the source
+    /// says why.
+    #[error(transparent)]
+    Invalid(Box<dyn std::error::Error + Send + Sync>),
+    /// The input is malformed in a way only a message describes.
+    #[error("{message}")]
+    Custom {
+        /// What is wrong with the input.
+        message: String,
+    },
+}
 
 impl DecodeError {
+    /// A decode failure described by a message.
+    pub fn custom(message: impl Into<String>) -> Self {
+        Self::Custom {
+            message: message.into(),
+        }
+    }
+
+    /// A decode failure described by a static message.
+    // TODO: think about better name
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &'static str) -> Self {
+        Self::custom(s)
+    }
+
+    /// A decode failure caused by a typed error, shown as that error.
+    pub fn from_err<E>(e: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Invalid(Box::new(e))
+    }
+
+    /// Wraps this error in the context of the decoding step that failed.
+    pub fn context(self, context: impl Display) -> Self {
+        Self::Context {
+            context: context.to_string(),
+            source: Box::new(self),
+        }
+    }
+
+    /// Transitional constructor for decode bodies still built on `anyhow`; the
+    /// chain is flattened into the message. Removed once no caller is left.
+    // Takes the error by value because callers pass it to `Result::map_err`.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new_custom(e: anyhow::Error) -> Self {
-        Self(e)
+        Self::custom(format!("{e:#}"))
     }
 }
 
+/// Transitional: lets `?` convert an `anyhow::Error` in decode bodies that
+/// have not moved to [`DecodeContext`] yet. Removed once no caller is left.
 impl From<anyhow::Error> for DecodeError {
     fn from(e: anyhow::Error) -> Self {
-        Self(e)
+        Self::new_custom(e)
+    }
+}
+
+/// Adds the context of a decoding step to a failed result.
+///
+/// Implemented for every `Result` whose error converts into [`DecodeError`],
+/// so it applies to results of `Decodable` calls and to `std::io::Result`.
+/// Its method names match `anyhow::Context`'s; where both traits are in scope,
+/// call it as `DecodeContext::context(result, ..)` to avoid the clash.
+pub trait DecodeContext<T> {
+    /// Wraps the error in `context`.
+    fn context<C>(self, context: C) -> Result<T, DecodeError>
+    where
+        C: Display;
+
+    /// Wraps the error in the context produced by `context`, which only runs
+    /// on failure.
+    fn with_context<C, F>(self, context: F) -> Result<T, DecodeError>
+    where
+        C: Display,
+        F: FnOnce() -> C;
+}
+
+impl<T, E> DecodeContext<T> for Result<T, E>
+where
+    E: Into<DecodeError>,
+{
+    fn context<C>(self, context: C) -> Result<T, DecodeError>
+    where
+        C: Display,
+    {
+        self.map_err(|error| error.into().context(context))
+    }
+
+    fn with_context<C, F>(self, context: F) -> Result<T, DecodeError>
+    where
+        C: Display,
+        F: FnOnce() -> C,
+    {
+        self.map_err(|error| error.into().context(context()))
     }
 }
 
@@ -433,8 +546,10 @@ macro_rules! impl_encode_decode_num_as_bigsize {
                 d: &mut D,
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                let varint = BigSize::consensus_decode_partial(d, &Default::default())
-                    .context(concat!("VarInt inside ", stringify!($num_type)))?;
+                let varint = anyhow::Context::context(
+                    BigSize::consensus_decode_partial(d, &Default::default()),
+                    concat!("VarInt inside ", stringify!($num_type)),
+                )?;
                 <$num_type>::try_from(varint.0).map_err(crate::encoding::DecodeError::from_err)
             }
         }
@@ -659,35 +774,6 @@ impl Decodable for bool {
     }
 }
 
-impl DecodeError {
-    // TODO: think about better name
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'static str) -> Self {
-        #[derive(Debug)]
-        struct StrError(&'static str);
-
-        impl std::fmt::Display for StrError {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Display::fmt(&self.0, f)
-            }
-        }
-
-        impl std::error::Error for StrError {}
-
-        Self(anyhow::Error::from(StrError(s)))
-    }
-
-    pub fn from_err<E: std::error::Error + Send + Sync + 'static>(e: E) -> Self {
-        Self(anyhow::Error::from(e))
-    }
-}
-
-impl std::fmt::Display for DecodeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:#}", self.0))
-    }
-}
-
 impl Encodable for Cow<'static, str> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         self.as_ref().consensus_encode(writer)
@@ -886,6 +972,7 @@ mod tests {
     use super::*;
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleRegistry;
+    use crate::util::FmtCompact as _;
 
     pub(crate) fn test_roundtrip<T>(value: &T)
     where
@@ -1290,5 +1377,65 @@ mod tests {
         // bitcoin structures are not lexicographically sortable so we cannot
         // test them here. in future we may crate a wrapper type that is
         // lexicographically sortable to use when needed
+    }
+
+    #[test]
+    fn decode_error_display_is_the_outer_layer_and_the_chain_is_reachable() {
+        let io = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "short read");
+        let err = Err::<(), _>(io)
+            .context("Decoding field a")
+            .context("Decoding Foo")
+            .expect_err("built from an error");
+
+        assert_eq!(err.to_string(), "Decoding Foo");
+        assert_eq!(
+            err.fmt_compact().to_string(),
+            "Decoding Foo: Decoding field a: short read"
+        );
+
+        let DecodeError::Context { source: inner, .. } = &err else {
+            panic!("outer layer is the last context added: {err:?}");
+        };
+        let DecodeError::Context { source: leaf, .. } = &**inner else {
+            panic!("inner layer is the first context added: {inner:?}");
+        };
+        assert!(matches!(**leaf, DecodeError::Io(_)), "{leaf:?}");
+    }
+
+    #[test]
+    fn from_err_shows_the_typed_error_as_is() {
+        let parse_error = "x".parse::<u8>().expect_err("not a number");
+        let message = parse_error.to_string();
+
+        let err = DecodeError::from_err(parse_error);
+
+        assert!(matches!(err, DecodeError::Invalid(_)), "{err:?}");
+        assert_eq!(err.to_string(), message);
+        assert_eq!(err.fmt_compact().to_string(), message);
+    }
+
+    #[test]
+    fn custom_and_from_str_carry_only_a_message() {
+        let err = DecodeError::custom(format!("Unknown network magic: {:x}", 0xd9b4_bef9_u32));
+        assert!(matches!(err, DecodeError::Custom { .. }), "{err:?}");
+        assert_eq!(err.to_string(), "Unknown network magic: d9b4bef9");
+        assert!(std::error::Error::source(&err).is_none());
+
+        let err = DecodeError::from_str("Out of range, expected 0 or 1");
+        assert_eq!(err.to_string(), "Out of range, expected 0 or 1");
+    }
+
+    #[test]
+    fn with_context_only_formats_on_error() {
+        let ok: Result<u8, DecodeError> = Ok(1);
+        let formatted = ok
+            .with_context(|| panic!("must not be called on Ok"))
+            .expect("still Ok");
+        assert_eq!(formatted, 1);
+
+        let err = Err::<u8, _>(DecodeError::from_str("bad"))
+            .with_context(|| format!("Decoding item {}", 3))
+            .expect_err("still Err");
+        assert_eq!(err.fmt_compact().to_string(), "Decoding item 3: bad");
     }
 }

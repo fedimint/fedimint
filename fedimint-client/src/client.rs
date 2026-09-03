@@ -506,7 +506,7 @@ impl Client {
         Ok(match client_secret {
             Some(client_secret) => Some(
                 T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
-                    .map_err(|e| anyhow!("Decoding failed: {e}"))?,
+                    .context("Decoding failed")?,
             ),
             None => None,
         })

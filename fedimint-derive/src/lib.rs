@@ -251,7 +251,6 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
         #[allow(deprecated)]
         impl ::fedimint_core::encoding::Decodable for #ident {
             fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(d: &mut D, modules: &::fedimint_core::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_core::encoding::DecodeError> {
-                use ::fedimint_core:: anyhow::Context;
                 #decode_inner
             }
         }
@@ -300,8 +299,9 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
             quote! {
                 #variant_idx => {
                     // FIXME: feels like there's a way more elegant way to do this with limited readers
-                    let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules)
-                        .context(concat!(
+                    let bytes: Vec<u8> = ::fedimint_core::anyhow::Context::context(
+                        ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules),
+                        concat!(
                             "Decoding bytes of ",
                             stringify!(#ident)
                         ))?;
@@ -333,8 +333,9 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
     let default_match_arm = if variants.iter().any(is_default_variant_enforce_valid) {
         quote! {
             variant => {
-                let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules)
-                    .context(concat!(
+                let bytes: Vec<u8> = ::fedimint_core::anyhow::Context::context(
+                    ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(d, modules),
+                    concat!(
                         "Decoding default variant of ",
                         stringify!(#ident)
                     ))?;
@@ -354,8 +355,9 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
     };
 
     quote! {
-        let variant = <u64 as ::fedimint_core::encoding::Decodable>::consensus_decode_partial_from_finite_reader(d, modules)
-            .context(concat!(
+        let variant = ::fedimint_core::anyhow::Context::context(
+            <u64 as ::fedimint_core::encoding::Decodable>::consensus_decode_partial_from_finite_reader(d, modules),
+            concat!(
                 "Decoding default variant of ",
                 stringify!(#ident)
             ))?;
@@ -403,8 +405,9 @@ fn derive_tuple_decode_block(
     quote! {
         {
             #(
-                let #field_names = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules)
-                    .context(concat!(
+                let #field_names = ::fedimint_core::anyhow::Context::context(
+                    ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules),
+                    concat!(
                         "Decoding tuple block ",
                         stringify!(#ident),
                         " field ",
@@ -429,8 +432,9 @@ fn derive_named_decode_block(
     quote! {
         {
             #(
-                let #variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules)
-                    .context(concat!(
+                let #variant_fields = ::fedimint_core::anyhow::Context::context(
+                    ::fedimint_core::encoding::Decodable::consensus_decode_partial_from_finite_reader(#reader, modules),
+                    concat!(
                         "Decoding named block field: ",
                         stringify!(#ident),
                         "{ ... ",
