@@ -6,7 +6,6 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use anyhow::Context;
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
@@ -26,7 +25,7 @@ use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::{Decodable, DecodeError};
+use crate::encoding::{Decodable, DecodeContext as _, DecodeError};
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
     SerdeModuleEncoding,

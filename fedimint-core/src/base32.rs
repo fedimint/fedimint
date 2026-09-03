@@ -206,7 +206,6 @@ fn decode_prefixed_reports_the_whole_decode_chain() {
 
     use crate::encoding::Encodable;
     use crate::invite_code::InviteCode;
-    use crate::util::FmtCompact as _;
 
     // Dropping the last byte of a valid invite code cuts off mid-federation-id, so
     // the reader runs out of input partway through the consensus decode instead of

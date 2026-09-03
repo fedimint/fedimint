@@ -1,7 +1,6 @@
 use std::io::{Error, Write};
 use std::str::FromStr;
 
-use anyhow::format_err;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
@@ -119,9 +118,7 @@ impl crate::encoding::Decodable for bitcoin::Txid {
         hex: &str,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let mut bytes = Vec::<u8>::from_hex(hex)
-            .map_err(anyhow::Error::from)
-            .map_err(DecodeError::new_custom)?;
+        let mut bytes = Vec::<u8>::from_hex(hex).map_err(DecodeError::from_err)?;
 
         // Just Bitcoin things: transaction hashes are encoded reverse
         bytes.reverse();
@@ -180,9 +177,8 @@ impl Decodable for NetworkLegacyEncodingWrapper {
     ) -> Result<Self, DecodeError> {
         let num = u32::consensus_decode_partial(d, modules)?;
         let magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
-        let network = bitcoin::Network::from_magic(magic).ok_or_else(|| {
-            DecodeError::new_custom(format_err!("Unknown network magic: {magic:x}"))
-        })?;
+        let network = bitcoin::Network::from_magic(magic)
+            .ok_or_else(|| DecodeError::custom(format!("Unknown network magic: {magic:x}")))?;
         Ok(Self(network))
     }
 }
@@ -200,7 +196,7 @@ impl Decodable for bitcoin::Network {
         Self::from_magic(bitcoin::p2p::Magic::from_bytes(
             Decodable::consensus_decode_partial(d, modules)?,
         ))
-        .ok_or_else(|| DecodeError::new_custom(format_err!("Unknown network magic")))
+        .ok_or_else(|| DecodeError::from_str("Unknown network magic"))
     }
 }
 
@@ -241,8 +237,8 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         let network = NetworkLegacyEncodingWrapper::consensus_decode_partial(&mut d, modules)?.0;
         let script_pk = bitcoin::ScriptBuf::consensus_decode_partial(&mut d, modules)?;
 
-        let address = bitcoin::Address::from_script(&script_pk, network)
-            .map_err(|e| DecodeError::new_custom(e.into()))?;
+        let address =
+            bitcoin::Address::from_script(&script_pk, network).map_err(DecodeError::from_err)?;
 
         Ok(address.into_unchecked())
     }

@@ -237,14 +237,11 @@ pub trait Decodable: Sized {
         let left = r.limit();
 
         if left != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!(
-                    "Type did not consume all bytes during decoding; expected={}; left={}; type={}",
-                    total_len,
-                    left,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
+            return Err(fedimint_core::encoding::DecodeError::custom(format!(
+                "Type did not consume all bytes during decoding; expected={total_len}; \
+                 left={left}; type={}",
+                std::any::type_name::<Self>(),
+            )));
         }
         Ok(res)
     }
@@ -273,9 +270,7 @@ pub trait Decodable: Sized {
         hex: &str,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::from_hex(hex)
-            .map_err(anyhow::Error::from)
-            .map_err(DecodeError::new_custom)?;
+        let bytes = Vec::<u8>::from_hex(hex).map_err(DecodeError::from_err)?;
         Decodable::consensus_decode_whole(&bytes, modules)
     }
 }
@@ -361,24 +356,7 @@ pub fn with_decoding_context<T>(
     result: Result<T, DecodeError>,
     context: &'static str,
 ) -> Result<T, DecodeError> {
-    DecodeContext::context(result, context)
-}
-
-impl Encodable for SafeUrl {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.to_string().consensus_encode(writer)
-    }
-}
-
-impl Decodable for SafeUrl {
-    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        String::consensus_decode_partial_from_finite_reader(d, modules)?
-            .parse::<Self>()
-            .map_err(DecodeError::from_err)
-    }
+    result.context(context)
 }
 
 /// Failure to consensus-decode a value.
@@ -507,6 +485,23 @@ where
         F: FnOnce() -> C,
     {
         self.map_err(|error| error.into().context(context()))
+    }
+}
+
+impl Encodable for SafeUrl {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.to_string().consensus_encode(writer)
+    }
+}
+
+impl Decodable for SafeUrl {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        String::consensus_decode_partial_from_finite_reader(d, modules)?
+            .parse::<Self>()
+            .map_err(DecodeError::from_err)
     }
 }
 
@@ -1373,6 +1368,18 @@ mod tests {
         // bitcoin structures are not lexicographically sortable so we cannot
         // test them here. in future we may crate a wrapper type that is
         // lexicographically sortable to use when needed
+    }
+
+    #[test]
+    fn whole_decode_rejects_trailing_bytes_with_a_message() {
+        let err = u8::consensus_decode_whole(&[1, 2], &ModuleDecoderRegistry::default())
+            .expect_err("one byte too many");
+        assert!(matches!(err, DecodeError::Custom { .. }), "{err:?}");
+        assert!(
+            err.to_string()
+                .starts_with("Type did not consume all bytes during decoding"),
+            "{err}"
+        );
     }
 
     #[test]
