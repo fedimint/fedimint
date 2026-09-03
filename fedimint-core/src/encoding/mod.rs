@@ -430,22 +430,6 @@ impl DecodeError {
             source: Box::new(self),
         }
     }
-
-    /// Transitional constructor for decode bodies still built on `anyhow`; the
-    /// chain is flattened into the message. Removed once no caller is left.
-    // Takes the error by value because callers pass it to `Result::map_err`.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn new_custom(e: anyhow::Error) -> Self {
-        Self::custom(format!("{e:#}"))
-    }
-}
-
-/// Transitional: lets `?` convert an `anyhow::Error` in decode bodies that
-/// have not moved to [`DecodeContext`] yet. Removed once no caller is left.
-impl From<anyhow::Error> for DecodeError {
-    fn from(e: anyhow::Error) -> Self {
-        Self::new_custom(e)
-    }
 }
 
 /// Adds the context of a decoding step to a failed result.
