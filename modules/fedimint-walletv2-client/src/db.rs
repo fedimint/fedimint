@@ -1,4 +1,3 @@
-use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
@@ -10,7 +9,6 @@ pub enum DbKeyPrefix {
     NextOutputIndex = 0x31,
     ValidAddressIndex = 0x32,
     PendingReceive = 0x33,
-    ReceiveOperation = 0x34,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -48,16 +46,28 @@ impl_db_lookup!(
 /// A peg-in to one of our addresses that the federation can see but has not yet
 /// recorded in its consensus output log.
 ///
+/// Keyed per outpoint rather than per address, because nothing stops an address
+/// being paid more than once: [`receive`] hands out the same address until a
+/// deposit is detected at it, so two deposits before the first is seen is an
+/// ordinary flow. Collapsing them would silently drop one from the progress
+/// view.
+///
 /// This table is rebuilt wholesale on every scan rather than appended to. The
 /// underlying data is advisory and revocable: an entry must disappear if a
 /// reorg unmines it or the mempool drops it, and once the output graduates into
 /// the consensus output log the real receive operation takes over.
+///
+/// [`receive`]: crate::WalletClientModule::receive
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct PendingReceiveKey(pub u64);
+pub struct PendingReceiveKey {
+    /// Encoded first so that [`PendingReceiveAddressPrefix`] can range over
+    /// every deposit to one address.
+    pub address_index: u64,
+    pub outpoint: bitcoin::OutPoint,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
 pub struct PendingReceive {
-    pub outpoint: bitcoin::OutPoint,
     pub value: bitcoin::Amount,
     /// Height of the block that mined the peg-in, or `None` while it is only
     /// in a guardian's mempool.
@@ -86,26 +96,12 @@ impl_db_record!(
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PendingReceivePrefix;
 
-impl_db_lookup!(key = PendingReceiveKey, query_prefix = PendingReceivePrefix);
-
-/// Links a receive address index to the operation claiming it.
-///
-/// Written atomically with the creation of the receive operation, so that
-/// progress for an address can be resolved with a point lookup instead of a
-/// scan over the event log.
+/// Ranges over every pending deposit to a single receive address.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct ReceiveOperationKey(pub u64);
-
-impl_db_record!(
-    key = ReceiveOperationKey,
-    value = OperationId,
-    db_prefix = DbKeyPrefix::ReceiveOperation
-);
-
-#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct ReceiveOperationPrefix;
+pub struct PendingReceiveAddressPrefix(pub u64);
 
 impl_db_lookup!(
-    key = ReceiveOperationKey,
-    query_prefix = ReceiveOperationPrefix
+    key = PendingReceiveKey,
+    query_prefix = PendingReceivePrefix,
+    query_prefix = PendingReceiveAddressPrefix,
 );
