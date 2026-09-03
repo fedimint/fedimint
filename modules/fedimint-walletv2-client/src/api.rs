@@ -205,16 +205,32 @@ where
         }))
         .await;
 
-        let mut block_count = 0;
+        let responses: Vec<PendingOutputs> = responses.into_iter().flatten().collect();
+
+        // Heights are absolute, so confirmations can be computed against any
+        // guardian's tip. Which tip to trust is the question: taking the
+        // highest would let a single peer inflate everyone's progress, so pick
+        // the same way the module itself picks a block count, the highest value
+        // a threshold of peers have reached.
+        //
+        // Falling back to the highest reported tip keeps progress working on a
+        // federation where fewer than a threshold of guardians are upgraded far
+        // enough to serve this endpoint at all.
+        let mut counts: Vec<u64> = responses.iter().map(|r| r.block_count).collect();
+
+        counts.sort_unstable();
+        counts.reverse();
+
+        let block_count = counts
+            .get(self.all_peers().to_num_peers().threshold() - 1)
+            .or_else(|| counts.first())
+            .copied()
+            .unwrap_or(0);
+
         let mut mempool_visibility = false;
         let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
 
-        for response in responses.into_iter().flatten() {
-            // Take the highest tip any guardian reports so that a peer lagging
-            // by a block does not walk back a confirmation count we already
-            // showed the user.
-            block_count = block_count.max(response.block_count);
-
+        for response in responses {
             // One guardian that can see a mempool is enough to report unmined
             // peg-ins for the whole federation.
             mempool_visibility |= response.mempool_visibility;

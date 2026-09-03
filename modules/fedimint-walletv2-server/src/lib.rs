@@ -296,7 +296,26 @@ async fn scan_pending_receives(
 
     scan_pending_blocks(btc_rpc, pks_hash, status.block_count, &mut cache.blocks).await?;
 
-    let mempool_visibility = scan_pending_mempool(btc_rpc, pks_hash, &mut cache.mempool).await?;
+    // A failed mempool read degrades to reporting no mempool visibility rather
+    // than failing the whole scan. Propagating would discard the mined progress
+    // gathered above, which is both the stronger signal and still available:
+    // with an esplora fallback the block scan can succeed while the mempool
+    // read, which only bitcoind can serve, does not.
+    let mempool_visibility = match scan_pending_mempool(btc_rpc, pks_hash, &mut cache.mempool).await
+    {
+        Ok(visibility) => visibility,
+        Err(err) => {
+            debug!(
+                target: LOG_MODULE_WALLETV2,
+                err = %err.fmt_compact_anyhow(),
+                "Error scanning mempool for pending receives, reporting confirmations only"
+            );
+
+            cache.mempool.clear();
+
+            false
+        }
+    };
 
     let mined = cache
         .blocks

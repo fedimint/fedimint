@@ -154,9 +154,14 @@ async fn await_federation_total_value(
     }
 }
 
-/// A peg-in should report confirmation progress while it waits out the
-/// finality delay, rather than leaving the user with no feedback at all
-/// between broadcasting and the ecash being issued.
+/// A peg-in should report progress while it waits out the finality delay,
+/// rather than leaving the user with no feedback at all between broadcasting
+/// and the ecash being issued.
+///
+/// Also covers an address paid twice: `receive` hands out the same address
+/// until a deposit is detected at it, so two deposits to one address is an
+/// ordinary flow and each must be tracked separately rather than one
+/// overwriting the other.
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -167,23 +172,35 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     initialize_consensus(&client, &bitcoin).await?;
 
     let module = client.get_first_module::<WalletClientModule>()?;
+
+    // Read before handing out the address, so that the claims for both deposits
+    // fall at or after this position.
+    let position = client.get_next_event_log_id().await;
+
     let address = module.receive().await;
 
-    assert_eq!(
-        module.receive_progress(&address).await?,
-        ReceiveProgress::AwaitingTransaction,
-        "An address with nothing sent to it is not awaiting confirmations"
+    assert!(
+        module.address_receive_progress(&address).await?.is_empty(),
+        "An address with nothing sent to it has no deposits to report"
     );
 
-    info!("Broadcast the deposit without mining it...");
+    info!("Broadcast the first deposit without mining it...");
 
-    let tx = bitcoin
+    let mined_tx = bitcoin
         .send_without_mining(&address, Amount::from_int_btc(1))
         .await;
 
     // Guardians report the unmined deposit straight out of their mempools,
     // which is the whole point: the user gets feedback before the first block.
-    await_receive_mempool(&client, &address, tx.compute_txid()).await?;
+    let mined_outpoint = await_receive_mempool(&client, &address, mined_tx.compute_txid()).await?;
+
+    // The per-deposit lookup must agree with the address-wide one.
+    assert_eq!(
+        module.receive_progress(mined_outpoint).await?,
+        ReceiveProgress::Mempool {
+            value: Amount::from_int_btc(1)
+        },
+    );
 
     bitcoin.mine_blocks(1).await;
 
@@ -197,46 +214,162 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
         "Progress should count up to the depth at which the federation claims"
     );
 
-    info!("Mine the deposit to finality and confirm the claim takes over...");
+    info!("Send a second deposit to the same address and leave it unmined...");
 
-    await_finality_delay(&client, &bitcoin).await?;
+    let unmined_tx = bitcoin
+        .send_without_mining(&address, Amount::from_int_btc(2))
+        .await;
 
-    let mut progress = pin!(module.subscribe_receive_progress(&address).await?);
+    let unmined_outpoint = await_deposit_count(&client, &address, 2)
+        .await?
+        .into_iter()
+        .find_map(|(outpoint, _)| (outpoint.txid == unmined_tx.compute_txid()).then_some(outpoint))
+        .expect("The second deposit must be reported against its own transaction");
+
+    // The two deposits sit at different stages, so neither may mask the other.
+    let progress = module.address_receive_progress(&address).await?;
+
+    let mined = lookup_progress(&progress, mined_outpoint);
+    let unmined = lookup_progress(&progress, unmined_outpoint);
+
+    assert_eq!(
+        unmined,
+        ReceiveProgress::Mempool {
+            value: Amount::from_int_btc(2)
+        },
+        "The unmined deposit must be reported from the mempool, with its own value"
+    );
+
+    match mined {
+        ReceiveProgress::Confirming {
+            value,
+            confirmations,
+            required,
+        } => {
+            assert_eq!(
+                value,
+                Amount::from_int_btc(1),
+                "Each deposit reports its own value, not a combined one"
+            );
+            assert!(
+                (1..required).contains(&confirmations),
+                "The mined deposit is confirming, got {confirmations} of {required}"
+            );
+        }
+        state => panic!("The mined deposit should still be confirming, got {state:?}"),
+    }
+
+    assert_eq!(
+        module.receive_progress(mined_outpoint).await?,
+        mined,
+        "The per-deposit lookup must agree with the address-wide one"
+    );
+
+    info!("Mine both deposits to finality and confirm they are claimed...");
+
+    // The second deposit is still unmined, so it is mined by the first of these
+    // blocks and needs the full delay on top of that. Mining only the delay
+    // would leave it one block short of claimable forever.
+    let consensus_block_count = module.block_count().await?;
+
+    bitcoin.mine_blocks(CONFIRMATION_FINALITY_DELAY + 1).await;
+
+    await_consensus_block_count(
+        &client,
+        consensus_block_count + CONFIRMATION_FINALITY_DELAY + 1,
+    )
+    .await?;
+
+    let mut progress = pin!(
+        module
+            .subscribe_receive_progress(&address, position)
+            .await?
+    );
 
     loop {
         match progress.next().await {
-            Some(ReceiveProgress::Claimed) => break,
-            Some(state) => info!("Receive progress: {state:?}"),
-            None => panic!("Progress stream ended before the peg-in was claimed"),
+            Some(states)
+                if states.len() == 2
+                    && states
+                        .iter()
+                        .all(|(_, state)| *state == ReceiveProgress::Claimed) =>
+            {
+                break;
+            }
+            Some(states) => info!("Receive progress: {states:?}"),
+            None => panic!("Progress stream ended before both peg-ins were claimed"),
         }
     }
 
     Ok(())
 }
 
+/// Returns the progress reported for `outpoint`, panicking if it is absent.
+fn lookup_progress(
+    progress: &[(bitcoin::OutPoint, ReceiveProgress)],
+    outpoint: bitcoin::OutPoint,
+) -> ReceiveProgress {
+    progress
+        .iter()
+        .find(|(reported, _)| *reported == outpoint)
+        .map(|(_, state)| state.clone())
+        .unwrap_or_else(|| panic!("No progress reported for {outpoint}, got {progress:?}"))
+}
+
+/// Polls until the address reports exactly `count` deposits.
+async fn await_deposit_count(
+    client: &ClientHandleArc,
+    address: &bitcoin::Address,
+    count: usize,
+) -> anyhow::Result<Vec<(bitcoin::OutPoint, ReceiveProgress)>> {
+    loop {
+        let progress = client
+            .get_first_module::<WalletClientModule>()?
+            .address_receive_progress(address)
+            .await?;
+
+        assert!(
+            progress.len() <= count,
+            "More deposits reported than were sent: {progress:?}"
+        );
+
+        if progress.len() == count {
+            return Ok(progress);
+        }
+
+        sleep_in_test(
+            format!("Waiting for the address to report {count} deposits"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
 /// Polls receive progress until the unmined peg-in is visible in the
-/// guardians' mempools, asserting it is reported against the expected
-/// transaction and value.
+/// guardians' mempools, returning its outpoint.
+///
+/// Asserts it is reported against the expected transaction and value, and as
+/// exactly one deposit.
 async fn await_receive_mempool(
     client: &ClientHandleArc,
     address: &bitcoin::Address,
     txid: bitcoin::Txid,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bitcoin::OutPoint> {
     loop {
         let progress = client
             .get_first_module::<WalletClientModule>()?
-            .receive_progress(address)
+            .address_receive_progress(address)
             .await?;
 
-        match progress {
-            ReceiveProgress::Mempool { value, outpoint } => {
-                assert_eq!(value, Amount::from_int_btc(1));
+        match progress.as_slice() {
+            [(outpoint, ReceiveProgress::Mempool { value })] => {
+                assert_eq!(*value, Amount::from_int_btc(1));
                 assert_eq!(outpoint.txid, txid);
 
-                return Ok(());
+                return Ok(*outpoint);
             }
-            ReceiveProgress::AwaitingTransaction => {}
-            state => panic!("Peg-in reached {state:?} while still unmined"),
+            [] => {}
+            states => panic!("Peg-in reached {states:?} while still unmined"),
         }
 
         sleep_in_test(
@@ -260,26 +393,30 @@ async fn await_receive_confirmations(
     loop {
         let progress = client
             .get_first_module::<WalletClientModule>()?
-            .receive_progress(address)
+            .address_receive_progress(address)
             .await?;
 
-        match progress {
-            ReceiveProgress::Confirming {
-                value,
-                confirmations,
-                required,
-                ..
-            } => {
-                assert_eq!(value, Amount::from_int_btc(1));
+        match progress.as_slice() {
+            [
+                (
+                    _,
+                    ReceiveProgress::Confirming {
+                        value,
+                        confirmations,
+                        required,
+                    },
+                ),
+            ] => {
+                assert_eq!(*value, Amount::from_int_btc(1));
 
-                if confirmations >= min {
-                    return Ok(required);
+                if *confirmations >= min {
+                    return Ok(*required);
                 }
             }
             // Still legitimate here: the scanner may not have observed the new
             // block yet, so the peg-in can briefly read as unmined.
-            ReceiveProgress::AwaitingTransaction | ReceiveProgress::Mempool { .. } => {}
-            state => panic!("Peg-in reached {state:?} before the finality delay elapsed"),
+            [] | [(_, ReceiveProgress::Mempool { .. })] => {}
+            states => panic!("Peg-in reached {states:?} before the finality delay elapsed"),
         }
 
         sleep_in_test(
@@ -440,8 +577,8 @@ mod db {
     };
     use fedimint_walletv2_client::WalletClientModule;
     use fedimint_walletv2_client::db::{
-        self, NextOutputIndexKey, PendingReceivePrefix, ReceiveOperationPrefix,
-        ValidAddressIndexKey, ValidAddressIndexPrefix,
+        self, NextOutputIndexKey, PendingReceivePrefix, ValidAddressIndexKey,
+        ValidAddressIndexPrefix,
     };
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
@@ -893,19 +1030,6 @@ mod db {
                             ensure!(
                                 pending.is_empty(),
                                 "no pending receives must be present, got {pending:?}"
-                            );
-                        }
-                        db::DbKeyPrefix::ReceiveOperation => {
-                            let operations = dbtx
-                                .find_by_prefix(&ReceiveOperationPrefix)
-                                .await
-                                .map(|(key, _)| key.0)
-                                .collect::<Vec<_>>()
-                                .await;
-
-                            ensure!(
-                                operations.is_empty(),
-                                "no receive operations must be present, got {operations:?}"
                             );
                         }
                     }
