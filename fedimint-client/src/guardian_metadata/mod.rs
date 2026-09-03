@@ -38,6 +38,12 @@ impl_db_lookup!(
 
 #[cfg(feature = "pkarr")]
 mod pkarr;
+#[cfg(test)]
+mod tests;
+
+const NORMAL_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const INITIAL_FAILED_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+const MAX_FAILED_REFRESH_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 /// Extra time to wait for additional peer responses after the minimum
 /// required have been collected.
@@ -54,7 +60,9 @@ fn extra_response_wait() -> Duration {
 pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>) {
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
+    let mut failed_refresh_interval = INITIAL_FAILED_REFRESH_INTERVAL;
     loop {
+        let received_response;
         if let Err(err) = {
             let api: &DynGlobalApi = &client_inner.api;
             let results = fetch_guardian_metadata_from_at_least_num_of_peers(
@@ -73,6 +81,7 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
                 results
             };
 
+            received_response = !results.is_empty();
             store_guardian_metadata_updates_from_peers(
                 client_inner.db(),
                 &guardian_pub_keys,
@@ -86,10 +95,25 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
         let duration = if is_running_in_test_env() {
             Duration::from_secs(1)
         } else {
-            // Check once an hour if there are new metadata
-            Duration::from_secs(3600)
+            next_refresh_interval(received_response, &mut failed_refresh_interval)
         };
         sleep(duration).await;
+    }
+}
+
+fn next_refresh_interval(
+    received_response: bool,
+    failed_refresh_interval: &mut Duration,
+) -> Duration {
+    if received_response {
+        *failed_refresh_interval = INITIAL_FAILED_REFRESH_INTERVAL;
+        NORMAL_REFRESH_INTERVAL
+    } else {
+        let interval = *failed_refresh_interval;
+        *failed_refresh_interval = failed_refresh_interval
+            .saturating_mul(2)
+            .min(MAX_FAILED_REFRESH_INTERVAL);
+        interval
     }
 }
 
