@@ -35,23 +35,23 @@ async fn fund_client(
 }
 
 async fn create_test_escrow(
-    buyer_escrow: &EscrowClientModule,
-    seller_keypair: Keypair,
+    funder_escrow: &EscrowClientModule,
+    recipient_keypair: Keypair,
     arbiter_keypair: Keypair,
     amount: Amount,
     arbiter_fee: Amount,
     timeout: Duration,
 ) -> anyhow::Result<(OperationId, EscrowId)> {
-    let result = buyer_escrow
+    let result = funder_escrow
         .create_escrow(
-            seller_keypair.public_key(),
+            recipient_keypair.public_key(),
             arbiter_keypair.public_key(),
             arbiter_fee,
             amount,
             timeout,
         )
         .await?;
-    let mut stream = buyer_escrow
+    let mut stream = funder_escrow
         .subscribe_escrow_creation(result.operation_id)
         .await?
         .into_stream();
@@ -77,20 +77,20 @@ fn sign_arbiter_decision(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_buyer_resolution() -> anyhow::Result<()> {
+async fn test_funder_resolution() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
     let secp = Secp256k1::new();
     let arbiter_keypair = Keypair::new(&secp, &mut OsRng);
-    let seller_keypair = seller_escrow.keypair;
+    let recipient_keypair = recipient_escrow.keypair;
 
     let (_operation_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_keypair,
+        funder_escrow.module,
+        recipient_keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -98,16 +98,16 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
     )
     .await?;
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
 
     let resolution_message = contract.resolution_message(Outcome::Release);
     let msg_bytes = compute_escrow_message(&resolution_message);
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
-    let buyer_sig = Secp256k1::new().sign_schnorr(&msg, &buyer_escrow.keypair);
+    let funder_sig = Secp256k1::new().sign_schnorr(&msg, &funder_escrow.keypair);
 
-    let resolve_op = seller_escrow.resolve_escrow(escrow_id, buyer_sig).await?;
+    let resolve_op = recipient_escrow.resolve_escrow(escrow_id, funder_sig).await?;
 
-    let mut resolve_stream = seller_escrow
+    let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
         .await?
         .into_stream();
@@ -116,7 +116,7 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Released);
 
     for _i in 0..10 {
-        let balance = seller_client.get_balance_for_btc().await?;
+        let balance = recipient_client.get_balance_for_btc().await?;
 
         if balance > Amount::ZERO {
             break;
@@ -129,7 +129,7 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
         .await;
     }
 
-    assert!(seller_client.get_balance_for_btc().await? > Amount::ZERO);
+    assert!(recipient_client.get_balance_for_btc().await? > Amount::ZERO);
 
     Ok(())
 }
@@ -137,21 +137,21 @@ async fn test_buyer_resolution() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_arbiter_resolution() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
     let arbiter_client = fed.new_client().await;
 
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
     let arbiter_escrow = arbiter_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
     let secp = Secp256k1::new();
-    let seller_keypair = seller_escrow.keypair;
+    let recipient_keypair = recipient_escrow.keypair;
     let arbiter_keypair = arbiter_escrow.keypair;
 
     let (_operation_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_keypair,
+        funder_escrow.module,
+        recipient_keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -162,15 +162,15 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     fedimint_core::task::sleep_in_test("waiting for the escrow timeout", Duration::from_secs(4))
         .await;
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
 
     let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
 
-    let resolve_op = buyer_escrow
+    let resolve_op = funder_escrow
         .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
         .await?;
 
-    let mut resolve_stream = buyer_escrow
+    let mut resolve_stream = funder_escrow
         .subscribe_escrow_resolution(resolve_op)
         .await?
         .into_stream();
@@ -178,7 +178,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Pending);
     assert_eq!(resolve_stream.ok().await?, EscrowInputSMState::Refunded);
 
-    assert!(buyer_client.get_balance_for_btc().await? > Amount::ZERO);
+    assert!(funder_client.get_balance_for_btc().await? > Amount::ZERO);
 
     // claiming arbiter's fee
     let arbiter_message = EscrowMessage::ArbiterFeeClaim {
@@ -246,19 +246,19 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
 
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
     let secp = Secp256k1::new();
     let arbiter_keypair = Keypair::new(&secp, &mut OsRng);
-    let seller_keypair = seller_escrow.keypair;
+    let recipient_keypair = recipient_escrow.keypair;
 
     let (_operation_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_keypair,
+        funder_escrow.module,
+        recipient_keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -266,10 +266,10 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
     )
     .await?;
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
 
-    let result = buyer_escrow
+    let result = funder_escrow
         .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
         .await;
 
@@ -282,29 +282,29 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
     );
 
     // contract untouched
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_buyer_signature_with_invalid_inputs() -> anyhow::Result<()> {
+async fn test_funder_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
     let arbiter_client = fed.new_client().await;
 
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
     let arbiter_escrow = arbiter_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
-    let seller_keypair = seller_escrow.keypair;
+    let recipient_keypair = recipient_escrow.keypair;
     let arbiter_keypair = arbiter_escrow.keypair;
 
     let (_operation_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_keypair,
+        funder_escrow.module,
+        recipient_keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -312,16 +312,16 @@ async fn test_buyer_signature_with_invalid_inputs() -> anyhow::Result<()> {
     )
     .await?;
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
 
     let msg_bytes = compute_escrow_message(&contract.resolution_message(Outcome::Refund));
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
-    let bad_buyer_sig = Secp256k1::new().sign_schnorr(&msg, &buyer_escrow.keypair);
+    let bad_funder_sig = Secp256k1::new().sign_schnorr(&msg, &funder_escrow.keypair);
 
-    let operation_id = seller_escrow
-        .resolve_escrow(escrow_id, bad_buyer_sig)
+    let operation_id = recipient_escrow
+        .resolve_escrow(escrow_id, bad_funder_sig)
         .await?;
-    let mut resolve_stream = seller_escrow
+    let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(operation_id)
         .await?
         .into_stream();
@@ -332,7 +332,7 @@ async fn test_buyer_signature_with_invalid_inputs() -> anyhow::Result<()> {
         EscrowInputSMState::Failed { .. }
     ));
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
 
     Ok(())
@@ -341,20 +341,20 @@ async fn test_buyer_signature_with_invalid_inputs() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
     let arbiter_client = fed.new_client().await;
 
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
     let arbiter_escrow = arbiter_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
-    let seller_keypair = seller_escrow.keypair;
+    let recipient_keypair = recipient_escrow.keypair;
     let arbiter_keypair = arbiter_escrow.keypair;
 
     let (_operation_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_keypair,
+        funder_escrow.module,
+        recipient_keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -365,17 +365,17 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     // wait for timeout
     fedimint_core::task::sleep_in_test("waiting for escrow timeout", Duration::from_secs(4)).await;
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
 
     let resolution_message = contract.resolution_message(Outcome::Refund);
     let msg_bytes = compute_escrow_message(&resolution_message);
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
     let arbiter_sig = Secp256k1::new().sign_schnorr(&msg, &arbiter_escrow.keypair);
 
-    let operation_id = seller_escrow
+    let operation_id = recipient_escrow
         .submit_arbiter_decision(escrow_id, Outcome::Release, arbiter_sig)
         .await?;
-    let mut resolve_stream = seller_escrow
+    let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(operation_id)
         .await?
         .into_stream();
@@ -386,25 +386,25 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
         EscrowInputSMState::Failed { .. }
     ));
 
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_contract_status_updated_after_buyer_release() -> anyhow::Result<()> {
+async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
-    let (seller_client, buyer_client) = fed.two_clients().await;
-    let buyer_escrow = buyer_client.get_first_module::<EscrowClientModule>()?;
-    let seller_escrow = seller_client.get_first_module::<EscrowClientModule>()?;
-    let _ = fund_client(&buyer_client, Amount::from_sats(2000)).await;
+    let (recipient_client, funder_client) = fed.two_clients().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let recipient_escrow = recipient_client.get_first_module::<EscrowClientModule>()?;
+    let _ = fund_client(&funder_client, Amount::from_sats(2000)).await;
 
     let secp = Secp256k1::new();
     let arbiter_keypair = Keypair::new(&secp, &mut OsRng);
 
     let (_op_id, escrow_id) = create_test_escrow(
-        buyer_escrow.module,
-        seller_escrow.keypair,
+        funder_escrow.module,
+        recipient_escrow.keypair,
         arbiter_keypair,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -413,14 +413,14 @@ async fn test_contract_status_updated_after_buyer_release() -> anyhow::Result<()
     .await?;
 
     // before resolution: Active
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
 
     let msg_bytes = compute_escrow_message(&contract.resolution_message(Outcome::Release));
-    let buyer_sig = secp.sign_schnorr(&Message::from_digest(msg_bytes), &buyer_escrow.keypair);
+    let funder_sig = secp.sign_schnorr(&Message::from_digest(msg_bytes), &funder_escrow.keypair);
 
-    let resolve_op = seller_escrow.resolve_escrow(escrow_id, buyer_sig).await?;
-    let mut stream = seller_escrow
+    let resolve_op = recipient_escrow.resolve_escrow(escrow_id, funder_sig).await?;
+    let mut stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
         .await?
         .into_stream();
@@ -428,7 +428,7 @@ async fn test_contract_status_updated_after_buyer_release() -> anyhow::Result<()
     assert_eq!(stream.ok().await?, EscrowInputSMState::Released);
 
     // after resolution: Released
-    let contract = buyer_escrow.get_contract(escrow_id).await?.unwrap();
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Released);
 
     Ok(())

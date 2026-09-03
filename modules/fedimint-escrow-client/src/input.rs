@@ -63,7 +63,7 @@ impl State for EscrowInputStateMachine {
                         Box::pin(async move {
                             let new_state = match result {
                                 Ok(()) => match &old_state.common.resolution {
-                                    Resolution::BuyerRelease { .. } => EscrowInputSMState::Released,
+                                    Resolution::FunderRelease { .. } => EscrowInputSMState::Released,
                                     Resolution::ArbiterOutcome { outcome, .. } => match outcome {
                                         Outcome::Release => EscrowInputSMState::Released,
                                         Outcome::Refund => EscrowInputSMState::Refunded,

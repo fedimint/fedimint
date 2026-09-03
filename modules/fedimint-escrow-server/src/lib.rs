@@ -221,8 +221,8 @@ impl ServerModule for Escrow {
         info!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
 
         match &input.resolution {
-            Resolution::BuyerRelease { buyer_signature } => {
-                self.handle_buyer_release(dbtx, input, buyer_signature)
+            Resolution::FunderRelease { funder_signature } => {
+                self.handle_funder_release(dbtx, input, funder_signature)
                     .await
             }
             Resolution::ArbiterOutcome {
@@ -261,9 +261,9 @@ impl ServerModule for Escrow {
         if contract.timeout <= now {
             return Err(EscrowOutputError::InvalidInputs);
         }
-        if contract.buyer_key == contract.seller_key
-            || contract.buyer_key == contract.arbiter_key
-            || contract.seller_key == contract.arbiter_key
+        if contract.funder_key == contract.recipient_key
+            || contract.funder_key == contract.arbiter_key
+            || contract.recipient_key == contract.arbiter_key
         {
             return Err(EscrowOutputError::InvalidInputs);
         }
@@ -305,8 +305,8 @@ impl ServerModule for Escrow {
         dbtx.get_value(&EscrowOutputOutcomeKey(out_point)).await
     }
 
-    // Every stored contract is a liability as federation owes this amount to buyer
-    // or seller
+    // Every stored contract is a liability as federation owes this amount to funder
+    // or recipient
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -355,8 +355,8 @@ impl ServerModule for Escrow {
                         Some(&contract.federation_id),
                     );
 
-                    let participant = params.pubkey == contract.buyer_key
-                        || params.pubkey == contract.seller_key
+                    let participant = params.pubkey == contract.funder_key
+                        || params.pubkey == contract.recipient_key
                         || params.pubkey == contract.arbiter_key;
 
                     if !participant {
@@ -441,8 +441,8 @@ impl ServerModule for Escrow {
                             let pubkey = pubkey;
 
                             async move {
-                                if contract.buyer_key == pubkey
-                                    || contract.seller_key == pubkey
+                                if contract.funder_key == pubkey
+                                    || contract.recipient_key == pubkey
                                     || contract.arbiter_key == pubkey
                                 {
                                     Some(contract)
@@ -463,8 +463,8 @@ impl ServerModule for Escrow {
 
 fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> bool {
     compute_contract_hash(
-        &contract.buyer_key,
-        &contract.seller_key,
+        &contract.funder_key,
+        &contract.recipient_key,
         &contract.arbiter_key,
         &contract.amount,
         &contract.timeout,
@@ -531,11 +531,11 @@ impl Escrow {
         Ok(contract)
     }
 
-    async fn handle_buyer_release(
+    async fn handle_funder_release(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         input: &EscrowInput,
-        buyer_signature: &Signature,
+        funder_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
 
@@ -544,21 +544,21 @@ impl Escrow {
         let msg_bytes = compute_escrow_message(&resolution_message);
         info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
 
-        if !verify_signature(&contract.buyer_key, msg_bytes, buyer_signature) {
-            return Err(EscrowInputError::InvalidBuyerSignature);
+        if !verify_signature(&contract.funder_key, msg_bytes, funder_signature) {
+            return Err(EscrowInputError::InvalidFunderSignature);
         }
 
         contract.transition(EscrowStatus::Released)?;
         dbtx.insert_entry(&EscrowContractKey(input.escrow_id), &contract)
             .await;
 
-        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved with buyer release");
+        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved with funder release");
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(contract.amount),
                 fees: Amounts::ZERO,
             },
-            pub_key: contract.seller_key,
+            pub_key: contract.recipient_key,
         })
     }
 
@@ -590,8 +590,8 @@ impl Escrow {
         }
 
         let recipient_key = match outcome {
-            Outcome::Release => contract.seller_key,
-            Outcome::Refund => contract.buyer_key,
+            Outcome::Release => contract.recipient_key,
+            Outcome::Refund => contract.funder_key,
         };
 
         dbtx.insert_entry(

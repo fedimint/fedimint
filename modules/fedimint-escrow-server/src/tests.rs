@@ -35,21 +35,21 @@ fn dummy_federation_id() -> FederationId {
 }
 
 fn make_contract(
-    buyer_kp: &Keypair,
-    seller_kp: &Keypair,
+    funder_kp: &Keypair,
+    recipient_kp: &Keypair,
     arbiter_kp: &Keypair,
     amount: Amount,
     arbiter_fee: Amount,
     timeout: u64,
 ) -> EscrowContract {
-    let buyer_key = buyer_kp.public_key();
-    let seller_key = seller_kp.public_key();
+    let funder_key = funder_kp.public_key();
+    let recipient_key = recipient_kp.public_key();
     let arbiter_key = arbiter_kp.public_key();
     let federation_id = dummy_federation_id();
 
     let contract_hash = compute_contract_hash(
-        &buyer_key,
-        &seller_key,
+        &funder_key,
+        &recipient_key,
         &arbiter_key,
         &amount,
         &timeout,
@@ -60,8 +60,8 @@ fn make_contract(
 
     EscrowContract {
         escrow_id,
-        buyer_key,
-        seller_key,
+        funder_key,
+        recipient_key,
         arbiter_key,
         amount,
         arbiter_fee,
@@ -80,9 +80,9 @@ fn past_timeout() -> u64 {
     fedimint_core::time::duration_since_epoch().as_secs() - 1
 }
 
-fn sign_release(buyer_kp: &Keypair, contract: &EscrowContract) -> Signature {
+fn sign_release(funder_kp: &Keypair, contract: &EscrowContract) -> Signature {
     let msg_bytes = compute_escrow_message(&contract.resolution_message(Outcome::Release));
-    Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), buyer_kp)
+    Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), funder_kp)
 }
 
 fn sign_arbiter(arbiter_kp: &Keypair, contract: &EscrowContract, outcome: Outcome) -> Signature {
@@ -116,12 +116,12 @@ fn dummy_out_point() -> OutPoint {
 async fn test_process_output_valid_contract_stored() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -169,12 +169,12 @@ async fn test_process_output_valid_contract_stored() {
 async fn test_process_output_duplicate_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -210,12 +210,12 @@ async fn test_process_output_duplicate_rejected() {
 async fn test_process_output_arbiter_fee_equals_amount_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(100),
         Amount::from_sats(100),
@@ -239,12 +239,12 @@ async fn test_process_output_arbiter_fee_equals_amount_rejected() {
 async fn test_process_output_expired_timeout_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -268,13 +268,13 @@ async fn test_process_output_expired_timeout_rejected() {
 async fn test_process_output_duplicate_keys_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
 
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
-        &buyer_kp,
+        &funder_kp,
+        &recipient_kp,
+        &funder_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
@@ -297,12 +297,12 @@ async fn test_process_output_duplicate_keys_rejected() {
 async fn test_process_output_tampered_contract_hash_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -324,15 +324,15 @@ async fn test_process_output_tampered_contract_hash_rejected() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_buyer_release_valid() {
+async fn test_funder_release_valid() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -345,11 +345,11 @@ async fn test_buyer_release_valid() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    let sig = sign_release(&buyer_kp, &contract);
+    let sig = sign_release(&funder_kp, &contract);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
-        resolution: Resolution::BuyerRelease {
-            buyer_signature: sig,
+        resolution: Resolution::FunderRelease {
+            funder_signature: sig,
         },
     };
 
@@ -359,8 +359,8 @@ async fn test_buyer_release_valid() {
 
     assert!(result.is_ok());
     let meta = result.unwrap();
-    // seller is the recipient of the full amount
-    assert_eq!(meta.pub_key, contract.seller_key);
+    // recipient is the recipient of the full amount
+    assert_eq!(meta.pub_key, contract.recipient_key);
     assert_eq!(meta.amount.amounts, Amounts::new_bitcoin(contract.amount));
 
     // status updated to Released
@@ -372,15 +372,15 @@ async fn test_buyer_release_valid() {
 }
 
 #[test_log::test(tokio::test)]
-async fn test_buyer_release_wrong_signature_rejected() {
+async fn test_funder_release_wrong_signature_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -392,12 +392,12 @@ async fn test_buyer_release_wrong_signature_rejected() {
     module_dbtx
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
-    // seller signing instead of buyer
-    let sig = sign_release(&seller_kp, &contract);
+    // recipient signing instead of funder
+    let sig = sign_release(&recipient_kp, &contract);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
-        resolution: Resolution::BuyerRelease {
-            buyer_signature: sig,
+        resolution: Resolution::FunderRelease {
+            funder_signature: sig,
         },
     };
 
@@ -405,19 +405,19 @@ async fn test_buyer_release_wrong_signature_rejected() {
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
 
-    assert_matches!(result, Err(EscrowInputError::InvalidBuyerSignature));
+    assert_matches!(result, Err(EscrowInputError::InvalidFunderSignature));
 }
 
 #[test_log::test(tokio::test)]
-async fn test_buyer_release_signs_refund_outcome_rejected() {
+async fn test_funder_release_signs_refund_outcome_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -430,12 +430,12 @@ async fn test_buyer_release_signs_refund_outcome_rejected() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    // buyer signs Refund outcome which should fail
-    let sig = sign_arbiter(&buyer_kp, &contract, Outcome::Refund);
+    // funder signs Refund outcome which should fail
+    let sig = sign_arbiter(&funder_kp, &contract, Outcome::Refund);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
-        resolution: Resolution::BuyerRelease {
-            buyer_signature: sig,
+        resolution: Resolution::FunderRelease {
+            funder_signature: sig,
         },
     };
 
@@ -443,19 +443,19 @@ async fn test_buyer_release_signs_refund_outcome_rejected() {
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
 
-    assert_matches!(result, Err(EscrowInputError::InvalidBuyerSignature));
+    assert_matches!(result, Err(EscrowInputError::InvalidFunderSignature));
 }
 
 #[test_log::test(tokio::test)]
-async fn test_buyer_release_already_released_rejected() {
+async fn test_funder_release_already_released_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -469,11 +469,11 @@ async fn test_buyer_release_already_released_rejected() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    let sig = sign_release(&buyer_kp, &contract);
+    let sig = sign_release(&funder_kp, &contract);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
-        resolution: Resolution::BuyerRelease {
-            buyer_signature: sig,
+        resolution: Resolution::FunderRelease {
+            funder_signature: sig,
         },
     };
 
@@ -488,12 +488,12 @@ async fn test_buyer_release_already_released_rejected() {
 async fn test_arbiter_release_after_timeout_valid() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -521,7 +521,7 @@ async fn test_arbiter_release_after_timeout_valid() {
 
     assert!(result.is_ok());
     let meta = result.unwrap();
-    assert_eq!(meta.pub_key, contract.seller_key);
+    assert_eq!(meta.pub_key, contract.recipient_key);
     assert_eq!(
         meta.amount.amounts,
         Amounts::new_bitcoin(contract.amount - contract.arbiter_fee)
@@ -545,12 +545,12 @@ async fn test_arbiter_release_after_timeout_valid() {
 async fn test_arbiter_refund_after_timeout_valid() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -577,8 +577,8 @@ async fn test_arbiter_refund_after_timeout_valid() {
         .await;
 
     assert!(result.is_ok());
-    // Refund → buyer receives payout
-    assert_eq!(result.unwrap().pub_key, contract.buyer_key);
+    // Refund → funder receives payout
+    assert_eq!(result.unwrap().pub_key, contract.funder_key);
 
     let stored = module_dbtx
         .get_value(&EscrowContractKey(contract.escrow_id))
@@ -591,12 +591,12 @@ async fn test_arbiter_refund_after_timeout_valid() {
 async fn test_arbiter_wrong_signature_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -609,8 +609,8 @@ async fn test_arbiter_wrong_signature_rejected() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    // buyer signing instead of arbiter
-    let sig = sign_arbiter(&buyer_kp, &contract, Outcome::Release);
+    // funder signing instead of arbiter
+    let sig = sign_arbiter(&funder_kp, &contract, Outcome::Release);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
         resolution: Resolution::ArbiterOutcome {
@@ -631,12 +631,12 @@ async fn test_arbiter_outcome_mismatch_rejected() {
     // Arbiter signs Release but declares Refund in the input
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -669,12 +669,12 @@ async fn test_arbiter_outcome_mismatch_rejected() {
 async fn test_fee_claim_valid() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -727,12 +727,12 @@ async fn test_fee_claim_valid() {
 async fn test_fee_claim_wrong_signature_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -752,8 +752,8 @@ async fn test_fee_claim_wrong_signature_rejected() {
         )
         .await;
 
-    // buyer signing the fee claim instead of arbiter
-    let sig = sign_fee_claim(&buyer_kp, contract.escrow_id, contract.arbiter_fee);
+    // funder signing the fee claim instead of arbiter
+    let sig = sign_fee_claim(&funder_kp, contract.escrow_id, contract.arbiter_fee);
     let input = EscrowInput {
         escrow_id: contract.escrow_id,
         resolution: Resolution::ArbiterFeeClaim {
@@ -773,12 +773,12 @@ async fn test_fee_claim_wrong_signature_rejected() {
 async fn test_fee_claim_wrong_amount_signature_rejected() {
     let escrow = make_escrow();
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(1000),
         Amount::from_sats(20),
@@ -816,12 +816,12 @@ async fn test_fee_claim_wrong_amount_signature_rejected() {
 
 #[test_log::test]
 fn test_contract_transition_active_to_released() {
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(100),
         Amount::from_sats(5),
@@ -833,12 +833,12 @@ fn test_contract_transition_active_to_released() {
 
 #[test_log::test]
 fn test_contract_transition_active_to_refunded() {
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(100),
         Amount::from_sats(5),
@@ -850,12 +850,12 @@ fn test_contract_transition_active_to_refunded() {
 
 #[test_log::test]
 fn test_contract_transition_released_to_released_rejected() {
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(100),
         Amount::from_sats(5),
@@ -870,12 +870,12 @@ fn test_contract_transition_released_to_released_rejected() {
 
 #[test_log::test]
 fn test_contract_transition_refunded_to_released_rejected() {
-    let buyer_kp = make_keypair();
-    let seller_kp = make_keypair();
+    let funder_kp = make_keypair();
+    let recipient_kp = make_keypair();
     let arbiter_kp = make_keypair();
     let mut contract = make_contract(
-        &buyer_kp,
-        &seller_kp,
+        &funder_kp,
+        &recipient_kp,
         &arbiter_kp,
         Amount::from_sats(100),
         Amount::from_sats(5),

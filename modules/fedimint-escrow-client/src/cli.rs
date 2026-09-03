@@ -18,7 +18,7 @@ enum Opts {
     /// Create a new escrow contract
     Create {
         #[clap(long)]
-        seller_key: secp256k1::PublicKey,
+        recipient_key: secp256k1::PublicKey,
         #[clap(long)]
         arbiter_key: secp256k1::PublicKey,
         #[clap(long)]
@@ -38,10 +38,10 @@ enum Opts {
     /// List the client's escrow operations
     ListEscrow,
 
-    /// Resolve the specific escrow with the buyer signature
+    /// Resolve the specific escrow with the funder signature
     ResolveEscrow {
         escrow_id: String,
-        buyer_signature: String,
+        funder_signature: String,
     },
 
     /// Resolve the escrow with the arbiter outcome (tx submitted by winner
@@ -97,7 +97,7 @@ pub(crate) async fn handle_cli_command(
 
     match opts {
         Opts::Create {
-            seller_key,
+            recipient_key,
             arbiter_key,
             arbiter_fee_msats,
             amount_sats,
@@ -105,7 +105,7 @@ pub(crate) async fn handle_cli_command(
         } => {
             let result = client
                 .create_escrow(
-                    seller_key,
+                    recipient_key,
                     arbiter_key,
                     arbiter_fee_msats,
                     Amount::from_sats(amount_sats),
@@ -152,7 +152,7 @@ pub(crate) async fn handle_cli_command(
         }
         Opts::ResolveEscrow {
             escrow_id,
-            buyer_signature,
+            funder_signature,
         } => {
             let escrow_id_bytes = hex::decode(&escrow_id)?;
             let escrow_id = EscrowId(
@@ -160,12 +160,12 @@ pub(crate) async fn handle_cli_command(
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
             );
-            let sig_bytes = hex::decode(&buyer_signature)?;
+            let sig_bytes = hex::decode(&funder_signature)?;
 
-            let buyer_signature = schnorr::Signature::from_slice(&sig_bytes)
+            let funder_signature = schnorr::Signature::from_slice(&sig_bytes)
                 .map_err(|e| anyhow::anyhow!("Invalid schnorr signature: {e}"))?;
 
-            let operation_id = client.resolve_escrow(escrow_id, buyer_signature).await?;
+            let operation_id = client.resolve_escrow(escrow_id, funder_signature).await?;
 
             let mut stream = client
                 .subscribe_escrow_resolution(operation_id)

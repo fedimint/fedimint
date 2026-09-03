@@ -256,7 +256,7 @@ impl ClientModule for EscrowClientModule {
                 "create_contract"=>{
                     let req:CreateContractRequest= serde_json::from_value(request)?;
                     let result=self.create_escrow(
-                        req.seller_key,
+                        req.recipient_key,
                         req.arbiter_key,
                         req.arbiter_fee,
                         req.amount,
@@ -275,7 +275,7 @@ impl ClientModule for EscrowClientModule {
                     let req:ResolveEscrowRequest=serde_json::from_value(request)?;
                     let result=self.resolve_escrow(
                         req.escrow_id,
-                        req.buyer_signature
+                        req.funder_signature
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
@@ -335,7 +335,7 @@ struct GetContractRequest {
 
 #[derive(Deserialize)]
 struct CreateContractRequest {
-    seller_key: PublicKey,
+    recipient_key: PublicKey,
     arbiter_key: PublicKey,
     arbiter_fee: Amount,
     amount: Amount,
@@ -350,7 +350,7 @@ struct SubscribeCreationRequest {
 #[derive(Deserialize)]
 struct ResolveEscrowRequest {
     escrow_id: EscrowId,
-    buyer_signature: schnorr::Signature,
+    funder_signature: schnorr::Signature,
 }
 
 #[derive(Deserialize)]
@@ -396,32 +396,32 @@ impl EscrowClientModule {
 
     pub async fn create_escrow(
         &self,
-        seller_key: PublicKey,
+        recipient_key: PublicKey,
         arbiter_key: PublicKey,
         arbiter_fee: Amount,
         amount: Amount,
         timeout: Duration,
     ) -> Result<CreateContractResponse, anyhow::Error> {
-        let buyer_key = self.keypair.public_key();
+        let funder_key = self.keypair.public_key();
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
 
-        anyhow::ensure!(buyer_key != seller_key, "buyer and seller keys must differ");
+        anyhow::ensure!(funder_key != recipient_key, "funder and recipient keys must differ");
         anyhow::ensure!(
-            buyer_key != arbiter_key,
-            "buyer and arbiter keys must differ"
+            funder_key != arbiter_key,
+            "funder and arbiter keys must differ"
         );
         anyhow::ensure!(
-            seller_key != arbiter_key,
-            "seller and arbiter keys must differ"
+            recipient_key != arbiter_key,
+            "recipient and arbiter keys must differ"
         );
         anyhow::ensure!(amount > Amount::ZERO, "amount must be greater than zero");
         anyhow::ensure!(arbiter_fee < amount, "arbiter fee must be less than amount");
         anyhow::ensure!(!timeout.is_zero(), "timeout must be non-zero");
 
         let contract_hash = compute_contract_hash(
-            &buyer_key,
-            &seller_key,
+            &funder_key,
+            &recipient_key,
             &arbiter_key,
             &amount,
             &timeout_deadline,
@@ -443,8 +443,8 @@ impl EscrowClientModule {
 
         let contract = EscrowContract {
             escrow_id,
-            buyer_key,
-            seller_key,
+            funder_key,
+            recipient_key,
             arbiter_key,
             amount,
             arbiter_fee,
@@ -513,7 +513,7 @@ impl EscrowClientModule {
     pub async fn resolve_escrow(
         &self,
         escrow_id: EscrowId,
-        buyer_signature: schnorr::Signature,
+        funder_signature: schnorr::Signature,
     ) -> Result<OperationId, anyhow::Error> {
         let operation_id = OperationId::new_random();
         let contract = self
@@ -526,7 +526,7 @@ impl EscrowClientModule {
             keys: vec![self.keypair],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::BuyerRelease { buyer_signature },
+                resolution: Resolution::FunderRelease { funder_signature },
             },
         };
 
@@ -541,7 +541,7 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: contract.amount,
-                                resolution: Resolution::BuyerRelease { buyer_signature },
+                                resolution: Resolution::FunderRelease { funder_signature },
                             },
                             state: EscrowInputSMState::Pending,
                         })

@@ -91,8 +91,8 @@ impl<'de> Deserialize<'de> for ContractHash {
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
 pub struct EscrowContract {
     pub escrow_id: EscrowId,
-    pub buyer_key: PublicKey,
-    pub seller_key: PublicKey,
+    pub funder_key: PublicKey,
+    pub recipient_key: PublicKey,
     pub arbiter_key: PublicKey,
     pub amount: Amount,
     pub arbiter_fee: Amount,
@@ -156,8 +156,8 @@ pub enum Outcome {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum Resolution {
-    BuyerRelease {
-        buyer_signature: Signature,
+    FunderRelease {
+        funder_signature: Signature,
     },
     ArbiterOutcome {
         arbiter_signature: Signature,
@@ -201,8 +201,8 @@ pub enum EscrowConsensusItem {
 pub enum EscrowInputError {
     #[error("Contract not found")]
     ContractNotFound,
-    #[error("Invalid buyer signature")]
-    InvalidBuyerSignature,
+    #[error("Invalid funder signature")]
+    InvalidFunderSignature,
     #[error("Invalid arbiter signature")]
     InvalidArbiterSignature,
     #[error("Timeout not reached")]
@@ -326,8 +326,8 @@ fn compute_resolution_message(
 }
 
 pub fn compute_contract_hash(
-    buyer_key: &PublicKey,
-    seller_key: &PublicKey,
+    funder_key: &PublicKey,
+    recipient_key: &PublicKey,
     arbiter_key: &PublicKey,
     amount: &Amount,
     timeout: &u64,
@@ -335,8 +335,8 @@ pub fn compute_contract_hash(
 ) -> ContractHash {
     let mut engine = sha256::HashEngine::default();
     engine.input(b"escrow_contract_hash");
-    engine.input(&buyer_key.serialize());
-    engine.input(&seller_key.serialize());
+    engine.input(&funder_key.serialize());
+    engine.input(&recipient_key.serialize());
     engine.input(&arbiter_key.serialize());
     engine.input(&amount.msats.to_le_bytes());
     engine.input(&timeout.to_le_bytes());
