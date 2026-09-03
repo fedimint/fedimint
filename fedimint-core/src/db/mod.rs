@@ -1938,7 +1938,7 @@ where
         }
 
         <Self as crate::encoding::Decodable>::consensus_decode_whole(&data[1..], modules)
-            .map_err(|decode_error| DecodingError::Other(decode_error.0.into()))
+            .map_err(DecodingError::from)
     }
 }
 
@@ -1950,7 +1950,7 @@ where
         data: &[u8],
         modules: &ModuleDecoderRegistry,
     ) -> std::result::Result<Self, DecodingError> {
-        T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0.into()))
+        T::consensus_decode_whole(data, modules).map_err(DecodingError::from)
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -2108,6 +2108,9 @@ pub enum DecodingError {
     WrongLength { expected: usize, found: usize },
     #[error("Other decoding error")]
     Other(#[source] Box<dyn Error + Send + Sync>),
+    /// The bytes are not a valid consensus encoding of the record type.
+    #[error("Invalid consensus encoding")]
+    Decode(#[from] DecodeError),
 }
 
 impl DecodingError {
