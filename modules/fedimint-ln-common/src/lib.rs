@@ -49,7 +49,7 @@ use anyhow::Context as AnyhowContext;
 use bitcoin::hashes::{Hash, sha256};
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Message;
@@ -343,11 +343,10 @@ impl Decodable for LightningGatewayRegistration {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let json_repr = String::consensus_decode_partial(r, modules)?;
-        serde_json::from_str(&json_repr).map_err(|e| {
-            DecodeError::new_custom(
-                anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),
-            )
-        })
+        DecodeContext::context(
+            serde_json::from_str(&json_repr).map_err(DecodeError::from_err),
+            "Failed to deserialize LightningGatewayRegistration",
+        )
     }
 }
 
