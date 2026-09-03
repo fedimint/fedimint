@@ -4792,6 +4792,7 @@ dependencies = [
 name = "fedimint-server-tests"
 version = "0.13.0-alpha"
 dependencies = [
+ "anyhow",
  "bitcoin",
  "fedimint-api-client",
  "fedimint-core",

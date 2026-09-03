@@ -47,8 +47,6 @@ use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
-/// Mostly re-exported for [`Decodable`] macros.
-pub use anyhow;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
