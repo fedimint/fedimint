@@ -575,7 +575,7 @@ impl Decodable for TransactionId {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bytes)?;
         Ok(Self::from_byte_array(bytes))
     }
 }

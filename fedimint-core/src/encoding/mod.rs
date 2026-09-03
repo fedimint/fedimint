@@ -526,7 +526,7 @@ macro_rules! impl_encode_decode_num_as_plain {
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
-                d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+                d.read_exact(&mut bytes)?;
                 Ok(<$num_type>::from_be_bytes(bytes))
             }
         }
@@ -546,10 +546,7 @@ macro_rules! impl_encode_decode_num_as_bigsize {
                 d: &mut D,
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                let varint = anyhow::Context::context(
-                    BigSize::consensus_decode_partial(d, &Default::default()),
-                    concat!("VarInt inside ", stringify!($num_type)),
-                )?;
+                let varint = BigSize::consensus_decode_partial(d, &Default::default())?;
                 <$num_type>::try_from(varint.0).map_err(crate::encoding::DecodeError::from_err)
             }
         }
@@ -764,8 +761,7 @@ impl Decodable for bool {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bool_as_u8 = [0u8];
-        d.read_exact(&mut bool_as_u8)
-            .map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bool_as_u8)?;
         match bool_as_u8[0] {
             0 => Ok(false),
             1 => Ok(true),
@@ -1437,5 +1433,29 @@ mod tests {
             .with_context(|| format!("Decoding item {}", 3))
             .expect_err("still Err");
         assert_eq!(err.fmt_compact().to_string(), "Decoding item 3: bad");
+    }
+
+    #[test]
+    fn truncated_input_is_an_io_error() {
+        let err = u8::consensus_decode_whole(&[], &ModuleDecoderRegistry::default())
+            .expect_err("empty input is not a u8");
+        assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
+    }
+
+    #[test]
+    fn truncated_integer_is_an_io_error() {
+        let err = u32::consensus_decode_whole(&[], &ModuleDecoderRegistry::default())
+            .expect_err("zero bytes are not a u32");
+        assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
+    }
+
+    #[test]
+    fn truncated_transaction_id_is_an_io_error() {
+        let err = crate::TransactionId::consensus_decode_whole(
+            &[0u8; 31],
+            &ModuleDecoderRegistry::default(),
+        )
+        .expect_err("31 bytes are not a transaction id");
+        assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
     }
 }

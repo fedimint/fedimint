@@ -62,8 +62,7 @@ where
                 let chunk_size = core::cmp::min(len, CHUNK_SIZE);
                 let chunk_end = chunk_start + chunk_size;
                 bytes.resize(chunk_end, 0u8);
-                d.read_exact(&mut bytes[chunk_start..chunk_end])
-                    .map_err(DecodeError::from_err)?;
+                d.read_exact(&mut bytes[chunk_start..chunk_end])?;
                 len -= chunk_size;
             }
 
@@ -163,8 +162,7 @@ where
 
         if TypeId::of::<T>() == TypeId::of::<u8>() {
             let mut bytes = [0u8; SIZE];
-            d.read_exact(bytes.as_mut_slice())
-                .map_err(DecodeError::from_err)?;
+            d.read_exact(bytes.as_mut_slice())?;
 
             // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             return Ok(unsafe { horribe_array_transmute_workaround(bytes) });

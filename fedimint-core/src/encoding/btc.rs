@@ -5,6 +5,7 @@ use anyhow::format_err;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
+use lightning::ln::msgs;
 use lightning::util::ser::{BigSize, Readable, Writeable};
 use miniscript::{Descriptor, MiniscriptKey};
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,23 @@ use serde::{Deserialize, Serialize};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::get_network_for_address;
 use crate::module::registry::ModuleDecoderRegistry;
+
+/// Keeps a rust-bitcoin reader failure distinguishable as [`DecodeError::Io`].
+fn from_bitcoin_encode_error(error: bitcoin::consensus::encode::Error) -> DecodeError {
+    match error {
+        bitcoin::consensus::encode::Error::Io(io) => DecodeError::Io(io.into()),
+        other => DecodeError::from_err(other),
+    }
+}
+
+/// Keeps a PSBT reader failure distinguishable as [`DecodeError::Io`].
+fn from_psbt_error(error: bitcoin::psbt::Error) -> DecodeError {
+    match error {
+        bitcoin::psbt::Error::Io(io) => DecodeError::Io(io.into()),
+        bitcoin::psbt::Error::ConsensusEncoding(inner) => from_bitcoin_encode_error(inner),
+        other => DecodeError::from_err(other),
+    }
+}
 
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
@@ -36,7 +54,7 @@ macro_rules! impl_encode_decode_bridge {
                 bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
                     &mut SimpleBitcoinRead(d),
                 )
-                .map_err(crate::encoding::DecodeError::from_err)
+                .map_err(from_bitcoin_encode_error)
             }
         }
     };
@@ -62,8 +80,7 @@ impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        Self::deserialize_from_reader(&mut BufBitcoinReader::new(d))
-            .map_err(crate::encoding::DecodeError::from_err)
+        Self::deserialize_from_reader(&mut BufBitcoinReader::new(d)).map_err(from_psbt_error)
     }
 }
 
@@ -95,7 +112,7 @@ impl crate::encoding::Decodable for bitcoin::Txid {
         bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(&mut SimpleBitcoinRead(
             d,
         ))
-        .map_err(crate::encoding::DecodeError::from_err)
+        .map_err(from_bitcoin_encode_error)
     }
 
     fn consensus_decode_hex(
@@ -317,8 +334,13 @@ impl Decodable for BigSize {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::read(&mut SimpleBitcoinRead(r))
-            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+        Self::read(&mut SimpleBitcoinRead(r)).map_err(|error| match error {
+            msgs::DecodeError::ShortRead => {
+                DecodeError::Io(std::io::ErrorKind::UnexpectedEof.into())
+            }
+            msgs::DecodeError::Io(kind) => DecodeError::Io(bitcoin_io::Error::from(kind).into()),
+            other => DecodeError::custom(format!("BigSize decoding error: {other:?}")),
+        })
     }
 }
 
@@ -447,7 +469,7 @@ mod tests {
     use crate::db::DatabaseValue;
     use crate::encoding::btc::NetworkLegacyEncodingWrapper;
     use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
-    use crate::encoding::{Decodable, Encodable};
+    use crate::encoding::{Decodable, DecodeError, Encodable};
 
     #[test_log::test]
     fn block_hash_roundtrip() {
@@ -615,5 +637,34 @@ mod tests {
             .parse::<lightning_invoice::Bolt11Invoice>()
             .unwrap();
         test_roundtrip(&invoice);
+    }
+
+    #[test_log::test]
+    fn truncated_outpoint_is_an_io_error() {
+        let outpoint = bitcoin::OutPoint {
+            txid: bitcoin::Txid::from_str(
+                "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
+            )
+            .unwrap(),
+            vout: 0,
+        };
+        let mut encoded = outpoint.consensus_encode_to_vec();
+        encoded.truncate(encoded.len() - 1);
+
+        let err =
+            bitcoin::OutPoint::consensus_decode_whole(&encoded, &ModuleDecoderRegistry::default())
+                .expect_err("35 of 36 bytes are not a full outpoint");
+        assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
+    }
+
+    #[test_log::test]
+    fn empty_psbt_input_is_an_io_error() {
+        // The PSBT magic is read through rust-bitcoin's consensus decoder, so a short
+        // read arrives wrapped in `ConsensusEncoding` rather than as a
+        // top-level `Io`.
+        let err =
+            bitcoin::psbt::Psbt::consensus_decode_whole(&[], &ModuleDecoderRegistry::default())
+                .expect_err("empty input is not a psbt");
+        assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
     }
 }
