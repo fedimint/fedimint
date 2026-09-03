@@ -16,7 +16,6 @@ name = "fedimint_dummy_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 fedimint-core = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
