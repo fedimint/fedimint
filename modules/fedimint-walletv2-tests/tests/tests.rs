@@ -577,8 +577,7 @@ mod db {
     };
     use fedimint_walletv2_client::WalletClientModule;
     use fedimint_walletv2_client::db::{
-        self, NextOutputIndexKey, PendingReceivePrefix, ValidAddressIndexKey,
-        ValidAddressIndexPrefix,
+        self, NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
     };
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
@@ -1015,21 +1014,6 @@ mod db {
                                 indices == vec![0, 1],
                                 "both seeded valid address indices must round-trip unchanged, \
                                  got {indices:?}"
-                            );
-                        }
-                        // Both tables below track peg-in progress and are
-                        // rebuilt at runtime, so a migrated database must not
-                        // carry any entries over.
-                        db::DbKeyPrefix::PendingReceive => {
-                            let pending = dbtx
-                                .find_by_prefix(&PendingReceivePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-
-                            ensure!(
-                                pending.is_empty(),
-                                "no pending receives must be present, got {pending:?}"
                             );
                         }
                     }

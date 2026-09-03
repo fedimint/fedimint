@@ -22,10 +22,7 @@ use anyhow::{Context as _, anyhow};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
-use db::{
-    NextOutputIndexKey, PendingReceive, PendingReceiveAddressPrefix, PendingReceiveKey,
-    PendingReceivePrefix, ValidAddressIndexKey, ValidAddressIndexPrefix,
-};
+use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client::DynGlobalClientContext;
@@ -48,16 +45,15 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
-use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    CONFIRMATION_FINALITY_DELAY, KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit,
-    WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor,
-    is_potential_receive,
+    CONFIRMATION_FINALITY_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
+    WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
+    descriptor, is_potential_receive,
 };
 use futures::{Stream, StreamExt};
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -262,7 +258,6 @@ impl ClientModuleInit for WalletClientInit {
         };
 
         module.spawn_output_scanner(args.task_group(), args.client_span());
-        module.spawn_pending_receive_scanner(args.task_group(), args.client_span());
 
         Ok(module)
     }
@@ -633,31 +628,30 @@ impl WalletClientModule {
     /// may move backwards. Use [`Self::subscribe_receive_progress`] to follow a
     /// deposit through to being claimed.
     ///
+    /// Each call queries the federation, so poll it sparingly;
+    /// [`Self::subscribe_receive_progress`] is the better fit for following a
+    /// deposit.
+    ///
     /// Errors if no deposit at `outpoint` is known to this client, which
     /// includes one that has been reorged out or evicted since it was last
-    /// seen.
+    /// seen, and one paying an address this client did not derive.
     pub async fn receive_progress(
         &self,
         outpoint: bitcoin::OutPoint,
     ) -> anyhow::Result<ReceiveProgress> {
-        // The pending table holds only a handful of live entries, so finding a
-        // deposit by outpoint alone is a short scan rather than a second index.
-        let pending: Vec<(bitcoin::OutPoint, PendingReceive)> = self
-            .db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix(&PendingReceivePrefix)
-            .await
-            .map(|(key, pending)| (key.outpoint, pending))
-            .collect()
-            .await;
+        let pending = self.module_api.pending_outputs().await;
 
-        let (_, pending) = pending
-            .into_iter()
-            .find(|(reported, _)| *reported == outpoint)
-            .context("No deposit at this outpoint")?;
+        // Guardians report every output passing the receive filter, most of
+        // which belong to other clients, so ownership is established by matching
+        // the script against our own addresses.
+        let ours = self.address_map().await;
 
-        Ok(Self::pending_progress(&pending))
+        pending
+            .outputs
+            .iter()
+            .find(|output| output.outpoint == outpoint && ours.contains_key(&output.script))
+            .map(|output| Self::pending_progress(output, pending.block_count))
+            .context("No deposit of ours at this outpoint")
     }
 
     /// The progress of every deposit to `address` the federation has seen,
@@ -672,37 +666,64 @@ impl WalletClientModule {
         &self,
         address: &Address,
     ) -> anyhow::Result<Vec<(bitcoin::OutPoint, ReceiveProgress)>> {
-        let address_index = self
-            .address_index(address)
+        self.address_index(address)
             .await
             .context("Address was not derived by this client")?;
 
-        Ok(self.address_receive_progress_by_index(address_index).await)
+        Ok(self.deposits_paying(&address.script_pubkey()).await)
     }
 
-    async fn address_receive_progress_by_index(
+    /// Every deposit the federation currently reports against `script`.
+    async fn deposits_paying(
         &self,
-        address_index: u64,
+        script: &ScriptBuf,
     ) -> Vec<(bitcoin::OutPoint, ReceiveProgress)> {
+        let pending = self.module_api.pending_outputs().await;
+
+        let mut deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)> = pending
+            .outputs
+            .iter()
+            .filter(|output| output.script == *script)
+            .map(|output| {
+                (
+                    output.outpoint,
+                    Self::pending_progress(output, pending.block_count),
+                )
+            })
+            .collect();
+
+        deposits.sort_by_key(|(outpoint, _)| *outpoint);
+
+        deposits
+    }
+
+    /// The scripts of every receive address derived so far, by index.
+    async fn address_map(&self) -> BTreeMap<ScriptBuf, u64> {
         self.db
             .begin_transaction_nc()
             .await
-            .find_by_prefix(&PendingReceiveAddressPrefix(address_index))
+            .find_by_prefix(&ValidAddressIndexPrefix)
             .await
-            .map(|(key, pending)| (key.outpoint, Self::pending_progress(&pending)))
+            .map(|entry| entry.0.0)
+            .map(|index| (self.derive_address(index).script_pubkey(), index))
             .collect()
             .await
     }
 
-    fn pending_progress(pending: &PendingReceive) -> ReceiveProgress {
+    fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
         // The module counts finality from the block after the one that mined the
         // transaction, so a peg-in is claimable one standard confirmation later
         // than the delay itself.
         let required = CONFIRMATION_FINALITY_DELAY + 1;
 
-        match pending.confirmations() {
+        // Confirmations count the block that mined the deposit as the first,
+        // matching what a block explorer displays.
+        match output
+            .height
+            .map(|height| block_count.saturating_sub(height))
+        {
             Some(confirmations) => ReceiveProgress::Confirming {
-                value: pending.value,
+                value: output.value,
                 // Guardians keep reporting an output for a while after it turns
                 // final, so that progress does not blank out before the claim
                 // begins. Clamp so a progress display cannot run past its own
@@ -711,7 +732,7 @@ impl WalletClientModule {
                 required,
             },
             None => ReceiveProgress::Mempool {
-                value: pending.value,
+                value: output.value,
             },
         }
     }
@@ -741,19 +762,19 @@ impl WalletClientModule {
         address: &Address,
         position: EventLogId,
     ) -> anyhow::Result<impl Stream<Item = Vec<(bitcoin::OutPoint, ReceiveProgress)>> + use<>> {
-        let address_index = self
-            .address_index(address)
+        self.address_index(address)
             .await
             .context("Address was not derived by this client")?;
 
         let module = self.clone();
+        let script = address.script_pubkey();
 
         Ok(async_stream::stream! {
             let mut last: Option<Vec<(bitcoin::OutPoint, ReceiveProgress)>> = None;
             let mut seen: BTreeSet<bitcoin::OutPoint> = BTreeSet::new();
 
             loop {
-                let progress = module.address_receive_progress_by_index(address_index).await;
+                let progress = module.deposits_paying(&script).await;
 
                 seen.extend(progress.iter().map(|(outpoint, _)| *outpoint));
 
@@ -1090,117 +1111,6 @@ impl WalletClientModule {
                 sleep(fedimint_walletv2_common::sleep_duration()).await;
             }
         });
-    }
-
-    /// Tracks peg-ins that are mined but not yet final, so a user who has just
-    /// sent bitcoin sees confirmation progress instead of nothing at all.
-    ///
-    /// Kept separate from the output scanner because the two answer different
-    /// questions on different cadences: that one walks an append-only consensus
-    /// log and may not rewind, whereas this one mirrors a revocable view of the
-    /// chain tip and must be free to drop entries again.
-    fn spawn_pending_receive_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
-        let module = self.clone();
-
-        task_group.spawn_cancellable_with_span(
-            client_span.clone(),
-            "pending-receive-scanner",
-            async move {
-                loop {
-                    if let Err(err) = module.check_pending_receives().await {
-                        warn!(
-                            target: LOG_CLIENT_MODULE_WALLETV2,
-                            err = %err.fmt_compact_anyhow(),
-                            "Failed to fetch pending receives"
-                        );
-                    }
-
-                    sleep(fedimint_walletv2_common::sleep_duration()).await;
-                }
-            },
-        );
-    }
-
-    /// Refreshes the pending receive table from the guardians' local views.
-    ///
-    /// The table is rebuilt wholesale rather than appended to: entries have to
-    /// disappear when a reorg unmines a peg-in, or when the output becomes
-    /// final and the real receive operation takes over.
-    async fn check_pending_receives(&self) -> anyhow::Result<()> {
-        let pending = self.module_api.pending_outputs().await;
-
-        let address_map: BTreeMap<ScriptBuf, u64> = self
-            .db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix(&ValidAddressIndexPrefix)
-            .await
-            .map(|entry| entry.0.0)
-            .map(|index| (self.derive_address(index).script_pubkey(), index))
-            .collect()
-            .await;
-
-        // Keyed per outpoint, so an address paid more than once keeps one entry
-        // per payment instead of the last one overwriting the rest.
-        let matched: BTreeMap<(u64, bitcoin::OutPoint), PendingReceive> = pending
-            .outputs
-            .iter()
-            .filter_map(|output| {
-                let address_index = address_map.get(&output.script)?;
-
-                Some((
-                    (*address_index, output.outpoint),
-                    PendingReceive {
-                        value: output.value,
-                        height: output.height,
-                        block_count: pending.block_count,
-                    },
-                ))
-            })
-            .collect();
-
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let existing: Vec<(u64, bitcoin::OutPoint)> = dbtx
-            .find_by_prefix(&PendingReceivePrefix)
-            .await
-            .map(|(key, _)| (key.address_index, key.outpoint))
-            .collect()
-            .await;
-
-        for (address_index, outpoint) in existing
-            .into_iter()
-            .filter(|key| !matched.contains_key(key))
-        {
-            dbtx.remove_entry(&PendingReceiveKey {
-                address_index,
-                outpoint,
-            })
-            .await;
-        }
-
-        for ((address_index, outpoint), pending_receive) in &matched {
-            dbtx.insert_entry(
-                &PendingReceiveKey {
-                    address_index: *address_index,
-                    outpoint: *outpoint,
-                },
-                pending_receive,
-            )
-            .await;
-        }
-
-        dbtx.commit_tx_result().await?;
-
-        debug!(
-            target: LOG_CLIENT_MODULE_WALLETV2,
-            block_count = pending.block_count,
-            reported_num = pending.outputs.len(),
-            matched_num = matched.len(),
-            "Scanning for pending receives"
-        );
-
-        Ok(())
     }
 
     async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
