@@ -88,7 +88,7 @@ async fn resolve_api_urls_via_pkarr(db: &Database) -> BTreeMap<PeerId, SafeUrl> 
                     }
                 };
 
-                let signed_packet = match client.resolve(&pk).await {
+                let signed_packet = match client.resolve_most_recent(&pk).await {
                     Some(sp) => sp,
                     None => {
                         warn!(
