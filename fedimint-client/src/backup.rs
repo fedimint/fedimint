@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::io::{Cursor, Write};
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::recovery::DynModuleBackup;
@@ -12,7 +12,7 @@ use fedimint_core::core::backup::{
     BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, BackupRequest, SignedBackupRequest,
 };
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext as _, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::serde_json;
 use fedimint_derive_secret::DerivableSecret;
