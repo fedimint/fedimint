@@ -1458,4 +1458,45 @@ mod tests {
         .expect_err("31 bytes are not a transaction id");
         assert!(matches!(err, DecodeError::Io(_)), "{err:?}");
     }
+
+    #[test]
+    fn derived_decode_names_the_failing_field_and_keeps_the_io_root() {
+        // `vec` decodes as one element (7); `num` then has no bytes left.
+        let err = TestStruct::consensus_decode_whole(&[1, 7], &ModuleDecoderRegistry::default())
+            .expect_err("payload is truncated");
+
+        let DecodeError::Context { context, source } = &err else {
+            panic!("the failing field's context is the outer layer: {err:?}");
+        };
+        assert_eq!(
+            context,
+            "Decoding named block field: TestStruct{ ... num ... }"
+        );
+        assert!(matches!(**source, DecodeError::Io(_)), "{source:?}");
+    }
+
+    #[test]
+    fn derived_decode_reports_unknown_variants_structurally() {
+        let unknown_variant = DefaultEnum::Default {
+            variant: 42,
+            bytes: vec![0, 1, 2, 3],
+        };
+        let mut encoding = vec![];
+        unknown_variant
+            .consensus_encode(&mut encoding)
+            .expect("encodes");
+
+        let err = NoDefaultEnum::consensus_decode_whole(&encoding, &ModuleRegistry::default())
+            .expect_err("variant 42 does not exist");
+        assert!(
+            matches!(
+                err,
+                DecodeError::InvalidVariant {
+                    variant: 42,
+                    type_name: "NoDefaultEnum"
+                }
+            ),
+            "{err:?}"
+        );
+    }
 }
