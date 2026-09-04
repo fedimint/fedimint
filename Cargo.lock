@@ -1192,6 +1192,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d084b0137aaa901caf9f1e8b21daa6aa24d41cd806e111335541eff9683bd6"
 
 [[package]]
+name = "bitreq"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65c2e1ab98050c93cc9ada070d5070e014329c65196d03f6f8f1f75c2666f37"
+dependencies = [
+ "base64 0.22.1",
+ "rustls 0.23.38",
+ "rustls-webpki 0.103.13",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "webpki-roots 1.0.8",
+]
+
+[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2522,7 +2538,7 @@ dependencies = [
  "bon",
  "chrono",
  "clap",
- "esplora-client 0.12.3",
+ "esplora-client 0.13.0",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
@@ -3038,6 +3054,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "esplora-client"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "647f9c89c653d69cce478202b7377c03737e33fc6bc5ec044187bf83e5597ea2"
+dependencies = [
+ "bitcoin",
+ "bitreq",
+ "hex-conservative 0.2.2",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "event-listener"
 version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3154,7 +3184,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "esplora-client 0.12.3",
+ "esplora-client 0.13.0",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
@@ -3716,7 +3746,7 @@ dependencies = [
  "bon",
  "clap",
  "erased-serde",
- "esplora-client 0.12.3",
+ "esplora-client 0.13.0",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-bitcoind",
@@ -4762,7 +4792,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "esplora-client 0.12.3",
+ "esplora-client 0.13.0",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
