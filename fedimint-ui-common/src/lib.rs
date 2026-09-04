@@ -13,6 +13,7 @@ use fedimint_core::module::ApiAuth;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 use serde::Deserialize;
+use subtle::ConstantTimeEq as _;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
@@ -40,6 +41,17 @@ impl<T> UiState<T> {
             auth_cookie_value: thread_rng().r#gen::<[u8; 32]>().encode_hex(),
             requires_auth,
         }
+    }
+
+    pub(crate) fn has_valid_auth_cookie(&self, jar: &CookieJar) -> bool {
+        jar.get(&self.auth_cookie_name).is_some_and(|cookie| {
+            bool::from(
+                cookie
+                    .value()
+                    .as_bytes()
+                    .ct_eq(self.auth_cookie_value.as_bytes()),
+            )
+        })
     }
 }
 
@@ -257,14 +269,9 @@ pub async fn connectivity_check_handler<Api: Send + Sync + 'static>(
     State(state): State<UiState<Api>>,
     jar: CookieJar,
 ) -> Html<String> {
-    // Check auth manually — return empty fragment if not authenticated.
-    // In passwordless mode (`!requires_auth`), this widget is always shown.
-    let authenticated = !state.requires_auth
-        || jar
-            .get(&state.auth_cookie_name)
-            .is_some_and(|c| c.value() == state.auth_cookie_value);
-
-    if !authenticated {
+    // Return an empty fragment instead of redirecting so htmx leaves the widget
+    // empty when the UI is not authenticated.
+    if state.requires_auth && !state.has_valid_auth_cookie(&jar) {
         return Html(String::new());
     }
 
@@ -289,4 +296,31 @@ pub async fn connectivity_check_handler<Api: Send + Sync + 'static>(
     };
 
     Html(markup.into_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use axum_extra::extract::CookieJar;
+    use axum_extra::extract::cookie::Cookie;
+
+    use super::UiState;
+
+    #[test]
+    fn authentication_requires_matching_cookie() {
+        let state = UiState {
+            api: (),
+            auth_cookie_name: "session".to_owned(),
+            auth_cookie_value: "expected-value".to_owned(),
+            requires_auth: true,
+        };
+
+        let valid = CookieJar::new().add(Cookie::new("session", "expected-value"));
+        let wrong_value = CookieJar::new().add(Cookie::new("session", "wrong-value"));
+        let wrong_name = CookieJar::new().add(Cookie::new("other", "expected-value"));
+
+        assert!(state.has_valid_auth_cookie(&valid));
+        assert!(!state.has_valid_auth_cookie(&wrong_value));
+        assert!(!state.has_valid_auth_cookie(&wrong_name));
+        assert!(!state.has_valid_auth_cookie(&CookieJar::new()));
+    }
 }
