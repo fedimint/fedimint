@@ -3,6 +3,8 @@
 //! These keys use the UserData prefix (0xb0) as recommended for external/CLI
 //! data that shouldn't be in the core client database schema.
 
+use std::fmt;
+
 use fedimint_client::db::DbKeyPrefix as ClientDbKeyPrefix;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -44,13 +46,22 @@ impl std::fmt::Display for CliDbKeyPrefix {
 pub struct AdminCredsKey;
 
 /// The stored admin credentials value
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Clone, Encodable, Decodable, Serialize, Deserialize)]
 pub struct StoredAdminCreds {
     /// Guardian's own peer_id
     pub peer_id: PeerId,
     /// Authentication password (stored as String, will be wrapped in ApiAuth
     /// when used)
     pub auth: String,
+}
+
+impl fmt::Debug for StoredAdminCreds {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StoredAdminCreds")
+            .field("peer_id", &self.peer_id)
+            .field("auth", &"<redacted>")
+            .finish()
+    }
 }
 
 impl_db_record!(
@@ -75,4 +86,24 @@ pub async fn store_admin_creds(db: &Database, creds: &StoredAdminCreds) {
     let mut dbtx = cli_db.begin_transaction().await;
     dbtx.insert_entry(&AdminCredsKey, creds).await;
     dbtx.commit_tx().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_admin_creds_debug_redacts_auth() {
+        let auth = "admin-password";
+        let creds = StoredAdminCreds {
+            peer_id: PeerId::from(1),
+            auth: auth.to_owned(),
+        };
+
+        let debug = format!("{creds:?}");
+
+        assert!(!debug.contains(auth));
+        assert!(debug.contains(&format!("peer_id: {:?}", creds.peer_id)));
+        assert!(debug.contains(r#"auth: "<redacted>""#));
+    }
 }
