@@ -42,7 +42,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -63,7 +63,7 @@ use serde_json::Value;
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, derive_agg_dk};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::api::LightningFederationApi;
 use crate::events::SendPaymentEvent;
@@ -83,6 +83,7 @@ pub enum LightningOperationMeta {
     Send(SendOperationMeta),
     Receive(ReceiveOperationMeta),
     LnurlReceive(LnurlReceiveOperationMeta),
+    RecoveredReceive(RecoveredReceiveOperationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +128,19 @@ impl ReceiveOperationMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LnurlReceiveOperationMeta {
+    pub contract: IncomingContract,
+    pub custom_meta: Value,
+}
+
+/// Operation meta of a direct receive rediscovered by the incoming contract
+/// scan rather than driven by a locally created invoice, e.g. after a restore
+/// from seed where the original operation was lost with the database.
+///
+/// The invoice is unavailable on this client, so the gateway fee cannot be
+/// recovered; the receive payment event reports the contract amount with a
+/// zero fee.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveredReceiveOperationMeta {
     pub contract: IncomingContract,
     pub custom_meta: Value,
 }
@@ -190,6 +204,7 @@ pub type SendResult = Result<OperationId, SendPaymentError>;
 ///     Pending -- invoice expires --> Expired
 ///     Claiming -- ecash is minted --> Claimed
 ///     Claiming -- the claim is rejected or minting ecash fails --> Failure
+///     Pending -- the claim cannot be funded --> Uneconomical
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReceiveOperationState {
@@ -206,8 +221,9 @@ pub enum ReceiveOperationState {
     /// remains claimable and the operation can be re-driven with
     /// [`LightningClientModule::reclaim_receive`].
     Failure,
-    /// The contract is worth less than the federation charges to claim it, so
-    /// it was left unclaimed. Reachable without any payment request of ours:
+    /// The claim could not be funded: it costs more than the contract is worth
+    /// and the wallet held too little to cover the difference, so the contract
+    /// was left unclaimed. Reachable without any payment request of ours:
     /// anyone can address an incoming contract to a published lnurl key.
     Uneconomical,
 }
@@ -224,8 +240,9 @@ pub enum FinalReceiveOperationState {
     /// remains claimable and the operation can be re-driven with
     /// [`LightningClientModule::reclaim_receive`].
     Failure,
-    /// The contract is worth less than the federation charges to claim it, so
-    /// it was left unclaimed.
+    /// The claim could not be funded: it costs more than the contract is worth
+    /// and the wallet held too little to cover the difference, so the contract
+    /// was left unclaimed.
     Uneconomical,
 }
 
@@ -915,14 +932,31 @@ impl LightningClientModule {
     /// actual claim - the lightning input fee at this federation's fee
     /// consensus, the change the primary module has to mint, and the
     /// sub-denomination remainder that cannot be minted at all - rather than
-    /// assuming a floor. A quote that fails outright is the same verdict: the
-    /// claim spends the contract as the transaction's only input, so a fee
-    /// larger than the contract leaves a transaction that cannot be balanced.
-    async fn is_worth_claiming(&self, amount: Amount) -> bool {
-        match self.receive_fee_quote(amount).await {
-            Ok(quote) => quote.total().get_bitcoin() < amount,
-            Err(_) => false,
+    /// assuming a floor.
+    ///
+    /// `Err` is a quote that could not be taken at all, which is not the same
+    /// answer as `Ok(false)`. Refusing to create an invoice on either is safe,
+    /// so the creation path folds them together; a scan must not, because it
+    /// skips the contract and advances a cursor that never goes back - which
+    /// abandons claimable funds whenever quoting is temporarily impossible,
+    /// as it is while the primary module is absent from the registry during a
+    /// recovery.
+    ///
+    /// Which is why the definitive case is answered before the quote is taken.
+    /// The lightning input fee is the one component known locally, and it is
+    /// only ever a lower bound on the quote's total, so an amount that does
+    /// not even cover it is uneconomical whatever the quote would have added
+    /// on top. Deciding it here keeps that answer independent of the primary
+    /// module: an unsolicited dust contract to a wallet that cannot fund a
+    /// quote would otherwise be an unpriceable `Err` forever, holding the scan
+    /// cursor and wedging the scan on exactly the contracts this check exists
+    /// to discard.
+    async fn claim_verdict(&self, amount: Amount) -> anyhow::Result<bool> {
+        if self.cfg.fee_consensus.fee(amount) >= amount {
+            return Ok(false);
         }
+
+        Ok(self.receive_fee_quote(amount).await?.total().get_bitcoin() < amount)
     }
 
     /// Computes the federation fee a `send` funding an outgoing contract worth
@@ -1071,8 +1105,9 @@ impl LightningClientModule {
 
         // Quoting the claim against this federation's fee consensus is exact, where a
         // fixed floor is either too permissive or too strict depending on how the
-        // federation is configured.
-        if !self.is_worth_claiming(contract_amount).await {
+        // federation is configured. Refusing on an unavailable quote is safe here -
+        // nothing has been created yet - so both answers fold into one refusal.
+        if !self.claim_verdict(contract_amount).await.unwrap_or(false) {
             return Err(ReceiveError::AmountTooSmall);
         }
 
@@ -1131,7 +1166,7 @@ impl LightningClientModule {
         contract: IncomingContract,
         operation_meta: LightningOperationMeta,
     ) -> Option<OperationId> {
-        let operation_id = OperationId::from_encodable(&contract.clone());
+        let operation_id = OperationId::from_encodable(&contract);
 
         let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(sk, &contract)?;
 
@@ -1145,8 +1180,10 @@ impl LightningClientModule {
             state: ReceiveSMState::Pending,
         });
 
-        // this may only fail if the operation id is already in use, in which case we
-        // ignore the error such that the method is idempotent
+        // Ignore operation-start errors to keep the method idempotent. Callers
+        // that advance persistent progress after this call must verify that the
+        // operation exists, since a failed database commit is also reported as
+        // an operation-start error.
         self.client_ctx
             .manual_operation_start(
                 operation_id,
@@ -1334,8 +1371,9 @@ impl LightningClientModule {
     /// Returns an error if the original operation is not a lightning receive,
     /// if its receive state machine is still active, if it did not fail with a
     /// rejected claim transaction, if its state-machine history is
-    /// unavailable, or if the recorded claim transaction cannot be verified
-    /// because it created no change outputs. When the recorded claim is still
+    /// unavailable, if the recorded claim transaction cannot be verified
+    /// because it created no change outputs, or if the contract's amount no
+    /// longer covers the claim fee. When the recorded claim is still
     /// undecided - the federation is unreachable, say - this waits for the
     /// decision rather than erroring.
     pub async fn reclaim_receive(
@@ -1420,6 +1458,21 @@ impl LightningClientModule {
                 "The recorded claim transaction was accepted; there is nothing to reclaim"
             );
         }
+
+        // Re-quote before resubmitting: the fee consensus can have risen since
+        // the claim was rejected, and the contract is the transaction's only
+        // input, so the primary module would top the shortfall up out of the
+        // existing balance rather than the claim failing. `Uneconomical` only
+        // catches a wallet too empty to cover the difference, so without this
+        // the reclaim silently costs more than it returns.
+        anyhow::ensure!(
+            self.claim_verdict(receive_sm.common.contract.commitment.amount)
+                .await
+                .map_err(|e| anyhow::anyhow!(
+                    "Cannot price the claim of the recorded contract: {e}"
+                ))?,
+            "The contract's amount no longer covers the claim fee; there is nothing worth reclaiming"
+        );
 
         // The original operation meta is reused such that the fee reported by
         // the receive payment event stays correct for the reclaimed contract.
@@ -1508,6 +1561,229 @@ impl LightningClientModule {
         );
     }
 
+    /// Rescans the incoming contract stream below the persisted scan cursor
+    /// for direct receives locked to the static module key. Returns recovery
+    /// operation ids that became recorded while the call ran, so callers can
+    /// subscribe to them.
+    ///
+    /// This is only needed by a wallet that restored from seed before direct
+    /// receives were recovered by the scan: its cursor has already advanced
+    /// past its historical contracts and the tail scan, which only ever moves
+    /// forward, never revisits them.
+    ///
+    /// This checks only the static module key. An lnurl contract left behind
+    /// the cursor by an older client is not covered.
+    ///
+    /// The rescan keeps no state of its own and does not move the scan
+    /// cursor. It is idempotent - recoveries are recorded under
+    /// contract-derived operation ids - so an interrupted run is simply
+    /// re-run.
+    ///
+    /// The stream endpoint returns the first remaining entries at or after
+    /// the queried index, and claimed contracts are removed from the stream,
+    /// so on a sparse stream the final batch may also include contracts at
+    /// or above the captured cursor. That overlap with the tail scan is
+    /// harmless: whichever caller records the operation first wins and the
+    /// other skips it.
+    ///
+    /// If a run errors or is cancelled, ids collected before the interruption
+    /// are not returned; those operations remain in the operation log and
+    /// their state machines keep claiming. A re-run reports only recoveries
+    /// that were still missing.
+    ///
+    /// A recovered receive whose claim transaction is rejected fails
+    /// terminally, as any other receive does, and is re-driven manually with
+    /// [`LightningClientModule::reclaim_receive`]; rerunning the rescan does
+    /// not retry it, since its operation is already recorded.
+    ///
+    /// Contracts whose amount no longer covers the claim fee are skipped and
+    /// not reported, as they are by the tail scan. Claiming one is not merely
+    /// pointless: the contract is the transaction's only input, so the primary
+    /// module tops the shortfall up out of the existing balance whenever the
+    /// wallet can afford it, and the recovery costs more than it returns.
+    pub async fn rescan_incoming_contracts(
+        &self,
+        custom_meta: Value,
+    ) -> anyhow::Result<Vec<OperationId>> {
+        let cursor = self
+            .client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&IncomingContractStreamIndexKey)
+            .await
+            .unwrap_or(0);
+
+        let mut operation_ids = Vec::new();
+        let mut failed_contracts = 0_usize;
+        let mut index = 0;
+
+        // Every queried index lies below the cursor and therefore below the
+        // federation's stream tip, so the long-polling endpoint returns
+        // immediately. The batch size is capped to the size of the remaining
+        // range, but since the endpoint returns the first remaining entries
+        // at or after the queried index and claimed contracts are removed
+        // from the stream, a batch on a sparse stream may still include
+        // contracts at or above the cursor. Recovering those overlaps with
+        // the tail scan and is harmless: recording is idempotent and
+        // whichever caller records the operation first wins.
+        while index < cursor {
+            let batch_size =
+                usize::try_from((cursor - index).min(128)).expect("Bounded by the batch size");
+
+            let (contracts, next_index) = self
+                .module_api
+                .await_incoming_contracts(index, batch_size)
+                .await;
+
+            for contract in &contracts {
+                match self
+                    .try_recover_direct_receive(contract, custom_meta.clone())
+                    .await
+                {
+                    DirectReceiveRecovery::Recorded(operation_id) => {
+                        operation_ids.push(operation_id);
+                    }
+                    DirectReceiveRecovery::NotNeeded => {}
+                    DirectReceiveRecovery::Failed => failed_contracts += 1,
+                }
+            }
+
+            index = next_index;
+        }
+
+        // Erroring out instead of skipping keeps the caller from mistaking an
+        // incomplete rescan for a complete one. The whole range is processed
+        // first so one failing contract does not hide later recoverable ones:
+        // the recoveries recorded by this run are already durable, and
+        // re-running the rescan retries only the failed contracts.
+        anyhow::ensure!(
+            failed_contracts == 0,
+            "Recorded {} recoveries but failed to record {failed_contracts}; rerun the rescan",
+            operation_ids.len(),
+        );
+
+        Ok(operation_ids)
+    }
+
+    /// Whether this id belongs to a recorded lnv2 operation. The module-kind
+    /// check avoids treating a cross-module operation-id collision as a
+    /// successfully recorded recovery.
+    async fn operation_recorded(&self, operation_id: OperationId) -> bool {
+        self.client_ctx.get_operation(operation_id).await.is_ok()
+    }
+
+    /// Rediscovers a direct receive for a contract locked to the static
+    /// module key, e.g. after a restore from seed, unless the operation is
+    /// already known to this client.
+    ///
+    /// Seed recovery cannot distinguish a restored replacement device from a
+    /// second live client on the same seed, so - as for lnurl receives - a
+    /// concurrent same-seed client now races the invoice creator for the
+    /// claim; the loser's operation fails even though the payment settled on
+    /// the other device. Concurrent same-seed clients are unsupported.
+    async fn try_recover_direct_receive(
+        &self,
+        contract: &IncomingContract,
+        custom_meta: Value,
+    ) -> DirectReceiveRecovery {
+        // Ownership first, and it is the cheapest of the three checks for the
+        // case that dominates: the stream carries every incoming contract the
+        // federation funded, so almost all of them are other clients', and a
+        // foreign one fails the claim key comparison after purely local
+        // arithmetic. The operation-log read below is a database transaction
+        // and the quote reads the wallet - paying either for every payment the
+        // federation makes would cost every client a lookup per payment.
+        if self
+            .recover_contract_keys(self.keypair.secret_key(), contract)
+            .is_none()
+        {
+            return DirectReceiveRecovery::NotNeeded;
+        }
+
+        // Matches the operation id derivation in `receive_incoming_contract`,
+        // so contracts of receives this client already tracks are skipped
+        // before it is asked to start a second state machine for them.
+        let operation_id = OperationId::from_encodable(contract);
+
+        if self.operation_recorded(operation_id).await {
+            return DirectReceiveRecovery::NotNeeded;
+        }
+
+        match self.claim_verdict(contract.commitment.amount).await {
+            Ok(true) => {}
+            // Nobody else can address a contract to the static key - only the
+            // tweaked claim key leaves this client - so this is not the lnurl
+            // branch's unsolicited-dust case but our own invoice repriced by a
+            // fee consensus that rose after it was created. Claim it anyway and
+            // the primary module tops the shortfall up out of the existing
+            // balance, costing more than the contract returns.
+            Ok(false) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LNV2,
+                    contract_id = ?contract.contract_id(),
+                    amount = %contract.commitment.amount,
+                    "Not recovering incoming contract, its amount does not cover the claim fee"
+                );
+
+                return DirectReceiveRecovery::NotNeeded;
+            }
+            // An unavailable quote is not a verdict. Reporting `NotNeeded` here
+            // would let the caller advance its cursor past a contract that was
+            // never priced, and the scan never comes back.
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LNV2,
+                    err = %err.fmt_compact_anyhow(),
+                    contract_id = ?contract.contract_id(),
+                    "Cannot price the claim of an incoming contract, not advancing past it"
+                );
+
+                return DirectReceiveRecovery::Failed;
+            }
+        }
+
+        if self
+            .receive_incoming_contract(
+                self.keypair.secret_key(),
+                contract.clone(),
+                LightningOperationMeta::RecoveredReceive(RecoveredReceiveOperationMeta {
+                    contract: contract.clone(),
+                    custom_meta,
+                }),
+            )
+            .await
+            .is_none()
+        {
+            // The contract is not locked to the static module key; there is
+            // nothing to recover.
+            return DirectReceiveRecovery::NotNeeded;
+        }
+
+        // `receive_incoming_contract` swallows every `manual_operation_start`
+        // error for idempotency, including a failed commit, so whether the
+        // recovery was actually recorded has to be verified before the tail
+        // scan advances past the contract: the scan only ever moves forward
+        // and never revisits it.
+        if self.operation_recorded(operation_id).await {
+            debug!(
+                target: LOG_CLIENT_MODULE_LNV2,
+                contract_id = ?contract.contract_id(),
+                "Discovered incoming contract locked to the static module key"
+            );
+
+            DirectReceiveRecovery::Recorded(operation_id)
+        } else {
+            warn!(
+                target: LOG_CLIENT_MODULE_LNV2,
+                contract_id = ?contract.contract_id(),
+                "Failed to record the recovery of an incoming contract"
+            );
+
+            DirectReceiveRecovery::Failed
+        }
+    }
+
     async fn receive_lnurl(&self, custom_meta: Value) {
         // Read the stream cursor with a short-lived transaction. It must NOT stay open
         // across the long-poll below: RocksDB's optimistic transactions validate a
@@ -1533,27 +1809,76 @@ impl LightningClientModule {
             .await_incoming_contracts(stream_index, 128)
             .await;
 
+        let mut batch_handled = true;
+
         for contract in &contracts {
             // The stream carries every incoming contract the federation funded, and
             // anyone can address one to a published lnurl key. Check that it is ours
             // before quoting - recovering the keys is local arithmetic, the quote
-            // reads the wallet - and skip the contracts the claim fee would swallow,
-            // so that unsolicited dust never becomes an operation in the first place.
-            if self
+            // reads the wallet. Both of this module's keys are checked: the lnurl
+            // key an lnurl receive is addressed to, and the static module key a
+            // direct receive uses, which the recovery branch below claims under.
+            // Checking only the lnurl key here would skip every contract the
+            // recovery branch exists to find.
+            let is_lnurl = self
                 .recover_contract_keys(self.lnurl_keypair.secret_key(), contract)
-                .is_none()
-            {
-                continue;
-            }
+                .is_some();
 
-            if !self.is_worth_claiming(contract.commitment.amount).await {
-                warn!(
-                    target: LOG_CLIENT_MODULE_LNV2,
-                    amount = %contract.commitment.amount,
-                    "Ignoring incoming contract, its amount does not cover the claim fee"
+            if !is_lnurl {
+                // Not addressed to the lnurl key, so it is only ours if it is
+                // locked to the static module key used by direct (invoice)
+                // receives. On a client whose database still holds the original
+                // operation this is a no-op; on a client restored from seed it
+                // rediscovers a funded contract whose operation was lost with
+                // the database and claims it.
+                //
+                // That path owns its own already-recorded and dust checks, in
+                // that order, so quoting here would price every contract this
+                // client already tracks - the common case on a client that
+                // never lost its database.
+                //
+                // Unlike the lnurl branch below, the final state is not awaited
+                // inline: the recovery is driven by its own persisted state
+                // machine, so the scan need not block on the claim reaching
+                // consensus before moving on.
+                batch_handled &= !matches!(
+                    self.try_recover_direct_receive(contract, custom_meta.clone())
+                        .await,
+                    DirectReceiveRecovery::Failed
                 );
 
                 continue;
+            }
+
+            // Skip the contracts the claim fee would swallow, so that unsolicited
+            // dust never becomes an operation in the first place. Anyone can
+            // address one to a published lnurl key, which is why this gate exists
+            // on this branch.
+            match self.claim_verdict(contract.commitment.amount).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LNV2,
+                        amount = %contract.commitment.amount,
+                        "Ignoring incoming contract, its amount does not cover the claim fee"
+                    );
+
+                    continue;
+                }
+                // Hold the cursor rather than skip: an unavailable quote is not
+                // a verdict, and the scan only ever moves forward.
+                Err(err) => {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LNV2,
+                        err = %err.fmt_compact_anyhow(),
+                        contract_id = ?contract.contract_id(),
+                        "Cannot price the claim of an incoming contract, not advancing past it"
+                    );
+
+                    batch_handled = false;
+
+                    continue;
+                }
             }
 
             if let Some(operation_id) = self
@@ -1567,10 +1892,31 @@ impl LightningClientModule {
                 )
                 .await
             {
-                self.await_final_receive_operation_state(operation_id)
-                    .await
-                    .ok();
+                if self.operation_recorded(operation_id).await {
+                    self.await_final_receive_operation_state(operation_id)
+                        .await
+                        .ok();
+                } else {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_LNV2,
+                        contract_id = ?contract.contract_id(),
+                        "Failed to record an lnurl receive operation"
+                    );
+
+                    batch_handled = false;
+                }
             }
+        }
+
+        // A receive that failed to commit must not be skipped: the scan only
+        // ever moves forward, so nothing revisits a contract once the cursor
+        // is past it. Leaving the cursor in place re-fetches and re-processes
+        // the batch - idempotently, thanks to the contract-derived operation
+        // ids - on the next iteration.
+        if !batch_handled {
+            fedimint_core::runtime::sleep(std::time::Duration::from_secs(10)).await;
+
+            return;
         }
 
         // Advance the cursor in its own short transaction. This is the only writer of
@@ -1588,6 +1934,22 @@ impl LightningClientModule {
 
         dbtx.commit_tx().await;
     }
+}
+
+/// The outcome of attempting to recover a direct receive from a single
+/// incoming contract.
+#[derive(Debug)]
+enum DirectReceiveRecovery {
+    /// A recovery operation was recorded for the contract and verified to
+    /// exist.
+    Recorded(OperationId),
+    /// There is nothing to recover: the contract is not locked to the static
+    /// module key, the operation already exists, or the claim fee would
+    /// swallow the contract's amount.
+    NotNeeded,
+    /// The recovery failed to be recorded, so a scan must not advance past
+    /// the contract.
+    Failed,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

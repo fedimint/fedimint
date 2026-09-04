@@ -35,6 +35,11 @@ enum Opts {
     /// Retry claiming a receive operation whose claim transaction was
     /// rejected. Returns the new operation id to await.
     ReclaimReceive { operation_id: OperationId },
+    /// Recover direct receives missed because the incoming contract scan
+    /// cursor had already advanced past them, for example on a wallet
+    /// restored from seed before direct receives were recovered
+    /// automatically. Returns the operation ids of the recovered receives.
+    RescanIncomingContracts,
     /// Lnurl subcommands
     #[command(subcommand)]
     Lnurl(LnurlOpts),
@@ -108,6 +113,9 @@ pub(crate) async fn handle_cli_command(
         ),
         Opts::ReclaimReceive { operation_id } => {
             json(lightning.reclaim_receive(operation_id).await?)
+        }
+        Opts::RescanIncomingContracts => {
+            json(lightning.rescan_incoming_contracts(Value::Null).await?)
         }
         Opts::Lnurl(lnurl_opts) => match lnurl_opts {
             LnurlOpts::Generate {

@@ -52,10 +52,12 @@ pub enum ReceiveSMState {
     /// [`crate::LightningClientModule::reclaim_receive`].
     ClaimingLegacy(Vec<OutPoint>),
     Expired,
-    /// Claiming the contract costs more in federation fees than the contract is
-    /// worth, so there is nothing to recover. Terminal: the verdict follows
-    /// from the contract amount and the federation's fee consensus, so waiting
-    /// does not change it.
+    /// The claim could not be funded, so there is nothing to recover. The
+    /// contract is the transaction's only input, so the primary module has to
+    /// cover the shortfall whenever the federation's fees exceed the contract;
+    /// this state is the case where it holds too little to do so. Terminal:
+    /// the state machine does not poll for the balance or the fee consensus to
+    /// change.
     Uneconomical,
     Claiming {
         change: OutPointRange,
@@ -80,7 +82,7 @@ pub enum ReceiveSMState {
 ///
 ///     Pending -- incoming contract is confirmed --> Claiming
 ///     Pending -- decryption contract expires --> Expired
-///     Pending -- claim fee exceeds the contract --> Uneconomical
+///     Pending -- the claim cannot be funded --> Uneconomical
 ///     Claiming -- claim transaction is accepted --> Claimed
 ///     Claiming -- claim transaction is rejected --> Failed
 /// ```
@@ -255,6 +257,10 @@ impl ReceiveStateMachine {
             // manually created invoices; lnurl receives have no invoice on the
             // client, so the fee is recovered from the fee-encoded expiration.
             Ok(LightningOperationMeta::Receive(meta)) => meta.gateway_fee(),
+            // A recovered receive lost its invoice with the original database
+            // and its expiration is a real timestamp rather than a fee
+            // encoding, so the gateway fee is unknown and reported as zero.
+            Ok(LightningOperationMeta::RecoveredReceive(..)) => Amount::ZERO,
             _ => Amount::from_msats(fee_from_expiration(
                 old_state.common.contract.commitment.expiration_or_fee,
             )),
