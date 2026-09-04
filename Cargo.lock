@@ -4974,6 +4974,7 @@ dependencies = [
  "fedimint-core",
  "maud",
  "serde",
+ "subtle",
  "tokio",
 ]
 

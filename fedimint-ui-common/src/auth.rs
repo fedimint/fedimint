@@ -114,12 +114,10 @@ where
             .await
             .map_err(|_| Redirect::to(LOGIN_ROUTE))?;
 
-        // Check if the auth cookie exists and has the correct value
-        match jar.get(&state.auth_cookie_name) {
-            Some(cookie) if cookie.value() == state.auth_cookie_value => {
-                Ok(UserAuth::authenticated())
-            }
-            _ => Err(Redirect::to(LOGIN_ROUTE)),
+        if state.has_valid_auth_cookie(&jar) {
+            Ok(UserAuth::authenticated())
+        } else {
+            Err(Redirect::to(LOGIN_ROUTE))
         }
     }
 }
