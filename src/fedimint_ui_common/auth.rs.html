@@ -114,13 +114,11 @@
 <a href=#114 id=114 data-nosnippet>114</a>            .<span class="kw">await
 <a href=#115 id=115 data-nosnippet>115</a>            </span>.map_err(|<span class="kw">_</span>| Redirect::to(LOGIN_ROUTE))<span class="question-mark">?</span>;
 <a href=#116 id=116 data-nosnippet>116</a>
-<a href=#117 id=117 data-nosnippet>117</a>        <span class="comment">// Check if the auth cookie exists and has the correct value
-<a href=#118 id=118 data-nosnippet>118</a>        </span><span class="kw">match </span>jar.get(<span class="kw-2">&amp;</span>state.auth_cookie_name) {
-<a href=#119 id=119 data-nosnippet>119</a>            <span class="prelude-val">Some</span>(cookie) <span class="kw">if </span>cookie.value() == state.auth_cookie_value =&gt; {
-<a href=#120 id=120 data-nosnippet>120</a>                <span class="prelude-val">Ok</span>(UserAuth::authenticated())
-<a href=#121 id=121 data-nosnippet>121</a>            }
-<a href=#122 id=122 data-nosnippet>122</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(Redirect::to(LOGIN_ROUTE)),
-<a href=#123 id=123 data-nosnippet>123</a>        }
-<a href=#124 id=124 data-nosnippet>124</a>    }
-<a href=#125 id=125 data-nosnippet>125</a>}
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">if </span>state.has_valid_auth_cookie(<span class="kw-2">&amp;</span>jar) {
+<a href=#118 id=118 data-nosnippet>118</a>            <span class="prelude-val">Ok</span>(UserAuth::authenticated())
+<a href=#119 id=119 data-nosnippet>119</a>        } <span class="kw">else </span>{
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="prelude-val">Err</span>(Redirect::to(LOGIN_ROUTE))
+<a href=#121 id=121 data-nosnippet>121</a>        }
+<a href=#122 id=122 data-nosnippet>122</a>    }
+<a href=#123 id=123 data-nosnippet>123</a>}
 </code></pre></div></section></main></body></html>
