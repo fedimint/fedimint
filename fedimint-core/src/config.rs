@@ -31,6 +31,7 @@ use crate::module::{
     SerdeModuleEncoding,
 };
 use crate::session_outcome::SignedSessionOutcome;
+use crate::util::FmtCompact as _;
 use crate::{PeerId, maybe_add_send_sync, secp256k1};
 
 // TODO: make configurable
@@ -919,7 +920,7 @@ impl<'de> Deserialize<'de> for DkgMessageG1 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 
@@ -943,7 +944,7 @@ impl<'de> Deserialize<'de> for DkgMessageG2 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::SystemTime;
 
-use anyhow::{anyhow, bail};
+use anyhow::{Context as _, bail};
 use bitcoin::hex::DisplayHex as _;
 use fedimint_api_client::api::ApiVersionSet;
 use fedimint_client_module::db::ClientModuleMigrationFn;
@@ -1064,7 +1064,7 @@ pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::R
     match client_secret {
         Some(client_secret) => {
             T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
-                .map_err(|e| anyhow!("Decoding failed: {e}"))
+                .context("Decoding failed")
         }
         None => bail!("Encoded client secret not present in DB"),
     }

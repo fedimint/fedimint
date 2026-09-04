@@ -11,6 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
+use crate::util::FmtCompact as _;
 
 #[derive(Clone, Debug)]
 pub struct TxOutProof {
@@ -97,13 +98,13 @@ impl<'de> Deserialize<'de> for TxOutProof {
             let bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)?;
             Ok(
                 Self::consensus_decode_partial(&mut Cursor::new(bytes), &empty_module_registry)
-                    .map_err(D::Error::custom)?,
+                    .map_err(|e| D::Error::custom(e.fmt_compact()))?,
             )
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(
                 Self::consensus_decode_partial(&mut Cursor::new(bytes), &empty_module_registry)
-                    .map_err(D::Error::custom)?,
+                    .map_err(|e| D::Error::custom(e.fmt_compact()))?,
             )
         }
     }
