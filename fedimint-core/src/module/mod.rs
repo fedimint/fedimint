@@ -362,7 +362,7 @@ pub struct IrohGatewayResponse {
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
-/// Authentication secret used to verify guardian admin API requests.
+/// Authentication secret used to verify privileged API requests.
 ///
 /// The inner value is private to prevent timing leaks via direct comparison.
 /// Use [`Self::verify`] for authentication checks.

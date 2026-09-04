@@ -31,16 +31,22 @@ async fn main() -> anyhow::Result<()> {
                     .json(&serde_json::json!({ "invite": dummy_invite }))
                     .send()
                     .await?;
-                assert!(response_no_auth.status().is_client_error());
+                assert_eq!(
+                    response_no_auth.status(),
+                    reqwest::StatusCode::UNAUTHORIZED
+                );
 
                 let response_with_wrong_auth = client
                     .put(&url)
-                    .header("Authorization", "Bearer wrong-token")
+                    .header("Authorization", "Bearer recurringd-test-token-wrong")
                     .header("Content-Type", "application/json")
                     .json(&serde_json::json!({ "invite": dummy_invite }))
                     .send()
                     .await?;
-                assert!(response_with_wrong_auth.status().is_client_error());
+                assert_eq!(
+                    response_with_wrong_auth.status(),
+                    reqwest::StatusCode::UNAUTHORIZED
+                );
             }
 
             // Give the LND Gateway a balance, it's the only GW serving LNv1 and recurringd
