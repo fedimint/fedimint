@@ -308,7 +308,7 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                             stringify!(#ident),
                         ),
                     )?;
-                    let mut cursor = std::io::Cursor::new(&bytes);
+                    let mut cursor = ::std::io::Cursor::new(&bytes);
 
                     let decoded = ::fedimint_core::encoding::DecodeContext::context(
                         (|| -> ::std::result::Result<_, ::fedimint_core::encoding::DecodeError> {
@@ -326,7 +326,7 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                     let read_bytes = cursor.position();
                     let total_bytes = bytes.len() as u64;
                     if read_bytes != total_bytes {
-                        return Err(::fedimint_core::encoding::DecodeError::custom(format!(
+                        return Err(::fedimint_core::encoding::DecodeError::custom(::std::format!(
                             "Partial read: got {total_bytes} bytes but only read {read_bytes} when decoding {}",
                             concat!(
                                 stringify!(#ident),

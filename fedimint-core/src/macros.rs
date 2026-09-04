@@ -347,10 +347,10 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                     }
                     None => match decoders.decoding_mode() {
                         $crate::module::registry::DecodingMode::Reject => {
-                            return Err(fedimint_core::encoding::DecodeError::custom(format!(
+                            return Err($crate::encoding::DecodeError::custom(::std::format!(
                                 "Module decoder not available for module instance: \
                                  {module_instance_id} when decoding {}",
-                                std::any::type_name::<Self>()
+                                ::std::any::type_name::<Self>()
                             )));
                         }
                         $crate::module::registry::DecodingMode::Fallback => $name::from_typed(
