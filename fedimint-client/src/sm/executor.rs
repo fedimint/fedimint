@@ -1091,9 +1091,7 @@ impl Decodable for InactiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);
@@ -1185,9 +1183,7 @@ impl Decodable for ActiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);

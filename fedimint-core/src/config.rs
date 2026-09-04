@@ -6,7 +6,6 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use anyhow::Context;
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
@@ -26,12 +25,13 @@ use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::{Decodable, DecodeError};
+use crate::encoding::{Decodable, DecodeContext as _, DecodeError};
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
     SerdeModuleEncoding,
 };
 use crate::session_outcome::SignedSessionOutcome;
+use crate::util::FmtCompact as _;
 use crate::{PeerId, maybe_add_send_sync, secp256k1};
 
 // TODO: make configurable
@@ -920,7 +920,7 @@ impl<'de> Deserialize<'de> for DkgMessageG1 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 
@@ -944,7 +944,7 @@ impl<'de> Deserialize<'de> for DkgMessageG2 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 

@@ -18,7 +18,7 @@ use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
-use fedimint_core::{Amount, BitcoinHash, PeerId, TransactionId, anyhow};
+use fedimint_core::{Amount, BitcoinHash, PeerId, TransactionId};
 use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
 use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};

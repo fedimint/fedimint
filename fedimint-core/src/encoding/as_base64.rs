@@ -25,5 +25,10 @@ where
             })?,
         &ModuleRegistry::default(),
     )
-    .map_err(|e| serde::de::Error::custom(format!("decodable deserialization failed: {e:#}")))
+    .map_err(|e| {
+        serde::de::Error::custom(format!(
+            "decodable deserialization failed: {}",
+            crate::util::FmtCompact::fmt_compact(&e)
+        ))
+    })
 }

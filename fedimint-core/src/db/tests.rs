@@ -2,9 +2,10 @@ use tokio::sync::oneshot;
 
 use super::mem_impl::MemDatabase;
 use super::{
-    Database, GlobalDBTxAccessToken, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt, TestKey,
-    TestVal, future_returns_shortly,
+    Database, DatabaseKey, DatabaseRecord, DecodingError, GlobalDBTxAccessToken,
+    IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt, TestKey, TestVal, future_returns_shortly,
 };
+use crate::module::registry::ModuleDecoderRegistry;
 use crate::runtime::spawn;
 
 async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
@@ -218,4 +219,13 @@ async fn test_prefix_global_dbtx_panics_on_wrong_access_token() {
 
     let mut tx = db.begin_transaction().await;
     let _tx = tx.global_dbtx(GlobalDBTxAccessToken::from_prefix(&[1]));
+}
+
+#[test]
+fn key_with_a_truncated_payload_is_a_decode_error() {
+    // The prefix byte alone is a well-formed prefix followed by no payload.
+    let bytes = [TestKey::DB_PREFIX];
+    let err = TestKey::from_bytes(&bytes, &ModuleDecoderRegistry::default())
+        .expect_err("a u64 cannot be decoded from zero bytes");
+    assert!(matches!(err, DecodingError::Decode(_)), "{err:?}");
 }

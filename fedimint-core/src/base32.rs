@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
+use crate::util::FmtCompact as _;
 
 /// Lowercase RFC 4648 Base32hex alphabet (32 characters).
 const RFC4648: [u8; 32] = *b"0123456789abcdefghijklmnopqrstuv";
@@ -125,10 +126,22 @@ pub enum PrefixedDecodeError {
     InvalidPrefix { expected: String },
     /// The payload is not valid base 32.
     #[error("Invalid base32 payload: {0}")]
-    Base32Decode(#[from] Base32DecodeError),
+    Base32Decode(Base32DecodeError),
     /// The decoded bytes are not a valid consensus encoding of the target type.
-    #[error("Invalid consensus encoding in base32 payload: {0}")]
-    ConsensusDecode(#[from] DecodeError),
+    #[error("Invalid consensus encoding in base32 payload: {}", .0.fmt_compact())]
+    ConsensusDecode(DecodeError),
+}
+
+impl From<DecodeError> for PrefixedDecodeError {
+    fn from(source: DecodeError) -> Self {
+        Self::ConsensusDecode(source)
+    }
+}
+
+impl From<Base32DecodeError> for PrefixedDecodeError {
+    fn from(source: Base32DecodeError) -> Self {
+        Self::Base32Decode(source)
+    }
 }
 
 #[test]
@@ -185,4 +198,41 @@ fn decode_prefixed_bytes_rejects_wrong_prefix() {
         decode_prefixed_bytes("fed", "xyz00"),
         Err(PrefixedDecodeError::InvalidPrefix { expected }) if expected == "fed"
     ));
+}
+
+#[test]
+fn decode_prefixed_reports_the_whole_decode_chain() {
+    use std::str::FromStr;
+
+    use crate::encoding::Encodable;
+    use crate::invite_code::InviteCode;
+
+    // Dropping the last byte of a valid invite code cuts off mid-federation-id, so
+    // the reader runs out of input partway through the consensus decode instead of
+    // failing on the very first byte.
+    let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+    let invite = InviteCode::from_str(invite_code_str).expect("valid invite code");
+    let bytes = invite.consensus_encode_to_vec();
+    let encoded = encode_prefixed_bytes(FEDIMINT_PREFIX, &bytes[..bytes.len() - 1]);
+
+    let err =
+        decode_prefixed::<InviteCode>(FEDIMINT_PREFIX, &encoded).expect_err("payload is truncated");
+    let text = err.to_string();
+    let err_fmt_compact = err.fmt_compact().to_string();
+    let PrefixedDecodeError::ConsensusDecode(inner) = err else {
+        panic!("a truncated payload is a decode error: {err:?}");
+    };
+
+    assert_eq!(
+        text,
+        format!(
+            "Invalid consensus encoding in base32 payload: {}",
+            inner.fmt_compact()
+        )
+    );
+    assert_ne!(inner.fmt_compact().to_string(), inner.to_string());
+    assert_eq!(
+        err_fmt_compact, text,
+        "no source, so nothing is printed twice"
+    );
 }

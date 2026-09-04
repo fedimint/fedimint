@@ -3511,7 +3511,6 @@ dependencies = [
 name = "fedimint-derive-secret"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin_hashes",
  "bls12_381",
  "fedimint-core",
@@ -3549,7 +3548,6 @@ dependencies = [
 name = "fedimint-dummy-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "fedimint-core",
  "serde",
  "thiserror 2.0.18",
@@ -3592,7 +3590,6 @@ dependencies = [
 name = "fedimint-empty-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "fedimint-core",
  "serde",
  "thiserror 2.0.18",
@@ -3637,7 +3634,6 @@ dependencies = [
 name = "fedimint-fountain"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "bitcoin_hashes",
  "fedimint-core",
@@ -3687,7 +3683,6 @@ dependencies = [
 name = "fedimint-gateway-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin",
  "clap",
  "fedimint-api-client",
@@ -4792,6 +4787,7 @@ dependencies = [
 name = "fedimint-server-tests"
 version = "0.13.0-alpha"
 dependencies = [
+ "anyhow",
  "bitcoin",
  "fedimint-api-client",
  "fedimint-core",
@@ -4982,7 +4978,6 @@ dependencies = [
 name = "fedimint-unknown-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "fedimint-core",
  "serde",
  "thiserror 2.0.18",

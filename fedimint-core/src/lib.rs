@@ -47,8 +47,6 @@ use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
-/// Mostly re-exported for [`Decodable`] macros.
-pub use anyhow;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
@@ -575,7 +573,7 @@ impl Decodable for TransactionId {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bytes)?;
         Ok(Self::from_byte_array(bytes))
     }
 }

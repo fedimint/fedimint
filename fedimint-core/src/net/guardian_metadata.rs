@@ -1,6 +1,6 @@
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::Message;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext as _, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 
 use crate::util::SafeUrl;
@@ -107,7 +107,8 @@ impl Decodable for SignedGuardianMetadata {
     ) -> Result<Self, DecodeError> {
         let bytes = Vec::<u8>::consensus_decode_partial_from_finite_reader(reader, modules)?;
         let value: GuardianMetadata = serde_json::from_slice(&bytes)
-            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("Invalid JSON: {e}")))?;
+            .map_err(DecodeError::from_err)
+            .context("Invalid JSON")?;
         let signature = secp256k1::schnorr::Signature::consensus_decode_partial_from_finite_reader(
             reader, modules,
         )?;

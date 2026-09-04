@@ -234,3 +234,31 @@ fn load_from_file_reads_valid_json() {
         serde_json::json!({ "answer": 42 })
     );
 }
+
+#[test]
+fn dkg_message_deserialize_reports_the_whole_decode_chain() {
+    use crate::config::DkgMessageG1;
+    use crate::encoding::Decodable;
+    use crate::module::registry::ModuleDecoderRegistry;
+    use crate::util::FmtCompact as _;
+
+    // Variant 1 (`Commitment`) whose one payload byte announces a one-element
+    // vector and then ends, so the reader runs out of input inside the variant
+    // rather than on the first byte.
+    let hex = "010101";
+    let expected = DkgMessageG1::consensus_decode_hex(hex, &ModuleDecoderRegistry::default())
+        .expect_err("payload is truncated");
+    assert_ne!(
+        expected.fmt_compact().to_string(),
+        expected.to_string(),
+        "the decode error has more than one layer, and the message shows all of them"
+    );
+
+    let err = serde_json::from_str::<DkgMessageG1>(&format!("\"{hex}\""))
+        .expect_err("payload is truncated");
+    assert!(
+        err.to_string()
+            .starts_with(&expected.fmt_compact().to_string()),
+        "{err}"
+    );
+}
