@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use axum::Json;
 use axum::body::Body;
-use axum::extract::{Path, Query, State};
+use axum::extract::{FromRequestParts, Path, Query, State};
+use axum::http::request::Parts;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, put};
@@ -14,6 +15,7 @@ use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::ApiAuth;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_client::recurring::api::{
     RecurringPaymentRegistrationRequest, RecurringPaymentRegistrationResponse,
@@ -47,15 +49,30 @@ struct CliOpts {
     bind_address: SocketAddr,
     #[clap(long, env = "FM_RECURRING_API_ADDRESS")]
     api_address: SafeUrl,
-    #[clap(long, env = "FM_RECURRING_API_BEARER_TOKEN")]
+    #[clap(
+        long,
+        env = "FM_RECURRING_API_BEARER_TOKEN",
+        value_parser = parse_non_empty_bearer_token
+    )]
     bearer_token: String,
     #[clap(long, env = "FM_RECURRING_DATA_DIR")]
     data_dir: PathBuf,
 }
 
+fn parse_non_empty_bearer_token(token: &str) -> Result<String, &'static str> {
+    if token.is_empty() {
+        Err("bearer token must not be empty")
+    } else {
+        Ok(token.to_owned())
+    }
+}
+
+#[cfg(test)]
+mod main_tests;
+
 #[derive(Clone)]
 struct AppState {
-    auth_token: String,
+    auth_token: ApiAuth,
     recurring_invoice_server: RecurringInvoiceServer,
 }
 
@@ -103,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
         .with_state(AppState {
-            auth_token: cli_opts.bearer_token,
+            auth_token: ApiAuth::new(cli_opts.bearer_token),
             recurring_invoice_server,
         });
 
@@ -119,15 +136,33 @@ struct AddFederationRequest {
     invite: InviteCode,
 }
 
+/// Extractor that verifies the bearer token required to register federations.
+struct FederationAuth;
+
+impl FromRequestParts<AppState> for FederationAuth {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        app_state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let AuthBearer(token) = AuthBearer::from_request_parts(parts, app_state)
+            .await
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+        if app_state.auth_token.verify(&token) {
+            Ok(Self)
+        } else {
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
+}
+
 async fn add_federation(
     State(app_state): State<AppState>,
-    AuthBearer(token): AuthBearer,
+    _auth: FederationAuth,
     request: Json<AddFederationRequest>,
 ) -> Result<Json<FederationId>, ApiError> {
-    if token != app_state.auth_token {
-        return Err(ApiError(anyhow::anyhow!("Invalid auth token")));
-    }
-
     let federation_id = app_state
         .recurring_invoice_server
         .register_federation(&request.invite)
