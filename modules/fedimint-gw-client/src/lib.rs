@@ -62,7 +62,8 @@ use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
     LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    RemoveGatewayRequest, create_gateway_registration_message, create_gateway_remove_message,
+    PreimageAuth, RemoveGatewayRequest, create_gateway_registration_message,
+    create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
@@ -904,7 +905,8 @@ impl GatewayClientModule {
                             if !matches!(
                                 entry.try_meta::<GatewayMeta>(),
                                 Ok(GatewayMeta::Pay { preimage_auth })
-                                    if preimage_auth == payload.preimage_auth
+                                    if PreimageAuth::new(preimage_auth)
+                                        .verifies(payload.preimage_auth)
                             ) {
                                 anyhow::bail!(
                                     "Not authorized to receive the preimage for contract {}",
