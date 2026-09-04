@@ -147,6 +147,11 @@ pub enum ReceiveProgress {
     /// to act on it.
     Confirming {
         value: bitcoin::Amount,
+        /// Height of the block that mined the deposit.
+        ///
+        /// Reported as the guardians saw it, so a reorg can move a deposit to a
+        /// different height or back to being unseen entirely.
+        height: u64,
         /// Confirmations counting the block that mined the transaction as the
         /// first, matching what a block explorer displays.
         confirmations: u64,
@@ -716,19 +721,18 @@ impl WalletClientModule {
         // than the delay itself.
         let required = CONFIRMATION_FINALITY_DELAY + 1;
 
-        // Confirmations count the block that mined the deposit as the first,
-        // matching what a block explorer displays.
-        match output
-            .height
-            .map(|height| block_count.saturating_sub(height))
-        {
-            Some(confirmations) => ReceiveProgress::Confirming {
+        match output.height {
+            Some(height) => ReceiveProgress::Confirming {
                 value: output.value,
+                height,
+                // Confirmations count the block that mined the deposit as the
+                // first, matching what a block explorer displays.
+                //
                 // Guardians keep reporting an output for a while after it turns
                 // final, so that progress does not blank out before the claim
                 // begins. Clamp so a progress display cannot run past its own
                 // target during that overlap.
-                confirmations: confirmations.min(required),
+                confirmations: block_count.saturating_sub(height).min(required),
                 required,
             },
             None => ReceiveProgress::Mempool {
