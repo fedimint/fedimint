@@ -7,6 +7,7 @@ use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::crit;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
+use fedimint_core::module::{GatewayErrorCode, GatewayErrorResponse};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_gw_client::pay::OutgoingPaymentError;
 use fedimint_lightning::LightningRpcError;
@@ -59,10 +60,12 @@ pub enum PublicGatewayError {
     RateLimited,
     #[error("Unexpected Error: {}", OptStacktrace(.0))]
     Unexpected(#[from] anyhow::Error),
+    #[error("The gateway could not communicate with the federation")]
+    FederationUnreachable,
 }
 
-impl IntoResponse for PublicGatewayError {
-    fn into_response(self) -> Response {
+impl PublicGatewayError {
+    fn into_response_with_debug(self, debug: bool) -> Response {
         // For privacy reasons, we do not return too many details about the failure of
         // the request back to the client to prevent malicious clients from
         // deducing state about the gateway/lightning node.
@@ -74,6 +77,15 @@ impl IntoResponse for PublicGatewayError {
             debug!(target: LOG_GATEWAY, "{self}");
         } else {
             crit!(target: LOG_GATEWAY, "{self}");
+        }
+        if matches!(self, PublicGatewayError::FederationUnreachable) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(GatewayErrorResponse::new(
+                    GatewayErrorCode::FederationUnreachable,
+                )),
+            )
+                .into_response();
         }
         let (error_message, status_code) = match &self {
             PublicGatewayError::Internal(_) => (
@@ -104,25 +116,29 @@ impl IntoResponse for PublicGatewayError {
                 StatusCode::TOO_MANY_REQUESTS,
             ),
             PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
+            PublicGatewayError::FederationUnreachable => unreachable!("handled above"),
         };
 
-        let error_message =
-            self.response_message(error_message, is_env_var_set(FM_DEBUG_GATEWAY_ENV));
+        let error_message = self.response_message(error_message, debug);
 
         Response::builder()
             .status(status_code)
             .body(error_message.into())
             .expect("Failed to create Response")
     }
-}
 
-impl PublicGatewayError {
     fn response_message(&self, sanitized: String, expose_debug_details: bool) -> String {
         if expose_debug_details && !matches!(self, PublicGatewayError::Internal(_)) {
             self.to_string()
         } else {
             sanitized
         }
+    }
+}
+
+impl IntoResponse for PublicGatewayError {
+    fn into_response(self) -> Response {
+        self.into_response_with_debug(is_env_var_set(FM_DEBUG_GATEWAY_ENV))
     }
 }
 
@@ -243,3 +259,6 @@ impl IntoResponse for LnurlError {
         (self.code, json).into_response()
     }
 }
+
+#[cfg(test)]
+mod error_tests;

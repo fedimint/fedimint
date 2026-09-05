@@ -1599,6 +1599,9 @@ impl Gateway {
                         ),
                     }));
                 }
+                GatewayExtPayStates::FederationUnreachable => {
+                    return Err(PublicGatewayError::FederationUnreachable);
+                }
                 GatewayExtPayStates::Created => {
                     debug!(target: LOG_GATEWAY, contract_id = %contract_id, "Start pay invoice state machine");
                 }
