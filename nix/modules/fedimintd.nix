@@ -35,7 +35,7 @@ let
         passwordUi = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Password for the guardian admin UI login form. Falls back to password.private file in data dir if not set, then to passwordless mode.";
+          description = "Password for the guardian admin UI login form. Falls back to password.private file in data dir if not set. If neither is present fedimintd refuses to start, unless passwordless mode is explicitly enabled via the FM_DANGEROUS_NO_ADMIN_UI_PASSWORD environment variable (only safe when the UI bind address is never exposed on a network).";
           example = "my-secure-password";
         };
 
