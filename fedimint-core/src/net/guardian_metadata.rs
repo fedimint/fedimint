@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::util::SafeUrl;
 
 const GUARDIAN_METADATA_MESSAGE_TAG: &[u8] = b"fedimint-guardian-metadata";
+
+/// Pkarr DNS TXT record name used by guardians to publish their API URL.
+///
+/// Used by `fedimint-server` to publish and `fedimint-client` to resolve.
+pub const PKARR_API_RECORD_NAME: &str = "fedimint_api";
 /// Allow messages with timestamps up to 1 hour in the future
 const MAX_FUTURE_TIMESTAMP_SECS: u64 = 3600;
 
