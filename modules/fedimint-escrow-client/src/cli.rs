@@ -186,6 +186,7 @@ pub(crate) async fn handle_cli_command(
                     }
                     EscrowInputSMState::FeeClaimed => {}
                     EscrowInputSMState::FeeClaiming => {}
+                    EscrowInputSMState::Disputed => {}
                 }
             }
 
@@ -232,6 +233,7 @@ pub(crate) async fn handle_cli_command(
                     }
                     EscrowInputSMState::FeeClaimed => {}
                     EscrowInputSMState::FeeClaiming => {}
+                    EscrowInputSMState::Disputed => {}
                 }
             }
 
@@ -270,6 +272,7 @@ pub(crate) async fn handle_cli_command(
                     EscrowInputSMState::FeeClaimed => {
                         break;
                     }
+                    EscrowInputSMState::Disputed => {}
                     EscrowInputSMState::Refunded => {}
                     EscrowInputSMState::Released => {}
                     EscrowInputSMState::Failed { reason } => {

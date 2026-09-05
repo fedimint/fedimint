@@ -106,12 +106,22 @@ impl EscrowContract {
     pub fn transition(&mut self, new_status: EscrowStatus) -> Result<(), EscrowInputError> {
         match (self.status.clone(), new_status.clone()) {
             (EscrowStatus::Active, EscrowStatus::Released)
-            | (EscrowStatus::Active, EscrowStatus::Refunded) => {
+            | (EscrowStatus::Active, EscrowStatus::Disputed)
+            | (EscrowStatus::Disputed, EscrowStatus::Released)
+            | (EscrowStatus::Disputed, EscrowStatus::Refunded) => {
                 self.status = new_status;
                 Ok(())
             }
 
             _ => Err(EscrowInputError::InvalidStateTransition),
+        }
+    }
+
+    pub fn engage_message(&self) -> EscrowMessage {
+        EscrowMessage::ArbiterEngaged {
+            escrow_id: self.escrow_id,
+            federation_id: self.federation_id,
+            contract_hash: self.contract_hash,
         }
     }
 
@@ -130,6 +140,7 @@ pub enum EscrowStatus {
     Active,
     Released,
     Refunded,
+    Disputed,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -159,6 +170,11 @@ pub enum Resolution {
     FunderRelease {
         funder_signature: Signature,
     },
+    ArbiterEngaged {
+        disputant_pubkey: PublicKey,
+        disputant_signature: Signature,
+        arbiter_signature: Signature,
+    },
     ArbiterOutcome {
         arbiter_signature: Signature,
         outcome: Outcome,
@@ -175,6 +191,12 @@ pub enum EscrowMessage {
         escrow_id: EscrowId,
         federation_id: FederationId,
         outcome: Outcome,
+        contract_hash: ContractHash,
+    },
+
+    ArbiterEngaged {
+        escrow_id: EscrowId,
+        federation_id: FederationId,
         contract_hash: ContractHash,
     },
 
@@ -378,6 +400,17 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             contract_hash,
             &mut engine,
         ),
+
+        EscrowMessage::ArbiterEngaged {
+            escrow_id,
+            federation_id,
+            contract_hash,
+        } => {
+            engine.input(b"arbiter_engaged");
+            engine.input(&escrow_id.0);
+            engine.input(&federation_id.0.to_byte_array());
+            engine.input(&contract_hash.0);
+        }
 
         EscrowMessage::ArbiterFeeClaim {
             escrow_id,

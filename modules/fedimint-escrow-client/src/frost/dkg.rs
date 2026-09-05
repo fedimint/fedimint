@@ -1,20 +1,23 @@
 use std::collections::BTreeMap;
 
+use fedimint_core::config::FederationId;
+use fedimint_core::db::{Database, DatabaseError};
+use frost_secp256k1::Secp256K1Sha256;
 use frost_secp256k1::keys::dkg::round1::SecretPackage;
 use frost_secp256k1::keys::dkg::round2::SecretPackage;
 use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
 use ring::rand::SystemRandom;
 
-use crate::frost::session::FrostSessionArgs;
-use crate::frost::transport::DkgTransport;
+use crate::frost::session::{FrostParticipant, SessionId};
+use crate::frost::transport::{DkgTransport, TransportError};
 
 pub struct DkgRound1 {}
 
 pub struct DkgRound2 {}
 
 pub struct DkgResult {
-    key_package: KeyPackage,
-    pub_key_package: PublicKeyPackage,
+    pub key_package: KeyPackage<Secp256K1Sha256>,
+    pub pubkey_package: PublicKeyPackage<Secp256K1Sha256>,
 }
 
 pub struct DkgState {
@@ -22,17 +25,37 @@ pub struct DkgState {
     round2_secret: Option<SecretPackage>,
 }
 
-pub struct DkgError {}
+#[derive(Debug, thiserror::Error)]
+pub enum DkgError {
+    #[error("transport error {0}")]
+    TransportError(TransportError),
+
+    #[error("database error {0}")]
+    DatabaseError(DatabaseError),
+
+    #[error("invalid session {session_id}")]
+    InvalidSession { session_id: SessionId },
+
+    #[error("invalid dkg state")]
+    InvalidDkgState,
+}
 
 pub struct DkgRunner<T> {
     transport: T,
 }
 
-impl<T: DkgTransport> DkgRunner<DkgTransport> {
+impl<T: DkgTransport> DkgRunner<T> {
     pub fn new(transport: T) -> Self {
         Self { transport }
     }
-    pub fn run_dkg(&mut self, args: &FrostSessionArgs) {
+    pub fn run_dkg(
+        transport: T,
+        db: &Database,
+        participant_id: &FrostParticipant,
+        participant: Vec<FrostParticipant>,
+        federation_id: &FederationId,
+        min_signers: &u16,
+    ) {
         let mut rng = SystemRandom::new();
         let min_participants = 3;
         let max_participants = 5;

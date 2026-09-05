@@ -406,7 +406,10 @@ impl EscrowClientModule {
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
 
-        anyhow::ensure!(funder_key != recipient_key, "funder and recipient keys must differ");
+        anyhow::ensure!(
+            funder_key != recipient_key,
+            "funder and recipient keys must differ"
+        );
         anyhow::ensure!(
             funder_key != arbiter_key,
             "funder and arbiter keys must differ"
@@ -566,6 +569,96 @@ impl EscrowClientModule {
                 escrow_id,
                 amount: contract.amount,
                 action: EscrowAction::Released,
+                txid,
+                out_point_indices,
+            }
+        };
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    pub async fn set_arbiter_engaged(
+        &self,
+        escrow_id: EscrowId,
+        disputant_pubkey: PublicKey,
+        disputant_signature: Signature,
+    ) -> anyhow::Result<OperationId> {
+        let operation_id = OperationId::new_random();
+        let secp = Secp256k1::new();
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
+
+        anyhow::ensure!(
+            contract.arbiter_key == self.keypair.public_key(),
+            "Should be submitted by arbiter"
+        );
+        let message = EscrowMessage::ArbiterEngaged {
+            escrow_id,
+            federation_id: self.federation_id,
+            contract_hash: contract.contract_hash,
+        };
+        let msg_bytes = compute_escrow_message(&message);
+        let arbiter_signature = secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
+
+        let input = ClientInput {
+            amounts: Amounts::ZERO,
+            keys: vec![self.keypair],
+            input: EscrowInput {
+                escrow_id,
+                resolution: Resolution::ArbiterEngaged {
+                    disputant_pubkey,
+                    disputant_signature,
+                    arbiter_signature,
+                },
+            },
+        };
+
+        let input_sm = ClientInputSM {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Input(EscrowInputStateMachine {
+                            common: EscrowInputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount: contract.amount,
+                                resolution: Resolution::ArbiterEngaged {
+                                    disputant_pubkey,
+                                    disputant_signature,
+                                    arbiter_signature,
+                                },
+                            },
+                            state: EscrowInputSMState::Pending,
+                        })
+                    })
+                    .collect()
+            }),
+        };
+
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
+        );
+
+        let operation_meta_gen = move |out_point_range: OutPointRange| {
+            let txid = out_point_range.txid();
+            let out_point_indices = out_point_range
+                .into_iter()
+                .map(|out_point| out_point.out_idx)
+                .collect();
+
+            EscrowOperationMeta {
+                escrow_id,
+                amount: Amount::ZERO,
+                action: EscrowAction::ArbiterEngaged,
                 txid,
                 out_point_indices,
             }
@@ -922,6 +1015,7 @@ impl EscrowClientModule {
                             match meta.action {
                                 EscrowAction::Released => yield EscrowInputSMState::Released,
                                 EscrowAction::Refunded  => yield EscrowInputSMState::Refunded,
+                                EscrowAction::ArbiterEngaged=>yield EscrowInputSMState::Disputed,
                                 EscrowAction::Created | EscrowAction::ArbiterFeeClaimed => {
                                     yield EscrowInputSMState::Failed {
                                         reason: "unexpected action in resolution stream".to_string()

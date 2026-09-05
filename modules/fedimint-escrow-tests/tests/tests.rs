@@ -105,7 +105,9 @@ async fn test_funder_resolution() -> anyhow::Result<()> {
     let msg = fedimint_core::secp256k1::Message::from_digest(msg_bytes);
     let funder_sig = Secp256k1::new().sign_schnorr(&msg, &funder_escrow.keypair);
 
-    let resolve_op = recipient_escrow.resolve_escrow(escrow_id, funder_sig).await?;
+    let resolve_op = recipient_escrow
+        .resolve_escrow(escrow_id, funder_sig)
+        .await?;
 
     let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
@@ -419,7 +421,9 @@ async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<(
     let msg_bytes = compute_escrow_message(&contract.resolution_message(Outcome::Release));
     let funder_sig = secp.sign_schnorr(&Message::from_digest(msg_bytes), &funder_escrow.keypair);
 
-    let resolve_op = recipient_escrow.resolve_escrow(escrow_id, funder_sig).await?;
+    let resolve_op = recipient_escrow
+        .resolve_escrow(escrow_id, funder_sig)
+        .await?;
     let mut stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
         .await?

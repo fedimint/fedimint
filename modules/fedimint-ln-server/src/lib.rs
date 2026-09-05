@@ -342,11 +342,11 @@ impl ServerModuleInit for LightningInit {
 ///     incentivize an external Lightning node to make payments for the funder
 ///   * [Incoming]: a contract type that represents the acquisition of a
 ///     preimage belonging to a hash. Every incoming contract is preceded by an
-///     offer that specifies how much the recipient is asking for the preimage to a
-///     particular hash. It also contains some threshold-encrypted data. Once
-///     the contract is funded the data is decrypted. If it is a valid preimage
-///     the contract's funds are now accessible to the creator of the offer, if
-///     not they are accessible to the funder.
+///     offer that specifies how much the recipient is asking for the preimage
+///     to a particular hash. It also contains some threshold-encrypted data.
+///     Once the contract is funded the data is decrypted. If it is a valid
+///     preimage the contract's funds are now accessible to the creator of the
+///     offer, if not they are accessible to the funder.
 ///
 /// These two primitives allow to integrate the federation with the wider
 /// Lightning network through a centralized but untrusted (except for

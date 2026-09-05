@@ -232,6 +232,20 @@ impl ServerModule for Escrow {
                 self.handle_arbiter_decision(input, dbtx, arbiter_signature, outcome)
                     .await
             }
+            Resolution::ArbiterEngaged {
+                disputant_pubkey,
+                disputant_signature,
+                arbiter_signature,
+            } => {
+                self.handle_arbiter_engage(
+                    input,
+                    dbtx,
+                    disputant_pubkey,
+                    disputant_signature,
+                    arbiter_signature,
+                )
+                .await
+            }
             Resolution::ArbiterFeeClaim {
                 arbiter_claim_pubkey,
                 arbiter_signature,
@@ -319,12 +333,11 @@ impl ServerModule for Escrow {
                 dbtx,
                 module_instance_id,
                 &EscrowContractPrefix,
-                |_, contract: EscrowContract| {
-                    if contract.status == EscrowStatus::Active {
+                |_, contract: EscrowContract| match contract.status {
+                    EscrowStatus::Active | EscrowStatus::Disputed => {
                         -(contract.amount.msats as i64)
-                    } else {
-                        0
                     }
+                    EscrowStatus::Released | EscrowStatus::Refunded => 0,
                 },
             )
             .await;
@@ -559,6 +572,49 @@ impl Escrow {
                 fees: Amounts::ZERO,
             },
             pub_key: contract.recipient_key,
+        })
+    }
+
+    async fn handle_arbiter_engage(
+        &self,
+        input: &EscrowInput,
+        dbtx: &mut DatabaseTransaction<'_>,
+        disputant_pubkey: &PublicKey,
+        disputatnt_signature: &Signature,
+        arbiter_signature: &Signature,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        if now > contract.timeout {
+            return Err(EscrowInputError::TimeoutNotReached);
+        }
+        let is_valid_disputant =
+            *disputant_pubkey == contract.funder_key || *disputant_pubkey == contract.recipient_key;
+        if !is_valid_disputant {
+            return Err(EscrowInputError::InvalidFunderSignature);
+        }
+
+        let engage_message = contract.engage_message();
+        let msg_bytes = compute_escrow_message(&engage_message);
+        if !verify_signature(disputant_pubkey, msg_bytes, disputatnt_signature) {
+            return Err(EscrowInputError::InvalidFunderSignature);
+        }
+
+        if !verify_signature(&contract.arbiter_key, msg_bytes, arbiter_signature) {
+            return Err(EscrowInputError::InvalidFunderSignature);
+        }
+
+        contract.transition(EscrowStatus::Disputed)?;
+        dbtx.insert_entry(&EscrowContractKey(input.escrow_id), &contract)
+            .await;
+
+        Ok(InputMeta {
+            amount: TransactionItemAmounts {
+                amounts: Amounts::ZERO,
+                fees: Amounts::ZERO,
+            },
+            pub_key: contract.arbiter_key,
         })
     }
 
