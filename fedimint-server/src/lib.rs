@@ -293,9 +293,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
 
-    let connectors = ConnectorRegistry::build_from_server_defaults()
-        .bind()
-        .await?;
+    let connectors = ConnectorRegistry::build_from_server_defaults().bind().await;
 
     Box::pin(consensus::run(
         connectors,

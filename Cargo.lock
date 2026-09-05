@@ -3150,7 +3150,6 @@ dependencies = [
 name = "fedimint-bitcoind"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
@@ -3158,6 +3157,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
+ "thiserror 2.0.18",
  "tracing",
 ]
 

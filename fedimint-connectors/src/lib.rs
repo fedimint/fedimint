@@ -14,14 +14,13 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail};
 use async_trait::async_trait;
 use fedimint_core::envs::{
     FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
 };
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use fedimint_metrics::HistogramExt as _;
@@ -30,7 +29,7 @@ use serde_json::Value;
 use tokio::sync::{OnceCell, SetOnce, broadcast, watch};
 use tracing::trace;
 
-use crate::error::ServerError;
+use crate::error::{ConnectorError, ServerError};
 use crate::metrics::{CONNECTION_ATTEMPTS_TOTAL, CONNECTION_DURATION_SECONDS};
 use crate::ws::WebsocketConnector;
 
@@ -41,18 +40,27 @@ const IROH_NEXT_PATH: &str = "/v1";
 /// The `/v1` path is an internal transport-selection marker. It prevents the
 /// connector from attempting Iroh 0.35 against an Iroh 1.0-only identity,
 /// avoiding both an inappropriate connection attempt and its overhead.
-pub fn iroh_next_endpoint_url(endpoint: &str) -> anyhow::Result<SafeUrl> {
-    let endpoint_id =
-        iroh_next::EndpointId::from_str(endpoint).context("Invalid Iroh 1.0 endpoint ID")?;
-    SafeUrl::parse(&format!("iroh://{endpoint_id}{IROH_NEXT_PATH}"))
-        .context("Invalid Iroh 1.0 endpoint URL")
+pub fn iroh_next_endpoint_url(endpoint: &str) -> Result<SafeUrl, ConnectorError> {
+    let endpoint_id = iroh_next::EndpointId::from_str(endpoint).map_err(|source| {
+        ConnectorError::InvalidNodeId {
+            host: endpoint.to_owned(),
+            source: Box::new(source),
+        }
+    })?;
+    let url = format!("iroh://{endpoint_id}{IROH_NEXT_PATH}");
+    SafeUrl::parse(&url).map_err(|source| ConnectorError::InvalidUrl {
+        url,
+        source: Box::new(source),
+    })
 }
 
-fn is_iroh_next_endpoint_url(url: &SafeUrl) -> anyhow::Result<bool> {
+fn is_iroh_next_endpoint_url(url: &SafeUrl) -> Result<bool, ConnectorError> {
     match url.path() {
         "" | "/" => Ok(false),
         IROH_NEXT_PATH => Ok(true),
-        path => bail!("Unsupported Iroh API URL path: {path}"),
+        path => Err(ConnectorError::UnsupportedUrlPath {
+            path: path.to_owned(),
+        }),
     }
 }
 
@@ -75,7 +83,9 @@ pub type ServerResult<T> = Result<T, ServerError>;
 
 /// Type for connector initialization functions
 type ConnectorInitFn = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>> + Send + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// Builder for [`ConnectorRegistry`]
@@ -110,7 +120,7 @@ pub struct ConnectorRegistryBuilder {
 
 impl ConnectorRegistryBuilder {
     #[allow(clippy::unused_async)] // Leave room for async in the future
-    pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
+    pub async fn bind(self) -> ConnectorRegistry {
         let iroh_next = self.iroh_next && self.iroh_enable;
 
         // Create initialization functions for each connector type
@@ -127,7 +137,7 @@ impl ConnectorRegistryBuilder {
         let ws_connector_init = Arc::new(move || {
             let builder = builder_ws.clone();
             Box::pin(async move { builder.build_ws_connector().await })
-                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                as Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
         });
         connectors_lazy.insert("ws".into(), (ws_connector_init.clone(), OnceCell::new()));
         connectors_lazy.insert("wss".into(), (ws_connector_init.clone(), OnceCell::new()));
@@ -142,7 +152,9 @@ impl ConnectorRegistryBuilder {
                     let builder = builder_iroh.clone();
                     let path_change = path_change_iroh.clone();
                     Box::pin(async move { builder.build_iroh_connector(path_change).await })
-                        as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                        as Pin<
+                            Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>,
+                        >
                 }),
                 OnceCell::new(),
             ),
@@ -152,7 +164,7 @@ impl ConnectorRegistryBuilder {
         let http_connector_init = Arc::new(move || {
             let builder = builder_http.clone();
             Box::pin(async move { builder.build_http_connector() })
-                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                as Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
         });
 
         connectors_lazy.insert(
@@ -164,7 +176,7 @@ impl ConnectorRegistryBuilder {
             (http_connector_init.clone(), OnceCell::new()),
         );
 
-        Ok(ConnectorRegistry {
+        ConnectorRegistry {
             inner: ConnectorRegistryInner {
                 connectors_lazy,
                 connection_overrides: self.connection_overrides,
@@ -173,25 +185,27 @@ impl ConnectorRegistryBuilder {
                 iroh_next,
             }
             .into(),
-        })
+        }
     }
 
     pub async fn build_iroh_connector(
         &self,
         path_change: Arc<watch::Sender<u64>>,
-    ) -> anyhow::Result<DynConnector> {
+    ) -> Result<DynConnector, ConnectorError> {
         if !self.iroh_enable {
-            bail!("Iroh connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "iroh" });
         }
-        Ok(Arc::new(
+        let connector =
             iroh::IrohConnector::new(self.iroh_dns.clone(), self.iroh_pkarr_dht, path_change)
-                .await?,
-        ) as DynConnector)
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
+
+        Ok(Arc::new(connector) as DynConnector)
     }
 
-    pub async fn build_ws_connector(&self) -> anyhow::Result<DynConnector> {
+    pub async fn build_ws_connector(&self) -> Result<DynConnector, ConnectorError> {
         if !self.ws_enable {
-            bail!("Websocket connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "ws" });
         }
 
         match self.ws_force_tor {
@@ -204,13 +218,13 @@ impl ConnectorRegistryBuilder {
 
             false => Ok(Arc::new(WebsocketConnector::new()) as DynConnector),
             #[allow(unreachable_patterns)]
-            _ => bail!("Tor requested, but not support not compiled in"),
+            _ => Err(ConnectorError::TorNotCompiledIn),
         }
     }
 
-    pub fn build_http_connector(&self) -> anyhow::Result<DynConnector> {
+    pub fn build_http_connector(&self) -> Result<DynConnector, ConnectorError> {
         if !self.http_enable {
-            bail!("Http connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "http" });
         }
 
         Ok(Arc::new(crate::http::HttpConnector::default()) as DynConnector)
@@ -254,7 +268,7 @@ impl ConnectorRegistryBuilder {
     }
 
     /// Apply overrides from env variables
-    pub fn with_env_var_overrides(mut self) -> anyhow::Result<Self> {
+    pub fn with_env_var_overrides(mut self) -> Self {
         // TODO: read rest of the env
         for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV) {
             self = self.with_connection_override(k, v);
@@ -266,7 +280,7 @@ impl ConnectorRegistryBuilder {
             self.iroh_next = false;
         }
 
-        Ok(Self { ..self })
+        self
     }
 
     pub fn with_connection_override(
@@ -385,23 +399,20 @@ impl ConnectorRegistry {
 
     /// Like [`Self::build_from_client_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_client_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_client_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_client_env() -> ConnectorRegistryBuilder {
+        Self::build_from_client_defaults().with_env_var_overrides()
     }
 
     /// Like [`Self::build_from_server_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_server_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_server_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_server_env() -> ConnectorRegistryBuilder {
+        Self::build_from_server_defaults().with_env_var_overrides()
     }
 
     /// Like [`Self::build_from_testing_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_testing_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_testing_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_testing_env() -> ConnectorRegistryBuilder {
+        Self::build_from_testing_defaults().with_env_var_overrides()
     }
 
     /// Wait until some connections have been made
@@ -447,10 +458,13 @@ impl ConnectorRegistry {
         let scheme = url.scheme().to_string();
 
         let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
-            return Err(ServerError::InvalidEndpoint(anyhow!(
-                "Unsupported scheme: {}; missing endpoint handler",
-                url.scheme()
-            )));
+            return Err(ServerError::InvalidEndpoint(
+                format!(
+                    "Unsupported scheme: {}; missing endpoint handler",
+                    url.scheme()
+                )
+                .into(),
+            ));
         };
 
         // Clone the init function to use in the async block
@@ -465,10 +479,11 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
-                ))
+                // `Transport` is printed, not walked, by its consumers, so the whole chain
+                // goes into the text on purpose.
+                ServerError::Transport(
+                    format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
+                )
             })?
             .connect_guardian(url, api_secret)
             .await;
@@ -501,7 +516,10 @@ impl ConnectorRegistry {
     ///
     /// This is the main function consumed by the downstream use for making
     /// connection.
-    pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    pub async fn connect_gateway(
+        &self,
+        url: &SafeUrl,
+    ) -> Result<DynGatewayConnection, ConnectorError> {
         trace!(
             target: LOG_NET,
             %url,
@@ -526,10 +544,7 @@ impl ConnectorRegistry {
         let scheme = url.scheme().to_string();
 
         let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
-            return Err(anyhow!(
-                "Unsupported scheme: {}; missing endpoint handler",
-                url.scheme()
-            ));
+            return Err(ConnectorError::UnsupportedScheme { scheme });
         };
 
         // Clone the init function to use in the async block
@@ -542,13 +557,7 @@ impl ConnectorRegistry {
         let result = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
-            .await
-            .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
-                ))
-            })?
+            .await?
             .connect_gateway(url)
             .await;
 
@@ -604,10 +613,11 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
-                ))
+                // `Transport` is printed, not walked, by its consumers, so the whole chain
+                // goes into the text on purpose.
+                ServerError::Transport(
+                    format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
+                )
             })?
             .iroh_peer_info(url, path_timeout)
             .await
@@ -635,7 +645,7 @@ pub trait Connector: Send + Sync + 'static + Debug {
         api_secret: Option<&str>,
     ) -> ServerResult<DynGuaridianConnection>;
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError>;
 
     /// Report how a connection to `url` is currently reaching its peer.
     fn connectivity(&self, url: &SafeUrl) -> Connectivity;
@@ -834,7 +844,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
                 match res {
                     Ok(o) => return Ok(o),
                     Err(err) => {
-                        return Err(ServerError::Connection(anyhow::format_err!("{}", err)));
+                        return Err(ServerError::Connection(err.into()));
                     }
                 }
             }
@@ -861,7 +871,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
                 let _ = leader_tx.send(
                     res.as_ref()
                         .map(|o| o.clone())
-                        .map_err(|err| err.to_string()),
+                        .map_err(|err| err.fmt_compact().to_string()),
                 );
 
                 let conn = res?;

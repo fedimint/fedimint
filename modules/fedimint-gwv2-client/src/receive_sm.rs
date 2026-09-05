@@ -1,7 +1,6 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
-use anyhow::anyhow;
 use fedimint_api_client::api::{FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client_module::DynGlobalClientContext;
@@ -157,13 +156,13 @@ impl ReceiveStateMachine {
                     if !contract.verify_decryption_share(
                         tpe_pks
                             .get(&peer_id)
-                            .ok_or(ServerError::InternalClientError(anyhow!(
+                            .ok_or(ServerError::InternalClientError(format!(
                                 "Missing TPE PK for peer {peer_id}?!"
                             )))?,
                         &share,
                     ) {
                         return Err(fedimint_api_client::api::ServerError::InvalidResponse(
-                            anyhow!("Invalid decryption share"),
+                            "Invalid decryption share".to_string(),
                         ));
                     }
 

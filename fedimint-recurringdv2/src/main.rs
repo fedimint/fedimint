@@ -65,9 +65,9 @@ async fn main() -> anyhow::Result<()> {
     let cli_opts = CliOpts::parse();
 
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
-        .with_env_var_overrides()?
+        .with_env_var_overrides()
         .bind()
-        .await?;
+        .await;
 
     if cli_opts.api_address.scheme() != "https" {
         warn!(

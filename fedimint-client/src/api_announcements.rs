@@ -14,7 +14,7 @@ use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
 use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
@@ -296,7 +296,7 @@ pub async fn get_api_urls(
                             warn!(
                                 target: LOG_CLIENT,
                                 %peer_id,
-                                err = %err.fmt_compact_anyhow(),
+                                err = %err.fmt_compact(),
                                 "Ignoring peer with invalid advertised iroh-next endpoint",
                             );
                             return None;

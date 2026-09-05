@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use anyhow::anyhow;
 use fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+    FederationApiExt, FederationError, FederationGeneralError, FederationResult,
+    IModuleFederationApi,
 };
 use fedimint_api_client::query::ThresholdAgreement;
 use fedimint_core::module::ApiRequestErased;
@@ -103,14 +103,16 @@ where
         Err(FederationError::general(
             SEND_FEE_ENDPOINT.to_string(),
             ApiRequestErased::new(()),
-            anyhow!(
-                "Guardians disagree on the onchain send fee ({}). The fee is \
-                 consensus state, so a guardian returning a different value has \
-                 diverged - because its Bitcoin backend is lagging, or because its \
-                 view of the pending transaction stack differs. The same fee \
-                 validates the send, so it cannot be accepted until they agree.",
-                describe_fee_quotes(&quotes)
-            ),
+            FederationGeneralError::ThresholdFailed {
+                message: format!(
+                    "Guardians disagree on the onchain send fee ({}). The fee is \
+                     consensus state, so a guardian returning a different value has \
+                     diverged - because its Bitcoin backend is lagging, or because its \
+                     view of the pending transaction stack differs. The same fee \
+                     validates the send, so it cannot be accepted until they agree.",
+                    describe_fee_quotes(&quotes)
+                ),
+            },
         ))
     }
 
@@ -135,14 +137,16 @@ where
         Err(FederationError::general(
             RECEIVE_FEE_ENDPOINT.to_string(),
             ApiRequestErased::new(()),
-            anyhow!(
-                "Guardians disagree on the onchain receive fee ({}). The fee is \
-                 consensus state, so a guardian returning a different value has \
-                 diverged - because its Bitcoin backend is lagging, or because its \
-                 view of the pending transaction stack differs. The same fee \
-                 validates the claim, so it cannot be accepted until they agree.",
-                describe_fee_quotes(&quotes)
-            ),
+            FederationGeneralError::ThresholdFailed {
+                message: format!(
+                    "Guardians disagree on the onchain receive fee ({}). The fee is \
+                     consensus state, so a guardian returning a different value has \
+                     diverged - because its Bitcoin backend is lagging, or because its \
+                     view of the pending transaction stack differs. The same fee \
+                     validates the claim, so it cannot be accepted until they agree.",
+                    describe_fee_quotes(&quotes)
+                ),
+            },
         ))
     }
 

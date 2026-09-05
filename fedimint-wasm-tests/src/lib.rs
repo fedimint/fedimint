@@ -44,7 +44,7 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
     let client_secret = load_or_generate_mnemonic(&db).await?;
     let connectors = ConnectorRegistry::build_from_testing_defaults()
         .bind()
-        .await?;
+        .await;
     builder.stopped();
     let client = builder
         .preview(connectors, invite_code)

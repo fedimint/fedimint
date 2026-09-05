@@ -69,9 +69,9 @@ fn validate_federation_status(
     federation_id: FederationId,
 ) -> ServerResult<FederationStatusResponse> {
     if status.federation_id() != federation_id {
-        return Err(ServerError::InvalidResponse(anyhow::anyhow!(
-            "Gateway federation status response names a different federation"
-        )));
+        return Err(ServerError::InvalidResponse(
+            "Gateway federation status response names a different federation".to_string(),
+        ));
     }
     Ok(status)
 }

@@ -145,8 +145,7 @@ async fn client_for_recovery_test(
     let federation_id = config.calculate_federation_id();
     let connectors = ConnectorRegistry::build_from_testing_defaults()
         .bind()
-        .await
-        .expect("Connector registry must build");
+        .await;
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let task_group = TaskGroup::new();
     let (log_ordering_wakeup_tx, _log_ordering_wakeup_rx) = watch::channel(());
@@ -173,7 +172,7 @@ async fn client_for_recovery_test(
         modules: ClientModuleRegistry::default(),
         module_inits: ModuleInitRegistry::new(),
         executor,
-        api: DynGlobalApi::new(connectors, BTreeMap::new(), None).expect("Global API must build"),
+        api: DynGlobalApi::new(connectors, BTreeMap::new(), None),
         root_secret: DerivableSecret::new_root(&[0; 32], &[0; 32]),
         operation_log: OperationLog::new(db),
         secp_ctx: Secp256k1::new(),

@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
-use crate::error::ServerError;
+use crate::error::{ConnectorError, ServerError};
 use crate::{
     Connectivity, DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection,
     ServerResult,
@@ -24,12 +23,12 @@ impl crate::Connector for HttpConnector {
         _url: &SafeUrl,
         _api_secret: Option<&str>,
     ) -> ServerResult<DynGuaridianConnection> {
-        Err(ServerError::InternalClientError(anyhow!(
-            "Unsupported transport mechanism"
-        )))
+        Err(ServerError::InternalClientError(
+            "Unsupported transport mechanism".to_string(),
+        ))
     }
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError> {
         let http_connection = HttpConnection {
             client: self.client.clone(),
             base_url: url.clone(),
@@ -90,14 +89,14 @@ impl IGatewayConnection for HttpConnection {
         let response = builder
             .send()
             .await
-            .map_err(|e| ServerError::ServerError(e.into()))?;
+            .map_err(|e| ServerError::ServerError(e.fmt_compact().to_string()))?;
 
         match response.status() {
             StatusCode::OK => Ok(response
                 .json::<Value>()
                 .await
-                .map_err(|e| ServerError::InvalidResponse(e.into()))?),
-            status => Err(ServerError::InvalidRequest(anyhow::anyhow!(
+                .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?),
+            status => Err(ServerError::InvalidRequest(format!(
                 "HTTP request returned unexpected status: {status}"
             ))),
         }

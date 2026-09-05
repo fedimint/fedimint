@@ -5,7 +5,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
-use anyhow::{Context as _, bail};
 use api::{DynGlobalApi, FederationApiExt as _};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_connectors::error::ServerError;
@@ -18,6 +17,8 @@ use fedimint_logging::LOG_CLIENT_NET;
 use query::FilterMap;
 use tracing::debug;
 
+use crate::api::ClientConfigDownloadError;
+
 pub mod api;
 pub mod metrics;
 /// Client query system
@@ -28,7 +29,7 @@ pub mod query;
 pub async fn download_from_invite_code(
     endpoints: &ConnectorRegistry,
     invite: &InviteCode,
-) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
+) -> Result<(ClientConfig, DynGlobalApi), ClientConfigDownloadError> {
     debug!(
         target: LOG_CLIENT_NET,
         %invite,
@@ -41,7 +42,7 @@ pub async fn download_from_invite_code(
         endpoints.clone(),
         invite.peers(),
         invite.api_secret().as_deref(),
-    )?;
+    );
     let api_secret = invite.api_secret();
 
     fedimint_core::util::retry(
@@ -57,7 +58,6 @@ pub async fn download_from_invite_code(
         },
     )
     .await
-    .context("Failed to download client config")
 }
 
 /// Tries to download the [`ClientConfig`] only once.
@@ -66,14 +66,14 @@ pub async fn try_download_client_config(
     api_from_invite: &DynGlobalApi,
     federation_id: FederationId,
     api_secret: Option<String>,
-) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
+) -> Result<(ClientConfig, DynGlobalApi), ClientConfigDownloadError> {
     debug!(target: LOG_CLIENT_NET, "Downloading client config from peer");
     // TODO: use new download approach based on guardian PKs
     let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
         if federation_id != cfg.global.calculate_federation_id() {
-            return Err(ServerError::ConditionFailed(anyhow::anyhow!(
-                "FederationId in invite code does not match client config"
-            )));
+            return Err(ServerError::ConditionFailed(
+                "FederationId in invite code does not match client config".to_string(),
+            ));
         }
 
         Ok(cfg.global.api_endpoints)
@@ -95,7 +95,7 @@ pub async fn try_download_client_config(
 
     debug!(target: LOG_CLIENT_NET, "Verifying client config with all peers");
 
-    let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref())?;
+    let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref());
     let client_config = api_full
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
@@ -103,8 +103,12 @@ pub async fn try_download_client_config(
         )
         .await?;
 
-    if client_config.calculate_federation_id() != federation_id {
-        bail!("Obtained client config has different federation id");
+    let found = client_config.calculate_federation_id();
+    if found != federation_id {
+        return Err(ClientConfigDownloadError::FederationIdMismatch {
+            expected: federation_id,
+            found,
+        });
     }
 
     Ok((client_config, api_full))
