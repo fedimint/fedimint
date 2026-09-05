@@ -172,7 +172,7 @@ impl IBitcoindRpc for BitcoindClient {
                 .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(BitcoinRpcError::from)
+        .map_err(BitcoinRpcError::Decode)
     }
 
     async fn get_info(&self) -> Result<BlockchainInfo, BitcoinRpcError> {

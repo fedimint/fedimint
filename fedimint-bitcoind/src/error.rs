@@ -14,7 +14,9 @@ pub enum BitcoinRpcError {
     /// built.
     #[error("Invalid Bitcoin rpc url {url}")]
     InvalidUrl {
-        /// The url that was rejected.
+        /// The url that was rejected, with any credentials redacted, or the
+        /// name of the environment variable it came from when it could
+        /// not be parsed at all.
         url: String,
         /// Why it was rejected.
         #[source]
@@ -52,5 +54,5 @@ pub enum BitcoinRpcError {
 
     /// A response could not be decoded.
     #[error("Failed to decode a Bitcoin rpc response")]
-    Decode(#[from] DecodeError),
+    Decode(#[source] DecodeError),
 }

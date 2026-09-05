@@ -40,8 +40,9 @@ pub struct BlockchainInfo {
 
 pub fn create_esplora_rpc(url: &SafeUrl) -> Result<DynBitcoindRpc, BitcoinRpcError> {
     let url = match env::var(FM_FORCE_BITCOIN_RPC_URL_ENV).ok() {
+        // The raw value may carry credentials, so the error names the variable instead.
         Some(s) => SafeUrl::parse(&s).map_err(|source| BitcoinRpcError::InvalidUrl {
-            url: s,
+            url: format!("${FM_FORCE_BITCOIN_RPC_URL_ENV}"),
             source: Box::new(source),
         })?,
         None => url.clone(),
