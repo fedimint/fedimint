@@ -207,7 +207,9 @@ fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> ServerError
             }
         }
         JsonRpcClientError::Transport(error) => ServerError::Transport(error),
-        JsonRpcClientError::RestartNeeded(arc) => ServerError::Transport(arc.to_string().into()),
+        JsonRpcClientError::RestartNeeded(arc) => {
+            ServerError::Transport(arc.fmt_compact().to_string().into())
+        }
         JsonRpcClientError::ParseError(error) => {
             ServerError::InvalidResponse(error.fmt_compact().to_string())
         }

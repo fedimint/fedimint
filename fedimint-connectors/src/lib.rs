@@ -867,7 +867,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
                 let _ = leader_tx.send(
                     res.as_ref()
                         .map(|o| o.clone())
-                        .map_err(|err| err.to_string()),
+                        .map_err(|err| err.fmt_compact().to_string()),
                 );
 
                 let conn = res?;
