@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::util::FmtCompact as _;
@@ -157,13 +158,21 @@ impl FederationError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum OutputOutcomeError {
-    #[error("Response deserialization error: {0}")]
-    ResponseDeserialization(anyhow::Error),
-    #[error("Federation error: {0}")]
+    /// The outcome bytes the federation returned could not be decoded.
+    #[error("Failed to decode the output outcome")]
+    ResponseDeserialization(#[from] DecodeError),
+    /// The outcome decoded into a different type than the caller asked for.
+    #[error("Output outcome of module instance {module_instance_id} is not a {expected_type}")]
+    WrongOutcomeType {
+        module_instance_id: ModuleInstanceId,
+        expected_type: &'static str,
+    },
+    /// The request to the federation failed.
+    #[error("Federation error")]
     Federation(#[from] FederationError),
-    #[error("Core error: {0}")]
-    Core(#[from] anyhow::Error),
+    /// The transaction that would have produced the outcome was rejected.
     #[error("Transaction rejected: {0}")]
     Rejected(String),
     #[error("Invalid output index {out_idx}, larger than {outputs_num} in the transaction")]
@@ -179,7 +188,7 @@ impl OutputOutcomeError {
                 e.report_if_unusual("OutputOutcome");
                 return;
             }
-            OutputOutcomeError::Core(_)
+            OutputOutcomeError::WrongOutcomeType { .. }
             | OutputOutcomeError::InvalidVout { .. }
             | OutputOutcomeError::ResponseDeserialization(_) => true,
             OutputOutcomeError::Rejected(_) | OutputOutcomeError::Timeout(_) => false,

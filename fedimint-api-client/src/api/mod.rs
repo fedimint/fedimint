@@ -616,18 +616,18 @@ pub fn deserialize_outcome<R>(
 where
     R: OutputOutcome + MaybeSend,
 {
-    let dyn_outcome = outcome
-        .try_into_inner_known_module_kind(module_decoder)
-        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
+    let dyn_outcome = outcome.try_into_inner_known_module_kind(module_decoder)?;
 
-    let source_instance = dyn_outcome.module_instance_id();
+    let module_instance_id = dyn_outcome.module_instance_id();
 
-    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
-        let target_type = std::any::type_name::<R>();
-        OutputOutcomeError::ResponseDeserialization(anyhow!(
-            "Could not downcast output outcome with instance id {source_instance} to {target_type}"
-        ))
-    })
+    dyn_outcome
+        .as_any()
+        .downcast_ref()
+        .cloned()
+        .ok_or(OutputOutcomeError::WrongOutcomeType {
+            module_instance_id,
+            expected_type: std::any::type_name::<R>(),
+        })
 }
 
 /// Federation API client
