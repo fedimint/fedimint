@@ -29,7 +29,7 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
-    TransactionBuilder, max_affordable_send_amount,
+    TransactionBuilder, TxSubmissionStates, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
@@ -67,7 +67,7 @@ use tracing::warn;
 
 use crate::api::LightningFederationApi;
 use crate::events::SendPaymentEvent;
-use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
+pub use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
 /// Number of blocks until outgoing lightning contracts times out and user
@@ -189,7 +189,7 @@ pub type SendResult = Result<OperationId, SendPaymentError>;
 ///     Pending -- payment is confirmed --> Claiming
 ///     Pending -- invoice expires --> Expired
 ///     Claiming -- ecash is minted --> Claimed
-///     Claiming -- minting ecash fails --> Failure
+///     Claiming -- the claim is rejected or minting ecash fails --> Failure
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReceiveOperationState {
@@ -201,7 +201,10 @@ pub enum ReceiveOperationState {
     Claiming,
     /// The payment has been successful.
     Claimed,
-    /// Either a programming error has occurred or the federation is malicious.
+    /// The claim was rejected, a programming error has occurred, or the
+    /// federation is malicious. When the claim was rejected, the contract
+    /// remains claimable and the operation can be re-driven with
+    /// [`LightningClientModule::reclaim_receive`].
     Failure,
     /// The contract is worth less than the federation charges to claim it, so
     /// it was left unclaimed. Reachable without any payment request of ours:
@@ -216,7 +219,10 @@ pub enum FinalReceiveOperationState {
     Expired,
     /// The payment has been successful.
     Claimed,
-    /// Either a programming error has occurred or the federation is malicious.
+    /// The claim was rejected, a programming error has occurred, or the
+    /// federation is malicious. When the claim was rejected, the contract
+    /// remains claimable and the operation can be re-driven with
+    /// [`LightningClientModule::reclaim_receive`].
     Failure,
     /// The contract is worth less than the federation charges to claim it, so
     /// it was left unclaimed.
@@ -1203,11 +1209,17 @@ impl LightningClientModule {
                 | ReceiveOperationState::Uneconomical => true,
             }, move || {
             stream! {
+                let mut claiming_yielded = false;
+
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
                             ReceiveSMState::Pending => yield ReceiveOperationState::Pending,
-                            ReceiveSMState::Claiming(out_points) => {
+                            // Records written before the claim transaction was
+                            // watched for rejection are terminal at claiming, so
+                            // the outcome is resolved from the primary module
+                            // outputs as it was when they were written.
+                            ReceiveSMState::ClaimingLegacy(out_points) => {
                                 yield ReceiveOperationState::Claiming;
 
                                 if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
@@ -1215,6 +1227,28 @@ impl LightningClientModule {
                                 } else {
                                     yield ReceiveOperationState::Failure;
                                 }
+                                return;
+                            },
+                            // The state machine enters this state exactly once,
+                            // but the notifier can replay a state, so it may be
+                            // observed multiple times; it is reported only once.
+                            ReceiveSMState::Claiming { .. } => {
+                                if !claiming_yielded {
+                                    claiming_yielded = true;
+
+                                    yield ReceiveOperationState::Claiming;
+                                }
+                            },
+                            ReceiveSMState::Claimed { change } => {
+                                if client_ctx.await_primary_module_outputs(operation_id, change.into_iter().collect()).await.is_ok() {
+                                    yield ReceiveOperationState::Claimed;
+                                } else {
+                                    yield ReceiveOperationState::Failure;
+                                }
+                                return;
+                            },
+                            ReceiveSMState::Failed => {
+                                yield ReceiveOperationState::Failure;
                                 return;
                             },
                             ReceiveSMState::Expired => {
@@ -1263,6 +1297,156 @@ impl LightningClientModule {
         }
 
         Ok(final_state.expect("Stream contains one final state"))
+    }
+
+    /// Starts a new state machine that retries claiming the incoming contract
+    /// of a receive operation whose claim transaction was rejected.
+    ///
+    /// A rejected claim leaves the incoming contract funded on the federation
+    /// while the receive operation reports [`ReceiveOperationState::Failure`],
+    /// so the money is still claimable with the keys recorded in the original
+    /// state machine. Current clients fail the receive visibly when the claim
+    /// is rejected; clients from before the claim transaction was watched
+    /// parked such operations permanently instead.
+    /// This method re-drives both: it verifies the recorded claim transaction
+    /// was indeed rejected, then starts a fresh receive state machine for the
+    /// same contract under a new operation id, which resubmits the claim if
+    /// the contract is still unclaimed. Subscribe to the returned operation id
+    /// to observe the result.
+    ///
+    /// This is a local state-history recovery tool: it requires the client DB
+    /// to still contain the original operation's state-machine history. It
+    /// does not recover seed-only restores where that history is unavailable.
+    ///
+    /// Repeated calls start independent reclaim attempts. This is intentional:
+    /// this is a manual break-glass recovery path, and concurrent attempts
+    /// race through the normal federation transaction validation, so at most
+    /// one of them can claim the contract.
+    ///
+    /// Note that clients from before the claim transaction was watched logged
+    /// the receive payment event when the claim was submitted, i.e. even when
+    /// it was later rejected, so a successful reclaim of such an operation
+    /// logs a second event for the same contract. Event log consumers that
+    /// count both will double count the receive.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the original operation is not a lightning receive,
+    /// if its receive state machine is still active, if it did not fail with a
+    /// rejected claim transaction, if its state-machine history is
+    /// unavailable, or if the recorded claim transaction cannot be verified
+    /// because it created no change outputs. When the recorded claim is still
+    /// undecided - the federation is unreachable, say - this waits for the
+    /// decision rather than erroring.
+    pub async fn reclaim_receive(
+        &self,
+        original_operation_id: OperationId,
+    ) -> anyhow::Result<OperationId> {
+        let operation = self.client_ctx.get_operation(original_operation_id).await?;
+
+        let active_states = self
+            .client_ctx
+            .get_own_operation_active_states(original_operation_id)
+            .await;
+
+        anyhow::ensure!(
+            !active_states
+                .iter()
+                .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_))),
+            "Cannot reclaim an active lightning receive"
+        );
+
+        let receive_sm = self
+            .client_ctx
+            .get_own_operation_inactive_states(original_operation_id)
+            .await
+            .into_iter()
+            .find_map(|(state, _)| match state {
+                LightningClientStateMachines::Receive(receive_sm)
+                    if matches!(
+                        receive_sm.state,
+                        ReceiveSMState::ClaimingLegacy(..) | ReceiveSMState::Failed
+                    ) =>
+                {
+                    Some(receive_sm)
+                }
+                _ => None,
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!("The operation did not fail with a rejected claim transaction")
+            })?;
+
+        // A legacy claiming record does not indicate whether its claim
+        // transaction was accepted, so it is checked here to prevent
+        // reclaiming - and thereby double counting - a settled receive. When
+        // the claim has not been decided yet this waits for the decision.
+        if let ReceiveSMState::ClaimingLegacy(out_points) = &receive_sm.state {
+            let claim_txid = out_points
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("The recorded claim transaction created no change"))?
+                .txid;
+
+            let claim_accepted = self
+                .client_ctx
+                .transaction_updates(original_operation_id)
+                .await
+                .update_stream
+                .filter_map(|tx_update| {
+                    std::future::ready(match tx_update.state {
+                        TxSubmissionStates::Accepted(txid) if txid == claim_txid => Some(true),
+                        TxSubmissionStates::Rejected(txid, ..) if txid == claim_txid => Some(false),
+                        // Legacy submission state retained for decoding old
+                        // databases: the transaction never entered consensus,
+                        // so the claim was not accepted.
+                        TxSubmissionStates::NonRetryableError(..) => Some(false),
+                        _ => None,
+                    })
+                })
+                .next()
+                .await
+                // A legacy claiming record is written in the same database
+                // transaction as its claim's submission state, so a decided
+                // or still-active submission always exists and the stream
+                // yields; it only ends if the underlying state broadcast
+                // lags out.
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "The transaction history stream ended before the claim was decided; retry"
+                    )
+                })?;
+
+            anyhow::ensure!(
+                !claim_accepted,
+                "The recorded claim transaction was accepted; there is nothing to reclaim"
+            );
+        }
+
+        // The original operation meta is reused such that the fee reported by
+        // the receive payment event stays correct for the reclaimed contract.
+        let operation_meta = operation
+            .try_meta::<LightningOperationMeta>()
+            .map_err(|e| anyhow::anyhow!("Invalid lightning operation metadata: {e}"))?;
+
+        let reclaim_operation_id = OperationId::new_random();
+
+        let receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
+            common: ReceiveSMCommon {
+                operation_id: reclaim_operation_id,
+                ..receive_sm.common
+            },
+            state: ReceiveSMState::Pending,
+        });
+
+        self.client_ctx
+            .manual_operation_start(
+                reclaim_operation_id,
+                LightningCommonInit::KIND.as_str(),
+                operation_meta,
+                vec![self.client_ctx.make_dyn_state(receive_sm)],
+            )
+            .await?;
+
+        Ok(reclaim_operation_id)
     }
 
     /// Generate an lnurl for the client. You can optionally specify a gateway
