@@ -847,6 +847,11 @@ impl Esplora {
             "--monitoring-addr=127.0.0.1:{esplora_monitoring_port}",
             "--jsonrpc-import", // Workaround for incompatible on-disk format
             "--cors=*",         // Allow CORS for WASM recovery tool
+            // Upstream defaults this to 256 MB per database, sized for a
+            // production node. These are throwaway regtest instances, so the
+            // memory is pure waste. This flag replaces a patch we used to carry
+            // on a fork of esplora.
+            "--db-write-buffer-size-mb=1",
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
 
