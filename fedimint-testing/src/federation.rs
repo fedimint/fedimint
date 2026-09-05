@@ -401,10 +401,7 @@ impl FederationTestBuilder {
                     Box::new(|_| axum::Router::new()),
                     1,
                     Duration::from_secs(3600),
-                    ConnectionLimits {
-                        max_connections: 1000,
-                        max_requests_per_connection: 100,
-                    },
+                    ConnectionLimits::new(1000, 100),
                     None,
                 ))
                 .await
