@@ -273,7 +273,7 @@ pub async fn run(
             .map(|(&peer_id, url)| (peer_id, url.url.clone()))
             .collect(),
         None,
-    )?;
+    );
 
     let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
@@ -480,7 +480,7 @@ pub async fn run(
             connectors,
             api_urls,
             force_api_secrets.get_active().as_deref(),
-        )?,
+        ),
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,

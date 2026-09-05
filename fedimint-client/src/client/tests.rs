@@ -172,7 +172,7 @@ async fn client_for_recovery_test(
         modules: ClientModuleRegistry::default(),
         module_inits: ModuleInitRegistry::new(),
         executor,
-        api: DynGlobalApi::new(connectors, BTreeMap::new(), None).expect("Global API must build"),
+        api: DynGlobalApi::new(connectors, BTreeMap::new(), None),
         root_secret: DerivableSecret::new_root(&[0; 32], &[0; 32]),
         operation_log: OperationLog::new(db),
         secp_ctx: Secp256k1::new(),

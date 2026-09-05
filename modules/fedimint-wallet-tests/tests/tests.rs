@@ -761,7 +761,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             )]
             .into(),
             None,
-        )?
+        )
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             bitcoin_rpc_connection.clone(),
@@ -911,7 +911,7 @@ async fn peg_in_claiming_an_already_tracked_utxo_is_rejected() -> anyhow::Result
             )]
             .into(),
             None,
-        )?
+        )
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             fixtures.server_bitcoin_rpc(),
@@ -1054,7 +1054,7 @@ async fn peg_out_change_is_recorded_as_claimed() -> anyhow::Result<()> {
             )]
             .into(),
             None,
-        )?
+        )
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             fixtures.server_bitcoin_rpc(),
@@ -1815,7 +1815,7 @@ async fn unknown_consensus_item_variant_is_rejected_without_panicking() -> anyho
             )]
             .into(),
             None,
-        )?
+        )
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             fixtures.server_bitcoin_rpc(),
@@ -1881,7 +1881,7 @@ async fn submission_rejects_a_fee_rate_that_cannot_produce_a_real_fee() -> anyho
             )]
             .into(),
             None,
-        )?
+        )
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             fixtures.server_bitcoin_rpc(),

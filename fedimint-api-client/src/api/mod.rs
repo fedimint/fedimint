@@ -447,28 +447,26 @@ impl DynGlobalApi {
         connectors: ConnectorRegistry,
         peers: BTreeMap<PeerId, SafeUrl>,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<Self> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
-            connectors, peers, None, api_secret,
-        ))
-        .into())
+    ) -> Self {
+        GlobalFederationApiWithCache::new(FederationApi::new(connectors, peers, None, api_secret))
+            .into()
     }
     pub fn new_admin(
         connectors: ConnectorRegistry,
         peer: PeerId,
         url: SafeUrl,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<DynGlobalApi> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
+    ) -> DynGlobalApi {
+        GlobalFederationApiWithCache::new(FederationApi::new(
             connectors,
             [(peer, url)].into(),
             Some(peer),
             api_secret,
         ))
-        .into())
+        .into()
     }
 
-    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
+    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         Self::new_admin(

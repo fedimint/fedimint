@@ -41,7 +41,7 @@ pub async fn download_from_invite_code(
         endpoints.clone(),
         invite.peers(),
         invite.api_secret().as_deref(),
-    )?;
+    );
     let api_secret = invite.api_secret();
 
     fedimint_core::util::retry(
@@ -95,7 +95,7 @@ pub async fn try_download_client_config(
 
     debug!(target: LOG_CLIENT_NET, "Verifying client config with all peers");
 
-    let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref())?;
+    let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref());
     let client_config = api_full
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),

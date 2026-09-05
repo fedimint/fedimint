@@ -349,7 +349,7 @@ impl Opts {
             });
         };
 
-        DynGlobalApi::new_admin(
+        Ok(DynGlobalApi::new_admin(
             self.make_endpoints().await.map_err(|e| CliError {
                 error: e.to_string(),
             })?,
@@ -360,8 +360,7 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
-        )
-        .map_err_cli()
+        ))
     }
 
     async fn make_endpoints(&self) -> Result<ConnectorRegistry, anyhow::Error> {
@@ -1239,8 +1238,7 @@ impl FedimintCli {
                         .get_value(&ApiSecretKey)
                         .await
                         .as_deref(),
-                )
-                .map_err_cli()?;
+                );
 
                 // Use the `auth` endpoint to verify credentials
                 admin_api.auth(auth.clone()).await.map_err(|e| CliError {
@@ -1914,7 +1912,7 @@ impl FedimintCli {
         args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
         let client =
-            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone())?;
+            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone());
 
         match &args.subcommand {
             SetupAdminCmd::Status => {

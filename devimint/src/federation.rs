@@ -392,7 +392,7 @@ impl Federation {
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 // TODO: will need it somewhere
                 // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-            )?;
+            );
             api_endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);

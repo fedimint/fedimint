@@ -85,12 +85,12 @@ impl FederationTest {
     pub async fn new_admin_api(&self, peer_id: PeerId) -> anyhow::Result<DynGlobalApi> {
         let config = self.configs.get(&peer_id).expect("peer to have config");
 
-        DynGlobalApi::new_admin(
+        Ok(DynGlobalApi::new_admin(
             ConnectorRegistry::build_from_testing_env().bind().await,
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
             None,
-        )
+        ))
     }
 
     /// Create a new admin client connected to this fed
@@ -419,8 +419,7 @@ impl FederationTestBuilder {
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
                 None,
-            )
-            .unwrap();
+            );
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
