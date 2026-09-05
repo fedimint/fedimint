@@ -57,8 +57,9 @@ use fedimintd_envs::{
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV,
-    FM_IROH_NEXT_ENABLE_ENV, FM_IROH_P2P_RELAY_ENV, FM_P2P_MAX_CONNECTION_AGE_SECS_ENV,
-    FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
+    FM_IROH_NEXT_ENABLE_ENV, FM_IROH_P2P_RELAY_ENV, FM_OVERRIDE_API_URLS_ENV,
+    FM_P2P_MAX_CONNECTION_AGE_SECS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV,
+    FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
 #[cfg(all(
@@ -276,6 +277,15 @@ struct ServerOpts {
     /// Bind address for the transitional Iroh 1.0 API endpoint
     #[arg(long, env = FM_BIND_API_NEXT_ENV)]
     bind_api_next: Option<SocketAddr>,
+
+    /// Authoritative API URLs to advertise in guardian metadata
+    ///
+    /// A nonempty comma-separated list replaces persisted administrator-managed
+    /// API URLs on every startup. Omitting it preserves persisted URLs. This
+    /// does not change the consensus config, Pkarr ID, or Iroh 1.0
+    /// endpoint.
+    #[arg(long, env = FM_OVERRIDE_API_URLS_ENV, value_delimiter = ',')]
+    override_api_urls: Vec<SafeUrl>,
 }
 
 impl ServerOpts {
@@ -487,7 +497,7 @@ pub async fn run(
     let task_group = root_task_group.clone();
     let code_version_hash = code_version_hash.to_string();
     root_task_group.spawn_cancellable("main", async move {
-        fedimint_server::run_with_iroh_p2p_relays_and_next_api(
+        fedimint_server::run_with_runtime_settings(
             server_opts.data_dir,
             auth_ui,
             auth_api,
@@ -512,6 +522,8 @@ pub async fn run(
             ),
             server_opts.iroh_p2p_relays,
             iroh_next_api_settings,
+            fedimint_server::ServerRuntimeSettings::default()
+                .with_guardian_metadata_api_url_overrides(server_opts.override_api_urls),
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
@@ -655,5 +667,64 @@ mod tests {
 
         assert!(opts.iroh_relays.is_empty());
         assert_eq!(opts.iroh_p2p_relays.len(), 1);
+    }
+
+    #[test]
+    fn api_url_override_accepts_multiple_startup_urls() {
+        let command = ServerOpts::command();
+        let override_arg = command
+            .get_arguments()
+            .find(|arg| arg.get_id() == "override_api_urls")
+            .expect("override-api-urls argument exists");
+        assert_eq!(
+            override_arg.get_env(),
+            Some(std::ffi::OsStr::new(FM_OVERRIDE_API_URLS_ENV))
+        );
+
+        let mut args = server_opts_args();
+        args.extend([
+            "--override-api-urls",
+            "ws://guardian.example/,ws://guardian.onion/",
+        ]);
+
+        let opts = ServerOpts::try_parse_from(args).expect("API URL overrides should parse");
+
+        assert_eq!(
+            opts.override_api_urls,
+            [
+                "ws://guardian.example/".parse().expect("valid URL"),
+                "ws://guardian.onion/".parse().expect("valid URL"),
+            ]
+        );
+    }
+
+    #[test]
+    fn api_url_override_parses_environment_list() {
+        let previous = std::env::var_os(FM_OVERRIDE_API_URLS_ENV);
+        // This test does not spawn threads while mutating this environment variable.
+        unsafe {
+            std::env::set_var(
+                FM_OVERRIDE_API_URLS_ENV,
+                "ws://guardian.example/,ws://guardian.onion/",
+            );
+        }
+
+        let opts = parse_server_opts();
+
+        // This test does not spawn threads while mutating this environment variable.
+        unsafe {
+            if let Some(previous) = previous {
+                std::env::set_var(FM_OVERRIDE_API_URLS_ENV, previous);
+            } else {
+                std::env::remove_var(FM_OVERRIDE_API_URLS_ENV);
+            }
+        }
+        assert_eq!(
+            opts.override_api_urls,
+            [
+                "ws://guardian.example/".parse().expect("valid URL"),
+                "ws://guardian.onion/".parse().expect("valid URL"),
+            ]
+        );
     }
 }
