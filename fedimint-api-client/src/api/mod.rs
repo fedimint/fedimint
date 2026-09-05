@@ -491,7 +491,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome>;
+    ) -> FederationResult<SessionOutcome>;
 
     async fn get_session_status(
         &self,
@@ -499,7 +499,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         decoders: &ModuleDecoderRegistry,
         core_api_version: ApiVersion,
         broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
-    ) -> anyhow::Result<SessionStatus>;
+    ) -> FederationResult<SessionStatus>;
 
     async fn session_count(&self) -> FederationResult<u64>;
 

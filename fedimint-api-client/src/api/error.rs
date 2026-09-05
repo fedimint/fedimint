@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
+use fedimint_core::encoding::DecodeError;
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::util::FmtCompact as _;
 #[cfg(feature = "uniffi")]
@@ -29,6 +30,14 @@ pub enum FederationGeneralError {
     /// A peer answered, but with something the caller cannot use.
     #[error("{message}")]
     UnexpectedResponse { message: String },
+
+    /// A peer's response was well-formed json but did not decode.
+    #[error("Failed to decode a peer's response")]
+    Decode(#[from] DecodeError),
+
+    /// The signed session outcome did not verify against the broadcast keys.
+    #[error("Invalid signature")]
+    InvalidSignature,
 }
 
 /// An API request error when calling an entire federation
