@@ -63,3 +63,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 divan = "0.1.21"
+
+[lints]
+workspace = true
