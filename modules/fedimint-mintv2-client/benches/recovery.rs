@@ -1,3 +1,4 @@
+use fedimint_core::core::Account;
 use fedimint_core::encoding::Encodable;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_client::issuance;
@@ -28,7 +29,8 @@ fn check_nonce(bencher: divan::Bencher) {
     let root_secret = DerivableSecret::new_root(&[0u8; 32], &[0u8; 8]);
     let denomination = Denomination(0);
     let tweak = issuance::grind_tweak(&root_secret);
-    let output_secret = issuance::output_secret(denomination, tweak, &root_secret);
+    let output_secret =
+        issuance::output_secret(Account::Primary, denomination, tweak, &root_secret);
     let nonce_hash = issuance::nonce(&output_secret).consensus_hash();
 
     bencher.bench(|| issuance::check_nonce(&output_secret, nonce_hash));

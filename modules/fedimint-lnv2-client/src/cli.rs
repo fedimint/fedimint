@@ -1,7 +1,7 @@
 use std::{ffi, iter};
 
 use clap::{Parser, Subcommand};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
 use lightning_invoice::Bolt11Invoice;
@@ -19,6 +19,8 @@ enum Opts {
         invoice: Bolt11Invoice,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
@@ -29,6 +31,8 @@ enum Opts {
         amount: Amount,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
@@ -47,6 +51,8 @@ enum LnurlOpts {
         recurringd: SafeUrl,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
 }
 
@@ -79,17 +85,28 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => {
-            json(lightning.send(invoice, gateway, Value::Null).await?)
-        }
+        Opts::Send {
+            gateway,
+            invoice,
+            account,
+        } => json(
+            lightning
+                .send(account, invoice, gateway, Value::Null)
+                .await?,
+        ),
         Opts::AwaitSend { operation_id } => json(
             lightning
                 .await_final_send_operation_state(operation_id)
                 .await?,
         ),
-        Opts::Receive { amount, gateway } => json(
+        Opts::Receive {
+            amount,
+            gateway,
+            account,
+        } => json(
             lightning
                 .receive(
+                    account,
                     amount,
                     3600,
                     Bolt11InvoiceDescription::Direct(String::new()),
@@ -107,7 +124,12 @@ pub(crate) async fn handle_cli_command(
             LnurlOpts::Generate {
                 recurringd,
                 gateway,
-            } => json(lightning.generate_lnurl(recurringd, gateway).await?),
+                account,
+            } => json(
+                lightning
+                    .generate_lnurl(account, recurringd, gateway)
+                    .await?,
+            ),
         },
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]

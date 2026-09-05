@@ -52,7 +52,9 @@ use fedimint_client_module::transaction::{
     TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{
     AutocommitError, Committable, Database, DatabaseError, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
@@ -899,6 +901,7 @@ impl WalletClientModule {
                     output_amount: Amounts::new_bitcoin(amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs),
+                    account: Account::Primary,
                 },
             )
             .await
@@ -1172,6 +1175,7 @@ impl WalletClientModule {
                             .manual_operation_start_dbtx(
                                 dbtx,
                                 deposit_address.operation_id,
+                                Account::Primary,
                                 WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta {
                                     variant: WalletOperationMetaVariant::Deposit {
@@ -1298,6 +1302,7 @@ impl WalletClientModule {
                             .manual_operation_start_dbtx(
                                 dbtx,
                                 deposit_address.operation_id,
+                                Account::Primary,
                                 WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta {
                                     variant: WalletOperationMetaVariant::Deposit {
@@ -1862,7 +1867,7 @@ impl WalletClientModule {
 
             let withdraw_output =
                 self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
-            let tx_builder = TransactionBuilder::new()
+            let tx_builder = TransactionBuilder::new(Account::Primary)
                 .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
             let extra_meta =
@@ -1922,7 +1927,7 @@ impl WalletClientModule {
         let operation_id = OperationId(thread_rng().r#gen());
 
         let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
-        let tx_builder = TransactionBuilder::new()
+        let tx_builder = TransactionBuilder::new(Account::Primary)
             .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
         let extra_meta = serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");

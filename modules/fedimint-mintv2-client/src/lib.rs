@@ -17,6 +17,7 @@ mod ecash;
 mod events;
 mod input;
 pub mod issuance;
+mod migrations;
 mod output;
 mod receive;
 
@@ -42,13 +43,13 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{
-    ClientContext, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
+    AccountSupport, ClientContext, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
 };
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -251,6 +252,8 @@ impl ClientModuleInit for MintClientInit {
         // runs ahead of it instead, and the items are put back in order below.
         .buffer_unordered(PARALLEL_SLICE_REQUESTS);
 
+        // One filter for the whole wallet, so a candidate is found in a single
+        // pass and only then tried against each account's nonces.
         let tweak_filter = issuance::tweak_filter(args.module_root_secret());
 
         // Slices that arrived before the ones in front of them. An input
@@ -283,31 +286,46 @@ impl ClientModuleInit for MintClientInit {
                         if !issuance::check_tweak(*tweak, tweak_filter) {
                             continue;
                         }
-                        let output_secret = issuance::output_secret(
-                            *denomination,
-                            *tweak,
-                            args.module_root_secret(),
-                        );
 
-                        if !issuance::check_nonce(&output_secret, *nonce_hash) {
-                            continue;
-                        }
-
-                        let computed_nonce_hash = issuance::nonce(&output_secret).consensus_hash();
-
-                        // Ignore possible duplicate nonces
-                        if !state.nonces.insert(computed_nonce_hash) {
-                            continue;
-                        }
-
-                        state.requests.insert(
-                            computed_nonce_hash,
-                            NoteIssuanceRequest::new(
+                        // Only the ~1/65536 of outputs that pass the filter get
+                        // here, so trying every account costs a handful of
+                        // derivations per candidate rather than per output.
+                        for account in Account::ALL {
+                            let output_secret = issuance::output_secret(
+                                account,
                                 *denomination,
                                 *tweak,
                                 args.module_root_secret(),
-                            ),
-                        );
+                            );
+
+                            if !issuance::check_nonce(&output_secret, *nonce_hash) {
+                                continue;
+                            }
+
+                            let computed_nonce_hash =
+                                issuance::nonce(&output_secret).consensus_hash();
+
+                            // Ignore possible duplicate nonces
+                            if !state.nonces.insert(computed_nonce_hash) {
+                                continue;
+                            }
+
+                            state.requests.insert(
+                                computed_nonce_hash,
+                                (
+                                    account,
+                                    NoteIssuanceRequest::new(
+                                        account,
+                                        *denomination,
+                                        *tweak,
+                                        args.module_root_secret(),
+                                    ),
+                                ),
+                            );
+
+                            // A nonce belongs to exactly one account.
+                            break;
+                        }
                     }
                     RecoveryItem::Input { nonce_hash } => {
                         state.requests.remove(nonce_hash);
@@ -327,22 +345,42 @@ impl ClientModuleInit for MintClientInit {
                 let recovered_amount = state
                     .requests
                     .values()
-                    .map(|request| request.denomination.amount())
+                    .map(|(_, request)| request.denomination.amount())
                     .sum::<Amount>();
 
-                let state_machines = args
-                    .context()
-                    .map_dyn(vec![MintClientStateMachines::Output(
-                        MintOutputStateMachine {
-                            common: OutputSMCommon {
-                                operation_id: OperationId::new_random(),
-                                range: None,
-                                issuance_requests: state.requests.into_values().collect(),
-                            },
-                            state: OutputSMState::Pending,
+                // A state machine credits its notes to its operation's
+                // account, so the scan's requests are split by account into
+                // one operation each, with the account recorded up front.
+                let mut requests_by_account: BTreeMap<Account, Vec<NoteIssuanceRequest>> =
+                    BTreeMap::new();
+
+                for (account, request) in state.requests.into_values() {
+                    requests_by_account
+                        .entry(account)
+                        .or_default()
+                        .push(request);
+                }
+
+                let mut state_machines = Vec::new();
+
+                for (account, issuance_requests) in requests_by_account {
+                    let operation_id = OperationId::new_random();
+
+                    args.context()
+                        .set_operation_account_dbtx(&mut dbtx.to_ref_nc(), operation_id, account)
+                        .await;
+
+                    state_machines.push(MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: OutputSMCommon {
+                            operation_id,
+                            range: None,
+                            issuance_requests,
                         },
-                    )])
-                    .collect();
+                        state: OutputSMState::Pending,
+                    }));
+                }
+
+                let state_machines = args.context().map_dyn(state_machines).collect();
 
                 args.context()
                     .add_state_machines_dbtx(&mut dbtx.to_ref_nc(), state_machines)
@@ -402,7 +440,13 @@ impl ClientModuleInit for MintClientInit {
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
-        BTreeMap::new()
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
+
+        migrations.insert(DatabaseVersion(0), |dbtx, active, inactive| {
+            Box::pin(migrations::migrate_to_accounts_v1(dbtx, active, inactive))
+        });
+
+        migrations
     }
 }
 
@@ -479,7 +523,11 @@ impl ClientModule for MintClientModule {
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
-        PrimaryModuleSupport::selected(PrimaryModulePriority::HIGH, [self.cfg.amount_unit])
+        PrimaryModuleSupport::selected(
+            PrimaryModulePriority::HIGH,
+            [self.cfg.amount_unit],
+            AccountSupport::All,
+        )
     }
 
     async fn create_final_inputs_and_outputs(
@@ -489,6 +537,7 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
+        account: Account,
     ) -> anyhow::Result<(
         ClientInputBundle<MintInput, MintClientStateMachines>,
         ClientOutputBundle<MintOutput, MintClientStateMachines>,
@@ -498,12 +547,12 @@ impl ClientModule for MintClientModule {
         }
 
         let funding_notes = self
-            .select_funding_input(dbtx, output_amount.saturating_sub(input_amount))
+            .select_funding_input(dbtx, account, output_amount.saturating_sub(input_amount))
             .await
             .context("Insufficient funds")?;
 
         for note in &funding_notes {
-            self.remove_spendable_note(dbtx, note).await;
+            self.remove_spendable_note(dbtx, account, note).await;
         }
 
         input_amount += funding_notes.iter().map(SpendableNote::amount).sum();
@@ -516,11 +565,16 @@ impl ClientModule for MintClientModule {
         assert!(output_amount <= input_amount);
 
         let (input_notes, output_amounts) = self
-            .rebalance(dbtx, &self.cfg.fee_consensus, input_amount - output_amount)
+            .rebalance(
+                dbtx,
+                account,
+                &self.cfg.fee_consensus,
+                input_amount - output_amount,
+            )
             .await;
 
         for note in &input_notes {
-            self.remove_spendable_note(dbtx, note).await;
+            self.remove_spendable_note(dbtx, account, note).await;
         }
 
         input_amount += input_notes.iter().map(SpendableNote::amount).sum();
@@ -561,7 +615,9 @@ impl ClientModule for MintClientModule {
         // We sort the amounts to minimize the leaked information.
         denominations.sort();
 
-        let output_bundle = self.create_output_bundle(operation_id, denominations).await;
+        let output_bundle = self
+            .create_output_bundle(account, operation_id, denominations)
+            .await;
 
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
@@ -577,12 +633,17 @@ impl ClientModule for MintClientModule {
         self.await_output_sm_success(operation_id, outpoint).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        unit: AmountUnit,
+        account: Account,
+    ) -> Amount {
         if unit != self.cfg.amount_unit {
             return Amount::ZERO;
         }
 
-        self.get_count_by_denomination_dbtx(dbtx)
+        self.get_count_by_denomination_dbtx(dbtx, account)
             .await
             .into_iter()
             .map(|(denomination, count)| denomination.amount().mul_u64(count))
@@ -600,6 +661,7 @@ impl MintClientModule {
     async fn select_funding_input(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
         mut excess_output: Amount,
     ) -> Option<Vec<SpendableNote>> {
         let mut selected_notes = Vec::new();
@@ -608,9 +670,9 @@ impl MintClientModule {
 
         for amount in client_denominations().rev() {
             let notes_amount = dbtx
-                .find_by_prefix(&SpendableNoteAmountPrefix(amount))
+                .find_by_prefix(&SpendableNoteAmountPrefix(account, amount))
                 .await
-                .map(|entry| entry.0.0)
+                .map(|entry| entry.0.1)
                 .collect::<Vec<SpendableNote>>()
                 .await;
 
@@ -659,15 +721,16 @@ impl MintClientModule {
     async fn rebalance(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
         fee: &FeeConsensus,
         mut excess_input: Amount,
     ) -> (Vec<SpendableNote>, Vec<Denomination>) {
-        let n_denominations = self.get_count_by_denomination_dbtx(dbtx).await;
+        let n_denominations = self.get_count_by_denomination_dbtx(dbtx, account).await;
 
         let mut notes = dbtx
-            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
+            .find_by_prefix_sorted_descending(&SpendableNotePrefix(account))
             .await
-            .map(|entry| entry.0.0)
+            .map(|entry| entry.0.1)
             .fuse();
 
         let mut input_notes = Vec::new();
@@ -757,12 +820,13 @@ impl MintClientModule {
     /// background grinder task.
     async fn create_output_bundle(
         &self,
+        account: Account,
         operation_id: OperationId,
         requested_denominations: Vec<Denomination>,
     ) -> ClientOutputBundle<MintOutput, MintClientStateMachines> {
         let issuance_requests = futures::stream::iter(requested_denominations)
             .zip(self.tweak_receiver.clone())
-            .map(|(d, tweak)| NoteIssuanceRequest::new(d, tweak, &self.root_secret))
+            .map(|(d, tweak)| NoteIssuanceRequest::new(account, d, tweak, &self.root_secret))
             .collect::<Vec<NoteIssuanceRequest>>()
             .await;
 
@@ -831,10 +895,11 @@ impl MintClientModule {
         stream.next_or_pending().await
     }
 
-    /// Count the `ECash` notes in the client's database by denomination.
-    pub async fn get_count_by_denomination(&self) -> BTreeMap<Denomination, u64> {
+    /// Count the `ECash` notes an account holds by denomination.
+    pub async fn get_count_by_denomination(&self, account: Account) -> BTreeMap<Denomination, u64> {
         self.get_count_by_denomination_dbtx(
             &mut self.client_ctx.module_db().begin_transaction_nc().await,
+            account,
         )
         .await
     }
@@ -842,11 +907,12 @@ impl MintClientModule {
     async fn get_count_by_denomination_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
     ) -> BTreeMap<Denomination, u64> {
-        dbtx.find_by_prefix(&SpendableNotePrefix)
+        dbtx.find_by_prefix(&SpendableNotePrefix(account))
             .await
             .fold(BTreeMap::new(), |mut acc, entry| async move {
-                acc.entry(entry.0.0.denomination)
+                acc.entry(entry.0.1.denomination)
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
 
@@ -882,6 +948,7 @@ impl MintClientModule {
     /// submitted it completes on its own and the notes return to the balance.
     pub async fn send(
         &self,
+        account: Account,
         amount: Amount,
         custom_meta: Value,
         include_invite: bool,
@@ -895,6 +962,7 @@ impl MintClientModule {
                 |dbtx, _| {
                     Box::pin(self.send_ecash_dbtx(
                         dbtx,
+                        account,
                         amount,
                         custom_meta.clone(),
                         include_invite,
@@ -917,7 +985,7 @@ impl MintClientModule {
         let operation_id = OperationId::new_random();
 
         let output = self
-            .create_output_bundle(operation_id, represent_amount(amount))
+            .create_output_bundle(account, operation_id, represent_amount(amount))
             .await;
         let output = self.client_ctx.make_client_outputs(output);
         let cm = custom_meta.clone();
@@ -932,7 +1000,7 @@ impl MintClientModule {
                     amount,
                     custom_meta: cm.clone(),
                 },
-                TransactionBuilder::new().with_outputs(output),
+                TransactionBuilder::new(account).with_outputs(output),
             )
             .await
             .map_err(|_| SendECashError::InsufficientBalance)?;
@@ -943,7 +1011,7 @@ impl MintClientModule {
                 .map_err(|_| SendECashError::Failure)?;
         }
 
-        Box::pin(self.send(amount, custom_meta, include_invite)).await
+        Box::pin(self.send(account, amount, custom_meta, include_invite)).await
     }
 
     /// Fast path for [`Self::send`]: if exact change is already held, spend
@@ -959,19 +1027,40 @@ impl MintClientModule {
     async fn send_ecash_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
         remaining_amount: Amount,
         custom_meta: Value,
         include_invite: bool,
     ) -> Result<Option<(OperationId, ECash)>, Infallible> {
-        let Some(notes) = Self::select_exact_change(&mut dbtx.to_ref_nc(), remaining_amount).await
+        let Some(notes) =
+            Self::select_exact_change(&mut dbtx.to_ref_nc(), account, remaining_amount).await
         else {
             return Ok(None);
         };
 
         for spendable_note in &notes {
-            self.remove_spendable_note(dbtx, spendable_note).await;
+            self.remove_spendable_note(dbtx, account, spendable_note)
+                .await;
         }
 
+        Ok(Some(
+            self.record_send(dbtx, account, notes, custom_meta, include_invite)
+                .await,
+        ))
+    }
+
+    /// Bundle notes already removed from `account` and record the send: the
+    /// operation log entry, the event and the balance ping. Shared by the
+    /// exact-change [`Self::send`] and by [`Self::send_max`], which differ only
+    /// in how they pick the notes.
+    async fn record_send(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
+        notes: Vec<SpendableNote>,
+        custom_meta: Value,
+        include_invite: bool,
+    ) -> (OperationId, ECash) {
         let ecash = if include_invite {
             let invite = self.client_ctx.get_invite_code().await;
             ECash::new_with_invite(notes, &invite)
@@ -985,6 +1074,7 @@ impl MintClientModule {
             .add_operation_log_entry_dbtx(
                 dbtx,
                 operation_id,
+                account,
                 MintCommonInit::KIND.as_str(),
                 MintOperationMeta::Send {
                     ecash: base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
@@ -999,6 +1089,7 @@ impl MintClientModule {
                 SendPaymentEvent {
                     operation_id,
                     amount,
+                    account,
                     ecash: base32::encode_prefixed(FEDIMINT_PREFIX, &ecash),
                 },
             )
@@ -1007,12 +1098,75 @@ impl MintClientModule {
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
 
-        Ok(Some((operation_id, ecash)))
+        (operation_id, ecash)
+    }
+
+    /// Hand out everything `account` holds as one note bundle, or `None` if it
+    /// holds nothing.
+    ///
+    /// Not [`Self::send`] with the account's balance as its amount: a send
+    /// rounds up to a whole denomination and takes its free path only when the
+    /// notes sum to that amount exactly, which a figure in whole sats
+    /// generally is not. Missing the free path drops the send onto the path
+    /// that builds a real transaction, which covers its fee out of the same
+    /// account, so asking for everything fails on the balance the user is
+    /// looking at.
+    ///
+    /// This is how funds move between accounts: `send_max` one, then
+    /// [`Self::receive`] the bundle into another, which reissues the notes to
+    /// the destination's own nonces so a later recovery finds them where they
+    /// now are.
+    pub async fn send_max(
+        &self,
+        account: Account,
+        custom_meta: Value,
+        include_invite: bool,
+    ) -> Option<(OperationId, ECash)> {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(self.send_max_dbtx(dbtx, account, custom_meta.clone(), include_invite))
+                },
+                Some(100),
+            )
+            .await
+            .expect("Failed to commit dbtx after 100 retries")
+    }
+
+    async fn send_max_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
+        custom_meta: Value,
+        include_invite: bool,
+    ) -> Result<Option<(OperationId, ECash)>, Infallible> {
+        let notes = dbtx
+            .find_by_prefix(&SpendableNotePrefix(account))
+            .await
+            .map(|entry| entry.0.1)
+            .collect::<Vec<SpendableNote>>()
+            .await;
+
+        if notes.is_empty() {
+            return Ok(None);
+        }
+
+        for spendable_note in &notes {
+            self.remove_spendable_note(dbtx, account, spendable_note)
+                .await;
+        }
+
+        Ok(Some(
+            self.record_send(dbtx, account, notes, custom_meta, include_invite)
+                .await,
+        ))
     }
 
     /// Receive the `ECash` by reissuing the notes and return the operation ID.
     pub async fn receive(
         &self,
+        account: Account,
         ecash: ECash,
         custom_meta: Value,
     ) -> Result<OperationId, ReceiveECashError> {
@@ -1048,7 +1202,7 @@ impl MintClientModule {
                     ecash: ec.clone(),
                     custom_meta: custom_meta.clone(),
                 },
-                TransactionBuilder::new().with_inputs(input),
+                TransactionBuilder::new(account).with_inputs(input),
             )
             .or_else(|_| async {
                 if self.client_ctx.operation_exists(operation_id).await {
@@ -1067,6 +1221,7 @@ impl MintClientModule {
                 ReceivePaymentEvent {
                     operation_id,
                     amount: ecash.amount(),
+                    account,
                 },
             )
             .await;
@@ -1085,7 +1240,11 @@ impl MintClientModule {
     /// rather than committed, so the client's notes are read but left
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        account: Account,
+        ecash: &ECash,
+    ) -> anyhow::Result<FeeQuote> {
         // A receive submits the ecash notes as explicit inputs and no explicit
         // outputs; the shared, module-agnostic fee quote runs the primary-module
         // balancing (rebalancing + minting change) over the real inventory.
@@ -1104,6 +1263,7 @@ impl MintClientModule {
                     output_amount: Amounts::ZERO,
                     input_fee: Amounts::new_custom(self.cfg.amount_unit, input_fee),
                     output_fee: Amounts::ZERO,
+                    account,
                 },
             )
             .await
@@ -1122,11 +1282,15 @@ impl MintClientModule {
     /// inputs) via the shared, module-agnostic fee quote over the real
     /// inventory. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(
+        &self,
+        account: Account,
+        amount: Amount,
+    ) -> anyhow::Result<FeeQuote> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
         // Exact-change path: handing out existing notes never costs a fee.
-        if self.can_make_exact_change(amount).await {
+        if self.can_make_exact_change(account, amount).await {
             return Ok(FeeQuote::ZERO);
         }
 
@@ -1148,6 +1312,7 @@ impl MintClientModule {
                     output_amount: Amounts::new_custom(self.cfg.amount_unit, output_amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_custom(self.cfg.amount_unit, output_fee),
+                    account,
                 },
             )
             .await
@@ -1157,10 +1322,10 @@ impl MintClientModule {
     /// `amount` exactly — the free path in [`Self::send`] — without modifying
     /// the inventory. Shares its greedy selection with
     /// [`Self::send_ecash_dbtx`] via [`Self::select_exact_change`].
-    async fn can_make_exact_change(&self, remaining_amount: Amount) -> bool {
+    async fn can_make_exact_change(&self, account: Account, remaining_amount: Amount) -> bool {
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
 
-        Self::select_exact_change(&mut dbtx, remaining_amount)
+        Self::select_exact_change(&mut dbtx, account, remaining_amount)
             .await
             .is_some()
     }
@@ -1172,12 +1337,13 @@ impl MintClientModule {
     /// and [`Self::can_make_exact_change`].
     async fn select_exact_change(
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
         mut remaining_amount: Amount,
     ) -> Option<Vec<SpendableNote>> {
         let mut stream = dbtx
-            .find_by_prefix_sorted_descending(&SpendableNotePrefix)
+            .find_by_prefix_sorted_descending(&SpendableNotePrefix(account))
             .await
-            .map(|entry| entry.0.0);
+            .map(|entry| entry.0.1);
 
         let mut notes = vec![];
 
@@ -1240,9 +1406,10 @@ impl MintClientModule {
     async fn remove_spendable_note(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        account: Account,
         spendable_note: &SpendableNote,
     ) {
-        dbtx.remove_entry(&SpendableNoteKey(spendable_note.clone()))
+        dbtx.remove_entry(&SpendableNoteKey(account, spendable_note.clone()))
             .await
             .expect("Must delete existing spendable note");
     }

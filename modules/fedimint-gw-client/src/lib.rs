@@ -33,7 +33,9 @@ use fedimint_client_module::{
 };
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
@@ -630,9 +632,12 @@ impl GatewayClientModule {
             amounts: Amounts::new_bitcoin(amount),
         };
 
-        let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
-            ClientOutputBundle::new(vec![output], vec![client_output_sm]),
-        ));
+        let tx = TransactionBuilder::new(Account::Primary).with_outputs(
+            self.client_ctx.make_client_outputs(ClientOutputBundle::new(
+                vec![output],
+                vec![client_output_sm],
+            )),
+        );
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -730,7 +735,7 @@ impl GatewayClientModule {
                             output: LightningOutput::V0(client_output.output),
                             amounts: client_output.amounts,
                         };
-                        let tx = TransactionBuilder::new().with_outputs(
+                        let tx = TransactionBuilder::new(Account::Primary).with_outputs(
                             self.client_ctx.make_client_outputs(ClientOutputBundle::new(
                                 vec![output],
                                 vec![client_output_sm],
@@ -943,14 +948,9 @@ impl GatewayClientModule {
                             match self.client_ctx.add_state_machines_dbtx(dbtx, dyn_states).await {
                                 Ok(()) => {
                                     self.client_ctx
-                                        .add_operation_log_entry_dbtx(
-                                            dbtx,
-                                            operation_id,
-                                            KIND.as_str(),
-                                            GatewayMeta::Pay {
+                                        .add_operation_log_entry_dbtx(dbtx, operation_id, Account::Primary, KIND.as_str(), GatewayMeta::Pay {
                                                 preimage_auth: payload.preimage_auth,
-                                            },
-                                        )
+                                            })
                                         .await;
                                 }
                                 Err(AddStateMachinesError::StateAlreadyExists) => {

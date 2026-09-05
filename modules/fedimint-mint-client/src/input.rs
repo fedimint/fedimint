@@ -255,8 +255,8 @@ impl MintInputStateCreated {
 
         let change_range = global_context
             .claim_inputs(
-                dbtx,
-                // The input of the refund tx is managed by this state machine, so no new state
+                dbtx, /* The input of the refund tx is managed by this state machine, so no new
+                       * state */
                 // machines need to be created
                 ClientInputBundle::new_no_sm(vec![refund_input]),
             )
@@ -351,8 +351,7 @@ impl MintInputStateCreatedBundle {
 
         let change_range = global_context
             .claim_inputs(
-                dbtx,
-                // We are inside an input state machine, so no need to spawn new ones
+                dbtx, // We are inside an input state machine, so no need to spawn new ones
                 ClientInputBundle::new_no_sm(inputs),
             )
             .await
@@ -451,8 +450,8 @@ impl MintInputStateRefundedBundle {
             };
             match global_context
                 .claim_inputs(
-                    dbtx,
-                    // The input of the refund tx is managed by this state machine, so no new state
+                    dbtx, /* The input of the refund tx is managed by this state machine, so no
+                           * new state */
                     // machines need to be created
                     ClientInputBundle::new_no_sm(vec![refund_input.clone()]),
                 )

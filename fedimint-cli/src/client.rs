@@ -11,7 +11,7 @@ use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::{ClientModuleConfig, FederationId};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -585,7 +585,7 @@ pub async fn handle_command(
                 // federation's per-note fees. The returned fees are quoted at
                 // the returned amount, so they must be used together.
                 BitcoinAmountOrAll::All => {
-                    let balance = client.get_balance_for_btc().await?;
+                    let balance = client.get_balance_for_btc(Account::Primary).await?;
                     wallet_module
                         .max_withdrawable_amount(&address, balance)
                         .await?
@@ -709,7 +709,9 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     } else if let Ok(mintv2_client) =
         client.get_first_module::<fedimint_mintv2_client::MintClientModule>()
     {
-        let counts = mintv2_client.get_count_by_denomination().await;
+        let counts = mintv2_client
+            .get_count_by_denomination(Account::Primary)
+            .await;
         let mut summary = TieredCounts::default();
         #[allow(clippy::cast_possible_truncation)]
         for (denomination, count) in counts {

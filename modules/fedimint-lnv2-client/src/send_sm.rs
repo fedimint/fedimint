@@ -58,10 +58,13 @@ pub enum SendSMState {
 
 async fn send_update_event(
     context: LightningClientContext,
+    global_context: &DynGlobalClientContext,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     operation_id: OperationId,
     status: SendPaymentStatus,
 ) {
+    let account = global_context.account(dbtx).await;
+
     context
         .client_ctx
         .log_event(
@@ -69,6 +72,7 @@ async fn send_update_event(
             SendPaymentUpdateEvent {
                 operation_id,
                 status,
+                account,
             },
         )
         .await;
@@ -227,6 +231,7 @@ impl SendStateMachine {
             Ok(preimage) => {
                 send_update_event(
                     context,
+                    &global_context,
                     dbtx,
                     old_state.common.operation_id,
                     SendPaymentStatus::Success(preimage),
@@ -256,6 +261,7 @@ impl SendStateMachine {
 
                 send_update_event(
                     context,
+                    &global_context,
                     dbtx,
                     old_state.common.operation_id,
                     SendPaymentStatus::Refunded,
@@ -297,6 +303,7 @@ impl SendStateMachine {
         if let Some(preimage) = preimage {
             send_update_event(
                 context,
+                &global_context,
                 dbtx,
                 old_state.common.operation_id,
                 SendPaymentStatus::Success(preimage),
@@ -322,6 +329,7 @@ impl SendStateMachine {
 
         send_update_event(
             context,
+            &global_context,
             dbtx,
             old_state.common.operation_id,
             SendPaymentStatus::Refunded,

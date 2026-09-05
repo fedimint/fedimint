@@ -1003,14 +1003,16 @@ impl ClientBuilder {
 
         for (module_id, _kind, module) in modules.iter_modules() {
             match module.supports_being_primary() {
-                PrimaryModuleSupport::Any { priority } => {
+                PrimaryModuleSupport::Any { priority, .. } => {
                     primary_modules
                         .entry(priority)
                         .or_default()
                         .wildcard
                         .push(module_id);
                 }
-                PrimaryModuleSupport::Selected { priority, units } => {
+                PrimaryModuleSupport::Selected {
+                    priority, units, ..
+                } => {
                     for unit in units {
                         primary_modules
                             .entry(priority)

@@ -5,6 +5,7 @@ use std::time::Duration;
 use async_stream::stream;
 use bitcoin::Amount;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::core::Account;
 use fedimint_core::task::sleep_in_test;
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
@@ -16,7 +17,7 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
+    FinalSendOperationState, ReceiveError, SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -170,8 +171,8 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
     let federation_address = client
         .get_first_module::<WalletClientModule>()?
-        .receive()
-        .await;
+        .receive(Account::Primary)
+        .await?;
 
     bitcoin
         .send_and_mine_block(&federation_address, Amount::from_int_btc(100))
@@ -209,6 +210,7 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
         let send_op = client
             .get_first_module::<WalletClientModule>()?
             .send(
+                Account::Primary,
                 address.clone(),
                 Amount::from_sat(10_000),
                 None,
@@ -252,14 +254,50 @@ async fn send_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
         client
             .get_first_module::<WalletClientModule>()?
             .send(
+                Account::Primary,
                 mainnet_address,
                 Amount::from_sat(100_000),
+                None,
+                serde_json::Value::Null
+            )
+            .await
+            .err(),
+        Some(SendError::WrongNetwork),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+/// The test fixture's primary module is the dummy module, which holds a single
+/// balance, so neither a send from nor an address for another account may be
+/// handed out.
+async fn primary_only_mint_rejects_other_accounts() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let wallet = client.get_first_module::<WalletClientModule>()?;
+
+    let address = bitcoin.get_new_address().await.as_unchecked().clone();
+
+    assert_eq!(
+        wallet
+            .send(
+                Account::Secondary,
+                address,
+                Amount::from_sat(10_000),
                 None,
                 serde_json::Value::Null,
             )
             .await
             .err(),
-        Some(SendError::WrongNetwork),
+        Some(SendError::AccountNotSupported),
+    );
+
+    assert_eq!(
+        wallet.receive(Account::Secondary).await.err(),
+        Some(ReceiveError::AccountNotSupported),
     );
 
     Ok(())
@@ -277,7 +315,13 @@ async fn send_below_the_dust_limit_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<WalletClientModule>()?
-            .send(address, Amount::from_sat(1), None, serde_json::Value::Null)
+            .send(
+                Account::Primary,
+                address,
+                Amount::from_sat(1),
+                None,
+                serde_json::Value::Null
+            )
             .await
             .err(),
         Some(SendError::DustValue),
@@ -295,7 +339,8 @@ mod db {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::{OutPoint, PeerId, TransactionId};
+    use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::{OutPoint, PeerId, TransactionId, impl_db_record};
     use fedimint_logging::TracingSetup;
     use fedimint_server_core::DynServerModuleInit;
     use fedimint_testing::db::{
@@ -303,9 +348,7 @@ mod db {
         validate_migrations_server,
     };
     use fedimint_walletv2_client::WalletClientModule;
-    use fedimint_walletv2_client::db::{
-        self, NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
-    };
+    use fedimint_walletv2_client::db::{self, NextOutputIndexKey, ValidAddressIndexPrefix};
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FederationWalletKey, FeeRateVoteKey,
@@ -689,11 +732,23 @@ mod db {
 
         dbtx.insert_new_entry(&NextOutputIndexKey, &3).await;
 
-        dbtx.insert_new_entry(&ValidAddressIndexKey(0), &()).await;
-        dbtx.insert_new_entry(&ValidAddressIndexKey(1), &()).await;
+        dbtx.insert_new_entry(&ValidAddressIndexKeyV0(0), &()).await;
+        dbtx.insert_new_entry(&ValidAddressIndexKeyV0(1), &()).await;
 
         dbtx.commit_tx().await;
     }
+
+    /// The v0 shape of the address-index key: the index alone, before accounts
+    /// split the table. Spelt out here so the snapshot keeps producing v0
+    /// bytes now that the live key leads with an account.
+    #[derive(Clone, Debug, Encodable, Decodable)]
+    struct ValidAddressIndexKeyV0(u64);
+
+    impl_db_record!(
+        key = ValidAddressIndexKeyV0,
+        value = (),
+        db_prefix = db::DbKeyPrefix::ValidAddressIndex
+    );
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
@@ -718,29 +773,27 @@ mod db {
 
                 for prefix in db::DbKeyPrefix::iter() {
                     match prefix {
+                        // The accounts migration drops the cursor rather than
+                        // re-keying it, so the scanner replays the federation's
+                        // output stream from zero and re-derives every index.
                         db::DbKeyPrefix::NextOutputIndex => {
-                            let index = dbtx
-                                .get_value(&NextOutputIndexKey)
-                                .await
-                                .context("the seeded next output index must still decode")?;
-
                             ensure!(
-                                index == 3,
-                                "the next output index must round-trip unchanged, got {index}"
+                                dbtx.get_value(&NextOutputIndexKey).await.is_none(),
+                                "the scan cursor must be cleared so the rescan starts from zero"
                             );
                         }
                         db::DbKeyPrefix::ValidAddressIndex => {
                             let indices = dbtx
                                 .find_by_prefix(&ValidAddressIndexPrefix)
                                 .await
-                                .map(|(key, ())| key.0)
                                 .collect::<Vec<_>>()
                                 .await;
 
                             ensure!(
-                                indices == vec![0, 1],
-                                "both seeded valid address indices must round-trip unchanged, \
-                                 got {indices:?}"
+                                indices.is_empty(),
+                                "the pre-accounts address indices must be dropped for the \
+                                 rescan to re-derive them per account, got {} entries",
+                                indices.len()
                             );
                         }
                     }

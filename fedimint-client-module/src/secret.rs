@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io::{Read, Write};
 
 use fedimint_core::config::FederationId;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{Account, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -15,10 +15,20 @@ const TYPE_PRE_ROOT_SECRET_HASH: ChildId = ChildId(0);
 const TYPE_MODULE: ChildId = ChildId(0);
 const TYPE_BACKUP: ChildId = ChildId(1);
 
+// Derived from a module-root-secret, to namespace the non-primary accounts.
+//
+// Sits far above anything a module derives at that level, so an account
+// subtree can never collide with a module's own children: mintv2 derives
+// `ChildId(denomination)` with denomination a `u8`, lnv2 derives `ChildId(0)`
+// and `ChildId(1)`, and walletv2 derives `ChildId(address_index)` counting up
+// from zero one address at a time.
+const TYPE_ACCOUNT: ChildId = ChildId(0xACC0_0000_0000_0000);
+
 pub trait DeriveableSecretClientExt {
     fn derive_module_secret(&self, module_instance_id: ModuleInstanceId) -> DerivableSecret;
     fn derive_backup_secret(&self) -> DerivableSecret;
     fn derive_pre_root_secret_hash(&self) -> [u8; 8];
+    fn derive_account_secret(&self, account: Account) -> DerivableSecret;
 }
 
 impl DeriveableSecretClientExt for DerivableSecret {
@@ -31,6 +41,22 @@ impl DeriveableSecretClientExt for DerivableSecret {
     fn derive_backup_secret(&self) -> DerivableSecret {
         assert_eq!(self.level(), 0);
         self.child_key(TYPE_BACKUP)
+    }
+
+    /// Account-scoped root, to be called on a module root secret.
+    ///
+    /// [`Account::Primary`] returns the module root unchanged, so every path a
+    /// released client has already derived stays bit-for-bit what it was and
+    /// no existing wallet's money moves. That costs the tree its uniformity —
+    /// this is a `match` where every other hop is just a hop — and the
+    /// alternative was to re-key every client in the field.
+    fn derive_account_secret(&self, account: Account) -> DerivableSecret {
+        if account == Account::Primary {
+            return self.clone();
+        }
+
+        self.child_key(TYPE_ACCOUNT)
+            .child_key(ChildId(u64::from(account.index())))
     }
 
     fn derive_pre_root_secret_hash(&self) -> [u8; 8] {

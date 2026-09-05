@@ -17,7 +17,7 @@ use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::ModuleKind;
+use fedimint_core::core::{Account, ModuleKind};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{
     Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
@@ -326,6 +326,7 @@ impl LightningClientModule {
             .manual_operation_start_dbtx(
                 dbtx,
                 operation_id,
+                Account::Primary,
                 "ln",
                 LightningOperationMeta {
                     variant: LightningOperationMetaVariant::RecurringPaymentReceive(

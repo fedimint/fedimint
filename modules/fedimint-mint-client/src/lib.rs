@@ -62,8 +62,8 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
-    ClientContext, ClientModule, IClientModule, OutPointRange, PrimaryModulePriority,
-    PrimaryModuleSupport,
+    AccountSupport, ClientContext, ClientModule, IClientModule, OutPointRange,
+    PrimaryModulePriority, PrimaryModuleSupport,
 };
 use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -74,7 +74,9 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped,
@@ -1053,7 +1055,11 @@ impl ClientModule for MintClientModule {
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
-        PrimaryModuleSupport::selected(PrimaryModulePriority::HIGH, [AmountUnit::BITCOIN])
+        PrimaryModuleSupport::selected(
+            PrimaryModulePriority::HIGH,
+            [AmountUnit::BITCOIN],
+            AccountSupport::PrimaryOnly,
+        )
     }
 
     async fn create_final_inputs_and_outputs(
@@ -1063,15 +1069,16 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
+        _account: Account,
     ) -> anyhow::Result<(
         ClientInputBundle<MintInput, MintClientStateMachines>,
         ClientOutputBundle<MintOutput, MintClientStateMachines>,
     )> {
-        let consolidation_inputs = self.consolidate_notes(dbtx).await?;
-
         if unit != AmountUnit::BITCOIN {
             bail!("Module can only handle Bitcoin");
         }
+
+        let consolidation_inputs = self.consolidate_notes(dbtx).await?;
 
         input_amount += consolidation_inputs
             .iter()
@@ -1123,10 +1130,16 @@ impl ClientModule for MintClientModule {
         self.await_output_finalized(operation_id, out_point).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        unit: AmountUnit,
+        _account: Account,
+    ) -> Amount {
         if unit != AmountUnit::BITCOIN {
             return Amount::ZERO;
         }
+
         self.get_note_counts_by_denomination(dbtx)
             .await
             .total_amount()
@@ -1134,7 +1147,8 @@ impl ClientModule for MintClientModule {
 
     async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
         Amounts::new_bitcoin(
-            <Self as ClientModule>::get_balance(self, dbtx, AmountUnit::BITCOIN).await,
+            <Self as ClientModule>::get_balance(self, dbtx, AmountUnit::BITCOIN, Account::Primary)
+                .await,
         )
     }
 
@@ -1908,6 +1922,7 @@ impl MintClientModule {
                     output_amount: Amounts::ZERO,
                     input_fee: Amounts::new_bitcoin(input_fee),
                     output_fee: Amounts::ZERO,
+                    account: Account::Primary,
                 },
             )
             .await
@@ -1969,6 +1984,7 @@ impl MintClientModule {
                     output_amount: Amounts::new_bitcoin(output_amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(output_fee),
+                    account: Account::Primary,
                 },
             )
             .await
@@ -2013,7 +2029,7 @@ impl MintClientModule {
         let amount = notes.total_amount();
         let mint_inputs = self.create_input_from_notes(notes)?;
 
-        let tx = TransactionBuilder::new().with_inputs(
+        let tx = TransactionBuilder::new(Account::Primary).with_inputs(
             self.client_ctx
                 .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
         );
@@ -2229,6 +2245,7 @@ impl MintClientModule {
                             .add_operation_log_entry_dbtx(
                                 dbtx,
                                 operation_id,
+                                Account::Primary,
                                 MintCommonInit::KIND.as_str(),
                                 MintOperationMeta {
                                     variant: MintOperationMetaVariant::SpendOOB {
@@ -2408,7 +2425,7 @@ impl MintClientModule {
                     amount,
                     extra_meta: em_clone.clone(),
                 },
-                TransactionBuilder::new().with_outputs(outputs),
+                TransactionBuilder::new(Account::Primary).with_outputs(outputs),
             )
             .await
             .context("Failed to submit reissuance transaction")?;
@@ -2467,6 +2484,7 @@ impl MintClientModule {
             .add_operation_log_entry_dbtx(
                 dbtx,
                 operation_id,
+                Account::Primary,
                 MintCommonInit::KIND.as_str(),
                 MintOperationMeta {
                     variant: MintOperationMetaVariant::SpendOOB {

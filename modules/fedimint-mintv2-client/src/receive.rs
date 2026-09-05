@@ -45,6 +45,7 @@ impl State for ReceiveStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let client_ctx = context.client_ctx.clone();
+        let global_context = global_context.clone();
 
         match &self.state {
             ReceiveSMState::Pending => vec![StateTransition::new(
@@ -52,6 +53,7 @@ impl State for ReceiveStateMachine {
                 move |dbtx, result, old_state| {
                     Box::pin(Self::transition_tx_outcome(
                         client_ctx.clone(),
+                        global_context.clone(),
                         dbtx,
                         result,
                         old_state,
@@ -77,10 +79,13 @@ impl ReceiveStateMachine {
 
     async fn transition_tx_outcome(
         client_ctx: ClientContext<MintClientModule>,
+        global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         result: Result<(), String>,
         old_state: ReceiveStateMachine,
     ) -> ReceiveStateMachine {
+        let account = global_context.account(dbtx).await;
+
         let (status, new_state) = match result {
             Ok(()) => (ReceivePaymentStatus::Success, ReceiveSMState::Success),
             Err(e) => (ReceivePaymentStatus::Rejected, ReceiveSMState::Rejected(e)),
@@ -92,6 +97,7 @@ impl ReceiveStateMachine {
                 ReceivePaymentUpdateEvent {
                     operation_id: old_state.common.operation_id,
                     status,
+                    account,
                 },
             )
             .await;
