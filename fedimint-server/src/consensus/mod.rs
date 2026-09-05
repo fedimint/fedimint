@@ -455,7 +455,11 @@ pub async fn run(
                         break;
                     }
 
-                    info!(target: LOG_CONSENSUS, "Waiting for bitcoin backend to sync... {progress:.1}%");
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Waiting for bitcoin backend to sync... {:.1}%",
+                        progress * 100.0
+                    );
                 } else {
                     break;
                 }
