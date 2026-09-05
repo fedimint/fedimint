@@ -23,11 +23,18 @@ const DEFAULT_IROH_RELAYS: [&str; 2] = [
     "https://use1-1.relay.elsirion.fedimint.iroh.link/",
 ];
 
-/// QUIC idle timeout used for iroh API endpoints.
-pub const IROH_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+/// QUIC idle timeout for every iroh endpoint.
+///
+/// With [`IROH_KEEP_ALIVE_INTERVAL`] underneath it, a dead connection surfaces
+/// within ~5s instead of the 30s QUIC default. The negotiated idle timeout is
+/// the minimum of both sides', so a guardian setting this caps detection
+/// latency for clients whose endpoints keep iroh's defaults. The path-level
+/// settings stay untouched — iroh tunes those for hole punching.
+pub const IROH_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// QUIC keep-alive interval used for iroh API endpoints.
-pub const IROH_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(30);
+/// QUIC keep-alive interval for every iroh endpoint, see
+/// [`IROH_IDLE_TIMEOUT`].
+pub const IROH_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub async fn build_iroh_endpoint(
     secret_key: SecretKey,
