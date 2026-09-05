@@ -1,0 +1,237 @@
+name: "Codex Distilled Diff"
+
+on:
+  # Use pull_request_target so secrets are available for fork PRs.
+  # Safety: we checkout the base branch (trusted) and only fetch the PR
+  # diff as text — no untrusted code is checked out or executed.
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review]
+
+# One distillation per PR at a time; a new push supersedes an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  distill:
+    # Run on PR open / new push / ready-for-review, skipping drafts.
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      !github.event.pull_request.draft
+    name: Distilled Diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Resolve PR metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          PR_JSON=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}")
+
+          {
+            echo "number=${PR_NUMBER}"
+            echo "base_ref=$(echo "$PR_JSON" | jq -r '.base.ref')"
+            echo "base_sha=$(echo "$PR_JSON" | jq -r '.base.sha')"
+            echo "head_sha=$(echo "$PR_JSON" | jq -r '.head.sha')"
+            echo "title=$(echo "$PR_JSON" | jq -r '.title')"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Checkout the base branch (trusted code only)
+          ref: ${{ steps.pr.outputs.base_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch PR head
+        run: |
+          # Fetch the PR head commit without checking it out
+          git fetch origin "${{ steps.pr.outputs.head_sha }}"
+
+      - name: Get diff to distill
+        id: diff
+        run: |
+          BASE_SHA=${{ steps.pr.outputs.base_sha }}
+          HEAD_SHA=${{ steps.pr.outputs.head_sha }}
+
+          git diff "$BASE_SHA"..."$HEAD_SHA" > /tmp/pr_diff.patch
+
+          DIFF_SIZE=$(wc -c < /tmp/pr_diff.patch)
+          MAX_SIZE=300000
+          if [ "$DIFF_SIZE" -gt "$MAX_SIZE" ]; then
+            truncate -s "$MAX_SIZE" /tmp/pr_diff.patch
+            echo -e "\n\n... [diff truncated at ${MAX_SIZE} bytes, full diff is ${DIFF_SIZE} bytes] ..." >> /tmp/pr_diff.patch
+            echo "truncated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "truncated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Build distillation prompt
+        env:
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+        run: |
+          TRUNCATED="${{ steps.diff.outputs.truncated }}"
+
+          # Prepend the distilled-diff instructions so Codex has them in context
+          cat .github/agents/distilled-diff.md > /tmp/distill_prompt.txt
+
+          cat >> /tmp/distill_prompt.txt <<'PROMPT_HEADER'
+
+          ---
+
+          Produce a distilled diff of the following pull request, following the
+          instructions above. Output ONLY the distilled diff (fenced blocks, the
+          folded-count line, and — only if the strict bar in the Diagrams section
+          is met — at most one Mermaid diagram). No preamble, no closing remarks,
+          no prose describing the change beyond at most one short leading theme
+          line.
+          PROMPT_HEADER
+
+          printf '\nPR Title: %s\n' "$PR_TITLE" >> /tmp/distill_prompt.txt
+
+          if [ "$TRUNCATED" = "true" ]; then
+            cat >> /tmp/distill_prompt.txt <<'EOF'
+
+          NOTE: The diff below was truncated due to size. Distill what is shown
+          and end with a folded-count line noting that the tail was truncated.
+          EOF
+          fi
+
+          printf '\nDiff:\n' >> /tmp/distill_prompt.txt
+          cat /tmp/pr_diff.patch >> /tmp/distill_prompt.txt
+
+      - name: Run Codex distillation
+        id: codex
+        env:
+          PPQ_KEY: ${{ secrets.PPQ_KEY }}
+          PPQ_MODEL: ${{ vars.PPQ_MODEL || 'openai/gpt-5.5' }}
+        run: |
+          set -euo pipefail
+
+          export CODEX_HOME="${RUNNER_TEMP}/codex-distill-home"
+          mkdir -p "$CODEX_HOME"
+          path_toml=$(jq -Rn --arg value "$PATH" '$value')
+          {
+            printf 'model = "%s"\n' "$PPQ_MODEL"
+            printf '%s\n' \
+              'model_provider = "ppq"' \
+              'model_reasoning_effort = "medium"' \
+              'sandbox_mode = "read-only"' \
+              'approval_policy = "never"' \
+              'hide_agent_reasoning = true' \
+              '' \
+              '[model_providers.ppq]' \
+              'name = "PPQ"' \
+              'base_url = "https://api.ppq.ai/v1"' \
+              'env_key = "PPQ_KEY"' \
+              'wire_api = "responses"' \
+              '' \
+              '[history]' \
+              'persistence = "none"' \
+              '' \
+              '[shell_environment_policy]' \
+              'inherit = "all"' \
+              'ignore_default_excludes = false'
+            printf 'set = { PATH = %s }\n' "$path_toml"
+            printf '%s\n' \
+              'include_only = [' \
+              '  "PATH",' \
+              '  "HOME",' \
+              '  "CODEX_HOME",' \
+              '  "CI",' \
+              '  "TMPDIR",' \
+              '  "TEMP",' \
+              '  "TMP",' \
+              '  "LANG",' \
+              '  "LC_*",' \
+              ']'
+          } > "$CODEX_HOME/config.toml"
+
+          print_codex_log_tail() {
+            local log_file="$1"
+            if [ ! -s "$log_file" ]; then
+              echo "Codex log is empty or missing: $log_file"
+              return
+            fi
+            echo "::group::codex log tail"
+            sed -E \
+              -e "s/(Authorization: Bearer )[A-Za-z0-9._-]+/\\1<redacted>/g" \
+              -e "s/(api[_-]?key[=:] ?)[A-Za-z0-9._-]+/\\1<redacted>/Ig" \
+              "$log_file" | tail -n 120
+            echo "::endgroup::"
+          }
+
+          if ! codex exec \
+            --ephemeral \
+            --output-last-message /tmp/distilled.md \
+            - < /tmp/distill_prompt.txt > /tmp/codex.log 2>&1; then
+            echo "Codex distillation failed"
+            print_codex_log_tail /tmp/codex.log
+            exit 1
+          fi
+
+          if [ ! -s /tmp/distilled.md ]; then
+            echo "Codex produced no output"
+            print_codex_log_tail /tmp/codex.log
+            exit 1
+          fi
+
+      - name: Upsert distilled-diff comment
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          HEAD_SHA="${{ steps.pr.outputs.head_sha }}"
+          MARKER="<!-- distilled-diff-bot -->"
+
+          # Wrap the distillation in a collapsed-by-default <details> block so it
+          # never dominates the PR conversation. The marker (an HTML comment) lets
+          # us find and update this comment on the next push instead of stacking.
+          {
+            echo "$MARKER"
+            echo "<details>"
+            printf '<summary>🔬 Distilled diff — the change at a glance (<code>%s</code>)</summary>\n' "${HEAD_SHA:0:7}"
+            echo ""
+            cat /tmp/distilled.md
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<sub>Distilled by fedimint-bot from the full diff — a map, not a replacement. Collapsed by default; expand for the shape of the change.</sub>"
+          } > /tmp/comment_body.md
+
+          # Find a prior distilled-diff comment by this bot (via the marker).
+          BOT_LOGIN=$(gh api user --jq '.login')
+          EXISTING_ID=$(gh api \
+            "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq "[.[] | select(.user.login == \"${BOT_LOGIN}\") | select(.body | contains(\"${MARKER}\")) | .id] | last // empty")
+
+          # Build the JSON payload from the file via jq (robust for arbitrary
+          # markdown/HTML) and pipe it in, matching the repo's other gh api usage.
+          jq -Rs '{body: .}' < /tmp/comment_body.md > /tmp/comment_payload.json
+
+          if [ -n "$EXISTING_ID" ]; then
+            gh api \
+              "repos/${{ github.repository }}/issues/comments/${EXISTING_ID}" \
+              --method PATCH \
+              --input /tmp/comment_payload.json
+            echo "Updated existing distilled-diff comment ${EXISTING_ID}"
+          else
+            gh api \
+              "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --method POST \
+              --input /tmp/comment_payload.json
+            echo "Posted new distilled-diff comment"
+          fi
