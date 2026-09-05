@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["impl_encode_decode_bridge"],"struct":["BitoinIoWriteAdapter","BufBitcoinReader","NetworkLegacyEncodingWrapper","SimpleBitcoinRead"]};
+window.SIDEBAR_ITEMS = {"fn":["from_bitcoin_encode_error","from_psbt_error"],"macro":["impl_encode_decode_bridge"],"struct":["BitoinIoWriteAdapter","BufBitcoinReader","NetworkLegacyEncodingWrapper","SimpleBitcoinRead"]};

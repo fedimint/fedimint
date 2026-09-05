@@ -208,7 +208,7 @@
 <a href=#208 id=208 data-nosnippet>208</a>            tweak_contract_key: PublicKey::consensus_decode_partial(d, modules)<span class="question-mark">?</span>,
 <a href=#209 id=209 data-nosnippet>209</a>        };
 <a href=#210 id=210 data-nosnippet>210</a>
-<a href=#211 id=211 data-nosnippet>211</a>        validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::new_custom)<span class="question-mark">?</span>;
+<a href=#211 id=211 data-nosnippet>211</a>        validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(|error| DecodeError::Invalid(error.into()))<span class="question-mark">?</span>;
 <a href=#212 id=212 data-nosnippet>212</a>        <span class="prelude-val">Ok</span>(slf)
 <a href=#213 id=213 data-nosnippet>213</a>    }
 <a href=#214 id=214 data-nosnippet>214</a>}

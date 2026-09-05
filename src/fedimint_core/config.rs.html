@@ -6,32 +6,32 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>std::path::{Path, PathBuf};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::str::FromStr;
 <a href=#8 id=8 data-nosnippet>8</a>
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>anyhow::Context;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>bitcoin::hashes::{Hash <span class="kw">as </span>BitcoinHash, hex, sha256};
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>bls12_381::Scalar;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::{ModuleDecoderRegistry, format_hex};
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_logging::LOG_CORE;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>hex::FromHex;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>secp256k1::PublicKey;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>serde::de::DeserializeOwned;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>serde_json::json;
-<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>thiserror::Error;
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>tracing::warn;
-<a href=#27 id=27 data-nosnippet>27</a>
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError};
-<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span><span class="kw">crate</span>::module::{
-<a href=#31 id=31 data-nosnippet>31</a>    CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
-<a href=#32 id=32 data-nosnippet>32</a>    SerdeModuleEncoding,
-<a href=#33 id=33 data-nosnippet>33</a>};
-<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span><span class="kw">crate</span>::session_outcome::SignedSessionOutcome;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>bitcoin::hashes::{Hash <span class="kw">as </span>BitcoinHash, hex, sha256};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>bls12_381::Scalar;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::{ModuleDecoderRegistry, format_hex};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_logging::LOG_CORE;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>hex::FromHex;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>secp256k1::PublicKey;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>serde::de::DeserializeOwned;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>serde_json::json;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>thiserror::Error;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>tracing::warn;
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeContext <span class="kw">as _</span>, DecodeError};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span><span class="kw">crate</span>::module::{
+<a href=#30 id=30 data-nosnippet>30</a>    CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
+<a href=#31 id=31 data-nosnippet>31</a>    SerdeModuleEncoding,
+<a href=#32 id=32 data-nosnippet>32</a>};
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span><span class="kw">crate</span>::session_outcome::SignedSessionOutcome;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span><span class="kw">crate</span>::util::FmtCompact <span class="kw">as _</span>;
 <a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>crate::{PeerId, maybe_add_send_sync, secp256k1};
 <a href=#36 id=36 data-nosnippet>36</a>
 <a href=#37 id=37 data-nosnippet>37</a><span class="comment">// TODO: make configurable
@@ -920,7 +920,7 @@
 <a href=#920 id=920 data-nosnippet>920</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
 <a href=#921 id=921 data-nosnippet>921</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
 <a href=#922 id=922 data-nosnippet>922</a>        )
-<a href=#923 id=923 data-nosnippet>923</a>        .map_err(serde::de::Error::custom)
+<a href=#923 id=923 data-nosnippet>923</a>        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
 <a href=#924 id=924 data-nosnippet>924</a>    }
 <a href=#925 id=925 data-nosnippet>925</a>}
 <a href=#926 id=926 data-nosnippet>926</a>
@@ -944,7 +944,7 @@
 <a href=#944 id=944 data-nosnippet>944</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
 <a href=#945 id=945 data-nosnippet>945</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
 <a href=#946 id=946 data-nosnippet>946</a>        )
-<a href=#947 id=947 data-nosnippet>947</a>        .map_err(serde::de::Error::custom)
+<a href=#947 id=947 data-nosnippet>947</a>        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
 <a href=#948 id=948 data-nosnippet>948</a>    }
 <a href=#949 id=949 data-nosnippet>949</a>}
 <a href=#950 id=950 data-nosnippet>950</a>
