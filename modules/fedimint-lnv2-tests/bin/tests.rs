@@ -977,6 +977,8 @@ struct LnUrlPayResponse {
 #[derive(Deserialize, Clone)]
 struct LnUrlPayInvoiceResponse {
     pr: Bolt11Invoice,
+    // LUD-06 requires this field, so parsing fails if the service omits it
+    routes: Vec<serde_json::Value>,
     verify: String,
 }
 
@@ -995,6 +997,11 @@ async fn fetch_invoice(lnurl: String, amount_msat: u64) -> anyhow::Result<(Bolt1
     ensure!(
         invoice_response.pr.amount_milli_satoshis() == Some(amount_msat),
         "Invoice amount is not set"
+    );
+
+    ensure!(
+        invoice_response.routes.is_empty(),
+        "LUD-06 requires routes to be an empty array"
     );
 
     let metadata_hash = sha256::Hash::hash(response.metadata.as_bytes());

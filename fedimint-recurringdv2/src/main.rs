@@ -177,6 +177,7 @@ async fn invoice(
 
     Json(LnurlResponse::Ok(InvoiceResponse {
         pr: invoice.clone(),
+        routes: vec![],
         verify: Some(
             gateway
                 .join_path(&format!("verify/{}", invoice.payment_hash()))
