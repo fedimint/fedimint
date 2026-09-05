@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
@@ -51,10 +51,11 @@ use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
-    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    CONFIRMATION_FINALITY_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
+    WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
+    descriptor, is_potential_receive,
 };
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use secp256k1::Keypair;
 use send_sm::{SendSMCommon, SendSMState, SendStateMachine};
@@ -112,6 +113,57 @@ pub enum FinalReceiveOperationState {
     Success,
     /// The federation rejected the claiming transaction.
     Aborted,
+}
+
+/// Progress of a single incoming peg-in.
+///
+/// Each variant describes one deposit, identified by the outpoint it is looked
+/// up or paired with. An address that has been paid more than once has one of
+/// these per payment rather than a combined view, so nothing is aggregated
+/// away.
+///
+/// There is no "nothing has arrived" variant: a deposit no guardian has seen
+/// has no outpoint to describe it, so absence is expressed by
+/// [`WalletClientModule::address_receive_progress`] returning an empty list.
+///
+/// [`ReceiveProgress::Mempool`] and [`ReceiveProgress::Confirming`] are derived
+/// from advisory, non-consensus data reported by individual guardians, so they
+/// are **not** authoritative and may move backwards: a reorg or an eviction can
+/// take a deposit back to being unseen entirely. Only
+/// [`ReceiveProgress::Claimed`] means money has actually been received.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReceiveProgress {
+    /// The deposit is in a guardian's mempool but is not mined.
+    ///
+    /// The weakest signal there is: an unmined transaction can be replaced or
+    /// evicted, and a deposit in this state can disappear again. Treat it as
+    /// "we have seen your payment", never as money received.
+    ///
+    /// Only guardians whose bitcoin backend can enumerate a mempool report
+    /// these, so on a federation without one a deposit stays unseen until it is
+    /// mined.
+    Mempool { value: bitcoin::Amount },
+    /// The deposit has been mined but is not yet deep enough for the federation
+    /// to act on it.
+    Confirming {
+        value: bitcoin::Amount,
+        /// Height of the block that mined the deposit.
+        ///
+        /// Reported as the guardians saw it, so a reorg can move a deposit to a
+        /// different height or back to being unseen entirely.
+        height: u64,
+        /// Confirmations counting the block that mined the transaction as the
+        /// first, matching what a block explorer displays.
+        confirmations: u64,
+        /// Confirmations needed before the federation records the output.
+        required: u64,
+    },
+    /// The deposit has been claimed and its ecash issued.
+    ///
+    /// Only [`WalletClientModule::subscribe_receive_progress`] reports this,
+    /// since establishing it means waiting on the receive operation itself
+    /// rather than reading the guardians' pending view.
+    Claimed,
 }
 
 #[derive(Debug, Clone)]
@@ -548,6 +600,232 @@ impl WalletClientModule {
         }
 
         Ok(final_state.expect("Stream contains one final state"))
+    }
+
+    /// Resolves one of our receive addresses back to the index it was derived
+    /// at.
+    ///
+    /// Only addresses handed out by [`Self::receive`] resolve; the set of valid
+    /// indices is small, so this is a short scan rather than a stored reverse
+    /// index.
+    async fn address_index(&self, address: &Address) -> Option<u64> {
+        let script = address.script_pubkey();
+
+        let indices: Vec<u64> = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| entry.0.0)
+            .collect()
+            .await;
+
+        indices
+            .into_iter()
+            .find(|index| self.derive_address(*index).script_pubkey() == script)
+    }
+
+    /// The current progress of the deposit at `outpoint`.
+    ///
+    /// Reads only the guardians' pending view, so it never reports
+    /// [`ReceiveProgress::Claimed`]; everything it does report is advisory and
+    /// may move backwards. Use [`Self::subscribe_receive_progress`] to follow a
+    /// deposit through to being claimed.
+    ///
+    /// Each call queries the federation, so poll it sparingly;
+    /// [`Self::subscribe_receive_progress`] is the better fit for following a
+    /// deposit.
+    ///
+    /// Errors if no deposit at `outpoint` is known to this client, which
+    /// includes one that has been reorged out or evicted since it was last
+    /// seen, and one paying an address this client did not derive.
+    pub async fn receive_progress(
+        &self,
+        outpoint: bitcoin::OutPoint,
+    ) -> anyhow::Result<ReceiveProgress> {
+        let pending = self.module_api.pending_outputs().await;
+
+        // Guardians report every output passing the receive filter, most of
+        // which belong to other clients, so ownership is established by matching
+        // the script against our own addresses.
+        let ours = self.address_map().await;
+
+        pending
+            .outputs
+            .iter()
+            .find(|output| output.outpoint == outpoint && ours.contains_key(&output.script))
+            .map(|output| Self::pending_progress(output, pending.block_count))
+            .context("No deposit of ours at this outpoint")
+    }
+
+    /// The progress of every deposit to `address` the federation has seen,
+    /// ordered by outpoint.
+    ///
+    /// An empty list means no guardian has reported a payment to the address
+    /// yet. That is not proof nothing was sent: an unmined deposit is only
+    /// visible to guardians whose bitcoin backend can enumerate a mempool.
+    ///
+    /// Errors if `address` was not handed out by [`Self::receive`].
+    pub async fn address_receive_progress(
+        &self,
+        address: &Address,
+    ) -> anyhow::Result<Vec<(bitcoin::OutPoint, ReceiveProgress)>> {
+        self.address_index(address)
+            .await
+            .context("Address was not derived by this client")?;
+
+        Ok(self.deposits_paying(&address.script_pubkey()).await)
+    }
+
+    /// Every deposit the federation currently reports against `script`.
+    async fn deposits_paying(
+        &self,
+        script: &ScriptBuf,
+    ) -> Vec<(bitcoin::OutPoint, ReceiveProgress)> {
+        let pending = self.module_api.pending_outputs().await;
+
+        let mut deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)> = pending
+            .outputs
+            .iter()
+            .filter(|output| output.script == *script)
+            .map(|output| {
+                (
+                    output.outpoint,
+                    Self::pending_progress(output, pending.block_count),
+                )
+            })
+            .collect();
+
+        deposits.sort_by_key(|(outpoint, _)| *outpoint);
+
+        deposits
+    }
+
+    /// The scripts of every receive address derived so far, by index.
+    async fn address_map(&self) -> BTreeMap<ScriptBuf, u64> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| entry.0.0)
+            .map(|index| (self.derive_address(index).script_pubkey(), index))
+            .collect()
+            .await
+    }
+
+    fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
+        // The module counts finality from the block after the one that mined the
+        // transaction, so a peg-in is claimable one standard confirmation later
+        // than the delay itself.
+        let required = CONFIRMATION_FINALITY_DELAY + 1;
+
+        match output.height {
+            Some(height) => ReceiveProgress::Confirming {
+                value: output.value,
+                height,
+                // Confirmations count the block that mined the deposit as the
+                // first, matching what a block explorer displays.
+                //
+                // Guardians keep reporting an output for a while after it turns
+                // final, so that progress does not blank out before the claim
+                // begins. Clamp so a progress display cannot run past its own
+                // target during that overlap.
+                confirmations: block_count.saturating_sub(height).min(required),
+                required,
+            },
+            None => ReceiveProgress::Mempool {
+                value: output.value,
+            },
+        }
+    }
+
+    /// Streams the progress of every deposit to `address`, yielding the full
+    /// per-deposit list whenever any of it changes, and ending once every
+    /// deposit it saw has been claimed.
+    ///
+    /// Yields an empty list until the first deposit appears. Confirmation
+    /// progress comes from polling the guardians' pending view, so updates
+    /// arrive within roughly the client's scan interval of the federation
+    /// observing them. Once no deposit is still gaining confirmations, the
+    /// stream waits on the receive operations themselves and yields a final
+    /// all-[`ReceiveProgress::Claimed`] list.
+    ///
+    /// `position` must be an event log position read *before* `address` was
+    /// handed out, the same way [`Self::await_receive`] is used, so that the
+    /// claims for these deposits fall at or after it.
+    ///
+    /// Because [`Self::await_receive`] matches the next receive of *any*
+    /// address, a deposit to a different address claimed in the meantime is
+    /// counted here too. Subscribing to one address at a time avoids that.
+    ///
+    /// Errors if `address` was not handed out by [`Self::receive`].
+    pub async fn subscribe_receive_progress(
+        &self,
+        address: &Address,
+        position: EventLogId,
+    ) -> anyhow::Result<impl Stream<Item = Vec<(bitcoin::OutPoint, ReceiveProgress)>> + use<>> {
+        self.address_index(address)
+            .await
+            .context("Address was not derived by this client")?;
+
+        let module = self.clone();
+        let script = address.script_pubkey();
+
+        Ok(async_stream::stream! {
+            let mut last: Option<Vec<(bitcoin::OutPoint, ReceiveProgress)>> = None;
+            let mut seen: BTreeSet<bitcoin::OutPoint> = BTreeSet::new();
+
+            loop {
+                let progress = module.deposits_paying(&script).await;
+
+                seen.extend(progress.iter().map(|(outpoint, _)| *outpoint));
+
+                if last.as_ref() != Some(&progress) {
+                    yield progress.clone();
+
+                    last = Some(progress.clone());
+                }
+
+                // Stop polling once nothing is still gaining confirmations,
+                // which covers a deposit sitting at the depth the federation
+                // claims at and one that has already dropped out of the pending
+                // window, as happens when several blocks arrive at once.
+                let advancing = progress.iter().any(|(_, state)| match state {
+                    ReceiveProgress::Mempool { .. } => true,
+                    ReceiveProgress::Confirming {
+                        confirmations,
+                        required,
+                        ..
+                    } => confirmations < required,
+                    ReceiveProgress::Claimed => false,
+                });
+
+                if !seen.is_empty() && !advancing {
+                    break;
+                }
+
+                sleep(fedimint_walletv2_common::sleep_duration()).await;
+            }
+
+            // The pending view cannot tell a claimed deposit from a reorged
+            // one, so the receive operations settle it.
+            let mut position = position;
+
+            for _ in 0..seen.len() {
+                let Ok((_, next)) = module.await_receive(position).await else {
+                    return;
+                };
+
+                position = next;
+            }
+
+            yield seen
+                .into_iter()
+                .map(|outpoint| (outpoint, ReceiveProgress::Claimed))
+                .collect();
+        })
     }
 
     /// Returns the highest valid receive address index that the background
