@@ -5,7 +5,7 @@ use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
     ConnectionPool, ConnectorRegistry, DynGatewayConnection, IGatewayConnection, ServerResult,
 };
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use reqwest::Method;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -31,7 +31,8 @@ impl GatewayApi {
                 let conn = connectors
                     .connect_gateway(&url)
                     .await
-                    .map_err(|err| ServerError::Connection(Box::new(err)))?;
+                    // `Connection` neither prints nor exposes a source, so flatten the chain.
+                    .map_err(|err| ServerError::Connection(err.fmt_compact().to_string().into()))?;
                 Ok(conn)
             })
             .await

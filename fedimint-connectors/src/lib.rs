@@ -479,6 +479,8 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
+                // `Transport` is printed, not walked, by its consumers, so the whole chain
+                // goes into the text on purpose.
                 ServerError::Transport(
                     format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
                 )
@@ -611,6 +613,8 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
+                // `Transport` is printed, not walked, by its consumers, so the whole chain
+                // goes into the text on purpose.
                 ServerError::Transport(
                     format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
                 )
