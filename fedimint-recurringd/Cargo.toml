@@ -45,5 +45,11 @@ tokio = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-server = { workspace = true }
+fedimint-ln-server = { workspace = true }
+fedimint-testing = { workspace = true }
+
 [lints]
 workspace = true

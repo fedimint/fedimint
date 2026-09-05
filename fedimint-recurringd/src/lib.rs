@@ -505,10 +505,10 @@ impl RecurringInvoiceServer {
         payment_code_id: PaymentCodeId,
         invoice_index: u64,
     ) -> Result<PaymentCodeInvoiceEntry, RecurringPaymentError> {
-        self.get_payment_code(payment_code_id).await?;
+        let payment_code = self.get_payment_code(payment_code_id).await?;
 
         let mut notified = self.invoice_generated.notified();
-        loop {
+        let invoice_entry = loop {
             let mut dbtx = self.db.begin_transaction_nc().await;
             if let Some(invoice_entry) = dbtx
                 .get_value(&PaymentCodeInvoiceKey {
@@ -517,12 +517,41 @@ impl RecurringInvoiceServer {
                 })
                 .await
             {
-                break Ok(invoice_entry);
+                break invoice_entry;
             };
 
             notified.await;
             notified = self.invoice_generated.notified();
+        };
+
+        // recipients act on a served invoice immediately, so don't hand one out
+        // while its offer transaction is in flight. The payer path gates the same
+        // way in create_bolt11_invoice.
+        self.await_offer_final(payment_code.federation_id, invoice_entry.operation_id)
+            .await?;
+
+        Ok(invoice_entry)
+    }
+
+    async fn await_offer_final(
+        &self,
+        federation_id: FederationId,
+        operation_id: OperationId,
+    ) -> Result<(), RecurringPaymentError> {
+        let federation_client = self.get_federation_client(federation_id).await?;
+        let ln_module = federation_client.get_ln_module()?;
+        let mut operation_updates = ln_module
+            .subscribe_ln_receive(operation_id)
+            .await?
+            .into_stream();
+
+        while let Some(update) = operation_updates.next().await {
+            if !matches!(update, LnReceiveState::Created) {
+                return Ok(());
+            }
         }
+
+        Ok(())
     }
 
     async fn get_next_invoice_index(
