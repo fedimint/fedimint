@@ -13,6 +13,7 @@ use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
 use tracing::debug;
 
 use super::{Connector, DynGuaridianConnection};
+use crate::error::ConnectorError;
 use crate::{Connectivity, DynGatewayConnection, IGuardianConnection as _, ServerError};
 
 #[derive(Clone)]
@@ -27,15 +28,13 @@ impl fmt::Debug for TorConnector {
 }
 
 impl TorConnector {
-    pub async fn bootstrap() -> anyhow::Result<Self> {
+    pub async fn bootstrap() -> Result<Self, ConnectorError> {
         use tracing::debug;
-
-        use crate::ServerError;
 
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
             .await
-            .map_err(|err| ServerError::InternalClientError(err.into()))?
+            .map_err(|err| ConnectorError::Tor(Box::new(err)))?
             .isolated_client();
 
         debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
@@ -180,8 +179,11 @@ impl Connector for TorConnector {
         }
     }
 
-    async fn connect_gateway(&self, _url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
-        Err(anyhow!("Unsupported transport method"))
+    async fn connect_gateway(
+        &self,
+        _url: &SafeUrl,
+    ) -> Result<DynGatewayConnection, ConnectorError> {
+        Err(ConnectorError::GatewayUnsupported)
     }
 
     fn connectivity(&self, _url: &SafeUrl) -> Connectivity {

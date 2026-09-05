@@ -6,7 +6,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
-use crate::error::ServerError;
+use crate::error::{ConnectorError, ServerError};
 use crate::{
     Connectivity, DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection,
     ServerResult,
@@ -29,7 +29,7 @@ impl crate::Connector for HttpConnector {
         )))
     }
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError> {
         let http_connection = HttpConnection {
             client: self.client.clone(),
             base_url: url.clone(),

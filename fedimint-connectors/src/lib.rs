@@ -14,14 +14,14 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::envs::{
     FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
 };
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use fedimint_metrics::HistogramExt as _;
@@ -30,7 +30,7 @@ use serde_json::Value;
 use tokio::sync::{OnceCell, SetOnce, broadcast, watch};
 use tracing::trace;
 
-use crate::error::ServerError;
+use crate::error::{ConnectorError, ServerError};
 use crate::metrics::{CONNECTION_ATTEMPTS_TOTAL, CONNECTION_DURATION_SECONDS};
 use crate::ws::WebsocketConnector;
 
@@ -41,18 +41,27 @@ const IROH_NEXT_PATH: &str = "/v1";
 /// The `/v1` path is an internal transport-selection marker. It prevents the
 /// connector from attempting Iroh 0.35 against an Iroh 1.0-only identity,
 /// avoiding both an inappropriate connection attempt and its overhead.
-pub fn iroh_next_endpoint_url(endpoint: &str) -> anyhow::Result<SafeUrl> {
-    let endpoint_id =
-        iroh_next::EndpointId::from_str(endpoint).context("Invalid Iroh 1.0 endpoint ID")?;
-    SafeUrl::parse(&format!("iroh://{endpoint_id}{IROH_NEXT_PATH}"))
-        .context("Invalid Iroh 1.0 endpoint URL")
+pub fn iroh_next_endpoint_url(endpoint: &str) -> Result<SafeUrl, ConnectorError> {
+    let endpoint_id = iroh_next::EndpointId::from_str(endpoint).map_err(|source| {
+        ConnectorError::InvalidNodeId {
+            host: endpoint.to_owned(),
+            source: Box::new(source),
+        }
+    })?;
+    let url = format!("iroh://{endpoint_id}{IROH_NEXT_PATH}");
+    SafeUrl::parse(&url).map_err(|source| ConnectorError::InvalidUrl {
+        url,
+        source: Box::new(source),
+    })
 }
 
-fn is_iroh_next_endpoint_url(url: &SafeUrl) -> anyhow::Result<bool> {
+fn is_iroh_next_endpoint_url(url: &SafeUrl) -> Result<bool, ConnectorError> {
     match url.path() {
         "" | "/" => Ok(false),
         IROH_NEXT_PATH => Ok(true),
-        path => bail!("Unsupported Iroh API URL path: {path}"),
+        path => Err(ConnectorError::UnsupportedUrlPath {
+            path: path.to_owned(),
+        }),
     }
 }
 
@@ -75,7 +84,9 @@ pub type ServerResult<T> = Result<T, ServerError>;
 
 /// Type for connector initialization functions
 type ConnectorInitFn = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>> + Send + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// Builder for [`ConnectorRegistry`]
@@ -127,7 +138,7 @@ impl ConnectorRegistryBuilder {
         let ws_connector_init = Arc::new(move || {
             let builder = builder_ws.clone();
             Box::pin(async move { builder.build_ws_connector().await })
-                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                as Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
         });
         connectors_lazy.insert("ws".into(), (ws_connector_init.clone(), OnceCell::new()));
         connectors_lazy.insert("wss".into(), (ws_connector_init.clone(), OnceCell::new()));
@@ -142,7 +153,9 @@ impl ConnectorRegistryBuilder {
                     let builder = builder_iroh.clone();
                     let path_change = path_change_iroh.clone();
                     Box::pin(async move { builder.build_iroh_connector(path_change).await })
-                        as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                        as Pin<
+                            Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>,
+                        >
                 }),
                 OnceCell::new(),
             ),
@@ -152,7 +165,7 @@ impl ConnectorRegistryBuilder {
         let http_connector_init = Arc::new(move || {
             let builder = builder_http.clone();
             Box::pin(async move { builder.build_http_connector() })
-                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                as Pin<Box<dyn Future<Output = Result<DynConnector, ConnectorError>> + Send>>
         });
 
         connectors_lazy.insert(
@@ -179,19 +192,21 @@ impl ConnectorRegistryBuilder {
     pub async fn build_iroh_connector(
         &self,
         path_change: Arc<watch::Sender<u64>>,
-    ) -> anyhow::Result<DynConnector> {
+    ) -> Result<DynConnector, ConnectorError> {
         if !self.iroh_enable {
-            bail!("Iroh connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "iroh" });
         }
-        Ok(Arc::new(
+        let connector =
             iroh::IrohConnector::new(self.iroh_dns.clone(), self.iroh_pkarr_dht, path_change)
-                .await?,
-        ) as DynConnector)
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
+
+        Ok(Arc::new(connector) as DynConnector)
     }
 
-    pub async fn build_ws_connector(&self) -> anyhow::Result<DynConnector> {
+    pub async fn build_ws_connector(&self) -> Result<DynConnector, ConnectorError> {
         if !self.ws_enable {
-            bail!("Websocket connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "ws" });
         }
 
         match self.ws_force_tor {
@@ -204,13 +219,13 @@ impl ConnectorRegistryBuilder {
 
             false => Ok(Arc::new(WebsocketConnector::new()) as DynConnector),
             #[allow(unreachable_patterns)]
-            _ => bail!("Tor requested, but not support not compiled in"),
+            _ => Err(ConnectorError::TorNotCompiledIn),
         }
     }
 
-    pub fn build_http_connector(&self) -> anyhow::Result<DynConnector> {
+    pub fn build_http_connector(&self) -> Result<DynConnector, ConnectorError> {
         if !self.http_enable {
-            bail!("Http connector not enabled");
+            return Err(ConnectorError::NotEnabled { scheme: "http" });
         }
 
         Ok(Arc::new(crate::http::HttpConnector::default()) as DynConnector)
@@ -467,7 +482,7 @@ impl ConnectorRegistry {
             .map_err(|e| {
                 ServerError::Transport(anyhow!(
                     "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
+                    e.fmt_compact()
                 ))
             })?
             .connect_guardian(url, api_secret)
@@ -501,7 +516,10 @@ impl ConnectorRegistry {
     ///
     /// This is the main function consumed by the downstream use for making
     /// connection.
-    pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    pub async fn connect_gateway(
+        &self,
+        url: &SafeUrl,
+    ) -> Result<DynGatewayConnection, ConnectorError> {
         trace!(
             target: LOG_NET,
             %url,
@@ -526,10 +544,7 @@ impl ConnectorRegistry {
         let scheme = url.scheme().to_string();
 
         let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
-            return Err(anyhow!(
-                "Unsupported scheme: {}; missing endpoint handler",
-                url.scheme()
-            ));
+            return Err(ConnectorError::UnsupportedScheme { scheme });
         };
 
         // Clone the init function to use in the async block
@@ -542,13 +557,7 @@ impl ConnectorRegistry {
         let result = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
-            .await
-            .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
-                ))
-            })?
+            .await?
             .connect_gateway(url)
             .await;
 
@@ -606,7 +615,7 @@ impl ConnectorRegistry {
             .map_err(|e| {
                 ServerError::Transport(anyhow!(
                     "Connector failed to initialize: {}",
-                    e.fmt_compact_anyhow()
+                    e.fmt_compact()
                 ))
             })?
             .iroh_peer_info(url, path_timeout)
@@ -635,7 +644,7 @@ pub trait Connector: Send + Sync + 'static + Debug {
         api_secret: Option<&str>,
     ) -> ServerResult<DynGuaridianConnection>;
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError>;
 
     /// Report how a connection to `url` is currently reaching its peer.
     fn connectivity(&self, url: &SafeUrl) -> Connectivity;

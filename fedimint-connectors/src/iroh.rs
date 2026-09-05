@@ -6,7 +6,6 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::envs::{
@@ -89,6 +88,7 @@ use tokio::sync::watch;
 use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+use crate::error::ConnectorError;
 use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
 
 #[derive(Clone)]
@@ -130,7 +130,7 @@ impl fmt::Debug for IrohConnector {
 }
 
 impl IrohConnector {
-    pub async fn new(
+    pub(crate) async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
@@ -156,7 +156,7 @@ impl IrohConnector {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn new_no_overrides(
+    pub(crate) async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
@@ -276,23 +276,25 @@ impl IrohConnector {
         })
     }
 
-    pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
+    pub(crate) fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
         self.connection_overrides.insert(node, addr);
         self
     }
 
-    pub fn node_id_from_url(url: &SafeUrl) -> anyhow::Result<NodeId> {
+    pub(crate) fn node_id_from_url(url: &SafeUrl) -> Result<NodeId, ConnectorError> {
         if url.scheme() != "iroh" {
-            bail!(
-                "Unsupported scheme: {}, passed to iroh endpoint handler",
-                url.scheme()
-            );
+            return Err(ConnectorError::UnsupportedScheme {
+                scheme: url.scheme().to_owned(),
+            });
         }
-        let host = url.host_str().context("Missing host string in Iroh URL")?;
+        let host = url.host_str().ok_or_else(|| ConnectorError::MissingHost {
+            url: url.to_owned(),
+        })?;
 
-        let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
-
-        Ok(node_id)
+        PublicKey::from_str(host).map_err(|source| ConnectorError::InvalidNodeId {
+            host: host.to_owned(),
+            source: Box::new(source),
+        })
     }
 }
 
@@ -313,12 +315,12 @@ impl crate::Connector for IrohConnector {
         }
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source,
+                source: source.into(),
                 url: url.to_owned(),
             })?;
         let next_only = crate::is_iroh_next_endpoint_url(url).map_err(|source| {
             ServerError::InvalidPeerUrl {
-                source,
+                source: source.into(),
                 url: url.to_owned(),
             }
         })?;
@@ -392,13 +394,14 @@ impl crate::Connector for IrohConnector {
         }))
     }
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError> {
         let node_id = Self::node_id_from_url(url)?;
         if let Some(node_addr) = self.connection_overrides.get(&node_id).cloned() {
             let conn = self
                 .stable
                 .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
-                .await?;
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
 
             #[cfg(not(target_family = "wasm"))]
             Self::spawn_connection_monitoring_stable(
@@ -409,7 +412,11 @@ impl crate::Connector for IrohConnector {
 
             Ok(IGatewayConnection::into_dyn(conn))
         } else {
-            let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
+            let conn = self
+                .stable
+                .connect(node_id, FEDIMINT_GATEWAY_ALPN)
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
             Ok(IGatewayConnection::into_dyn(conn))
         }
     }
@@ -446,7 +453,7 @@ impl crate::Connector for IrohConnector {
     ) -> ServerResult<Option<IrohPeerInfo>> {
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source,
+                source: source.into(),
                 url: url.to_owned(),
             })?;
         let connection_override = self.connection_overrides.get(&node_id).cloned();
@@ -937,8 +944,10 @@ mod tests {
     use fedimint_core::util::SafeUrl;
 
     use super::{
-        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
+        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, IrohConnector,
+        request_timeout_for_method,
     };
+    use crate::error::ConnectorError;
     use crate::{iroh_next_endpoint_url, is_iroh_next_endpoint_url, preserve_iroh_next_marker};
 
     const TEST_ENDPOINT_ID: &str =
@@ -967,9 +976,36 @@ mod tests {
     }
 
     #[test]
-    fn unknown_iroh_api_version_path_is_rejected() {
-        let url = SafeUrl::parse(&format!("iroh://{TEST_ENDPOINT_ID}/v2")).expect("valid Iroh URL");
-        assert!(is_iroh_next_endpoint_url(&url).is_err());
+    fn unsupported_iroh_url_path_is_typed() {
+        let url = SafeUrl::parse("iroh://someendpoint/v2").expect("valid url");
+        assert!(
+            matches!(
+                is_iroh_next_endpoint_url(&url),
+                Err(ConnectorError::UnsupportedUrlPath { .. })
+            ),
+            "{:?}",
+            is_iroh_next_endpoint_url(&url)
+        );
+    }
+
+    #[test]
+    fn garbage_endpoint_id_is_an_invalid_node_id() {
+        let err = iroh_next_endpoint_url("not-an-endpoint-id")
+            .expect_err("garbage is not an endpoint id");
+        assert!(
+            matches!(err, ConnectorError::InvalidNodeId { .. }),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn a_non_iroh_url_has_an_unsupported_scheme() {
+        let url = SafeUrl::parse("ws://example.com").expect("valid url");
+        let err = IrohConnector::node_id_from_url(&url).expect_err("ws is not iroh");
+        assert!(
+            matches!(err, ConnectorError::UnsupportedScheme { .. }),
+            "{err:?}"
+        );
     }
 
     /// Every `await_*` endpoint currently exposed by fedimint modules

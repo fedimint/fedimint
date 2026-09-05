@@ -32,7 +32,7 @@ impl GatewayApi {
                 let conn = connectors
                     .connect_gateway(&url)
                     .await
-                    .map_err(ServerError::Connection)?;
+                    .map_err(|err| ServerError::Connection(err.into()))?;
                 Ok(conn)
             })
             .await

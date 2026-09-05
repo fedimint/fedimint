@@ -22,6 +22,7 @@ use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
+use crate::error::ConnectorError;
 use crate::{
     Connectivity, DynGatewayConnection, DynGuaridianConnection, IConnection, IGuardianConnection,
     ServerError, ServerResult,
@@ -129,8 +130,11 @@ impl Connector for WebsocketConnector {
         Ok(client.into_dyn())
     }
 
-    async fn connect_gateway(&self, _url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
-        Err(anyhow!("Unsupported transport method"))
+    async fn connect_gateway(
+        &self,
+        _url: &SafeUrl,
+    ) -> Result<DynGatewayConnection, ConnectorError> {
+        Err(ConnectorError::GatewayUnsupported)
     }
 
     fn connectivity(&self, _url: &SafeUrl) -> Connectivity {

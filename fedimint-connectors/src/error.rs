@@ -4,6 +4,63 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use thiserror::Error;
 use tracing::{trace, warn};
 
+/// A failure to build a connector, or to reach a gateway through one.
+///
+/// Peer (guardian) requests report [`ServerError`] instead; this type covers
+/// the connector layer underneath it.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ConnectorError {
+    /// No connector is registered for the url's scheme.
+    #[error("Unsupported scheme {scheme}; missing endpoint handler")]
+    UnsupportedScheme { scheme: String },
+
+    /// The connector for this scheme was switched off when the registry was
+    /// built.
+    #[error("The {scheme} connector is not enabled")]
+    NotEnabled { scheme: &'static str },
+
+    /// Tor routing was requested from a build that has no Tor support.
+    #[error("Tor was requested, but support for it is not compiled in")]
+    TorNotCompiledIn,
+
+    /// This transport can reach guardians but not gateways.
+    #[error("This transport cannot connect to a gateway")]
+    GatewayUnsupported,
+
+    /// The url carries no host to address.
+    #[error("Missing host in url {url}")]
+    MissingHost { url: SafeUrl },
+
+    /// The url's host is not a valid Iroh node id.
+    #[error("Invalid Iroh node id {host}")]
+    InvalidNodeId {
+        host: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    /// The url could not be parsed.
+    #[error("Invalid url {url}")]
+    InvalidUrl {
+        url: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    /// The Iroh api url path selects a wire version this build does not know.
+    #[error("Unsupported Iroh api url path {path}")]
+    UnsupportedUrlPath { path: String },
+
+    /// The transport refused the connection or failed to start.
+    #[error("Transport failure")]
+    Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    /// The Tor client could not be bootstrapped.
+    #[error("Failed to bootstrap the Tor client")]
+    Tor(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
 #[non_exhaustive]
