@@ -120,6 +120,19 @@ pub const FM_DEVIMINT_CMD_INHERIT_STDERR_ENV: &str = "FM_DEVIMINT_CMD_INHERIT_ST
 /// Force devimint to run a test with a deprecated configuration
 pub const FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV: &str = "FM_DEVIMINT_RUN_DEPRECATED_TESTS";
 
+/// Expected vendor when devimint compares `fedimintd --version` with DKG/setup.
+///
+/// `fedimintd --version` is its Cargo package version, so it does not include
+/// the optional vendor passed to `fedimintd::run` at runtime. DKG/setup reports
+/// the normalized version with `+vendor`; set this environment variable so
+/// devimint can reconstruct and compare that semantic version exactly. This
+/// preserves testing of exact vendor identity instead of stripping SemVer build
+/// metadata.
+///
+/// `_ENV` names this Rust constant; the environment variable is
+/// `FM_EXPECTED_FEDIMINTD_VENDOR`.
+pub const FM_EXPECTED_FEDIMINTD_VENDOR_ENV: &str = "FM_EXPECTED_FEDIMINTD_VENDOR";
+
 /// Devimint's "data dir" (think `/usr/devimint/`).
 ///
 /// "Static" because we use "data dir" for the directory `devimint` puts all the

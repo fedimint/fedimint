@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::core::ModuleKind;
 use crate::encoding::{Decodable, Encodable};
 use crate::util::SafeUrl;
+use crate::version::DkgVersion;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
 /// Connection information sent between peers in order to start config gen
@@ -26,8 +27,12 @@ pub struct PeerSetupCode {
     pub federation_size: Option<u32>,
     /// Bitcoin network configured locally by the guardian
     pub network: Network,
-    /// Fedimint `x.y.z` cargo release version running on this peer
-    pub fedimint_version: String,
+    /// Normalized Fedimint `x.y.z` release version with optional vendor suffix
+    ///
+    /// Its consensus encoding remains the historical string encoding so setup
+    /// codes generated before this field became semantically typed still
+    /// decode.
+    pub fedimint_version: DkgVersion,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
