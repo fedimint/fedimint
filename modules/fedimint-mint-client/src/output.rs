@@ -344,7 +344,9 @@ impl MintOutputStatesCreated {
                             &module_decoder,
                             &tbs_pks,
                         )
-                        .map_err(ServerError::InvalidResponse)
+                        .map_err(|err| {
+                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
+                        })
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -586,7 +588,7 @@ impl MintOutputStatesCreatedMulti {
                     move |peer, outcomes: Vec<Option<SerdeOutputOutcome>>| {
                         // Verify the response has the expected length
                         if outcomes.len() != common.out_point_range.count() {
-                            return Err(ServerError::InvalidResponse(anyhow::anyhow!(
+                            return Err(ServerError::InvalidResponse(format!(
                                 "Peer {peer} returned {} outcomes but expected {}",
                                 outcomes.len(),
                                 common.out_point_range.count()
@@ -623,7 +625,9 @@ impl MintOutputStatesCreatedMulti {
                                             out_point = %OutPoint { txid: common.txid(), out_idx},
                                             "Invalid signature share from peer"
                                         );
-                                        return Err(ServerError::InvalidResponse(err));
+                                        return Err(ServerError::InvalidResponse(
+                                            err.fmt_compact_anyhow().to_string(),
+                                        ));
                                     }
                                 }
                             } else {
@@ -693,7 +697,9 @@ impl MintOutputStatesCreatedMulti {
                                 &module_decoder,
                                 &tbs_pks,
                             )
-                            .map_err(ServerError::InvalidResponse)
+                            .map_err(|err| {
+                                ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
+                            })
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -729,7 +735,11 @@ impl MintOutputStatesCreatedMulti {
                                             &module_decoder,
                                             &tbs_pks,
                                         )
-                                        .map_err(ServerError::InvalidResponse)
+                                        .map_err(|err| {
+                                            ServerError::InvalidResponse(
+                                                err.fmt_compact_anyhow().to_string(),
+                                            )
+                                        })
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),

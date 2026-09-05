@@ -71,9 +71,9 @@ pub async fn try_download_client_config(
     // TODO: use new download approach based on guardian PKs
     let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
         if federation_id != cfg.global.calculate_federation_id() {
-            return Err(ServerError::ConditionFailed(anyhow::anyhow!(
-                "FederationId in invite code does not match client config"
-            )));
+            return Err(ServerError::ConditionFailed(
+                "FederationId in invite code does not match client config".to_string(),
+            ));
         }
 
         Ok(cfg.global.api_endpoints)

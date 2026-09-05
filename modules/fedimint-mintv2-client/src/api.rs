@@ -5,6 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeersExt, OutPointRange, PeerId, apply, async_trait_maybe_send};
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
@@ -57,7 +58,9 @@ impl MintV2ModuleApi for DynModuleApi {
             FilterMapThreshold::new(
                 move |peer, signature_shares| {
                     verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(ServerError::InvalidResponse)
+                        .map_err(|err| {
+                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
+                        })
                 },
                 self.all_peers().to_num_peers(),
             ),
@@ -82,7 +85,9 @@ impl MintV2ModuleApi for DynModuleApi {
             FilterMapThreshold::new(
                 move |peer, signature_shares| {
                     verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(ServerError::InvalidResponse)
+                        .map_err(|err| {
+                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
+                        })
                 },
                 self.all_peers().to_num_peers(),
             ),

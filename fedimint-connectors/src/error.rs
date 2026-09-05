@@ -68,62 +68,67 @@ pub enum ServerError {
     /// The response payload was returned successfully but failed to be
     /// deserialized
     #[error("Response deserialization error: {0}")]
-    ResponseDeserialization(anyhow::Error),
+    ResponseDeserialization(Box<dyn std::error::Error + Send + Sync>),
 
     /// The request was addressed to an invalid `peer_id`
     #[error("Invalid peer id: {peer_id}")]
     InvalidPeerId { peer_id: PeerId },
 
     /// The request was addressed to an invalid `url`
+    ///
+    /// The cause is boxed to keep `ServerError` cheap to move.
     #[error("Invalid peer url: {url}")]
-    InvalidPeerUrl { url: SafeUrl, source: anyhow::Error },
+    InvalidPeerUrl {
+        url: SafeUrl,
+        source: Box<ConnectorError>,
+    },
 
     /// The endpoint specification for the peer is invalid (e.g. wrong url)
-    #[error("Invalid endpoint")]
-    InvalidEndpoint(anyhow::Error),
+    #[error("Invalid endpoint: {0}")]
+    InvalidEndpoint(Box<dyn std::error::Error + Send + Sync>),
 
     /// Could not connect
     #[error("Connection failed: {0}")]
-    Connection(anyhow::Error),
+    Connection(Box<dyn std::error::Error + Send + Sync>),
 
     /// Underlying transport failed, in some typical way
     #[error("Transport error: {0}")]
-    Transport(anyhow::Error),
+    Transport(Box<dyn std::error::Error + Send + Sync>),
 
     /// The rpc id (e.g. jsonrpc method name) was not recognized by the peer
     ///
     /// This one is important and sometimes used to detect backward
     /// compatibility capabilities, so transports should properly support
     /// it.
-    #[error("Invalid rpc id")]
-    InvalidRpcId(anyhow::Error),
+    #[error("Invalid rpc id: {0}")]
+    InvalidRpcId(String),
 
     /// Something about the request we've sent was wrong, should not typically
     /// happen
-    #[error("Invalid request")]
-    InvalidRequest(anyhow::Error),
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
 
     /// Something about the response was wrong, should not typically happen
     #[error("Invalid response: {0}")]
-    InvalidResponse(anyhow::Error),
+    InvalidResponse(String),
 
     /// Server returned an internal error, suggesting something is wrong with it
     #[error("Unspecified server error: {0}")]
-    ServerError(anyhow::Error),
+    ServerError(String),
 
     /// Some condition on the response this not match
     ///
     /// Typically expected, and often used in `FilterMap` query strategy to
     /// reject responses that don't match some criteria.
     #[error("Unspecified condition error: {0}")]
-    ConditionFailed(anyhow::Error),
+    ConditionFailed(String),
 
     /// An internal client error
     ///
     /// Things that shouldn't happen (better than panicking), logical errors,
     /// malfunctions caused by internal issues.
     #[error("Unspecified internal client error: {0}")]
-    InternalClientError(anyhow::Error),
+    InternalClientError(String),
 }
 
 impl ServerError {

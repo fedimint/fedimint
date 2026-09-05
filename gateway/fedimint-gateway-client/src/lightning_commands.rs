@@ -262,11 +262,11 @@ impl LightningCommands {
                 let start_secs = start_time
                     .timestamp()
                     .try_into()
-                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
+                    .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let end_secs = end_time
                     .timestamp()
                     .try_into()
-                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
+                    .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let response = list_transactions(
                     client,
                     base_url,

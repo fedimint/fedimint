@@ -309,18 +309,18 @@ impl crate::Connector for IrohConnector {
             // There seem to be no way to pass secret over current Iroh calling
             // convention. Connecting anyway would silently drop the credential and
             // talk to an API that never authenticates us, so refuse instead.
-            return Err(ServerError::Connection(anyhow::format_err!(
-                "Iroh api secrets currently not supported"
-            )));
+            return Err(ServerError::Connection(
+                "Iroh api secrets currently not supported".into(),
+            ));
         }
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source: source.into(),
+                source: Box::new(source),
                 url: url.to_owned(),
             })?;
         let next_only = crate::is_iroh_next_endpoint_url(url).map_err(|source| {
             ServerError::InvalidPeerUrl {
-                source: source.into(),
+                source: Box::new(source),
                 url: url.to_owned(),
             }
         })?;
@@ -390,7 +390,7 @@ impl crate::Connector for IrohConnector {
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            ServerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+            ServerError::ServerError("Both iroh connection attempts failed".to_string())
         }))
     }
 
@@ -453,7 +453,7 @@ impl crate::Connector for IrohConnector {
     ) -> ServerResult<Option<IrohPeerInfo>> {
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source: source.into(),
+                source: Box::new(source),
                 url: url.to_owned(),
             })?;
         let connection_override = self.connection_overrides.get(&node_id).cloned();
@@ -464,7 +464,7 @@ impl crate::Connector for IrohConnector {
         let mut conn_type_watcher = self
             .stable
             .conn_type(node_id)
-            .map_err(ServerError::Connection)?;
+            .map_err(|err| ServerError::Connection(err.into()))?;
         let mut conn_type = conn_type_watcher
             .get()
             .unwrap_or(iroh::endpoint::ConnectionType::None);
@@ -639,7 +639,7 @@ impl IrohConnector {
                 conn
             }
             None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
-        }.map_err(ServerError::Connection)?;
+        }.map_err(|err| ServerError::Connection(err.into()))?;
 
         Ok(conn)
     }
@@ -680,8 +680,7 @@ impl IrohConnector {
                 FEDIMINT_API_ALPN
             ).await,
         }
-        .map_err(Into::into)
-        .map_err(ServerError::Connection)?;
+        .map_err(|err| ServerError::Connection(err.into()))?;
 
         // Retain the connection so `connectivity` can read its paths back;
         // iroh 1.0 offers no endpoint-level lookup to recover it from.
@@ -805,17 +804,17 @@ impl IGuardianConnection for Connection {
                     iroh::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
                     IROH_REQUEST_TIMEOUT_ERROR_REASON,
                 );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
+                return Err(ServerError::Transport(
+                    format!("iroh request {method_str} timed out after {timeout:?}").into(),
+                ));
             }
         };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(format!("Api Error: {e:?}")))
     }
 }
 
@@ -872,17 +871,17 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
                     iroh_next::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
                     IROH_REQUEST_TIMEOUT_ERROR_REASON,
                 );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
+                return Err(ServerError::Transport(
+                    format!("iroh request {method_str} timed out after {timeout:?}").into(),
+                ));
             }
         };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(format!("Api Error: {e:?}")))
     }
 }
 
@@ -920,14 +919,13 @@ impl IGatewayConnection for Connection {
             .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
-        match StatusCode::from_u16(response.status).map_err(|e| {
-            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
-        })? {
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
+        match StatusCode::from_u16(response.status)
+            .map_err(|e| ServerError::InvalidResponse(format!("Invalid status code: {e}")))?
+        {
             StatusCode::OK => Ok(response.body),
-            status => Err(ServerError::ServerError(anyhow::anyhow!(
-                "Server returned status code: {}",
-                status
+            status => Err(ServerError::ServerError(format!(
+                "Server returned status code: {status}"
             ))),
         }
     }

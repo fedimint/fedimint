@@ -14,7 +14,6 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::envs::{
     FM_WS_API_CONNECT_OVERRIDES_ENV, is_running_in_test_env, parse_kv_list_from_env,
@@ -459,10 +458,13 @@ impl ConnectorRegistry {
         let scheme = url.scheme().to_string();
 
         let Some(connector_lazy) = self.inner.connectors_lazy.get(&scheme) else {
-            return Err(ServerError::InvalidEndpoint(anyhow!(
-                "Unsupported scheme: {}; missing endpoint handler",
-                url.scheme()
-            )));
+            return Err(ServerError::InvalidEndpoint(
+                format!(
+                    "Unsupported scheme: {}; missing endpoint handler",
+                    url.scheme()
+                )
+                .into(),
+            ));
         };
 
         // Clone the init function to use in the async block
@@ -477,10 +479,9 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact()
-                ))
+                ServerError::Transport(
+                    format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
+                )
             })?
             .connect_guardian(url, api_secret)
             .await;
@@ -610,10 +611,9 @@ impl ConnectorRegistry {
             .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
-                ServerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact()
-                ))
+                ServerError::Transport(
+                    format!("Connector failed to initialize: {}", e.fmt_compact()).into(),
+                )
             })?
             .iroh_peer_info(url, path_timeout)
             .await
@@ -840,7 +840,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
                 match res {
                     Ok(o) => return Ok(o),
                     Err(err) => {
-                        return Err(ServerError::Connection(anyhow::format_err!("{}", err)));
+                        return Err(ServerError::Connection(err.into()));
                     }
                 }
             }

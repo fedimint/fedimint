@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 
-use anyhow::Context;
 use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
     ConnectionPool, ConnectorRegistry, DynGatewayConnection, IGatewayConnection, ServerResult,
@@ -32,7 +31,7 @@ impl GatewayApi {
                 let conn = connectors
                     .connect_gateway(&url)
                     .await
-                    .map_err(|err| ServerError::Connection(err.into()))?;
+                    .map_err(|err| ServerError::Connection(Box::new(err)))?;
                 Ok(conn)
             })
             .await
@@ -45,18 +44,13 @@ impl GatewayApi {
         route: &str,
         payload: Option<P>,
     ) -> ServerResult<T> {
-        let conn = self
-            .get_or_create_connection(base_url)
-            .await
-            .context("Failed to connect to gateway")
-            .map_err(ServerError::Connection)?;
+        let conn = self.get_or_create_connection(base_url).await?;
         let payload = payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
         let res = conn
             .request(self.password.clone(), method, route, payload)
             .await?;
-        let response = serde_json::from_value::<T>(res).map_err(|e| {
-            ServerError::InvalidResponse(anyhow::anyhow!("Received invalid response: {e}"))
-        })?;
+        let response = serde_json::from_value::<T>(res)
+            .map_err(|e| ServerError::InvalidResponse(format!("Received invalid response: {e}")))?;
         Ok(response)
     }
 

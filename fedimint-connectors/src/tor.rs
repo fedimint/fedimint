@@ -2,11 +2,10 @@
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use arti_client::{TorAddr, TorClient, TorClientConfig};
 use async_trait::async_trait;
 use base64::Engine as _;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use jsonrpsee_ws_client::{HeaderMap, HeaderValue, WsClientBuilder};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
@@ -53,12 +52,14 @@ impl Connector for TorConnector {
     ) -> super::ServerResult<DynGuaridianConnection> {
         let addr = (
             url.host_str()
-                .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Expected host str")))?,
+                .ok_or_else(|| ServerError::InvalidEndpoint("Expected host str".into()))?,
             url.port_or_known_default()
-                .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Expected port number")))?,
+                .ok_or_else(|| ServerError::InvalidEndpoint("Expected port number".into()))?,
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| {
-            ServerError::InvalidEndpoint(anyhow!("Invalid endpoint addr: {addr:?}: {e:#}"))
+            ServerError::InvalidEndpoint(
+                format!("Invalid endpoint addr: {addr:?}: {}", e.fmt_compact()).into(),
+            )
         })?;
 
         let tor_addr_clone = tor_addr.clone();
@@ -104,9 +105,9 @@ impl Connector for TorConnector {
             "wss" => true,
             "ws" => false,
             unexpected_scheme => {
-                return Err(ServerError::InvalidEndpoint(anyhow!(
-                    "Unsupported scheme: {unexpected_scheme}"
-                )));
+                return Err(ServerError::InvalidEndpoint(
+                    format!("Unsupported scheme: {unexpected_scheme}").into(),
+                ));
             }
         };
 
@@ -157,7 +158,7 @@ impl Connector for TorConnector {
                 let host = url
                     .host_str()
                     .map(ToOwned::to_owned)
-                    .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Invalid host str")))?;
+                    .ok_or_else(|| ServerError::InvalidEndpoint("Invalid host str".into()))?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.

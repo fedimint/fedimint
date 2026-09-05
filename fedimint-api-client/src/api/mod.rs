@@ -8,7 +8,7 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError};
 pub use fedimint_connectors::ServerResult;
@@ -148,7 +148,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
     }
 
@@ -165,7 +165,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
             .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
@@ -703,9 +703,7 @@ impl FederationApi {
             .ok_or_else(|| ServerError::InvalidPeerId { peer_id: peer })?;
         let conn = self
             .get_or_create_connection(url, self.api_secret.as_deref())
-            .await
-            .context("Failed to connect to peer")
-            .map_err(ServerError::Connection)?;
+            .await?;
 
         let method_str = method.to_string();
         let peer_str = peer.to_string();

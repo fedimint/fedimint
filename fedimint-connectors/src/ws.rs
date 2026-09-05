@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-#[allow(unused)]
-use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::module::{ApiMethod, ApiRequestErased};
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::rustls::install_crypto_provider;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_NET_WS;
 use jsonrpsee_core::client::ClientT;
@@ -91,14 +89,13 @@ impl WebsocketConnector {
                 // `user:pass@...`
                 let mut url = url.clone();
                 url.set_username("fedimint")
-                    .map_err(|_| ServerError::InvalidEndpoint(anyhow!("invalid username")))?;
+                    .map_err(|_| ServerError::InvalidEndpoint("Invalid username".into()))?;
                 url.set_password(Some(&api_secret))
-                    .map_err(|_| ServerError::InvalidEndpoint(anyhow!("invalid secret")))?;
+                    .map_err(|_| ServerError::InvalidEndpoint("Invalid secret".into()))?;
 
-                let client = client
-                    .build(url.as_str())
-                    .await
-                    .map_err(|err| ServerError::InternalClientError(err.into()))?;
+                let client = client.build(url.as_str()).await.map_err(|err| {
+                    ServerError::InternalClientError(err.fmt_compact().to_string())
+                })?;
 
                 return Ok(Arc::new(client));
             }
@@ -107,7 +104,7 @@ impl WebsocketConnector {
         let client = client
             .build(url.as_str())
             .await
-            .map_err(|err| ServerError::InternalClientError(err.into()))?;
+            .map_err(|err| ServerError::InternalClientError(err.fmt_compact().to_string()))?;
 
         Ok(Arc::new(client))
     }
@@ -197,37 +194,39 @@ impl IGuardianConnection for Arc<WsClient> {
 fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> ServerError {
     match jsonrpc_error {
         JsonRpcClientError::Call(error_object) => {
-            let error = anyhow!(error_object.message().to_owned());
+            let message = error_object.message().to_owned();
             match ErrorCode::from(error_object.code()) {
                 ErrorCode::ParseError | ErrorCode::OversizedRequest | ErrorCode::InvalidRequest => {
-                    ServerError::InvalidRequest(error)
+                    ServerError::InvalidRequest(message)
                 }
-                ErrorCode::MethodNotFound => ServerError::InvalidRpcId(error),
-                ErrorCode::InvalidParams => ServerError::InvalidRequest(error),
+                ErrorCode::MethodNotFound => ServerError::InvalidRpcId(message),
+                ErrorCode::InvalidParams => ServerError::InvalidRequest(message),
                 ErrorCode::InternalError | ErrorCode::ServerIsBusy | ErrorCode::ServerError(_) => {
-                    ServerError::ServerError(error)
+                    ServerError::ServerError(message)
                 }
             }
         }
-        JsonRpcClientError::Transport(error) => ServerError::Transport(anyhow!(error)),
-        JsonRpcClientError::RestartNeeded(arc) => ServerError::Transport(anyhow!(arc)),
-        JsonRpcClientError::ParseError(error) => ServerError::InvalidResponse(anyhow!(error)),
+        JsonRpcClientError::Transport(error) => ServerError::Transport(error),
+        JsonRpcClientError::RestartNeeded(arc) => ServerError::Transport(arc.to_string().into()),
+        JsonRpcClientError::ParseError(error) => {
+            ServerError::InvalidResponse(error.fmt_compact().to_string())
+        }
         JsonRpcClientError::InvalidSubscriptionId => {
-            ServerError::Transport(anyhow!("Invalid subscription id"))
+            ServerError::Transport("Invalid subscription id".into())
         }
         JsonRpcClientError::InvalidRequestId(invalid_request_id) => {
-            ServerError::InvalidRequest(anyhow!(invalid_request_id))
+            ServerError::InvalidRequest(invalid_request_id.fmt_compact().to_string())
         }
-        JsonRpcClientError::RequestTimeout => ServerError::Transport(anyhow!("Request timeout")),
-        JsonRpcClientError::Custom(e) => ServerError::Transport(anyhow!(e)),
+        JsonRpcClientError::RequestTimeout => ServerError::Transport("Request timeout".into()),
+        JsonRpcClientError::Custom(e) => ServerError::Transport(e.into()),
         JsonRpcClientError::HttpNotImplemented => {
-            ServerError::ServerError(anyhow!("Http not implemented"))
+            ServerError::ServerError("Http not implemented".to_string())
         }
         JsonRpcClientError::EmptyBatchRequest(empty_batch_request) => {
-            ServerError::InvalidRequest(anyhow!(empty_batch_request))
+            ServerError::InvalidRequest(empty_batch_request.fmt_compact().to_string())
         }
         JsonRpcClientError::RegisterMethod(register_method_error) => {
-            ServerError::InvalidResponse(anyhow!(register_method_error))
+            ServerError::InvalidResponse(register_method_error.fmt_compact().to_string())
         }
     }
 }

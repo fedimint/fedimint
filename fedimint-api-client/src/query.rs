@@ -147,7 +147,7 @@ impl<R: Eq + Clone> QueryStrategy<R> for ThresholdConsensus<R> {
 
 #[cfg(test)]
 fn dead_peer() -> ServerError {
-    ServerError::Connection(anyhow::anyhow!("peer is unreachable"))
+    ServerError::Connection("peer is unreachable".into())
 }
 
 #[test]
