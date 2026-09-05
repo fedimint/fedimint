@@ -89,9 +89,37 @@ pub struct InvoiceResponse {
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerifyResponse {
+    /// Always "OK" for successful responses per LUD-21. Defaulted when
+    /// parsing since not all services send it.
+    #[serde(default = "ok_status")]
+    pub status: String,
     pub settled: bool,
     #[serde_as(as = "Option<Hex>")]
     pub preimage: Option<[u8; 32]>,
+}
+
+fn ok_status() -> String {
+    "OK".to_string()
+}
+
+impl VerifyResponse {
+    /// A LUD-21 response for a payment that has been settled
+    pub fn settled(preimage: [u8; 32]) -> Self {
+        Self {
+            status: ok_status(),
+            settled: true,
+            preimage: Some(preimage),
+        }
+    }
+
+    /// A LUD-21 response for a payment that is still pending
+    pub fn pending() -> Self {
+        Self {
+            status: ok_status(),
+            settled: false,
+            preimage: None,
+        }
+    }
 }
 
 /// Fetch and parse an LNURL-pay response
@@ -228,6 +256,24 @@ fn parse_error_response() {
     let response: LnurlResponse<PayResponse> = serde_json::from_str(json).unwrap();
 
     assert_eq!(response.into_result().unwrap_err(), "Invalid request");
+}
+
+#[test]
+fn serialize_verify_response_lud_21() {
+    let json = serde_json::to_value(LnurlResponse::Ok(VerifyResponse::pending())).unwrap();
+
+    // LUD-21 responses carry an explicit "OK" status alongside the payment
+    // state
+    assert_eq!(json["status"], "OK");
+    assert_eq!(json["settled"], false);
+    assert_eq!(json["preimage"], serde_json::Value::Null);
+
+    let json =
+        serde_json::to_value(LnurlResponse::Ok(VerifyResponse::settled([0x42; 32]))).unwrap();
+
+    assert_eq!(json["status"], "OK");
+    assert_eq!(json["settled"], true);
+    assert_eq!(json["preimage"], "42".repeat(32));
 }
 
 #[test]
