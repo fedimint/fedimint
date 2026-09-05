@@ -1485,7 +1485,7 @@ pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
         .FM_API_URL
         .parse()
         .expect("FM_API_URL must be a valid SafeUrl");
-    let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+    let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
     let admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, None)?;
     let invite: InviteCode = admin_api
         .request_single_peer(

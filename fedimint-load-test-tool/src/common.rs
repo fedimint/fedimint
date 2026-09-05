@@ -163,7 +163,7 @@ pub async fn build_client(
     let client_secret = Client::load_or_generate_client_secret(&db).await?;
     let root_secret =
         RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(&client_secret));
-    let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
+    let connectors = ConnectorRegistry::build_from_client_env().bind().await;
 
     let client = if Client::is_initialized(&db).await {
         client_builder.open(connectors, db, root_secret).await

@@ -754,7 +754,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         PeerId::from(0),
         // FIXME: use proper mock
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            ConnectorRegistry::build_from_testing_env().bind().await,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
@@ -904,7 +904,7 @@ async fn peg_in_claiming_an_already_tracked_utxo_is_rejected() -> anyhow::Result
         &task_group,
         PeerId::from(0),
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            ConnectorRegistry::build_from_testing_env().bind().await,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
@@ -1047,7 +1047,7 @@ async fn peg_out_change_is_recorded_as_claimed() -> anyhow::Result<()> {
         &task_group,
         PeerId::from(0),
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            ConnectorRegistry::build_from_testing_env().bind().await,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
@@ -1808,7 +1808,7 @@ async fn unknown_consensus_item_variant_is_rejected_without_panicking() -> anyho
         &task_group,
         PeerId::from(0),
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            ConnectorRegistry::build_from_testing_env().bind().await,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
@@ -1874,7 +1874,7 @@ async fn submission_rejects_a_fee_rate_that_cannot_produce_a_real_fee() -> anyho
         &task_group,
         PeerId::from(0),
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            ConnectorRegistry::build_from_testing_env().bind().await,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),

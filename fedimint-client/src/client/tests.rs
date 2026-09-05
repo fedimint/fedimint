@@ -145,8 +145,7 @@ async fn client_for_recovery_test(
     let federation_id = config.calculate_federation_id();
     let connectors = ConnectorRegistry::build_from_testing_defaults()
         .bind()
-        .await
-        .expect("Connector registry must build");
+        .await;
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let task_group = TaskGroup::new();
     let (log_ordering_wakeup_tx, _log_ordering_wakeup_rx) = watch::channel(());

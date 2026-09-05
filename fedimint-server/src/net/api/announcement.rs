@@ -58,7 +58,7 @@ pub async fn start_api_announcement_service(
     // FIXME: (@leonardo) how should we handle the connector here ?
     let api_client = DynGlobalApi::new(
         // TODO: get from somewhere/unify?
-        ConnectorRegistry::build_from_server_env()?.bind().await?,
+        ConnectorRegistry::build_from_server_env().bind().await,
         get_api_urls(&db, &cfg.consensus).await,
         api_secret.as_deref(),
     )?;

@@ -121,7 +121,7 @@ pub struct ConnectorRegistryBuilder {
 
 impl ConnectorRegistryBuilder {
     #[allow(clippy::unused_async)] // Leave room for async in the future
-    pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
+    pub async fn bind(self) -> ConnectorRegistry {
         let iroh_next = self.iroh_next && self.iroh_enable;
 
         // Create initialization functions for each connector type
@@ -177,7 +177,7 @@ impl ConnectorRegistryBuilder {
             (http_connector_init.clone(), OnceCell::new()),
         );
 
-        Ok(ConnectorRegistry {
+        ConnectorRegistry {
             inner: ConnectorRegistryInner {
                 connectors_lazy,
                 connection_overrides: self.connection_overrides,
@@ -186,7 +186,7 @@ impl ConnectorRegistryBuilder {
                 iroh_next,
             }
             .into(),
-        })
+        }
     }
 
     pub async fn build_iroh_connector(
@@ -269,7 +269,7 @@ impl ConnectorRegistryBuilder {
     }
 
     /// Apply overrides from env variables
-    pub fn with_env_var_overrides(mut self) -> anyhow::Result<Self> {
+    pub fn with_env_var_overrides(mut self) -> Self {
         // TODO: read rest of the env
         for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV) {
             self = self.with_connection_override(k, v);
@@ -281,7 +281,7 @@ impl ConnectorRegistryBuilder {
             self.iroh_next = false;
         }
 
-        Ok(Self { ..self })
+        self
     }
 
     pub fn with_connection_override(
@@ -400,23 +400,20 @@ impl ConnectorRegistry {
 
     /// Like [`Self::build_from_client_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_client_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_client_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_client_env() -> ConnectorRegistryBuilder {
+        Self::build_from_client_defaults().with_env_var_overrides()
     }
 
     /// Like [`Self::build_from_server_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_server_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_server_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_server_env() -> ConnectorRegistryBuilder {
+        Self::build_from_server_defaults().with_env_var_overrides()
     }
 
     /// Like [`Self::build_from_testing_defaults`] build will apply
     /// environment-provided overrides.
-    pub fn build_from_testing_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_testing_defaults().with_env_var_overrides()?;
-        Ok(builder)
+    pub fn build_from_testing_env() -> ConnectorRegistryBuilder {
+        Self::build_from_testing_defaults().with_env_var_overrides()
     }
 
     /// Wait until some connections have been made

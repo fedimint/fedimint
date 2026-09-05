@@ -365,11 +365,11 @@ impl Opts {
     }
 
     async fn make_endpoints(&self) -> Result<ConnectorRegistry, anyhow::Error> {
-        ConnectorRegistry::build_from_client_defaults()
+        Ok(ConnectorRegistry::build_from_client_defaults()
             .iroh_pkarr_dht(self.iroh_enable_dht())
             .ws_force_tor(self.use_tor())
             .bind()
-            .await
+            .await)
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
